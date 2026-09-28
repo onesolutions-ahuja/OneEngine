@@ -2894,3 +2894,98 @@ button:focus-visible {
   margin-top: 9px;
   min-height: 240px;
 }
+
+/* Object configuration tabs in the right pane. */
+.objects-config-tabs {
+  margin-top: 9px;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.objects-config-tabs button {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid rgba(0,0,0,.075);
+  border-radius: 7px;
+  color: rgba(0,0,0,.55);
+  background: rgba(255,255,255,.7);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.objects-config-tabs button.is-active {
+  color: #0a66d8;
+  border-color: rgba(10,132,255,.2);
+  background: #eef6ff;
+}
+
+.objects-config-list {
+  margin-top: 9px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.075);
+  border-radius: 11px;
+  background: white;
+}
+
+.objects-config-list-head {
+  min-height: 42px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #efeff0;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.objects-config-list-head strong {
+  font-size: 12px;
+}
+
+.objects-config-list-head button {
+  height: 27px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(0,0,0,.09);
+  border-radius: 7px;
+  color: #1d1d1f;
+  background: white;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.objects-config-rows > div {
+  min-height: 42px;
+  padding: 6px 10px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(0,0,0,.055);
+  font-size: 10.5px;
+}
+
+.objects-config-rows > div:last-child {
+  border-bottom: 0;
+}
+
+.objects-config-rows > div > span:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.objects-config-rows strong {
+  font-size: 11.5px;
+}
+
+.objects-config-rows small {
+  margin-top: 2px;
+  color: rgba(0,0,0,.42);
+  font-size: 9.5px;
+}
