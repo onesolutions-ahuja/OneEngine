@@ -6,6 +6,7 @@ import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
 import RecordListView from './components/RecordListView'
 import OneBuilder from './pages/settings/OneBuilder'
+import ObjectsSettingsPane from './pages/settings/ObjectsSettingsPane'
 import {
   Bluetooth,
   LockKeyhole,
@@ -253,6 +254,7 @@ const settingsGroups = [
     { key: 'server-api', label: 'Server / API Configuration', icon: MonitorCog, tone: 'gray' },
   ],
   [
+    { key: 'objects', label: 'Objects', icon: LayoutGrid, tone: 'cyan', searchTerms: ['objects', 'object manager', 'fields', 'metadata', 'api name'] },
     { key: 'platform', label: 'Platform', icon: LayoutGrid, tone: 'cyan', searchTerms: ['onebuilder', 'workflow', 'approval flow', 'dashboard builder', 'report builder', 'canvas', 'components'] },
     { key: 'message-templates', label: 'Message Templates', icon: ReceiptText, tone: 'cyan' },
   ],
@@ -763,6 +765,8 @@ function SettingsPage() {
                     { key: 'is_system_role', label: 'Type', render: (row) => row.is_system_role ? 'System' : 'Custom' },
                   ]}
                 />
+              ) : current?.key === 'objects' ? (
+                <ObjectsSettingsPane />
               ) : current?.key === 'platform' ? (
                 <OneBuilder />
               ) : (
