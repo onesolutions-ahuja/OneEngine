@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import { checkBackend } from './services/api'
 import {
   Bluetooth,
   LockKeyhole,
@@ -243,6 +244,12 @@ function Desktop({ onLock }) {
 
 export default function App() {
   const [locked, setLocked] = useState(true)
+
+  useEffect(() => {
+    checkBackend()
+      .then(() => document.documentElement.setAttribute('data-onepos-backend', 'connected'))
+      .catch(() => document.documentElement.setAttribute('data-onepos-backend', 'offline'))
+  }, [])
   const [transitioning, setTransitioning] = useState(false)
 
   const unlock = () => {
