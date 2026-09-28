@@ -3066,3 +3066,566 @@ button:focus-visible {
     grid-template-columns: 132px minmax(0,1fr);
   }
 }
+
+/* Themed Till workspace — frozen over the desktop wallpaper. */
+.dock-lucide-icon {
+  width: 28px;
+  height: 28px;
+  padding: 7px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(145deg, #082d73, #0d63bf 55%, #16ccd5);
+  box-sizing: content-box;
+  box-shadow: 0 5px 14px rgba(4,44,104,.25);
+}
+
+.till-theme-page {
+  position: fixed;
+  inset: 28px 0 0;
+  z-index: 5;
+  padding: 12px 16px 104px;
+  overflow: hidden;
+}
+
+.till-theme-window {
+  width: min(1420px, calc(100vw - 32px));
+  height: calc(100vh - 144px);
+  margin: 0 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(0,0,0,.11);
+  border-radius: 16px;
+  background: rgba(246,247,249,.94);
+  box-shadow: 0 24px 70px rgba(0,0,0,.18);
+  backdrop-filter: blur(24px);
+}
+
+.till-theme-header {
+  min-height: 48px;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(0,0,0,.07);
+  background: rgba(235,237,240,.96);
+}
+
+.till-theme-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.till-theme-header strong { font-size: 13px; }
+.till-theme-header span { margin-top: 2px; color: rgba(0,0,0,.48); font-size: 10px; }
+
+.till-theme-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.till-theme-header-actions button,
+.till-action-bar button {
+  min-height: 30px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 8px;
+  color: #1d1d1f;
+  background: rgba(255,255,255,.76);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.till-action-bar {
+  min-height: 42px;
+  padding: 6px 8px;
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(0,0,0,.065);
+  background: rgba(246,246,247,.94);
+}
+
+.till-action-bar button:hover,
+.till-theme-header-actions button:hover {
+  background: #fff;
+  border-color: rgba(10,132,255,.24);
+}
+
+.till-main-grid {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 350px;
+}
+
+.till-catalogue {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: rgba(249,249,250,.78);
+}
+
+.till-catalogue-tools {
+  padding: 9px;
+  display: grid;
+  gap: 7px;
+  border-bottom: 1px solid rgba(0,0,0,.055);
+}
+
+.till-catalogue-tools > label {
+  width: min(520px, 100%);
+  height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(0,0,0,.085);
+  border-radius: 9px;
+  color: rgba(0,0,0,.42);
+  background: rgba(255,255,255,.82);
+}
+
+.till-catalogue-tools input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 11.5px;
+}
+
+.till-categories {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+}
+
+.till-categories button {
+  min-height: 27px;
+  padding: 0 9px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 7px;
+  color: rgba(0,0,0,.52);
+  background: rgba(0,0,0,.045);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.till-categories button.is-active {
+  color: white;
+  background: #0a84ff;
+}
+
+.till-product-grid {
+  min-height: 0;
+  padding: 9px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px,1fr));
+  align-content: start;
+  gap: 8px;
+}
+
+.till-product-card {
+  min-height: 126px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border: 1px solid rgba(0,0,0,.075);
+  border-radius: 11px;
+  color: #1d1d1f;
+  background: rgba(255,255,255,.92);
+  text-align: left;
+}
+
+.till-product-card:hover {
+  border-color: rgba(10,132,255,.35);
+  box-shadow: 0 6px 16px rgba(0,0,0,.06);
+}
+
+.till-product-image {
+  height: 64px;
+  margin-bottom: 7px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  color: rgba(0,0,0,.26);
+  background: #f1f3f5;
+}
+
+.till-product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.till-product-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+}
+
+.till-product-card > span {
+  margin-top: 3px;
+  color: #0a66d8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.till-product-card small {
+  margin-top: 2px;
+  color: rgba(0,0,0,.4);
+  font-size: 9px;
+}
+
+.till-cart {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid rgba(0,0,0,.07);
+  background: rgba(255,255,255,.96);
+}
+
+.till-cart-head {
+  min-height: 50px;
+  padding: 8px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.till-cart-head > div { display: flex; flex-direction: column; }
+.till-cart-head strong { font-size: 12px; }
+.till-cart-head span { margin-top: 2px; color: rgba(0,0,0,.45); font-size: 9.5px; }
+
+.till-cart-lines {
+  min-height: 0;
+  flex: 1;
+  padding: 7px 9px;
+  overflow-y: auto;
+}
+
+.till-cart-line {
+  position: relative;
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 5px 8px;
+  border-bottom: 1px solid rgba(0,0,0,.055);
+}
+
+.till-cart-line > div:first-child { min-width: 0; display: flex; flex-direction: column; }
+.till-cart-line strong { font-size: 10.5px; }
+.till-cart-line small { margin-top: 2px; color: rgba(0,0,0,.42); font-size: 9px; }
+
+.till-qty {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.075);
+  border-radius: 7px;
+}
+
+.till-qty button {
+  width: 26px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+}
+
+.till-qty span {
+  min-width: 28px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.till-remove-misc {
+  position: absolute;
+  right: 0;
+  bottom: 5px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+}
+
+.till-cart-empty,
+.till-empty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  color: rgba(0,0,0,.35);
+  text-align: center;
+  font-size: 10px;
+}
+
+.till-cart-empty strong { color: rgba(0,0,0,.55); }
+
+.till-cart-summary {
+  padding: 10px;
+  border-top: 1px solid rgba(0,0,0,.07);
+  background: #f7f7f8;
+}
+
+.till-cart-summary > div:not(.till-pay-grid) {
+  min-height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(0,0,0,.56);
+  font-size: 10px;
+}
+
+.till-cart-summary .is-total {
+  min-height: 34px !important;
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(0,0,0,.07);
+  color: #1d1d1f !important;
+  font-size: 13px !important;
+}
+
+.till-cash-input {
+  height: 32px;
+  margin-top: 7px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(0,0,0,.085);
+  border-radius: 8px;
+  background: white;
+}
+
+.till-cash-input input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 10.5px;
+}
+
+.till-pay-grid {
+  margin-top: 7px;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.till-pay-grid button {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.till-pay-cash { color: white; background: #34a853; }
+.till-pay-card { color: white; background: #0a84ff; }
+
+.till-notice {
+  margin: 7px 9px 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: #17622b;
+  background: rgba(52,199,89,.09);
+  font-size: 10px;
+}
+
+.till-notice.is-error {
+  color: #9b2c25;
+  background: rgba(255,59,48,.08);
+}
+
+.till-modal-backdrop {
+  position: fixed;
+  inset: 28px 0 0;
+  z-index: 1500;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(20,22,28,.26);
+  backdrop-filter: blur(10px);
+}
+
+.till-modal {
+  width: min(430px, calc(100vw - 36px));
+  max-height: calc(100vh - 84px);
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.11);
+  border-radius: 14px;
+  background: #f7f7f8;
+  box-shadow: 0 24px 70px rgba(0,0,0,.26);
+}
+
+.till-modal.is-wide { width: min(620px, calc(100vw - 36px)); }
+
+.till-modal > header {
+  min-height: 46px;
+  padding: 8px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0,0,0,.07);
+  background: #e9eaec;
+}
+
+.till-modal > header strong { font-size: 12px; }
+.till-modal > header button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+}
+
+.till-modal-body {
+  max-height: calc(100vh - 150px);
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.till-form {
+  display: grid;
+  gap: 9px;
+}
+
+.till-form.is-row {
+  margin-top: 10px;
+  grid-template-columns: repeat(2,minmax(0,1fr)) auto auto;
+  align-items: end;
+}
+
+.till-form label {
+  display: grid;
+  gap: 4px;
+  color: rgba(0,0,0,.55);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.till-form input,
+.till-form select,
+.till-modal-search {
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid rgba(0,0,0,.09);
+  border-radius: 8px;
+  outline: 0;
+  background: white;
+  font-size: 10.5px;
+}
+
+.till-primary,
+.till-form > button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  color: white;
+  background: #0a84ff;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.till-danger { background: #d94b43 !important; }
+
+.till-modal-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.till-modal-search input {
+  min-width: 0;
+  width: 100%;
+  height: 32px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.till-customer-results,
+.till-held-list {
+  margin-top: 9px;
+  display: grid;
+  gap: 5px;
+}
+
+.till-customer-results button,
+.till-held-list button {
+  min-height: 42px;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 8px;
+  color: #1d1d1f;
+  background: white;
+}
+
+.till-customer-results span,
+.till-held-list span {
+  margin-top: 2px;
+  color: rgba(0,0,0,.42);
+  font-size: 9px;
+}
+
+.till-session-stats {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 6px;
+}
+
+.till-session-stats > div {
+  min-height: 58px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.07);
+}
+
+.till-session-stats span { color: rgba(0,0,0,.45); font-size: 8.5px; text-transform: uppercase; }
+.till-session-stats strong { margin-top: 3px; font-size: 11.5px; }
+
+@media (max-width: 900px) {
+  .till-main-grid { grid-template-columns: minmax(0,1fr) 310px; }
+  .till-action-bar button { padding-inline: 7px; }
+}
+
+@media (max-width: 720px) {
+  .till-theme-page { padding-inline: 6px; }
+  .till-theme-window { width: calc(100vw - 12px); }
+  .till-main-grid { grid-template-columns: 1fr; }
+  .till-cart { position: absolute; right: 10px; top: 105px; bottom: 108px; width: min(330px, calc(100vw - 20px)); box-shadow: 0 16px 50px rgba(0,0,0,.2); }
+}
