@@ -168,6 +168,88 @@ button:focus-visible {
   cursor: pointer;
 }
 
+
+.login-glass-card {
+  margin-top: auto;
+  margin-bottom: 6vh;
+  width: min(360px, calc(100vw - 32px));
+  padding: 22px;
+  border-radius: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  background: rgba(24, 28, 38, 0.32);
+  border: 1px solid rgba(255,255,255,.28);
+  box-shadow: 0 24px 70px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.22);
+  backdrop-filter: blur(30px) saturate(1.25);
+}
+
+.login-avatar {
+  margin: 0 auto 2px;
+}
+
+.login-title {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.login-subtitle {
+  margin: -4px 0 8px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255,255,255,.72);
+}
+
+.login-field {
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(255,255,255,.16);
+  color: white;
+  padding: 0 13px;
+  outline: 0;
+  box-shadow: inset 0 1px rgba(255,255,255,.12);
+}
+
+.login-field::placeholder {
+  color: rgba(255,255,255,.7);
+}
+
+.login-field:focus {
+  border-color: rgba(255,255,255,.55);
+  background: rgba(255,255,255,.2);
+}
+
+.login-submit {
+  height: 44px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 12px;
+  color: white;
+  font-weight: 700;
+  background: rgba(10,132,255,.9);
+  box-shadow: 0 8px 24px rgba(0,68,160,.28), inset 0 1px rgba(255,255,255,.25);
+  cursor: pointer;
+}
+
+.login-submit:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.login-error {
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #fff;
+  background: rgba(185, 28, 28, .5);
+  border: 1px solid rgba(255,255,255,.16);
+  font-size: 12px;
+  text-align: center;
+}
+
 .demo-menubar {
   height: 28px;
   padding: 0 10px 0 9px;
