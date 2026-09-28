@@ -1,28 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import {
-  CalendarDays,
-  CloudSun,
-  Folder,
   Bluetooth,
   LockKeyhole,
-  MessageCircle,
-  Music2,
   Search,
-  Settings,
   SlidersHorizontal,
   Wifi,
 } from 'lucide-react'
 
 const dockItems = [
-  { id: 'finder', label: 'Files', icon: Folder, tint: 'blue' },
-  { id: 'search', label: 'Search', icon: Search, tint: 'cyan' },
-  { id: 'messages', label: 'Messages', icon: MessageCircle, tint: 'green' },
-  { id: 'weather', label: 'Weather', icon: CloudSun, tint: 'sky' },
-  { id: 'calendar', label: 'Calendar', icon: CalendarDays, tint: 'red' },
-  { id: 'music', label: 'Music', icon: Music2, tint: 'pink' },
-  { id: 'settings', label: 'Settings', icon: Settings, tint: 'silver' },
+  { id: 'finder', label: 'Finder', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
+  { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
+  { id: 'launchpad', label: 'Launchpad', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
+  { id: 'maps', label: 'Maps', src: 'https://rdvnui.com/assets/Maps-C7aNhhUR.png', scaled: true },
+  { id: 'notes', label: 'Notes', src: 'https://rdvnui.com/assets/Notes-fm-2Meh1.png', scaled: true },
 ]
+
+const trashItem = {
+  id: 'trash',
+  label: 'Trash',
+  src: 'https://rdvnui.com/assets/Trash%20Full-BoE_wJYh.png',
+  scaled: false,
+}
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -37,13 +36,6 @@ function useClock() {
 
 function Dock({ onItemOpen }) {
   const mouseX = useMotionValue(Number.POSITIVE_INFINITY)
-  const [bouncing, setBouncing] = useState(null)
-
-  const activate = (id) => {
-    setBouncing(id)
-    window.setTimeout(() => setBouncing(null), 300)
-    onItemOpen?.(id)
-  }
 
   return (
     <div className="dock-zone">
@@ -53,69 +45,57 @@ function Dock({ onItemOpen }) {
         onMouseLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
         aria-label="Smart Theme dock"
       >
-        {dockItems.map(({ id, label, icon: Icon, tint }) => (
+        {dockItems.map((item) => (
           <DockItem
-            key={id}
-            label={label}
-            Icon={Icon}
-            tint={tint}
+            key={item.id}
+            item={item}
             mouseX={mouseX}
-            bouncing={bouncing === id}
-            onActivate={() => activate(id)}
+            onActivate={() => onItemOpen?.(item.id)}
           />
         ))}
+        <div className="dock-separator" aria-hidden="true" />
+        <DockItem
+          item={trashItem}
+          mouseX={mouseX}
+          onActivate={() => onItemOpen?.(trashItem.id)}
+        />
       </motion.div>
     </div>
   )
 }
 
-function DockItem({ label, Icon, tint, mouseX, bouncing, onActivate }) {
+function DockItem({ item, mouseX, onActivate }) {
   const ref = useRef(null)
 
   const distance = useTransform(mouseX, (value) => {
-    const bounds = ref.current?.getBoundingClientRect()
-    if (!bounds) return Number.POSITIVE_INFINITY
+    const bounds = ref.current?.getBoundingClientRect() ?? { x: 0, width: 0 }
     return value - bounds.x - bounds.width / 2
   })
 
-  const targetWidth = useTransform(distance, [-150, 0, 150], [46, 98, 46])
-  const width = useSpring(targetWidth, {
-    mass: 0.08,
-    stiffness: 220,
-    damping: 18,
-  })
-
-  const targetLift = useTransform(distance, [-150, 0, 150], [0, -17, 0])
-  const y = useSpring(targetLift, {
-    mass: 0.08,
-    stiffness: 220,
-    damping: 18,
-  })
-
-  const targetScale = useTransform(distance, [-150, 0, 150], [1, 1.24, 1])
-  const scale = useSpring(targetScale, {
-    mass: 0.08,
-    stiffness: 220,
-    damping: 18,
+  const widthTarget = useTransform(distance, [-150, 0, 150], [40, 100, 40])
+  const width = useSpring(widthTarget, {
+    mass: 0.1,
+    stiffness: 150,
+    damping: 12,
   })
 
   return (
     <motion.button
       ref={ref}
       type="button"
-      className={`dock-item ${bouncing ? 'is-bouncing' : ''}`}
+      className="dock-item"
       style={{ width }}
       onClick={onActivate}
-      aria-label={label}
+      aria-label={item.label}
     >
-      <span className="dock-tooltip">{label}</span>
-      <motion.span
-        className={`dock-icon dock-icon--${tint}`}
-        style={{ y, scale }}
-      >
-        <Icon size={30} strokeWidth={1.8} aria-hidden="true" />
-      </motion.span>
-      <span className="dock-dot" aria-hidden="true" />
+      <span className="dock-icon-wrap">
+        <img
+          className={item.scaled ? 'dock-image dock-image--scaled' : 'dock-image'}
+          src={item.src}
+          alt=""
+          draggable="false"
+        />
+      </span>
     </motion.button>
   )
 }
@@ -189,7 +169,7 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
-    const item = dockItems.find((entry) => entry.id === id)
+    const item = dockItems.find((entry) => entry.id === id) ?? (id === trashItem.id ? trashItem : null)
     setMessage(`${item?.label ?? 'App'} clicked — component wiring comes next.`)
   }
 
@@ -233,8 +213,13 @@ function Desktop({ onLock }) {
           <button type="button" className="status-button" aria-label="Control Center">
             <SlidersHorizontal size={18} strokeWidth={2.2} />
           </button>
-          <button type="button" className="status-button assistant-orb" aria-label="Assistant">
-            <span aria-hidden="true" />
+          <button type="button" className="status-button" aria-label="Assistant">
+            <img
+              className="siri-image"
+              src="https://rdvnui.com/assets/siri-icon-DMUdF73Y.png"
+              alt=""
+              draggable="false"
+            />
           </button>
           <button type="button" className="menubar-time-button">
             {dateTime}
