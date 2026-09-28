@@ -1,5 +1,18 @@
-import { useMemo, useState } from 'react'
-import { ArrowDownAZ, ArrowUpAZ, Pencil, Plus, Search } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp, Check, Filter, Pencil, Plus, Search } from 'lucide-react'
+
+const valueFor = (column, row) => {
+  if (column.filterValue) return column.filterValue(row)
+  if (column.sortValue) return column.sortValue(row)
+  return row?.[column.key]
+}
+
+const valueLabel = (value) => {
+  if (value === true) return 'Active'
+  if (value === false) return 'Inactive'
+  if (value == null || value === '') return 'Blank'
+  return String(value)
+}
 
 export default function RecordListView({
   title,
@@ -18,40 +31,75 @@ export default function RecordListView({
 }) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
+  const [filters, setFilters] = useState({})
+  const [filterOpen, setFilterOpen] = useState(null)
+  const filterAreaRef = useRef(null)
+
+  useEffect(() => {
+    const close = (event) => {
+      if (!filterAreaRef.current?.contains(event.target)) setFilterOpen(null)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [])
+
+  const filterOptions = useMemo(() => {
+    const result = {}
+    for (const column of columns) {
+      const seen = new Map()
+      for (const row of rows) {
+        const raw = valueFor(column, row)
+        const id = JSON.stringify(raw)
+        if (!seen.has(id)) seen.set(id, { id, raw, label: valueLabel(raw) })
+      }
+      result[column.key] = [...seen.values()].sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }),
+      )
+    }
+    return result
+  }, [rows, columns])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const searched = !q
+    let result = !q
       ? rows
       : rows.filter((row) =>
           searchKeys.some((key) => String(row?.[key] ?? '').toLowerCase().includes(q)),
         )
 
-    if (!sort.key) return searched
+    result = result.filter((row) =>
+      columns.every((column) => {
+        const selected = filters[column.key]
+        if (!selected?.length) return true
+        return selected.includes(JSON.stringify(valueFor(column, row)))
+      }),
+    )
+
+    if (!sort.key) return result
     const column = columns.find((item) => item.key === sort.key)
     const read = column?.sortValue
       ? (row) => column.sortValue(row)
       : (row) => row?.[sort.key]
 
-    return [...searched].sort((a, b) => {
+    return [...result].sort((a, b) => {
       const av = read(a)
       const bv = read(b)
       const an = Number(av)
       const bn = Number(bv)
-      let result = 0
+      let comparison = 0
 
-      if (av == null && bv == null) result = 0
-      else if (av == null) result = 1
-      else if (bv == null) result = -1
+      if (av == null && bv == null) comparison = 0
+      else if (av == null) comparison = 1
+      else if (bv == null) comparison = -1
       else if (Number.isFinite(an) && Number.isFinite(bn) && String(av).trim() !== '' && String(bv).trim() !== '') {
-        result = an - bn
+        comparison = an - bn
       } else {
-        result = String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true })
+        comparison = String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true })
       }
 
-      return sort.direction === 'asc' ? result : -result
+      return sort.direction === 'asc' ? comparison : -comparison
     })
-  }, [rows, query, searchKeys, columns, sort])
+  }, [rows, query, searchKeys, columns, sort, filters])
 
   const toggleSort = (column) => {
     if (column.sortable === false) return
@@ -61,6 +109,20 @@ export default function RecordListView({
     }))
   }
 
+  const toggleFilterValue = (columnKey, optionId) => {
+    setFilters((current) => {
+      const selected = current[columnKey] || []
+      const next = selected.includes(optionId)
+        ? selected.filter((value) => value !== optionId)
+        : [...selected, optionId]
+      return { ...current, [columnKey]: next }
+    })
+  }
+
+  const clearColumnFilter = (columnKey) => {
+    setFilters((current) => ({ ...current, [columnKey]: [] }))
+  }
+
   return (
     <div className="record-list-view">
       <div className="record-list-header">
@@ -68,12 +130,7 @@ export default function RecordListView({
           <strong>{title}</strong>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        <button
-          type="button"
-          className="record-create-button"
-          disabled={!canCreate}
-          onClick={onCreate}
-        >
+        <button type="button" className="record-create-button" disabled={!canCreate} onClick={onCreate}>
           <Plus size={15} />
           {createLabel}
         </button>
@@ -98,26 +155,73 @@ export default function RecordListView({
       ) : error ? (
         <div className="record-list-state record-list-state--error">{error}</div>
       ) : (
-        <div className="record-list-table-wrap">
+        <div className="record-list-table-wrap" ref={filterAreaRef}>
           <table className="record-list-table">
             <thead>
               <tr>
                 {canEdit ? <th className="record-list-edit-head"></th> : null}
                 {columns.map((column) => {
-                  const active = sort.key === column.key
-                  const Icon = active && sort.direction === 'desc' ? ArrowDownAZ : ArrowUpAZ
+                  const activeSort = sort.key === column.key
+                  const SortIcon = activeSort && sort.direction === 'desc' ? ArrowDown : ArrowUp
+                  const activeFilter = (filters[column.key] || []).length > 0
+                  const options = filterOptions[column.key] || []
                   return (
-                    <th key={column.key}>
-                      <button
-                        type="button"
-                        className={`record-sort-button ${active ? 'is-active' : ''}`}
-                        onClick={() => toggleSort(column)}
-                        disabled={column.sortable === false}
-                        title={active && sort.direction === 'asc' ? 'Sort Z to A' : 'Sort A to Z'}
-                      >
-                        <span>{column.label}</span>
-                        {column.sortable === false ? null : <Icon size={13} />}
-                      </button>
+                    <th key={column.key} className="record-list-column-head">
+                      <div className="record-column-controls">
+                        <button
+                          type="button"
+                          className={`record-sort-button ${activeSort ? 'is-active' : ''}`}
+                          onClick={() => toggleSort(column)}
+                          disabled={column.sortable === false}
+                          title={activeSort && sort.direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
+                        >
+                          <span>{column.label}</span>
+                          {column.sortable === false ? null : <SortIcon size={12} />}
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`record-filter-button ${activeFilter ? 'is-active' : ''}`}
+                          aria-label={`Filter ${column.label}`}
+                          aria-expanded={filterOpen === column.key}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setFilterOpen((current) => current === column.key ? null : column.key)
+                          }}
+                        >
+                          <Filter size={12} />
+                        </button>
+                      </div>
+
+                      {filterOpen === column.key ? (
+                        <div className="record-filter-popover" onClick={(event) => event.stopPropagation()}>
+                          <div className="record-filter-popover-head">
+                            <strong>Filter {column.label}</strong>
+                            <button type="button" onClick={() => clearColumnFilter(column.key)}>Clear</button>
+                          </div>
+                          <div className="record-filter-options">
+                            {options.map((option) => {
+                              const checked = (filters[column.key] || []).includes(option.id)
+                              return (
+                                <label key={option.id} className="record-filter-option">
+                                  <span className={`record-filter-check ${checked ? 'is-checked' : ''}`}>
+                                    {checked ? <Check size={11} /> : null}
+                                  </span>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleFilterValue(column.key, option.id)}
+                                  />
+                                  <span>{option.label}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                          <div className="record-filter-popover-foot">
+                            <button type="button" onClick={() => setFilterOpen(null)}>Done</button>
+                          </div>
+                        </div>
+                      ) : null}
                     </th>
                   )
                 })}
