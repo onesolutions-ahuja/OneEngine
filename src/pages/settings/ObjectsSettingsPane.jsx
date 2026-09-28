@@ -1,6 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Box, ChevronRight, Plus, Search } from 'lucide-react'
+import { apiRequest } from '../../services/api'
 import { loadPlatformObjects } from '../../services/settings'
+
+const TABS = [
+  ['details', 'Details'],
+  ['fields', 'Fields'],
+  ['formula', 'Formula Fields'],
+  ['relationships', 'Relationships'],
+  ['record-types', 'Record Types'],
+  ['layouts', 'Layouts'],
+  ['validation', 'Validation'],
+  ['triggers', 'Triggers'],
+  ['buttons', 'Buttons'],
+  ['permissions', 'Permissions'],
+]
 
 function objectName(object) {
   return object?.name || object?.label || object?.object_name || object?.object_key || object?.key || 'Unnamed Object'
@@ -10,10 +24,22 @@ function objectKey(object) {
   return object?.object_key || object?.key || object?.api_name || ''
 }
 
+function fieldName(field) {
+  return field?.label || field?.name || field?.api_name || field?.field_key || 'Unnamed field'
+}
+
+function isFormulaField(field) {
+  const type = String(field?.field_type || field?.type || '').toLowerCase()
+  return type === 'formula' || type === 'rollup' || Boolean(field?.formula || field?.config?.formula || field?.formula_expression)
+}
+
 export default function ObjectsSettingsPane() {
   const [objects, setObjects] = useState([])
   const [query, setQuery] = useState('')
   const [selectedKey, setSelectedKey] = useState('')
+  const [activeTab, setActiveTab] = useState('details')
+  const [fields, setFields] = useState([])
+  const [objectLoading, setObjectLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -50,6 +76,29 @@ export default function ObjectsSettingsPane() {
   }, [objects, query])
 
   const selected = objects.find((object) => objectKey(object) === selectedKey) || filtered[0] || null
+  const selectedId = selected?.id || selected?.object_id || ''
+
+  useEffect(() => {
+    setActiveTab('details')
+    setFields([])
+    if (!selectedId) return
+    let live = true
+    setObjectLoading(true)
+    apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/fields`)
+      .then((response) => {
+        if (live) setFields(Array.isArray(response?.data) ? response.data : [])
+      })
+      .catch(() => {
+        if (live) setFields([])
+      })
+      .finally(() => {
+        if (live) setObjectLoading(false)
+      })
+    return () => { live = false }
+  }, [selectedId])
+
+  const normalFields = fields.filter((field) => !isFormulaField(field))
+  const formulaFields = fields.filter(isFormulaField)
 
   return (
     <div className="objects-settings-shell">
@@ -111,15 +160,62 @@ export default function ObjectsSettingsPane() {
                 <span>{objectKey(selected)}</span>
               </div>
             </div>
-            <div className="objects-detail-card">
-              <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
-              <div><span>Source table</span><strong>{selected.source_table || 'Metadata object'}</strong></div>
-              <div><span>Type</span><strong>{selected.company_id ? 'Custom' : 'Standard'}</strong></div>
-              <div><span>Status</span><strong>{selected.active === false ? 'Inactive' : 'Active'}</strong></div>
+
+            <div className="objects-config-tabs">
+              {TABS.map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={activeTab === key ? 'is-active' : ''}
+                  onClick={() => setActiveTab(key)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <div className="objects-detail-placeholder">
-              Object configuration will open here in the next migration step.
-            </div>
+
+            {activeTab === 'details' ? (
+              <div className="objects-detail-card">
+                <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
+                <div><span>Source table</span><strong>{selected.source_table || 'Metadata object'}</strong></div>
+                <div><span>Type</span><strong>{selected.company_id ? 'Custom' : 'Standard'}</strong></div>
+                <div><span>Status</span><strong>{selected.active === false ? 'Inactive' : 'Active'}</strong></div>
+              </div>
+            ) : null}
+
+            {activeTab === 'fields' || activeTab === 'formula' ? (
+              <div className="objects-config-list">
+                <div className="objects-config-list-head">
+                  <strong>{activeTab === 'fields' ? 'Fields' : 'Formula Fields'}</strong>
+                  <button type="button"><Plus size={13} /> New</button>
+                </div>
+                {objectLoading ? (
+                  <div className="objects-detail-placeholder">Loading fields…</div>
+                ) : (activeTab === 'fields' ? normalFields : formulaFields).length ? (
+                  <div className="objects-config-rows">
+                    {(activeTab === 'fields' ? normalFields : formulaFields).map((field) => (
+                      <div key={field.id || field.field_id || field.api_name}>
+                        <span>
+                          <strong>{fieldName(field)}</strong>
+                          <small>{field.api_name || field.field_key || '—'}</small>
+                        </span>
+                        <span>{field.field_type || field.type || 'text'}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="objects-detail-placeholder">
+                    No {activeTab === 'fields' ? 'fields' : 'formula fields'} configured.
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {!['details', 'fields', 'formula'].includes(activeTab) ? (
+              <div className="objects-detail-placeholder">
+                {TABS.find(([key]) => key === activeTab)?.[1]} configuration for {objectName(selected)} will render here.
+              </div>
+            ) : null}
           </>
         ) : (
           <div className="objects-detail-placeholder">Select an object.</div>
