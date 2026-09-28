@@ -251,7 +251,7 @@ const settingsGroups = [
     { key: 'email-delivery', label: 'Email Delivery', icon: Mail, tone: 'pink' },
   ],
   [
-    { key: 'server-api', label: 'Server / API Configuration', icon: MonitorCog, tone: 'gray' },
+    { key: 'server-api', label: 'Server Configuration', icon: MonitorCog, tone: 'gray' },
   ],
   [
     { key: 'objects', label: 'Objects', icon: LayoutGrid, tone: 'cyan', searchTerms: ['objects', 'object manager', 'fields', 'metadata', 'api name'] },
