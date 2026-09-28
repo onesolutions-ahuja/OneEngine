@@ -258,8 +258,22 @@ const settingsGroups = [
   ],
 ]
 
+function readRoute() {
+  const raw = window.location.hash.replace(/^#\/?/, '')
+  const [root, section] = raw.split('/')
+  if (root === 'settings') return { app: 'settings', section: section || 'general' }
+  return { app: 'home', section: null }
+}
+
+function setRoute(app, section = null) {
+  const next = app === 'settings'
+    ? `#/settings/${section || 'general'}`
+    : '#/'
+  if (window.location.hash !== next) window.history.replaceState(null, '', next)
+}
+
 function SettingsPage() {
-  const [active, setActive] = useState('general')
+  const [active, setActive] = useState(() => readRoute().section || 'general')
   const [query, setQuery] = useState('')
   const [context, setContext] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -334,7 +348,10 @@ function SettingsPage() {
   const current = visibleItems.find((item) => item.key === active) || visibleItems[0] || null
 
   useEffect(() => {
-    if (current && current.key !== active) setActive(current.key)
+    if (current && current.key !== active) {
+      setActive(current.key)
+      setRoute('settings', current.key)
+    }
   }, [current?.key, active])
 
   useEffect(() => {
@@ -571,7 +588,7 @@ function SettingsPage() {
                   key={key}
                   type="button"
                   className={`settings-nav-item ${current?.key === key ? 'is-active' : ''}`}
-                  onClick={() => setActive(key)}
+                  onClick={() => { setActive(key); setRoute('settings', key) }}
                 >
                   <span className={`settings-nav-icon settings-nav-icon--${tone}`}>
                     <Icon size={16} strokeWidth={2.1} />
@@ -852,8 +869,14 @@ function SettingsPage() {
 
 function Desktop({ onLock }) {
   const [message, setMessage] = useState('Hello.')
-  const [activeApp, setActiveApp] = useState('home')
+  const [activeApp, setActiveApp] = useState(() => readRoute().app)
   const now = useClock()
+
+  useEffect(() => {
+    const syncRoute = () => setActiveApp(readRoute().app)
+    window.addEventListener('hashchange', syncRoute)
+    return () => window.removeEventListener('hashchange', syncRoute)
+  }, [])
 
   const dateTime = useMemo(
     () =>
@@ -869,6 +892,7 @@ function Desktop({ onLock }) {
 
   const openItem = (id) => {
     if (id === 'settings') {
+      setRoute('settings', readRoute().section || 'general')
       setActiveApp('settings')
       return
     }
@@ -889,7 +913,7 @@ function Desktop({ onLock }) {
           <button
             type="button"
             className="brand-chip one-brand"
-            onClick={() => { setMessage('Hello.'); setActiveApp('home') }}
+            onClick={() => { setMessage('Hello.'); setRoute('home'); setActiveApp('home') }}
             aria-label="One Solutions"
           >
             <span className="one-logo-mark" aria-hidden="true">O</span>
@@ -955,6 +979,7 @@ export default function App() {
   const [locked, setLocked] = useState(() => !hasSession())
 
   useEffect(() => {
+    if (!window.location.hash) setRoute('home')
     checkBackend()
       .then(() => document.documentElement.setAttribute('data-onepos-backend', 'connected'))
       .catch(() => document.documentElement.setAttribute('data-onepos-backend', 'offline'))
