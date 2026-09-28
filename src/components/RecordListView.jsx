@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Check, Filter, Pencil, Plus, Search } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Filter, GripVertical, Pencil, Plus, Search } from 'lucide-react'
 
 const valueFor = (column, row) => {
   if (column.filterValue) return column.filterValue(row)
@@ -12,6 +12,46 @@ const valueLabel = (value) => {
   if (value === false) return 'Inactive'
   if (value == null || value === '') return 'Blank'
   return String(value)
+}
+
+const normalizeComparable = (value) => {
+  if (value == null || value === '') return ''
+  const number = Number(value)
+  if (Number.isFinite(number)) return number
+  const date = Date.parse(value)
+  if (Number.isFinite(date) && /[-/:]/.test(String(value))) return date
+  return String(value).toLowerCase()
+}
+
+const matchesOperator = (raw, operator, expected) => {
+  const actualText = valueLabel(raw).toLowerCase()
+  const expectedText = String(expected ?? '').toLowerCase()
+  if (!expectedText && !['is_blank', 'is_not_blank'].includes(operator)) return true
+
+  if (operator === 'contains') return actualText.includes(expectedText)
+  if (operator === 'not_contains') return !actualText.includes(expectedText)
+  if (operator === 'starts_with') return actualText.startsWith(expectedText)
+  if (operator === 'equals') return actualText === expectedText
+  if (operator === 'not_equals') return actualText !== expectedText
+  if (operator === 'is_blank') return raw == null || raw === ''
+  if (operator === 'is_not_blank') return raw != null && raw !== ''
+
+  const actual = normalizeComparable(raw)
+  const wanted = normalizeComparable(expected)
+  if (operator === 'greater_than') return actual > wanted
+  if (operator === 'less_than') return actual < wanted
+  if (operator === 'greater_or_equal') return actual >= wanted
+  if (operator === 'less_or_equal') return actual <= wanted
+  return true
+}
+
+const layoutKey = (title) => {
+  let userId = 'anonymous'
+  try {
+    const user = JSON.parse(sessionStorage.getItem('onepos_user') || '{}')
+    userId = user?.id || user?.username || 'anonymous'
+  } catch {}
+  return `onepos_recordlist_layout:${userId}:${String(title || 'list').toLowerCase().replace(/\s+/g, '-')}`
 }
 
 export default function RecordListView({
@@ -33,6 +73,15 @@ export default function RecordListView({
   const [sort, setSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
   const [filters, setFilters] = useState({})
   const [filterOpen, setFilterOpen] = useState(null)
+  const [draggingKey, setDraggingKey] = useState(null)
+  const [columnOrder, setColumnOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(layoutKey(title)) || '[]')
+      return Array.isArray(saved) ? saved : []
+    } catch {
+      return []
+    }
+  })
   const filterAreaRef = useRef(null)
 
   useEffect(() => {
@@ -42,6 +91,28 @@ export default function RecordListView({
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
   }, [])
+
+  useEffect(() => {
+    const validKeys = columns.map((column) => column.key)
+    setColumnOrder((current) => {
+      const kept = current.filter((key) => validKeys.includes(key))
+      const missing = validKeys.filter((key) => !kept.includes(key))
+      return [...kept, ...missing]
+    })
+  }, [columns])
+
+  useEffect(() => {
+    if (!columnOrder.length) return
+    try {
+      localStorage.setItem(layoutKey(title), JSON.stringify(columnOrder))
+    } catch {}
+  }, [columnOrder, title])
+
+  const orderedColumns = useMemo(() => {
+    const byKey = new Map(columns.map((column) => [column.key, column]))
+    const order = columnOrder.length ? columnOrder : columns.map((column) => column.key)
+    return order.map((key) => byKey.get(key)).filter(Boolean)
+  }, [columns, columnOrder])
 
   const filterOptions = useMemo(() => {
     const result = {}
@@ -69,9 +140,17 @@ export default function RecordListView({
 
     result = result.filter((row) =>
       columns.every((column) => {
-        const selected = filters[column.key]
-        if (!selected?.length) return true
-        return selected.includes(JSON.stringify(valueFor(column, row)))
+        const config = filters[column.key]
+        if (!config) return true
+
+        const selected = config.values || []
+        const raw = valueFor(column, row)
+        if (selected.length && !selected.includes(JSON.stringify(raw))) return false
+
+        if (config.operator) {
+          return matchesOperator(raw, config.operator, config.value)
+        }
+        return true
       }),
     )
 
@@ -109,18 +188,42 @@ export default function RecordListView({
     }))
   }
 
+  const patchFilter = (columnKey, patch) => {
+    setFilters((current) => ({
+      ...current,
+      [columnKey]: { values: [], operator: '', value: '', ...(current[columnKey] || {}), ...patch },
+    }))
+  }
+
   const toggleFilterValue = (columnKey, optionId) => {
-    setFilters((current) => {
-      const selected = current[columnKey] || []
-      const next = selected.includes(optionId)
+    const current = filters[columnKey] || { values: [], operator: '', value: '' }
+    const selected = current.values || []
+    patchFilter(columnKey, {
+      values: selected.includes(optionId)
         ? selected.filter((value) => value !== optionId)
-        : [...selected, optionId]
-      return { ...current, [columnKey]: next }
+        : [...selected, optionId],
     })
   }
 
   const clearColumnFilter = (columnKey) => {
-    setFilters((current) => ({ ...current, [columnKey]: [] }))
+    setFilters((current) => {
+      const next = { ...current }
+      delete next[columnKey]
+      return next
+    })
+  }
+
+  const moveColumn = (fromKey, toKey) => {
+    if (!fromKey || !toKey || fromKey === toKey) return
+    setColumnOrder((current) => {
+      const base = current.length ? [...current] : columns.map((column) => column.key)
+      const from = base.indexOf(fromKey)
+      const to = base.indexOf(toKey)
+      if (from < 0 || to < 0) return base
+      const [moved] = base.splice(from, 1)
+      base.splice(to, 0, moved)
+      return base
+    })
   }
 
   return (
@@ -160,14 +263,35 @@ export default function RecordListView({
             <thead>
               <tr>
                 {canEdit ? <th className="record-list-edit-head"></th> : null}
-                {columns.map((column) => {
+                {orderedColumns.map((column) => {
                   const activeSort = sort.key === column.key
                   const SortIcon = activeSort && sort.direction === 'desc' ? ArrowDown : ArrowUp
-                  const activeFilter = (filters[column.key] || []).length > 0
+                  const filter = filters[column.key] || {}
+                  const activeFilter = Boolean((filter.values || []).length || filter.operator)
                   const options = filterOptions[column.key] || []
                   return (
-                    <th key={column.key} className="record-list-column-head">
+                    <th
+                      key={column.key}
+                      className={`record-list-column-head ${draggingKey === column.key ? 'is-dragging' : ''}`}
+                      draggable
+                      onDragStart={(event) => {
+                        setDraggingKey(column.key)
+                        event.dataTransfer.effectAllowed = 'move'
+                        event.dataTransfer.setData('text/plain', column.key)
+                      }}
+                      onDragEnd={() => setDraggingKey(null)}
+                      onDragOver={(event) => {
+                        event.preventDefault()
+                        event.dataTransfer.dropEffect = 'move'
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault()
+                        moveColumn(event.dataTransfer.getData('text/plain'), column.key)
+                        setDraggingKey(null)
+                      }}
+                    >
                       <div className="record-column-controls">
+                        <GripVertical size={11} className="record-column-drag" />
                         <button
                           type="button"
                           className={`record-sort-button ${activeSort ? 'is-active' : ''}`}
@@ -199,9 +323,38 @@ export default function RecordListView({
                             <strong>Filter {column.label}</strong>
                             <button type="button" onClick={() => clearColumnFilter(column.key)}>Clear</button>
                           </div>
+
+                          <div className="record-filter-condition">
+                            <select
+                              value={filter.operator || ''}
+                              onChange={(event) => patchFilter(column.key, { operator: event.target.value })}
+                            >
+                              <option value="">Choose condition…</option>
+                              <option value="equals">Equals</option>
+                              <option value="not_equals">Does not equal</option>
+                              <option value="contains">Contains</option>
+                              <option value="not_contains">Does not contain</option>
+                              <option value="starts_with">Starts with</option>
+                              <option value="greater_than">More than</option>
+                              <option value="less_than">Less than</option>
+                              <option value="greater_or_equal">More than or equal</option>
+                              <option value="less_or_equal">Less than or equal</option>
+                              <option value="is_blank">Is blank</option>
+                              <option value="is_not_blank">Is not blank</option>
+                            </select>
+                            {filter.operator && !['is_blank', 'is_not_blank'].includes(filter.operator) ? (
+                              <input
+                                value={filter.value || ''}
+                                onChange={(event) => patchFilter(column.key, { value: event.target.value })}
+                                placeholder="Value"
+                              />
+                            ) : null}
+                          </div>
+
+                          <div className="record-filter-values-title">Values</div>
                           <div className="record-filter-options">
                             {options.map((option) => {
-                              const checked = (filters[column.key] || []).includes(option.id)
+                              const checked = (filter.values || []).includes(option.id)
                               return (
                                 <label key={option.id} className="record-filter-option">
                                   <span className={`record-filter-check ${checked ? 'is-checked' : ''}`}>
@@ -242,7 +395,7 @@ export default function RecordListView({
                       </button>
                     </td>
                   ) : null}
-                  {columns.map((column) => (
+                  {orderedColumns.map((column) => (
                     <td key={column.key}>
                       {column.render ? column.render(row) : (row?.[column.key] ?? '—')}
                     </td>
@@ -251,7 +404,7 @@ export default function RecordListView({
               ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + (canEdit ? 1 : 0)} className="record-list-empty">
+                  <td colSpan={orderedColumns.length + (canEdit ? 1 : 0)} className="record-list-empty">
                     {emptyText}
                   </td>
                 </tr>
