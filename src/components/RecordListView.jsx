@@ -63,7 +63,11 @@ export default function RecordListView({
 
   return (
     <div className="record-list-view">
-      <div className="record-list-actions">
+      <div className="record-list-header">
+        <div>
+          <strong>{title}</strong>
+          {subtitle ? <p>{subtitle}</p> : null}
+        </div>
         <button
           type="button"
           className="record-create-button"
@@ -77,11 +81,7 @@ export default function RecordListView({
 
       <div className="record-list-separator" aria-hidden="true" />
 
-      <div className="record-list-header">
-        <div>
-          <strong>{title}</strong>
-          {subtitle ? <p>{subtitle}</p> : null}
-        </div>
+      <div className="record-list-search-row">
         <label className="record-list-search">
           <Search size={15} />
           <input
@@ -102,6 +102,7 @@ export default function RecordListView({
           <table className="record-list-table">
             <thead>
               <tr>
+                {canEdit ? <th className="record-list-edit-head"></th> : null}
                 {columns.map((column) => {
                   const active = sort.key === column.key
                   const Icon = active && sort.direction === 'desc' ? ArrowDownAZ : ArrowUpAZ
@@ -120,17 +121,11 @@ export default function RecordListView({
                     </th>
                   )
                 })}
-                {canEdit ? <th className="record-list-edit-head">Edit</th> : null}
               </tr>
             </thead>
             <tbody>
               {filtered.map((row) => (
                 <tr key={row.id}>
-                  {columns.map((column) => (
-                    <td key={column.key}>
-                      {column.render ? column.render(row) : (row?.[column.key] ?? '—')}
-                    </td>
-                  ))}
                   {canEdit ? (
                     <td className="record-list-edit-cell">
                       <button
@@ -143,6 +138,11 @@ export default function RecordListView({
                       </button>
                     </td>
                   ) : null}
+                  {columns.map((column) => (
+                    <td key={column.key}>
+                      {column.render ? column.render(row) : (row?.[column.key] ?? '—')}
+                    </td>
+                  ))}
                 </tr>
               ))}
               {filtered.length === 0 ? (
