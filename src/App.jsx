@@ -78,14 +78,16 @@ function Dock({ onItemOpen }) {
         onMouseLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
         aria-label="Smart Theme dock"
       >
-        {dockItems.map((item) => (
-          <DockItem
-            key={item.id}
-            item={item}
-            mouseX={mouseX}
-            onActivate={() => onItemOpen?.(item.id)}
-          />
-        ))}
+        <div className="dock-magnify-zone">
+          {dockItems.map((item) => (
+            <DockItem
+              key={item.id}
+              item={item}
+              mouseX={mouseX}
+              onActivate={() => onItemOpen?.(item.id)}
+            />
+          ))}
+        </div>
         <div className="dock-fixed-zone">
           <div className="dock-separator" aria-hidden="true" />
           <div className="dock-jarves-slot">
