@@ -44,9 +44,28 @@ export async function login(username, password) {
   return data
 }
 
+export async function verifyPin(pin) {
+  const data = await apiRequest('/api/auth/unlock-pin', {
+    method: 'POST',
+    body: JSON.stringify({ pin }),
+  })
+  if (!data?.success) throw new Error(data?.message || 'Unable to unlock')
+  return data
+}
+
+export function getStoredUser() {
+  try {
+    return JSON.parse(sessionStorage.getItem('onepos_user') || localStorage.getItem('onepos_user') || '{}')
+  } catch {
+    return {}
+  }
+}
+
 export function logout() {
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
+  localStorage.removeItem('onepos_token')
+  localStorage.removeItem('onepos_user')
 }
 
 export function hasSession() {
