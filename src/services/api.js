@@ -22,7 +22,11 @@ export async function apiRequest(path, options = {}) {
 
   if (!response.ok) {
     const message = typeof body === 'object' && body?.message ? body.message : `Request failed (${response.status})`
-    throw new Error(message)
+    throw Object.assign(new Error(message), {
+      status: response.status,
+      code: typeof body === 'object' ? body?.code : undefined,
+      payload: body,
+    })
   }
 
   return body
