@@ -258,18 +258,24 @@ const settingsGroups = [
   ],
 ]
 
+const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+
 function readRoute() {
-  const raw = window.location.hash.replace(/^#\/?/, '')
-  const [root, section] = raw.split('/')
-  if (root === 'settings') return { app: 'settings', section: section || 'general' }
+  const base = APP_BASE || ''
+  const path = window.location.pathname.startsWith(base)
+    ? window.location.pathname.slice(base.length)
+    : window.location.pathname
+  const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
+  if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'general' }
   return { app: 'home', section: null }
 }
 
 function setRoute(app, section = null) {
+  const base = APP_BASE || ''
   const next = app === 'settings'
-    ? `#/settings/${section || 'general'}`
-    : '#/'
-  if (window.location.hash !== next) window.history.replaceState(null, '', next)
+    ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
+    : `${base}/`
+  if (window.location.pathname !== next) window.history.pushState(null, '', next)
 }
 
 function SettingsPage() {
@@ -874,8 +880,8 @@ function Desktop({ onLock }) {
 
   useEffect(() => {
     const syncRoute = () => setActiveApp(readRoute().app)
-    window.addEventListener('hashchange', syncRoute)
-    return () => window.removeEventListener('hashchange', syncRoute)
+    window.addEventListener('popstate', syncRoute)
+    return () => window.removeEventListener('popstate', syncRoute)
   }, [])
 
   const dateTime = useMemo(
@@ -979,7 +985,6 @@ export default function App() {
   const [locked, setLocked] = useState(() => !hasSession())
 
   useEffect(() => {
-    if (!window.location.hash) setRoute('home')
     checkBackend()
       .then(() => document.documentElement.setAttribute('data-onepos-backend', 'connected'))
       .catch(() => document.documentElement.setAttribute('data-onepos-backend', 'offline'))
