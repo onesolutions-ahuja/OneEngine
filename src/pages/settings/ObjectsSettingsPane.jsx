@@ -161,61 +161,66 @@ export default function ObjectsSettingsPane() {
               </div>
             </div>
 
-            <div className="objects-config-tabs">
-              {TABS.map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={activeTab === key ? 'is-active' : ''}
-                  onClick={() => setActiveTab(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <div className="objects-config-workspace">
+              <nav className="objects-config-tabs" aria-label="Object configuration">
+                {TABS.map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={activeTab === key ? 'is-active' : ''}
+                    onClick={() => setActiveTab(key)}
+                  >
+                    <span>{label}</span>
+                    <ChevronRight size={12} />
+                  </button>
+                ))}
+              </nav>
 
-            {activeTab === 'details' ? (
-              <div className="objects-detail-card">
-                <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
-                <div><span>Source table</span><strong>{selected.source_table || 'Metadata object'}</strong></div>
-                <div><span>Type</span><strong>{selected.company_id ? 'Custom' : 'Standard'}</strong></div>
-                <div><span>Status</span><strong>{selected.active === false ? 'Inactive' : 'Active'}</strong></div>
-              </div>
-            ) : null}
+              <div className="objects-config-content">
+                {activeTab === 'details' ? (
+                  <div className="objects-detail-card">
+                    <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
+                    <div><span>Source table</span><strong>{selected.source_table || 'Metadata object'}</strong></div>
+                    <div><span>Type</span><strong>{selected.company_id ? 'Custom' : 'Standard'}</strong></div>
+                    <div><span>Status</span><strong>{selected.active === false ? 'Inactive' : 'Active'}</strong></div>
+                  </div>
+                ) : null}
 
-            {activeTab === 'fields' || activeTab === 'formula' ? (
-              <div className="objects-config-list">
-                <div className="objects-config-list-head">
-                  <strong>{activeTab === 'fields' ? 'Fields' : 'Formula Fields'}</strong>
-                  <button type="button"><Plus size={13} /> New</button>
-                </div>
-                {objectLoading ? (
-                  <div className="objects-detail-placeholder">Loading fields…</div>
-                ) : (activeTab === 'fields' ? normalFields : formulaFields).length ? (
-                  <div className="objects-config-rows">
-                    {(activeTab === 'fields' ? normalFields : formulaFields).map((field) => (
-                      <div key={field.id || field.field_id || field.api_name}>
-                        <span>
-                          <strong>{fieldName(field)}</strong>
-                          <small>{field.api_name || field.field_key || '—'}</small>
-                        </span>
-                        <span>{field.field_type || field.type || 'text'}</span>
+                {activeTab === 'fields' || activeTab === 'formula' ? (
+                  <div className="objects-config-list">
+                    <div className="objects-config-list-head">
+                      <strong>{activeTab === 'fields' ? 'Fields' : 'Formula Fields'}</strong>
+                      <button type="button"><Plus size={13} /> New</button>
+                    </div>
+                    {objectLoading ? (
+                      <div className="objects-detail-placeholder">Loading fields…</div>
+                    ) : (activeTab === 'fields' ? normalFields : formulaFields).length ? (
+                      <div className="objects-config-rows">
+                        {(activeTab === 'fields' ? normalFields : formulaFields).map((field) => (
+                          <div key={field.id || field.field_id || field.api_name}>
+                            <span>
+                              <strong>{fieldName(field)}</strong>
+                              <small>{field.api_name || field.field_key || '—'}</small>
+                            </span>
+                            <span>{field.field_type || field.type || 'text'}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <div className="objects-detail-placeholder">
+                        No {activeTab === 'fields' ? 'fields' : 'formula fields'} configured.
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="objects-detail-placeholder">
-                    No {activeTab === 'fields' ? 'fields' : 'formula fields'} configured.
-                  </div>
-                )}
-              </div>
-            ) : null}
+                ) : null}
 
-            {!['details', 'fields', 'formula'].includes(activeTab) ? (
-              <div className="objects-detail-placeholder">
-                {TABS.find(([key]) => key === activeTab)?.[1]} configuration for {objectName(selected)} will render here.
+                {!['details', 'fields', 'formula'].includes(activeTab) ? (
+                  <div className="objects-detail-placeholder">
+                    {TABS.find(([key]) => key === activeTab)?.[1]} configuration for {objectName(selected)} will render here.
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
           </>
         ) : (
           <div className="objects-detail-placeholder">Select an object.</div>
