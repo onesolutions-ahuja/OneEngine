@@ -32,6 +32,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Add SPA fallback
+        run: cp dist/index.html dist/404.html
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
