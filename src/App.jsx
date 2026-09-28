@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { checkBackend, hasSession, login } from './services/api'
-import { loadSettingsContext, loadUsers, patchSettings } from './services/settings'
+import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsContext, loadUsers, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
+import RecordListView from './components/RecordListView'
 import {
   Bluetooth,
   LockKeyhole,
@@ -266,6 +267,13 @@ function SettingsPage() {
   const [users, setUsers] = useState([])
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersError, setUsersError] = useState('')
+  const [roles, setRoles] = useState([])
+  const [rolesLoading, setRolesLoading] = useState(false)
+  const [rolesError, setRolesError] = useState('')
+  const [permissionCatalog, setPermissionCatalog] = useState([])
+  const [recordDialog, setRecordDialog] = useState(null)
+  const [recordForm, setRecordForm] = useState({})
+  const [recordSaving, setRecordSaving] = useState(false)
 
   const load = async () => {
     try {
@@ -291,6 +299,9 @@ function SettingsPage() {
   const entitlements = permissions.entitlements || {}
   const canManage = isSuperadmin || permissionCodes.includes('settings.manage')
   const canViewUsers = isSuperadmin || isAdmin || permissionCodes.includes('user.view')
+  const canCreateUsers = isSuperadmin || isAdmin || permissionCodes.includes('user.create')
+  const canEditUsers = isSuperadmin || isAdmin || permissionCodes.includes('user.edit')
+  const canManageRoles = isSuperadmin || isAdmin || permissionCodes.includes('role.manage')
 
   const access = settingSectionAccess({
     isAdmin,
@@ -342,6 +353,141 @@ function SettingsPage() {
       alive = false
     }
   }, [current?.key, canViewUsers])
+
+  useEffect(() => {
+    if (current?.key !== 'roles-permissions') return
+    if (!canManageRoles) {
+      setRoles([])
+      setRolesError('You do not have permission to manage roles.')
+      return
+    }
+
+    let alive = true
+    setRolesLoading(true)
+    setRolesError('')
+    Promise.all([loadRoles(), loadPermissions()])
+      .then(([roleRows, permissions]) => {
+        if (!alive) return
+        setRoles(roleRows)
+        setPermissionCatalog(permissions)
+      })
+      .catch((err) => {
+        if (alive) setRolesError(err?.message || 'Unable to load roles')
+      })
+      .finally(() => {
+        if (alive) setRolesLoading(false)
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [current?.key, canManageRoles])
+
+  const refreshUsers = async () => {
+    if (!canViewUsers) return
+    setUsers(await loadUsers())
+  }
+
+  const refreshRoles = async () => {
+    if (!canManageRoles) return
+    setRoles(await loadRoles())
+  }
+
+  const openCreateUser = () => {
+    setRecordForm({ username: '', fullName: '', email: '', password: '', roleId: '', storeId: null, active: true })
+    setRecordDialog({ type: 'user', mode: 'create' })
+  }
+
+  const openEditUser = (row) => {
+    setRecordForm({
+      id: row.id,
+      username: row.username || '',
+      fullName: row.full_name || '',
+      email: row.email || '',
+      password: '',
+      roleId: row.role_id || '',
+      storeId: row.store_id || null,
+      active: row.active !== false,
+    })
+    setRecordDialog({ type: 'user', mode: 'edit' })
+  }
+
+  const openCreateRole = () => {
+    setRecordForm({ name: '', description: '', parentRoleId: '', permissions: [] })
+    setRecordDialog({ type: 'role', mode: 'create' })
+  }
+
+  const openEditRole = async (row) => {
+    setRecordDialog({ type: 'role', mode: 'edit', loading: true })
+    try {
+      const selected = await loadRolePermissions(row.id)
+      setRecordForm({
+        id: row.id,
+        name: row.name || '',
+        description: row.description || '',
+        parentRoleId: row.parent_role_id || '',
+        permissions: selected,
+        isSystemRole: row.is_system_role === true,
+      })
+      setRecordDialog({ type: 'role', mode: 'edit' })
+    } catch (err) {
+      setRolesError(err?.message || 'Unable to load role permissions')
+      setRecordDialog(null)
+    }
+  }
+
+  const saveRecord = async (event) => {
+    event.preventDefault()
+    if (!recordDialog) return
+    setRecordSaving(true)
+    try {
+      if (recordDialog.type === 'user') {
+        if (recordDialog.mode === 'create') {
+          await createUser({
+            username: recordForm.username,
+            fullName: recordForm.fullName,
+            email: recordForm.email || null,
+            password: recordForm.password,
+            roleId: recordForm.roleId || null,
+            storeId: recordForm.storeId || null,
+          })
+        } else {
+          await updateUser(recordForm.id, {
+            fullName: recordForm.fullName,
+            email: recordForm.email || null,
+            roleId: recordForm.roleId || null,
+            storeId: recordForm.storeId || null,
+            active: recordForm.active !== false,
+            ...(recordForm.password ? { password: recordForm.password } : {}),
+          })
+        }
+        await refreshUsers()
+      } else {
+        let roleId = recordForm.id
+        if (recordDialog.mode === 'create') {
+          const created = await createRole({
+            name: recordForm.name,
+            description: recordForm.description || null,
+            parentRoleId: recordForm.parentRoleId || null,
+          })
+          roleId = created?.data?.id
+        } else {
+          await updateRole(roleId, {
+            name: recordForm.name,
+            description: recordForm.description || null,
+            parentRoleId: recordForm.parentRoleId || null,
+          })
+        }
+        if (roleId) await saveRolePermissions(roleId, recordForm.permissions || [])
+        await refreshRoles()
+      }
+      setRecordDialog(null)
+    } catch (err) {
+      setError(err?.message || 'Unable to save record')
+    } finally {
+      setRecordSaving(false)
+    }
+  }
 
   const settings = context?.settings
   const user = context?.user
@@ -502,19 +648,55 @@ function SettingsPage() {
                   <div className="settings-row"><strong>Earning rate</strong><span className="settings-value">{Number(settings.loyalty?.earningRate || 0) * 100}%</span></div>
                 </>
               ) : current?.key === 'users' ? (
-                <div className="settings-users-view">
-                  <div className="settings-users-toolbar">
-                    <div>
-                      <strong>Users</strong>
-                      <p>{users.length} user{users.length === 1 ? '' : 's'} in this company</p>
-                    </div>
-                  </div>
-
-                  {usersLoading ? (
-                    <div className="settings-users-state">Loading users…</div>
-                  ) : usersError ? (
-                    <div className="settings-users-state settings-users-state--error">{usersError}</div>
-                  ) : (
+                <RecordListView
+                  title="Users"
+                  subtitle={`${users.length} user${users.length === 1 ? '' : 's'} in this company`}
+                  rows={users}
+                  loading={usersLoading}
+                  error={usersError}
+                  canCreate={canCreateUsers}
+                  canEdit={canEditUsers}
+                  onCreate={openCreateUser}
+                  onEdit={openEditUser}
+                  searchKeys={['full_name', 'username', 'email', 'role_name', 'store_name']}
+                  columns={[
+                    { key: 'full_name', label: 'Name', render: (row) => row.full_name || '—' },
+                    { key: 'username', label: 'Username' },
+                    { key: 'email', label: 'Email', render: (row) => row.email || '—' },
+                    { key: 'role_name', label: 'Role', render: (row) => row.role_name || '—' },
+                    { key: 'store_name', label: 'Store', render: (row) => row.store_name || 'All stores' },
+                    {
+                      key: 'active',
+                      label: 'Status',
+                      render: (row) => (
+                        <span className={`settings-status-pill ${row.active ? 'is-active' : 'is-inactive'}`}>
+                          {row.active ? 'Active' : 'Inactive'}
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
+              ) : current?.key === 'roles-permissions' ? (
+                <RecordListView
+                  title="Roles & Permissions"
+                  subtitle={`${roles.length} role${roles.length === 1 ? '' : 's'} in this company`}
+                  rows={roles}
+                  loading={rolesLoading}
+                  error={rolesError}
+                  canCreate={canManageRoles}
+                  canEdit={canManageRoles}
+                  onCreate={openCreateRole}
+                  onEdit={openEditRole}
+                  searchKeys={['name', 'description', 'parent_role_name']}
+                  columns={[
+                    { key: 'name', label: 'Name' },
+                    { key: 'description', label: 'Description', render: (row) => row.description || '—' },
+                    { key: 'parent_role_name', label: 'Parent role', render: (row) => row.parent_role_name || '—' },
+                    { key: 'user_count', label: 'Users' },
+                    { key: 'is_system_role', label: 'Type', render: (row) => row.is_system_role ? 'System' : 'Custom' },
+                  ]}
+                />
+              ) : (
                     <div className="settings-table-wrap">
                       <table className="settings-table">
                         <thead>
@@ -571,6 +753,94 @@ function SettingsPage() {
           )}
         </div>
       </div>
+
+      {recordDialog ? (
+        <div className="record-dialog-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !recordSaving) setRecordDialog(null)
+        }}>
+          <form className="record-dialog" onSubmit={saveRecord}>
+            <div className="record-dialog-header">
+              <div>
+                <strong>
+                  {recordDialog.type === 'user'
+                    ? (recordDialog.mode === 'create' ? 'Create User' : 'Edit User')
+                    : (recordDialog.mode === 'create' ? 'Create Role' : 'Edit Role')}
+                </strong>
+                <span>{recordDialog.type === 'role' ? 'Role and permission record' : 'User account record'}</span>
+              </div>
+              <button type="button" className="record-dialog-close" onClick={() => setRecordDialog(null)}>×</button>
+            </div>
+
+            {recordDialog.loading ? (
+              <div className="record-dialog-loading">Loading…</div>
+            ) : recordDialog.type === 'user' ? (
+              <div className="record-dialog-body">
+                {recordDialog.mode === 'create' ? (
+                  <label>Username<input value={recordForm.username || ''} onChange={(e) => setRecordForm({ ...recordForm, username: e.target.value })} required /></label>
+                ) : (
+                  <label>Username<input value={recordForm.username || ''} disabled /></label>
+                )}
+                <label>Full name<input value={recordForm.fullName || ''} onChange={(e) => setRecordForm({ ...recordForm, fullName: e.target.value })} required /></label>
+                <label>Email<input type="email" value={recordForm.email || ''} onChange={(e) => setRecordForm({ ...recordForm, email: e.target.value })} /></label>
+                <label>{recordDialog.mode === 'create' ? 'Password' : 'New password (optional)'}<input type="password" value={recordForm.password || ''} onChange={(e) => setRecordForm({ ...recordForm, password: e.target.value })} required={recordDialog.mode === 'create'} /></label>
+                <label>Role
+                  <select value={recordForm.roleId || ''} onChange={(e) => setRecordForm({ ...recordForm, roleId: e.target.value })}>
+                    <option value="">No role</option>
+                    {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+                  </select>
+                </label>
+                {recordDialog.mode === 'edit' ? (
+                  <label className="record-dialog-checkbox">
+                    <input type="checkbox" checked={recordForm.active !== false} onChange={(e) => setRecordForm({ ...recordForm, active: e.target.checked })} />
+                    Active user
+                  </label>
+                ) : null}
+              </div>
+            ) : (
+              <div className="record-dialog-body">
+                <label>Role name<input value={recordForm.name || ''} onChange={(e) => setRecordForm({ ...recordForm, name: e.target.value })} required disabled={recordForm.isSystemRole === true} /></label>
+                <label>Description<textarea rows="3" value={recordForm.description || ''} onChange={(e) => setRecordForm({ ...recordForm, description: e.target.value })} /></label>
+                <label>Parent role
+                  <select value={recordForm.parentRoleId || ''} onChange={(e) => setRecordForm({ ...recordForm, parentRoleId: e.target.value })}>
+                    <option value="">No parent</option>
+                    {roles.filter((role) => role.id !== recordForm.id).map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+                  </select>
+                </label>
+                <div className="record-permissions">
+                  <strong>Permissions</strong>
+                  <div className="record-permissions-grid">
+                    {permissionCatalog.map((permission) => {
+                      const checked = (recordForm.permissions || []).includes(permission.code)
+                      return (
+                        <label key={permission.code} className="record-permission-item">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const currentPermissions = new Set(recordForm.permissions || [])
+                              if (e.target.checked) currentPermissions.add(permission.code)
+                              else currentPermissions.delete(permission.code)
+                              setRecordForm({ ...recordForm, permissions: Array.from(currentPermissions) })
+                            }}
+                          />
+                          <span><b>{permission.name || permission.code}</b><small>{permission.code}</small></span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!recordDialog.loading ? (
+              <div className="record-dialog-footer">
+                <button type="button" className="record-dialog-secondary" onClick={() => setRecordDialog(null)} disabled={recordSaving}>Cancel</button>
+                <button type="submit" className="record-dialog-primary" disabled={recordSaving}>{recordSaving ? 'Saving…' : 'Save'}</button>
+              </div>
+            ) : null}
+          </form>
+        </div>
+      ) : null}
     </section>
   )
 }
