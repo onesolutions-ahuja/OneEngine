@@ -2989,3 +2989,80 @@ button:focus-visible {
   color: rgba(0,0,0,.42);
   font-size: 9.5px;
 }
+
+/* Object configuration moves from top tabs into a narrow third pane. */
+.objects-config-workspace {
+  margin-top: 9px;
+  min-height: 430px;
+  display: grid;
+  grid-template-columns: 150px minmax(0,1fr);
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.075);
+  border-radius: 11px;
+  background: white;
+}
+
+.objects-config-tabs {
+  margin: 0;
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: 1px solid rgba(0,0,0,.065);
+  background: #efeff0;
+}
+
+.objects-config-tabs button {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 7px 0 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border: 0;
+  border-radius: 7px;
+  color: rgba(0,0,0,.58);
+  background: transparent;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.objects-config-tabs button:hover {
+  background: rgba(0,0,0,.045);
+}
+
+.objects-config-tabs button.is-active {
+  color: white;
+  background: #0a84ff;
+}
+
+.objects-config-tabs button svg {
+  opacity: .45;
+}
+
+.objects-config-tabs button.is-active svg {
+  opacity: .9;
+}
+
+.objects-config-content {
+  min-width: 0;
+  padding: 10px;
+  overflow: auto;
+  background: #f7f7f8;
+}
+
+.objects-config-content .objects-detail-card,
+.objects-config-content .objects-config-list,
+.objects-config-content .objects-detail-placeholder {
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .objects-config-workspace {
+    grid-template-columns: 132px minmax(0,1fr);
+  }
+}
