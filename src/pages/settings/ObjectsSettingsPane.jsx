@@ -1,0 +1,130 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Box, ChevronRight, Plus, Search } from 'lucide-react'
+import { loadPlatformObjects } from '../../services/settings'
+
+function objectName(object) {
+  return object?.name || object?.label || object?.object_name || object?.object_key || object?.key || 'Unnamed Object'
+}
+
+function objectKey(object) {
+  return object?.object_key || object?.key || object?.api_name || ''
+}
+
+export default function ObjectsSettingsPane() {
+  const [objects, setObjects] = useState([])
+  const [query, setQuery] = useState('')
+  const [selectedKey, setSelectedKey] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let live = true
+    setLoading(true)
+    setError('')
+    loadPlatformObjects()
+      .then((rows) => {
+        if (!live) return
+        setObjects(rows)
+        if (!selectedKey && rows.length) setSelectedKey(objectKey(rows[0]))
+      })
+      .catch((err) => {
+        if (live) setError(err?.message || 'Unable to load objects')
+      })
+      .finally(() => {
+        if (live) setLoading(false)
+      })
+    return () => { live = false }
+  }, [])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return objects
+    return objects.filter((object) =>
+      [
+        objectName(object),
+        objectKey(object),
+        object?.description,
+        object?.source_table,
+      ].filter(Boolean).join(' ').toLowerCase().includes(q),
+    )
+  }, [objects, query])
+
+  const selected = objects.find((object) => objectKey(object) === selectedKey) || filtered[0] || null
+
+  return (
+    <div className="objects-settings-shell">
+      <aside className="objects-list-pane">
+        <div className="objects-pane-header">
+          <div>
+            <strong>Objects</strong>
+            <span>{objects.length} configured</span>
+          </div>
+          <button type="button" className="objects-new-icon" title="New Object" aria-label="New Object">
+            <Plus size={15} />
+          </button>
+        </div>
+
+        <label className="objects-pane-search">
+          <Search size={15} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search objects"
+          />
+        </label>
+
+        <div className="objects-pane-list">
+          {loading ? <div className="objects-pane-state">Loading objects…</div> : null}
+          {error ? <div className="objects-pane-state is-error">{error}</div> : null}
+          {!loading && !error && filtered.map((object) => {
+            const key = objectKey(object)
+            const active = key === objectKey(selected)
+            return (
+              <button
+                key={object.id || key}
+                type="button"
+                className={`objects-list-item ${active ? 'is-active' : ''}`}
+                onClick={() => setSelectedKey(key)}
+              >
+                <span className="objects-list-icon"><Box size={14} /></span>
+                <span className="objects-list-copy">
+                  <strong>{objectName(object)}</strong>
+                  <small>{key}</small>
+                </span>
+                <ChevronRight size={13} />
+              </button>
+            )
+          })}
+          {!loading && !error && !filtered.length ? (
+            <div className="objects-pane-state">No matching objects.</div>
+          ) : null}
+        </div>
+      </aside>
+
+      <section className="objects-detail-pane">
+        {selected ? (
+          <>
+            <div className="objects-detail-header">
+              <div className="objects-detail-icon"><Box size={18} /></div>
+              <div>
+                <strong>{objectName(selected)}</strong>
+                <span>{objectKey(selected)}</span>
+              </div>
+            </div>
+            <div className="objects-detail-card">
+              <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
+              <div><span>Source table</span><strong>{selected.source_table || 'Metadata object'}</strong></div>
+              <div><span>Type</span><strong>{selected.company_id ? 'Custom' : 'Standard'}</strong></div>
+              <div><span>Status</span><strong>{selected.active === false ? 'Inactive' : 'Active'}</strong></div>
+            </div>
+            <div className="objects-detail-placeholder">
+              Object configuration will open here in the next migration step.
+            </div>
+          </>
+        ) : (
+          <div className="objects-detail-placeholder">Select an object.</div>
+        )}
+      </section>
+    </div>
+  )
+}
