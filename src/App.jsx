@@ -217,23 +217,23 @@ function LockScreen({ onUnlock }) {
 
 const settingsGroups = [
   [
-    { key: 'general', label: 'General', icon: Settings2, tone: 'orange' },
-    { key: 'company', label: 'Company', icon: Building2, tone: 'blue' },
-    { key: 'store-till', label: 'Store & Till', icon: Store, tone: 'blue' },
+    { key: 'general', label: 'General', icon: Settings2, tone: 'orange', searchTerms: ['date format', 'currency', 'timezone', 'regional'] },
+    { key: 'company', label: 'Company', icon: Building2, tone: 'blue', searchTerms: ['company name', 'legal name', 'company email', 'company phone', 'logo'] },
+    { key: 'store-till', label: 'Store & Till', icon: Store, tone: 'blue', searchTerms: ['store', 'till', 'terminal', 'terminal number', 'product view', 'invoice'] },
     { key: 'client-web-shop', label: 'Client Web Shop', icon: ShoppingCart, tone: 'green' },
   ],
   [
-    { key: 'tax-vat', label: 'Tax / VAT', icon: ReceiptText, tone: 'green' },
+    { key: 'tax-vat', label: 'Tax / VAT', icon: ReceiptText, tone: 'green', searchTerms: ['vat', 'tax', 'vat enabled', 'default vat rate', 'rate'] },
     { key: 'receipts', label: 'Receipts', icon: ReceiptText, tone: 'green' },
     { key: 'payment-terminals', label: 'Payment Terminals', icon: CreditCard, tone: 'green' },
-    { key: 'customer-loyalty', label: 'Customer Loyalty', icon: Sparkles, tone: 'purple' },
+    { key: 'customer-loyalty', label: 'Customer Loyalty', icon: Sparkles, tone: 'purple', searchTerms: ['loyalty', 'earning rate', 'points', 'redeem', 'rewards'] },
   ],
   [
     { key: 'hardware', label: 'Hardware', icon: HardDrive, tone: 'gray' },
   ],
   [
-    { key: 'users', label: 'Users', icon: Users, tone: 'blue' },
-    { key: 'roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck, tone: 'blue' },
+    { key: 'users', label: 'Users', icon: Users, tone: 'blue', searchTerms: ['user', 'username', 'email', 'role', 'store', 'active', 'inactive'] },
+    { key: 'roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck, tone: 'blue', searchTerms: ['role', 'permission', 'permissions', 'parent role', 'system role', 'custom role'] },
   ],
   [
     { key: 'ai-assistant', label: 'AI assistant', icon: Sparkles, tone: 'purple' },
@@ -310,12 +310,21 @@ function SettingsPage() {
     loyalty: entitlements.loyalty === true,
   })
 
+  const normalizedQuery = query.trim().toLowerCase()
+  const itemMatchesSearch = (item) => {
+    if (!normalizedQuery) return true
+    const searchable = [item.label, ...(item.searchTerms || [])]
+      .join(' ')
+      .toLowerCase()
+    return searchable.includes(normalizedQuery)
+  }
+
   const visibleGroups = settingsGroups
     .map((group) =>
       group.filter(
         (item) =>
           sectionIsVisible(access, item.label) &&
-          item.label.toLowerCase().includes(query.toLowerCase()),
+          itemMatchesSearch(item),
       ),
     )
     .filter((group) => group.length)
