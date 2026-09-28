@@ -32,13 +32,66 @@ function useClock() {
 }
 
 function Dock({ onItemOpen }) {
-  const [pointerX, setPointerX] = useState(null)
   const [bouncing, setBouncing] = useState(null)
   const dockRef = useRef(null)
+  const itemRefs = useRef([])
+  const frameRef = useRef(null)
+
+  const applyMagnification = (clientX) => {
+    const dock = dockRef.current
+    if (!dock) return
+
+    const dockRect = dock.getBoundingClientRect()
+
+    itemRefs.current.forEach((item) => {
+      if (!item) return
+
+      const center = dockRect.left + item.offsetLeft + item.offsetWidth / 2
+      const signedDistance = center - clientX
+      const distance = Math.abs(signedDistance)
+      const radius = 128
+      const normalized = Math.max(0, 1 - distance / radius)
+      const influence = normalized * normalized * (3 - 2 * normalized)
+
+      const scale = 1 + influence * 0.66
+      const lift = influence * 21
+      const push = Math.sign(signedDistance || 1) * influence * 18
+
+      item.style.setProperty('--dock-scale', scale.toFixed(3))
+      item.style.setProperty('--dock-lift', `${lift.toFixed(2)}px`)
+      item.style.setProperty('--dock-push', `${push.toFixed(2)}px`)
+    })
+  }
+
+  const resetMagnification = () => {
+    itemRefs.current.forEach((item) => {
+      if (!item) return
+      item.style.setProperty('--dock-scale', '1')
+      item.style.setProperty('--dock-lift', '0px')
+      item.style.setProperty('--dock-push', '0px')
+    })
+  }
+
+  const handlePointerMove = (event) => {
+    const clientX = event.clientX
+    if (frameRef.current) cancelAnimationFrame(frameRef.current)
+    frameRef.current = requestAnimationFrame(() => applyMagnification(clientX))
+  }
+
+  const handlePointerLeave = () => {
+    if (frameRef.current) cancelAnimationFrame(frameRef.current)
+    resetMagnification()
+  }
+
+  useEffect(() => {
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current)
+    }
+  }, [])
 
   const activate = (id) => {
     setBouncing(id)
-    window.setTimeout(() => setBouncing(null), 520)
+    window.setTimeout(() => setBouncing(null), 360)
     onItemOpen?.(id)
   }
 
@@ -47,19 +100,20 @@ function Dock({ onItemOpen }) {
       <div
         className="dock"
         ref={dockRef}
-        onPointerMove={(event) => setPointerX(event.clientX)}
-        onPointerLeave={() => setPointerX(null)}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
         aria-label="Smart Theme dock"
       >
-        {dockItems.map(({ id, label, icon: Icon, tint }) => (
+        {dockItems.map(({ id, label, icon: Icon, tint }, index) => (
           <DockItem
             key={id}
-            id={id}
             label={label}
             Icon={Icon}
             tint={tint}
-            pointerX={pointerX}
             bouncing={bouncing === id}
+            setRef={(node) => {
+              itemRefs.current[index] = node
+            }}
             onActivate={() => activate(id)}
           />
         ))}
@@ -68,43 +122,13 @@ function Dock({ onItemOpen }) {
   )
 }
 
-function DockItem({ label, Icon, tint, pointerX, bouncing, onActivate }) {
-  const ref = useRef(null)
-  const [center, setCenter] = useState(null)
-
-  useEffect(() => {
-    const update = () => {
-      const rect = ref.current?.getBoundingClientRect()
-      if (rect) setCenter(rect.left + rect.width / 2)
-    }
-    update()
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
-
-  let scale = 1
-  let lift = 0
-  let spacing = 0
-
-  if (pointerX !== null && center !== null) {
-    const distance = Math.abs(pointerX - center)
-    const influence = Math.max(0, 1 - distance / 140)
-    scale = 1 + influence * 0.55
-    lift = influence * 12
-    spacing = influence * 16
-  }
-
+function DockItem({ label, Icon, tint, bouncing, setRef, onActivate }) {
   return (
     <button
-      ref={ref}
+      ref={setRef}
       type="button"
       className={`dock-item ${bouncing ? 'is-bouncing' : ''}`}
       onClick={onActivate}
-      style={{
-        '--dock-scale': scale,
-        '--dock-lift': `${lift}px`,
-        '--dock-spacing': `${spacing}px`,
-      }}
       aria-label={label}
     >
       <span className="dock-tooltip">{label}</span>
