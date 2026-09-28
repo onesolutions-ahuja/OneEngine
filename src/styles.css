@@ -1939,3 +1939,32 @@ button:focus-visible {
     max-height: 340px;
   }
 }
+
+/* Final RecordListView toolbar placement. */
+.record-list-header {
+  justify-content: space-between;
+}
+
+.record-list-header .record-create-button {
+  margin-left: auto;
+}
+
+.record-list-search-row {
+  padding: 10px 12px;
+  border: 1px solid rgba(0,0,0,.07);
+  border-top: 0;
+  background: rgba(255,255,255,.9);
+}
+
+.record-list-search-row .record-list-search {
+  width: min(480px, 44%);
+  margin: 0;
+}
+
+.record-list-edit-head,
+.record-list-edit-cell {
+  width: 42px;
+  min-width: 42px;
+  padding-left: 8px !important;
+  padding-right: 4px !important;
+}
