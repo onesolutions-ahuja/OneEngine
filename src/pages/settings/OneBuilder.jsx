@@ -165,6 +165,7 @@ export default function OneBuilder() {
   }
 
   const activeTab = TABS.find((item) => item.key === tab)
+  const ActiveTabIcon = activeTab?.icon || LayoutDashboard
 
   return (
     <div className="onebuilder">
@@ -210,7 +211,7 @@ export default function OneBuilder() {
           <div className="onebuilder-canvas">
             {!items.length ? (
               <div className="onebuilder-empty">
-                <activeTab.icon size={34} />
+                <ActiveTabIcon size={34} />
                 <strong>Start building</strong>
                 <span>Drag components from the right panel or click one to add it.</span>
               </div>
