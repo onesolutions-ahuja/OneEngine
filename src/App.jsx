@@ -84,12 +84,14 @@ function DockItem({ label, Icon, tint, pointerX, bouncing, onActivate }) {
 
   let scale = 1
   let lift = 0
+  let spacing = 0
 
   if (pointerX !== null && center !== null) {
     const distance = Math.abs(pointerX - center)
     const influence = Math.max(0, 1 - distance / 140)
     scale = 1 + influence * 0.55
     lift = influence * 12
+    spacing = influence * 16
   }
 
   return (
@@ -101,6 +103,7 @@ function DockItem({ label, Icon, tint, pointerX, bouncing, onActivate }) {
       style={{
         '--dock-scale': scale,
         '--dock-lift': `${lift}px`,
+        '--dock-spacing': `${spacing}px`,
       }}
       aria-label={label}
     >
