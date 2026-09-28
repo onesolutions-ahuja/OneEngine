@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { checkBackend } from './services/api'
+import { checkBackend, hasSession, login } from './services/api'
 import {
   Bluetooth,
   LockKeyhole,
@@ -134,6 +134,11 @@ function DockItem({ item, mouseX, onActivate }) {
 
 function LockScreen({ onUnlock }) {
   const now = useClock()
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
   const time = useMemo(
     () =>
       new Intl.DateTimeFormat('en-GB', {
@@ -153,37 +158,65 @@ function LockScreen({ onUnlock }) {
     [now],
   )
 
-  useEffect(() => {
-    const onKey = (event) => {
-      if (event.key === 'Enter' || event.key === ' ') onUnlock()
+  const submit = async (event) => {
+    event?.preventDefault()
+    if (!username.trim() || !password) return
+    try {
+      setSubmitting(true)
+      setError('')
+      await login(username.trim(), password)
+      onUnlock()
+    } catch (err) {
+      setError(err?.message || 'Unable to sign in')
+    } finally {
+      setSubmitting(false)
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onUnlock])
+  }
 
   return (
     <main className="screen lock-screen">
       <div className="wallpaper wallpaper--lock" />
       <div className="lock-vignette" />
-      <section className="lock-content" aria-label="Lock screen">
+
+      <section className="lock-content" aria-label="Login screen">
         <div className="lock-date">{date}</div>
         <div className="lock-time">{time}</div>
 
-        <button type="button" className="profile-button" onClick={onUnlock}>
-          <span className="profile-avatar">S</span>
-          <span className="profile-name">Smart Theme</span>
-          <span className="unlock-hint">Click to unlock</span>
-        </button>
-      </section>
+        <form className="login-glass-card" onSubmit={submit}>
+          <div className="profile-avatar login-avatar">O</div>
+          <div className="login-title">One Solutions</div>
+          <div className="login-subtitle">Superadmin test access</div>
 
-      <button type="button" className="lock-action" onClick={onUnlock}>
-        <LockKeyhole size={17} />
-        Unlock
-      </button>
+          <input
+            className="login-field"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="Username or email"
+            autoComplete="username"
+          />
+          <input
+            className="login-field"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Password"
+            type="password"
+            autoComplete="current-password"
+          />
+
+          {error ? <div className="login-error">{error}</div> : null}
+
+          <button
+            className="login-submit"
+            type="submit"
+            disabled={submitting || !username.trim() || !password}
+          >
+            {submitting ? 'Signing in…' : 'Sign In'}
+          </button>
+        </form>
+      </section>
     </main>
   )
 }
-
 
 const settingsGroups = [
   [
@@ -329,7 +362,7 @@ function SettingsPage() {
               </div>
             )}
           </div>
-        </div>        )}
+        </div>
       </div>
     </section>
   )
@@ -433,7 +466,7 @@ function Desktop({ onLock }) {
 }
 
 export default function App() {
-  const [locked, setLocked] = useState(false)
+  const [locked, setLocked] = useState(() => !hasSession())
 
   useEffect(() => {
     checkBackend()
