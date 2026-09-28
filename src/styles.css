@@ -1634,3 +1634,308 @@ button:focus-visible {
 .record-list-table th {
   background: #ededee;
 }
+
+/* OneBuilder — custom Platform-only builder surface. */
+.settings-card:has(.onebuilder) {
+  width: min(1180px, 100%);
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.onebuilder {
+  width: 100%;
+  min-width: 0;
+}
+
+.onebuilder-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 11px;
+  background: rgba(255,255,255,.84);
+}
+
+.onebuilder-tab {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-right: 1px solid rgba(0,0,0,.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: transparent;
+  color: rgba(0,0,0,.58);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.onebuilder-tab:last-child { border-right: 0; }
+
+.onebuilder-tab:hover { background: rgba(0,0,0,.025); }
+
+.onebuilder-tab.is-active {
+  color: #0a66d8;
+  background: #eef6ff;
+  box-shadow: inset 0 -2px #0a84ff;
+}
+
+.onebuilder-gap {
+  height: 22px;
+}
+
+.onebuilder-workspace {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 280px;
+  gap: 14px;
+  min-height: 560px;
+}
+
+.onebuilder-canvas-card,
+.onebuilder-components {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: rgba(255,255,255,.86);
+}
+
+.onebuilder-canvas-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.onebuilder-canvas-header,
+.onebuilder-components-header {
+  min-height: 52px;
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0,0,0,.065);
+  background: #efeff0;
+}
+
+.onebuilder-canvas-header > div,
+.onebuilder-components-header {
+  font-size: 12px;
+}
+
+.onebuilder-canvas-header > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.onebuilder-canvas-header strong,
+.onebuilder-components-header strong {
+  font-size: 13px;
+}
+
+.onebuilder-canvas-header span,
+.onebuilder-components-header span {
+  margin-top: 2px;
+  color: rgba(0,0,0,.48);
+  font-size: 11px;
+}
+
+.onebuilder-clear {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(0,0,0,.09);
+  border-radius: 7px;
+  background: white;
+  color: #555;
+  font-size: 11px;
+}
+
+.onebuilder-clear:disabled { opacity: .4; }
+
+.onebuilder-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 500px;
+  padding: 18px;
+  overflow: auto;
+  background:
+    linear-gradient(rgba(0,0,0,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,.035) 1px, transparent 1px),
+    #fafafa;
+  background-size: 22px 22px;
+}
+
+.onebuilder-empty {
+  min-height: 450px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: rgba(0,0,0,.38);
+  text-align: center;
+}
+
+.onebuilder-empty strong {
+  color: rgba(0,0,0,.62);
+  font-size: 14px;
+}
+
+.onebuilder-empty span {
+  max-width: 330px;
+  font-size: 12px;
+}
+
+.onebuilder-canvas-stack {
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+  margin: 12px auto;
+}
+
+.onebuilder-node {
+  min-height: 58px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: 18px minmax(0,1fr) 26px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 4px 16px rgba(0,0,0,.045);
+}
+
+.onebuilder-node > svg { color: rgba(0,0,0,.28); }
+
+.onebuilder-node > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.onebuilder-node small {
+  color: rgba(0,0,0,.42);
+  font-size: 10px;
+}
+
+.onebuilder-node strong {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.onebuilder-node button {
+  border: 0;
+  background: transparent;
+  color: rgba(0,0,0,.42);
+  font-size: 18px;
+}
+
+.onebuilder-components {
+  display: flex;
+  flex-direction: column;
+}
+
+.onebuilder-component-search {
+  height: 36px;
+  margin: 10px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 8px;
+  background: #f5f5f6;
+  color: rgba(0,0,0,.5);
+}
+
+.onebuilder-component-search input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+.onebuilder-component-list {
+  padding: 0 10px 10px;
+  display: grid;
+  gap: 7px;
+  overflow-y: auto;
+}
+
+.onebuilder-component {
+  min-height: 46px;
+  padding: 7px 8px;
+  display: grid;
+  grid-template-columns: 28px minmax(0,1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 9px;
+  background: #fff;
+  color: #1d1d1f;
+  text-align: left;
+  cursor: grab;
+}
+
+.onebuilder-component:hover {
+  border-color: rgba(10,132,255,.42);
+  background: #f7fbff;
+}
+
+.onebuilder-component-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: #0a66d8;
+  background: #eaf4ff;
+}
+
+.onebuilder-component > span:nth-child(2) {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.onebuilder-component b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.onebuilder-component small {
+  margin-top: 2px;
+  color: rgba(0,0,0,.42);
+  font-size: 10px;
+}
+
+.onebuilder-component > svg {
+  color: rgba(0,0,0,.3);
+}
+
+.onebuilder-message {
+  margin-top: 8px;
+  color: rgba(0,0,0,.48);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .onebuilder-tabs {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+
+  .onebuilder-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .onebuilder-components {
+    max-height: 340px;
+  }
+}
