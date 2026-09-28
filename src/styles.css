@@ -1462,3 +1462,104 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+/* Final compact record-list table treatment. */
+.record-list-table th,
+.record-list-table td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.record-list-table tbody tr {
+  height: 34px;
+}
+
+.record-list-table th {
+  height: 30px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.record-sort-button {
+  width: 100%;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.record-sort-button svg {
+  opacity: .35;
+}
+
+.record-sort-button:hover svg,
+.record-sort-button.is-active svg {
+  opacity: .8;
+  color: #0a84ff;
+}
+
+.record-sort-button:disabled {
+  cursor: default;
+}
+
+.record-edit-button {
+  width: 24px;
+  height: 24px;
+}
+
+.record-status-toggle {
+  padding: 0;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  color: #7a2e2a;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.record-status-toggle:disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+.record-status-toggle-track {
+  width: 30px;
+  height: 18px;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #b7b7bb;
+  transition: background 140ms ease;
+}
+
+.record-status-toggle-track span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: transform 140ms ease;
+}
+
+.record-status-toggle.is-on {
+  color: #177a34;
+}
+
+.record-status-toggle.is-on .record-status-toggle-track {
+  background: #34c759;
+}
+
+.record-status-toggle.is-on .record-status-toggle-track span {
+  transform: translateX(12px);
+}
