@@ -2112,3 +2112,39 @@ button:focus-visible {
 .record-list-table-wrap {
   overflow: auto;
 }
+
+/* Final Settings list surface polish. */
+.settings-card:has(.record-list-view) {
+  background: transparent;
+}
+
+.record-list-header {
+  border: 1px solid rgba(0,0,0,.075);
+  border-radius: 12px;
+  background: rgba(239,239,240,.98);
+  box-shadow: 0 1px 2px rgba(0,0,0,.025);
+}
+
+.record-list-separator {
+  height: 18px;
+  background: transparent;
+}
+
+.record-list-search-row {
+  padding: 0 0 10px;
+  border: 0;
+  background: transparent;
+}
+
+.record-list-search-row .record-list-search {
+  background: rgba(255,255,255,.52);
+  border-color: rgba(0,0,0,.08);
+  box-shadow: none;
+  backdrop-filter: blur(12px);
+}
+
+.record-list-table-wrap {
+  border-top: 1px solid rgba(0,0,0,.07);
+  border-radius: 11px;
+  overflow: auto;
+}
