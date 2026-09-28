@@ -2199,3 +2199,15 @@ button:focus-visible {
   text-transform: uppercase;
   letter-spacing: .05em;
 }
+
+/* Wider final RecordListView: halve the visual side gaps while keeping header/search aligned. */
+.settings-card:has(.record-list-view) {
+  width: min(1100px, 100%);
+}
+
+.record-list-view,
+.record-list-header,
+.record-list-search-row,
+.record-list-table-wrap {
+  width: 100%;
+}
