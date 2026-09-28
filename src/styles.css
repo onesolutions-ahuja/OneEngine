@@ -3710,3 +3710,25 @@ button:focus-visible {
     gap: 8px;
   }
 }
+
+/* Lock screen session mode: PIN unlock + quiet sign-out action. */
+.login-pin-field {
+  text-align: center;
+  letter-spacing: .32em;
+  font-weight: 800;
+}
+
+.lock-signout {
+  margin-top: 2px;
+  border: 0;
+  color: rgba(255,255,255,.78);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lock-signout:hover {
+  color: #fff;
+  text-decoration: underline;
+}
