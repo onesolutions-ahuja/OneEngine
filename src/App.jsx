@@ -388,6 +388,28 @@ function SettingsPage() {
     setUsers(await loadUsers())
   }
 
+  const toggleUserActive = async (row) => {
+    if (!canEditUsers) return
+    const nextActive = !row.active
+    setUsers((currentRows) =>
+      currentRows.map((item) => item.id === row.id ? { ...item, active: nextActive } : item),
+    )
+    try {
+      await updateUser(row.id, {
+        fullName: row.full_name,
+        email: row.email || null,
+        roleId: row.role_id || null,
+        storeId: row.store_id || null,
+        active: nextActive,
+      })
+    } catch (err) {
+      setUsers((currentRows) =>
+        currentRows.map((item) => item.id === row.id ? { ...item, active: row.active } : item),
+      )
+      setUsersError(err?.message || 'Unable to update user status')
+    }
+  }
+
   const refreshRoles = async () => {
     if (!canManageRoles) return
     setRoles(await loadRoles())
@@ -668,10 +690,19 @@ function SettingsPage() {
                     {
                       key: 'active',
                       label: 'Status',
+                      sortValue: (row) => row.active ? 'Active' : 'Inactive',
                       render: (row) => (
-                        <span className={`settings-status-pill ${row.active ? 'is-active' : 'is-inactive'}`}>
-                          {row.active ? 'Active' : 'Inactive'}
-                        </span>
+                        <button
+                          type="button"
+                          className={`record-status-toggle ${row.active ? 'is-on' : ''}`}
+                          aria-pressed={row.active}
+                          aria-label={`${row.active ? 'Deactivate' : 'Activate'} ${row.full_name || row.username}`}
+                          disabled={!canEditUsers}
+                          onClick={() => toggleUserActive(row)}
+                        >
+                          <span className="record-status-toggle-track"><span /></span>
+                          <b>{row.active ? 'Active' : 'Inactive'}</b>
+                        </button>
                       ),
                     },
                   ]}
