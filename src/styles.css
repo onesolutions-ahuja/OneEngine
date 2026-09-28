@@ -629,6 +629,7 @@ button:focus-visible {
 .settings-nav-icon--black { color: white; background: linear-gradient(#2b2b2b,#000); }
 .settings-nav-icon--cyan { color: white; background: linear-gradient(#8be2fd,#55bef0); }
 .settings-nav-icon--orange { color: white; background: linear-gradient(#fcb137,#fc9501); }
+.settings-nav-icon--green { color: white; background: linear-gradient(#34c759,#20a943); }
 
 .settings-chevron {
   margin-left: auto;
