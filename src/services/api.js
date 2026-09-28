@@ -1,4 +1,4 @@
-const API_BASE = String(import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')
+const API_BASE = String(import.meta.env.VITE_API_BASE || 'https://onepos.onrender.com').replace(/\/$/, '')
 
 export function apiUrl(path) {
   if (/^https?:\/\//i.test(path)) return path
