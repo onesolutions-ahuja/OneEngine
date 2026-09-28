@@ -4,11 +4,14 @@ import {
   CalendarDays,
   CloudSun,
   Folder,
+  Bluetooth,
   LockKeyhole,
   MessageCircle,
   Music2,
   Search,
   Settings,
+  SlidersHorizontal,
+  Wifi,
 } from 'lucide-react'
 
 const dockItems = [
@@ -195,15 +198,48 @@ function Desktop({ onLock }) {
       <div className="wallpaper wallpaper--desktop" />
 
       <header className="demo-menubar">
-        <button type="button" className="brand-chip" onClick={() => setMessage('Hello.')}>
-          Smart Theme
-        </button>
+        <div className="menubar-left">
+          <button
+            type="button"
+            className="brand-chip one-brand"
+            onClick={() => setMessage('Hello.')}
+            aria-label="One Solutions"
+          >
+            <span className="one-logo-mark" aria-hidden="true">O</span>
+            <span className="one-logo-text" aria-hidden="true">ne</span>
+          </button>
+
+          <button type="button" className="menu-text menu-text--strong">Finder</button>
+          <button type="button" className="menu-text">File</button>
+          <button type="button" className="menu-text">Edit</button>
+          <button type="button" className="menu-text">View</button>
+          <button type="button" className="menu-text">Go</button>
+          <button type="button" className="menu-text">Window</button>
+          <button type="button" className="menu-text">Help</button>
+        </div>
+
         <div className="menubar-spacer" />
-        <button type="button" className="menubar-button" onClick={onLock}>
-          <LockKeyhole size={14} />
-          Lock
-        </button>
-        <span className="menubar-time">{dateTime}</span>
+
+        <div className="menubar-right">
+          <button type="button" className="status-button" aria-label="Search">
+            <Search size={18} strokeWidth={2.1} />
+          </button>
+          <button type="button" className="status-button" aria-label="Wi-Fi">
+            <Wifi size={17} strokeWidth={2.1} />
+          </button>
+          <button type="button" className="status-button" aria-label="Bluetooth">
+            <Bluetooth size={17} strokeWidth={2.1} />
+          </button>
+          <button type="button" className="status-button" aria-label="Control Center">
+            <SlidersHorizontal size={18} strokeWidth={2.2} />
+          </button>
+          <button type="button" className="status-button assistant-orb" aria-label="Assistant">
+            <span aria-hidden="true" />
+          </button>
+          <button type="button" className="menubar-time-button">
+            {dateTime}
+          </button>
+        </div>
       </header>
 
       <section className="hello-stage">
