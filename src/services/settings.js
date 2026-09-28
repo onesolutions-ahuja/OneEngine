@@ -20,3 +20,9 @@ export async function patchSettings(patch) {
     body: JSON.stringify(patch),
   })
 }
+
+
+export async function loadUsers() {
+  const payload = await apiRequest('/api/admin/users')
+  return Array.isArray(payload?.data) ? payload.data : []
+}
