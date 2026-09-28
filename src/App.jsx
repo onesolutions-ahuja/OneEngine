@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { checkBackend, hasSession, login } from './services/api'
+import JarvisOrb from './components/jarvis/JarvisOrb'
 import {
   Bluetooth,
   LockKeyhole,
@@ -48,13 +49,6 @@ const dockItems = [
   { id: 'notes', label: 'Notes', src: 'https://rdvnui.com/assets/Notes-fm-2Meh1.png', scaled: true },
 ]
 
-const trashItem = {
-  id: 'trash',
-  label: 'Trash',
-  src: 'https://rdvnui.com/assets/Trash%20Full-BoE_wJYh.png',
-  scaled: false,
-}
-
 function useClock() {
   const [now, setNow] = useState(() => new Date())
 
@@ -86,11 +80,9 @@ function Dock({ onItemOpen }) {
           />
         ))}
         <div className="dock-separator" aria-hidden="true" />
-        <DockItem
-          item={trashItem}
-          mouseX={mouseX}
-          onActivate={() => onItemOpen?.(trashItem.id)}
-        />
+        <div className="dock-jarves-slot">
+          <JarvisOrb onClick={() => onItemOpen?.('jarves')} />
+        </div>
       </motion.div>
     </div>
   )
@@ -390,7 +382,11 @@ function Desktop({ onLock }) {
       setActiveApp('settings')
       return
     }
-    const item = dockItems.find((entry) => entry.id === id) ?? (id === trashItem.id ? trashItem : null)
+    if (id === 'jarves') {
+      setMessage('JARVES')
+      return
+    }
+    const item = dockItems.find((entry) => entry.id === id) ?? null
     setMessage(`${item?.label ?? 'App'} clicked — component wiring comes next.`)
   }
 
