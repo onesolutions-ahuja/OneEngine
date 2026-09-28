@@ -2793,3 +2793,104 @@ button:focus-visible {
     grid-template-columns: 240px minmax(0,1fr);
   }
 }
+
+/* Compact Settings vertical rhythm so the Dock never covers content. */
+.settings-content-header {
+  height: 28px;
+  min-height: 28px;
+}
+
+.settings-content-header h2 {
+  font-size: 12px;
+}
+
+.settings-content-body {
+  padding: 12px clamp(12px, 2.5vw, 36px) 110px;
+}
+
+.settings-card:has(.record-list-view),
+.settings-card:has(.objects-settings-shell),
+.settings-card:has(.onebuilder) {
+  width: min(1180px, 100%);
+}
+
+.record-list-header {
+  min-height: 40px;
+  padding: 6px 10px;
+}
+
+.record-list-separator {
+  height: 10px;
+}
+
+.record-list-search-row {
+  padding-bottom: 7px;
+}
+
+.record-list-search-row .record-list-search {
+  height: 28px;
+}
+
+.record-list-table-wrap {
+  max-height: calc(100vh - 285px);
+  overflow: auto;
+}
+
+.record-list-table th,
+.record-list-table td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.record-list-table tbody tr {
+  height: 30px;
+}
+
+/* Objects view: tighter side gaps and move the middle/right panes upward. */
+.objects-settings-shell {
+  min-height: calc(100vh - 185px);
+}
+
+.objects-pane-header {
+  min-height: 44px;
+  padding: 6px 9px;
+}
+
+.objects-pane-search {
+  height: 30px;
+  margin: 7px;
+}
+
+.objects-list-item {
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.objects-detail-pane {
+  padding: 10px;
+}
+
+.objects-detail-header {
+  min-height: 48px;
+  padding: 8px 10px;
+}
+
+.objects-detail-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.objects-detail-card {
+  margin-top: 9px;
+}
+
+.objects-detail-card > div {
+  min-height: 48px;
+  padding: 7px 9px;
+}
+
+.objects-detail-placeholder {
+  margin-top: 9px;
+  min-height: 240px;
+}
