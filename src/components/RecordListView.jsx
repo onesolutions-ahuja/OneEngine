@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Check, Filter, GripVertical, Pencil, Plus, Search } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, FileDown, FileUp, Filter, GripVertical, Pencil, Plus, Search } from 'lucide-react'
+import DataLoaderWindow from './DataLoaderWindow'
 
 const valueFor = (column, row) => {
   if (column.filterValue) return column.filterValue(row)
@@ -68,12 +69,16 @@ export default function RecordListView({
   loading = false,
   error = '',
   emptyText = 'No records found.',
+  objectKey = null,
+  objectLabel = null,
+  onDataChanged,
 }) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
   const [filters, setFilters] = useState({})
   const [filterOpen, setFilterOpen] = useState(null)
   const [draggingKey, setDraggingKey] = useState(null)
+  const [dataLoaderMode, setDataLoaderMode] = useState(null)
   const [columnOrder, setColumnOrder] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(layoutKey(title)) || '[]')
@@ -233,10 +238,34 @@ export default function RecordListView({
           <strong>{title}</strong>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        <button type="button" className="record-create-button" disabled={!canCreate} onClick={onCreate}>
-          <Plus size={15} />
-          {createLabel}
-        </button>
+        <div className="record-list-header-actions">
+          {objectKey ? (
+            <div className="record-data-actions" aria-label="Data tools">
+              <button
+                type="button"
+                className="record-data-icon"
+                title={`Import ${objectLabel || title}`}
+                aria-label={`Import ${objectLabel || title}`}
+                onClick={() => setDataLoaderMode('import')}
+              >
+                <FileUp size={16} />
+              </button>
+              <button
+                type="button"
+                className="record-data-icon"
+                title={`Export ${objectLabel || title}`}
+                aria-label={`Export ${objectLabel || title}`}
+                onClick={() => setDataLoaderMode('export')}
+              >
+                <FileDown size={16} />
+              </button>
+            </div>
+          ) : null}
+          <button type="button" className="record-create-button" disabled={!canCreate} onClick={onCreate}>
+            <Plus size={15} />
+            {createLabel}
+          </button>
+        </div>
       </div>
 
       <div className="record-list-separator" aria-hidden="true" />
@@ -413,6 +442,15 @@ export default function RecordListView({
           </table>
         </div>
       )}
+      {dataLoaderMode && objectKey ? (
+        <DataLoaderWindow
+          objectKey={objectKey}
+          objectLabel={objectLabel || title}
+          initialMode={dataLoaderMode}
+          onClose={() => setDataLoaderMode(null)}
+          onImported={onDataChanged}
+        />
+      ) : null}
     </div>
   )
 }
