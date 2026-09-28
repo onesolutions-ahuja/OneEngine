@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { checkBackend, hasSession, login } from './services/api'
+import { checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
 import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsContext, loadUsers, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
@@ -139,10 +139,13 @@ function DockItem({ item, mouseX, onActivate }) {
   )
 }
 
-function LockScreen({ onUnlock }) {
+function LockScreen({ onUnlock, onSignOut }) {
   const now = useClock()
+  const sessionMode = hasSession()
+  const storedUser = getStoredUser()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -155,6 +158,7 @@ function LockScreen({ onUnlock }) {
       }).format(now),
     [now],
   )
+
   const date = useMemo(
     () =>
       new Intl.DateTimeFormat('en-GB', {
@@ -167,10 +171,18 @@ function LockScreen({ onUnlock }) {
 
   const submit = async (event) => {
     event?.preventDefault()
-    if (!username.trim() || !password) return
     try {
       setSubmitting(true)
       setError('')
+
+      if (sessionMode) {
+        if (!pin.trim()) return
+        await verifyPin(pin.trim())
+        onUnlock()
+        return
+      }
+
+      if (!username.trim() || !password) return
       await login(username.trim(), password)
       onUnlock()
     } catch (err) {
@@ -179,6 +191,9 @@ function LockScreen({ onUnlock }) {
       setSubmitting(false)
     }
   }
+
+  const displayName = storedUser?.name || storedUser?.username || 'User'
+  const initial = displayName.trim().charAt(0).toUpperCase() || 'U'
 
   return (
     <main className="screen lock-screen">
@@ -190,35 +205,77 @@ function LockScreen({ onUnlock }) {
         <div className="lock-time">{time}</div>
 
         <form className="login-glass-card" onSubmit={submit}>
-          <div className="profile-avatar login-avatar">O</div>
-          <div className="login-title">One Solutions</div>
-          <div className="login-subtitle">Superadmin test access</div>
+          <div className="profile-avatar login-avatar">{initial}</div>
 
-          <input
-            className="login-field"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="Username or email"
-            autoComplete="username"
-          />
-          <input
-            className="login-field"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Password"
-            type="password"
-            autoComplete="current-password"
-          />
+          {sessionMode ? (
+            <>
+              <div className="login-title">{displayName}</div>
+              <div className="login-subtitle">Enter PIN to unlock</div>
 
-          {error ? <div className="login-error">{error}</div> : null}
+              <input
+                className="login-field login-pin-field"
+                value={pin}
+                onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 12))}
+                placeholder="PIN"
+                inputMode="numeric"
+                type="password"
+                autoComplete="off"
+                autoFocus
+              />
 
-          <button
-            className="login-submit"
-            type="submit"
-            disabled={submitting || !username.trim() || !password}
-          >
-            {submitting ? 'Signing in…' : 'Sign In'}
-          </button>
+              {error ? <div className="login-error">{error}</div> : null}
+
+              <button
+                className="login-submit"
+                type="submit"
+                disabled={submitting || !pin.trim()}
+              >
+                {submitting ? 'Unlocking…' : 'Unlock'}
+              </button>
+
+              <button
+                className="lock-signout"
+                type="button"
+                onClick={onSignOut}
+                disabled={submitting}
+              >
+                Sign Out
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="login-title">One Solutions</div>
+              <div className="login-subtitle">Sign in with your account</div>
+
+              <input
+                className="login-field"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="Email or username"
+                autoComplete="username"
+                autoFocus
+              />
+
+              <input
+                className="login-field"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Password"
+                type="password"
+                autoComplete="current-password"
+              />
+
+              {error ? <div className="login-error">{error}</div> : null}
+
+              <button
+                className="login-submit"
+                type="submit"
+                disabled={submitting || !username.trim() || !password}
+              >
+                {submitting ? 'Signing in…' : 'Sign In'}
+              </button>
+            </>
+          )}
         </form>
       </section>
     </main>
@@ -1007,7 +1064,7 @@ function Desktop({ onLock }) {
 }
 
 export default function App() {
-  const [locked, setLocked] = useState(() => !hasSession())
+  const [locked, setLocked] = useState(true)
 
   useEffect(() => {
     checkBackend()
@@ -1034,9 +1091,14 @@ export default function App() {
     }, 260)
   }
 
+  const signOut = () => {
+    logout()
+    setLocked(true)
+  }
+
   return (
     <div className={`app-shell ${transitioning ? 'is-transitioning' : ''}`}>
-      {locked ? <LockScreen onUnlock={unlock} /> : <Desktop onLock={lock} />}
+      {locked ? <LockScreen onUnlock={unlock} onSignOut={signOut} /> : <Desktop onLock={lock} />}
     </div>
   )
 }
