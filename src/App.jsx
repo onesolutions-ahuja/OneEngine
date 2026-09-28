@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { checkBackend, hasSession, login } from './services/api'
-import { loadSettingsContext, patchSettings } from './services/settings'
+import { loadSettingsContext, loadUsers, patchSettings } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
 import {
@@ -263,6 +263,9 @@ function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState('')
+  const [users, setUsers] = useState([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersError, setUsersError] = useState('')
 
   const load = async () => {
     try {
@@ -287,6 +290,7 @@ function SettingsPage() {
   const isPlatformDeveloper = context?.user?.isPlatformDeveloper === true
   const entitlements = permissions.entitlements || {}
   const canManage = isSuperadmin || permissionCodes.includes('settings.manage')
+  const canViewUsers = isSuperadmin || isAdmin || permissionCodes.includes('user.view')
 
   const access = settingSectionAccess({
     isAdmin,
@@ -311,6 +315,33 @@ function SettingsPage() {
   useEffect(() => {
     if (current && current.key !== active) setActive(current.key)
   }, [current?.key, active])
+
+  useEffect(() => {
+    if (current?.key !== 'users') return
+    if (!canViewUsers) {
+      setUsers([])
+      setUsersError('You do not have permission to view users.')
+      return
+    }
+
+    let alive = true
+    setUsersLoading(true)
+    setUsersError('')
+    loadUsers()
+      .then((rows) => {
+        if (alive) setUsers(rows)
+      })
+      .catch((err) => {
+        if (alive) setUsersError(err?.message || 'Unable to load users')
+      })
+      .finally(() => {
+        if (alive) setUsersLoading(false)
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [current?.key, canViewUsers])
 
   const settings = context?.settings
   const user = context?.user
@@ -470,6 +501,57 @@ function SettingsPage() {
                   </div>
                   <div className="settings-row"><strong>Earning rate</strong><span className="settings-value">{Number(settings.loyalty?.earningRate || 0) * 100}%</span></div>
                 </>
+              ) : current?.key === 'users' ? (
+                <div className="settings-users-view">
+                  <div className="settings-users-toolbar">
+                    <div>
+                      <strong>Users</strong>
+                      <p>{users.length} user{users.length === 1 ? '' : 's'} in this company</p>
+                    </div>
+                  </div>
+
+                  {usersLoading ? (
+                    <div className="settings-users-state">Loading users…</div>
+                  ) : usersError ? (
+                    <div className="settings-users-state settings-users-state--error">{usersError}</div>
+                  ) : (
+                    <div className="settings-table-wrap">
+                      <table className="settings-table">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Store</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {users.map((row) => (
+                            <tr key={row.id}>
+                              <td>{row.full_name || '—'}</td>
+                              <td>{row.username || '—'}</td>
+                              <td>{row.email || '—'}</td>
+                              <td>{row.role_name || '—'}</td>
+                              <td>{row.store_name || 'All stores'}</td>
+                              <td>
+                                <span className={`settings-status-pill ${row.active ? 'is-active' : 'is-inactive'}`}>
+                                  {row.active ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                          {users.length === 0 && (
+                            <tr>
+                              <td colSpan="6" className="settings-table-empty">No users found.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="settings-row">
                   <div>
