@@ -81,9 +81,11 @@ function Dock({ onItemOpen }) {
             onActivate={() => onItemOpen?.(item.id)}
           />
         ))}
-        <div className="dock-separator" aria-hidden="true" />
-        <div className="dock-jarves-slot">
-          <JarvisOrb onClick={() => onItemOpen?.('jarves')} />
+        <div className="dock-fixed-zone">
+          <div className="dock-separator" aria-hidden="true" />
+          <div className="dock-jarves-slot">
+            <JarvisOrb onClick={() => onItemOpen?.('jarves')} />
+          </div>
         </div>
       </motion.div>
     </div>
