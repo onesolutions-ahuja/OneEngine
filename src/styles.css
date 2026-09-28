@@ -3732,3 +3732,111 @@ button:focus-visible {
   color: #fff;
   text-decoration: underline;
 }
+
+/* Global dock-safe Settings viewport: no Settings content may render behind Dock. */
+.settings-page {
+  bottom: 92px;
+  min-height: 0;
+}
+
+.settings-main,
+.settings-content,
+.settings-content-body {
+  min-height: 0;
+}
+
+.settings-content-body {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 14px;
+}
+
+.settings-card,
+.record-list-view,
+.objects-settings-shell,
+.objects-list-pane,
+.objects-detail-pane,
+.objects-config-workspace,
+.objects-config-content {
+  min-height: 0;
+}
+
+.settings-card:has(.record-list-view),
+.settings-card:has(.objects-settings-shell),
+.settings-card:has(.onebuilder) {
+  max-height: 100%;
+}
+
+.record-list-view {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+}
+
+.record-list-table-wrap {
+  min-height: 0;
+  max-height: calc(100vh - 330px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.objects-settings-shell {
+  height: 100%;
+  min-height: 0;
+  max-height: calc(100vh - 148px);
+}
+
+.objects-list-pane,
+.objects-detail-pane {
+  min-height: 0;
+  max-height: 100%;
+}
+
+.objects-pane-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+.objects-detail-pane {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.objects-config-workspace {
+  min-height: 0;
+  max-height: calc(100vh - 245px);
+}
+
+.objects-config-tabs,
+.objects-config-content {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Keep visible native scrollbars on data-heavy Settings panes. */
+.objects-pane-list::-webkit-scrollbar,
+.objects-detail-pane::-webkit-scrollbar,
+.objects-config-tabs::-webkit-scrollbar,
+.objects-config-content::-webkit-scrollbar,
+.record-list-table-wrap::-webkit-scrollbar,
+.settings-content-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.objects-pane-list::-webkit-scrollbar-thumb,
+.objects-detail-pane::-webkit-scrollbar-thumb,
+.objects-config-tabs::-webkit-scrollbar-thumb,
+.objects-config-content::-webkit-scrollbar-thumb,
+.record-list-table-wrap::-webkit-scrollbar-thumb,
+.settings-content-body::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(0,0,0,.24);
+  background-clip: padding-box;
+}
