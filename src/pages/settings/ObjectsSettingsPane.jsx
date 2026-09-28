@@ -40,6 +40,14 @@ export default function ObjectsSettingsPane() {
   const [activeTab, setActiveTab] = useState('details')
   const [fields, setFields] = useState([])
   const [objectLoading, setObjectLoading] = useState(false)
+  const [objectData, setObjectData] = useState({
+    relationships: [],
+    recordTypes: [],
+    layouts: [],
+    rules: [],
+    buttons: [],
+    permissions: null,
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -84,12 +92,36 @@ export default function ObjectsSettingsPane() {
     if (!selectedId) return
     let live = true
     setObjectLoading(true)
-    apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/fields`)
-      .then((response) => {
-        if (live) setFields(Array.isArray(response?.data) ? response.data : [])
+    Promise.all([
+      apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/fields`),
+      apiRequest('/api/platform/relationships'),
+      apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/record-types`),
+      apiRequest('/api/platform/layouts'),
+      apiRequest('/api/platform/rules'),
+      apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/buttons`),
+      apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/effective-permissions`),
+    ])
+      .then(([fieldsRes, relationshipsRes, recordTypesRes, layoutsRes, rulesRes, buttonsRes, permissionsRes]) => {
+        if (!live) return
+        setFields(Array.isArray(fieldsRes?.data) ? fieldsRes.data : [])
+        const relationships = Array.isArray(relationshipsRes?.data) ? relationshipsRes.data : []
+        const layouts = Array.isArray(layoutsRes?.data) ? layoutsRes.data : []
+        const rules = Array.isArray(rulesRes?.data) ? rulesRes.data : []
+        setObjectData({
+          relationships: relationships.filter((row) =>
+            String(row.parent_object_id) === String(selectedId) ||
+            String(row.child_object_id) === String(selectedId)),
+          recordTypes: Array.isArray(recordTypesRes?.data) ? recordTypesRes.data : [],
+          layouts: layouts.filter((row) => String(row.object_id) === String(selectedId)),
+          rules: rules.filter((row) => String(row.object_id) === String(selectedId)),
+          buttons: Array.isArray(buttonsRes?.data) ? buttonsRes.data : [],
+          permissions: permissionsRes?.data || null,
+        })
       })
       .catch(() => {
-        if (live) setFields([])
+        if (!live) return
+        setFields([])
+        setObjectData({ relationships: [], recordTypes: [], layouts: [], rules: [], buttons: [], permissions: null })
       })
       .finally(() => {
         if (live) setObjectLoading(false)
@@ -214,9 +246,76 @@ export default function ObjectsSettingsPane() {
                   </div>
                 ) : null}
 
-                {!['details', 'fields', 'formula'].includes(activeTab) ? (
-                  <div className="objects-detail-placeholder">
-                    {TABS.find(([key]) => key === activeTab)?.[1]} configuration for {objectName(selected)} will render here.
+                {activeTab === 'relationships' ? (
+                  <ObjectDataList title="Relationships" rows={objectData.relationships}
+                    primary={(row) => row.relationship_key || 'Relationship'}
+                    secondary={(row) => `${row.parent_object_key || ''} → ${row.child_object_key || ''}`}
+                    meta={(row) => row.relationship_type || 'lookup'} />
+                ) : null}
+
+                {activeTab === 'record-types' ? (
+                  <ObjectDataList title="Record Types" rows={objectData.recordTypes}
+                    primary={(row) => row.label || row.name || row.record_type_key || 'Record Type'}
+                    secondary={(row) => row.record_type_key || row.api_name || ''}
+                    meta={(row) => row.default_record_type ? 'Default' : 'Active'} />
+                ) : null}
+
+                {activeTab === 'layouts' ? (
+                  <ObjectDataList title="Layouts" rows={objectData.layouts}
+                    primary={(row) => row.name || row.label || row.layout_key || 'Layout'}
+                    secondary={(row) => row.layout_key || row.page_type || ''}
+                    meta={(row) => row.page_type || 'layout'} />
+                ) : null}
+
+                {activeTab === 'validation' ? (
+                  <ObjectDataList title="Validation Rules" rows={objectData.rules.filter((row) => {
+                    const type = typeof row.action === 'string' ? row.action : row.action?.type
+                    return type === 'validation' || type === 'validate'
+                  })}
+                    primary={(row) => row.name || row.rule_key || 'Validation Rule'}
+                    secondary={(row) => row.description || row.trigger_key || row.trigger || ''}
+                    meta={(row) => row.active === false ? 'Inactive' : 'Active'} />
+                ) : null}
+
+                {activeTab === 'triggers' ? (
+                  <ObjectDataList title="Triggers / Automation" rows={objectData.rules}
+                    primary={(row) => row.name || row.rule_key || 'Rule'}
+                    secondary={(row) => row.trigger_key || row.trigger || ''}
+                    meta={(row) => typeof row.action === 'string' ? row.action : row.action?.type || 'rule'} />
+                ) : null}
+
+                {activeTab === 'buttons' ? (
+                  <ObjectDataList title="Buttons" rows={objectData.buttons}
+                    primary={(row) => row.label || row.button_key || 'Button'}
+                    secondary={(row) => row.button_key || row.target_key || ''}
+                    meta={(row) => row.placement || row.variant || 'button'} />
+                ) : null}
+
+                {activeTab === 'permissions' ? (
+                  <div className="objects-permissions-card">
+                    {objectData.permissions ? (
+                      <>
+                        <div className="objects-permission-grid">
+                          {['view','create','edit','delete','import','export'].map((key) => (
+                            <div key={key}>
+                              <span>{key}</span>
+                              <strong>{objectData.permissions[`can_${key}`] ? 'Allowed' : 'Denied'}</strong>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="objects-config-list">
+                          <div className="objects-config-list-head"><strong>Field Access</strong></div>
+                          <div className="objects-config-rows">
+                            {(objectData.permissions.fields || []).map((field) => (
+                              <div key={field.fieldId || field.label}>
+                                <span><strong>{field.label}</strong><small>{field.readable ? 'Visible' : 'Hidden'}</small></span>
+                                <span>{field.writable ? 'Editable' : 'Read only'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    ) : <div className="objects-detail-placeholder">No permission data.</div>}
                   </div>
                 ) : null}
               </div>
@@ -226,6 +325,33 @@ export default function ObjectsSettingsPane() {
           <div className="objects-detail-placeholder">Select an object.</div>
         )}
       </section>
+    </div>
+  )
+}
+
+
+function ObjectDataList({ title, rows = [], primary, secondary, meta }) {
+  return (
+    <div className="objects-config-list">
+      <div className="objects-config-list-head">
+        <strong>{title}</strong>
+        <button type="button"><Plus size={13} /> New</button>
+      </div>
+      {rows.length ? (
+        <div className="objects-config-rows">
+          {rows.map((row, index) => (
+            <div key={row.id || row.rule_id || row.layout_id || row.relationship_id || row.button_id || index}>
+              <span>
+                <strong>{primary(row)}</strong>
+                <small>{secondary(row)}</small>
+              </span>
+              <span>{meta(row)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="objects-detail-placeholder">No {title.toLowerCase()} configured.</div>
+      )}
     </div>
   )
 }
