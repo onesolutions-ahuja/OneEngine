@@ -2148,3 +2148,54 @@ button:focus-visible {
   border-radius: 11px;
   overflow: auto;
 }
+
+/* Advanced filter conditions + per-user draggable column order. */
+.record-column-drag {
+  flex: 0 0 auto;
+  color: rgba(0,0,0,.22);
+  cursor: grab;
+}
+
+.record-list-column-head {
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.record-list-column-head.is-dragging {
+  opacity: .45;
+  background: #e4efff;
+}
+
+.record-filter-condition {
+  padding: 8px;
+  display: grid;
+  gap: 7px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.record-filter-condition select,
+.record-filter-condition input {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(0,0,0,.11);
+  border-radius: 7px;
+  outline: 0;
+  color: #1d1d1f;
+  background: white;
+  font-size: 11px;
+}
+
+.record-filter-condition select:focus,
+.record-filter-condition input:focus {
+  border-color: rgba(10,132,255,.55);
+  box-shadow: 0 0 0 2px rgba(10,132,255,.10);
+}
+
+.record-filter-values-title {
+  padding: 8px 10px 2px;
+  color: rgba(0,0,0,.42);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
