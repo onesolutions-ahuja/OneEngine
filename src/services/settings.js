@@ -77,3 +77,10 @@ export async function updateUser(userId, input) {
     body: JSON.stringify(input),
   })
 }
+
+
+export async function loadPlatformObjects() {
+  const payload = await apiRequest('/api/platform/metadata')
+  const rows = payload?.data?.objects || []
+  return Array.isArray(rows) ? rows : []
+}
