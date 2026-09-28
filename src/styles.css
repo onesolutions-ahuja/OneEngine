@@ -1121,3 +1121,344 @@ button:focus-visible {
   text-align: center !important;
   color: rgba(0,0,0,.45);
 }
+
+.record-list-view {
+  width: 100%;
+}
+
+.record-list-actions {
+  min-height: 50px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+}
+
+.record-create-button {
+  height: 30px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 7px;
+  color: #1d1d1f;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  box-shadow: 0 1px 1px rgba(0,0,0,.03);
+}
+
+.record-create-button:disabled {
+  opacity: .42;
+}
+
+.record-list-separator {
+  height: 12px;
+  background: rgba(0,0,0,.055);
+  border-top: 1px solid rgba(0,0,0,.035);
+  border-bottom: 1px solid rgba(0,0,0,.035);
+}
+
+.record-list-header {
+  min-height: 58px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgba(0,0,0,.055);
+}
+
+.record-list-header strong {
+  font-size: 13px;
+}
+
+.record-list-header p {
+  margin: 4px 0 0;
+  color: rgba(0,0,0,.5);
+  font-size: 12px;
+}
+
+.record-list-search {
+  width: min(260px, 42%);
+  height: 32px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  background: rgba(0,0,0,.05);
+  border: 1px solid rgba(0,0,0,.06);
+  color: rgba(0,0,0,.5);
+}
+
+.record-list-search input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+.record-list-table-wrap {
+  width: 100%;
+  overflow: auto;
+}
+
+.record-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.record-list-table th,
+.record-list-table td {
+  padding: 11px 14px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(0,0,0,.055);
+}
+
+.record-list-table th {
+  color: rgba(0,0,0,.54);
+  background: rgba(248,248,248,.96);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.record-list-table tbody tr:hover {
+  background: rgba(0,0,0,.025);
+}
+
+.record-list-edit-head,
+.record-list-edit-cell {
+  width: 52px;
+  text-align: center !important;
+}
+
+.record-edit-button {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 0;
+  color: rgba(0,0,0,.56);
+  background: transparent;
+}
+
+.record-edit-button:hover {
+  background: rgba(0,0,0,.06);
+  color: #0a84ff;
+}
+
+.record-list-state,
+.record-list-empty {
+  padding: 28px 16px !important;
+  text-align: center !important;
+  color: rgba(0,0,0,.5);
+  font-size: 12px;
+}
+
+.record-list-state--error {
+  color: #a3261f;
+}
+
+.record-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0,0,0,.28);
+  backdrop-filter: blur(10px);
+}
+
+.record-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(78vh, 760px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #f7f7f7;
+  border: 1px solid rgba(0,0,0,.1);
+  box-shadow: 0 24px 80px rgba(0,0,0,.25);
+  color: #1d1d1f;
+}
+
+.record-dialog-header {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0,0,0,.07);
+  background: rgba(255,255,255,.8);
+}
+
+.record-dialog-header div {
+  display: flex;
+  flex-direction: column;
+}
+
+.record-dialog-header strong {
+  font-size: 14px;
+}
+
+.record-dialog-header span {
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(0,0,0,.48);
+}
+
+.record-dialog-close {
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  color: rgba(0,0,0,.5);
+}
+
+.record-dialog-body {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+}
+
+.record-dialog-body > label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.record-dialog input,
+.record-dialog select,
+.record-dialog textarea {
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: white;
+  padding: 7px 9px;
+  font: inherit;
+}
+
+.record-dialog textarea {
+  resize: vertical;
+}
+
+.record-dialog-checkbox {
+  display: flex !important;
+  grid-template-columns: none !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.record-dialog-checkbox input {
+  min-height: 0;
+}
+
+.record-permissions {
+  display: grid;
+  gap: 8px;
+}
+
+.record-permissions > strong {
+  font-size: 12px;
+}
+
+.record-permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 7px;
+}
+
+.record-permission-item {
+  min-width: 0;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 8px !important;
+  padding: 8px;
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 8px;
+  background: white;
+}
+
+.record-permission-item input {
+  min-height: 0;
+  margin-top: 2px;
+}
+
+.record-permission-item span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.record-permission-item b {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.record-permission-item small {
+  margin-top: 2px;
+  color: rgba(0,0,0,.45);
+  font-size: 10px;
+}
+
+.record-dialog-footer {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid rgba(0,0,0,.07);
+  background: rgba(255,255,255,.78);
+}
+
+.record-dialog-primary,
+.record-dialog-secondary {
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.record-dialog-primary {
+  border: 0;
+  color: white;
+  background: #0a84ff;
+}
+
+.record-dialog-secondary {
+  border: 1px solid rgba(0,0,0,.1);
+  background: white;
+  color: #1d1d1f;
+}
+
+.record-dialog-loading {
+  padding: 40px;
+  text-align: center;
+  color: rgba(0,0,0,.5);
+}
+
+@media (max-width: 700px) {
+  .record-list-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .record-list-search {
+    width: 100%;
+  }
+
+  .record-permissions-grid {
+    grid-template-columns: 1fr;
+  }
+}
