@@ -968,3 +968,35 @@ button:focus-visible {
     transition-duration: 0.001ms !important;
   }
 }
+
+.jarvis-orb-host {
+  position: relative;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.dock-jarves-slot {
+  position: relative;
+  width: 58px;
+  height: 40px;
+  flex: 0 0 58px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: visible;
+}
+
+.dock-jarves-slot .jarvis-orb-host {
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  transform: translateX(-50%) scale(.72);
+  transform-origin: bottom center;
+}
+
+.dock-jarves-slot .jarvis-orb-container {
+  pointer-events: auto;
+}
