@@ -713,6 +713,9 @@ function SettingsPage() {
                   canEdit={canEditUsers}
                   onCreate={openCreateUser}
                   onEdit={openEditUser}
+                  objectKey="employee"
+                  objectLabel="Users"
+                  onDataChanged={refreshUsers}
                   searchKeys={['full_name', 'username', 'email', 'role_name', 'store_name']}
                   columns={[
                     { key: 'full_name', label: 'Name', render: (row) => row.full_name || '—' },
