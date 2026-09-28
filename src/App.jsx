@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { checkBackend, hasSession, login } from './services/api'
+import { loadSettingsContext, patchSettings } from './services/settings'
+import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
 import {
   Bluetooth,
@@ -255,17 +257,84 @@ const settingsGroups = [
 function SettingsPage() {
   const [active, setActive] = useState('general')
   const [query, setQuery] = useState('')
+  const [context, setContext] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState('')
+
+  const load = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      setContext(await loadSettingsContext())
+    } catch (err) {
+      setError(err?.message || 'Unable to load settings')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const permissions = context?.permissions || {}
+  const permissionCodes = Array.isArray(permissions.permissions) ? permissions.permissions : []
+  const isSuperadmin = permissions.isSuperadmin === true
+  const isAdmin = permissions.isAdmin === true
+  const isPlatformDeveloper = context?.user?.isPlatformDeveloper === true
+  const entitlements = permissions.entitlements || {}
+  const canManage = isSuperadmin || permissionCodes.includes('settings.manage')
+
+  const access = settingSectionAccess({
+    isAdmin,
+    isSuperadmin,
+    isPlatformDeveloper,
+    loyalty: entitlements.loyalty === true,
+  })
 
   const visibleGroups = settingsGroups
-    .map((group) => group.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())))
+    .map((group) =>
+      group.filter(
+        (item) =>
+          sectionIsVisible(access, item.label) &&
+          item.label.toLowerCase().includes(query.toLowerCase()),
+      ),
+    )
     .filter((group) => group.length)
 
-  const current = settingsGroups.flat().find((item) => item.key === active)
+  const visibleItems = visibleGroups.flat()
+  const current = visibleItems.find((item) => item.key === active) || visibleItems[0] || null
+
+  useEffect(() => {
+    if (current && current.key !== active) setActive(current.key)
+  }, [current?.key, active])
+
+  const settings = context?.settings
+  const user = context?.user
+  const update = async (field, value) => {
+    if (!canManage) return
+    try {
+      setSaving(field)
+      setError('')
+      await patchSettings({ [field]: value })
+      await load()
+    } catch (err) {
+      setError(err?.message || 'Unable to save setting')
+    } finally {
+      setSaving('')
+    }
+  }
+
+  const profileName = user?.name || user?.username || 'User'
+  const profileRole = isSuperadmin ? 'Superadmin' : user?.role || 'User'
+  const initial = profileName.trim().charAt(0).toUpperCase() || 'U'
 
   return (
     <section className="settings-page">
       <aside className="settings-sidebar">
         <div className="settings-window-title">Settings</div>
+
         <label className="settings-search">
           <Search size={17} />
           <input
@@ -276,10 +345,10 @@ function SettingsPage() {
         </label>
 
         <div className="settings-profile">
-          <div className="settings-avatar">O</div>
+          <div className="settings-avatar">{initial}</div>
           <div>
-            <strong>One Solutions</strong>
-            <span>User Account</span>
+            <strong>{profileName}</strong>
+            <span>{profileRole}</span>
           </div>
         </div>
 
@@ -290,7 +359,7 @@ function SettingsPage() {
                 <button
                   key={key}
                   type="button"
-                  className={`settings-nav-item ${active === key ? 'is-active' : ''}`}
+                  className={`settings-nav-item ${current?.key === key ? 'is-active' : ''}`}
                   onClick={() => setActive(key)}
                 >
                   <span className={`settings-nav-icon settings-nav-icon--${tone}`}>
@@ -311,49 +380,111 @@ function SettingsPage() {
         </div>
 
         <div className="settings-content-body">
-          <div className="settings-card">
-            {active === 'general' ? (
-              <>
+          {error ? <div className="settings-error">{error}</div> : null}
+          {loading ? (
+            <div className="settings-card settings-state-card">Loading settings…</div>
+          ) : !settings ? (
+            <div className="settings-card settings-state-card">No settings data available.</div>
+          ) : (
+            <div className="settings-card">
+              {current?.key === 'general' ? (
+                <>
+                  <div className="settings-row">
+                    <div>
+                      <strong>Date format</strong>
+                      <p>Regional display format used across onePOS.</p>
+                    </div>
+                    <select
+                      value={settings.general?.dateFormat || 'DD/MM/YYYY'}
+                      disabled={!canManage || saving === 'dateFormat'}
+                      onChange={(event) => update('dateFormat', event.target.value)}
+                    >
+                      <option>DD/MM/YYYY</option>
+                      <option>MM/DD/YYYY</option>
+                      <option>YYYY-MM-DD</option>
+                    </select>
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>Currency</strong><p>Default company currency.</p></div>
+                    <span className="settings-value">{settings.company?.currency || '—'}</span>
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>Timezone</strong><p>Default company timezone.</p></div>
+                    <span className="settings-value">{settings.company?.timezone || '—'}</span>
+                  </div>
+                </>
+              ) : current?.key === 'company' ? (
+                <>
+                  <div className="settings-row"><strong>Company name</strong><span className="settings-value">{settings.company?.name || '—'}</span></div>
+                  <div className="settings-row"><strong>Legal name</strong><span className="settings-value">{settings.company?.legalName || '—'}</span></div>
+                  <div className="settings-row"><strong>Company email</strong><span className="settings-value">{settings.company?.email || '—'}</span></div>
+                  <div className="settings-row"><strong>Company phone</strong><span className="settings-value">{settings.company?.phone || '—'}</span></div>
+                </>
+              ) : current?.key === 'store-till' ? (
+                <>
+                  <div className="settings-row"><strong>Store</strong><span className="settings-value">{settings.store?.name || settings.store?.storeName || 'Current store'}</span></div>
+                  <div className="settings-row"><strong>Till</strong><span className="settings-value">{settings.till?.name || '—'}</span></div>
+                  <div className="settings-row"><strong>Terminal number</strong><span className="settings-value">{settings.till?.terminalNumber || '—'}</span></div>
+                  <div className="settings-row"><strong>Product view</strong><span className="settings-value">{settings.till?.productView || 'image'}</span></div>
+                </>
+              ) : current?.key === 'tax-vat' ? (
+                <>
+                  <div className="settings-row">
+                    <strong>VAT enabled</strong>
+                    <button
+                      type="button"
+                      className={`mac-switch ${settings.tax?.vatEnabled ? 'is-on' : ''}`}
+                      disabled={!canManage || saving === 'vatEnabled'}
+                      onClick={() => update('vatEnabled', !settings.tax?.vatEnabled)}
+                    >
+                      <span />
+                    </button>
+                  </div>
+                  <div className="settings-row">
+                    <strong>Default VAT rate</strong>
+                    <select
+                      value={String(settings.tax?.defaultVatRate ?? 20)}
+                      disabled={!canManage || saving === 'defaultVatRate'}
+                      onChange={(event) => update('defaultVatRate', Number(event.target.value))}
+                    >
+                      <option value="0">0%</option>
+                      <option value="5">5%</option>
+                      <option value="20">20%</option>
+                    </select>
+                  </div>
+                </>
+              ) : current?.key === 'customer-loyalty' ? (
+                <>
+                  <div className="settings-row">
+                    <strong>Loyalty enabled</strong>
+                    <button
+                      type="button"
+                      className={`mac-switch ${settings.loyalty?.enabled ? 'is-on' : ''}`}
+                      disabled={!canManage || saving === 'loyaltyEnabled'}
+                      onClick={() => update('loyaltyEnabled', !settings.loyalty?.enabled)}
+                    >
+                      <span />
+                    </button>
+                  </div>
+                  <div className="settings-row"><strong>Earning rate</strong><span className="settings-value">{Number(settings.loyalty?.earningRate || 0) * 100}%</span></div>
+                </>
+              ) : (
                 <div className="settings-row">
-                  <div><strong>Date format</strong><p>Regional display format used across onePOS.</p></div>
-                  <select defaultValue="DD/MM/YYYY"><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option><option>YYYY-MM-DD</option></select>
+                  <div>
+                    <strong>{current?.label}</strong>
+                    <p>RBAC visibility is live. This section is ready for the next onePOS component/data migration pass.</p>
+                  </div>
+                  <ChevronRight size={16} />
                 </div>
-                <div className="settings-row">
-                  <div><strong>Currency</strong><p>Default company currency.</p></div>
-                  <span className="settings-value">GBP</span>
-                </div>
-                <div className="settings-row">
-                  <div><strong>Timezone</strong><p>Default timezone for company activity.</p></div>
-                  <span className="settings-value">Europe/London</span>
-                </div>
-              </>
-            ) : active === 'company' ? (
-              <>
-                <div className="settings-row"><strong>Company name</strong><span className="settings-value">One Solutions</span></div>
-                <div className="settings-row"><strong>Company email</strong><span className="settings-value">—</span></div>
-                <div className="settings-row"><strong>Company phone</strong><span className="settings-value">—</span></div>
-              </>
-            ) : active === 'store-till' ? (
-              <>
-                <div className="settings-row"><strong>Stores</strong><span className="settings-value">Manage stores</span></div>
-                <div className="settings-row"><strong>Tills</strong><span className="settings-value">Manage tills</span></div>
-                <div className="settings-row"><strong>Invoice settings</strong><span className="settings-value">Configure</span></div>
-              </>
-            ) : active === 'tax-vat' ? (
-              <>
-                <div className="settings-row"><strong>VAT enabled</strong><button type="button" className="mac-switch is-on"><span /></button></div>
-                <div className="settings-row"><strong>Default VAT rate</strong><span className="settings-value">20%</span></div>
-              </>
-            ) : (
-              <div className="settings-row">
-                <div>
-                  <strong>{current?.label}</strong>
-                  <p>This is now mapped to the live onePOS Settings structure and ready for its real API/data wiring.</p>
-                </div>
-                <ChevronRight size={16} />
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
+
+          {!loading && (
+            <div className="settings-rbac-note">
+              {canManage ? 'Editing allowed by settings.manage / Superadmin.' : 'Read-only: your role does not have settings.manage.'}
+            </div>
+          )}
         </div>
       </div>
     </section>
