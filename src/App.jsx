@@ -7,6 +7,7 @@ import JarvisOrb from './components/jarvis/JarvisOrb'
 import RecordListView from './components/RecordListView'
 import OneBuilder from './pages/settings/OneBuilder'
 import ObjectsSettingsPane from './pages/settings/ObjectsSettingsPane'
+import TillPage from './pages/till/TillPage'
 import {
   Bluetooth,
   LockKeyhole,
@@ -41,6 +42,7 @@ import {
   Sparkles,
   Cable,
   MonitorCog,
+  MonitorSmartphone,
   LayoutGrid,
   Mail,
 } from 'lucide-react'
@@ -49,7 +51,7 @@ const dockItems = [
   { id: 'finder', label: 'Finder', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
   { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
   { id: 'launchpad', label: 'Launchpad', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
-  { id: 'jarvis', label: 'Jarvis', src: 'https://rdvnui.com/assets/siri-icon-DMUdF73Y.png', scaled: true },
+  { id: 'till', label: 'Till', icon: MonitorSmartphone },
   { id: 'maps', label: 'Maps', src: 'https://rdvnui.com/assets/Maps-C7aNhhUR.png', scaled: true },
   { id: 'notes', label: 'Notes', src: 'https://rdvnui.com/assets/Notes-fm-2Meh1.png', scaled: true },
 ]
@@ -120,12 +122,16 @@ function DockItem({ item, mouseX, onActivate }) {
       aria-label={item.label}
     >
       <span className="dock-icon-wrap">
-        <img
-          className={item.scaled ? 'dock-image dock-image--scaled' : 'dock-image'}
-          src={item.src}
-          alt=""
-          draggable="false"
-        />
+        {item.icon ? (
+          <item.icon className="dock-lucide-icon" size={27} strokeWidth={1.8} />
+        ) : (
+          <img
+            className={item.scaled ? 'dock-image dock-image--scaled' : 'dock-image'}
+            src={item.src}
+            alt=""
+            draggable="false"
+          />
+        )}
       </span>
     </motion.button>
   )
@@ -269,6 +275,7 @@ function readRoute() {
     : window.location.pathname
   const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
   if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'general' }
+  if (parts[0] === 'till') return { app: 'till', section: null }
   return { app: 'home', section: null }
 }
 
@@ -276,7 +283,9 @@ function setRoute(app, section = null) {
   const base = APP_BASE || ''
   const next = app === 'settings'
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
-    : `${base}/`
+    : app === 'till'
+      ? `${base}/till`
+      : `${base}/`
   if (window.location.pathname !== next) window.history.pushState(null, '', next)
 }
 
@@ -909,6 +918,11 @@ function Desktop({ onLock }) {
       setActiveApp('settings')
       return
     }
+    if (id === 'till') {
+      setRoute('till')
+      setActiveApp('till')
+      return
+    }
     if (id === 'jarves') {
       setMessage('JARVES')
       return
@@ -973,6 +987,8 @@ function Desktop({ onLock }) {
 
       {activeApp === 'settings' ? (
         <SettingsPage />
+      ) : activeApp === 'till' ? (
+        <TillPage />
       ) : (
         <section className="hello-stage">
           <p className="eyebrow">SMART THEME</p>
