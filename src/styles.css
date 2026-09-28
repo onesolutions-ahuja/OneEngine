@@ -50,21 +50,14 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: -3;
-  background:
-    radial-gradient(circle at 18% 16%, rgba(123, 92, 255, 0.95), transparent 35%),
-    radial-gradient(circle at 84% 20%, rgba(0, 189, 255, 0.68), transparent 34%),
-    radial-gradient(circle at 64% 88%, rgba(246, 91, 148, 0.82), transparent 38%),
-    linear-gradient(145deg, #111c4d 0%, #18172f 45%, #070b14 100%);
-  transform: scale(1.03);
+  background: url("https://rdvnui.com/assets/sonoma-_dP7BXLz.jpg") center center / cover no-repeat;
 }
 
 .wallpaper::after {
   content: "";
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 48% 46%, transparent 0 28%, rgba(5, 7, 18, 0.12) 70%),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.16));
+  background: transparent;
 }
 
 .wallpaper--lock {
@@ -182,9 +175,9 @@ button:focus-visible {
   align-items: center;
   gap: 0;
   color: #111;
-  background: rgba(248, 248, 248, 0.72);
+  background: hsl(34.3 8.8% 90% / 0.6);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(28px) saturate(1.35);
+  backdrop-filter: blur(64px);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
   animation: slide-down 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
   user-select: none;
@@ -303,17 +296,11 @@ button:focus-visible {
   white-space: nowrap;
 }
 
-.assistant-orb span {
-  width: 18px;
-  height: 18px;
+.siri-image {
+  width: 20px;
+  height: 20px;
   display: block;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 67% 28%, #ffffff 0 7%, transparent 8%),
-    conic-gradient(from 25deg, #6f4cff, #20b7ff, #34d77e, #ffd84a, #ff557c, #9f55ff, #6f4cff);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 1px 2px rgba(0,0,0,.16);
 }
-
 .hello-stage {
   min-height: calc(100vh - 34px);
   display: grid;
@@ -353,10 +340,9 @@ button:focus-visible {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 13px;
+  bottom: 0;
   display: flex;
   justify-content: center;
-  padding: 0 14px;
   pointer-events: none;
 }
 
@@ -365,127 +351,62 @@ button:focus-visible {
   display: flex;
   align-items: flex-end;
   gap: 12px;
+  height: 60px;
   min-height: 60px;
   padding: 0 8px 12px;
   margin-bottom: 8px;
   border-radius: 16px;
-  background: rgba(235, 239, 232, 0.52);
+  background: hsl(34.3 3.4% 94.8% / 0.5);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.30),
-    0 0 0 1px rgba(0, 0, 0, 0.07),
-    0 10px 30px rgba(0, 0, 0, 0.20);
-  backdrop-filter: blur(24px) saturate(1.35);
-  animation: dock-enter 380ms 40ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  will-change: width;
+    inset 0 0 0 1px hsl(34.3 3.4% 94.8% / 0.2),
+    0 0 0 1px hsl(34.3 8.8% 2% / 0.075),
+    0 10px 30px 0 hsl(34.3 8.8% 2% / 0.2);
+  backdrop-filter: blur(40px);
 }
 
 .dock-item {
   position: relative;
   flex: 0 0 auto;
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  aspect-ratio: 1 / 1;
   padding: 0;
   border: 0;
   background: transparent;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  display: block;
   cursor: pointer;
   overflow: visible;
 }
 
-.dock-icon {
-  width: 46px;
-  height: 46px;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  color: rgba(255, 255, 255, 0.98);
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.2),
-    inset 0 1px rgba(255, 255, 255, 0.34);
-  overflow: hidden;
+.dock-icon-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 
-.dock-icon--blue {
-  background: linear-gradient(145deg, #65c6ff, #3476ff 66%, #1d4fcc);
-}
-
-.dock-icon--cyan {
-  background: linear-gradient(145deg, #72e6ff, #2a91d3 68%, #176aa8);
-}
-
-.dock-icon--green {
-  background: linear-gradient(145deg, #7be984, #2fbd5a 67%, #158642);
-}
-
-.dock-icon--sky {
-  background: linear-gradient(145deg, #6dd5ff, #2e98e8 70%, #2163b8);
-}
-
-.dock-icon--red {
-  background: linear-gradient(145deg, #ff8a8a, #ef4e5b 68%, #b52536);
-}
-
-.dock-icon--pink {
-  background: linear-gradient(145deg, #ff9ad5, #e74996 68%, #ad2168);
-}
-
-.dock-icon--silver {
-  background: linear-gradient(145deg, #d9e0ea, #7e8ca4 70%, #505d71);
-}
-
-.dock-tooltip {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 10px);
-  translate: -50% 6px;
-  opacity: 0;
+.dock-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  user-select: none;
   pointer-events: none;
-  white-space: nowrap;
-  padding: 5px 8px;
-  border-radius: 7px;
-  background: rgba(36, 39, 49, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: white;
-  font-size: 11px;
-  backdrop-filter: blur(14px);
-  transition:
-    opacity 110ms ease,
-    translate 110ms ease;
 }
 
-.dock-item:hover .dock-tooltip,
-.dock-item:focus-visible .dock-tooltip {
-  opacity: 1;
-  translate: -50% 0;
+.dock-image--scaled {
+  transform: scale(1.25);
 }
 
-.dock-dot {
-  position: absolute;
-  left: 50%;
-  bottom: -5px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  translate: -50% 0;
-  background: rgba(255, 255, 255, 0.76);
-  opacity: 0.5;
-}
-
-.dock-item.is-bouncing .dock-icon {
-  animation: dock-bounce 300ms cubic-bezier(0.2, 0.9, 0.2, 1);
+.dock-separator {
+  width: 1px;
+  height: 36px;
+  margin-inline: 4px;
+  background: hsl(0 0% 0% / 0.2);
+  flex: 0 0 auto;
 }
 
 .app-shell.is-transitioning .screen {
   animation: screen-out 320ms ease both;
-}
-
-@keyframes dock-bounce {
-  0%, 100% { translate: 0 0; }
-  42% { translate: 0 -14px; }
-  72% { translate: 0 -4px; }
 }
 
 @keyframes lock-enter {
@@ -570,25 +491,8 @@ button:focus-visible {
   }
 
   .dock {
-    max-width: calc(100vw - 16px);
-    gap: 7px;
-    padding-inline: 7px;
-    border-radius: 17px;
-  }
-
-  .dock-item,
-  .dock-icon {
-    width: 42px;
-    height: 42px;
-  }
-
-  .dock-icon {
-    border-radius: 12px;
-  }
-
-  .dock-icon svg {
-    width: 24px;
-    height: 24px;
+    max-width: calc(100vw - 12px);
+    gap: 8px;
   }
 
   .lock-action {
