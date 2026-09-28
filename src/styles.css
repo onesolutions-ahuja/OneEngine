@@ -476,7 +476,6 @@ button:focus-visible {
   background: rgba(246, 246, 246, 0.96);
   backdrop-filter: blur(42px) saturate(1.25);
   overflow: hidden;
-  padding-bottom: 84px;
 }
 
 .settings-sidebar {
