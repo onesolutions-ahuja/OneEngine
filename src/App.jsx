@@ -737,44 +737,6 @@ function SettingsPage() {
                     { key: 'is_system_role', label: 'Type', render: (row) => row.is_system_role ? 'System' : 'Custom' },
                   ]}
                 />
-              ) : (
-                    <div className="settings-table-wrap">
-                      <table className="settings-table">
-                        <thead>
-                          <tr>
-                            <th>Name</th>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Store</th>
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {users.map((row) => (
-                            <tr key={row.id}>
-                              <td>{row.full_name || '—'}</td>
-                              <td>{row.username || '—'}</td>
-                              <td>{row.email || '—'}</td>
-                              <td>{row.role_name || '—'}</td>
-                              <td>{row.store_name || 'All stores'}</td>
-                              <td>
-                                <span className={`settings-status-pill ${row.active ? 'is-active' : 'is-inactive'}`}>
-                                  {row.active ? 'Active' : 'Inactive'}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                          {users.length === 0 && (
-                            <tr>
-                              <td colSpan="6" className="settings-table-empty">No users found.</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
               ) : current?.key === 'platform' ? (
                 <OneBuilder />
               ) : (
