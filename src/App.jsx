@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import {
   CalendarDays,
   CloudSun,
@@ -32,111 +33,87 @@ function useClock() {
 }
 
 function Dock({ onItemOpen }) {
+  const mouseX = useMotionValue(Number.POSITIVE_INFINITY)
   const [bouncing, setBouncing] = useState(null)
-  const dockRef = useRef(null)
-  const itemRefs = useRef([])
-  const frameRef = useRef(null)
-
-  const applyMagnification = (clientX) => {
-    const dock = dockRef.current
-    if (!dock) return
-
-    const dockRect = dock.getBoundingClientRect()
-
-    itemRefs.current.forEach((item) => {
-      if (!item) return
-
-      const center = dockRect.left + item.offsetLeft + item.offsetWidth / 2
-      const signedDistance = center - clientX
-      const distance = Math.abs(signedDistance)
-      const radius = 128
-      const normalized = Math.max(0, 1 - distance / radius)
-      const influence = normalized * normalized * (3 - 2 * normalized)
-
-      const scale = 1 + influence * 0.66
-      const lift = influence * 21
-      const push = Math.sign(signedDistance || 1) * influence * 18
-
-      item.style.setProperty('--dock-scale', scale.toFixed(3))
-      item.style.setProperty('--dock-lift', `${lift.toFixed(2)}px`)
-      item.style.setProperty('--dock-push', `${push.toFixed(2)}px`)
-    })
-  }
-
-  const resetMagnification = () => {
-    itemRefs.current.forEach((item) => {
-      if (!item) return
-      item.style.setProperty('--dock-scale', '1')
-      item.style.setProperty('--dock-lift', '0px')
-      item.style.setProperty('--dock-push', '0px')
-    })
-  }
-
-  const handlePointerMove = (event) => {
-    const clientX = event.clientX
-    if (frameRef.current) cancelAnimationFrame(frameRef.current)
-    frameRef.current = requestAnimationFrame(() => applyMagnification(clientX))
-  }
-
-  const handlePointerLeave = () => {
-    if (frameRef.current) cancelAnimationFrame(frameRef.current)
-    resetMagnification()
-  }
-
-  useEffect(() => {
-    return () => {
-      if (frameRef.current) cancelAnimationFrame(frameRef.current)
-    }
-  }, [])
 
   const activate = (id) => {
     setBouncing(id)
-    window.setTimeout(() => setBouncing(null), 360)
+    window.setTimeout(() => setBouncing(null), 300)
     onItemOpen?.(id)
   }
 
   return (
     <div className="dock-zone">
-      <div
+      <motion.div
         className="dock"
-        ref={dockRef}
-        onPointerMove={handlePointerMove}
-        onPointerLeave={handlePointerLeave}
+        onMouseMove={(event) => mouseX.set(event.pageX)}
+        onMouseLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
         aria-label="Smart Theme dock"
       >
-        {dockItems.map(({ id, label, icon: Icon, tint }, index) => (
+        {dockItems.map(({ id, label, icon: Icon, tint }) => (
           <DockItem
             key={id}
             label={label}
             Icon={Icon}
             tint={tint}
+            mouseX={mouseX}
             bouncing={bouncing === id}
-            setRef={(node) => {
-              itemRefs.current[index] = node
-            }}
             onActivate={() => activate(id)}
           />
         ))}
-      </div>
+      </motion.div>
     </div>
   )
 }
 
-function DockItem({ label, Icon, tint, bouncing, setRef, onActivate }) {
+function DockItem({ label, Icon, tint, mouseX, bouncing, onActivate }) {
+  const ref = useRef(null)
+
+  const distance = useTransform(mouseX, (value) => {
+    const bounds = ref.current?.getBoundingClientRect()
+    if (!bounds) return Number.POSITIVE_INFINITY
+    return value - bounds.x - bounds.width / 2
+  })
+
+  const targetWidth = useTransform(distance, [-150, 0, 150], [46, 98, 46])
+  const width = useSpring(targetWidth, {
+    mass: 0.08,
+    stiffness: 220,
+    damping: 18,
+  })
+
+  const targetLift = useTransform(distance, [-150, 0, 150], [0, -17, 0])
+  const y = useSpring(targetLift, {
+    mass: 0.08,
+    stiffness: 220,
+    damping: 18,
+  })
+
+  const targetScale = useTransform(distance, [-150, 0, 150], [1, 1.24, 1])
+  const scale = useSpring(targetScale, {
+    mass: 0.08,
+    stiffness: 220,
+    damping: 18,
+  })
+
   return (
-    <button
-      ref={setRef}
+    <motion.button
+      ref={ref}
       type="button"
       className={`dock-item ${bouncing ? 'is-bouncing' : ''}`}
+      style={{ width }}
       onClick={onActivate}
       aria-label={label}
     >
       <span className="dock-tooltip">{label}</span>
-      <span className={`dock-icon dock-icon--${tint}`}>
+      <motion.span
+        className={`dock-icon dock-icon--${tint}`}
+        style={{ y, scale }}
+      >
         <Icon size={30} strokeWidth={1.8} aria-hidden="true" />
-      </span>
+      </motion.span>
       <span className="dock-dot" aria-hidden="true" />
-    </button>
+    </motion.button>
   )
 }
 
