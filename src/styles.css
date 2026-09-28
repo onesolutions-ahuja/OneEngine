@@ -1563,3 +1563,74 @@ button:focus-visible {
 .record-status-toggle.is-on .record-status-toggle-track span {
   transform: translateX(12px);
 }
+
+/* Settings record-list hierarchy: distinct page header, breathing space, then searchable table. */
+.settings-content-header {
+  background: #e9e9eb;
+  border-bottom: 1px solid rgba(0,0,0,.09);
+  box-shadow: inset 0 -1px rgba(255,255,255,.55);
+}
+
+.settings-content-body {
+  background: #f5f5f6;
+}
+
+.settings-card:has(.record-list-view) {
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.record-list-view {
+  overflow: hidden;
+  border-radius: 11px;
+  background: transparent;
+}
+
+.record-list-actions {
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 11px;
+  background: rgba(255,255,255,.82);
+}
+
+.record-list-separator {
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  border: 0;
+}
+
+.record-list-header {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,.07);
+  border-bottom: 0;
+  border-radius: 11px 11px 0 0;
+  background: rgba(242,242,243,.96);
+}
+
+.record-list-header > div {
+  min-width: 150px;
+}
+
+.record-list-search {
+  width: min(320px, 48%);
+  height: 30px;
+  background: #fff;
+  border-color: rgba(0,0,0,.10);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,.025);
+}
+
+.record-list-table-wrap {
+  border: 1px solid rgba(0,0,0,.07);
+  border-top: 0;
+  border-radius: 0 0 11px 11px;
+  background: rgba(255,255,255,.82);
+}
+
+.record-list-table th {
+  background: #ededee;
+}
