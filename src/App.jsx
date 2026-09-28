@@ -25,6 +25,18 @@ import {
   MousePointer2,
   Printer,
   ChevronRight,
+  Building2,
+  Store,
+  ShoppingCart,
+  ReceiptText,
+  CreditCard,
+  HardDrive,
+  ShieldCheck,
+  Sparkles,
+  Cable,
+  MonitorCog,
+  LayoutGrid,
+  Mail,
 } from 'lucide-react'
 
 const dockItems = [
@@ -175,43 +187,48 @@ function LockScreen({ onUnlock }) {
 
 const settingsGroups = [
   [
-    { key: 'wifi', label: 'Wi-Fi', icon: Wifi, tone: 'blue' },
-    { key: 'bluetooth', label: 'Bluetooth', icon: Bluetooth, tone: 'blue' },
-    { key: 'network', label: 'Network', icon: Globe2, tone: 'blue' },
+    { key: 'general', label: 'General', icon: Settings2, tone: 'orange' },
+    { key: 'company', label: 'Company', icon: Building2, tone: 'blue' },
+    { key: 'store-till', label: 'Store & Till', icon: Store, tone: 'blue' },
+    { key: 'client-web-shop', label: 'Client Web Shop', icon: ShoppingCart, tone: 'green' },
   ],
   [
-    { key: 'notifications', label: 'Notifications', icon: Bell, tone: 'red' },
-    { key: 'sounds', label: 'Sounds', icon: Volume2, tone: 'pink' },
-    { key: 'focus', label: 'Focus', icon: Moon, tone: 'purple' },
-    { key: 'screen-time', label: 'Screen Time', icon: Clock3, tone: 'purple' },
+    { key: 'tax-vat', label: 'Tax / VAT', icon: ReceiptText, tone: 'green' },
+    { key: 'receipts', label: 'Receipts', icon: ReceiptText, tone: 'green' },
+    { key: 'payment-terminals', label: 'Payment Terminals', icon: CreditCard, tone: 'green' },
+    { key: 'customer-loyalty', label: 'Customer Loyalty', icon: Sparkles, tone: 'purple' },
   ],
   [
-    { key: 'general', label: 'General', icon: Settings2, tone: 'gray' },
-    { key: 'appearance', label: 'Appearance', icon: CircleUserRound, tone: 'black' },
-    { key: 'accessibility', label: 'Accessibility', icon: Accessibility, tone: 'blue' },
-    { key: 'control-center', label: 'Control Center', icon: SlidersHorizontal, tone: 'gray' },
-    { key: 'privacy', label: 'Privacy & Security', icon: Shield, tone: 'blue' },
+    { key: 'hardware', label: 'Hardware', icon: HardDrive, tone: 'gray' },
   ],
   [
-    { key: 'desktop-dock', label: 'Desktop & Dock', icon: Monitor, tone: 'black' },
-    { key: 'display', label: 'Display', icon: Monitor, tone: 'blue' },
-    { key: 'wallpaper', label: 'Wallpaper', icon: Image, tone: 'cyan' },
-    { key: 'energy', label: 'Energy Saver', icon: BatteryCharging, tone: 'orange' },
+    { key: 'users', label: 'Users', icon: Users, tone: 'blue' },
+    { key: 'roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck, tone: 'blue' },
   ],
   [
-    { key: 'users', label: 'Users & Groups', icon: Users, tone: 'blue' },
-    { key: 'passwords', label: 'Passwords', icon: KeyRound, tone: 'gray' },
-    { key: 'internet', label: 'Internet Accounts', icon: Globe2, tone: 'blue' },
+    { key: 'ai-assistant', label: 'AI assistant', icon: Sparkles, tone: 'purple' },
   ],
   [
-    { key: 'keyboard', label: 'Keyboard', icon: Keyboard, tone: 'gray' },
-    { key: 'mouse', label: 'Mouse', icon: MousePointer2, tone: 'gray' },
-    { key: 'printers', label: 'Printers & Scanners', icon: Printer, tone: 'gray' },
+    { key: 'connections', label: 'Connections', icon: Cable, tone: 'purple' },
+    { key: 'uber-eats', label: 'Uber Eats', icon: Cable, tone: 'purple' },
+    { key: 'deliveroo', label: 'Deliveroo', icon: Cable, tone: 'purple' },
+    { key: 'whatsapp', label: 'WhatsApp', icon: Cable, tone: 'green' },
+  ],
+  [
+    { key: 'sms-delivery', label: 'SMS Delivery', icon: CreditCard, tone: 'pink' },
+    { key: 'email-delivery', label: 'Email Delivery', icon: Mail, tone: 'pink' },
+  ],
+  [
+    { key: 'server-api', label: 'Server / API Configuration', icon: MonitorCog, tone: 'gray' },
+  ],
+  [
+    { key: 'platform', label: 'Platform', icon: LayoutGrid, tone: 'cyan' },
+    { key: 'message-templates', label: 'Message Templates', icon: ReceiptText, tone: 'cyan' },
   ],
 ]
 
 function SettingsPage() {
-  const [active, setActive] = useState('appearance')
+  const [active, setActive] = useState('general')
   const [query, setQuery] = useState('')
 
   const visibleGroups = settingsGroups
@@ -268,88 +285,51 @@ function SettingsPage() {
           <h2>{current?.label ?? 'Settings'}</h2>
         </div>
 
-        {active === 'appearance' ? (
-          <div className="settings-content-body">
-            <div className="settings-card">
+        <div className="settings-content-body">
+          <div className="settings-card">
+            {active === 'general' ? (
+              <>
+                <div className="settings-row">
+                  <div><strong>Date format</strong><p>Regional display format used across onePOS.</p></div>
+                  <select defaultValue="DD/MM/YYYY"><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option><option>YYYY-MM-DD</option></select>
+                </div>
+                <div className="settings-row">
+                  <div><strong>Currency</strong><p>Default company currency.</p></div>
+                  <span className="settings-value">GBP</span>
+                </div>
+                <div className="settings-row">
+                  <div><strong>Timezone</strong><p>Default timezone for company activity.</p></div>
+                  <span className="settings-value">Europe/London</span>
+                </div>
+              </>
+            ) : active === 'company' ? (
+              <>
+                <div className="settings-row"><strong>Company name</strong><span className="settings-value">One Solutions</span></div>
+                <div className="settings-row"><strong>Company email</strong><span className="settings-value">—</span></div>
+                <div className="settings-row"><strong>Company phone</strong><span className="settings-value">—</span></div>
+              </>
+            ) : active === 'store-till' ? (
+              <>
+                <div className="settings-row"><strong>Stores</strong><span className="settings-value">Manage stores</span></div>
+                <div className="settings-row"><strong>Tills</strong><span className="settings-value">Manage tills</span></div>
+                <div className="settings-row"><strong>Invoice settings</strong><span className="settings-value">Configure</span></div>
+              </>
+            ) : active === 'tax-vat' ? (
+              <>
+                <div className="settings-row"><strong>VAT enabled</strong><button type="button" className="mac-switch is-on"><span /></button></div>
+                <div className="settings-row"><strong>Default VAT rate</strong><span className="settings-value">20%</span></div>
+              </>
+            ) : (
               <div className="settings-row">
                 <div>
-                  <strong>Appearance</strong>
-                  <p>Choose how One Solutions looks across your workspace.</p>
+                  <strong>{current?.label}</strong>
+                  <p>This is now mapped to the live onePOS Settings structure and ready for its real API/data wiring.</p>
                 </div>
-                <div className="appearance-options">
-                  <button className="appearance-tile appearance-tile--light" type="button"><span /></button>
-                  <button className="appearance-tile appearance-tile--dark" type="button"><span /></button>
-                  <button className="appearance-tile appearance-tile--auto" type="button"><span /></button>
-                </div>
+                <ChevronRight size={16} />
               </div>
-              <div className="settings-row">
-                <strong>Accent color</strong>
-                <div className="accent-dots">
-                  {['multi','blue','purple','pink','red','orange','yellow','green','gray'].map((name) => (
-                    <button key={name} type="button" className={`accent-dot accent-dot--${name}`} aria-label={name} />
-                  ))}
-                </div>
-              </div>
-              <div className="settings-row">
-                <strong>Sidebar icon size</strong>
-                <select defaultValue="Medium"><option>Small</option><option>Medium</option><option>Large</option></select>
-              </div>
-              <div className="settings-row">
-                <strong>Allow wallpaper tinting in windows</strong>
-                <button type="button" className="mac-switch is-on"><span /></button>
-              </div>
-            </div>
+            )}
           </div>
-        ) : active === 'display' ? (
-          <div className="settings-content-body">
-            <div className="settings-card">
-              <div className="settings-row">
-                <div>
-                  <strong>Main display</strong>
-                  <p>Configure the display used for your onePOS workspace.</p>
-                </div>
-                <span className="settings-value">Built-in Display</span>
-              </div>
-              <div className="settings-row">
-                <strong>Resolution</strong>
-                <select defaultValue="Default">
-                  <option>Default</option>
-                  <option>More Space</option>
-                  <option>Larger Text</option>
-                </select>
-              </div>
-              <div className="settings-row">
-                <strong>Brightness</strong>
-                <input className="settings-slider" type="range" min="0" max="100" defaultValue="72" />
-              </div>
-              <div className="settings-row">
-                <div>
-                  <strong>Automatically adjust brightness</strong>
-                  <p>Use ambient conditions to adjust the display automatically.</p>
-                </div>
-                <button type="button" className="mac-switch is-on"><span /></button>
-              </div>
-              <div className="settings-row">
-                <strong>Night Shift</strong>
-                <select defaultValue="Off">
-                  <option>Off</option>
-                  <option>Sunset to Sunrise</option>
-                  <option>Custom</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="settings-content-body">
-            <div className="settings-card settings-placeholder">
-              <span className={`settings-nav-icon settings-nav-icon--${current?.tone ?? 'gray'} settings-placeholder-icon`}>
-                {current?.icon ? (() => { const Icon = current.icon; return <Icon size={28} /> })() : null}
-              </span>
-              <h3>{current?.label}</h3>
-              <p>This section is ready for onePOS settings wiring.</p>
-            </div>
-          </div>
-        )}
+        </div>        )}
       </div>
     </section>
   )
@@ -453,7 +433,7 @@ function Desktop({ onLock }) {
 }
 
 export default function App() {
-  const [locked, setLocked] = useState(true)
+  const [locked, setLocked] = useState(false)
 
   useEffect(() => {
     checkBackend()
