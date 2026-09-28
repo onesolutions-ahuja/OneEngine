@@ -300,6 +300,45 @@ function SettingsPage() {
               </div>
             </div>
           </div>
+        ) : active === 'display' ? (
+          <div className="settings-content-body">
+            <div className="settings-card">
+              <div className="settings-row">
+                <div>
+                  <strong>Main display</strong>
+                  <p>Configure the display used for your onePOS workspace.</p>
+                </div>
+                <span className="settings-value">Built-in Display</span>
+              </div>
+              <div className="settings-row">
+                <strong>Resolution</strong>
+                <select defaultValue="Default">
+                  <option>Default</option>
+                  <option>More Space</option>
+                  <option>Larger Text</option>
+                </select>
+              </div>
+              <div className="settings-row">
+                <strong>Brightness</strong>
+                <input className="settings-slider" type="range" min="0" max="100" defaultValue="72" />
+              </div>
+              <div className="settings-row">
+                <div>
+                  <strong>Automatically adjust brightness</strong>
+                  <p>Use ambient conditions to adjust the display automatically.</p>
+                </div>
+                <button type="button" className="mac-switch is-on"><span /></button>
+              </div>
+              <div className="settings-row">
+                <strong>Night Shift</strong>
+                <select defaultValue="Off">
+                  <option>Off</option>
+                  <option>Sunset to Sunrise</option>
+                  <option>Custom</option>
+                </select>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="settings-content-body">
             <div className="settings-card settings-placeholder">
