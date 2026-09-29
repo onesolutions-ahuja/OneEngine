@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
+import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import { apiRequest, apiUrl, checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
 import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsContext, loadUsers, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
@@ -955,24 +955,61 @@ function SettingsPage() {
 }
 
 
+function marketplaceIcon(item) {
+  const manifest = item?.manifest || {}
+  const raw = item?.icon_url || item?.logo_url || item?.icon
+    || manifest.iconUrl || manifest.icon_url || manifest.logoUrl || manifest.logo_url || manifest.icon
+  if (typeof raw === 'string' && raw.trim()) {
+    const value = raw.trim()
+    return /^https?:\/\//i.test(value) ? value : apiUrl(value.startsWith('/') ? value : `/${value}`)
+  }
+  const assetKey = item?.icon_asset_key || item?.iconAssetKey || manifest.iconAssetKey || manifest.icon_asset_key
+  return typeof assetKey === 'string' && /^[a-z0-9-]+$/i.test(assetKey)
+    ? apiUrl(`/icons/apps/${assetKey}.svg`)
+    : ''
+}
+
 function TopbarAppsMenu({ apps, query, onClose }) {
   const q = String(query || '').trim().toLowerCase()
   const visible = apps.filter((item) => item?.visible !== false && item?.system_only !== true)
     .filter((item) => !q || `${item.name || ''} ${item.package_key || ''} ${item.category || ''}`.toLowerCase().includes(q))
   const installed = visible.filter((item) => Boolean(item.company_installation))
   const available = visible.filter((item) => !item.company_installation)
-  const renderRows = (rows) => rows.slice(0, 10).map((item) => (
-    <button key={item.package_key || item.id} type="button" className="topbar-app-row" onClick={onClose}>
-      <span className="topbar-app-icon"><ShoppingBag size={14} /></span>
-      <span><strong>{item.name || item.package_key}</strong><small>{item.category || 'App'}</small></span>
-    </button>
-  ))
+  const renderRows = (rows, start = 0) => rows.slice(0, 12).map((item, index) => {
+    const icon = marketplaceIcon(item)
+    return (
+      <motion.button
+        key={item.package_key || item.id}
+        type="button"
+        className="topbar-app-row"
+        onClick={onClose}
+        initial={{ opacity: 0, y: 8, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', mass: 0.12, stiffness: 260, damping: 21, delay: Math.min(0.18, (start + index) * 0.018) }}
+        whileHover={{ y: -2, scale: 1.018 }}
+        whileTap={{ scale: 0.97 }}
+      >
+        <span className="topbar-app-icon">
+          {icon ? <img src={icon} alt="" draggable="false" /> : <ShoppingBag size={20} />}
+        </span>
+        <span><strong>{item.name || item.package_key}</strong><small>{item.category || 'App'}</small></span>
+      </motion.button>
+    )
+  })
   return (
-    <div className="mac-popover topbar-app-menu">
+    <motion.div
+      className="mac-popover topbar-app-menu"
+      initial={{ opacity: 0, y: -10, scale: 0.94, transformOrigin: 'top center' }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8, scale: 0.96 }}
+      transition={{ type: 'spring', mass: 0.16, stiffness: 300, damping: 24 }}
+    >
       <div className="mac-popover-title">OneStore</div>
-      <section><b>Installed</b>{installed.length ? renderRows(installed) : <p>No installed apps match.</p>}</section>
-      <section><b>Available</b>{available.length ? renderRows(available) : <p>No available apps match.</p>}</section>
-    </div>
+      <div className="topbar-app-columns">
+        <section><b>Installed</b>{installed.length ? renderRows(installed, 0) : <p>No installed apps match.</p>}</section>
+        <section><b>Available in oneStore</b>{available.length ? renderRows(available, installed.length) : <p>No available apps match.</p>}</section>
+      </div>
+    </motion.div>
   )
 }
 
@@ -1019,6 +1056,7 @@ function Desktop({ onLock }) {
   const [appSearch, setAppSearch] = useState('')
   const [storeApps, setStoreApps] = useState([])
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
+  const topbarPanelRef = useRef(null)
   const now = useClock()
   const storedUser = getStoredUser()
   const isTillUser = !storedUser?.isSuperadmin && /till|cashier|sales/i.test(String(storedUser?.role || ''))
@@ -1028,6 +1066,22 @@ function Desktop({ onLock }) {
     window.addEventListener('popstate', syncRoute)
     return () => window.removeEventListener('popstate', syncRoute)
   }, [])
+
+  useEffect(() => {
+    if (!topPanel) return undefined
+    const closeOutside = (event) => {
+      if (!topbarPanelRef.current?.contains(event.target)) setTopPanel('')
+    }
+    const closeEscape = (event) => {
+      if (event.key === 'Escape') setTopPanel('')
+    }
+    document.addEventListener('pointerdown', closeOutside, true)
+    document.addEventListener('keydown', closeEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside, true)
+      document.removeEventListener('keydown', closeEscape)
+    }
+  }, [topPanel])
 
   useEffect(() => {
     let live = true
@@ -1119,7 +1173,7 @@ function Desktop({ onLock }) {
 
         <div className="menubar-spacer" />
 
-        <div className="menubar-right">
+        <div className="menubar-right" ref={topbarPanelRef}>
           <div className="topbar-search-wrap">
             <label className="topbar-search-pill">
               <Search size={14} strokeWidth={2.1} />
@@ -1131,9 +1185,11 @@ function Desktop({ onLock }) {
                 aria-label="Search apps"
               />
             </label>
-            {topPanel === 'apps' ? (
-              <TopbarAppsMenu apps={storeApps} query={appSearch} onClose={() => setTopPanel('')} />
-            ) : null}
+            <AnimatePresence>
+              {topPanel === 'apps' ? (
+                <TopbarAppsMenu apps={storeApps} query={appSearch} onClose={() => setTopPanel('')} />
+              ) : null}
+            </AnimatePresence>
           </div>
           <div className="topbar-status-wrap">
             <button type="button" className="status-button" aria-label="Connection health" onClick={() => setTopPanel(topPanel === 'wifi' ? '' : 'wifi')}>
