@@ -9,6 +9,7 @@ import OneBuilder from './pages/settings/OneBuilder'
 import MetadataSettingsPage from './pages/settings/MetadataSettingsPage'
 import ObjectsSettingsPane from './pages/settings/ObjectsSettingsPane'
 import ClientWebShopSettings from './pages/settings/ClientWebShopSettings'
+import PaymentTerminalSettings from './pages/settings/PaymentTerminalSettings'
 import TillPage from './pages/till/TillPage'
 import WorkspacePage from './pages/workspace/WorkspacePage'
 import {
@@ -1186,6 +1187,8 @@ function SettingsPage() {
                     <span className="settings-value">Configure under Hardware</span>
                   </div>
                 </>
+              ) : current?.key === 'payment-terminals' ? (
+                <PaymentTerminalSettings />
               ) : current?.key === 'customer-loyalty' ? (
                 <>
                   <div className="settings-row">
