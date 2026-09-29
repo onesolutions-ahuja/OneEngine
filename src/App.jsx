@@ -23,6 +23,8 @@ const SupplierReturnsPage = lazy(() => import('./pages/returns/SupplierReturnsPa
 const ProductsPage = lazy(() => import('./pages/products/ProductsPage'))
 const CategoriesPage = lazy(() => import('./pages/products/CategoriesPage'))
 const GlobalProductLookupPage = lazy(() => import('./pages/products/GlobalProductLookupPage'))
+const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage'))
+const ReplenishmentPage = lazy(() => import('./pages/inventory/ReplenishmentPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -456,6 +458,8 @@ function readRoute() {
   if (parts[0] === 'products') return { app: 'products', section: null }
   if (parts[0] === 'categories') return { app: 'categories', section: null }
   if (parts[0] === 'global-products') return { app: 'global-products', section: null }
+  if (parts[0] === 'inventory') return { app: 'inventory', section: null }
+  if (parts[0] === 'replenishment') return { app: 'replenishment', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -484,6 +488,10 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/categories`
       : app === 'global-products'
         ? `${base}/global-products`
+      : app === 'inventory'
+        ? `${base}/inventory`
+      : app === 'replenishment'
+        ? `${base}/replenishment`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1731,6 +1739,16 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'inventory') {
+      setRoute('inventory')
+      setActiveApp('inventory')
+      return
+    }
+    if (id === 'replenishment') {
+      setRoute('replenishment')
+      setActiveApp('replenishment')
+      return
+    }
     if (id === 'categories') {
       setRoute('categories')
       setActiveApp('categories')
@@ -1947,6 +1965,10 @@ function Desktop({ onLock }) {
               setTopPanel('store')
             }}
           />
+        ) : activeApp === 'inventory' ? (
+          <InventoryPage onOpenReplenishment={() => openItem('replenishment')} />
+        ) : activeApp === 'replenishment' ? (
+          <ReplenishmentPage onBack={() => openItem('inventory')} />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
