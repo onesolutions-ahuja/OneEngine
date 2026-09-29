@@ -42,6 +42,7 @@ const OnlineOrdersPrep = lazy(() => import('./pages/online/OnlineOrdersPrep'))
 const OwnDeliveryWorkspace = lazy(() => import('./pages/online/OwnDeliveryWorkspace'))
 const ReturnsAdmin = lazy(() => import('./pages/returns/ReturnsAdmin'))
 const SupplierReturnsAdmin = lazy(() => import('./pages/returns/ReturnsAdmin').then((module) => ({ default: module.SupplierReturnsAdmin })))
+const AuditLogPage = lazy(() => import('./pages/audit/AuditLogPage'))
 const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
 import {
   Bluetooth,
@@ -485,6 +486,7 @@ function readRoute() {
   if (parts[0] === 'sales') return { app: 'sales', section: null }
   if (parts[0] === 'returns') return { app: 'returns', section: null }
   if (parts[0] === 'supplier-returns') return { app: 'supplier-returns', section: null }
+  if (parts[0] === 'audit-log') return { app: 'audit-log', section: null }
   if (parts[0] === 'products') return { app: 'products', section: null }
   if (parts[0] === 'categories') return { app: 'categories', section: null }
   if (parts[0] === 'global-products') return { app: 'global-products', section: null }
@@ -567,6 +569,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/returns`
       : app === 'supplier-returns'
         ? `${base}/supplier-returns`
+      : app === 'audit-log'
+        ? `${base}/audit-log`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1881,6 +1885,11 @@ function Desktop({ onLock }) {
       setActiveApp('supplier-returns')
       return
     }
+    if (id === 'audit-log') {
+      setRoute('audit-log')
+      setActiveApp('audit-log')
+      return
+    }
     if (id === 'reports') {
       setRoute('reports')
       setActiveApp('reports')
@@ -2181,6 +2190,8 @@ function Desktop({ onLock }) {
           <ReturnsAdmin />
         ) : activeApp === 'supplier-returns' ? (
           <SupplierReturnsAdmin />
+        ) : activeApp === 'audit-log' ? (
+          <AuditLogPage />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
