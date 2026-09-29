@@ -21,7 +21,12 @@ function matchesRule(rule, record) {
 }
 
 export function actionKeyForButton(button) {
-  return String(button?.config?.uiAction || "").trim();
+  const configured = String(button?.config?.uiAction || "").trim();
+  if (configured) return configured;
+  const actionKey = String(button?.action_key || button?.target_key || "").trim();
+  const suffix = actionKey.startsWith("online_order.") ? actionKey.slice("online_order.".length) : actionKey;
+  if (suffix === "mark_ready") return "ready";
+  return suffix;
 }
 
 export function buttonStyle(button) {
