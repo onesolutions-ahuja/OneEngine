@@ -58,6 +58,18 @@ export function apiUrl(path) {
   return `${base}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+export async function apiFetch(path, options = {}) {
+  const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  return fetch(apiUrl(path), {
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(getActingCompanyId() ? { 'X-Acting-Company-Id': getActingCompanyId() } : {}),
+      ...(options.headers || {}),
+    },
+  })
+}
+
 export async function apiRequest(path, options = {}) {
   const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   const response = await fetch(apiUrl(path), {
