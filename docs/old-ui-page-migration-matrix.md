@@ -11,7 +11,7 @@ Zero-loss rule: an old UI page/section is deleted only after its Smart Theme rep
 | Tax / VAT | Yes | Yes | Yes | VAT enabled + validated 0–100% default rate migrated. Currency remains available under General/Company. |
 | Receipts | Yes | Yes | Yes | Company header, VAT display/rate, date format and Hardware paper-width guidance migrated. |
 | Store & Till | Partial | No | No | HOLD — old page still owns store/till editing, invoice prefixes, negative-inventory acknowledgement, dock quick-access ordering, Customer Display runtime launch/state and one-time Self-Checkout pairing keys. |
-| Client Web Shop | Navigation only / pending | No | No | Pending |
+| Client Web Shop | Yes | Yes | Yes | Full settings form, store/price-list selection, pickup/delivery, own-delivery, sandbox payments, fees/minimum order, save and public storefront link migrated. |
 | Payment Terminals | Navigation only / pending | No | No | Pending |
 | Customer Loyalty | Partial | No | No | Pending full comparison |
 | Hardware | Navigation only / pending | No | No | Pending |
