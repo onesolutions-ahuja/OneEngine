@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Download, Gift, Plus, RefreshCw, Search, Upload, Users, X } from 'lucide-react'
-import { apiRequest, apiUrl } from '../../services/api'
+import { apiFetch, apiRequest } from '../../services/api'
 import RecordListView from '../../components/RecordListView'
 import { SaleDetail } from '../sales/SalesPage'
 import { serializeMaximumAgeDays, validateCreditPaymentAmount } from './customerCreditForm'
@@ -73,8 +73,7 @@ export default function CustomersPage({onOpenGiftCards}){
   const doExport=async()=>{
     try{
       setExportBusy(true);setError('')
-      const token=localStorage.getItem('onepos_token')
-      const res=await fetch(apiUrl('/api/customers/export'),{headers:{Accept:'text/csv',...(token?{Authorization:`Bearer ${token}`}:{})}})
+      const res=await apiFetch('/api/customers/export',{headers:{Accept:'text/csv'}})
       if(!res.ok)throw new Error('Unable to export customers')
       const blob=await res.blob(),url=URL.createObjectURL(blob),a=document.createElement('a')
       a.href=url;a.download=`customers-export-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url)
