@@ -33,7 +33,7 @@ import {
   Keyboard,
   MousePointer2,
   Printer,
-  ChevronRight,
+  ChevronLeft, ChevronRight,
   Building2,
   Store,
   ShoppingCart,
@@ -461,6 +461,7 @@ function SettingsPage() {
   const [recordForm, setRecordForm] = useState({})
   const [recordSaving, setRecordSaving] = useState(false)
   const [settingsCatalog, setSettingsCatalog] = useState(() => readSettingsNavCache())
+  const [mobileSettingsDetail, setMobileSettingsDetail] = useState(() => Boolean(readRoute().section && readRoute().section !== 'general'))
 
   const load = async () => {
     try {
@@ -760,7 +761,7 @@ function SettingsPage() {
   const initial = profileName.trim().charAt(0).toUpperCase() || 'U'
 
   return (
-    <section className="settings-page">
+    <section className={`settings-page ${mobileSettingsDetail ? 'is-mobile-detail' : 'is-mobile-list'}`}>
       <aside className="settings-sidebar">
         <div className="settings-window-title">Settings</div>
 
@@ -789,7 +790,7 @@ function SettingsPage() {
                   key={key}
                   type="button"
                   className={`settings-nav-item ${current?.key === key ? 'is-active' : ''}`}
-                  onClick={() => { setActive(key); setRoute('settings', key) }}
+                  onClick={() => { setActive(key); setRoute('settings', key); setMobileSettingsDetail(true) }}
                 >
                   <span className={`settings-nav-icon settings-nav-icon--${tone}`}>
                     <Icon size={16} strokeWidth={2.1} />
@@ -805,6 +806,18 @@ function SettingsPage() {
 
       <div className="settings-content">
         <div className="settings-content-header">
+          <button
+            type="button"
+            className="settings-mobile-back"
+            onClick={() => {
+              setMobileSettingsDetail(false)
+              setRoute('settings', null)
+            }}
+            aria-label="Back to Settings"
+          >
+            <ChevronLeft size={17} />
+            <span>Settings</span>
+          </button>
           <h2>{current?.label ?? 'Settings'}</h2>
         </div>
 
