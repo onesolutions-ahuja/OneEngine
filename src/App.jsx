@@ -103,6 +103,7 @@ const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/Licensi
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
 const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/StoreTillSettingsPage'))
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
+const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -519,6 +520,7 @@ const SETTINGS_VISUALS = {
   'uber-eats': { icon: Cable, tone: 'purple' },
   deliveroo: { icon: Cable, tone: 'purple' },
   whatsapp: { icon: Cable, tone: 'green' },
+  'whatsapp-assistant': { icon: Cable, tone: 'green' },
   'sms-delivery': { icon: CreditCard, tone: 'pink' },
   'email-delivery': { icon: Mail, tone: 'pink' },
   'server-api': { icon: MonitorCog, tone: 'gray' },
@@ -1562,6 +1564,8 @@ function SettingsPage({ onOpenProfile }) {
                 <DeliverySettingsPage channel="email" />
               ) : current?.key === 'sms-delivery' ? (
                 <DeliverySettingsPage channel="sms" />
+              ) : current?.key === 'whatsapp-assistant' ? (
+                <WhatsAppAssistantSettings />
               ) : current?.key === 'ai-assistant' ? (
                 <AiAssistantSettings />
               ) : current?.key === 'users' ? (
@@ -2402,6 +2406,7 @@ function Desktop({ onLock, onSignOut }) {
     }
     if (id === 'store') {
       setAppSearch('')
+      setLauncherOpen(false)
       setStoreFocusPackageKey('')
       setTopPanel('store')
       return
