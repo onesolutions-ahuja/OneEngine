@@ -92,7 +92,7 @@ export default function SalesPage({ onOpenReturns, onOpenSupplierReturns }) {
   </section>
 }
 
-function SaleDetail({ sale, currency, onClose }) {
+export function SaleDetail({ sale, currency, onClose }) {
   const [channelState, setChannelState] = useState({ channel: '', phase: 'idle', message: '' })
 
   const beginOrSend = async (channel) => {
