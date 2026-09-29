@@ -1482,7 +1482,10 @@ function Desktop({ onLock }) {
 }
 
 export default function App() {
-  const [locked, setLocked] = useState(true)
+  // A browser refresh should restore an authenticated session, not behave like
+  // an explicit workstation lock. PIN is only required after the user chooses
+  // Lock during the current session.
+  const [locked, setLocked] = useState(() => !hasSession())
 
   useEffect(() => {
     checkBackend()
