@@ -33,6 +33,8 @@ const CustomersPage = lazy(() => import('./pages/customers/CustomersPage'))
 const GiftCardsPage = lazy(() => import('./pages/customers/GiftCardsPage'))
 const AttendancePage = lazy(() => import('./pages/employees/AttendancePage'))
 const StoresPage = lazy(() => import('./pages/stores/StoresPage'))
+const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'))
+const CustomReportsPage = lazy(() => import('./pages/reports/CustomReportsPage'))
 const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
 import {
   Bluetooth,
@@ -475,6 +477,8 @@ function readRoute() {
   if (parts[0] === 'gift-cards') return { app: 'gift-cards', section: null }
   if (parts[0] === 'employees') return { app: 'employees', section: null }
   if (parts[0] === 'stores') return { app: 'stores', section: null }
+  if (parts[0] === 'reports') return { app: 'reports', section: null }
+  if (parts[0] === 'custom-reports') return { app: 'custom-reports', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -519,6 +523,10 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/employees`
       : app === 'stores'
         ? `${base}/stores`
+      : app === 'reports'
+        ? `${base}/reports`
+      : app === 'custom-reports'
+        ? `${base}/custom-reports`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1789,6 +1797,16 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'reports') {
+      setRoute('reports')
+      setActiveApp('reports')
+      return
+    }
+    if (id === 'custom-reports') {
+      setRoute('custom-reports')
+      setActiveApp('custom-reports')
+      return
+    }
     if (id === 'stores') {
       setRoute('stores')
       setActiveApp('stores')
@@ -2061,6 +2079,10 @@ function Desktop({ onLock }) {
           <AttendancePage />
         ) : activeApp === 'stores' ? (
           <StoresPage />
+        ) : activeApp === 'reports' ? (
+          <ReportsPage onOpenCustomReports={() => openItem('custom-reports')} />
+        ) : activeApp === 'custom-reports' ? (
+          <CustomReportsPage onBack={() => openItem('reports')} />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
