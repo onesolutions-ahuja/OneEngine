@@ -257,7 +257,16 @@ button:focus-visible {
   align-items: center;
   gap: 0;
   color: #111;
-  background: hsl(34.3 8.8% 90% / 0.6);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 111, 97, 0.56) 0%,
+      rgba(255, 179, 71, 0.46) 23%,
+      rgba(227, 74, 203, 0.38) 49%,
+      rgba(122, 92, 255, 0.34) 74%,
+      rgba(56, 189, 248, 0.30) 100%
+    ),
+    rgba(248, 248, 248, 0.68);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(64px);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
@@ -351,6 +360,13 @@ button:focus-visible {
   font-size: 14px;
   line-height: 1;
   font-weight: 800;
+}
+
+.one-logo-play {
+  width: 18px;
+  height: 18px;
+  display: block;
+  flex: 0 0 18px;
 }
 
 .menu-text {
@@ -3733,9 +3749,10 @@ button:focus-visible {
   text-decoration: underline;
 }
 
-/* Global dock-safe Settings viewport: no Settings content may render behind Dock. */
+/* Settings fills the desktop so the wallpaper never leaks through behind the dock.
+   Dock safety is handled with internal bottom spacing instead of shrinking the page. */
 .settings-page {
-  bottom: 92px;
+  bottom: 0;
   min-height: 0;
 }
 
@@ -3749,7 +3766,11 @@ button:focus-visible {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 14px;
+  padding-bottom: 106px;
+}
+
+.settings-nav {
+  padding-bottom: 106px;
 }
 
 .settings-card,
