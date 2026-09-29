@@ -24,7 +24,7 @@ const columnsFor = (currency) => [
   { key: 'cashier', label: 'Cashier', render: (row) => row.cashier || '—' },
 ]
 
-export default function SalesPage() {
+export default function SalesPage({ onOpenReturns, onOpenSupplierReturns }) {
   const [sales, setSales] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -67,7 +67,11 @@ export default function SalesPage() {
   return <section className="module-page sales-page">
     <header className="module-page-header">
       <div><span>Transactions</span><h1>Sales</h1><p>Completed and recorded till transactions.</p></div>
-      <button type="button" onClick={load}><RefreshCw size={14}/> Refresh</button>
+      <div className="module-header-actions">
+        {onOpenReturns ? <button type="button" onClick={onOpenReturns}>Customer Returns</button> : null}
+        {onOpenSupplierReturns ? <button type="button" onClick={onOpenSupplierReturns}>Supplier Returns</button> : null}
+        <button type="button" onClick={load}><RefreshCw size={14}/> Refresh</button>
+      </div>
     </header>
 
     <div className="module-page-card">
