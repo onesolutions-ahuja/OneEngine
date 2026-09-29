@@ -93,6 +93,9 @@ export const DASHBOARD_COMPONENTS = Object.freeze([
   { key: "bar", label: "Bar Chart", kind: "chart" },
   { key: "table", label: "Table / List", kind: "record" },
   { key: "text", label: "Text", kind: "content" },
+  { key: "clock_widget", label: "Clock / Watch", kind: "content" },
+  { key: "calendar_widget", label: "Calendar", kind: "content" },
+  { key: "weather_widget", label: "Weather", kind: "content" },
 ]);
 
 export const DASHBOARD_DATE_RANGES = Object.freeze([
