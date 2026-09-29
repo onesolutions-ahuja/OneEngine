@@ -96,10 +96,37 @@ export async function login(username, password) {
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
 
-  const data = await apiRequest('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ username, password }),
-  })
+  const attemptLogin = async () => {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 15000)
+    try {
+      return await apiRequest('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+        signal: controller.signal,
+      })
+    } finally {
+      window.clearTimeout(timeout)
+    }
+  }
+
+  let data
+  try {
+    data = await attemptLogin()
+  } catch (error) {
+    if (error?.name !== 'AbortError') throw error
+    // Render may briefly be unavailable while a new deployment starts.
+    await new Promise((resolve) => window.setTimeout(resolve, 1200))
+    try {
+      data = await attemptLogin()
+    } catch (retryError) {
+      if (retryError?.name === 'AbortError') {
+        throw new Error('Server is starting. Please try again in a few seconds.')
+      }
+      throw retryError
+    }
+  }
+
   if (!data?.success || !data?.token) throw new Error(data?.message || 'Login failed')
   sessionStorage.setItem('onepos_token', data.token)
   sessionStorage.setItem('onepos_user', JSON.stringify(data.user || {}))
