@@ -71,11 +71,11 @@ function isWorkflowRule(rule) {
   return ruleActionType(rule).toLowerCase() === 'workflow'
 }
 
-export default function ObjectsSettingsPane() {
+export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
   const [objects, setObjects] = useState([])
   const [query, setQuery] = useState('')
   const [selectedKey, setSelectedKey] = useState('')
-  const [activeTab, setActiveTab] = useState('details')
+  const [activeTab, setActiveTab] = useState(initialTab || 'details')
   const [mobileStage, setMobileStage] = useState('objects')
   const [fields, setFields] = useState([])
   const [editor, setEditor] = useState(null)
@@ -101,6 +101,13 @@ export default function ObjectsSettingsPane() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [permissionView, setPermissionView] = useState('effective')
+
+  useEffect(() => {
+    if (!initialTab) return
+    setEditor(null)
+    setActiveTab(initialTab)
+    setMobileStage('objects')
+  }, [initialTab])
 
   useEffect(() => {
     let live = true
