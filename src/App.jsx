@@ -547,8 +547,6 @@ function SettingsPage({ onOpenProfile }) {
 
   const permissions = context?.permissions || {}
   const permissionCodes = Array.isArray(permissions.permissions) ? permissions.permissions : []
-  const isAdmin = permissions.isAdmin === true
-  const isPlatformDeveloper = context?.user?.isPlatformDeveloper === true
   const entitlements = permissions.entitlements || {}
   // Runtime authorization comes from RBAC permission codes. Identity tags are
   // descriptive/bootstrap context only and do not grant UI actions.
