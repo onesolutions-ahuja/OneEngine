@@ -291,10 +291,10 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
           </> : null}
           {current.id && principals && canAssignDefaults ? <>
             <section data-testid="dashboard-defaults-panel">
-              <h2 className="font-semibold text-sm">DEFAULT DASHBOARD FOR</h2>
+              <h2 className="font-semibold text-sm">LANDING DASHBOARD FOR</h2><p className="mt-1 text-xs" style={{ color: "var(--onepos-text-muted)" }}>Choose which dashboard opens as the Smart Theme home for a user, role, public group or the company. More specific assignments take precedence by priority.</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_100px_auto]">
                 <select className={FIELD} style={FIELD_STYLE} value={defaultType} onChange={(event) => { setDefaultType(event.target.value); setDefaultId(""); }} aria-label="Default target type">
-                  <option value="USER">Me / User</option><option value="ROLE">Role</option><option value="PUBLIC_GROUP">Public Group</option><option value="COMPANY">Company</option>
+                  <option value="USER">User</option><option value="ROLE">Role</option><option value="PUBLIC_GROUP">Public Group</option><option value="COMPANY">Company</option>
                 </select>
                 <select className={FIELD} style={FIELD_STYLE} value={defaultId} onChange={(event) => setDefaultId(event.target.value)} aria-label="Default target principal">
                   <option value="">Select target</option>{principalOptions(defaultType).map((item) => <option key={item.id} value={item.id}>{optionLabel(defaultType, item)}</option>)}
