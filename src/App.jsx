@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, apiUrl, checkBackend, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
+import { apiRequest, apiUrl, checkBackend, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, setActingCompanyId, verifyPin } from './services/api'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
@@ -813,6 +813,25 @@ function SettingsPage({ onOpenProfile }) {
     || (current?.key === 'server-api' && permissionCodes.includes('platform.manage'))
   const hasCompanyContext = context?.hasCompanyContext === true
   const companySettingsError = context?.settingsError || ''
+  const authorisedCompanies = Array.isArray(context?.authorisedCompanies) ? context.authorisedCompanies : []
+
+  const chooseCompanyContext = async (companyId) => {
+    if (!companyId) return
+    try {
+      setLoading(true)
+      setError('')
+      await apiRequest('/api/platform/developer/acting-company', {
+        method: 'PUT',
+        body: JSON.stringify({ actingCompanyId: companyId }),
+      })
+      setActingCompanyId(companyId)
+      await load()
+    } catch (err) {
+      setError(err?.message || 'Unable to select company')
+    } finally {
+      setLoading(false)
+    }
+  }
 
 
   useEffect(() => {
@@ -1126,7 +1145,22 @@ function SettingsPage({ onOpenProfile }) {
           {loading ? (
             <div className="settings-card settings-state-card">Loading settings…</div>
           ) : !companyIndependentSection && !hasCompanyContext ? (
-            <div className="settings-card settings-state-card">Select a company context to manage company settings.</div>
+            <div className="settings-card settings-state-card">
+              {authorisedCompanies.length ? (
+                <>
+                  <strong>Select company</strong>
+                  <p>Choose the company you want to manage.</p>
+                  <select defaultValue="" onChange={(event) => { if (event.target.value) void chooseCompanyContext(event.target.value) }}>
+                    <option value="" disabled>Choose company…</option>
+                    {authorisedCompanies.map((company) => (
+                      <option key={company.id} value={company.id}>{company.name}</option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <>No authorised company context is available for this account.</>
+              )}
+            </div>
           ) : !companyIndependentSection && !settings ? (
             <div className="settings-card settings-state-card">{companySettingsError || 'No settings data available.'}</div>
           ) : (
