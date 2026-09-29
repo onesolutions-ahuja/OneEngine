@@ -44,6 +44,15 @@ Zero-loss rule: an old UI page/section is deleted only after its Smart Theme rep
 | Profile / own User record route | Yes | Yes | No | Read-only metadata profile migrated using /api/platform/runtime/my-record. Legacy profile code remains only because AdminLayout itself is still active. |
 | AdminLayout legacy shell | Smart Theme App shell | Partial | No | DELETE LAST — remaining old modules still route through AdminLayout. |
 
+## Phase 3 — Sales + Returns
+
+| Old UI page / runtime | Smart Theme replacement | Logic fully migrated? | Old UI deleted? | Status / note |
+|---|---|---:|---:|---|
+| Sales | Yes | Yes | No | ✅ Sales list/search, full sale detail, totals and manual invoice resend by SMS / Email / WhatsApp migrated. `/sales` route wired; installed OneSales launcher route opens Sales. ⏳ DELETE BLOCKER: legacy AdminLayout still imports SalesAdmin. |
+| Customer Returns | Yes | Yes | No | ✅ Receipt lookup, returnable validation, remaining quantities, review, backend-authoritative refund calculation, stable idempotency key, online-only guard and return history/detail migrated. ⏳ DELETE BLOCKER: legacy AdminLayout still imports ReturnsAdmin. |
+| Supplier Returns | Yes | Yes | Partial | ✅ Available received stock, quantity validation, supplier return posting and history migrated. ✅ Unused standalone duplicate SupplierReturnsAdmin.jsx deleted. ⏳ Embedded legacy component remains inside ReturnsAdmin until AdminLayout cutover. |
+| Sale detail shared modal | Replaced in SalesPage | Yes for Sales | No | ⏳ Customers still imports the legacy SaleDetailModal; delete after Customers migration. |
+
 ## Later phases
 
 - Core workspace/object pages
