@@ -181,6 +181,52 @@ export async function login(username, password) {
   return { ...data, user: resolvedUser }
 }
 
+export function startGoogleLogin(returnTo = typeof window !== 'undefined' ? window.location.href : '') {
+  if (typeof window === 'undefined') return
+  const target = returnTo || window.location.href
+  window.location.assign(apiUrl(`/api/auth/google/start?returnTo=${encodeURIComponent(target.split('#')[0])}`))
+}
+
+export function consumeGoogleOAuthCallback() {
+  if (typeof window === 'undefined') return { handled: false }
+
+  const raw = String(window.location.hash || '').replace(/^#/, '')
+  if (!raw) return { handled: false }
+
+  const params = new URLSearchParams(raw)
+  const error = params.get('google_error')
+  const token = params.get('google_token')
+
+  if (!error && !token) return { handled: false }
+
+  window.history.replaceState({}, '', window.location.pathname + window.location.search)
+
+  if (error) {
+    const messages = {
+      google_cancelled: 'Google sign-in was cancelled.',
+      account_not_linked: 'This Google account is not linked to a onePOS account.',
+      account_disabled: 'This onePOS account is disabled.',
+      email_not_verified: 'Your Google email address could not be verified.',
+      invalid_state: 'Google sign-in could not be verified. Please try again.',
+      missing_code: 'Google did not return a sign-in code. Please try again.',
+      token_exchange_failed: 'Google sign-in could not be completed. Please try again.',
+      profile_lookup_failed: 'Google account details could not be loaded.',
+      google_not_configured: 'Google Sign-In is not available right now.',
+      google_login_failed: 'Google Sign-In failed. Please try again.',
+    }
+    return { handled: true, error: messages[error] || 'Google Sign-In failed. Please try again.' }
+  }
+
+  sessionStorage.removeItem('onepos_token')
+  sessionStorage.removeItem('onepos_user')
+  localStorage.removeItem('onepos_token')
+  localStorage.removeItem('onepos_user')
+  setActingCompanyId('')
+  sessionStorage.setItem('onepos_token', token)
+
+  return { handled: true, token }
+}
+
 export async function verifyPin(pin) {
   const data = await apiRequest('/api/auth/unlock-pin', {
     method: 'POST',
