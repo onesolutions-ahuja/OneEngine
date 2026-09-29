@@ -23,7 +23,7 @@ function appIcon(item){
   return `${import.meta.env.BASE_URL||'/'}icons/apps/${String(key).trim().toLowerCase().replaceAll('_','-')}.svg`
 }
 
-export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],onPackagesChange}){
+export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],onPackagesChange,canManagePackages=false}){
   const [packages,setPackages]=useState(()=>Array.isArray(initialPackages)?initialPackages:[])
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
@@ -33,21 +33,16 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   const [category,setCategory]=useState('All')
   const [selectedKey,setSelectedKey]=useState('')
   const [workingKey,setWorkingKey]=useState('')
-  const [canManage,setCanManage]=useState(false)
+  const canManage=canManagePackages
 
   const load=async({refreshCatalogue=false}={})=>{
     try{
       setLoading(true);setError('')
-      const [catalogue,perm]=await Promise.all([
-        refreshCatalogue||!packages.length?apiRequest('/api/packages/marketplace'):Promise.resolve({success:true,data:packages}),
-        apiRequest('/api/auth/me/permissions').catch(()=>null),
-      ])
+      const catalogue=await (refreshCatalogue||!packages.length?apiRequest('/api/packages/marketplace'):Promise.resolve({success:true,data:packages}))
       if(!catalogue?.success)throw new Error(catalogue?.message||'Unable to load oneStore')
       const nextPackages=Array.isArray(catalogue.data)?catalogue.data:[]
       setPackages(nextPackages)
       onPackagesChange?.(nextPackages)
-      const codes=perm?.data?.permissions||[]
-      setCanManage(perm?.data?.isAdmin===true||perm?.data?.isSuperadmin===true||codes.includes('package.install'))
     }catch(err){setError(err?.message||'Unable to load oneStore')}
     finally{setLoading(false)}
   }
