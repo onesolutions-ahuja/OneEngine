@@ -2336,6 +2336,8 @@ function Desktop({ onLock }) {
               ) : null}
               {topPanel === 'store' ? (
                 <OneStorePopover
+                  initialPackages={storeApps}
+                  onPackagesChange={setStoreApps}
                   onClose={() => setTopPanel('')}
                   onOpenRoute={(route) => {
                     const slug = String(route || '').split('?')[0].split('/').filter(Boolean).pop()
