@@ -17,6 +17,7 @@ const TillPage = lazy(() => import('./pages/till/TillPage'))
 const WorkspacePage = lazy(() => import('./pages/workspace/WorkspacePage'))
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'))
+const SalesPage = lazy(() => import('./pages/sales/SalesPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -444,6 +445,7 @@ function readRoute() {
   if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'general' }
   if (parts[0] === 'till') return { app: 'till', section: null }
   if (parts[0] === 'profile') return { app: 'profile', section: null }
+  if (parts[0] === 'sales') return { app: 'sales', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -460,6 +462,8 @@ function setRoute(app, section = null, options = {}) {
       ? `${base}/till`
       : app === 'profile'
         ? `${base}/profile`
+      : app === 'sales'
+        ? `${base}/sales`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1484,7 +1488,7 @@ function marketplaceIcon(item) {
   return localAppIcon('default-app')
 }
 
-function TopbarAppsMenu({ apps, query, onClose, mode = 'launcher' }) {
+function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, mode = 'launcher' }) {
   const q = String(query || '').trim().toLowerCase()
   const visible = apps.filter((item) => item?.visible !== false && item?.system_only !== true)
     .filter((item) => !q || `${item.name || ''} ${item.package_key || ''} ${item.category || ''}`.toLowerCase().includes(q))
@@ -1498,7 +1502,11 @@ function TopbarAppsMenu({ apps, query, onClose, mode = 'launcher' }) {
         key={item.package_key || item.id}
         type="button"
         className="topbar-app-row"
-        onClick={onClose}
+        onClick={() => {
+          const route = item?.route || item?.manifest?.route || item?.company_installation?.manifest?.route || ''
+          if (mode !== 'store' && item?.company_installation && route) onOpenRoute?.(route)
+          onClose?.()
+        }}
         initial={{ opacity: 0, y: 8, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: 'spring', mass: 0.12, stiffness: 260, damping: 21, delay: Math.min(0.18, (start + index) * 0.018) }}
@@ -1703,6 +1711,11 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'sales') {
+      setRoute('sales')
+      setActiveApp('sales')
+      return
+    }
     if (id === 'workspace') {
       setRoute('workspace')
       setActiveApp('workspace')
@@ -1802,7 +1815,16 @@ function Desktop({ onLock }) {
             </motion.label>
             <AnimatePresence>
               {topPanel === 'apps' || topPanel === 'store' ? (
-                <TopbarAppsMenu apps={storeApps} query={appSearch} mode={topPanel === 'store' ? 'store' : 'launcher'} onClose={() => setTopPanel('')} />
+                <TopbarAppsMenu
+                  apps={storeApps}
+                  query={appSearch}
+                  mode={topPanel === 'store' ? 'store' : 'launcher'}
+                  onClose={() => setTopPanel('')}
+                  onOpenRoute={(route) => {
+                    const slug = String(route || '').split('?')[0].split('/').filter(Boolean).pop()
+                    if (slug) openItem(slug)
+                  }}
+                />
               ) : null}
             </AnimatePresence>
           </div>
@@ -1856,6 +1878,8 @@ function Desktop({ onLock }) {
           }} />
         ) : activeApp === 'till' ? (
           <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
+        ) : activeApp === 'sales' ? (
+          <SalesPage />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
