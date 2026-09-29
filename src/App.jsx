@@ -2338,6 +2338,7 @@ function Desktop({ onLock }) {
                 <OneStorePopover
                   initialPackages={storeApps}
                   onPackagesChange={setStoreApps}
+                  canManagePackages={desktopPermissions.includes('package.install')}
                   onClose={() => setTopPanel('')}
                   onOpenRoute={(route) => {
                     const slug = String(route || '').split('?')[0].split('/').filter(Boolean).pop()
