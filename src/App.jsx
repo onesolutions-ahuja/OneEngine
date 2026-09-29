@@ -733,7 +733,25 @@ function SettingsPage({ onOpenProfile }) {
     try {
       setLoading(true)
       setError('')
-      setContext(await loadSettingsContext())
+      setSettingsCatalogError('')
+      const nextContext = await loadSettingsContext()
+      setContext(nextContext)
+
+      try {
+        const rows = await loadSettingsCatalog()
+        if (Array.isArray(rows) && rows.length) {
+          writeSettingsNavCache(rows)
+          setSettingsCatalog(rows)
+        } else if (!readSettingsNavCache().length) {
+          setSettingsCatalogError('Settings catalogue is unavailable.')
+        }
+      } catch (catalogError) {
+        if (!readSettingsNavCache().length) {
+          setSettingsCatalogError(catalogError?.message || 'Unable to load Settings catalogue.')
+        }
+      } finally {
+        setSettingsCatalogLoaded(true)
+      }
     } catch (err) {
       setError(err?.message || 'Unable to load settings')
     } finally {
@@ -743,30 +761,6 @@ function SettingsPage({ onOpenProfile }) {
 
   useEffect(() => {
     void load()
-  }, [])
-
-  useEffect(() => {
-    let live = true
-    setSettingsCatalogError('')
-    loadSettingsCatalog()
-      .then((rows) => {
-        if (!live) return
-        if (Array.isArray(rows) && rows.length) {
-          writeSettingsNavCache(rows)
-          setSettingsCatalog(rows)
-          return
-        }
-        if (!settingsCatalog.length) setSettingsCatalogError('Settings catalogue is unavailable.')
-      })
-      .catch((error) => {
-        if (live && !settingsCatalog.length) {
-          setSettingsCatalogError(error?.message || 'Unable to load Settings catalogue.')
-        }
-      })
-      .finally(() => {
-        if (live) setSettingsCatalogLoaded(true)
-      })
-    return () => { live = false }
   }, [])
 
   const permissions = context?.permissions || {}
@@ -1151,20 +1145,7 @@ function SettingsPage({ onOpenProfile }) {
             <div className="settings-card settings-state-card">Loading settings…</div>
           ) : !companyIndependentSection && !hasCompanyContext ? (
             <div className="settings-card settings-state-card">
-              {authorisedCompanies.length ? (
-                <>
-                  <strong>Select company</strong>
-                  <p>Choose the company you want to manage.</p>
-                  <select defaultValue="" onChange={(event) => { if (event.target.value) void chooseCompanyContext(event.target.value) }}>
-                    <option value="" disabled>Choose company…</option>
-                    {authorisedCompanies.map((company) => (
-                      <option key={company.id} value={company.id}>{company.name}</option>
-                    ))}
-                  </select>
-                </>
-              ) : (
-                <>No authorised company context is available for this account.</>
-              )}
+              Company mapping is unavailable for this user. Sign out and sign in again after an administrator maps the user to a company.
             </div>
           ) : !companyIndependentSection && !settings ? (
             <div className="settings-card settings-state-card">{companySettingsError || 'No settings data available.'}</div>
