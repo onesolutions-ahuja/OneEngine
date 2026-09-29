@@ -1186,6 +1186,7 @@ function SettingsPage({ onOpenProfile }) {
 
         <div className="settings-content-body">
           {error ? <div className="settings-error">{error}</div> : null}
+          <Suspense fallback={<div className="settings-card settings-state-card">Loading section…</div>}>
           {loading ? (
             <div className="settings-card settings-state-card">Loading settings…</div>
           ) : !companyIndependentSection && !hasCompanyContext ? (
@@ -1647,6 +1648,7 @@ function SettingsPage({ onOpenProfile }) {
               )}
             </div>
           )}
+          </Suspense>
 
         </div>
       </div>
