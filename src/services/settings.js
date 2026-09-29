@@ -45,6 +45,13 @@ export async function patchSettings(patch) {
   })
 }
 
+export async function patchCompanySettings(patch) {
+  return apiRequest('/api/settings/company', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
 
 export async function loadUsers() {
   const payload = await apiRequest('/api/admin/users')
