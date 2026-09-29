@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Static runtime checks
+        run: npx --yes eslint@9.36.0 src services --config eslint.config.js
+
       - name: Build
         run: npm run build
 
