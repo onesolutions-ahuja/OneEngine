@@ -31,6 +31,8 @@ const SuppliersPage = lazy(() => import('./pages/suppliers/SuppliersPage'))
 const CustomersPage = lazy(() => import('./pages/customers/CustomersPage'))
 const GiftCardsPage = lazy(() => import('./pages/customers/GiftCardsPage'))
 const AttendancePage = lazy(() => import('./pages/employees/AttendancePage'))
+const StoresPage = lazy(() => import('./pages/stores/StoresPage'))
+const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -471,6 +473,7 @@ function readRoute() {
   if (parts[0] === 'customers') return { app: 'customers', section: null }
   if (parts[0] === 'gift-cards') return { app: 'gift-cards', section: null }
   if (parts[0] === 'employees') return { app: 'employees', section: null }
+  if (parts[0] === 'stores') return { app: 'stores', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -513,6 +516,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/gift-cards`
       : app === 'employees'
         ? `${base}/employees`
+      : app === 'stores'
+        ? `${base}/stores`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1156,12 +1161,7 @@ function SettingsPage({ onOpenProfile }) {
                   </div>
                 </>
               ) : current?.key === 'store-till' ? (
-                <>
-                  <div className="settings-row"><strong>Store</strong><span className="settings-value">{settings.store?.name || settings.store?.storeName || 'Current store'}</span></div>
-                  <div className="settings-row"><strong>Till</strong><span className="settings-value">{settings.till?.name || '—'}</span></div>
-                  <div className="settings-row"><strong>Terminal number</strong><span className="settings-value">{settings.till?.terminalNumber || '—'}</span></div>
-                  <div className="settings-row"><strong>Product view</strong><span className="settings-value">{settings.till?.productView || 'image'}</span></div>
-                </>
+                <StoreTillSettingsPage settings={settings} onSettingsChanged={load} />
               ) : current?.key === 'client-web-shop' ? (
                 <ClientWebShopSettings />
               ) : current?.key === 'tax-vat' ? (
@@ -1760,6 +1760,11 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'stores') {
+      setRoute('stores')
+      setActiveApp('stores')
+      return
+    }
     if (id === 'employees') {
       setRoute('employees')
       setActiveApp('employees')
@@ -2025,6 +2030,8 @@ function Desktop({ onLock }) {
           <GiftCardsPage onBack={() => openItem('customers')} />
         ) : activeApp === 'employees' ? (
           <AttendancePage />
+        ) : activeApp === 'stores' ? (
+          <StoresPage />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
