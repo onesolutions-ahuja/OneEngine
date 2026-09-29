@@ -21,6 +21,8 @@ const SalesPage = lazy(() => import('./pages/sales/SalesPage'))
 const ReturnsPage = lazy(() => import('./pages/returns/ReturnsPage'))
 const SupplierReturnsPage = lazy(() => import('./pages/returns/SupplierReturnsPage'))
 const ProductsPage = lazy(() => import('./pages/products/ProductsPage'))
+const CategoriesPage = lazy(() => import('./pages/products/CategoriesPage'))
+const GlobalProductLookupPage = lazy(() => import('./pages/products/GlobalProductLookupPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -452,6 +454,8 @@ function readRoute() {
   if (parts[0] === 'returns') return { app: 'returns', section: null }
   if (parts[0] === 'supplier-returns') return { app: 'supplier-returns', section: null }
   if (parts[0] === 'products') return { app: 'products', section: null }
+  if (parts[0] === 'categories') return { app: 'categories', section: null }
+  if (parts[0] === 'global-products') return { app: 'global-products', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -476,6 +480,10 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/supplier-returns`
       : app === 'products'
         ? `${base}/products`
+      : app === 'categories'
+        ? `${base}/categories`
+      : app === 'global-products'
+        ? `${base}/global-products`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1723,6 +1731,16 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'categories') {
+      setRoute('categories')
+      setActiveApp('categories')
+      return
+    }
+    if (id === 'global-products') {
+      setRoute('global-products')
+      setActiveApp('global-products')
+      return
+    }
     if (id === 'products') {
       setRoute('products')
       setActiveApp('products')
@@ -1918,6 +1936,16 @@ function Desktop({ onLock }) {
           <ProductsPage
             onOpenCategories={() => openItem('categories')}
             onOpenGlobalProducts={() => openItem('global-products')}
+          />
+        ) : activeApp === 'categories' ? (
+          <CategoriesPage onBack={() => openItem('products')} />
+        ) : activeApp === 'global-products' ? (
+          <GlobalProductLookupPage
+            onBack={() => openItem('products')}
+            onOpenStore={() => {
+              setAppSearch('')
+              setTopPanel('store')
+            }}
           />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
