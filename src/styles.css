@@ -7783,3 +7783,206 @@ button:focus-visible {
     max-height: 290px;
   }
 }
+
+
+/* Standalone customer-facing Till display. */
+.customer-display-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f4f6f8;
+  color: #1f2937;
+}
+
+.customer-display-header {
+  min-height: 70px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(90deg,#104744,#176f6a);
+  color: #fff;
+}
+
+.customer-display-brand {
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: -.04em;
+}
+
+.customer-display-store {
+  overflow: hidden;
+  color: rgba(255,255,255,.72);
+  font-size: 16px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-display-welcome {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+}
+
+.customer-display-logo {
+  width: 88px;
+  height: 88px;
+  display: grid;
+  place-items: center;
+  border-radius: 25px;
+  background: linear-gradient(135deg,#1a817b,#176f6a 58%,#0e5f5a);
+  color: #fff;
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.customer-display-welcome h1 {
+  margin: 12px 0 0;
+  font-size: clamp(28px,4vw,44px);
+}
+
+.customer-display-welcome p {
+  margin: 0;
+  color: #64748b;
+  font-size: clamp(15px,2vw,20px);
+}
+
+.customer-display-bill {
+  width: min(900px,100%);
+  margin: 0 auto;
+  padding: 24px 28px 34px;
+}
+
+.customer-display-bill h1 {
+  margin: 0 0 14px;
+  font-size: clamp(24px,3vw,34px);
+}
+
+.customer-display-lines,
+.customer-display-totals {
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(15,23,42,.045);
+}
+
+.customer-display-line {
+  min-height: 68px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.customer-display-line:last-child {
+  border-bottom: 0;
+}
+
+.customer-display-line > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.customer-display-line strong {
+  overflow: hidden;
+  font-size: clamp(16px,2vw,21px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-display-line span {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.customer-display-line b {
+  font-size: clamp(17px,2vw,22px);
+  white-space: nowrap;
+}
+
+.customer-display-totals {
+  margin-top: 16px;
+  padding: 16px 18px;
+}
+
+.customer-display-totals > div {
+  padding: 4px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 17px;
+}
+
+.customer-display-totals .customer-display-account {
+  display: block;
+  color: #15803d;
+  font-size: 13px;
+}
+
+.customer-display-totals .is-discount {
+  color: #15803d;
+}
+
+.customer-display-totals .is-total {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #cbd5e1;
+  font-size: clamp(25px,4vw,38px);
+  font-weight: 800;
+}
+
+.customer-display-qr-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15,23,42,.48);
+}
+
+.customer-display-qr {
+  position: relative;
+  width: min(420px,100%);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15,23,42,.28);
+}
+
+.customer-display-qr > button {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.customer-display-qr img {
+  width: 220px;
+  height: 220px;
+  object-fit: contain;
+}
+
+.customer-display-qr small,
+.customer-display-qr span {
+  color: #64748b;
+}
