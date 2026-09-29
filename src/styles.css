@@ -4139,7 +4139,7 @@ button:focus-visible {
 }
 
 .topbar-search-wrap .mac-popover {
-  width: 330px;
+  width: min(680px, calc(100vw - 32px));
 }
 
 .mac-popover-title {
@@ -4217,13 +4217,51 @@ button:focus-visible {
 
 .topbar-app-icon,
 .control-symbol {
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
   display: grid;
   place-items: center;
-  border-radius: 7px;
+  overflow: hidden;
+  border-radius: 11px;
   background: rgba(0, 0, 0, 0.055);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+}
+
+.topbar-app-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+
+.topbar-app-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.topbar-app-menu section {
+  min-width: 0;
+}
+
+.topbar-app-menu .topbar-app-row {
+  min-height: 58px;
+  padding: 8px 9px;
+}
+
+.topbar-app-menu .topbar-app-row strong {
+  font-size: 12.5px;
+}
+
+.topbar-app-menu .topbar-app-row small {
+  font-size: 10px;
+}
+
+@media (max-width: 720px) {
+  .topbar-app-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 .control-symbol {
