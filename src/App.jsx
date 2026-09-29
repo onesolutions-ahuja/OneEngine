@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, apiUrl, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, startGoogleLogin, verifyPin } from './services/api'
@@ -6,59 +6,103 @@ import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettin
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb, { ORB_STATES } from './components/jarvis/JarvisOrb'
 import JarvisPanel from './components/jarvis/JarvisPanel'
-const RecordListView = lazy(() => import('./components/RecordListView'))
-const MetadataRecordFormModal = lazy(() => import('./components/MetadataRecordFormModal'))
-const UserStoreAccessModal = lazy(() => import('./components/UserStoreAccessModal'))
-const OneBuilder = lazy(() => import('./pages/settings/OneBuilder'))
-const WorkflowRunsAdmin = lazy(() => import('./pages/settings/Platform/WorkflowRunsAdmin'))
-const WorkItemsAdmin = lazy(() => import('./pages/settings/Platform/WorkItemsAdmin'))
-const PlatformAppsAdmin = lazy(() => import('./pages/settings/Platform/PlatformAppsAdmin'))
-const DeploymentAdmin = lazy(() => import('./pages/settings/Platform/DeploymentAdmin'))
-const NotificationSubscriptionsAdmin = lazy(() => import('./pages/settings/Platform/NotificationSubscriptionsAdmin'))
-const ValueSetList = lazy(() => import('./pages/settings/Platform/ValueSetList'))
-const MetadataSettingsPage = lazy(() => import('./pages/settings/MetadataSettingsPage'))
-const ObjectsSettingsPane = lazy(() => import('./pages/settings/ObjectsSettingsPane'))
-const ClientWebShopSettings = lazy(() => import('./pages/settings/ClientWebShopSettings'))
-const PaymentTerminalSettings = lazy(() => import('./pages/settings/PaymentTerminalSettings'))
-const HardwareSettings = lazy(() => import('./pages/settings/HardwareSettings'))
-const AiAssistantSettings = lazy(() => import('./pages/settings/AiAssistantSettings'))
-const ConnectionsSettings = lazy(() => import('./pages/settings/ConnectionsSettings'))
-const TillPage = lazy(() => import('./pages/till/TillPage'))
-const CustomerDisplay = lazy(() => import('./pages/till/CustomerDisplay'))
-const WorkspacePage = lazy(() => import('./pages/workspace/WorkspacePage'))
-const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
-const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'))
-const SalesPage = lazy(() => import('./pages/sales/SalesPage'))
-const ReturnsPage = lazy(() => import('./pages/returns/ReturnsPage'))
-const ExchangePage = lazy(() => import('./pages/returns/ExchangePage'))
-const LayawayPage = lazy(() => import('./pages/sales/LayawayPage'))
-const SupplierReturnsPage = lazy(() => import('./pages/returns/SupplierReturnsPage'))
-const ProductsPage = lazy(() => import('./pages/products/ProductsPage'))
-const CategoriesPage = lazy(() => import('./pages/products/CategoriesPage'))
-const GlobalProductLookupPage = lazy(() => import('./pages/products/GlobalProductLookupPage'))
-const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage'))
-const ReplenishmentPage = lazy(() => import('./pages/inventory/ReplenishmentPage'))
-const PurchasesPage = lazy(() => import('./pages/purchases/PurchasesPage'))
-const SuppliersPage = lazy(() => import('./pages/suppliers/SuppliersPage'))
-const CustomersPage = lazy(() => import('./pages/customers/CustomersPage'))
-const GiftCardsPage = lazy(() => import('./pages/customers/GiftCardsPage'))
-const AttendancePage = lazy(() => import('./pages/employees/AttendancePage'))
-const StoresPage = lazy(() => import('./pages/stores/StoresPage'))
-const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'))
-const CustomReportsPage = lazy(() => import('./pages/reports/CustomReportsPage'))
-const IntegrationsAdmin = lazy(() => import('./pages/integrations/IntegrationsAdmin'))
-const AccountingAdmin = lazy(() => import('./pages/integrations/AccountingAdmin'))
-const OnlineOrdersAdmin = lazy(() => import('./pages/online/OnlineOrdersAdmin'))
-const OnlineOrdersPrep = lazy(() => import('./pages/online/OnlineOrdersPrep'))
-const OwnDeliveryWorkspace = lazy(() => import('./pages/online/OwnDeliveryWorkspace'))
-const ReturnsAdmin = lazy(() => import('./pages/returns/ReturnsAdmin'))
-const SupplierReturnsAdmin = lazy(() => import('./pages/returns/ReturnsAdmin').then((module) => ({ default: module.SupplierReturnsAdmin })))
-const AuditLogPage = lazy(() => import('./pages/audit/AuditLogPage'))
-const OneStorePopover = lazy(() => import('./pages/oneStore/OneStorePopover'))
-const LicensingAdmin = lazy(() => import('./pages/superadmin/LicensingAdmin'))
-const AppReleasesAdmin = lazy(() => import('./pages/superadmin/AppReleasesAdmin'))
-const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
-const DeliverySettingsPage = lazy(() => import('./pages/settings/DeliverySettingsPage'))
+const CHUNK_RELOAD_KEY = 'onepos:lazy-chunk-reload'
+
+function lazyWithRecovery(loader) {
+  return lazy(async () => {
+    try {
+      const module = await loader()
+      window.sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+      return module
+    } catch (error) {
+      const message = String(error?.message || error || '')
+      const isChunkLoadFailure = /failed to fetch dynamically imported module|importing a module script failed|loading chunk .* failed|error loading dynamically imported module/i.test(message)
+      if (isChunkLoadFailure && window.sessionStorage.getItem(CHUNK_RELOAD_KEY) !== '1') {
+        window.sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+        window.location.reload()
+        return new Promise(() => {})
+      }
+      window.sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+      throw error
+    }
+  })
+}
+
+class LazyLoadBoundary extends Component {
+  state = { error: null }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidCatch(error) {
+    console.error('Lazy-loaded page failed', error)
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <div className="route-loading" role="alert">
+        <span>Unable to load this page.</span>
+        <button type="button" onClick={() => window.location.reload()}>Retry</button>
+      </div>
+    )
+  }
+}
+
+const RecordListView = lazyWithRecovery(() => import('./components/RecordListView'))
+const MetadataRecordFormModal = lazyWithRecovery(() => import('./components/MetadataRecordFormModal'))
+const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
+const OneBuilder = lazyWithRecovery(() => import('./pages/settings/OneBuilder'))
+const WorkflowRunsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/WorkflowRunsAdmin'))
+const WorkItemsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/WorkItemsAdmin'))
+const PlatformAppsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/PlatformAppsAdmin'))
+const DeploymentAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/DeploymentAdmin'))
+const NotificationSubscriptionsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/NotificationSubscriptionsAdmin'))
+const ValueSetList = lazyWithRecovery(() => import('./pages/settings/Platform/ValueSetList'))
+const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
+const ObjectsSettingsPane = lazyWithRecovery(() => import('./pages/settings/ObjectsSettingsPane'))
+const ClientWebShopSettings = lazyWithRecovery(() => import('./pages/settings/ClientWebShopSettings'))
+const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/PaymentTerminalSettings'))
+const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
+const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
+const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
+const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
+const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
+const WorkspacePage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
+const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
+const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
+const SalesPage = lazyWithRecovery(() => import('./pages/sales/SalesPage'))
+const ReturnsPage = lazyWithRecovery(() => import('./pages/returns/ReturnsPage'))
+const ExchangePage = lazyWithRecovery(() => import('./pages/returns/ExchangePage'))
+const LayawayPage = lazyWithRecovery(() => import('./pages/sales/LayawayPage'))
+const SupplierReturnsPage = lazyWithRecovery(() => import('./pages/returns/SupplierReturnsPage'))
+const ProductsPage = lazyWithRecovery(() => import('./pages/products/ProductsPage'))
+const CategoriesPage = lazyWithRecovery(() => import('./pages/products/CategoriesPage'))
+const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
+const InventoryPage = lazyWithRecovery(() => import('./pages/inventory/InventoryPage'))
+const ReplenishmentPage = lazyWithRecovery(() => import('./pages/inventory/ReplenishmentPage'))
+const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
+const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
+const CustomersPage = lazyWithRecovery(() => import('./pages/customers/CustomersPage'))
+const GiftCardsPage = lazyWithRecovery(() => import('./pages/customers/GiftCardsPage'))
+const AttendancePage = lazyWithRecovery(() => import('./pages/employees/AttendancePage'))
+const StoresPage = lazyWithRecovery(() => import('./pages/stores/StoresPage'))
+const ReportsPage = lazyWithRecovery(() => import('./pages/reports/ReportsPage'))
+const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
+const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
+const AccountingAdmin = lazyWithRecovery(() => import('./pages/integrations/AccountingAdmin'))
+const OnlineOrdersAdmin = lazyWithRecovery(() => import('./pages/online/OnlineOrdersAdmin'))
+const OnlineOrdersPrep = lazyWithRecovery(() => import('./pages/online/OnlineOrdersPrep'))
+const OwnDeliveryWorkspace = lazyWithRecovery(() => import('./pages/online/OwnDeliveryWorkspace'))
+const ReturnsAdmin = lazyWithRecovery(() => import('./pages/returns/ReturnsAdmin'))
+const SupplierReturnsAdmin = lazyWithRecovery(() => import('./pages/returns/ReturnsAdmin').then((module) => ({ default: module.SupplierReturnsAdmin })))
+const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage'))
+const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
+const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
+const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
+const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/StoreTillSettingsPage'))
+const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -285,7 +329,7 @@ function DockItem({ item, mouseX, onActivate }) {
 
 function LockScreen({ onUnlock, onSignOut }) {
   const now = useClock()
-  const sessionMode = hasSession()
+  const [sessionMode] = useState(() => hasSession())
   const storedUser = getStoredUser()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -1186,6 +1230,7 @@ function SettingsPage({ onOpenProfile }) {
 
         <div className="settings-content-body">
           {error ? <div className="settings-error">{error}</div> : null}
+          <LazyLoadBoundary>
           <Suspense fallback={<div className="settings-card settings-state-card">Loading section…</div>}>
           {loading ? (
             <div className="settings-card settings-state-card">Loading settings…</div>
@@ -1600,7 +1645,7 @@ function SettingsPage({ onOpenProfile }) {
               ) : current?.key === 'roles-permissions' ? (
                 <RecordListView
                   title="Roles & Permissions"
-                  subtitle={`${roles.length} role${roles.length === 1 ? '' : 's'} in this company`}
+                  subtitle={rolesLoading ? 'Loading roles…' : `${roles.length} role${roles.length === 1 ? '' : 's'} in this company`}
                   rows={roles}
                   loading={rolesLoading}
                   error={rolesError}
@@ -1649,6 +1694,7 @@ function SettingsPage({ onOpenProfile }) {
             </div>
           )}
           </Suspense>
+          </LazyLoadBoundary>
 
         </div>
       </div>
@@ -1802,7 +1848,7 @@ function marketplaceIcon(item) {
   return localAppIcon('default-app')
 }
 
-function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, mode = 'launcher' }) {
+function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, mode = 'launcher' }) {
   const q = String(query || '').trim().toLowerCase()
   const visible = apps.filter((item) => item?.visible !== false && item?.system_only !== true)
     .filter((item) => !q || `${item.name || ''} ${item.package_key || ''} ${item.category || ''}`.toLowerCase().includes(q))
@@ -1818,7 +1864,15 @@ function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, mode = 'launcher' }
         className="topbar-app-row"
         onClick={() => {
           const route = item?.route || item?.manifest?.route || item?.company_installation?.manifest?.route || ''
-          if (mode !== 'store' && item?.company_installation && route) onOpenRoute?.(route)
+          if (mode !== 'store' && item?.company_installation && route) {
+            onOpenRoute?.(route)
+            onClose?.()
+            return
+          }
+          if (mode !== 'store' && !item?.company_installation) {
+            onOpenStore?.(item.package_key)
+            return
+          }
           onClose?.()
         }}
         initial={{ opacity: 0, y: 8, scale: 0.97 }}
@@ -2412,6 +2466,7 @@ function Desktop({ onLock, onSignOut }) {
                   mode="launcher"
                   onClose={() => setTopPanel('')}
                   onOpenRoute={openRoutePath}
+                  onOpenStore={() => setTopPanel('store')}
                 />
               ) : null}
               {topPanel === 'store' ? (
@@ -2490,6 +2545,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : null}
       </AnimatePresence>
 
+      <LazyLoadBoundary>
       <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>
         {activeApp === 'settings' ? (
           <SettingsPage onOpenProfile={() => {
@@ -2589,6 +2645,7 @@ function Desktop({ onLock, onSignOut }) {
           <DashboardPage />
         )}
       </Suspense>
+      </LazyLoadBoundary>
 
       <Dock onItemOpen={openItem} />
     </main>
@@ -2598,7 +2655,7 @@ function Desktop({ onLock, onSignOut }) {
 export default function App() {
   const route = readRoute()
   if (route.app === 'customer-display') {
-    return <Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense>
+    return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary>
   }
 
   // A browser refresh should restore an authenticated session, not behave like
