@@ -53,7 +53,7 @@ export default function DeliverySettingsPage({ channel = 'email' }) {
   const payload=()=>({
     enabled,
     autoSendEnabled:configuration.auto_send_enabled===true,
-    ...Object.fromEntries(fields.map(([key])=>[camelField(key),configuration[key]??''])),
+    ...Object.fromEntries(fields.map(([key])=>[key,configuration[key]??''])),
     ...(secrets.apiKey?{apiKey:secrets.apiKey}:{}),
     ...(secrets.apiSecret?{apiSecret:secrets.apiSecret}:{}),
     ...(secrets.authToken?{authToken:secrets.authToken}:{}),
@@ -121,9 +121,6 @@ export default function DeliverySettingsPage({ channel = 'email' }) {
   </div>
 }
 
-function camelField(key){
-  return key.replace(/_([a-z])/g,(_,letter)=>letter.toUpperCase())
-}
 
 function fieldHelp(key){
   const help={
