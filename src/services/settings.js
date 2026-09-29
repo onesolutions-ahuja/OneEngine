@@ -17,6 +17,7 @@ export async function loadSettingsContext() {
   // apiRequest(). Treat either as an effective company context so every
   // company-scoped Settings page follows the same rule.
   let actingCompanyId = getActingCompanyId()
+  let authorisedCompanies = []
 
   /*
    * Self-heal an existing Smart Theme session that was created before the
@@ -24,22 +25,25 @@ export async function loadSettingsContext() {
    * If this Platform Developer has exactly one authorised company, select it
    * automatically instead of leaving every company Settings page unusable.
    */
-  if (!user?.companyId && !actingCompanyId && user?.isPlatformDeveloper === true) {
+  if (!user?.companyId && user?.isPlatformDeveloper === true) {
     try {
       const companiesResponse = await apiRequest('/api/platform/developer/companies')
-      const companies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
-      if (companies.length === 1) {
-        actingCompanyId = String(companies[0].id || '')
-        if (actingCompanyId) {
-          await apiRequest('/api/platform/developer/acting-company', {
-            method: 'PUT',
-            body: JSON.stringify({ actingCompanyId }),
-          })
-          setActingCompanyId(actingCompanyId)
-        }
+      authorisedCompanies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
+      const rememberedIsAuthorised = authorisedCompanies.some((company) => String(company.id) === String(actingCompanyId))
+      if (!rememberedIsAuthorised) actingCompanyId = ''
+      if (!actingCompanyId && authorisedCompanies.length === 1) {
+        actingCompanyId = String(authorisedCompanies[0].id || '')
+      }
+      if (actingCompanyId) {
+        await apiRequest('/api/platform/developer/acting-company', {
+          method: 'PUT',
+          body: JSON.stringify({ actingCompanyId }),
+        })
+        setActingCompanyId(actingCompanyId)
       }
     } catch {
       actingCompanyId = ''
+      authorisedCompanies = []
     }
   }
 
@@ -63,6 +67,7 @@ export async function loadSettingsContext() {
     settingsError,
     hasCompanyContext,
     actingCompanyId: actingCompanyId || null,
+    authorisedCompanies,
   }
 }
 
