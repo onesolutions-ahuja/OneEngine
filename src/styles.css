@@ -7115,3 +7115,10 @@ button:focus-visible {
 .objects-config-row-button strong,.objects-config-row-button small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .objects-config-row-button small{margin-top:2px;color:rgba(29,29,31,.48);font-size:11px}
 .objects-config-row-button>span:last-child{color:rgba(29,29,31,.58);font-size:11px;text-align:right}
+
+
+/* Object Manager permission workspace */
+.objects-permission-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(0,0,0,.08)}
+.objects-permission-tabs button{min-height:30px;padding:0 10px;border:1px solid rgba(0,0,0,.09);border-radius:8px;background:#fff;color:rgba(29,29,31,.62);font-size:12px;font-weight:650;cursor:pointer}
+.objects-permission-tabs button:hover{background:#f5f5f7}
+.objects-permission-tabs button.is-active{background:#1d1d1f;color:#fff;border-color:#1d1d1f}
