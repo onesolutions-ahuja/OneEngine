@@ -1223,7 +1223,7 @@ function Desktop({ onLock }) {
       ) : activeApp === 'till' ? (
         <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
       ) : activeApp === 'workspace' ? (
-        <WorkspacePage />
+        <WorkspacePage onNavigate={openItem} />
       ) : (
         <section className="hello-stage">
           <p className="eyebrow">SMART THEME</p>
