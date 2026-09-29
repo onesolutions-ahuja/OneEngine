@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
+import CustomReportsAdmin from '../reports/CustomReportsAdmin.jsx'
 import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 
@@ -170,7 +171,7 @@ export default function OneBuilder() {
     setLoading(true)
     setError('')
     try {
-      const [components, actions, reportElements, triggerRes, objectRes, roleRes, ruleRes, approvalRes, dashboardRes] = await Promise.all([
+      const [components, actions, reportElements, triggerRes, objectRes, roleRes, ruleRes, approvalRes, dashboardRes, customReportRes] = await Promise.all([
         apiRequest('/api/platform/component-registry').catch(() => ({ data: [] })),
         apiRequest('/api/platform/workflow-actions').catch(() => ({ data: [] })),
         apiRequest('/api/platform/report-builder-registry').catch(() => ({ data: [] })),
@@ -180,6 +181,7 @@ export default function OneBuilder() {
         apiRequest('/api/platform/rules').catch(() => ({ data: [] })),
         apiRequest('/api/platform/approval-processes').catch(() => ({ data: [] })),
         apiRequest('/api/dashboards').catch(() => ({ data: [] })),
+        apiRequest('/api/reports/custom').catch(() => ({ data: [] })),
       ])
       const objectRows = objectRes?.data?.objects || objectRes?.data || []
       setComponentRegistry(normalizeRegistry(components?.data?.components || components?.data || []))
@@ -193,6 +195,7 @@ export default function OneBuilder() {
         workflow: responseRows(ruleRes).filter(isWorkflowRule),
         approval: responseRows(approvalRes),
         dashboard: responseRows(dashboardRes),
+        report: responseRows(customReportRes),
       }))
     } catch (err) {
       setError(err?.message || 'Unable to load Builder metadata')
@@ -214,8 +217,8 @@ export default function OneBuilder() {
       } else if (builderType === 'dashboard') {
         const response = await apiRequest('/api/dashboards')
         setSaved((current) => ({ ...current, dashboard: responseRows(response) }))
-      } else if (builderType === 'report' && selectedObject?.id) {
-        const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/reports`)
+      } else if (builderType === 'report') {
+        const response = await apiRequest('/api/reports/custom')
         setSaved((current) => ({ ...current, report: responseRows(response) }))
       }
     } catch (err) {
@@ -233,17 +236,11 @@ export default function OneBuilder() {
   useEffect(() => {
     if (!selectedObject?.id) {
       setFields([])
-      if (tab === 'report') setSaved((current) => ({ ...current, report: [] }))
       return
     }
     apiRequest(`/api/platform/objects/${encodeURIComponent(selectedObject.id)}/fields`)
       .then((response) => setFields(Array.isArray(response?.data) ? response.data.filter((field) => field.active !== false) : []))
       .catch(() => setFields([]))
-    if (tab === 'report') {
-      apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/reports`)
-        .then((response) => setSaved((current) => ({ ...current, report: Array.isArray(response?.data) ? response.data : [] })))
-        .catch(() => setSaved((current) => ({ ...current, report: [] })))
-    }
   }, [selectedObject?.id, tab])
 
   const palette = useMemo(() => {
@@ -351,16 +348,6 @@ export default function OneBuilder() {
       } else {
         const row = saved.report.find((item) => String(item.id) === String(id))
         if (!row) return
-        const config = row.config || {}
-        const nodes = []
-        for (const field of config.fields || []) nodes.push({ id: `field_${nodes.length}_${Date.now()}`, key: 'field', label: fields.find((item) => item.api_name === field)?.label || field, builderType: 'report', config: { field } })
-        for (const filter of config.filters || []) nodes.push({ id: `filter_${nodes.length}_${Date.now()}`, key: 'filter', label: 'Filter', builderType: 'report', config: { ...filter } })
-        const groups = Array.isArray(config.groupBy) ? config.groupBy : config.groupBy ? [config.groupBy] : []
-        for (const field of groups) nodes.push({ id: `group_${nodes.length}_${Date.now()}`, key: 'group', label: 'Group', builderType: 'report', config: { field } })
-        for (const metric of config.metrics || []) nodes.push({ id: `metric_${nodes.length}_${Date.now()}`, key: 'metric', label: 'Metric', builderType: 'report', config: { ...metric } })
-        for (const sort of config.sort || []) nodes.push({ id: `sort_${nodes.length}_${Date.now()}`, key: 'sort', label: 'Sort', builderType: 'report', config: { ...sort } })
-        setMeta((current) => ({ ...current, report: { label: row.label || '', description: row.description || '', objectId: row.object_id || selectedObject?.id || '', reportKey: row.report_key || '' } }))
-        setCanvas((current) => ({ ...current, report: nodes }))
       }
       setSelectedSavedId(id)
       setSelectedNodeId('')
@@ -515,6 +502,27 @@ export default function OneBuilder() {
             ) : null}
           </div>
         </section>
+      ) : tab === 'report' ? (
+        <CustomReportsAdmin
+          embedded
+          initialReport={selectedSavedId ? saved.report.find((item) => String(item.id) === String(selectedSavedId)) || null : null}
+          onClose={() => {
+            setMode('list')
+            setSelectedSavedId('')
+            setSelectedNodeId('')
+            setSideTab('components')
+            setError('')
+            void loadSavedDefinitions('report')
+          }}
+          onSaved={() => {
+            setMessage('Saved.')
+            setMode('list')
+            setSelectedSavedId('')
+            setSelectedNodeId('')
+            setSideTab('components')
+            void loadSavedDefinitions('report')
+          }}
+        />
       ) : tab === 'approval' ? (
         <ApprovalProcessBuilder
           embedded
