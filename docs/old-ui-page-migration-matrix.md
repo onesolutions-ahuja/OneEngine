@@ -28,6 +28,21 @@ Zero-loss rule: an old UI page/section is deleted only after its Smart Theme rep
 | Platform / Builder | Yes | Partial | No | Approval/workflow/dashboard administration parity still needs page-level audit. |
 | Message Templates | Navigation only / pending | No | No | Pending |
 
+
+## Phase 2 — Core Workspace / Object Runtime
+
+| Old UI page / runtime | Smart Theme replacement | Logic fully migrated? | Old UI deleted? | Status / note |
+|---|---|---:|---:|---|
+| Dashboard | Yes | Yes | No | Runtime migrated: saved/default dashboards, dashboard selector, shared date range, refresh, generic KPI/chart/table/text/modern components and company currency. DELETE BLOCKER: legacy AdminLayout still imports Dashboard until shell cutover. |
+| Dashboard Builder | Partial / OneBuilder direction | No | No | HOLD — builder editing, sharing and default assignments belong to the Platform/Builder hold. |
+| Platform ObjectPage generic runtime | Yes — Workspace | Yes | No | Workspace now covers metadata fields/list views, FLS/object permissions, record types, create/edit/quick-create layouts, CRUD, metadata buttons, configured layout actions, related records + create-related, history, import/export and object/record deep links. DELETE BLOCKER: old AdminLayout/Profile/SettingsObjectHost still consume ObjectPage. |
+| Shared ObjectList | Yes — RecordListView | Yes for Workspace | No | DELETE BLOCKER: Sales, Inventory, Purchases, Suppliers and Customers still import legacy ObjectList; delete after their module phases. |
+| Shared ObjectRecordView | Yes — Workspace detail | Yes for Workspace | No | DELETE BLOCKER: old Platform FormRenderer/ObjectRecordDetail still import it. |
+| SettingsObjectHost | Objects/metadata Settings replacement exists | Partial | No | HOLD with Platform/Builder; old metadata-hosted Settings routes still consume ObjectPage. |
+| CustomPageRuntime | No complete Smart Theme runtime yet | No | No | HOLD with Platform/Builder/custom-page migration. |
+| StandardObjectFormModal / StandardObjectViewModal | Workspace metadata editor/detail replacement | Partial | No | DELETE BLOCKER: Products, Customers, Suppliers, Stores and Users still consume these adapters until their module phases. |
+| AdminLayout legacy shell | Smart Theme App shell | Partial | No | DELETE LAST — remaining old modules still route through AdminLayout. |
+
 ## Later phases
 
 - Core workspace/object pages
