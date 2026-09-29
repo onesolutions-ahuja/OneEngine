@@ -40,6 +40,8 @@ const AccountingAdmin = lazy(() => import('./pages/integrations/AccountingAdmin'
 const OnlineOrdersAdmin = lazy(() => import('./pages/online/OnlineOrdersAdmin'))
 const OnlineOrdersPrep = lazy(() => import('./pages/online/OnlineOrdersPrep'))
 const OwnDeliveryWorkspace = lazy(() => import('./pages/online/OwnDeliveryWorkspace'))
+const ReturnsAdmin = lazy(() => import('./pages/returns/ReturnsAdmin'))
+const SupplierReturnsAdmin = lazy(() => import('./pages/returns/ReturnsAdmin').then((module) => ({ default: module.SupplierReturnsAdmin })))
 const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
 import {
   Bluetooth,
@@ -501,6 +503,8 @@ function readRoute() {
   if (parts[0] === 'online-orders') return { app: 'online-orders', section: null }
   if (parts[0] === 'order-prep') return { app: 'order-prep', section: null }
   if (parts[0] === 'own-delivery') return { app: 'own-delivery', section: null }
+  if (parts[0] === 'returns') return { app: 'returns', section: null }
+  if (parts[0] === 'supplier-returns') return { app: 'supplier-returns', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -559,6 +563,10 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/order-prep`
       : app === 'own-delivery'
         ? `${base}/own-delivery`
+      : app === 'returns'
+        ? `${base}/returns`
+      : app === 'supplier-returns'
+        ? `${base}/supplier-returns`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1863,6 +1871,16 @@ function Desktop({ onLock }) {
       setActiveApp('own-delivery')
       return
     }
+    if (id === 'returns') {
+      setRoute('returns')
+      setActiveApp('returns')
+      return
+    }
+    if (id === 'supplier-returns') {
+      setRoute('supplier-returns')
+      setActiveApp('supplier-returns')
+      return
+    }
     if (id === 'reports') {
       setRoute('reports')
       setActiveApp('reports')
@@ -2159,6 +2177,10 @@ function Desktop({ onLock }) {
           <OnlineOrdersPrep />
         ) : activeApp === 'own-delivery' ? (
           <OwnDeliveryWorkspace />
+        ) : activeApp === 'returns' ? (
+          <ReturnsAdmin />
+        ) : activeApp === 'supplier-returns' ? (
+          <SupplierReturnsAdmin />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
