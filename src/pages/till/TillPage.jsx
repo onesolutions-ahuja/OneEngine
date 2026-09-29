@@ -229,6 +229,14 @@ export default function TillPage({ onOpenSettings }) {
   }, [])
 
   useEffect(() => {
+    const onToast = (event) => {
+      if (event?.detail?.message) setMessage(String(event.detail.message))
+    }
+    window.addEventListener('onepos:toast', onToast)
+    return () => window.removeEventListener('onepos:toast', onToast)
+  }, [])
+
+  useEffect(() => {
     void load()
     const stopMonitor = startConnectivityMonitoring({ intervalMs: 30000 })
     const unsubscribe = subscribeConnectivity(async (next) => {
@@ -694,7 +702,12 @@ export default function TillPage({ onOpenSettings }) {
   }
 
   const headerButtons = buttons.filter((button) => button.placement === 'till_action_header')
-  const actionButtons = buttons.filter((button) => button.placement === 'till_action_bar')
+  const actionButtons = buttons.filter((button) => {
+    if (button.placement !== 'till_action_bar') return false
+    const action = button?.config?.uiAction || button?.config?.ui_action
+    if (action === 'receipt_qr' && settings?.receiptQr?.allowManualQr === false) return false
+    return true
+  })
   const paymentButtons = buttons.filter((button) => button.placement === 'till_payment')
   const lineButtons = buttons.filter((button) => button.placement === 'till_line_action')
   const productView = settings?.till?.productView || 'image'
