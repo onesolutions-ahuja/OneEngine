@@ -10,6 +10,7 @@ import MetadataSettingsPage from './pages/settings/MetadataSettingsPage'
 import ObjectsSettingsPane from './pages/settings/ObjectsSettingsPane'
 import ClientWebShopSettings from './pages/settings/ClientWebShopSettings'
 import PaymentTerminalSettings from './pages/settings/PaymentTerminalSettings'
+import HardwareSettings from './pages/settings/HardwareSettings'
 import TillPage from './pages/till/TillPage'
 import WorkspacePage from './pages/workspace/WorkspacePage'
 import {
@@ -1204,6 +1205,8 @@ function SettingsPage() {
                   </div>
                   <div className="settings-row"><strong>Earning rate</strong><span className="settings-value">{Number(settings.loyalty?.earningRate || 0) * 100}%</span></div>
                 </>
+              ) : current?.key === 'hardware' ? (
+                <HardwareSettings />
               ) : current?.key === 'users' ? (
                 <RecordListView
                   title="Users"
