@@ -920,9 +920,11 @@ html[data-platform-theme="theme4"] .onepos-shell-header .jarvis-corner > [data-t
 
   clip-path: circle(50% at 50% 50%);
 
-  background: transparent;
+  /* Restore the original black video field inside the centre circle while
+     keeping the supplied video, mask, glow and animation unchanged. */
+  background: #000;
 
-  mix-blend-mode: screen;
+  mix-blend-mode: normal;
 
   filter:
 
