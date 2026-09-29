@@ -291,6 +291,7 @@ export function logout() {
   sessionStorage.removeItem('onepos_user')
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
+  setActingCompanyId('')
 }
 
 export function hasSession() {
