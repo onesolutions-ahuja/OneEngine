@@ -485,11 +485,13 @@ function SettingsPage() {
   const isAdmin = permissions.isAdmin === true
   const isPlatformDeveloper = context?.user?.isPlatformDeveloper === true
   const entitlements = permissions.entitlements || {}
-  const canManage = isSuperadmin || permissionCodes.includes('settings.manage')
-  const canViewUsers = isSuperadmin || isAdmin || permissionCodes.includes('user.view')
-  const canCreateUsers = isSuperadmin || isAdmin || permissionCodes.includes('user.create')
-  const canEditUsers = isSuperadmin || isAdmin || permissionCodes.includes('user.edit')
-  const canManageRoles = isSuperadmin || isAdmin || permissionCodes.includes('role.manage')
+  // Runtime authorization comes from RBAC permission codes. Identity tags are
+  // descriptive/bootstrap context only and do not grant UI actions.
+  const canManage = permissionCodes.includes('settings.manage')
+  const canViewUsers = permissionCodes.includes('user.view')
+  const canCreateUsers = permissionCodes.includes('user.create')
+  const canEditUsers = permissionCodes.includes('user.edit')
+  const canManageRoles = permissionCodes.includes('role.manage')
 
   const access = settingSectionAccess({
     isAdmin,
@@ -522,6 +524,10 @@ function SettingsPage() {
 
   const visibleItems = visibleGroups.flat()
   const current = visibleItems.find((item) => item.key === active) || visibleItems[0] || null
+  const platformOnlySection = current?.key === 'objects' || current?.key === 'platform'
+  const hasCompanyContext = context?.hasCompanyContext === true
+  const companySettingsError = context?.settingsError || ''
+
 
   useEffect(() => {
     if (current && current.key !== active) {
@@ -787,8 +793,10 @@ function SettingsPage() {
           {error ? <div className="settings-error">{error}</div> : null}
           {loading ? (
             <div className="settings-card settings-state-card">Loading settings…</div>
-          ) : !settings ? (
-            <div className="settings-card settings-state-card">No settings data available.</div>
+          ) : !platformOnlySection && !hasCompanyContext ? (
+            <div className="settings-card settings-state-card">Select a company context to manage company settings.</div>
+          ) : !platformOnlySection && !settings ? (
+            <div className="settings-card settings-state-card">{companySettingsError || 'No settings data available.'}</div>
           ) : (
             <div className="settings-card">
               {current?.key === 'general' ? (
@@ -949,9 +957,9 @@ function SettingsPage() {
             </div>
           )}
 
-          {!loading && (
+          {!loading && !platformOnlySection && hasCompanyContext && (
             <div className="settings-rbac-note">
-              {canManage ? 'Editing allowed by settings.manage / Superadmin.' : 'Read-only: your role does not have settings.manage.'}
+              {canManage ? 'Editing allowed by settings.manage.' : 'Read-only: your role does not have settings.manage.'}
             </div>
           )}
         </div>
