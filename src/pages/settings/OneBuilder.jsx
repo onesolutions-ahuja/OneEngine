@@ -1,20 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  AppWindow, BarChart3, Bell, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
-  ListChecks, PlayCircle, Plus, RefreshCw, Rocket, Search, Table2, TextCursorInput, UserCheck, Workflow,
+  AppWindow, BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
+  Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
 import CustomReportsAdmin from '../reports/CustomReportsAdmin.jsx'
 import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
-import WorkflowRunsAdmin from './Platform/WorkflowRunsAdmin.jsx'
-import WorkItemsAdmin from './Platform/WorkItemsAdmin.jsx'
-import DeploymentAdmin from './Platform/DeploymentAdmin.jsx'
-import PlatformAppsAdmin from './Platform/PlatformAppsAdmin.jsx'
-import NotificationSubscriptionsAdmin from './Platform/NotificationSubscriptionsAdmin.jsx'
 import CustomPageBuilder from './Platform/CustomPageBuilder.jsx'
-import ValueSetList from './Platform/ValueSetList.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
@@ -22,12 +16,6 @@ const TABS = [
   { key: 'page', label: 'Page Builder', icon: AppWindow },
   { key: 'dashboard', label: 'Dashboard Builder', icon: LayoutDashboard },
   { key: 'report', label: 'Report Builder', icon: BarChart3 },
-  { key: 'runs', label: 'Workflow Runs', icon: PlayCircle },
-  { key: 'work-items', label: 'Work Items', icon: ListChecks },
-  { key: 'platform-apps', label: 'Platform Apps', icon: AppWindow },
-  { key: 'deployments', label: 'Deployments', icon: Rocket },
-  { key: 'notifications', label: 'Notifications', icon: Bell },
-  { key: 'value-sets', label: 'Value Sets', icon: Table2 },
 ]
 
 const APPROVAL_STRUCTURAL_COMPONENTS = [
@@ -477,20 +465,8 @@ export default function OneBuilder() {
 
       {error ? <div className="onebuilder-error">{error}</div> : null}
 
-      {tab === 'runs' ? (
-        <WorkflowRunsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
-      ) : tab === 'work-items' ? (
-        <WorkItemsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
-      ) : tab === 'page' ? (
+      {tab === 'page' ? (
         <CustomPageBuilder onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
-      ) : tab === 'platform-apps' ? (
-        <PlatformAppsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
-      ) : tab === 'deployments' ? (
-        <DeploymentAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
-      ) : tab === 'notifications' ? (
-        <NotificationSubscriptionsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
-      ) : tab === 'value-sets' ? (
-        <ValueSetList onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : mode === 'list' ? (
         <section className="onebuilder-list-view">
           <header className="onebuilder-list-header">
