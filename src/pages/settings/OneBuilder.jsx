@@ -6,6 +6,7 @@ import {
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
 import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
+import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
@@ -514,6 +515,29 @@ export default function OneBuilder() {
             ) : null}
           </div>
         </section>
+      ) : tab === 'approval' ? (
+        <ApprovalProcessBuilder
+          embedded
+          initialProcess={selectedSavedId ? saved.approval.find((item) => String(item.id) === String(selectedSavedId)) || null : null}
+          onMessage={(value) => setMessage(value || '')}
+          onError={(value) => setError(value || '')}
+          onClose={() => {
+            setMode('list')
+            setSelectedSavedId('')
+            setSelectedNodeId('')
+            setSideTab('components')
+            setError('')
+            void loadSavedDefinitions('approval')
+          }}
+          onSaved={() => {
+            setMessage('Saved.')
+            setMode('list')
+            setSelectedSavedId('')
+            setSelectedNodeId('')
+            setSideTab('components')
+            void loadSavedDefinitions('approval')
+          }}
+        />
       ) : tab === 'workflow' ? (
         <WorkflowAdmin
           embedded
