@@ -37,6 +37,9 @@ const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'))
 const CustomReportsPage = lazy(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazy(() => import('./pages/integrations/IntegrationsAdmin'))
 const AccountingAdmin = lazy(() => import('./pages/integrations/AccountingAdmin'))
+const OnlineOrdersAdmin = lazy(() => import('./pages/online/OnlineOrdersAdmin'))
+const OnlineOrdersPrep = lazy(() => import('./pages/online/OnlineOrdersPrep'))
+const OwnDeliveryWorkspace = lazy(() => import('./pages/online/OwnDeliveryWorkspace'))
 const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
 import {
   Bluetooth,
@@ -495,6 +498,9 @@ function readRoute() {
   if (parts[0] === 'custom-reports') return { app: 'custom-reports', section: null }
   if (parts[0] === 'integrations') return { app: 'integrations', section: null }
   if (parts[0] === 'accounting') return { app: 'accounting', section: null }
+  if (parts[0] === 'online-orders') return { app: 'online-orders', section: null }
+  if (parts[0] === 'order-prep') return { app: 'order-prep', section: null }
+  if (parts[0] === 'own-delivery') return { app: 'own-delivery', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -547,6 +553,12 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/integrations`
       : app === 'accounting'
         ? `${base}/accounting`
+      : app === 'online-orders'
+        ? `${base}/online-orders`
+      : app === 'order-prep'
+        ? `${base}/order-prep`
+      : app === 'own-delivery'
+        ? `${base}/own-delivery`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1836,6 +1848,21 @@ function Desktop({ onLock }) {
       setActiveApp('accounting')
       return
     }
+    if (id === 'online-orders') {
+      setRoute('online-orders')
+      setActiveApp('online-orders')
+      return
+    }
+    if (id === 'order-prep') {
+      setRoute('order-prep')
+      setActiveApp('order-prep')
+      return
+    }
+    if (id === 'own-delivery') {
+      setRoute('own-delivery')
+      setActiveApp('own-delivery')
+      return
+    }
     if (id === 'reports') {
       setRoute('reports')
       setActiveApp('reports')
@@ -2126,6 +2153,12 @@ function Desktop({ onLock }) {
           <IntegrationsAdmin storeId={routeState?.storeId || storedUser?.storeId || null} />
         ) : activeApp === 'accounting' ? (
           <AccountingAdmin storeId={routeState?.storeId || storedUser?.storeId || null} />
+        ) : activeApp === 'online-orders' ? (
+          <OnlineOrdersAdmin />
+        ) : activeApp === 'order-prep' ? (
+          <OnlineOrdersPrep />
+        ) : activeApp === 'own-delivery' ? (
+          <OwnDeliveryWorkspace />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
