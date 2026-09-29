@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, apiUrl, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, startGoogleLogin, verifyPin } from './services/api'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
-import JarvisOrb from './components/jarvis/JarvisOrb'
+import JarvisOrb, { ORB_STATES } from './components/jarvis/JarvisOrb'
+import JarvisPanel from './components/jarvis/JarvisPanel'
 const RecordListView = lazy(() => import('./components/RecordListView'))
 const MetadataRecordFormModal = lazy(() => import('./components/MetadataRecordFormModal'))
 const UserStoreAccessModal = lazy(() => import('./components/UserStoreAccessModal'))
@@ -100,12 +102,12 @@ import {
 } from 'lucide-react'
 
 const dockItems = [
-  { id: 'launchpad', label: 'Launcher', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
+  { id: 'launchpad', label: 'Launcher', icon: LayoutGrid },
   { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
   { id: 'builder', label: 'Builder', icon: LayoutGrid },
   { id: 'contacts', label: 'Contacts', icon: Users },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
-  { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
+  { id: 'settings', label: 'Settings', icon: Settings2 },
 ]
 
 const mobileDockItems = [
@@ -113,7 +115,7 @@ const mobileDockItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
   { id: 'workspace', label: 'Workspace', icon: Users },
-  { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
+  { id: 'settings', label: 'Settings', icon: Settings2 },
 ]
 
 function useClock() {
@@ -150,68 +152,93 @@ function MenuBarClock() {
 
 function Dock({ onItemOpen }) {
   const mouseX = useMotionValue(Number.POSITIVE_INFINITY)
+  const [jarvesOpen, setJarvesOpen] = useState(false)
+  const [jarvesActivity, setJarvesActivity] = useState(null)
+  const jarvesRef = useRef(null)
   const resetMagnification = () => mouseX.set(Number.POSITIVE_INFINITY)
   const trackTouch = (event) => {
     const touch = event.touches?.[0]
     if (touch) mouseX.set(touch.clientX)
   }
+  const closeJarves = () => {
+    setJarvesOpen(false)
+    setJarvesActivity(null)
+    jarvesRef.current?.focus()
+  }
 
   return (
-    <div className="dock-zone">
-      <motion.div
-        className="dock"
-        onMouseMove={(event) => mouseX.set(event.clientX)}
-        onMouseLeave={resetMagnification}
-        aria-label="Smart Theme dock"
-      >
-        <div
-          className="dock-magnify-zone dock-desktop-items"
-          onTouchStart={trackTouch}
-          onTouchMove={trackTouch}
-          onTouchEnd={resetMagnification}
-          onTouchCancel={resetMagnification}
+    <>
+      <div className="dock-zone">
+        <motion.div
+          className="dock"
+          onMouseMove={(event) => mouseX.set(event.clientX)}
+          onMouseLeave={resetMagnification}
+          aria-label="Smart Theme dock"
         >
-          {dockItems.map((item) => (
-            <DockItem
-              key={item.id}
-              item={item}
-              mouseX={mouseX}
-              onActivate={() => onItemOpen?.(item.id)}
-            />
-          ))}
-        </div>
-        <div className="dock-fixed-zone">
-          <div className="dock-separator" aria-hidden="true" />
-          <div className="dock-jarves-slot">
-            <JarvisOrb onClick={() => onItemOpen?.('jarves')} />
+          <div
+            className="dock-magnify-zone dock-desktop-items"
+            onTouchStart={trackTouch}
+            onTouchMove={trackTouch}
+            onTouchEnd={resetMagnification}
+            onTouchCancel={resetMagnification}
+          >
+            {dockItems.map((item) => item.jarves ? (
+              <div className="dock-jarves-slot" key={item.id}>
+                <JarvisOrb
+                  state={jarvesActivity || ORB_STATES.IDLE}
+                  open={jarvesOpen}
+                  buttonRef={jarvesRef}
+                  onClick={() => setJarvesOpen(true)}
+                />
+              </div>
+            ) : (
+              <DockItem
+                key={item.id}
+                item={item}
+                mouseX={mouseX}
+                onActivate={() => onItemOpen?.(item.id)}
+              />
+            ))}
           </div>
-        </div>
-        <div className="dock-mobile-items">
-          {mobileDockItems.map((item) => (
+          <div className="dock-mobile-items">
+            {mobileDockItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="dock-mobile-item"
+                onClick={() => onItemOpen?.(item.id)}
+                aria-label={item.label}
+              >
+                <span className="dock-icon-wrap">
+                  {item.icon ? (
+                    <item.icon className="dock-lucide-icon" size={24} strokeWidth={1.8} />
+                  ) : (
+                    <img
+                      className={item.scaled ? 'dock-image dock-image--scaled' : 'dock-image'}
+                      src={item.src}
+                      alt=""
+                      draggable="false"
+                    />
+                  )}
+                </span>
+              </button>
+            ))}
             <button
-              key={item.id}
               type="button"
               className="dock-mobile-item"
-              onClick={() => onItemOpen?.(item.id)}
-              aria-label={item.label}
+              onClick={() => setJarvesOpen(true)}
+              aria-label="JARVES"
             >
-              <span className="dock-icon-wrap">
-                {item.icon ? (
-                  <item.icon className="dock-lucide-icon" size={24} strokeWidth={1.8} />
-                ) : (
-                  <img
-                    className={item.scaled ? 'dock-image dock-image--scaled' : 'dock-image'}
-                    src={item.src}
-                    alt=""
-                    draggable="false"
-                  />
-                )}
-              </span>
+              <Sparkles className="dock-lucide-icon" size={24} strokeWidth={1.8} />
             </button>
-          ))}
-        </div>
-      </motion.div>
-    </div>
+          </div>
+        </motion.div>
+      </div>
+      {jarvesOpen ? createPortal(
+        <JarvisPanel embedded onClose={closeJarves} onActivityChange={setJarvesActivity} />,
+        document.body,
+      ) : null}
+    </>
   )
 }
 
@@ -2295,10 +2322,6 @@ function Desktop({ onLock, onSignOut }) {
       setActiveApp('till')
       return
     }
-    if (id === 'jarves') {
-      setMessage('JARVES')
-      return
-    }
     const item = dockItems.find((entry) => entry.id === id) ?? null
     setMessage(`${item?.label ?? 'App'} clicked — component wiring comes next.`)
   }
@@ -2523,10 +2546,6 @@ function Desktop({ onLock, onSignOut }) {
           <OnlineOrdersPrep />
         ) : activeApp === 'own-delivery' ? (
           <OwnDeliveryWorkspace />
-        ) : activeApp === 'returns' ? (
-          <ReturnsAdmin />
-        ) : activeApp === 'supplier-returns' ? (
-          <SupplierReturnsAdmin />
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
