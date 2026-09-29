@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, apiUrl, checkBackend, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, setActingCompanyId, verifyPin } from './services/api'
+import { apiRequest, apiUrl, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, setActingCompanyId, startGoogleLogin, verifyPin } from './services/api'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
@@ -264,6 +264,18 @@ function LockScreen({ onUnlock, onSignOut }) {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  useEffect(() => {
+    const result = consumeGoogleOAuthCallback()
+    if (!result.handled) return
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    if (result.token) {
+      window.location.reload()
+    }
+  }, [])
+
   const time = useMemo(
     () =>
       new Intl.DateTimeFormat('en-GB', {
@@ -388,6 +400,23 @@ function LockScreen({ onUnlock, onSignOut }) {
                 disabled={submitting || !username.trim() || !password}
               >
                 {submitting ? 'Signing in…' : 'Sign In'}
+              </button>
+
+              <div className="login-divider" aria-hidden="true"><span>or</span></div>
+
+              <button
+                className="google-signin-button"
+                type="button"
+                onClick={() => startGoogleLogin()}
+                disabled={submitting}
+              >
+                <svg className="google-signin-logo" viewBox="0 0 18 18" aria-hidden="true">
+                  <path fill="#4285F4" d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.716v2.258h2.909c1.702-1.567 2.684-3.876 2.684-6.615Z"/>
+                  <path fill="#34A853" d="M9 18c2.43 0 4.468-.806 5.956-2.18l-2.91-2.258c-.805.54-1.836.859-3.046.859-2.344 0-4.328-1.585-5.036-3.714H.957v2.332A9 9 0 0 0 9 18Z"/>
+                  <path fill="#FBBC05" d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.592.102-1.167.282-1.707V4.961H.957A9 9 0 0 0 0 9c0 1.452.347 2.827.957 4.039l3.007-2.332Z"/>
+                  <path fill="#EA4335" d="M9 3.579c1.321 0 2.507.454 3.441 1.346l2.581-2.581C13.464.892 11.425 0 9 0A9 9 0 0 0 .957 4.961l3.007 2.332C4.672 5.164 6.656 3.579 9 3.579Z"/>
+                </svg>
+                Continue with Google
               </button>
             </>
           )}
