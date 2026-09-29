@@ -36,6 +36,7 @@ const StoresPage = lazy(() => import('./pages/stores/StoresPage'))
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'))
 const CustomReportsPage = lazy(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazy(() => import('./pages/integrations/IntegrationsAdmin'))
+const AccountingAdmin = lazy(() => import('./pages/integrations/AccountingAdmin'))
 const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
 import {
   Bluetooth,
@@ -493,6 +494,7 @@ function readRoute() {
   if (parts[0] === 'reports') return { app: 'reports', section: null }
   if (parts[0] === 'custom-reports') return { app: 'custom-reports', section: null }
   if (parts[0] === 'integrations') return { app: 'integrations', section: null }
+  if (parts[0] === 'accounting') return { app: 'accounting', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -543,6 +545,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/custom-reports`
       : app === 'integrations'
         ? `${base}/integrations`
+      : app === 'accounting'
+        ? `${base}/accounting`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1827,6 +1831,11 @@ function Desktop({ onLock }) {
       setActiveApp('integrations')
       return
     }
+    if (id === 'accounting') {
+      setRoute('accounting')
+      setActiveApp('accounting')
+      return
+    }
     if (id === 'reports') {
       setRoute('reports')
       setActiveApp('reports')
@@ -2115,6 +2124,8 @@ function Desktop({ onLock }) {
           <CustomReportsPage onBack={() => openItem('reports')} />
         ) : activeApp === 'integrations' ? (
           <IntegrationsAdmin storeId={routeState?.storeId || storedUser?.storeId || null} />
+        ) : activeApp === 'accounting' ? (
+          <AccountingAdmin storeId={routeState?.storeId || storedUser?.storeId || null} />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
