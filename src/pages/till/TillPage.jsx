@@ -5,10 +5,11 @@ import {
   ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
 import {
   cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
   loadProductModifiers, loadTillBootstrapCache, offlineQueueEntries, removeOfflineCashSale,
-  syncOfflineCashSales,
+  retryAllOfflineCashSales, retryOfflineCashSale, syncOfflineCashSales,
 } from '../../services/tillOffline'
 
 const ICONS = {
@@ -111,7 +112,9 @@ export default function TillPage({ onOpenSettings }) {
   const [negativeStockNotice, setNegativeStockNotice] = useState(null)
   const [pendingSaleRequest, setPendingSaleRequest] = useState(null)
   const [offlineCount, setOfflineCount] = useState(0)
+  const [offlineEntries, setOfflineEntries] = useState([])
   const [online, setOnline] = useState(() => navigator.onLine !== false)
+  const [connectivity, setConnectivity] = useState({ server: 'unknown', database: 'unknown', internet: navigator.onLine === false ? 'disconnected' : 'unknown' })
   const [permissions, setPermissions] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [onlineOrderCount, setOnlineOrderCount] = useState(0)
@@ -141,7 +144,14 @@ export default function TillPage({ onOpenSettings }) {
   }
 
   const refreshOfflineCount = async () => {
-    try { setOfflineCount((await offlineQueueEntries()).length) } catch { setOfflineCount(0) }
+    try {
+      const entries = await offlineQueueEntries()
+      setOfflineEntries(entries)
+      setOfflineCount(entries.length)
+    } catch {
+      setOfflineEntries([])
+      setOfflineCount(0)
+    }
   }
 
   const load = async () => {
@@ -190,22 +200,23 @@ export default function TillPage({ onOpenSettings }) {
 
   useEffect(() => {
     void load()
-    const backOnline = async () => {
-      setOnline(true)
-      try {
-        const result = await syncOfflineCashSales(apiRequest)
-        if (result.synced) setMessage(`${result.synced} offline sale${result.synced === 1 ? '' : 's'} synced.`)
-      } finally {
-        await refreshOfflineCount()
-        void load()
+    const stopMonitor = startConnectivityMonitoring({ intervalMs: 30000 })
+    const unsubscribe = subscribeConnectivity(async (next) => {
+      setConnectivity(next)
+      const serverOnline = next.server === SERVER_STATES.CONNECTED
+      setOnline(serverOnline)
+      if (serverOnline) {
+        try {
+          const result = await syncOfflineCashSales(apiRequest)
+          if (result.synced) setMessage(`${result.synced} offline sale${result.synced === 1 ? '' : 's'} synced.`)
+        } finally {
+          await refreshOfflineCount()
+        }
       }
-    }
-    const wentOffline = () => setOnline(false)
-    window.addEventListener('online', backOnline)
-    window.addEventListener('offline', wentOffline)
+    })
     return () => {
-      window.removeEventListener('online', backOnline)
-      window.removeEventListener('offline', wentOffline)
+      unsubscribe()
+      stopMonitor()
     }
   }, [])
 
@@ -622,6 +633,7 @@ export default function TillPage({ onOpenSettings }) {
     if (action === 'pay_card') return completeSale('card')
     if (action === 'pay_more') return setModal('payment')
     if (action === 'price_override' && item) { setPriceTarget(item); setModal('price_override') }
+    if (action === 'offline_queue') return setModal('offline_queue')
   }
 
   const headerButtons = buttons.filter((button) => button.placement === 'till_action_header')
@@ -636,6 +648,10 @@ export default function TillPage({ onOpenSettings }) {
         <header className="till-theme-header">
           <div><strong>{settings?.store?.name || 'Till'}</strong><span>{till ? `${till.terminal_name || till.terminalNumber || 'Till'} · Open` : 'Till closed'}{offlineCount ? ` · ${offlineCount} pending sync` : ''}</span></div>
           <div className="till-theme-header-actions">
+            {offlineCount ? <button type="button" className="till-settings-button" onClick={() => setModal('offline_queue')} title="Offline sales queue" aria-label="Offline sales queue"><CloudQueueIcon count={offlineCount}/></button> : null}
+            <span className="till-connectivity-status" title={`Server: ${connectivity.server} · Database: ${connectivity.database}`}>
+              <i className={connectivity.server === SERVER_STATES.CONNECTED && connectivity.database !== DB_STATES.UNAVAILABLE ? 'is-online' : 'is-offline'} />
+            </span>
             <button type="button" className="till-settings-button" onClick={onOpenSettings} title="Settings" aria-label="Settings"><Settings2 size={15}/></button>
             {headerButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={dispatchTillAction}/>)}
           </div>
@@ -712,7 +728,8 @@ export default function TillPage({ onOpenSettings }) {
       {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setPendingSaleRequest(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const pending = pendingSaleRequest || { paymentMethod: pendingPayment, options: { verifiedOverride: true } }; setAgeVerified(true); setPendingPayment(null); setPendingSaleRequest(null); setModal(null); window.setTimeout(() => completeSale(pending.paymentMethod, pending.options), 0) }}>Age verified</button></div></Modal> : null}
       {modal === 'payment' ? <Modal title="Payment" onClose={() => setModal(null)} wide><PaymentSheet total={total} methods={paymentMethods} online={online} cardAvailable={paymentCapability} customer={selectedCustomer} credit={liveCredit || selectedCustomer?.credit || null} onPay={async (method, options) => { await completeSale(method, options || {}); setModal(null) }}/></Modal> : null}
       {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={(price, reason) => { setBasket((rows) => rows.map((row) => row.id === priceTarget.id ? { ...row, price, priceOverride: price, priceOverrideReason: reason } : row)); setPriceTarget(null); setModal(null) }}/></Modal> : null}
-      {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { void revokeReceiptQr(); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}<p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p></div></Modal> : null}
+      {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { void revokeReceiptQr(); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}{settings?.receiptQr?.showCountdown !== false ? <p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p> : null}{settings?.receiptQr?.allowRegenerate !== false ? <button type="button" className="till-primary" onClick={() => generateReceiptQr(receiptQr.saleId || lastSale?.id)}>Regenerate QR</button> : null}</div></Modal> : null}
+      {modal === 'offline_queue' ? <Modal title="Offline sales queue" onClose={() => setModal(null)} wide><div className="till-offline-queue"><p>Saved cash sales sync automatically when the onePOS server is reachable. Failed sales remain here for review.</p>{offlineEntries.length ? offlineEntries.map((entry) => <div className="till-offline-row" key={entry.id}><div><strong>{entry.provisionalReceipt || 'Saved sale'}</strong><span>{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''} · {entry.status === 'failed' ? 'Needs attention' : 'Pending sync'}</span>{entry.lastError ? <small>{entry.lastError}</small> : null}</div>{entry.status === 'failed' ? <button type="button" onClick={async () => { await retryOfflineCashSale(entry.id); await syncOfflineCashSales(apiRequest); await refreshOfflineCount() }}>Retry</button> : null}</div>) : <div className="till-empty">No sales waiting to sync.</div>}<div className="till-form-actions"><button type="button" onClick={async () => { await syncOfflineCashSales(apiRequest); await refreshOfflineCount() }}>Sync pending</button>{offlineEntries.some((entry) => entry.status === 'failed') ? <button type="button" className="till-primary" onClick={async () => { await retryAllOfflineCashSales(); await syncOfflineCashSales(apiRequest); await refreshOfflineCount() }}>Retry all failed</button> : null}</div></div></Modal> : null}
       {saleCompleteNotice ? <Modal title={saleCompleteNotice.pendingSync ? 'Sale saved — pending sync' : 'Transaction complete'} onClose={() => setSaleCompleteNotice(null)}><div className="till-form"><p>{saleCompleteNotice.receiptNumber ? `Receipt ${saleCompleteNotice.receiptNumber}` : 'Sale complete'}</p><div className="till-payment-remaining"><span>Total</span><strong>{money(saleCompleteNotice.total, currency)}</strong></div>{saleCompleteNotice.received != null ? <div className="till-payment-remaining"><span>Cash received</span><strong>{money(saleCompleteNotice.received, currency)}</strong></div> : null}<div className="till-payment-remaining"><span>Change</span><strong>{money(saleCompleteNotice.change, currency)}</strong></div><button type="button" className="till-primary" onClick={() => setSaleCompleteNotice(null)}>OK</button></div></Modal> : null}
     </section>
   )
@@ -753,6 +770,10 @@ function PaymentSheet({ total, methods, online, cardAvailable, customer, credit,
       <button type="button" className="till-primary" disabled={unavailable || (method === 'gift_card' && !giftCardCode.trim())} onClick={() => onPay(method, { cashReceivedOverride: method === 'cash' ? Number(cashReceived || total) : null, giftCardCode })}>Pay {selected?.label || method}</button>
     </div>
   </div>
+}
+
+function CloudQueueIcon({ count }) {
+  return <span className="till-queue-icon"><FileText size={14}/><small>{count}</small></span>
 }
 
 function ModifierPicker({ product, groups, onClose, onConfirm }) {
