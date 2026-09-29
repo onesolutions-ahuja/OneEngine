@@ -20,6 +20,7 @@ const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'))
 const SalesPage = lazy(() => import('./pages/sales/SalesPage'))
 const ReturnsPage = lazy(() => import('./pages/returns/ReturnsPage'))
 const SupplierReturnsPage = lazy(() => import('./pages/returns/SupplierReturnsPage'))
+const ProductsPage = lazy(() => import('./pages/products/ProductsPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -450,6 +451,7 @@ function readRoute() {
   if (parts[0] === 'sales') return { app: 'sales', section: null }
   if (parts[0] === 'returns') return { app: 'returns', section: null }
   if (parts[0] === 'supplier-returns') return { app: 'supplier-returns', section: null }
+  if (parts[0] === 'products') return { app: 'products', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -472,6 +474,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/returns`
       : app === 'supplier-returns'
         ? `${base}/supplier-returns`
+      : app === 'products'
+        ? `${base}/products`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1719,6 +1723,11 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'products') {
+      setRoute('products')
+      setActiveApp('products')
+      return
+    }
     if (id === 'returns') {
       setRoute('returns')
       setActiveApp('returns')
@@ -1905,6 +1914,11 @@ function Desktop({ onLock }) {
           <ReturnsPage />
         ) : activeApp === 'supplier-returns' ? (
           <SupplierReturnsPage />
+        ) : activeApp === 'products' ? (
+          <ProductsPage
+            onOpenCategories={() => openItem('categories')}
+            onOpenGlobalProducts={() => openItem('global-products')}
+          />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
