@@ -68,6 +68,7 @@ export default function ObjectsSettingsPane() {
   const [mobileStage, setMobileStage] = useState('objects')
   const [fields, setFields] = useState([])
   const [objectLoading, setObjectLoading] = useState(false)
+  const [loadedSections, setLoadedSections] = useState({})
   const [objectData, setObjectData] = useState({
     relationships: [],
     recordTypes: [],
@@ -124,62 +125,144 @@ export default function ObjectsSettingsPane() {
   const selectedId = selected?.id || selected?.object_id || ''
 
   useEffect(() => {
-    setActiveTab('details')
     setFields([])
-    if (!selectedId) return
+    setLoadedSections({})
+    setObjectLoading(false)
+    setObjectData({
+      relationships: [],
+      recordTypes: [],
+      layouts: [],
+      listViews: [],
+      rules: [],
+      buttons: [],
+      registeredActions: [],
+      actionBindings: [],
+      approvalProcesses: [],
+      assignmentRules: [],
+      reports: [],
+      sharingSettings: null,
+      sharingRules: [],
+      automationLogs: [],
+      permissions: null,
+    })
+  }, [selectedId])
+
+  useEffect(() => {
+    if (!selectedId || activeTab === 'details') return undefined
+
+    const wantsFields = activeTab === 'fields' || activeTab === 'formula'
+    const wantsRelationships = activeTab === 'relationships'
+    const wantsRules = activeTab === 'validation' || activeTab === 'actions' || activeTab === 'automation'
+    const wantsPermissions = activeTab === 'permissions'
+    const wantsConfiguration = [
+      'record-types',
+      'layouts',
+      'list-views',
+      'actions',
+      'approvals',
+      'assignment',
+      'buttons',
+      'reports',
+      'sharing',
+      'automation-logs',
+    ].includes(activeTab)
+
+    const requests = []
+    if (wantsFields && !loadedSections.fields) {
+      requests.push(['fields', apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/fields`)])
+    }
+    if (wantsRelationships && !loadedSections.relationships) {
+      requests.push(['relationships', apiRequest('/api/platform/relationships')])
+    }
+    if (wantsRules && !loadedSections.rules) {
+      requests.push(['rules', apiRequest('/api/platform/rules')])
+    }
+    if (wantsPermissions && !loadedSections.permissions) {
+      requests.push(['permissions', apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/effective-permissions`)])
+    }
+    if (wantsConfiguration && !loadedSections.configuration) {
+      requests.push(['configuration', apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/configuration`)])
+    }
+
+    if (!requests.length) return undefined
+
     let live = true
     setObjectLoading(true)
-    Promise.allSettled([
-      apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/fields`),
-      apiRequest('/api/platform/relationships'),
-      apiRequest('/api/platform/rules'),
-      apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/effective-permissions`),
-      apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/configuration`),
-    ])
-      .then(([fieldsResult, relationshipsResult, rulesResult, permissionsResult, configurationResult]) => {
+
+    Promise.allSettled(requests.map(([, request]) => request))
+      .then((results) => {
         if (!live) return
+        const completed = {}
 
-        const value = (result) => result?.status === 'fulfilled' ? result.value : null
-        const fieldsRes = value(fieldsResult)
-        const relationshipsRes = value(relationshipsResult)
-        const rulesRes = value(rulesResult)
-        const permissionsRes = value(permissionsResult)
-        const configurationRes = value(configurationResult)
+        results.forEach((result, index) => {
+          const key = requests[index][0]
+          if (result.status !== 'fulfilled') return
+          const payload = result.value
+          completed[key] = true
 
-        setFields(Array.isArray(fieldsRes?.data) ? fieldsRes.data : [])
+          if (key === 'fields') {
+            setFields(Array.isArray(payload?.data) ? payload.data : [])
+            return
+          }
 
-        const relationships = Array.isArray(relationshipsRes?.data) ? relationshipsRes.data : []
-        const rules = Array.isArray(rulesRes?.data) ? rulesRes.data : []
-        const configuration = configurationRes?.data || {}
+          if (key === 'relationships') {
+            const relationships = Array.isArray(payload?.data) ? payload.data : []
+            setObjectData((current) => ({
+              ...current,
+              relationships: relationships.filter((row) =>
+                String(row.parent_object_id) === String(selectedId) ||
+                String(row.child_object_id) === String(selectedId)),
+            }))
+            return
+          }
 
-        setObjectData({
-          relationships: relationships.filter((row) =>
-            String(row.parent_object_id) === String(selectedId) ||
-            String(row.child_object_id) === String(selectedId)),
-          recordTypes: Array.isArray(configuration.recordTypes) ? configuration.recordTypes : [],
-          layouts: Array.isArray(configuration.layouts) ? configuration.layouts : [],
-          listViews: Array.isArray(configuration.listViews) ? configuration.listViews : [],
-          rules: rules.filter((row) =>
-            String(row.object_id) === String(selectedId)
-            || (Array.isArray(row.referenced_object_ids)
-              && row.referenced_object_ids.some((objectId) => String(objectId) === String(selectedId)))),
-          buttons: Array.isArray(configuration.buttons) ? configuration.buttons : [],
-          registeredActions: Array.isArray(configuration.registeredActions) ? configuration.registeredActions : [],
-          actionBindings: Array.isArray(configuration.actionBindings) ? configuration.actionBindings : [],
-          approvalProcesses: Array.isArray(configuration.approvalProcesses) ? configuration.approvalProcesses : [],
-          assignmentRules: Array.isArray(configuration.assignmentRules) ? configuration.assignmentRules : [],
-          reports: Array.isArray(configuration.reports) ? configuration.reports : [],
-          sharingSettings: configuration.sharingSettings || null,
-          sharingRules: Array.isArray(configuration.sharingRules) ? configuration.sharingRules : [],
-          automationLogs: Array.isArray(configuration.automationLogs) ? configuration.automationLogs : [],
-          permissions: permissionsRes?.data || null,
+          if (key === 'rules') {
+            const rules = Array.isArray(payload?.data) ? payload.data : []
+            setObjectData((current) => ({
+              ...current,
+              rules: rules.filter((row) =>
+                String(row.object_id) === String(selectedId)
+                || (Array.isArray(row.referenced_object_ids)
+                  && row.referenced_object_ids.some((objectId) => String(objectId) === String(selectedId)))),
+            }))
+            return
+          }
+
+          if (key === 'permissions') {
+            setObjectData((current) => ({ ...current, permissions: payload?.data || null }))
+            return
+          }
+
+          if (key === 'configuration') {
+            const configuration = payload?.data || {}
+            setObjectData((current) => ({
+              ...current,
+              recordTypes: Array.isArray(configuration.recordTypes) ? configuration.recordTypes : [],
+              layouts: Array.isArray(configuration.layouts) ? configuration.layouts : [],
+              listViews: Array.isArray(configuration.listViews) ? configuration.listViews : [],
+              buttons: Array.isArray(configuration.buttons) ? configuration.buttons : [],
+              registeredActions: Array.isArray(configuration.registeredActions) ? configuration.registeredActions : [],
+              actionBindings: Array.isArray(configuration.actionBindings) ? configuration.actionBindings : [],
+              approvalProcesses: Array.isArray(configuration.approvalProcesses) ? configuration.approvalProcesses : [],
+              assignmentRules: Array.isArray(configuration.assignmentRules) ? configuration.assignmentRules : [],
+              reports: Array.isArray(configuration.reports) ? configuration.reports : [],
+              sharingSettings: configuration.sharingSettings || null,
+              sharingRules: Array.isArray(configuration.sharingRules) ? configuration.sharingRules : [],
+              automationLogs: Array.isArray(configuration.automationLogs) ? configuration.automationLogs : [],
+            }))
+          }
         })
+
+        if (Object.keys(completed).length) {
+          setLoadedSections((current) => ({ ...current, ...completed }))
+        }
       })
       .finally(() => {
         if (live) setObjectLoading(false)
       })
+
     return () => { live = false }
-  }, [selectedId])
+  }, [activeTab, selectedId, loadedSections])
 
   const normalFields = fields.filter((field) => !isFormulaField(field))
   const formulaFields = fields.filter(isFormulaField)
@@ -223,7 +306,7 @@ export default function ObjectsSettingsPane() {
                 key={object.id || key}
                 type="button"
                 className={`objects-list-item ${active ? 'is-active' : ''}`}
-                onClick={() => { setSelectedKey(key); setMobileStage('menu') }}
+                onClick={() => { setSelectedKey(key); setActiveTab('details'); setMobileStage('menu') }}
               >
                 <span className="objects-list-icon"><Box size={14} /></span>
                 <span className="objects-list-copy">
