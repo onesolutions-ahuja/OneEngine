@@ -1298,6 +1298,15 @@ function Desktop({ onLock }) {
             </button>
             {topPanel === 'control' ? <ControlCenterMenu /> : null}
           </div>
+          <button
+            type="button"
+            className="status-button"
+            aria-label="Open Settings"
+            title="Settings"
+            onClick={() => { setTopPanel(''); setRoute('settings', 'general'); setActiveApp('settings') }}
+          >
+            <Settings2 size={17} strokeWidth={2.1} />
+          </button>
           <button type="button" className="menubar-time-button">
             {dateTime}
           </button>
