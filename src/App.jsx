@@ -1616,11 +1616,6 @@ function SettingsPage({ onOpenProfile }) {
             </div>
           )}
 
-          {!loading && !companyIndependentSection && hasCompanyContext && (
-            <div className="settings-rbac-note">
-              {canManage ? 'Editing allowed by settings.manage.' : 'Read-only: your role does not have settings.manage.'}
-            </div>
-          )}
         </div>
       </div>
 
