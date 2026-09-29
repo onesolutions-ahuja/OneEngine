@@ -78,6 +78,15 @@ function useClock() {
   return now
 }
 
+function MenuBarClock() {
+  const now = useClock()
+  return (
+    <button type="button" className="menubar-time-button">
+      {dateTime}
+    </button>
+  )
+}
+
 function Dock({ onItemOpen }) {
   const mouseX = useMotionValue(Number.POSITIVE_INFINITY)
   const resetMagnification = () => mouseX.set(Number.POSITIVE_INFINITY)
@@ -1622,7 +1631,6 @@ function Desktop({ onLock }) {
   const [storeAppsLoaded, setStoreAppsLoaded] = useState(false)
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
   const topbarPanelRef = useRef(null)
-  const now = useClock()
   const storedUser = getStoredUser()
   const isTillUser = /till|cashier|sales/i.test(String(storedUser?.role || ''))
 
@@ -1834,9 +1842,7 @@ function Desktop({ onLock }) {
           >
             <Settings2 size={17} strokeWidth={2.1} />
           </button>
-          <button type="button" className="menubar-time-button">
-            {dateTime}
-          </button>
+          <MenuBarClock />
         </div>
       </header>
 
