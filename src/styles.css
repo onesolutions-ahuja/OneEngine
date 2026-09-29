@@ -3656,10 +3656,16 @@ button:focus-visible {
 
 .dock-magnify-zone {
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
   display: flex;
   align-items: flex-end;
   gap: 12px;
   overflow: visible;
+  /* Keep the original magnification physics, but make the Jarves divider a
+     hard visual boundary. Negative top/bottom/left insets preserve the
+     existing rise and left-side motion; only the right edge is clipped. */
+  clip-path: inset(-120px 0 -120px -120px);
 }
 
 .dock-fixed-zone {
