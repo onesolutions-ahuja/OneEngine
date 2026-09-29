@@ -147,9 +147,12 @@ function GenericObjectSettings({ object, superadmin }) {
   const selected = rows.find((row) => String(row.id) === String(selectedId)) || null
   const readable = fields.filter((field) => field.active !== false && field.readable !== false && !['company_id'].includes(field.api_name))
   const writable = readable.filter((field) => field.writable === true && !['formula', 'rollup'].includes(String(field.field_type || '').toLowerCase()))
-  const canCreate = superadmin || permissions?.can_create === true
-  const canEdit = superadmin || permissions?.can_edit === true
-  const canDelete = superadmin || permissions?.can_delete === true
+  const allowCreate = object?.config?.settingsAllowCreate !== false && object?.config?.settings_allow_create !== false
+  const allowEdit = object?.config?.settingsAllowEdit !== false && object?.config?.settings_allow_edit !== false
+  const allowDelete = object?.config?.settingsAllowDelete !== false && object?.config?.settings_allow_delete !== false
+  const canCreate = allowCreate && (superadmin || permissions?.can_create === true)
+  const canEdit = allowEdit && (superadmin || permissions?.can_edit === true)
+  const canDelete = allowDelete && (superadmin || permissions?.can_delete === true)
 
   const startEdit = () => {
     if (!selected || !canEdit) return
@@ -276,8 +279,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   const [query, setQuery] = useState('')
   const [objects, setObjects] = useState([])
   const [objectPermissions, setObjectPermissions] = useState({})
-  const [systemFields, setSystemFields] = useState([])
-  const [systemRows, setSystemRows] = useState([])
+  const [sectionedData, setSectionedData] = useState({})
   const [active, setActive] = useState(initialSection || '')
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -286,10 +288,15 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   const sectionedObjects = objects.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
   const superadmin = user?.isSuperadmin === true || user?.is_superadmin === true
 
-  const loadSystemRows = async (object) => {
-    if (!object) return
-    const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=10`)
-    setSystemRows(Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [])
+  const loadSectionedRows = async (object) => {
+    if (!object?.id) return
+    const key = objectKey(object)
+    const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=10`)
+    const records = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
+    setSectionedData((current) => ({
+      ...current,
+      [object.id]: { ...(current[object.id] || {}), rows: records },
+    }))
   }
 
   useEffect(() => {
@@ -317,16 +324,18 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
       setObjectPermissions(Object.fromEntries(permissionPairs))
 
       const sectioned = hosts.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
-      if (sectioned.length) {
-        const system = sectioned[0]
+      const sectionedPairs = await Promise.all(sectioned.map(async (object) => {
         const [fieldRes, recordRes] = await Promise.all([
-          apiRequest(`/api/platform/objects/${encodeURIComponent(system.id)}/fields`),
-          apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(system))}/records?page=1&pageSize=10`),
+          apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`),
+          apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=10`),
         ])
-        if (!live) return
-        setSystemFields(Array.isArray(fieldRes?.data) ? fieldRes.data : [])
-        setSystemRows(Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : [])
-      }
+        return [object.id, {
+          fields: Array.isArray(fieldRes?.data) ? fieldRes.data : [],
+          rows: Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : [],
+        }]
+      }))
+      if (!live) return
+      setSectionedData(Object.fromEntries(sectionedPairs))
     }).catch((err) => live && setError(err?.message || 'Unable to load metadata settings')).finally(() => live && setLoading(false))
     return () => { live = false }
   }, [])
@@ -335,7 +344,8 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
     const rows = []
     for (const sectionedObject of sectionedObjects) {
       const sections = new Map()
-      for (const field of systemFields) {
+      const fields = sectionedData[sectionedObject.id]?.fields || []
+      for (const field of fields) {
         if (field.active === false || field.readable === false) continue
         const label = fieldSection(field)
         const key = sectionKey(label)
@@ -355,7 +365,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
       })
     }
     return rows.sort((a, b) => (a.order || 0) - (b.order || 0) || a.label.localeCompare(b.label))
-  }, [objects, systemFields, sectionedObjects])
+  }, [objects, sectionedData, sectionedObjects])
 
   const permittedEntries = entries.filter((entry) => {
     if (superadmin) return true
@@ -413,12 +423,12 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
           ) : current.type === 'system' ? (
             <SystemSettingsSection
               object={current.object}
-              fields={systemFields}
-              record={systemRows[0] || null}
+              fields={sectionedData[current.object.id]?.fields || []}
+              record={sectionedData[current.object.id]?.rows?.[0] || null}
               permissions={objectPermissions[current.object.id]}
               superadmin={superadmin}
               section={current.section}
-              onSaved={() => loadSystemRows(current.object)}
+              onSaved={() => loadSectionedRows(current.object)}
             />
           ) : (
             <GenericObjectSettings object={current.object} superadmin={superadmin} />
