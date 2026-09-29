@@ -31,11 +31,14 @@ function fieldLabel(fields, key) {
   return fields.find((field) => field.key === key)?.label || key;
 }
 
-export default function CustomReportsAdmin() {
+export default function CustomReportsAdmin({ embedded = false, initialReport = null, onClose, onSaved } = {}) {
   const [reports, setReports] = useState([]);
   const [metadata, setMetadata] = useState({ fields: [], filters: [], stores: [], users: [], platformObjects: [], sources: [], canManage: false });
-  const [definition, setDefinition] = useState(initialDefinition);
-  const [editingId, setEditingId] = useState(null);
+  const initialEmbeddedDefinition = initialReport
+    ? { ...(initialReport.definition || {}), userIds: initialReport.user_ids || [], name: initialReport.name || "", description: initialReport.description || "" }
+    : initialDefinition();
+  const [definition, setDefinition] = useState(() => initialEmbeddedDefinition);
+  const [editingId, setEditingId] = useState(() => initialReport?.id || null);
   const [running, setRunning] = useState(null);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -69,6 +72,20 @@ export default function CustomReportsAdmin() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!embedded) return;
+    if (initialReport) {
+      setEditingId(initialReport.id || null);
+      setDefinition({ ...(initialReport.definition || {}), userIds: initialReport.user_ids || [], name: initialReport.name || "", description: initialReport.description || "" });
+    } else {
+      setEditingId(null);
+      setDefinition(initialDefinition());
+    }
+    setResults(null);
+    setNotice("");
+    setError("");
+  }, [embedded, initialReport?.id]);
 
   useEffect(() => {
     if (definition.dataSource !== "platform_object" || !definition.objectId) {
@@ -147,6 +164,7 @@ export default function CustomReportsAdmin() {
       }
       setNotice("Report saved.");
       await load();
+      onSaved?.(saved || { id: reportId, definition });
       if (runAfterSave && (saved?.id || editingId)) await run(saved?.id || editingId, saved?.definition || definition);
     } catch (saveError) {
       setError(errorMessage(saveError));
@@ -232,20 +250,34 @@ export default function CustomReportsAdmin() {
 
   return (
     <div className="space-y-5">
-      <div className="onepos-page-header">
-        <div>
-          <h1 className="onepos-page-title">My Reports</h1>
-          <p className="onepos-page-subtitle">Saved report definitions run against current sales data.</p>
+      {embedded ? (
+        <div className="onepos-page-header">
+          <div>
+            <h1 className="onepos-page-title">{editingId ? "Edit Report" : "Create Report"}</h1>
+            <p className="onepos-page-subtitle">Build, preview and run report metadata against current data.</p>
+          </div>
+          <div className="flex gap-2">
+            {editingId ? <button type="button" onClick={() => duplicate({ id: editingId })} className="onepos-btn onepos-btn-sm onepos-btn-secondary">Duplicate</button> : null}
+            {editingId ? <button type="button" onClick={() => archive({ id: editingId, name: definition.name })} className="onepos-btn onepos-btn-sm onepos-btn-secondary text-red-700">Archive</button> : null}
+            <button type="button" onClick={() => onClose?.()} className="onepos-btn onepos-btn-sm onepos-btn-secondary">Cancel</button>
+          </div>
         </div>
-        <button type="button" onClick={() => { setEditingId(null); setDefinition(initialDefinition()); setResults(null); setNotice(""); }} className="onepos-btn onepos-btn-primary">
-          Create Report
-        </button>
-      </div>
+      ) : (
+        <div className="onepos-page-header">
+          <div>
+            <h1 className="onepos-page-title">My Reports</h1>
+            <p className="onepos-page-subtitle">Saved report definitions run against current sales data.</p>
+          </div>
+          <button type="button" onClick={() => { setEditingId(null); setDefinition(initialDefinition()); setResults(null); setNotice(""); }} className="onepos-btn onepos-btn-primary">
+            Create Report
+          </button>
+        </div>
+      )}
 
       {error && <div className="onepos-alert onepos-alert-error">{error}</div>}
       {notice && <div className="onepos-alert onepos-alert-success">{notice}</div>}
 
-      <div className="onepos-card overflow-hidden">
+      {!embedded ? <div className="onepos-card overflow-hidden">
         <div className="onepos-card-header"><span className="onepos-card-title">Available reports</span></div>
         {reports.length ? reports.map((report) => (
           <div key={report.id} className="p-4 border-b last:border-b-0 flex flex-wrap items-center gap-3">
@@ -259,18 +291,18 @@ export default function CustomReportsAdmin() {
             <button type="button" onClick={() => archive(report)} className="onepos-btn onepos-btn-sm onepos-btn-secondary text-red-700">Archive</button>
           </div>
         )) : <div className="onepos-empty"><span className="onepos-empty-title">No saved reports yet.</span></div>}
-      </div>
+      </div> : null}
 
       {/* Report authoring (fields, filters, grouping, sorting) is the report
           schema builder, so it stays a desktop workflow — phones get the list
           and can still open/run any saved report (task §Mobile rule). */}
-      <div className="onepos-card onepos-card-body md:hidden">
+      {!embedded ? <div className="onepos-card onepos-card-body md:hidden">
         <p className="text-sm text-slate-500">
           Creating and editing report definitions is available on a larger screen. You can still open and run any saved report above.
         </p>
-      </div>
+      </div> : null}
 
-      <div className="onepos-card onepos-card-body space-y-5 hidden md:block">
+      <div className={`onepos-card onepos-card-body space-y-5 ${embedded ? "" : "hidden md:block"}`}>
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-semibold">{editingId ? "Edit report" : "Create report"}</h2>
           <span className="text-xs text-slate-400">Data source: {definition.dataSource === "platform_object" ? "Platform Object" : "Sales"}</span>
