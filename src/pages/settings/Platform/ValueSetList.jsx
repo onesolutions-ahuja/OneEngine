@@ -63,32 +63,32 @@ export default function ValueSetList({ onBack, onMessage, onError }) {
     } catch (error) {
       onError?.(error.message || "Unable to add value.");
     }
+  }
 
-    async function updateValue(item, changes) {
-      try {
-        await apiRequest(`/api/platform/value-set-values/${item.id}`, {
-          method: "PUT",
-          body: JSON.stringify(changes),
-        });
-        await load();
-        onMessage?.("Value updated.");
-      } catch (error) {
-        onError?.(error.message || "Unable to update value.");
-      }
+  async function updateValue(item, changes) {
+    try {
+      await apiRequest(`/api/platform/value-set-values/${item.id}`, {
+        method: "PUT",
+        body: JSON.stringify(changes),
+      });
+      await load();
+      onMessage?.("Value updated.");
+    } catch (error) {
+      onError?.(error.message || "Unable to update value.");
+    }
+  }
 
-      async function toggleValueSet() {
-        if (!selected) return;
-        try {
-          await apiRequest(`/api/platform/value-sets/${selected.id}`, {
-            method: "PUT",
-            body: JSON.stringify({ active: selected.active === false }),
-          });
-          await load();
-          onMessage?.("Value set status updated.");
-        } catch (error) {
-          onError?.(error.message || "Unable to update value set status.");
-        }
-      }
+  async function toggleValueSet() {
+    if (!selected) return;
+    try {
+      await apiRequest(`/api/platform/value-sets/${selected.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ active: selected.active === false }),
+      });
+      await load();
+      onMessage?.("Value set status updated.");
+    } catch (error) {
+      onError?.(error.message || "Unable to update value set status.");
     }
   }
 
