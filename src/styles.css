@@ -2649,6 +2649,32 @@ button:focus-visible {
 .objects-pane-list {
   padding: 0 7px 10px;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,.24) transparent;
+}
+
+.objects-pane-list::-webkit-scrollbar,
+.objects-detail-pane::-webkit-scrollbar,
+.objects-config-tabs::-webkit-scrollbar,
+.objects-config-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.objects-pane-list::-webkit-scrollbar-track,
+.objects-detail-pane::-webkit-scrollbar-track,
+.objects-config-tabs::-webkit-scrollbar-track,
+.objects-config-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.objects-pane-list::-webkit-scrollbar-thumb,
+.objects-detail-pane::-webkit-scrollbar-thumb,
+.objects-config-tabs::-webkit-scrollbar-thumb,
+.objects-config-content::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(0,0,0,.22);
 }
 
 .objects-list-item {
@@ -2724,7 +2750,14 @@ button:focus-visible {
   min-width: 0;
   padding: 18px;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,.24) transparent;
   background: #f7f7f8;
+}
+
+.objects-mobile-back {
+  display: none;
 }
 
 .objects-detail-header {
@@ -3026,6 +3059,8 @@ button:focus-visible {
   gap: 2px;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,.24) transparent;
   border-right: 1px solid rgba(0,0,0,.065);
   background: #efeff0;
 }
@@ -3068,6 +3103,8 @@ button:focus-visible {
   min-width: 0;
   padding: 10px;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,.24) transparent;
   background: #f7f7f8;
 }
 
@@ -3080,6 +3117,80 @@ button:focus-visible {
 @media (max-width: 900px) {
   .objects-config-workspace {
     grid-template-columns: 132px minmax(0,1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .objects-settings-shell {
+    min-height: calc(100vh - 170px);
+    grid-template-columns: 1fr;
+  }
+
+  .objects-list-pane {
+    border-right: 0;
+  }
+
+  .objects-settings-shell.mobile-stage-objects .objects-detail-pane {
+    display: none;
+  }
+
+  .objects-settings-shell.mobile-stage-menu .objects-list-pane,
+  .objects-settings-shell.mobile-stage-detail .objects-list-pane {
+    display: none;
+  }
+
+  .objects-settings-shell.mobile-stage-menu .objects-detail-pane,
+  .objects-settings-shell.mobile-stage-detail .objects-detail-pane {
+    display: block;
+  }
+
+  .objects-settings-shell.mobile-stage-menu .objects-mobile-back--objects,
+  .objects-settings-shell.mobile-stage-detail .objects-mobile-back--menu {
+    display: grid;
+  }
+
+  .objects-mobile-back {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgba(0,0,0,.09);
+    border-radius: 7px;
+    color: #1d1d1f;
+    background: rgba(255,255,255,.9);
+  }
+
+  .objects-config-workspace {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .objects-settings-shell.mobile-stage-menu .objects-config-content {
+    display: none;
+  }
+
+  .objects-settings-shell.mobile-stage-menu .objects-config-tabs {
+    border-right: 0;
+  }
+
+  .objects-settings-shell.mobile-stage-detail .objects-config-tabs {
+    display: none;
+  }
+
+  .objects-pane-list,
+  .objects-detail-pane,
+  .objects-config-tabs,
+  .objects-config-content {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .objects-pane-list::-webkit-scrollbar,
+  .objects-detail-pane::-webkit-scrollbar,
+  .objects-config-tabs::-webkit-scrollbar,
+  .objects-config-content::-webkit-scrollbar {
+    display: none;
   }
 }
 
