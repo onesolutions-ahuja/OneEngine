@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArchiveRestore, BadgePoundSterling, Banknote, CreditCard, FileText, HandCoins,
   Minus, Pause, Pencil, Plus, Printer, QrCode, ReceiptText, Search, Settings2,
-  ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet,
+  ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor,
 } from 'lucide-react'
 import { apiRequest, getActingCompanyId, getStoredUser } from '../../services/api'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
@@ -29,6 +29,7 @@ const ICONS = {
   layers: Layers,
   tag: Tag,
   'user-round': UserRound,
+  monitor: Monitor,
   x: X,
 }
 
@@ -91,7 +92,7 @@ function Modal({ title, children, onClose, wide = false }) {
 
 function MetaButton({ button, onAction, disabled = false, className = '' }) {
   const Icon = ICONS[button?.icon] || ShoppingBag
-  return <button type="button" className={className} disabled={disabled} onClick={() => onAction(button?.config?.uiAction || button?.config?.ui_action || button?.action_key, null, button)}><Icon size={15}/>{button?.label}</button>
+  return <button type="button" className={className} disabled={disabled} onClick={() => onAction(button?.config?.uiAction || button?.config?.ui_action || button?.action_key || button?.target_key || button?.button_key, null, button)}><Icon size={15}/>{button?.label}</button>
 }
 
 function buttonMap(buttons) {
@@ -691,6 +692,77 @@ export default function TillPage({ onOpenSettings }) {
     } catch (err) { setError(err?.message || 'Unable to record petty cash') }
   }
 
+  const customerDisplayEnabled =
+    settings?.till?.customerDisplayEnabled === true
+    || settings?.customerDisplayEnabled === true
+    || settings?.storeTill?.customerDisplayEnabled === true
+
+  const openCustomerDisplay = () => {
+    if (!customerDisplayEnabled) {
+      setError('Enable Customer Display in Settings → Store & Till first.')
+      return
+    }
+    const base = String(import.meta.env.BASE_URL || '/').replace(/\/?$/, '/')
+    const popup = window.open(`${base}customer-display`, 'onepos-customer-display', 'noopener,noreferrer')
+    if (!popup) setError('Browser blocked the Customer Display window. Allow pop-ups and try again.')
+  }
+
+  const executeMetadataButton = async (button) => {
+    if (!button?.button_key) return
+    setBusy(true)
+    setError('')
+    try {
+      const wantsLastSale = button?.config?.recordContext === 'last_sale'
+        || button?.config?.record_context === 'last_sale'
+        || button?.config?.requiresPersistedRecord === true
+        || button?.config?.requires_persisted_record === true
+
+      if (wantsLastSale && !lastSale?.id) {
+        throw new Error('Complete a sale before using this action.')
+      }
+
+      const context = {
+        storeId: till?.store_id || settings?.store?.id || getStoredUser()?.storeId || null,
+        terminalId: till?.terminal_id || null,
+        customerId: selectedCustomer?.id || null,
+        subtotal,
+        vat,
+        discount: discountAmount,
+        total,
+        basket: [
+          ...basket.map((item) => ({
+            productId: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            modifiers: item.modifiers || [],
+          })),
+          ...miscLines.map((line) => ({
+            itemType: 'MISC',
+            name: line.description,
+            quantity: line.quantity,
+            unitPrice: line.price,
+          })),
+        ],
+      }
+
+      const endpoint = wantsLastSale && lastSale?.id
+        ? `/api/platform/objects/sale/records/${encodeURIComponent(lastSale.id)}/buttons/${encodeURIComponent(button.button_key)}/execute`
+        : `/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`
+
+      const response = await apiRequest(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(wantsLastSale && lastSale?.id ? { inputs: context } : { context }),
+      })
+      if (response?.success === false) throw new Error(response?.message || 'Unable to run Till action')
+      setMessage(`${button.label || 'Action'} completed.`)
+    } catch (err) {
+      setError(err?.message || 'Unable to run Till action')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const dispatchTillAction = (action, item = null, button = null) => {
     if (action === 'till_session') return setModal('till')
     if (action === 'customer') return setModal('customer')
@@ -706,8 +778,10 @@ export default function TillPage({ onOpenSettings }) {
     if (action === 'pay_cash') return completeSale('cash')
     if (action === 'pay_card') return completeSale('card')
     if (action === 'pay_more') return setModal('payment')
-    if (action === 'price_override' && item) { setPriceTarget(item); setModal('price_override') }
+    if (action === 'price_override' && item) { setPriceTarget(item); setModal('price_override'); return }
     if (action === 'offline_queue') return setModal('offline_queue')
+    if (action === 'customer_display') return openCustomerDisplay()
+    if (button) return void executeMetadataButton(button)
   }
 
   const headerButtons = buttons.filter((button) => button.placement === 'till_action_header')
@@ -715,6 +789,7 @@ export default function TillPage({ onOpenSettings }) {
     if (button.placement !== 'till_action_bar') return false
     const action = button?.config?.uiAction || button?.config?.ui_action
     if (action === 'receipt_qr' && settings?.receiptQr?.allowManualQr === false) return false
+    if (action === 'customer_display' && !customerDisplayEnabled) return false
     return true
   })
   const paymentButtons = buttons.filter((button) => button.placement === 'till_payment')
