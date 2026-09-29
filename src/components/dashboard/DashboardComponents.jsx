@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 /*
  * Generic dashboard component renderers.
  *
@@ -218,6 +219,65 @@ function ModernActionCard({ component, config }) {
   </div>;
 }
 
+function UtilityClock({ config }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), config?.showSeconds ? 1000 : 30000);
+    return () => window.clearInterval(timer);
+  }, [config?.showSeconds]);
+  const options = {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(config?.showSeconds ? { second: "2-digit" } : {}),
+    hour12: config?.hour12 !== false,
+    ...(config?.timeZone ? { timeZone: config.timeZone } : {}),
+  };
+  let time = "";
+  let date = "";
+  try {
+    time = new Intl.DateTimeFormat(undefined, options).format(now);
+    date = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long", ...(config?.timeZone ? { timeZone: config.timeZone } : {}) }).format(now);
+  } catch {
+    time = now.toLocaleTimeString();
+    date = now.toLocaleDateString();
+  }
+  return <div className="h-full flex flex-col items-center justify-center text-center">
+    <div className="text-4xl font-semibold tabular-nums tracking-tight" style={{ color: "var(--onepos-text-heading)" }}>{time}</div>
+    {config?.showDate !== false ? <div className="mt-2 text-sm" style={{ color: "var(--onepos-text-secondary)" }}>{date}</div> : null}
+  </div>;
+}
+
+function UtilityCalendar({ config }) {
+  const now = new Date();
+  let weekday = "", day = "", month = "";
+  try {
+    const tz = config?.timeZone ? { timeZone: config.timeZone } : {};
+    weekday = new Intl.DateTimeFormat(undefined, { weekday: "long", ...tz }).format(now);
+    day = new Intl.DateTimeFormat(undefined, { day: "numeric", ...tz }).format(now);
+    month = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric", ...tz }).format(now);
+  } catch {
+    weekday = now.toLocaleDateString(undefined, { weekday: "long" });
+    day = String(now.getDate());
+    month = now.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+  return <div className="h-full flex flex-col items-center justify-center text-center">
+    {config?.showWeekday !== false ? <div className="text-sm font-medium" style={{ color: "var(--onepos-text-secondary)" }}>{weekday}</div> : null}
+    <div className="my-1 text-5xl font-bold tabular-nums" style={{ color: "var(--onepos-text-heading)" }}>{day}</div>
+    {config?.showMonth !== false ? <div className="text-sm" style={{ color: "var(--onepos-text-secondary)" }}>{month}</div> : null}
+  </div>;
+}
+
+function UtilityWeather({ config }) {
+  const hasDisplay = String(config?.temperature || "").trim() || String(config?.condition || "").trim();
+  return <div className="h-full flex flex-col items-center justify-center text-center">
+    <div className="text-sm font-medium" style={{ color: "var(--onepos-text-secondary)" }}>{config?.location || "Weather"}</div>
+    {hasDisplay ? <>
+      <div className="my-1 text-4xl font-semibold tabular-nums" style={{ color: "var(--onepos-text-heading)" }}>{config?.temperature ? `${config.temperature}°${config?.unit || "C"}` : "—"}</div>
+      <div className="text-sm" style={{ color: "var(--onepos-text-secondary)" }}>{config?.condition || ""}</div>
+    </> : <div className="mt-3 text-xs" style={{ color: "var(--onepos-text-muted)" }}>Configure a weather source/value in Properties.</div>}
+  </div>;
+}
+
 /*
  * The one runtime entry point shared by the Dashboard page, the Dashboard
  * Builder preview and any saved dashboard. It receives an already-validated
@@ -228,6 +288,14 @@ export function renderDashboardComponent(component, result, state) {
     return <Card component={component} state={state}><p className="text-sm" style={{ color: "var(--onepos-text-body)" }}>{component.config?.content}</p></Card>;
   }
   const config = component.config || {};
+  if (["clock_widget", "calendar_widget", "weather_widget"].includes(component.type)) {
+    const body = component.type === "clock_widget"
+      ? <UtilityClock config={config} />
+      : component.type === "calendar_widget"
+        ? <UtilityCalendar config={config} />
+        : <UtilityWeather config={config} />;
+    return <Card component={component} state={state}>{body}</Card>;
+  }
   if (["folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile"].includes(component.type)) {
     const body = component.type === "folder_card"
       ? <ModernFolderCard component={component} config={config} />
