@@ -1668,6 +1668,88 @@ function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, mode = 'launcher' }
   )
 }
 
+function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onOpenStore }) {
+  const q = String(query || '').trim().toLowerCase()
+  const visible = apps
+    .filter((item) => item?.visible !== false && item?.system_only !== true)
+    .filter((item) => !q || `${item.name || ''} ${item.package_key || ''} ${item.category || ''}`.toLowerCase().includes(q))
+
+  return (
+    <motion.div
+      className="launcher-overlay"
+      initial={{ opacity: 0, scale: 1.035, filter: 'blur(10px)' }}
+      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, scale: 1.02, filter: 'blur(8px)' }}
+      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose?.()
+      }}
+    >
+      <div className="launcher-glass">
+        <div className="launcher-search">
+          <Search size={16} strokeWidth={2} />
+          <input
+            value={query}
+            onChange={(event) => onQueryChange?.(event.target.value)}
+            placeholder="Search apps"
+            aria-label="Search launcher apps"
+            autoFocus
+          />
+        </div>
+
+        <div className="launcher-app-grid" role="list" aria-label="oneStore apps">
+          {visible.map((item, index) => {
+            const icon = marketplaceIcon(item)
+            const route = item?.route || item?.manifest?.route || item?.company_installation?.manifest?.route || ''
+            const installed = Boolean(item.company_installation)
+            return (
+              <motion.button
+                key={item.package_key || item.id}
+                type="button"
+                className="launcher-app"
+                role="listitem"
+                title={installed ? (item.name || item.package_key) : `${item.name || item.package_key} — available in oneStore`}
+                initial={{ opacity: 0, y: 18, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ type: 'spring', mass: 0.15, stiffness: 250, damping: 20, delay: Math.min(0.22, index * 0.012) }}
+                whileHover={{ y: -7, scale: 1.055 }}
+                whileTap={{ scale: 0.94 }}
+                onClick={() => {
+                  if (installed && route) {
+                    onClose?.()
+                    onOpenRoute?.(route)
+                  } else {
+                    onClose?.()
+                    onOpenStore?.()
+                  }
+                }}
+              >
+                <span className="launcher-app-icon">
+                  {icon ? (
+                    <img
+                      src={icon}
+                      alt=""
+                      draggable="false"
+                      onError={(event) => {
+                        event.currentTarget.onerror = null
+                        event.currentTarget.src = localAppIcon('default-app')
+                      }}
+                    />
+                  ) : (
+                    <ShoppingBag size={38} strokeWidth={1.6} />
+                  )}
+                </span>
+                <strong>{item.name || item.package_key}</strong>
+              </motion.button>
+            )
+          })}
+          {!visible.length ? <div className="launcher-empty">No apps match your search.</div> : null}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
 function ConnectionMenu({ health, onRefresh }) {
   const online = health?.status === 'Connected'
   return (
@@ -1766,6 +1848,7 @@ function Desktop({ onLock }) {
   const [activeApp, setActiveApp] = useState(() => readRoute().app)
   const [routeState, setRouteState] = useState(() => readRoute())
   const [topPanel, setTopPanel] = useState('')
+  const [launcherOpen, setLauncherOpen] = useState(false)
   const [appSearch, setAppSearch] = useState('')
   const [storeApps, setStoreApps] = useState([])
   const [storeAppsLoaded, setStoreAppsLoaded] = useState(false)
@@ -1792,6 +1875,15 @@ function Desktop({ onLock }) {
     window.addEventListener('onepos:open-store', openStore)
     return () => window.removeEventListener('onepos:open-store', openStore)
   }, [])
+
+  useEffect(() => {
+    if (!launcherOpen) return undefined
+    const closeEscape = (event) => {
+      if (event.key === 'Escape') setLauncherOpen(false)
+    }
+    document.addEventListener('keydown', closeEscape)
+    return () => document.removeEventListener('keydown', closeEscape)
+  }, [launcherOpen])
 
   useEffect(() => {
     if (!topPanel) return undefined
@@ -1825,7 +1917,7 @@ function Desktop({ onLock }) {
   }, [])
 
   useEffect(() => {
-    if (storeAppsLoaded || (topPanel !== 'apps' && topPanel !== 'store')) return undefined
+    if (storeAppsLoaded || (!launcherOpen && topPanel !== 'apps' && topPanel !== 'store')) return undefined
     let live = true
     apiRequest('/api/packages/marketplace')
       .then((packages) => {
@@ -1837,7 +1929,7 @@ function Desktop({ onLock }) {
         if (live) setStoreAppsLoaded(true)
       })
     return () => { live = false }
-  }, [topPanel, storeAppsLoaded])
+  }, [launcherOpen, topPanel, storeAppsLoaded])
 
   const dateTime = useMemo(
     () =>
@@ -1979,7 +2071,8 @@ function Desktop({ onLock }) {
     }
     if (id === 'launchpad') {
       setAppSearch('')
-      setTopPanel('apps')
+      setTopPanel('')
+      setLauncherOpen(true)
       return
     }
     if (id === 'store') {
@@ -2132,6 +2225,25 @@ function Desktop({ onLock }) {
           <MenuBarClock />
         </div>
       </header>
+
+      <AnimatePresence>
+        {launcherOpen ? (
+          <LauncherOverlay
+            apps={storeApps}
+            query={appSearch}
+            onQueryChange={setAppSearch}
+            onClose={() => setLauncherOpen(false)}
+            onOpenRoute={(route) => {
+              const slug = String(route || '').split('?')[0].split('/').filter(Boolean).pop()
+              if (slug) openItem(slug)
+            }}
+            onOpenStore={() => {
+              setAppSearch('')
+              setTopPanel('store')
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>
         {activeApp === 'settings' ? (
