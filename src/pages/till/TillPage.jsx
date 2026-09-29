@@ -1,27 +1,40 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  BadgePoundSterling,
-  Banknote,
-  CreditCard,
-  FileText,
-  HandCoins,
-  Minus,
-  Pause,
-  Plus,
-  Printer,
-  ReceiptText,
-  Search,
-  ShoppingBag,
-  Tag,
-  UserRound,
-  WalletCards,
-  Settings2,
-  X,
+  ArchiveRestore, BadgePoundSterling, Banknote, CreditCard, FileText, HandCoins,
+  Minus, Pause, Pencil, Plus, Printer, QrCode, ReceiptText, Search, Settings2,
+  ShoppingBag, Tag, UserRound, X,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import {
+  cacheTillBootstrap, enqueueOfflineCashSale, loadTillBootstrapCache,
+  offlineQueueEntries, syncOfflineCashSales,
+} from '../../services/tillOffline'
 
-function money(value) {
-  return `£${Number(value || 0).toFixed(2)}`
+const ICONS = {
+  'archive-open': ArchiveRestore,
+  'badge-pound-sterling': BadgePoundSterling,
+  banknote: Banknote,
+  'credit-card': CreditCard,
+  'file-text': FileText,
+  'hand-coins': HandCoins,
+  minus: Minus,
+  pause: Pause,
+  pencil: Pencil,
+  plus: Plus,
+  printer: Printer,
+  'qr-code': QrCode,
+  'shopping-bag': ShoppingBag,
+  tag: Tag,
+  'user-round': UserRound,
+  x: X,
+}
+
+function money(value, currency = 'GBP') {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(Number(value || 0))
+  } catch {
+    return `${currency} ${Number(value || 0).toFixed(2)}`
+  }
 }
 
 function normaliseProduct(product) {
@@ -31,7 +44,7 @@ function normaliseProduct(product) {
     sku: product.sku || product.code || '',
     barcode: product.barcode || product.ean || '',
     price: Number(product.price ?? product.selling_price ?? product.unit_price ?? 0),
-    vatRate: Number(product.vat_rate ?? product.vatRate ?? 20),
+    vatRate: Number(product.vat_rate ?? product.vatRate ?? 0),
     vatApplicable: product.vat_applicable !== undefined ? product.vat_applicable !== false : product.vatApplicable !== false,
     ageRestricted: product.age_restricted === true || product.ageRestricted === true,
     trackStock: product.track_stock !== false && product.trackStock !== false,
@@ -46,14 +59,20 @@ function Modal({ title, children, onClose, wide = false }) {
   return (
     <div className="till-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose?.()}>
       <section className={`till-modal ${wide ? 'is-wide' : ''}`}>
-        <header>
-          <strong>{title}</strong>
-          <button type="button" onClick={onClose}><X size={15} /></button>
-        </header>
+        <header><strong>{title}</strong><button type="button" onClick={onClose}><X size={15}/></button></header>
         <div className="till-modal-body">{children}</div>
       </section>
     </div>
   )
+}
+
+function MetaButton({ button, onAction, disabled = false, className = '' }) {
+  const Icon = ICONS[button?.icon] || ShoppingBag
+  return <button type="button" className={className} disabled={disabled} onClick={() => onAction(button?.config?.uiAction || button?.config?.ui_action || button?.action_key)}><Icon size={15}/>{button?.label}</button>
+}
+
+function buttonMap(buttons) {
+  return Object.fromEntries((buttons || []).map((button) => [button?.config?.uiAction || button?.config?.ui_action || button?.action_key, button]))
 }
 
 export default function TillPage({ onOpenSettings }) {
@@ -66,7 +85,9 @@ export default function TillPage({ onOpenSettings }) {
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [discount, setDiscount] = useState({ type: null, value: 0 })
   const [settings, setSettings] = useState(null)
+  const [buttons, setButtons] = useState([])
   const [till, setTill] = useState(null)
+  const [paymentCapability, setPaymentCapability] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -77,6 +98,16 @@ export default function TillPage({ onOpenSettings }) {
   const [cashReceived, setCashReceived] = useState('')
   const [busy, setBusy] = useState(false)
   const [lastSale, setLastSale] = useState(null)
+  const [ageVerified, setAgeVerified] = useState(false)
+  const [pendingPayment, setPendingPayment] = useState(null)
+  const [receiptQr, setReceiptQr] = useState(null)
+  const [receiptDetail, setReceiptDetail] = useState(null)
+  const [priceTarget, setPriceTarget] = useState(null)
+  const [offlineCount, setOfflineCount] = useState(0)
+  const [online, setOnline] = useState(() => navigator.onLine !== false)
+
+  const currency = settings?.company?.currency || 'GBP'
+  const meta = useMemo(() => buttonMap(buttons), [buttons])
 
   const loadTill = async () => {
     try {
@@ -87,120 +118,222 @@ export default function TillPage({ onOpenSettings }) {
     }
   }
 
+  const applyBootstrap = (catalogue, settingsResponse, buttonRows) => {
+    const payload = catalogue?.data || catalogue || {}
+    const rows = Array.isArray(payload.products) ? payload.products.map(normaliseProduct).filter((product) => product.active) : []
+    setProducts(rows)
+    setCategories(['All', ...new Set(rows.map((product) => product.category).filter(Boolean))])
+    setSettings(settingsResponse?.data || settingsResponse || null)
+    setButtons(Array.isArray(buttonRows) ? buttonRows : [])
+  }
+
+  const refreshOfflineCount = async () => {
+    try { setOfflineCount((await offlineQueueEntries()).length) } catch { setOfflineCount(0) }
+  }
+
   const load = async () => {
     setLoading(true)
     setError('')
     try {
-      const [catalogue, settingsResponse] = await Promise.all([
+      const [catalogue, settingsResponse, buttonResponse, capability] = await Promise.all([
         apiRequest('/api/products/catalogue'),
         apiRequest('/api/settings'),
+        apiRequest('/api/platform/runtime/objects/sale/buttons'),
+        apiRequest('/api/connector-capabilities/payment.sale').catch(() => ({ data: { available: false } })),
       ])
-      const payload = catalogue?.data || {}
-      const rows = Array.isArray(payload.products)
-        ? payload.products.map(normaliseProduct).filter((product) => product.active)
-        : []
-      setProducts(rows)
-      const names = [...new Set(rows.map((product) => product.category).filter(Boolean))]
-      setCategories(['All', ...names])
-      setSettings(settingsResponse?.data || null)
+      applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [])
+      cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [] })
+      setPaymentCapability(capability?.data?.available === true)
+      setOnline(true)
       await loadTill()
     } catch (err) {
-      setError(err?.message || 'Unable to load till')
+      const cached = loadTillBootstrapCache()
+      if (cached) {
+        applyBootstrap(cached.catalogue, cached.settingsResponse, cached.buttons)
+        setOnline(false)
+        setError('Server unavailable — cached Till loaded. Cash sales only.')
+      } else {
+        setError(err?.message || 'Unable to load till')
+      }
     } finally {
       setLoading(false)
+      await refreshOfflineCount()
     }
   }
 
   useEffect(() => {
     void load()
+    const backOnline = async () => {
+      setOnline(true)
+      try {
+        const result = await syncOfflineCashSales(apiRequest)
+        if (result.synced) setMessage(`${result.synced} offline sale${result.synced === 1 ? '' : 's'} synced.`)
+      } finally {
+        await refreshOfflineCount()
+        void load()
+      }
+    }
+    const wentOffline = () => setOnline(false)
+    window.addEventListener('online', backOnline)
+    window.addEventListener('offline', wentOffline)
+    return () => {
+      window.removeEventListener('online', backOnline)
+      window.removeEventListener('offline', wentOffline)
+    }
   }, [])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return products.filter((product) => {
       if (category !== 'All' && product.category !== category) return false
-      if (!q) return true
-      return [product.name, product.sku, product.barcode].join(' ').toLowerCase().includes(q)
+      return !q || [product.name, product.sku, product.barcode].join(' ').toLowerCase().includes(q)
     })
   }, [products, category, search])
 
   const grossSubtotal = basket.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
     + miscLines.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
   const discountAmount = discount.type === 'percent'
-    ? grossSubtotal * Math.min(100, Number(discount.value || 0)) / 100
-    : discount.type === 'fixed'
-      ? Math.min(grossSubtotal, Number(discount.value || 0))
-      : 0
+    ? grossSubtotal * Math.max(0, Number(discount.value || 0)) / 100
+    : discount.type === 'fixed' ? Math.max(0, Number(discount.value || 0)) : 0
   const subtotal = Math.max(0, grossSubtotal - discountAmount)
-
   const vatEnabled = settings?.tax?.vatEnabled !== false
-  const defaultVatRate = Number(settings?.tax?.defaultVatRate ?? 20) / 100
-  const vat = vatEnabled
-    ? basket.reduce((sum, item) => {
-        const line = Number(item.price) * item.quantity
-        const share = grossSubtotal ? discountAmount * (line / grossSubtotal) : 0
-        const net = Math.max(0, line - share)
-        const rate = item.vatApplicable === false ? 0 : Number(item.vatRate || defaultVatRate * 100) / 100
-        return sum + (net - net / (1 + rate))
-      }, 0)
-    : 0
+  const defaultVatRate = Number(settings?.tax?.defaultVatRate ?? 0) / 100
+  const vat = vatEnabled ? basket.reduce((sum, item) => {
+    const line = Number(item.price) * item.quantity
+    const share = grossSubtotal ? discountAmount * (line / grossSubtotal) : 0
+    const net = Math.max(0, line - share)
+    const rate = item.vatApplicable === false ? 0 : Number(item.vatRate || defaultVatRate * 100) / 100
+    return sum + (rate > 0 ? net - net / (1 + rate) : 0)
+  }, 0) : 0
   const total = subtotal
+  const hasAgeRestricted = basket.some((item) => item.ageRestricted)
 
   const addProduct = (product) => {
     setError('')
     setBasket((current) => {
       const found = current.find((item) => item.id === product.id)
-      if (found) {
-        if (product.trackStock && found.quantity >= product.stock) {
-          setError(`Only ${product.stock} left in stock for ${product.name}.`)
-          return current
-        }
-        return current.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
-      }
-      if (product.trackStock && product.stock <= 0) {
-        setError(`${product.name} is out of stock.`)
-        return current
-      }
+      if (found) return current.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
       return [...current, { ...product, quantity: 1 }]
     })
   }
 
-  const changeQty = (id, delta) => {
-    setBasket((current) => current
-      .map((item) => item.id === id ? { ...item, quantity: item.quantity + delta } : item)
-      .filter((item) => item.quantity > 0))
-  }
+  const changeQty = (id, delta) => setBasket((current) => current.map((item) => item.id === id ? { ...item, quantity: item.quantity + delta } : item).filter((item) => item.quantity > 0))
 
   const clearSale = () => {
     setBasket([])
     setMiscLines([])
     setSelectedCustomer(null)
     setDiscount({ type: null, value: 0 })
-    setMessage('Sale cleared.')
+    setAgeVerified(false)
+    setCashReceived('')
+  }
+
+  const buildSalePayload = (paymentMethod) => ({
+    clientRequestId: crypto.randomUUID(),
+    items: basket.map((item) => {
+      const line = Number(item.price) * item.quantity
+      const lineDiscount = grossSubtotal ? discountAmount * (line / grossSubtotal) : 0
+      return {
+        productId: item.id,
+        quantity: item.quantity,
+        unitPrice: item.price,
+        tax: 0,
+        discount: lineDiscount,
+        total: Math.max(0, line - lineDiscount),
+        ...(item.priceOverride ? { priceOverride: item.priceOverride, priceOverrideReason: item.priceOverrideReason || null } : {}),
+      }
+    }),
+    customerId: selectedCustomer?.id || null,
+    miscLines: miscLines.map((line) => ({ description: line.description, price: line.price, quantity: line.quantity, vatRate: line.vatRate })),
+    vatEnabled,
+    vatRate: defaultVatRate,
+    subtotal,
+    tax: vat,
+    discount: discountAmount,
+    total,
+    paymentMethod,
+    discountType: discount.type,
+    discountValue: discount.value,
+    ageVerified: hasAgeRestricted ? ageVerified : undefined,
+  })
+
+  const maybeShowReceiptQr = async (sale) => {
+    const mode = String(settings?.receiptQr?.showAfterSuccessfulPayment || 'OFF').toUpperCase()
+    if (!sale?.id || mode === 'OFF') return
+    if (mode === 'ONLY_WHEN_PRINTER_UNAVAILABLE') {
+      try {
+        const status = await apiRequest('/api/connector-capabilities/printer.status')
+        if (status?.data?.available === true) return
+      } catch {}
+    }
+    await generateReceiptQr(sale.id)
+  }
+
+  const completeSale = async (paymentMethod) => {
+    if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
+    if (hasAgeRestricted && !ageVerified) {
+      setPendingPayment(paymentMethod)
+      setModal('age')
+      return
+    }
+    if (!till && online) {
+      setModal('till')
+      return setError('Open a till session before completing a sale.')
+    }
+    if (paymentMethod === 'card' && !online) return setError('Card payment requires an online connection.')
+    if (paymentMethod === 'card' && !paymentCapability) return setError('No healthy payment connector is assigned to this till.')
+    const received = paymentMethod === 'cash' ? Number(cashReceived || total) : total
+    if (paymentMethod === 'cash' && received < total) return setError('Cash received is less than the sale total.')
+
+    setBusy(true)
+    setError('')
+    const payload = buildSalePayload(paymentMethod)
+    try {
+      if (!online && paymentMethod === 'cash') {
+        const entry = await enqueueOfflineCashSale(payload, till?.terminal_number || till?.terminalNumber || 'T')
+        clearSale()
+        setLastSale({ id: null, receipt_number: entry.provisionalReceipt, total, offline: true })
+        setMessage(`Cash sale saved offline · ${entry.provisionalReceipt} · Pending sync.`)
+        await refreshOfflineCount()
+        return
+      }
+      const response = await apiRequest('/api/sales', { method: 'POST', body: JSON.stringify(payload) })
+      if (!response?.success || !response?.sale?.id) throw new Error(response?.message || 'Sale could not be confirmed')
+      const sale = response.sale
+      setLastSale(sale)
+      clearSale()
+      setMessage(paymentMethod === 'cash'
+        ? `Sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''} · Change ${money(Math.max(0, received - total), currency)}`
+        : `Card sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''}`)
+      await maybeShowReceiptQr(sale)
+      await load()
+    } catch (err) {
+      if (paymentMethod === 'cash' && (err instanceof TypeError || err?.status >= 500 || navigator.onLine === false)) {
+        try {
+          const entry = await enqueueOfflineCashSale(payload, till?.terminal_number || till?.terminalNumber || 'T')
+          clearSale()
+          setLastSale({ id: null, receipt_number: entry.provisionalReceipt, total, offline: true })
+          setOnline(false)
+          setMessage(`Cash sale saved offline · ${entry.provisionalReceipt} · Pending sync.`)
+          await refreshOfflineCount()
+          return
+        } catch {}
+      }
+      setError(err?.message || 'Unable to complete sale')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const holdSale = async () => {
     if (!basket.length && !miscLines.length) return setError('Add an item before holding the sale.')
     setBusy(true)
     try {
-      const response = await apiRequest('/api/held-sales', {
-        method: 'POST',
-        body: JSON.stringify({
-          items: basket,
-          miscLines,
-          customerId: selectedCustomer?.id || null,
-          discountType: discount.type,
-          discountValue: discount.value,
-        }),
-      })
+      const response = await apiRequest('/api/held-sales', { method: 'POST', body: JSON.stringify({ items: basket, miscLines, customerId: selectedCustomer?.id || null, discountType: discount.type, discountValue: discount.value }) })
       if (!response?.success) throw new Error(response?.message || 'Unable to hold sale')
       clearSale()
       setMessage('Sale held successfully.')
-    } catch (err) {
-      setError(err?.message || 'Unable to hold sale')
-    } finally {
-      setBusy(false)
-    }
+    } catch (err) { setError(err?.message || 'Unable to hold sale') } finally { setBusy(false) }
   }
 
   const openHeld = async () => {
@@ -208,187 +341,121 @@ export default function TillPage({ onOpenSettings }) {
       const response = await apiRequest('/api/held-sales')
       setHeldSales(response?.data || [])
       setModal('held')
-    } catch (err) {
-      setError(err?.message || 'Unable to load held sales')
-    }
+    } catch (err) { setError(err?.message || 'Unable to load held sales') }
   }
 
   const resumeHeld = async (id) => {
     try {
-      const response = await apiRequest(`/api/held-sales/${encodeURIComponent(id)}/resume`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      })
+      const response = await apiRequest(`/api/held-sales/${encodeURIComponent(id)}/resume`, { method: 'POST', body: JSON.stringify({}) })
       if (!response?.success) throw new Error(response?.message || 'Unable to resume sale')
       const held = response.data || {}
-      if (Array.isArray(held.items)) {
-        setBasket(held.items)
-        setMiscLines([])
-      } else {
-        setBasket(held.items?.items || [])
-        setMiscLines(held.items?.miscLines || [])
-      }
+      if (Array.isArray(held.items)) { setBasket(held.items); setMiscLines([]) } else { setBasket(held.items?.items || []); setMiscLines(held.items?.miscLines || []) }
       setDiscount({ type: held.discount_type || null, value: Number(held.discount_value || 0) })
       setModal(null)
       setMessage('Held sale resumed.')
-    } catch (err) {
-      setError(err?.message || 'Unable to resume sale')
-    }
+    } catch (err) { setError(err?.message || 'Unable to resume sale') }
   }
 
   const searchCustomers = async (value) => {
     setCustomerSearch(value)
     if (!value.trim()) return setCustomers([])
+    try { const response = await apiRequest(`/api/customer-lookup?search=${encodeURIComponent(value.trim())}`); setCustomers(response?.data || []) } catch { setCustomers([]) }
+  }
+
+  const generateReceiptQr = async (saleId = lastSale?.id) => {
+    if (!saleId) return setError('A synced completed sale is required for Receipt QR.')
     try {
-      const response = await apiRequest(`/api/customer-lookup?search=${encodeURIComponent(value.trim())}`)
-      setCustomers(response?.data || [])
+      const response = await apiRequest(`/api/sales/${encodeURIComponent(saleId)}/receipt-qr`, { method: 'POST', body: JSON.stringify({}) })
+      if (!response?.success || !response?.data?.qrcodeUrl) throw new Error(response?.message || 'Unable to create Receipt QR')
+      setReceiptQr(response.data)
+      setModal('receipt_qr')
+    } catch (err) { setError(err?.message || 'Unable to create Receipt QR') }
+  }
+
+  const openPrint = async () => {
+    if (!lastSale) return
+    if (!lastSale.id) return window.print()
+    try {
+      const response = await apiRequest(`/api/sales/${encodeURIComponent(lastSale.id)}`)
+      setReceiptDetail(response?.data || response?.sale || response)
+      setModal('print')
     } catch {
-      setCustomers([])
+      setReceiptDetail(lastSale)
+      setModal('print')
     }
   }
 
-  const completeCashSale = async () => {
-    if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
-    if (!till) {
-      setModal('till')
-      return setError('Open a till session before completing a sale.')
-    }
-    const received = Number(cashReceived || total)
-    if (received < total) return setError('Cash received is less than the sale total.')
-
-    setBusy(true)
-    setError('')
+  const openDrawer = async () => {
     try {
-      const id = crypto.randomUUID()
-      const items = basket.map((item) => {
-        const line = Number(item.price) * item.quantity
-        const lineDiscount = grossSubtotal ? discountAmount * (line / grossSubtotal) : 0
-        return {
-          productId: item.id,
-          quantity: item.quantity,
-          unitPrice: item.price,
-          tax: 0,
-          discount: lineDiscount,
-          total: Math.max(0, line - lineDiscount),
-        }
-      })
-      const response = await apiRequest('/api/sales', {
-        method: 'POST',
-        body: JSON.stringify({
-          clientRequestId: id,
-          items,
-          customerId: selectedCustomer?.id || null,
-          miscLines: miscLines.map((line) => ({
-            description: line.description,
-            price: line.price,
-            quantity: line.quantity,
-            vatRate: line.vatRate,
-          })),
-          vatEnabled,
-          vatRate: defaultVatRate,
-          subtotal,
-          tax: vat,
-          discount: discountAmount,
-          total,
-          paymentMethod: 'cash',
-          discountType: discount.type,
-          discountValue: discount.value,
-          ageVerified: basket.some((item) => item.ageRestricted) ? true : undefined,
-        }),
-      })
-      if (!response?.success || !response?.sale?.id) throw new Error(response?.message || 'Sale could not be confirmed')
-      setLastSale(response.sale)
-      const change = Math.max(0, received - total)
-      clearSale()
-      setCashReceived('')
-      setMessage(`Sale complete${response.sale.receipt_number ? ` · ${response.sale.receipt_number}` : ''} · Change ${money(change)}`)
-      await load()
-    } catch (err) {
-      setError(err?.message || 'Unable to complete sale')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const openTillSession = async (openingCash) => {
-    try {
-      const response = await apiRequest('/api/till/sessions', {
-        method: 'POST',
-        body: JSON.stringify({ openingCash: Number(openingCash || 0) }),
-      })
-      if (!response?.success) throw new Error(response?.message || 'Unable to open till')
-      await loadTill()
-      setModal(null)
-      setMessage('Till opened.')
-    } catch (err) {
-      setError(err?.message || 'Unable to open till')
-    }
+      const response = await apiRequest('/api/till/drawer/open', { method: 'POST', body: JSON.stringify({ terminalId: till?.terminal_id || till?.terminalId || null, reason: 'No-sale drawer open from Till' }) })
+      setMessage(response?.message || 'Drawer open recorded.')
+    } catch (err) { setError(err?.message || 'Unable to open drawer') }
   }
 
   const recordPettyCash = async (amount, reason) => {
     if (!till?.id) return setError('Open a till before recording petty cash.')
     try {
-      const response = await apiRequest(`/api/till/sessions/${till.id}/cash-movements`, {
-        method: 'POST',
-        body: JSON.stringify({ type: 'cash_out', amount: Number(amount), reason: `Petty cash: ${reason}` }),
-      })
+      const response = await apiRequest(`/api/till/sessions/${till.id}/cash-movements`, { method: 'POST', body: JSON.stringify({ type: 'cash_out', amount: Number(amount), reason: `Petty cash: ${reason}` }) })
       if (!response?.success) throw new Error(response?.message || 'Unable to record petty cash')
       setModal(null)
       setMessage('Petty cash recorded.')
-    } catch (err) {
-      setError(err?.message || 'Unable to record petty cash')
-    }
+    } catch (err) { setError(err?.message || 'Unable to record petty cash') }
   }
+
+  const dispatchTillAction = (action, item = null) => {
+    if (action === 'till_session') return setModal('till')
+    if (action === 'customer') return setModal('customer')
+    if (action === 'hold') return holdSale()
+    if (action === 'resume') return openHeld()
+    if (action === 'discount') return setModal('discount')
+    if (action === 'void') { clearSale(); setMessage('Sale cleared.'); return }
+    if (action === 'misc') return setModal('misc')
+    if (action === 'petty') return setModal('petty')
+    if (action === 'print') return openPrint()
+    if (action === 'receipt_qr') return generateReceiptQr()
+    if (action === 'open_drawer') return openDrawer()
+    if (action === 'pay_cash') return completeSale('cash')
+    if (action === 'pay_card') return completeSale('card')
+    if (action === 'price_override' && item) { setPriceTarget(item); setModal('price_override') }
+  }
+
+  const headerButtons = buttons.filter((button) => button.placement === 'till_action_header')
+  const actionButtons = buttons.filter((button) => button.placement === 'till_action_bar')
+  const paymentButtons = buttons.filter((button) => button.placement === 'till_payment')
+  const lineButtons = buttons.filter((button) => button.placement === 'till_line_action')
+  const productView = settings?.till?.productView || 'image'
 
   return (
     <section className="till-theme-page">
       <div className="till-theme-window">
         <header className="till-theme-header">
-          <div>
-            <strong>{settings?.store?.name || 'Till'}</strong>
-            <span>{till ? `${till.terminal_name || 'Till'} · Open` : 'Till closed'}</span>
-          </div>
+          <div><strong>{settings?.store?.name || 'Till'}</strong><span>{till ? `${till.terminal_name || till.terminalNumber || 'Till'} · Open` : 'Till closed'}{offlineCount ? ` · ${offlineCount} pending sync` : ''}</span></div>
           <div className="till-theme-header-actions">
-            <button type="button" className="till-settings-button" onClick={onOpenSettings} title="Settings" aria-label="Settings"><Settings2 size={15} /></button>
-            <button type="button" onClick={() => setModal('till')}><BadgePoundSterling size={15} /> Till</button>
-            <button type="button" onClick={() => setModal('customer')}><UserRound size={15} /> {selectedCustomer?.name || 'Customer'}</button>
+            <button type="button" className="till-settings-button" onClick={onOpenSettings} title="Settings" aria-label="Settings"><Settings2 size={15}/></button>
+            {headerButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={dispatchTillAction}/>)}
           </div>
         </header>
 
         <div className="till-action-bar">
-          <button type="button" onClick={holdSale} disabled={busy}><Pause size={15} /> Hold</button>
-          <button type="button" onClick={openHeld}><FileText size={15} /> Resume</button>
-          <button type="button" onClick={() => setModal('customer')}><UserRound size={15} /> Customer</button>
-          <button type="button" onClick={() => setModal('discount')}><Tag size={15} /> Discount</button>
-          <button type="button" onClick={clearSale}><X size={15} /> Void</button>
-          <button type="button" onClick={() => setModal('misc')}><ShoppingBag size={15} /> Misc Item</button>
-          <button type="button" onClick={() => setModal('petty')}><HandCoins size={15} /> Petty Cash</button>
-          <button type="button" onClick={() => lastSale && window.print()} disabled={!lastSale}><Printer size={15} /> Print</button>
+          {actionButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={dispatchTillAction} disabled={busy || (button.config?.uiAction === 'print' && !lastSale)}/>)}
         </div>
 
         <div className="till-main-grid">
           <main className="till-catalogue">
             <div className="till-catalogue-tools">
-              <label><Search size={15} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products or scan barcode" autoFocus /></label>
-              <div className="till-categories">
-                {categories.map((name) => (
-                  <button key={name} type="button" className={category === name ? 'is-active' : ''} onClick={() => setCategory(name)}>{name}</button>
-                ))}
-              </div>
+              <label><Search size={15}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products or scan barcode" autoFocus/></label>
+              <div className="till-categories">{categories.map((name) => <button key={name} type="button" className={category === name ? 'is-active' : ''} onClick={() => setCategory(name)}>{name}</button>)}</div>
             </div>
 
+            {!online ? <div className="till-notice">Offline mode · cash only · sales are stored durably and synced later.</div> : null}
             {error ? <div className="till-notice is-error">{error}</div> : null}
             {message ? <div className="till-notice">{message}</div> : null}
 
-            <div className="till-product-grid">
+            <div className={`till-product-grid ${productView === 'compact' ? 'is-compact' : ''}`}>
               {loading ? <div className="till-empty">Loading catalogue…</div> : filtered.map((product) => (
                 <button key={product.id} type="button" className="till-product-card" onClick={() => addProduct(product)}>
-                  <div className="till-product-image">
-                    {product.imageUrl ? <img src={product.imageUrl} alt="" /> : <ShoppingBag size={24} />}
-                  </div>
-                  <strong>{product.name}</strong>
-                  <span>{money(product.price)}</span>
-                  {product.trackStock ? <small>{product.stock} in stock</small> : <small>Non-stock</small>}
+                  {productView !== 'compact' ? <div className="till-product-image">{product.imageUrl ? <img src={product.imageUrl} alt=""/> : <ShoppingBag size={24}/>}</div> : null}
+                  <strong>{product.name}</strong><span>{money(product.price, currency)}</span>{product.trackStock ? <small>{product.stock} in stock</small> : <small>Non-stock</small>}
                 </button>
               ))}
               {!loading && !filtered.length ? <div className="till-empty">No products found.</div> : null}
@@ -396,210 +463,107 @@ export default function TillPage({ onOpenSettings }) {
           </main>
 
           <aside className="till-cart">
-            <div className="till-cart-head">
-              <div><strong>Current Sale</strong><span>{selectedCustomer?.name || 'Walk-in Customer'}</span></div>
-              <ReceiptText size={18} />
-            </div>
-
+            <div className="till-cart-head"><div><strong>Current Sale</strong><span>{selectedCustomer?.name || 'Walk-in Customer'}</span></div><ReceiptText size={18}/></div>
             <div className="till-cart-lines">
-              {!basket.length && !miscLines.length ? (
-                <div className="till-cart-empty"><ShoppingBag size={32} /><strong>No items</strong><span>Select a product to begin</span></div>
-              ) : null}
+              {!basket.length && !miscLines.length ? <div className="till-cart-empty"><ShoppingBag size={32}/><strong>No items</strong><span>Select a product to begin</span></div> : null}
               {basket.map((item) => (
                 <div className="till-cart-line" key={item.id}>
-                  <div><strong>{item.name}</strong><small>{money(item.price)} each</small></div>
-                  <strong>{money(item.price * item.quantity)}</strong>
+                  <div><strong>{item.name}</strong><small>{money(item.price, currency)} each{item.priceOverride ? ' · price changed' : ''}</small></div>
+                  <strong>{money(item.price * item.quantity, currency)}</strong>
                   <div className="till-qty">
-                    <button type="button" onClick={() => changeQty(item.id, -1)}><Minus size={12} /></button>
-                    <span>{item.quantity}</span>
-                    <button type="button" onClick={() => changeQty(item.id, 1)}><Plus size={12} /></button>
-                    <button type="button" onClick={() => setBasket((rows) => rows.filter((row) => row.id !== item.id))}><X size={12} /></button>
+                    <button type="button" onClick={() => changeQty(item.id, -1)}><Minus size={12}/></button><span>{item.quantity}</span><button type="button" onClick={() => changeQty(item.id, 1)}><Plus size={12}/></button>
+                    {lineButtons.map((button) => <button key={button.id || button.button_key} type="button" title={button.label} onClick={() => dispatchTillAction(button.config?.uiAction, item)}><Pencil size={12}/></button>)}
+                    <button type="button" onClick={() => setBasket((rows) => rows.filter((row) => row.id !== item.id))}><X size={12}/></button>
                   </div>
                 </div>
               ))}
-              {miscLines.map((line, index) => (
-                <div className="till-cart-line" key={`misc-${index}`}>
-                  <div><strong>{line.description}</strong><small>Misc Item</small></div>
-                  <strong>{money(line.price * line.quantity)}</strong>
-                  <button type="button" className="till-remove-misc" onClick={() => setMiscLines((rows) => rows.filter((_, i) => i !== index))}><X size={12} /></button>
-                </div>
-              ))}
+              {miscLines.map((line, index) => <div className="till-cart-line" key={`misc-${index}`}><div><strong>{line.description}</strong><small>Misc Item</small></div><strong>{money(line.price * line.quantity, currency)}</strong><button type="button" className="till-remove-misc" onClick={() => setMiscLines((rows) => rows.filter((_, i) => i !== index))}><X size={12}/></button></div>)}
             </div>
 
             <div className="till-cart-summary">
-              <div><span>Subtotal</span><strong>{money(grossSubtotal)}</strong></div>
-              {discountAmount > 0 ? <div><span>Discount</span><strong>-{money(discountAmount)}</strong></div> : null}
-              <div><span>VAT</span><strong>{money(vat)}</strong></div>
-              <div className="is-total"><span>Total</span><strong>{money(total)}</strong></div>
-              <label className="till-cash-input"><Banknote size={15} /><input value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Cash received" /></label>
+              <div><span>Subtotal</span><strong>{money(grossSubtotal, currency)}</strong></div>
+              {discountAmount > 0 ? <div><span>Discount</span><strong>-{money(discountAmount, currency)}</strong></div> : null}
+              <div><span>VAT</span><strong>{money(vat, currency)}</strong></div>
+              <div className="is-total"><span>Total</span><strong>{money(total, currency)}</strong></div>
+              <label className="till-cash-input"><Banknote size={15}/><input value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Cash received"/></label>
               <div className="till-pay-grid">
-                <button type="button" className="till-pay-cash" disabled={busy || (!basket.length && !miscLines.length)} onClick={completeCashSale}><Banknote size={18} /> Cash</button>
-                <button type="button" className="till-pay-card" onClick={() => setMessage('Card terminal flow will use the existing One Connect runtime in the next Till migration pass.')}><CreditCard size={18} /> Card</button>
+                {paymentButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={dispatchTillAction} disabled={busy || (!basket.length && !miscLines.length) || (button.config?.uiAction === 'pay_card' && (!online || !paymentCapability))} className={button.config?.uiAction === 'pay_cash' ? 'till-pay-cash' : 'till-pay-card'}/>)}
               </div>
             </div>
           </aside>
         </div>
       </div>
 
-      {modal === 'discount' ? (
-        <Modal title="Discount" onClose={() => setModal(null)}>
-          <DiscountForm value={discount} subtotal={grossSubtotal} onApply={(next) => { setDiscount(next); setModal(null) }} />
-        </Modal>
-      ) : null}
-
-      {modal === 'misc' ? (
-        <Modal title="Misc Item" onClose={() => setModal(null)}>
-          <MiscForm vatEnabled={vatEnabled} onAdd={(line) => { setMiscLines((rows) => [...rows, line]); setModal(null) }} />
-        </Modal>
-      ) : null}
-
-      {modal === 'petty' ? (
-        <Modal title="Petty Cash" onClose={() => setModal(null)}>
-          <PettyForm onSubmit={recordPettyCash} />
-        </Modal>
-      ) : null}
-
-      {modal === 'customer' ? (
-        <Modal title="Select Customer" onClose={() => setModal(null)} wide>
-          <label className="till-modal-search"><Search size={15} /><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email" /></label>
-          <div className="till-customer-results">
-            <button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>
-            {customers.map((customer) => (
-              <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}>
-                <strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span>
-              </button>
-            ))}
-          </div>
-        </Modal>
-      ) : null}
-
-      {modal === 'held' ? (
-        <Modal title="Held Sales" onClose={() => setModal(null)} wide>
-          <div className="till-held-list">
-            {heldSales.map((sale) => (
-              <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}>
-                <strong>{sale.customer_name || 'Held Sale'}</strong>
-                <span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span>
-              </button>
-            ))}
-            {!heldSales.length ? <div className="till-empty">No held sales.</div> : null}
-          </div>
-        </Modal>
-      ) : null}
-
-      {modal === 'till' ? (
-        <Modal title="Till Session" onClose={() => setModal(null)} wide>
-          <TillSessionPanel till={till} onOpen={openTillSession} onChanged={loadTill} onMessage={setMessage} onError={setError} />
-        </Modal>
-      ) : null}
+      {modal === 'discount' ? <Modal title={meta.discount?.label || 'Discount'} onClose={() => setModal(null)}><DiscountForm value={discount} onApply={(next) => { setDiscount(next); setModal(null) }}/></Modal> : null}
+      {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settings?.tax?.defaultVatRate ?? 0)} onAdd={(line) => { setMiscLines((rows) => [...rows, line]); setModal(null) }}/></Modal> : null}
+      {modal === 'petty' ? <Modal title={meta.petty?.label || 'Petty Cash'} onClose={() => setModal(null)}><PettyForm onSubmit={recordPettyCash}/></Modal> : null}
+      {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
+      {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
+      {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError}/></Modal> : null}
+      {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const payment = pendingPayment; setAgeVerified(true); setPendingPayment(null); setModal(null); window.setTimeout(() => completeSale(payment), 0) }}>Age verified</button></div></Modal> : null}
+      {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={(price, reason) => { setBasket((rows) => rows.map((row) => row.id === priceTarget.id ? { ...row, price, priceOverride: price, priceOverrideReason: reason } : row)); setPriceTarget(null); setModal(null) }}/></Modal> : null}
+      {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { setReceiptQr(null); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}<p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p></div></Modal> : null}
+      {modal === 'print' ? <Modal title="Receipt" onClose={() => setModal(null)} wide><div className="till-print-preview"><pre>{JSON.stringify(receiptDetail || lastSale, null, 2)}</pre><button type="button" className="till-primary" onClick={() => window.print()}>Print</button></div></Modal> : null}
     </section>
   )
 }
 
-function DiscountForm({ value, subtotal, onApply }) {
+function DiscountForm({ value, onApply }) {
   const [type, setType] = useState(value.type || 'percent')
   const [amount, setAmount] = useState(value.value || '')
-  return (
-    <div className="till-form">
-      <label>Type<select value={type} onChange={(e) => setType(e.target.value)}><option value="percent">Percentage</option><option value="fixed">Fixed amount</option></select></label>
-      <label>Value<input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} min="0" step="0.01" /></label>
-      <button type="button" className="till-primary" onClick={() => {
-        const n = Math.max(0, Number(amount || 0))
-        onApply({ type, value: type === 'percent' ? Math.min(100, n) : Math.min(subtotal, n) })
-      }}>Apply Discount</button>
-    </div>
-  )
+  return <div className="till-form"><label>Type<select value={type} onChange={(e) => setType(e.target.value)}><option value="percent">Percentage</option><option value="fixed">Fixed amount</option></select></label><label>Value<input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} min="0" step="0.01"/></label><button type="button" className="till-primary" onClick={() => onApply({ type, value: Math.max(0, Number(amount || 0)) })}>Apply Discount</button></div>
 }
 
-function MiscForm({ vatEnabled, onAdd }) {
+function MiscForm({ vatEnabled, defaultVatRate, onAdd }) {
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('')
   const [quantity, setQuantity] = useState(1)
-  const [vatRate, setVatRate] = useState(20)
-  return (
-    <div className="till-form">
-      <label>Description<input value={description} onChange={(e) => setDescription(e.target.value)} /></label>
-      <label>Price<input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} /></label>
-      <label>Quantity<input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></label>
-      <label>VAT<select disabled={!vatEnabled} value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))}><option value="20">20%</option><option value="5">5%</option><option value="0">0%</option></select></label>
-      <button type="button" className="till-primary" onClick={() => {
-        if (!description.trim() || Number(price) <= 0 || Number(quantity) <= 0) return
-        onAdd({ description: description.trim(), price: Number(price), quantity: Number(quantity), vatRate: Number(vatRate) / 100 })
-      }}>Add to Sale</button>
-    </div>
-  )
+  const [vatRate, setVatRate] = useState(defaultVatRate)
+  return <div className="till-form"><label>Description<input value={description} onChange={(e) => setDescription(e.target.value)}/></label><label>Price<input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)}/></label><label>Quantity<input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)}/></label><label>VAT rate<input type="number" step="0.01" disabled={!vatEnabled} value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))}/></label><button type="button" className="till-primary" onClick={() => { if (!description.trim() || Number(price) <= 0 || Number(quantity) <= 0) return; onAdd({ description: description.trim(), price: Number(price), quantity: Number(quantity), vatRate: Number(vatRate) / 100 }) }}>Add to Sale</button></div>
 }
 
 function PettyForm({ onSubmit }) {
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
-  return (
-    <div className="till-form">
-      <label>Amount<input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
-      <label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
-      <button type="button" className="till-primary" onClick={() => Number(amount) > 0 && reason.trim() && onSubmit(amount, reason.trim())}>Record Pay Out</button>
-    </div>
-  )
+  return <div className="till-form"><label>Amount<input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)}/></label><label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)}/></label><button type="button" className="till-primary" onClick={() => Number(amount) > 0 && reason.trim() && onSubmit(amount, reason.trim())}>Record Pay Out</button></div>
 }
 
-function TillSessionPanel({ till, onOpen, onChanged, onMessage, onError }) {
+function PriceOverrideForm({ item, onApply }) {
+  const [price, setPrice] = useState(item.price)
+  const [reason, setReason] = useState('')
+  return <div className="till-form"><label>New price<input type="number" min="0.01" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)}/></label><label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)}/></label><button type="button" className="till-primary" onClick={() => Number(price) > 0 && onApply(Number(price), reason.trim())}>Apply Price</button></div>
+}
+
+function TillSessionPanel({ till, buttons, currency, onChanged, onMessage, onError }) {
   const [openingCash, setOpeningCash] = useState('')
   const [countedCash, setCountedCash] = useState('')
   const [cashAmount, setCashAmount] = useState('')
   const [reason, setReason] = useState('')
+  const meta = buttonMap(buttons)
 
+  const open = async () => {
+    try {
+      const response = await apiRequest('/api/till/sessions', { method: 'POST', body: JSON.stringify({ openingCash: Number(openingCash || 0) }) })
+      if (!response?.success) throw new Error(response?.message || 'Unable to open till')
+      await onChanged?.(); onMessage?.('Till opened.')
+    } catch (err) { onError?.(err?.message || 'Unable to open till') }
+  }
   const movement = async (type) => {
     if (!till?.id || Number(cashAmount) <= 0) return
     try {
-      await apiRequest(`/api/till/sessions/${till.id}/cash-movements`, {
-        method: 'POST',
-        body: JSON.stringify({ type, amount: Number(cashAmount), reason: reason || null }),
-      })
-      setCashAmount('')
-      setReason('')
-      await onChanged?.()
-      onMessage?.('Cash movement recorded.')
-    } catch (err) {
-      onError?.(err?.message || 'Unable to record cash movement')
-    }
+      await apiRequest(`/api/till/sessions/${till.id}/cash-movements`, { method: 'POST', body: JSON.stringify({ type, amount: Number(cashAmount), reason: reason || null }) })
+      setCashAmount(''); setReason(''); await onChanged?.(); onMessage?.('Cash movement recorded.')
+    } catch (err) { onError?.(err?.message || 'Unable to record cash movement') }
   }
-
   const close = async () => {
     try {
-      const response = await apiRequest(`/api/till/sessions/${till.id}/close`, {
-        method: 'POST',
-        body: JSON.stringify({ countedCash: Number(countedCash || 0) }),
-      })
+      const response = await apiRequest(`/api/till/sessions/${till.id}/close`, { method: 'POST', body: JSON.stringify({ countedCash: Number(countedCash || 0) }) })
       if (!response?.success) throw new Error(response?.message || 'Unable to close till')
-      await onChanged?.()
-      onMessage?.('Till closed.')
-    } catch (err) {
-      onError?.(err?.message || 'Unable to close till')
-    }
+      await onChanged?.(); onMessage?.('Till closed.')
+    } catch (err) { onError?.(err?.message || 'Unable to close till') }
   }
 
-  if (!till) {
-    return <div className="till-form"><label>Opening cash<input type="number" step="0.01" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)} /></label><button type="button" className="till-primary" onClick={() => onOpen(openingCash)}>Open Till</button></div>
-  }
+  if (!till) return <div className="till-form"><label>Opening cash<input type="number" step="0.01" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)}/></label>{meta.open_till ? <MetaButton button={meta.open_till} onAction={open}/> : null}</div>
 
-  return (
-    <div className="till-session-panel">
-      <div className="till-session-stats">
-        <div><span>Opening cash</span><strong>{money(till.opening_cash)}</strong></div>
-        <div><span>Cash sales</span><strong>{money(till.cash_sales)}</strong></div>
-        <div><span>Cash in</span><strong>{money(till.cash_in_total)}</strong></div>
-        <div><span>Cash out</span><strong>{money(till.cash_out_total)}</strong></div>
-      </div>
-      <div className="till-form is-row">
-        <label>Amount<input type="number" step="0.01" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} /></label>
-        <label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
-        <button type="button" onClick={() => movement('cash_in')}>Cash In</button>
-        <button type="button" onClick={() => movement('cash_out')}>Cash Out</button>
-      </div>
-      <div className="till-form is-row">
-        <label>Counted cash<input type="number" step="0.01" value={countedCash} onChange={(e) => setCountedCash(e.target.value)} /></label>
-        <button type="button" className="till-danger" onClick={close}>Close Till</button>
-      </div>
-    </div>
-  )
+  return <div className="till-session-panel"><div className="till-session-stats"><div><span>Opening cash</span><strong>{money(till.opening_cash ?? till.openingCash, currency)}</strong></div><div><span>Cash sales</span><strong>{money(till.cash_sales ?? till.cashSalesTotal, currency)}</strong></div><div><span>Cash in</span><strong>{money(till.cash_in_total ?? till.cashInTotal, currency)}</strong></div><div><span>Cash out</span><strong>{money(till.cash_out_total ?? till.cashOutTotal, currency)}</strong></div></div><div className="till-form is-row"><label>Amount<input type="number" step="0.01" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)}/></label><label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)}/></label>{meta.cash_in ? <MetaButton button={meta.cash_in} onAction={() => movement('cash_in')}/> : null}{meta.cash_out ? <MetaButton button={meta.cash_out} onAction={() => movement('cash_out')}/> : null}</div><div className="till-form is-row"><label>Counted cash<input type="number" step="0.01" value={countedCash} onChange={(e) => setCountedCash(e.target.value)}/></label>{meta.close_till ? <MetaButton button={meta.close_till} onAction={close}/> : null}</div></div>
 }
