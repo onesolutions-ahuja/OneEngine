@@ -5,13 +5,14 @@ import { loadPlatformObjects } from '../../services/settings'
 
 const TABS = [
   ['details', 'Details'],
-  ['fields', 'Fields'],
+  ['fields', 'Fields & Relationships'],
   ['formula', 'Formula Fields'],
   ['relationships', 'Relationships'],
   ['record-types', 'Record Types'],
-  ['layouts', 'Layouts'],
-  ['validation', 'Validation'],
-  ['triggers', 'Triggers'],
+  ['layouts', 'Forms / Layouts'],
+  ['validation', 'Validation Rules'],
+  ['actions', 'Actions'],
+  ['automation', 'Automation / Flows'],
   ['buttons', 'Buttons'],
   ['permissions', 'Permissions'],
 ]
@@ -31,6 +32,26 @@ function fieldName(field) {
 function isFormulaField(field) {
   const type = String(field?.field_type || field?.type || '').toLowerCase()
   return type === 'formula' || type === 'rollup' || Boolean(field?.formula || field?.config?.formula || field?.formula_expression)
+}
+
+function isRelationshipField(field) {
+  const type = String(field?.field_type || field?.type || '').toLowerCase()
+  return type === 'lookup'
+    || type === 'master_detail'
+    || Boolean(field?.relationship_id || field?.lookup_object_id || field?.config?.relationship || field?.config?.lookupObjectKey)
+}
+
+function ruleActionType(rule) {
+  return String(typeof rule?.action === 'string' ? rule.action : rule?.action?.type || '').trim()
+}
+
+function isValidationRule(rule) {
+  const type = ruleActionType(rule).toLowerCase()
+  return type === 'validation' || type === 'validate'
+}
+
+function isWorkflowRule(rule) {
+  return ruleActionType(rule).toLowerCase() === 'workflow'
 }
 
 export default function ObjectsSettingsPane() {
@@ -92,7 +113,7 @@ export default function ObjectsSettingsPane() {
     if (!selectedId) return
     let live = true
     setObjectLoading(true)
-    Promise.all([
+    Promise.allSettled([
       apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/fields`),
       apiRequest('/api/platform/relationships'),
       apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/record-types`),
@@ -101,12 +122,24 @@ export default function ObjectsSettingsPane() {
       apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/buttons`),
       apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/effective-permissions`),
     ])
-      .then(([fieldsRes, relationshipsRes, recordTypesRes, layoutsRes, rulesRes, buttonsRes, permissionsRes]) => {
+      .then(([fieldsResult, relationshipsResult, recordTypesResult, layoutsResult, rulesResult, buttonsResult, permissionsResult]) => {
         if (!live) return
+
+        const value = (result) => result?.status === 'fulfilled' ? result.value : null
+        const fieldsRes = value(fieldsResult)
+        const relationshipsRes = value(relationshipsResult)
+        const recordTypesRes = value(recordTypesResult)
+        const layoutsRes = value(layoutsResult)
+        const rulesRes = value(rulesResult)
+        const buttonsRes = value(buttonsResult)
+        const permissionsRes = value(permissionsResult)
+
         setFields(Array.isArray(fieldsRes?.data) ? fieldsRes.data : [])
+
         const relationships = Array.isArray(relationshipsRes?.data) ? relationshipsRes.data : []
         const layouts = Array.isArray(layoutsRes?.data) ? layoutsRes.data : []
         const rules = Array.isArray(rulesRes?.data) ? rulesRes.data : []
+
         setObjectData({
           relationships: relationships.filter((row) =>
             String(row.parent_object_id) === String(selectedId) ||
@@ -118,11 +151,6 @@ export default function ObjectsSettingsPane() {
           permissions: permissionsRes?.data || null,
         })
       })
-      .catch(() => {
-        if (!live) return
-        setFields([])
-        setObjectData({ relationships: [], recordTypes: [], layouts: [], rules: [], buttons: [], permissions: null })
-      })
       .finally(() => {
         if (live) setObjectLoading(false)
       })
@@ -131,6 +159,10 @@ export default function ObjectsSettingsPane() {
 
   const normalFields = fields.filter((field) => !isFormulaField(field))
   const formulaFields = fields.filter(isFormulaField)
+  const relationshipFields = fields.filter(isRelationshipField)
+  const validationRules = objectData.rules.filter(isValidationRule)
+  const automationRules = objectData.rules.filter(isWorkflowRule)
+  const actionRules = objectData.rules.filter((rule) => !isValidationRule(rule) && !isWorkflowRule(rule))
 
   return (
     <div className="objects-settings-shell">
@@ -218,32 +250,55 @@ export default function ObjectsSettingsPane() {
                   </div>
                 ) : null}
 
-                {activeTab === 'fields' || activeTab === 'formula' ? (
+                {activeTab === 'fields' ? (
                   <div className="objects-config-list">
                     <div className="objects-config-list-head">
-                      <strong>{activeTab === 'fields' ? 'Fields' : 'Formula Fields'}</strong>
-                      <button type="button"><Plus size={13} /> New</button>
+                      <strong>Fields & Relationships</strong>
+                      <button type="button"><Plus size={13} /> New Field</button>
                     </div>
                     {objectLoading ? (
                       <div className="objects-detail-placeholder">Loading fields…</div>
-                    ) : (activeTab === 'fields' ? normalFields : formulaFields).length ? (
+                    ) : normalFields.length ? (
                       <div className="objects-config-rows">
-                        {(activeTab === 'fields' ? normalFields : formulaFields).map((field) => (
+                        {normalFields.map((field) => (
                           <div key={field.id || field.field_id || field.api_name}>
                             <span>
                               <strong>{fieldName(field)}</strong>
                               <small>{field.api_name || field.field_key || '—'}</small>
                             </span>
-                            <span>{field.field_type || field.type || 'text'}</span>
+                            <span>{isRelationshipField(field) ? `Related · ${field.field_type || field.type || 'lookup'}` : (field.field_type || field.type || 'text')}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="objects-detail-placeholder">
-                        No {activeTab === 'fields' ? 'fields' : 'formula fields'} configured.
-                      </div>
+                      <div className="objects-detail-placeholder">No fields configured.</div>
                     )}
+                    <div className="objects-config-subsection">
+                      <div className="objects-config-list-head"><strong>Related / Lookup Fields</strong></div>
+                      {relationshipFields.length ? (
+                        <div className="objects-config-rows">
+                          {relationshipFields.map((field) => (
+                            <div key={`related-${field.id || field.field_id || field.api_name}`}>
+                              <span>
+                                <strong>{fieldName(field)}</strong>
+                                <small>{field.api_name || field.field_key || '—'}</small>
+                              </span>
+                              <span>{field.lookup_object_key || field.config?.lookupObjectKey || field.field_type || 'lookup'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="objects-detail-placeholder">No related fields configured.</div>
+                      )}
+                    </div>
                   </div>
+                ) : null}
+
+                {activeTab === 'formula' ? (
+                  <ObjectDataList title="Formula Fields" rows={formulaFields}
+                    primary={(field) => fieldName(field)}
+                    secondary={(field) => field.api_name || field.field_key || '—'}
+                    meta={(field) => field.field_type || field.type || 'formula'} />
                 ) : null}
 
                 {activeTab === 'relationships' ? (
@@ -268,20 +323,27 @@ export default function ObjectsSettingsPane() {
                 ) : null}
 
                 {activeTab === 'validation' ? (
-                  <ObjectDataList title="Validation Rules" rows={objectData.rules.filter((row) => {
-                    const type = typeof row.action === 'string' ? row.action : row.action?.type
-                    return type === 'validation' || type === 'validate'
-                  })}
+                  <ObjectDataList title="Validation Rules" rows={validationRules}
                     primary={(row) => row.name || row.rule_key || 'Validation Rule'}
                     secondary={(row) => row.description || row.trigger_key || row.trigger || ''}
                     meta={(row) => row.active === false ? 'Inactive' : 'Active'} />
                 ) : null}
 
-                {activeTab === 'triggers' ? (
-                  <ObjectDataList title="Triggers / Automation" rows={objectData.rules}
-                    primary={(row) => row.name || row.rule_key || 'Rule'}
+                {activeTab === 'actions' ? (
+                  <ObjectDataList title="Actions" rows={actionRules}
+                    primary={(row) => row.name || row.rule_key || 'Action'}
                     secondary={(row) => row.trigger_key || row.trigger || ''}
-                    meta={(row) => typeof row.action === 'string' ? row.action : row.action?.type || 'rule'} />
+                    meta={(row) => ruleActionType(row) || 'action'} />
+                ) : null}
+
+                {activeTab === 'automation' ? (
+                  <ObjectDataList title="Automation / Flows" rows={automationRules}
+                    primary={(row) => row.name || row.rule_key || 'Flow'}
+                    secondary={(row) => row.trigger_key || row.trigger || ''}
+                    meta={(row) => {
+                      const steps = Array.isArray(row.action?.actions) ? row.action.actions.length : 0
+                      return `${row.active === false ? 'Inactive' : 'Active'} · ${steps} step${steps === 1 ? '' : 's'}`
+                    }} />
                 ) : null}
 
                 {activeTab === 'buttons' ? (
