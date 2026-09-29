@@ -13,6 +13,17 @@ function fieldType(field){
   if(raw==='formula')return String(field?.config?.resultType||'text').toLowerCase()
   return raw
 }
+function isAuditField(field){
+  const key=String(fieldKey(field)||'').toLowerCase()
+  const source=String(sourceKey(field)||'').toLowerCase()
+  return ['created_at','updated_at','createdat','updatedat','created','updated'].includes(key)
+    || ['created_at','updated_at','createdat','updatedat','created','updated'].includes(source)
+}
+function isFieldDisabled(field){
+  return field?.writable===false
+    || String(field?.field_type||'').toLowerCase()==='formula'
+    || isAuditField(field)
+}
 function configOf(field){
   if(field?.config&&typeof field.config==='object')return field.config
   try{return JSON.parse(field?.config||'{}')}catch{return {}}
@@ -34,16 +45,17 @@ function optionLabel(option){
 }
 
 function MetadataField({field,value,onChange}){
-  const type=fieldType(field)
+  const rawType=fieldType(field)
   const key=fieldKey(field)
   const label=field?.label||field?.name||key
-  const disabled=field?.writable===false||String(field?.field_type||'').toLowerCase()==='formula'
+  const disabled=isFieldDisabled(field)
   const config=configOf(field)
+  const related=config.relatedObjectKey||config.related_object_key
+  const type=related&&rawType!=='formula'?'lookup':rawType
   const [lookups,setLookups]=useState([])
   const [lookupError,setLookupError]=useState('')
 
   useEffect(()=>{
-    const related=config.relatedObjectKey||config.related_object_key
     if(type!=='lookup'||!related||disabled)return
     let live=true
     apiRequest(`/api/platform/objects/${encodeURIComponent(related)}/records?limit=100`)
@@ -60,17 +72,17 @@ function MetadataField({field,value,onChange}){
   if(type==='boolean'){
     control=<button type="button" className={`mac-switch ${value===true?'is-on':''}`} disabled={disabled} onClick={()=>onChange(value!==true)}><span/></button>
   }else if(type==='long_text'){
-    control=<textarea rows={3} value={value??''} disabled={disabled} onChange={e=>onChange(e.target.value)}/>
+    control=<textarea rows={3} value={value??''} disabled={disabled} required={field?.required===true} onChange={e=>onChange(e.target.value)}/>
   }else if(type==='picklist'||type==='select'){
-    control=<select value={value??''} disabled={disabled} onChange={e=>onChange(e.target.value)}><option value="">Select {label}</option>{optionsOf(field).map(o=><option key={String(optionValue(o))} value={String(optionValue(o))}>{String(optionLabel(o))}</option>)}</select>
+    control=<select value={value??''} disabled={disabled} required={field?.required===true} onChange={e=>onChange(e.target.value)}><option value="">Select {label}</option>{optionsOf(field).map(o=><option key={String(optionValue(o))} value={String(optionValue(o))}>{String(optionLabel(o))}</option>)}</select>
   }else if(type==='multiselect'){
     const selected=Array.isArray(value)?value.map(String):[]
-    control=<select multiple value={selected} disabled={disabled} onChange={e=>onChange(Array.from(e.target.selectedOptions,o=>o.value))}>{optionsOf(field).map(o=><option key={String(optionValue(o))} value={String(optionValue(o))}>{String(optionLabel(o))}</option>)}</select>
+    control=<select multiple value={selected} disabled={disabled} required={field?.required===true} onChange={e=>onChange(Array.from(e.target.selectedOptions,o=>o.value))}>{optionsOf(field).map(o=><option key={String(optionValue(o))} value={String(optionValue(o))}>{String(optionLabel(o))}</option>)}</select>
   }else if(type==='lookup'&&lookups.length){
-    control=<select value={typeof value==='object'?(value?.id||''):(value??'')} disabled={disabled} onChange={e=>onChange(e.target.value)}><option value="">Select {label}</option>{lookups.map(row=>{const id=row?.id??row?.record_id;const text=row?.label??row?.name??row?.full_name??row?.username??row?.display_name??row?.title??id;return <option key={String(id)} value={String(id)}>{String(text)}</option>})}</select>
+    control=<select value={typeof value==='object'?(value?.id||''):(value??'')} disabled={disabled} required={field?.required===true} onChange={e=>onChange(e.target.value)}><option value="">Select {label}</option>{lookups.map(row=>{const id=row?.id??row?.record_id;const text=row?.label??row?.name??row?.full_name??row?.username??row?.display_name??row?.title??id;return <option key={String(id)} value={String(id)}>{String(text)}</option>})}</select>
   }else{
     const htmlType=['email','date','datetime-local','url','tel'].includes(type)?type:type==='datetime'?'datetime-local':type==='phone'?'tel':['number','decimal','currency'].includes(type)?'number':'text'
-    control=<input type={htmlType} step={['decimal','currency'].includes(type)?'any':undefined} value={typeof value==='object'?'':(value??'')} disabled={disabled} onChange={e=>onChange(['number','decimal','currency'].includes(type)&&e.target.value!==''?Number(e.target.value):e.target.value)}/>
+    control=<input type={htmlType} step={['decimal','currency'].includes(type)?'any':undefined} value={typeof value==='object'?'':(value??'')} disabled={disabled} required={field?.required===true} onChange={e=>onChange(['number','decimal','currency'].includes(type)&&e.target.value!==''?Number(e.target.value):e.target.value)}/>
   }
 
   return <label className={`metadata-form-field ${type==='boolean'?'is-toggle':''}`}>
@@ -109,7 +121,7 @@ export default function MetadataRecordFormModal({objectKey,record=null,mode='edi
     return()=>{live=false}
   },[objectKey,mode,recordId])
 
-  const editable=useMemo(()=>fields.filter(f=>f?.writable!==false&&String(f?.field_type||'').toLowerCase()!=='formula'),[fields])
+  const editable=useMemo(()=>fields.filter(f=>!isFieldDisabled(f)),[fields])
   const submit=async e=>{
     e.preventDefault()
     for(const field of editable){
