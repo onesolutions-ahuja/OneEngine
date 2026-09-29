@@ -1117,16 +1117,22 @@ function SettingsPage() {
                     </button>
                   </div>
                   <div className="settings-row">
-                    <strong>Default VAT rate</strong>
-                    <select
-                      value={String(settings.tax?.defaultVatRate ?? 20)}
+                    <div><strong>Default VAT rate</strong><p>Any rate from 0% to 100%.</p></div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      defaultValue={Number(settings.tax?.defaultVatRate ?? 20)}
                       disabled={!canManage || saving === 'defaultVatRate'}
-                      onChange={(event) => update('defaultVatRate', Number(event.target.value))}
-                    >
-                      <option value="0">0%</option>
-                      <option value="5">5%</option>
-                      <option value="20">20%</option>
-                    </select>
+                      onBlur={(event) => {
+                        const next = Number(event.target.value)
+                        if (Number.isFinite(next) && next >= 0 && next <= 100 && next !== Number(settings.tax?.defaultVatRate ?? 20)) {
+                          update('defaultVatRate', next)
+                        }
+                      }}
+                      aria-label="Default VAT rate"
+                    />
                   </div>
                 </>
               ) : current?.key === 'customer-loyalty' ? (
