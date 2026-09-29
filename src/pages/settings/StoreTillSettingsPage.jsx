@@ -191,7 +191,7 @@ export default function StoreTillSettingsPage({settings,onSettingsChanged}){
 
     <section className="settings-feature-card">
       <header><div><Monitor size={16}/><span><strong>Customer Display</strong><small>Second-screen bill mirror; Till remains source of truth.</small></span></div><button type="button" className={`mac-switch ${customerDisplay?'is-on':''}`} disabled={Boolean(busy)} onClick={()=>saveCustomerDisplay(!customerDisplay)}><span/></button></header>
-      {customerDisplay?<footer><button onClick={()=>window.open('/customer-display','onepos-customer-display-window','popup=yes,width=720,height=1080')}>Open Customer Display</button></footer>:null}
+      {customerDisplay?<footer><button onClick={()=>window.open(`${import.meta.env.BASE_URL || '/'}customer-display`,'onepos-customer-display-window','popup=yes,width=720,height=1080')}>Open Customer Display</button></footer>:null}
     </section>
 
     <section className="settings-feature-card">
