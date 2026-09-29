@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
-  Plus, Search, Table2, TextCursorInput, UserCheck, Workflow,
+  Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 
@@ -32,6 +32,20 @@ function normalizeRegistry(input) {
     label: row.displayName || row.display_name || row.label || row.title || row.name || row.key,
     category: row.category || row.kind || 'Component',
   })).filter((row) => row.key)
+}
+
+function responseRows(response) {
+  const data = response?.data
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.rows)) return data.rows
+  if (Array.isArray(data?.items)) return data.items
+  if (Array.isArray(data?.definitions)) return data.definitions
+  return []
+}
+
+function isWorkflowRule(rule) {
+  const action = rule?.action || {}
+  return String(action?.type || '').toLowerCase() === 'workflow' || Array.isArray(action?.actions)
 }
 
 function builderSupports(component, builder) {
@@ -145,6 +159,7 @@ export default function OneBuilder() {
     report: { label: '', description: '', objectId: '', reportKey: '' },
   })
   const [loading, setLoading] = useState(true)
+  const [listLoading, setListLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -172,14 +187,38 @@ export default function OneBuilder() {
       setRoles(Array.isArray(roleRes?.data) ? roleRes.data : [])
       setSaved((current) => ({
         ...current,
-        workflow: (Array.isArray(ruleRes?.data) ? ruleRes.data : []).filter((rule) => rule?.action?.type === 'workflow'),
-        approval: Array.isArray(approvalRes?.data) ? approvalRes.data : [],
-        dashboard: Array.isArray(dashboardRes?.data) ? dashboardRes.data : [],
+        workflow: responseRows(ruleRes).filter(isWorkflowRule),
+        approval: responseRows(approvalRes),
+        dashboard: responseRows(dashboardRes),
       }))
     } catch (err) {
       setError(err?.message || 'Unable to load Builder metadata')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadSavedDefinitions = async (builderType = tab) => {
+    setListLoading(true)
+    setError('')
+    try {
+      if (builderType === 'workflow') {
+        const response = await apiRequest('/api/platform/rules')
+        setSaved((current) => ({ ...current, workflow: responseRows(response).filter(isWorkflowRule) }))
+      } else if (builderType === 'approval') {
+        const response = await apiRequest('/api/platform/approval-processes')
+        setSaved((current) => ({ ...current, approval: responseRows(response) }))
+      } else if (builderType === 'dashboard') {
+        const response = await apiRequest('/api/dashboards')
+        setSaved((current) => ({ ...current, dashboard: responseRows(response) }))
+      } else if (builderType === 'report' && selectedObject?.id) {
+        const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/reports`)
+        setSaved((current) => ({ ...current, report: responseRows(response) }))
+      }
+    } catch (err) {
+      setError(err?.message || `Unable to load existing ${builderType} definitions`)
+    } finally {
+      setListLoading(false)
     }
   }
 
@@ -378,6 +417,7 @@ export default function OneBuilder() {
         if (response?.data?.id) setSelectedSavedId(response.data.id)
       }
       await loadBase()
+      await loadSavedDefinitions(tab)
       if (tab === 'report' && selectedObject) {
         const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/reports`)
         setSaved((current) => ({ ...current, report: Array.isArray(response?.data) ? response.data : [] }))
@@ -415,6 +455,7 @@ export default function OneBuilder() {
             className={`onebuilder-tab ${tab === key ? 'is-active' : ''}`}
             onClick={() => {
               setTab(key)
+              void loadSavedDefinitions(key)
               setMode('list')
               setSideTab('components')
               setPaletteSearch('')
@@ -439,14 +480,19 @@ export default function OneBuilder() {
               <strong>{activeTab?.label}</strong>
               <span>{listRows.length} existing</span>
             </div>
-            <button type="button" className="onebuilder-list-add" onClick={newDefinition} title={`New ${activeTab?.label}`} aria-label={`New ${activeTab?.label}`}>
-              <Plus size={15}/>
-            </button>
+            <div className="onebuilder-list-actions">
+              <button type="button" className="onebuilder-list-add" onClick={() => void loadSavedDefinitions(tab)} title={`Refresh ${activeTab?.label}`} aria-label={`Refresh ${activeTab?.label}`} disabled={listLoading}>
+                <RefreshCw size={14} className={listLoading ? 'is-spinning' : ''}/>
+              </button>
+              <button type="button" className="onebuilder-list-add" onClick={newDefinition} title={`New ${activeTab?.label}`} aria-label={`New ${activeTab?.label}`}>
+                <Plus size={15}/>
+              </button>
+            </div>
           </header>
 
           <div className="onebuilder-list-body">
-            {loading ? <div className="onebuilder-list-empty">Loading…</div> : null}
-            {!loading && listRows.length ? listRows.map((item) => (
+            {(loading || listLoading) ? <div className="onebuilder-list-empty">Loading existing definitions…</div> : null}
+            {!loading && !listLoading && listRows.length ? listRows.map((item) => (
               <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
                 <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
                 <span className="onebuilder-list-row-copy">
@@ -457,7 +503,7 @@ export default function OneBuilder() {
                 <span className="onebuilder-list-row-chevron">›</span>
               </button>
             )) : null}
-            {!loading && !listRows.length ? (
+            {!loading && !listLoading && !listRows.length ? (
               <div className="onebuilder-list-empty">
                 <ActiveTabIcon size={28}/>
                 <strong>No {activeTab?.label?.toLowerCase()} configured</strong>
