@@ -13,6 +13,8 @@ import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import ObjectReportsAdmin from './Platform/ObjectReportsAdmin.jsx'
 import PermissionSetsAdmin from './Platform/PermissionSetsAdmin.jsx'
 import AccessControlAdmin from './Platform/AccessControlAdmin.jsx'
+import AssignmentRuleEditor from './Platform/AssignmentRuleEditor.jsx'
+import SharingRuleEditor from './Platform/SharingRuleEditor.jsx'
 
 const TABS = [
   ['details', 'Details'],
@@ -518,6 +520,24 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     onClose={closeEditor}
                     onSaved={async () => { await refreshConfiguration(); closeEditor() }}
                   />
+                ) : editor?.kind === 'assignment' ? (
+                  <AssignmentRuleEditor
+                    object={{ ...selected, id: selectedId }}
+                    fields={fields}
+                    rule={editor.item || null}
+                    onError={(value) => setError(value || '')}
+                    onCancel={closeEditor}
+                    onSaved={async () => { await refreshConfiguration(); closeEditor() }}
+                  />
+                ) : editor?.kind === 'sharing' ? (
+                  <SharingRuleEditor
+                    object={{ ...selected, id: selectedId }}
+                    fields={fields}
+                    rule={editor.item || null}
+                    onError={(value) => setError(value || '')}
+                    onCancel={closeEditor}
+                    onSaved={async () => { await refreshConfiguration(); closeEditor() }}
+                  />
                 ) : activeTab === 'details' ? (
                   <div className="objects-detail-card">
                     <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
@@ -661,13 +681,13 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                 ) : null}
 
                 {activeTab === 'assignment' ? (
-                  <div className="objects-config-list">
-                    <ObjectDataList title="Assignment Rules" rows={objectData.assignmentRules}
-                      primary={(row) => row.name || row.rule_key || 'Assignment Rule'}
-                      secondary={(row) => row.rule_key || row.assignment_field || ''}
-                      meta={(row) => `${row.target_type || 'Target'} · priority ${row.priority ?? 0}`} />
-                    <div className="objects-detail-placeholder">The legacy Platform frontend did not include a separate Assignment Rule authoring screen. Existing assignment metadata remains visible here without inventing a second editor.</div>
-                  </div>
+                  <ObjectDataList title="Assignment Rules" rows={objectData.assignmentRules}
+                    primary={(row) => row.name || row.rule_key || 'Assignment Rule'}
+                    secondary={(row) => row.rule_key || row.assignment_field || ''}
+                    meta={(row) => `${row.target_type || 'Target'} · priority ${row.priority ?? 0}${row.active === false ? ' · Inactive' : ''}`}
+                    actionLabel="Assignment Rule"
+                    onAdd={() => setEditor({ kind: 'assignment', item: null })}
+                    onRowClick={(row) => setEditor({ kind: 'assignment', item: row })} />
                 ) : null}
 
                 {activeTab === 'reports' ? (
@@ -679,7 +699,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                 ) : null}
 
                 {activeTab === 'sharing' ? (
-                  <div className="objects-config-list">
+                  <div className="objects-config-list objects-config-list--stacked">
                     <div className="objects-config-list-head"><strong>Sharing</strong></div>
                     <div className="objects-detail-card">
                       <div><span>Default access</span><strong>{objectData.sharingSettings?.default_access || 'Not configured'}</strong></div>
@@ -687,9 +707,11 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     </div>
                     <ObjectDataList title="Sharing Rules" rows={objectData.sharingRules}
                       primary={(row) => row.name || row.rule_key || 'Sharing Rule'}
-                      secondary={(row) => row.description || row.rule_key || ''}
-                      meta={(row) => row.access_level || (row.active === false ? 'Inactive' : 'Active')} />
-                    <div className="objects-detail-placeholder">The legacy Platform frontend exposed sharing configuration as metadata/effective access only; it did not include a separate sharing-rule authoring screen. Public Groups and Queues are managed under Permissions → Public Groups & Queues.</div>
+                      secondary={(row) => row.rule_type === 'owner' ? `Owner based · ${row.rule_key || ''}` : `Criteria based · ${row.rule_key || ''}`}
+                      meta={(row) => `${row.access_level || 'READ'}${row.active === false ? ' · Inactive' : ''}`}
+                      actionLabel="Sharing Rule"
+                      onAdd={() => setEditor({ kind: 'sharing', item: null })}
+                      onRowClick={(row) => setEditor({ kind: 'sharing', item: row })} />
                   </div>
                 ) : null}
 
