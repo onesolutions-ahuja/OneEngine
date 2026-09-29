@@ -110,9 +110,12 @@ function GenericProperties({ item, fields = [], actionRegistry = [], roles = [],
   }
 
   if (item.builderType === 'report') {
-    if (item.key === 'field') return <div className="onebuilder-properties-form"><label>Field<select value={item.config?.field || ''} onChange={(e) => patchConfig({ field: e.target.value })}><option value="">Select field</option>{fields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label}</option>)}</select></label></div>
-    if (item.key === 'group') return <div className="onebuilder-properties-form"><label>Group by<select value={item.config?.field || ''} onChange={(e) => patchConfig({ field: e.target.value })}><option value="">Select field</option>{fields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label}</option>)}</select></label></div>
-    if (item.key === 'filter') return <div className="onebuilder-properties-form"><label>Field<select value={item.config?.field || ''} onChange={(e) => patchConfig({ field: e.target.value })}><option value="">Select field</option>{fields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label}</option>)}</select></label><label>Operator<select value={item.config?.operator || 'eq'} onChange={(e) => patchConfig({ operator: e.target.value })}>{['eq','neq','gt','gte','lt','lte','contains','is_null','in'].map((operator) => <option key={operator}>{operator}</option>)}</select></label><label>Value<input value={item.config?.value ?? ''} onChange={(e) => patchConfig({ value: e.target.value })}/></label></div>
+    const fieldSelect = (label, key = 'field') => <label>{label}<select value={item.config?.[key] || ''} onChange={(e) => patchConfig({ [key]: e.target.value })}><option value="">Select field</option>{fields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label}</option>)}</select></label>
+    if (item.key === 'field') return <div className="onebuilder-properties-form">{fieldSelect('Field')}</div>
+    if (item.key === 'group') return <div className="onebuilder-properties-form">{fieldSelect('Group by')}</div>
+    if (item.key === 'filter') return <div className="onebuilder-properties-form">{fieldSelect('Field')}<label>Operator<select value={item.config?.operator || 'eq'} onChange={(e) => patchConfig({ operator: e.target.value })}>{['eq','neq','gt','gte','lt','lte','contains','in','is_null'].map((operator) => <option key={operator} value={operator}>{operator}</option>)}</select></label>{item.config?.operator !== 'is_null' ? <label>Value<input value={item.config?.value ?? ''} onChange={(e) => patchConfig({ value: e.target.value })}/></label> : null}</div>
+    if (item.key === 'metric') return <div className="onebuilder-properties-form"><label>Metric<select value={item.config?.type || 'count'} onChange={(e) => patchConfig({ type: e.target.value })}>{['count','sum','avg','min','max'].map((type) => <option key={type} value={type}>{type}</option>)}</select></label>{item.config?.type !== 'count' ? fieldSelect('Field') : null}</div>
+    if (item.key === 'sort') return <div className="onebuilder-properties-form">{fieldSelect('Sort field')}<label>Direction<select value={item.config?.direction || 'asc'} onChange={(e) => patchConfig({ direction: e.target.value })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label></div>
     return <div className="onebuilder-properties-form"><label>Configuration<textarea rows="9" value={JSON.stringify(item.config || {}, null, 2)} onChange={(e) => { try { onChange({ ...item, config: JSON.parse(e.target.value) }) } catch {} }}/></label></div>
   }
 
@@ -123,6 +126,7 @@ export default function OneBuilder() {
   const [tab, setTab] = useState('workflow')
   const [componentRegistry, setComponentRegistry] = useState([])
   const [actionRegistry, setActionRegistry] = useState([])
+  const [reportRegistry, setReportRegistry] = useState([])
   const [triggers, setTriggers] = useState([])
   const [objects, setObjects] = useState([])
   const [roles, setRoles] = useState([])
@@ -146,9 +150,10 @@ export default function OneBuilder() {
     setLoading(true)
     setError('')
     try {
-      const [components, actions, triggerRes, objectRes, roleRes, ruleRes, approvalRes, dashboardRes] = await Promise.all([
+      const [components, actions, reportElements, triggerRes, objectRes, roleRes, ruleRes, approvalRes, dashboardRes] = await Promise.all([
         apiRequest('/api/platform/component-registry').catch(() => ({ data: [] })),
         apiRequest('/api/platform/workflow-actions').catch(() => ({ data: [] })),
+        apiRequest('/api/platform/report-builder-registry').catch(() => ({ data: [] })),
         apiRequest('/api/platform/workflow-triggers').catch(() => ({ data: [] })),
         apiRequest('/api/platform/objects'),
         apiRequest('/api/platform/approval-roles').catch(() => ({ data: [] })),
@@ -159,6 +164,7 @@ export default function OneBuilder() {
       const objectRows = objectRes?.data?.objects || objectRes?.data || []
       setComponentRegistry(normalizeRegistry(components?.data?.components || components?.data || []))
       setActionRegistry(normalizeRegistry(actions?.data || []))
+      setReportRegistry(normalizeRegistry(reportElements?.data || []))
       setTriggers(normalizeRegistry(triggerRes?.data || []))
       setObjects(Array.isArray(objectRows) ? objectRows.filter((object) => object.active !== false) : [])
       setRoles(Array.isArray(roleRes?.data) ? roleRes.data : [])
@@ -207,15 +213,12 @@ export default function OneBuilder() {
         ...component, category: component.category || 'Dashboard', icon: component.key.includes('kpi') ? Gauge : component.key.includes('chart') || ['pie','donut','bar'].includes(component.key) ? BarChart3 : component.key === 'table' ? Table2 : LayoutDashboard, builderType: 'dashboard',
       }))
     } else {
-      rows = [
-        { key: 'field', label: 'Field', category: 'Report', icon: TextCursorInput, builderType: 'report' },
-        { key: 'filter', label: 'Filter', category: 'Report', icon: Filter, builderType: 'report' },
-        { key: 'group', label: 'Group', category: 'Report', icon: Table2, builderType: 'report' },
-      ]
+      const iconFor = (key) => key === 'field' ? TextCursorInput : key === 'filter' ? Filter : key === 'group' ? Table2 : key === 'metric' ? BarChart3 : Table2
+      rows = reportRegistry.map((component) => ({ ...component, icon: iconFor(component.key), builderType: 'report' }))
     }
     const q = paletteSearch.trim().toLowerCase()
     return q ? rows.filter((item) => `${item.label} ${item.category} ${item.key}`.toLowerCase().includes(q)) : rows
-  }, [tab, actionRegistry, componentRegistry, paletteSearch])
+  }, [tab, actionRegistry, componentRegistry, reportRegistry, paletteSearch])
 
   const items = canvas[tab] || []
   const selectedNode = items.find((item) => item.id === selectedNodeId) || null
@@ -306,6 +309,8 @@ export default function OneBuilder() {
         for (const filter of config.filters || []) nodes.push({ id: `filter_${nodes.length}_${Date.now()}`, key: 'filter', label: 'Filter', builderType: 'report', config: { ...filter } })
         const groups = Array.isArray(config.groupBy) ? config.groupBy : config.groupBy ? [config.groupBy] : []
         for (const field of groups) nodes.push({ id: `group_${nodes.length}_${Date.now()}`, key: 'group', label: 'Group', builderType: 'report', config: { field } })
+        for (const metric of config.metrics || []) nodes.push({ id: `metric_${nodes.length}_${Date.now()}`, key: 'metric', label: 'Metric', builderType: 'report', config: { ...metric } })
+        for (const sort of config.sort || []) nodes.push({ id: `sort_${nodes.length}_${Date.now()}`, key: 'sort', label: 'Sort', builderType: 'report', config: { ...sort } })
         setMeta((current) => ({ ...current, report: { label: row.label || '', description: row.description || '', objectId: row.object_id || selectedObject?.id || '', reportKey: row.report_key || '' } }))
         setCanvas((current) => ({ ...current, report: nodes }))
       }
@@ -360,7 +365,9 @@ export default function OneBuilder() {
         const reportFields = [...new Set(items.filter((item) => item.key === 'field' && item.config?.field).map((item) => item.config.field))]
         const filters = items.filter((item) => item.key === 'filter' && item.config?.field).map((item) => ({ field: item.config.field, operator: item.config.operator || 'eq', value: item.config.value }))
         const groups = items.filter((item) => item.key === 'group' && item.config?.field).map((item) => item.config.field)
-        const payload = { label: activeMeta.label, reportKey: activeMeta.reportKey || safeKey(activeMeta.label, 'report'), description: activeMeta.description || '', config: { fields: reportFields, filters, groupBy: groups[0] || null, sort: [], summaries: [] } }
+        const metrics = items.filter((item) => item.key === 'metric').map((item) => ({ type: item.config?.type || 'count', ...(item.config?.field ? { field: item.config.field } : {}) }))
+        const sort = items.filter((item) => item.key === 'sort' && item.config?.field).map((item) => ({ field: item.config.field, direction: item.config?.direction === 'desc' ? 'desc' : 'asc' }))
+        const payload = { label: activeMeta.label, reportKey: activeMeta.reportKey || safeKey(activeMeta.label, 'report'), description: activeMeta.description || '', config: { fields: reportFields, filters, groupBy: groups[0] || null, metrics: metrics.length ? metrics : [{ type: 'count' }], sort } }
         const response = await apiRequest(selectedSavedId ? `/api/platform/reports/${encodeURIComponent(selectedSavedId)}` : `/api/platform/objects/${encodeURIComponent(objectKey(object))}/reports`, { method: selectedSavedId ? 'PUT' : 'POST', body: JSON.stringify(payload) })
         if (response?.data?.id) setSelectedSavedId(response.data.id)
       }
