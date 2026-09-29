@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Box, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react'
+import { Box, ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { loadPlatformObjects } from '../../services/settings'
 
@@ -201,9 +201,6 @@ export default function ObjectsSettingsPane() {
             <strong>Objects</strong>
             <span>{objects.length} configured</span>
           </div>
-          <button type="button" className="objects-new-icon" title="New Object" aria-label="New Object">
-            <Plus size={15} />
-          </button>
         </div>
 
         <label className="objects-pane-search">
@@ -299,7 +296,6 @@ export default function ObjectsSettingsPane() {
                   <div className="objects-config-list">
                     <div className="objects-config-list-head">
                       <strong>Fields & Relationships</strong>
-                      <button type="button"><Plus size={13} /> New Field</button>
                     </div>
                     {objectLoading ? (
                       <div className="objects-detail-placeholder">Loading fields…</div>
@@ -494,7 +490,6 @@ function ObjectDataList({ title, rows = [], primary, secondary, meta }) {
     <div className="objects-config-list">
       <div className="objects-config-list-head">
         <strong>{title}</strong>
-        <button type="button"><Plus size={13} /> New</button>
       </div>
       {rows.length ? (
         <div className="objects-config-rows">
