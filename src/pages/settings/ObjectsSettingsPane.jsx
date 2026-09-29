@@ -11,6 +11,8 @@ import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 import ActionsAdmin from './Platform/ActionsAdmin.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import ObjectReportsAdmin from './Platform/ObjectReportsAdmin.jsx'
+import PermissionSetsAdmin from './Platform/PermissionSetsAdmin.jsx'
+import AccessControlAdmin from './Platform/AccessControlAdmin.jsx'
 
 const TABS = [
   ['details', 'Details'],
@@ -98,6 +100,7 @@ export default function ObjectsSettingsPane() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [permissionView, setPermissionView] = useState('effective')
 
   useEffect(() => {
     let live = true
@@ -679,6 +682,7 @@ export default function ObjectsSettingsPane() {
                       primary={(row) => row.name || row.rule_key || 'Sharing Rule'}
                       secondary={(row) => row.description || row.rule_key || ''}
                       meta={(row) => row.access_level || (row.active === false ? 'Inactive' : 'Active')} />
+                    <div className="objects-detail-placeholder">The legacy Platform frontend exposed sharing configuration as metadata/effective access only; it did not include a separate sharing-rule authoring screen. Public Groups and Queues are managed under Permissions → Public Groups & Queues.</div>
                   </div>
                 ) : null}
 
@@ -705,29 +709,53 @@ export default function ObjectsSettingsPane() {
 
                 {activeTab === 'permissions' ? (
                   <div className="objects-permissions-card">
-                    {objectData.permissions ? (
-                      <>
-                        <div className="objects-permission-grid">
-                          {['view','create','edit','delete','import','export'].map((key) => (
-                            <div key={key}>
-                              <span>{key}</span>
-                              <strong>{objectData.permissions[`can_${key}`] ? 'Allowed' : 'Denied'}</strong>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="objects-config-list">
-                          <div className="objects-config-list-head"><strong>Field Access</strong></div>
-                          <div className="objects-config-rows">
-                            {(objectData.permissions.fields || []).map((field) => (
-                              <div key={field.fieldId || field.label}>
-                                <span><strong>{field.label}</strong><small>{field.readable ? 'Visible' : 'Hidden'}</small></span>
-                                <span>{field.writable ? 'Editable' : 'Read only'}</span>
+                    <div className="objects-permission-tabs">
+                      <button type="button" className={permissionView === 'effective' ? 'is-active' : ''} onClick={() => setPermissionView('effective')}>Effective Access</button>
+                      <button type="button" className={permissionView === 'sets' ? 'is-active' : ''} onClick={() => setPermissionView('sets')}>Permission Sets</button>
+                      <button type="button" className={permissionView === 'access' ? 'is-active' : ''} onClick={() => setPermissionView('access')}>Public Groups & Queues</button>
+                    </div>
+
+                    {permissionView === 'effective' ? (
+                      objectData.permissions ? (
+                        <>
+                          <div className="objects-permission-grid">
+                            {['view','create','edit','delete','import','export'].map((key) => (
+                              <div key={key}>
+                                <span>{key}</span>
+                                <strong>{objectData.permissions[`can_${key}`] ? 'Allowed' : 'Denied'}</strong>
                               </div>
                             ))}
                           </div>
-                        </div>
-                      </>
-                    ) : <div className="objects-detail-placeholder">No permission data.</div>}
+                          <div className="objects-detail-card">
+                            <div><span>Source</span><strong>{objectData.permissions.source || 'default_deny'}</strong></div>
+                            <div><span>Permission sets</span><strong>{(objectData.permissions.permissionSets || []).map((set) => set.name).join(', ') || 'None'}</strong></div>
+                            <div><span>Permission groups</span><strong>{(objectData.permissions.permissionSetGroups || []).map((group) => group.name).join(', ') || 'None'}</strong></div>
+                            <div><span>Platform manager</span><strong>{objectData.permissions.canManagePlatform ? 'Yes' : 'No'}</strong></div>
+                          </div>
+                          <div className="objects-config-list">
+                            <div className="objects-config-list-head"><strong>Field Access</strong></div>
+                            <div className="objects-config-rows">
+                              {(objectData.permissions.fields || []).map((field) => (
+                                <div key={field.fieldId || field.label}>
+                                  <span><strong>{field.label}</strong><small>{field.readable ? 'Visible' : 'Hidden'}</small></span>
+                                  <span>{field.writable ? 'Editable' : 'Read only'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      ) : <div className="objects-detail-placeholder">No permission data.</div>
+                    ) : permissionView === 'sets' ? (
+                      <PermissionSetsAdmin
+                        onMessage={() => { void apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/effective-permissions`).then((response) => setObjectData((current) => ({ ...current, permissions: response?.data || null }))).catch(() => {}) }}
+                        onError={(value) => setError(value || '')}
+                      />
+                    ) : (
+                      <AccessControlAdmin
+                        onMessage={() => {}}
+                        onError={(value) => setError(value || '')}
+                      />
+                    )}
                   </div>
                 ) : null}
               </div>
