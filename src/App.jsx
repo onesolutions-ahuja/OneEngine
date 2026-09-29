@@ -97,6 +97,13 @@ const dockItems = [
   { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
 ]
 
+const mobileDockItems = [
+  { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
+  { id: 'till', label: 'Till', icon: MonitorSmartphone },
+  { id: 'workspace', label: 'Workspace', icon: Users },
+]
+
 function useClock() {
   const [now, setNow] = useState(() => new Date())
 
@@ -146,7 +153,7 @@ function Dock({ onItemOpen }) {
         aria-label="Smart Theme dock"
       >
         <div
-          className="dock-magnify-zone"
+          className="dock-magnify-zone dock-desktop-items"
           onTouchStart={trackTouch}
           onTouchMove={trackTouch}
           onTouchEnd={resetMagnification}
@@ -159,6 +166,30 @@ function Dock({ onItemOpen }) {
               mouseX={mouseX}
               onActivate={() => onItemOpen?.(item.id)}
             />
+          ))}
+        </div>
+        <div className="dock-mobile-items">
+          {mobileDockItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="dock-mobile-item"
+              onClick={() => onItemOpen?.(item.id)}
+              aria-label={item.label}
+            >
+              <span className="dock-icon-wrap">
+                {item.icon ? (
+                  <item.icon className="dock-lucide-icon" size={24} strokeWidth={1.8} />
+                ) : (
+                  <img
+                    className={item.scaled ? 'dock-image dock-image--scaled' : 'dock-image'}
+                    src={item.src}
+                    alt=""
+                    draggable="false"
+                  />
+                )}
+              </span>
+            </button>
           ))}
         </div>
         <div className="dock-fixed-zone">
@@ -2000,6 +2031,11 @@ function Desktop({ onLock }) {
     if (id === 'app-releases') {
       setRoute('app-releases')
       setActiveApp('app-releases')
+      return
+    }
+    if (id === 'dashboard') {
+      setRoute('dashboard')
+      setActiveApp('dashboard')
       return
     }
     if (id === 'reports') {
