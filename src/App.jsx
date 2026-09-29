@@ -104,7 +104,6 @@ const dockItems = [
   { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
   { id: 'builder', label: 'Builder', icon: LayoutGrid },
   { id: 'contacts', label: 'Contacts', icon: Users },
-  { id: 'jarves', label: 'JARVES', jarves: true },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
   { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
 ]
@@ -172,11 +171,7 @@ function Dock({ onItemOpen }) {
           onTouchEnd={resetMagnification}
           onTouchCancel={resetMagnification}
         >
-          {dockItems.map((item) => item.jarves ? (
-            <div key={item.id} className="dock-jarves-slot">
-              <JarvisOrb onClick={() => onItemOpen?.('jarves')} />
-            </div>
-          ) : (
+          {dockItems.map((item) => (
             <DockItem
               key={item.id}
               item={item}
@@ -184,6 +179,12 @@ function Dock({ onItemOpen }) {
               onActivate={() => onItemOpen?.(item.id)}
             />
           ))}
+        </div>
+        <div className="dock-fixed-zone">
+          <div className="dock-separator" aria-hidden="true" />
+          <div className="dock-jarves-slot">
+            <JarvisOrb onClick={() => onItemOpen?.('jarves')} />
+          </div>
         </div>
         <div className="dock-mobile-items">
           {mobileDockItems.map((item) => (
