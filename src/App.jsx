@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, apiUrl, checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
-import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
+import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
 import RecordListView from './components/RecordListView'
@@ -756,6 +756,48 @@ function SettingsPage() {
     }
   }
 
+  const updateCompany = async (field, value) => {
+    if (!canManage) return
+    const next = String(value ?? '').trim()
+    if (next === String(settings?.company?.[field] ?? '').trim()) return
+    try {
+      setSaving(`company.${field}`)
+      setError('')
+      await patchCompanySettings({ [field]: next || null })
+      await load()
+    } catch (err) {
+      setError(err?.message || 'Unable to save company setting')
+    } finally {
+      setSaving('')
+    }
+  }
+
+  const updateBatchPolicy = async (changes) => {
+    if (!canManage) return
+    const inventory = settings?.inventory || {}
+    const next = {
+      batchInventoryMode: inventory.batchInventoryMode || 'none',
+      batchDefaultMfgRule: inventory.batchDefaultMfgRule || 'none',
+      batchDefaultExpiryRule: inventory.batchDefaultExpiryRule || 'none',
+      batchDefaultExpiryDays: Number(inventory.batchDefaultExpiryDays ?? 365),
+      ...changes,
+    }
+    if (next.batchInventoryMode === 'none') {
+      next.batchDefaultMfgRule = 'none'
+      next.batchDefaultExpiryRule = 'none'
+    }
+    try {
+      setSaving('batchPolicy')
+      setError('')
+      await patchSettings(next)
+      await load()
+    } catch (err) {
+      setError(err?.message || 'Unable to save batch inventory policy')
+    } finally {
+      setSaving('')
+    }
+  }
+
   const profileName = user?.name || user?.username || 'User'
   const profileRole = isSuperadmin ? 'Superadmin' : user?.role || 'User'
   const initial = profileName.trim().charAt(0).toUpperCase() || 'U'
@@ -850,12 +892,96 @@ function SettingsPage() {
                   </div>
                   <div className="settings-row">
                     <div><strong>Currency</strong><p>Default company currency.</p></div>
-                    <span className="settings-value">{settings.company?.currency || '—'}</span>
+                    <input
+                      defaultValue={settings.company?.currency || ''}
+                      disabled={!canManage || saving === 'company.currency'}
+                      onBlur={(event) => updateCompany('currency', event.target.value)}
+                      aria-label="Currency"
+                    />
                   </div>
                   <div className="settings-row">
                     <div><strong>Timezone</strong><p>Default company timezone.</p></div>
-                    <span className="settings-value">{settings.company?.timezone || '—'}</span>
+                    <input
+                      defaultValue={settings.company?.timezone || ''}
+                      disabled={!canManage || saving === 'company.timezone'}
+                      onBlur={(event) => updateCompany('timezone', event.target.value)}
+                      aria-label="Timezone"
+                    />
                   </div>
+                  <div className="settings-row">
+                    <div><strong>Scan &amp; Go</strong><p>Allow the Scan &amp; Go customer flow for this company.</p></div>
+                    <button
+                      type="button"
+                      className={`mac-switch ${settings.scanGo?.enabled ? 'is-on' : ''}`}
+                      disabled={!canManage || saving === 'scanGoEnabled'}
+                      onClick={() => update('scanGoEnabled', !settings.scanGo?.enabled)}
+                      aria-label="Scan & Go"
+                    >
+                      <span />
+                    </button>
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>Exchange mode</strong><p>Controls which exchange workflow cashiers may use.</p></div>
+                    <select
+                      value={settings.exchange?.mode || 'both'}
+                      disabled={!canManage || saving === 'exchangeMode'}
+                      onChange={(event) => update('exchangeMode', event.target.value)}
+                    >
+                      <option value="receipt">Receipt / Invoice only</option>
+                      <option value="normal">Normal / No receipt only</option>
+                      <option value="both">Both — cashier chooses</option>
+                    </select>
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>Batch inventory mode</strong><p>Controls whether batch and date data is required when stock enters the company.</p></div>
+                    <select
+                      value={settings.inventory?.batchInventoryMode || 'none'}
+                      disabled={!canManage || saving === 'batchPolicy'}
+                      onChange={(event) => updateBatchPolicy({ batchInventoryMode: event.target.value })}
+                    >
+                      <option value="none">No Batch Inventory</option>
+                      <option value="optional_dates">Batch Inventory — Dates Optional</option>
+                      <option value="required_dates">Proper Batch Inventory</option>
+                    </select>
+                  </div>
+                  {(settings.inventory?.batchInventoryMode || 'none') === 'optional_dates' ? (
+                    <>
+                      <div className="settings-row">
+                        <div><strong>Manufacturing date default</strong><p>Applied when a manufacturing date is not entered.</p></div>
+                        <select
+                          value={settings.inventory?.batchDefaultMfgRule || 'none'}
+                          disabled={!canManage || saving === 'batchPolicy'}
+                          onChange={(event) => updateBatchPolicy({ batchDefaultMfgRule: event.target.value })}
+                        >
+                          <option value="none">No default</option>
+                          <option value="today">Today</option>
+                        </select>
+                      </div>
+                      <div className="settings-row">
+                        <div><strong>Expiry date default</strong><p>Applied when an expiry date is not entered.</p></div>
+                        <select
+                          value={settings.inventory?.batchDefaultExpiryRule || 'none'}
+                          disabled={!canManage || saving === 'batchPolicy'}
+                          onChange={(event) => updateBatchPolicy({ batchDefaultExpiryRule: event.target.value })}
+                        >
+                          <option value="none">No default</option>
+                          <option value="today_plus_days">Today + days</option>
+                        </select>
+                      </div>
+                      <div className="settings-row">
+                        <div><strong>Default expiry days</strong><p>Number of days added when the expiry default uses Today + days.</p></div>
+                        <input
+                          type="number"
+                          min="0"
+                          max="3650"
+                          value={Number(settings.inventory?.batchDefaultExpiryDays ?? 365)}
+                          disabled={!canManage || saving === 'batchPolicy'}
+                          onChange={(event) => updateBatchPolicy({ batchDefaultExpiryDays: Number(event.target.value) })}
+                          aria-label="Default expiry days"
+                        />
+                      </div>
+                    </>
+                  ) : null}
                 </>
               ) : current?.key === 'company' ? (
                 <>
