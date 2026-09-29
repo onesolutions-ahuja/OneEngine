@@ -200,9 +200,12 @@ export function getStoredUser() {
 
 export async function ensureActingCompanyContext() {
   const user = getStoredUser()
-  if (user?.companyId) return user.companyId
+  // Tenant users are scoped by their authenticated company. Platform users
+  // must always revalidate the acting-company header, even when a companyId
+  // was cached into the session user by a previous bootstrap.
+  if (user?.companyId && user?.isPlatformDeveloper !== true) return user.companyId
 
-  const rememberedCompanyId = getActingCompanyId()
+  const rememberedCompanyId = getActingCompanyId() || (user?.isPlatformDeveloper === true ? String(user?.companyId || '') : '')
   try {
     const permissionResponse = await apiRequest('/api/auth/me/permissions')
     const permissionCodes = Array.isArray(permissionResponse?.data?.permissions)
