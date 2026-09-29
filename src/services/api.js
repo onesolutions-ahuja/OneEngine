@@ -129,8 +129,44 @@ export async function login(username, password) {
 
   if (!data?.success || !data?.token) throw new Error(data?.message || 'Login failed')
   sessionStorage.setItem('onepos_token', data.token)
-  sessionStorage.setItem('onepos_user', JSON.stringify(data.user || {}))
-  return data
+
+  let resolvedUser = data.user || {}
+  if (resolvedUser?.isPlatformDeveloper === true) {
+    /*
+     * Smart Theme is a separate frontend from the legacy onePOS shell, so it
+     * must hydrate the same authorised acting-company context after login.
+     * Without this, a mapped Platform Developer/Superadmin reaches Settings
+     * with no X-Acting-Company-Id and every tenant-backed page appears empty.
+     */
+    const rememberedCompanyId = getActingCompanyId()
+    setActingCompanyId('')
+    try {
+      const companiesResponse = await apiRequest('/api/platform/developer/companies')
+      const companies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
+      const companyId = companies.some((company) => String(company.id) === String(rememberedCompanyId))
+        ? rememberedCompanyId
+        : companies.length === 1
+          ? companies[0].id
+          : ''
+
+      if (companyId) {
+        await apiRequest('/api/platform/developer/acting-company', {
+          method: 'PUT',
+          body: JSON.stringify({ actingCompanyId: companyId }),
+        })
+        setActingCompanyId(companyId)
+        resolvedUser = { ...resolvedUser, companyId }
+      }
+    } catch {
+      setActingCompanyId('')
+    }
+  } else {
+    // Tenant logins must never inherit a previous developer company context.
+    setActingCompanyId('')
+  }
+
+  sessionStorage.setItem('onepos_user', JSON.stringify(resolvedUser))
+  return { ...data, user: resolvedUser }
 }
 
 export async function verifyPin(pin) {
