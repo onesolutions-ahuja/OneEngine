@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Box, ChevronRight, Pencil, Save, Search, Trash2, X } from 'lucide-react'
+import { Box, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import RecordListView from '../../components/RecordListView'
 
@@ -99,6 +99,7 @@ export default function WorkspacePage() {
   const [editor, setEditor] = useState(null)
   const [detailTab, setDetailTab] = useState('details')
   const [relatedState, setRelatedState] = useState({ key: '', loading: false, rows: [], error: '' })
+  const [historyState, setHistoryState] = useState({ loading: false, rows: [], error: '' })
   const [actionBusy, setActionBusy] = useState('')
 
   useEffect(() => {
@@ -191,6 +192,23 @@ export default function WorkspacePage() {
     return () => { live = false }
   }, [selectedId, selectedKey])
 
+  useEffect(() => {
+    if (!selectedObject || !selectedId) {
+      setHistoryState({ loading: false, rows: [], error: '' })
+      return
+    }
+    let live = true
+    setHistoryState({ loading: true, rows: [], error: '' })
+    apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/history`)
+      .then((response) => {
+        if (live) setHistoryState({ loading: false, rows: Array.isArray(response?.data) ? response.data : [], error: '' })
+      })
+      .catch((err) => {
+        if (live) setHistoryState({ loading: false, rows: [], error: err?.message || 'Unable to load record history' })
+      })
+    return () => { live = false }
+  }, [selectedId, selectedKey])
+
   const filteredObjects = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return objects
@@ -207,8 +225,38 @@ export default function WorkspacePage() {
 
   const defaultRecordTypeId = runtimeMeta.recordTypes.find((item) => item.is_default === true)?.id || ''
   const createLayout = resolveRecordLayout(runtimeMeta.layouts, 'create', defaultRecordTypeId, runtimeMeta.defaultCreateLayout)
-  const openCreate = () => setEditor({ mode: 'create', values: {}, recordTypeId: defaultRecordTypeId })
-  const openEdit = (row) => setEditor({ mode: 'edit', id: row.id, values: { ...row }, recordTypeId: row.recordTypeId || row.record_type_id || '' })
+  const quickCreateLayout = resolveRecordLayout(runtimeMeta.layouts, 'quick_create', defaultRecordTypeId, createLayout)
+  const openCreate = () => setEditor({
+    mode: 'create',
+    values: {},
+    recordTypeId: defaultRecordTypeId,
+    targetKey: objectKey(selectedObject),
+    targetLabel: objectLabel(selectedObject),
+    targetFields: fields,
+    targetLayouts: runtimeMeta.layouts,
+    targetRecordTypes: runtimeMeta.recordTypes,
+  })
+  const openQuickCreate = () => setEditor({
+    mode: 'quick_create',
+    values: {},
+    recordTypeId: defaultRecordTypeId,
+    targetKey: objectKey(selectedObject),
+    targetLabel: objectLabel(selectedObject),
+    targetFields: fields,
+    targetLayouts: runtimeMeta.layouts,
+    targetRecordTypes: runtimeMeta.recordTypes,
+  })
+  const openEdit = (row) => setEditor({
+    mode: 'edit',
+    id: row.id,
+    values: { ...row },
+    recordTypeId: row.recordTypeId || row.record_type_id || '',
+    targetKey: objectKey(selectedObject),
+    targetLabel: objectLabel(selectedObject),
+    targetFields: fields,
+    targetLayouts: runtimeMeta.layouts,
+    targetRecordTypes: runtimeMeta.recordTypes,
+  })
 
   const saveRecord = async (event) => {
     event.preventDefault()
@@ -218,19 +266,22 @@ export default function WorkspacePage() {
       if (values[key] === '') values[key] = null
     }
     try {
-      const key = objectKey(selectedObject)
-      const url = editor.mode === 'create'
+      const key = editor.targetKey || objectKey(selectedObject)
+      const creating = editor.mode === 'create' || editor.mode === 'quick_create' || editor.mode === 'create_related'
+      const url = creating
         ? `/api/platform/objects/${encodeURIComponent(key)}/records`
         : `/api/platform/objects/${encodeURIComponent(key)}/records/${encodeURIComponent(editor.id)}`
       const response = await apiRequest(url, {
-        method: editor.mode === 'create' ? 'POST' : 'PUT',
+        method: creating ? 'POST' : 'PUT',
         body: JSON.stringify({ data: values, recordTypeId: editor.recordTypeId || null }),
       })
       if (response?.success === false) throw new Error(response.message || 'Unable to save record')
+      const relatedToRefresh = editor.relatedRelationship || null
       setEditor(null)
       await loadObject(selectedObject)
       const savedId = response?.data?.id
-      if (savedId) setSelectedId(savedId)
+      if (savedId && key === objectKey(selectedObject)) setSelectedId(savedId)
+      if (relatedToRefresh) await loadRelated(relatedToRefresh)
     } catch (err) {
       setEditor((current) => ({ ...current, error: err?.message || 'Unable to save record' }))
     }
@@ -267,6 +318,71 @@ export default function WorkspacePage() {
       await loadObject(selectedObject)
     } catch (err) {
       setError(err?.message || 'Unable to execute action')
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  const layoutActionComponents = (detailLayout?.definition?.components || [])
+    .map((component, index) => ({ component, index }))
+    .filter(({ component }) => component?.type === 'action' && component?.visible !== false)
+
+  const runConfiguredAction = async (component, index) => {
+    if (!selectedObject || !selectedId) return
+    if (component.action === 'edit') return openEdit(detailRecord)
+    if (component.action === 'delete') return deleteRecord()
+    if (component.action === 'create_related') {
+      const relationship = outboundRelationships.find((item) => item.relationship_key === component.relationship_key)
+      if (relationship) return createRelatedRecord(relationship)
+      return setError('Related record configuration is incomplete')
+    }
+    const actionKey = String(component?.id || component?.key || `${component?.action || 'action'}:${index}`)
+    if (!['run_workflow', 'call_function'].includes(String(component.action || '').toLowerCase())) {
+      return setError(`${component.label || component.action || 'Action'} is configured, but no safe executor is available.`)
+    }
+    setActionBusy(actionKey)
+    setError('')
+    try {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/actions/${encodeURIComponent(actionKey)}/execute`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      if (response?.success === false) throw new Error(response.message || 'Action failed')
+      await loadObject(selectedObject)
+    } catch (err) {
+      setError(err?.message || 'Unable to execute configured action')
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  const createRelatedRecord = async (relationship) => {
+    if (!relationship?.child_object_key || !relationship?.child_field_api_name || !selectedId) {
+      setError('Related record configuration is incomplete')
+      return
+    }
+    try {
+      setActionBusy(`related:${relationship.relationship_key}`)
+      setError('')
+      const response = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(relationship.child_object_key)}/workspace`)
+      const meta = response?.data || {}
+      const childFields = Array.isArray(meta.fields) ? meta.fields : []
+      const childTypes = Array.isArray(meta.recordTypes) ? meta.recordTypes : []
+      const childLayouts = Array.isArray(meta.layouts) ? meta.layouts : []
+      const recordTypeId = childTypes.find((item) => item.is_default === true)?.id || ''
+      setEditor({
+        mode: 'create_related',
+        values: { [relationship.child_field_api_name]: selectedId },
+        recordTypeId,
+        targetKey: relationship.child_object_key,
+        targetLabel: relationship.child_object_label || relationship.child_object_key,
+        targetFields: childFields,
+        targetLayouts: childLayouts,
+        targetRecordTypes: childTypes,
+        relatedRelationship: relationship,
+      })
+    } catch (err) {
+      setError(err?.message || 'Unable to prepare related record')
     } finally {
       setActionBusy('')
     }
@@ -340,11 +456,18 @@ export default function WorkspacePage() {
                 <small>{detailRecord.id}</small>
               </div>
               <div className="workspace-detail-actions">
+                {canCreate && quickCreateLayout ? <button type="button" onClick={openQuickCreate}><Plus size={13}/> Quick Create</button> : null}
                 {runtimeMeta.buttons.filter((button) => ['record','workspace_record','detail'].includes(button.placement) || !button.placement).map((button) => (
                   <button key={button.id || button.button_key} type="button" disabled={actionBusy === button.button_key} onClick={() => runMetadataButton(button)}>
                     {button.label}
                   </button>
                 ))}
+                {layoutActionComponents.map(({ component, index }) => {
+                  const actionKey = String(component?.id || component?.key || `${component?.action || 'action'}:${index}`)
+                  return <button key={actionKey} type="button" disabled={Boolean(actionBusy)} onClick={() => runConfiguredAction(component, index)}>
+                    {actionBusy === actionKey ? 'Working…' : (component.label || component.action)}
+                  </button>
+                })}
                 {canEdit ? <button type="button" onClick={() => openEdit(detailRecord)}><Pencil size={13}/> Edit</button> : null}
                 {canDelete ? <button type="button" className="is-danger" onClick={deleteRecord}><Trash2 size={13}/></button> : null}
               </div>
@@ -352,6 +475,7 @@ export default function WorkspacePage() {
             <div className="workspace-detail-scroll">
               <div className="workspace-detail-tabs">
                 <button type="button" className={detailTab === 'details' ? 'is-active' : ''} onClick={() => setDetailTab('details')}>Details</button>
+                <button type="button" className={detailTab === 'history' ? 'is-active' : ''} onClick={() => setDetailTab('history')}><History size={12}/> History</button>
                 {outboundRelationships.map((relationship) => (
                   <button key={relationship.id || relationship.relationship_key} type="button" className={detailTab === 'related' && relatedState.key === relationship.relationship_key ? 'is-active' : ''} onClick={() => loadRelated(relationship)}>
                     {relationship.label || relationship.child_object_label || relationship.relationship_key}
@@ -360,12 +484,28 @@ export default function WorkspacePage() {
               </div>
               {detailTab === 'related' ? (
                 <section className="workspace-detail-card">
-                  <h3>Related Records</h3>
+                  <div className="workspace-related-heading">
+                    <h3>Related Records</h3>
+                    {(() => {
+                      const relationship = outboundRelationships.find((item) => item.relationship_key === relatedState.key)
+                      return relationship && canCreate ? <button type="button" disabled={Boolean(actionBusy)} onClick={() => createRelatedRecord(relationship)}><Plus size={12}/> New</button> : null
+                    })()}
+                  </div>
                   {relatedState.loading ? <div className="workspace-state">Loading related records…</div> : relatedState.error ? <div className="workspace-state">{relatedState.error}</div> : relatedState.rows.length ? relatedState.rows.map((row) => (
                     <button className="workspace-related-row" type="button" key={row.id}>
-                      <strong>{recordTitle(row, detailFields)}</strong><span>{row.id}</span>
+                      <strong>{recordTitle(row, fields)}</strong><span>{row.id}</span>
                     </button>
                   )) : <div className="workspace-state">No related records.</div>}
+                </section>
+              ) : detailTab === 'history' ? (
+                <section className="workspace-detail-card">
+                  <h3>Record History</h3>
+                  {historyState.loading ? <div className="workspace-state">Loading history…</div> : historyState.error ? <div className="workspace-state">{historyState.error}</div> : historyState.rows.length ? historyState.rows.map((item) => (
+                    <div className="workspace-history-row" key={item.id}>
+                      <div><strong>{item.action || 'Change'} {item.field_api_name || 'record'}</strong><span>{readableValue(item.old_value)} → {readableValue(item.new_value)}</span></div>
+                      <time>{readableValue(item.created_at)}</time>
+                    </div>
+                  )) : <div className="workspace-state">No history available.</div>}
                 </section>
               ) : (
                 <>
@@ -397,13 +537,18 @@ export default function WorkspacePage() {
       {editor ? (
         <div className="workspace-editor-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setEditor(null)}>
           <form className="workspace-editor" onSubmit={saveRecord}>
-            <header><div><strong>{editor.mode === 'create' ? 'New' : 'Edit'} {objectLabel(selectedObject)}</strong></div><button type="button" onClick={() => setEditor(null)}><X size={15}/></button></header>
+            <header><div><strong>{editor.mode === 'edit' ? 'Edit' : editor.mode === 'quick_create' ? 'Quick Create' : 'New'} {editor.targetLabel || objectLabel(selectedObject)}</strong></div><button type="button" onClick={() => setEditor(null)}><X size={15}/></button></header>
             <div className="workspace-editor-body">
               {editor.error ? <div className="workspace-editor-error">{editor.error}</div> : null}
-              {runtimeMeta.recordTypes.length ? <label><span>Record Type</span><select value={editor.recordTypeId || ''} onChange={(e) => setEditor((current) => ({ ...current, recordTypeId: e.target.value }))}><option value="">Default</option>{runtimeMeta.recordTypes.map((type) => <option key={type.id} value={type.id}>{type.name || type.label || type.record_type_key}</option>)}</select></label> : null}
+              {(editor.targetRecordTypes || runtimeMeta.recordTypes).length ? <label><span>Record Type</span><select value={editor.recordTypeId || ''} onChange={(e) => setEditor((current) => ({ ...current, recordTypeId: e.target.value }))}><option value="">Default</option>{(editor.targetRecordTypes || runtimeMeta.recordTypes).map((type) => <option key={type.id} value={type.id}>{type.name || type.label || type.record_type_key}</option>)}</select></label> : null}
               {fieldsForLayout(
-                fields.filter((field) => field.active !== false && field.writable !== false && !['formula','rollup'].includes(field.field_type)),
-                resolveRecordLayout(runtimeMeta.layouts, editor.mode === 'create' ? 'create' : 'edit', editor.recordTypeId, editor.mode === 'create' ? createLayout : detailLayout),
+                (editor.targetFields || fields).filter((field) => field.active !== false && field.writable !== false && !['formula','rollup'].includes(field.field_type)),
+                resolveRecordLayout(
+                  editor.targetLayouts || runtimeMeta.layouts,
+                  editor.mode === 'quick_create' ? 'quick_create' : editor.mode === 'edit' ? 'edit' : 'create',
+                  editor.recordTypeId,
+                  editor.mode === 'quick_create' ? quickCreateLayout : editor.mode === 'edit' ? detailLayout : createLayout,
+                ),
               ).map((field) => (
                 <WorkspaceField key={field.id || field.api_name} field={field} value={editor.values?.[field.api_name]} onChange={(value) => setEditor((current) => ({ ...current, values: { ...current.values, [field.api_name]: value } }))} />
               ))}
