@@ -18,7 +18,7 @@ Zero-loss rule: an old UI page/section is deleted only after its Smart Theme rep
 | Users | Yes | Pending full comparison | No | Pending |
 | Roles & Permissions | Yes | Pending full comparison | No | Pending |
 | AI assistant | Yes | Yes | Yes | Company JARVES allowance, enabled/remaining seats and server-enforced allowance validation migrated; per-user toggles remain on Users. |
-| Connections | Navigation only / pending | No | No | Pending |
+| Connections | Yes | Yes | Yes | Integration/device health loading and refresh migrated; legacy health fetch/context removed from old Settings shell. |
 | Uber Eats | Navigation only / pending | No | No | Pending |
 | Deliveroo | Navigation only / pending | No | No | Pending |
 | WhatsApp Assistant | Navigation only / pending | No | No | Pending |
