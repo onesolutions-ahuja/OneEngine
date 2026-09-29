@@ -55,9 +55,9 @@ const blankComponent = (type) => {
 };
 
 
-export default function DashboardBuilder() {
+export default function DashboardBuilder({ embedded = false, initialDashboard = null, onClose, onSaved } = {}) {
   const [dashboards, setDashboards] = useState([]);
-  const [current, setCurrent] = useState(null);
+  const [current, setCurrent] = useState(() => initialDashboard ? { ...initialDashboard } : embedded ? { ...empty } : null);
   const [runtime, setRuntime] = useState([]);
   const registry = useComponentRegistry();
   const dashboardPalette = registryForBuilder(registry, "DASHBOARD");
@@ -124,6 +124,14 @@ export default function DashboardBuilder() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!embedded) return;
+    setCurrent(initialDashboard ? { ...initialDashboard } : { ...empty });
+    setRuntime([]);
+    setPreview(false);
+    setSelectedId(null);
+    if (initialDashboard?.id) loadPrincipals();
+  }, [embedded, initialDashboard?.id]);
 
   const save = async () => {
     const value = current || empty;
@@ -144,6 +152,7 @@ export default function DashboardBuilder() {
       await loadPrincipals();
       await runPreview(response.data);
       await load();
+      onSaved?.(response.data);
     } catch (error) {
       setError(error.message || "Unable to save dashboard");
     } finally {
@@ -184,7 +193,12 @@ export default function DashboardBuilder() {
     return { ...value, components };
   });
   const removeComponent = (index) => setCurrent((value) => ({ ...value, components: (value?.components || []).filter((_, i) => i !== index) }));
-  const close = () => { setCurrent(null); setRuntime([]); setPreview(false); };
+  const close = () => {
+    setRuntime([]);
+    setPreview(false);
+    if (embedded) onClose?.();
+    else setCurrent(null);
+  };
 
 
   if (!current) {
