@@ -1760,6 +1760,7 @@ function ControlCenterMenu({ onOpenWifi, onOpenBluetooth }) {
 }
 
 function Desktop({ onLock }) {
+  const now = useClock()
   const [message, setMessage] = useState('Hello.')
   const [activeApp, setActiveApp] = useState(() => readRoute().app)
   const [routeState, setRouteState] = useState(() => readRoute())
