@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, apiUrl, checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
-import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsContext, loadUsers, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
+import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
 import RecordListView from './components/RecordListView'
@@ -286,7 +286,7 @@ function LockScreen({ onUnlock, onSignOut }) {
   )
 }
 
-const settingsGroups = [
+const settingsFallbackGroups = [
   [
     { key: 'general', label: 'General', icon: Settings2, tone: 'orange', searchTerms: ['date format', 'currency', 'timezone', 'regional'] },
     { key: 'company', label: 'Company', icon: Building2, tone: 'blue', searchTerms: ['company name', 'legal name', 'company email', 'company phone', 'logo'] },
@@ -328,6 +328,83 @@ const settingsGroups = [
     { key: 'message-templates', label: 'Message Templates', icon: ReceiptText, tone: 'cyan' },
   ],
 ]
+
+const SETTINGS_NAV_CACHE_KEY = 'onepos.settings.nav.v1'
+
+function settingsNavSlug(value) {
+  return String(value || 'settings').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+function readSettingsNavCache() {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(SETTINGS_NAV_CACHE_KEY) || 'null')
+    return Array.isArray(value) ? value : []
+  } catch {
+    return []
+  }
+}
+
+function writeSettingsNavCache(value) {
+  try { sessionStorage.setItem(SETTINGS_NAV_CACHE_KEY, JSON.stringify(Array.isArray(value) ? value : [])) } catch {}
+}
+
+const settingsFallbackEntries = settingsFallbackGroups.flat()
+
+function settingsVisual(label, explicitKey = '') {
+  const labelSlug = settingsNavSlug(label)
+  const match = settingsFallbackEntries.find((entry) =>
+    entry.key === explicitKey || settingsNavSlug(entry.label) === labelSlug
+  )
+  return {
+    key: explicitKey || match?.key || labelSlug,
+    icon: match?.icon || Settings2,
+    tone: match?.tone || 'gray',
+    searchTerms: match?.searchTerms || [],
+  }
+}
+
+function buildSettingsGroupsFromCatalog(catalog) {
+  if (!Array.isArray(catalog) || catalog.length === 0) return []
+  const grouped = new Map()
+  const seen = new Set()
+
+  const push = (group, item) => {
+    if (!item?.key || seen.has(item.key)) return
+    seen.add(item.key)
+    const groupKey = group || 'Settings'
+    if (!grouped.has(groupKey)) grouped.set(groupKey, [])
+    grouped.get(groupKey).push(item)
+  }
+
+  for (const object of catalog) {
+    if (object?.permissions?.can_view === false) continue
+    const config = object?.config || {}
+    const sectioned = config.settingsSectionSource === 'field-config' || config.settings_section_source === 'field-config'
+
+    if (sectioned) {
+      for (const field of Array.isArray(object?.fields) ? object.fields : []) {
+        if (field?.active === false || field?.readable === false) continue
+        const fieldConfig = field?.config || {}
+        const label = fieldConfig.settingsSection || fieldConfig.settings_section || 'General'
+        const explicitKey = fieldConfig.settingsKey || fieldConfig.settings_key || ''
+        const visual = settingsVisual(label, explicitKey)
+        push(
+          fieldConfig.settingsGroup || fieldConfig.settings_group || config.settingsGroup || config.settings_group || 'Settings',
+          { ...visual, label },
+        )
+      }
+      continue
+    }
+
+    const label = config.settingsLabel || config.settings_label || object?.label || object?.name || object?.object_key || object?.api_name
+    if (!label) continue
+    const explicitKey = config.settingsRouteKey || config.settings_route_key || config.settingsKey || config.settings_key || ''
+    const visual = settingsVisual(label, explicitKey)
+    push(config.settingsGroup || config.settings_group || 'Settings', { ...visual, label })
+  }
+
+  return [...grouped.values()].filter((group) => group.length)
+}
 
 const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
 
@@ -372,6 +449,7 @@ function SettingsPage() {
   const [recordDialog, setRecordDialog] = useState(null)
   const [recordForm, setRecordForm] = useState({})
   const [recordSaving, setRecordSaving] = useState(false)
+  const [settingsCatalog, setSettingsCatalog] = useState(() => readSettingsNavCache())
 
   const load = async () => {
     try {
@@ -387,6 +465,18 @@ function SettingsPage() {
 
   useEffect(() => {
     void load()
+  }, [])
+
+  useEffect(() => {
+    let live = true
+    loadSettingsCatalog()
+      .then((rows) => {
+        if (!live || !rows.length) return
+        writeSettingsNavCache(rows)
+        setSettingsCatalog(rows)
+      })
+      .catch(() => {})
+    return () => { live = false }
   }, [])
 
   const permissions = context?.permissions || {}
@@ -417,7 +507,10 @@ function SettingsPage() {
     return searchable.includes(normalizedQuery)
   }
 
-  const visibleGroups = settingsGroups
+  const metadataGroups = buildSettingsGroupsFromCatalog(settingsCatalog)
+  const navigationGroups = metadataGroups.length ? metadataGroups : settingsFallbackGroups
+
+  const visibleGroups = navigationGroups
     .map((group) =>
       group.filter(
         (item) =>
