@@ -42,14 +42,13 @@ export default function ApprovalProcessBuilder({onMessage,onError,embedded=false
  const criteriaIssue=criteriaRules.length&&criteriaRules.some(r=>!r.field||(!["is_empty","changed"].includes(r.operator||"equals")&&String(r.value??"").trim()===""))?"Complete all criteria fields.":"";
  const approverIssue=!form.steps.length?"Add at least one approver.":form.steps.some(step=>!step.roleId)?"Choose an approver role for every step.":"";
  const outcomeCount=(form.config.submissionActions||[]).length+(form.config.finalApprovalActions||[]).length+(form.config.finalRejectionActions||[]).length;
- const outcomeIssue=!outcomeCount?"Add at least one outcome action.":"";
  const setupIssue=!form.name?"Enter a process name.":!form.objectId?"Choose an object.":"";
- const reviewIssue=setupIssue||criteriaIssue||approverIssue||outcomeIssue;
+ const reviewIssue=setupIssue||criteriaIssue||approverIssue;
  const approvalGuide=[
   {key:"setup",label:"Setup",status:setupIssue?"error":"complete",message:setupIssue},
   {key:"criteria",label:"Criteria",status:criteriaIssue?"error":criteriaRules.length?"complete":"idle",message:criteriaIssue||(criteriaRules.length?"":"Optional")},
   {key:"approvers",label:"Approvers",status:approverIssue?"error":"complete",message:approverIssue},
-  {key:"actions",label:"Outcome Actions",status:outcomeIssue?"error":"complete",message:outcomeIssue},
+  {key:"actions",label:"Outcome Actions",status:outcomeCount?"complete":"idle",message:outcomeCount?"":"Optional"},
   {key:"review",label:"Review",status:reviewIssue?"error":"complete",message:reviewIssue},
  ];
  const goGuide=(key)=>{setGuideStep(key);document.getElementById(`approval-${key}-section`)?.scrollIntoView({behavior:"smooth",block:"start"})};
