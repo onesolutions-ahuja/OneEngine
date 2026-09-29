@@ -5,6 +5,7 @@ import { loadPlatformObjects } from '../../services/settings'
 import FieldEditor from './Platform/FieldEditor.jsx'
 import RelationshipEditor from './Platform/RelationshipEditor.jsx'
 import RecordTypeEditor from './Platform/RecordTypeEditor.jsx'
+import LayoutEditor from './Platform/LayoutEditor.jsx'
 
 const TABS = [
   ['details', 'Details'],
@@ -313,6 +314,33 @@ export default function ObjectsSettingsPane() {
     closeEditor()
   }
 
+  const refreshConfiguration = async () => {
+    if (!selectedId) return
+    const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/configuration`)
+    const configuration = response?.data || {}
+    setObjectData((current) => ({
+      ...current,
+      recordTypes: Array.isArray(configuration.recordTypes) ? configuration.recordTypes : [],
+      layouts: Array.isArray(configuration.layouts) ? configuration.layouts : [],
+      listViews: Array.isArray(configuration.listViews) ? configuration.listViews : [],
+      buttons: Array.isArray(configuration.buttons) ? configuration.buttons : [],
+      registeredActions: Array.isArray(configuration.registeredActions) ? configuration.registeredActions : [],
+      actionBindings: Array.isArray(configuration.actionBindings) ? configuration.actionBindings : [],
+      approvalProcesses: Array.isArray(configuration.approvalProcesses) ? configuration.approvalProcesses : [],
+      assignmentRules: Array.isArray(configuration.assignmentRules) ? configuration.assignmentRules : [],
+      reports: Array.isArray(configuration.reports) ? configuration.reports : [],
+      sharingSettings: configuration.sharingSettings || null,
+      sharingRules: Array.isArray(configuration.sharingRules) ? configuration.sharingRules : [],
+      automationLogs: Array.isArray(configuration.automationLogs) ? configuration.automationLogs : [],
+    }))
+    setLoadedSections((current) => ({ ...current, configuration: true }))
+  }
+
+  const saveLayout = async () => {
+    await refreshConfiguration()
+    closeEditor()
+  }
+
 
   return (
     <div className={`objects-settings-shell mobile-stage-${mobileStage}`}>
@@ -420,6 +448,15 @@ export default function ObjectsSettingsPane() {
                     onSave={saveRelationship}
                     onCancel={closeEditor}
                   />
+                ) : editor?.kind === 'layout' ? (
+                  <LayoutEditor
+                    layout={editor.item || null}
+                    objects={objects}
+                    initialObjectId={selectedId}
+                    initialPageType={editor.pageType || 'detail'}
+                    onSave={saveLayout}
+                    onCancel={closeEditor}
+                  />
                 ) : activeTab === 'details' ? (
                   <div className="objects-detail-card">
                     <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
@@ -498,10 +535,13 @@ export default function ObjectsSettingsPane() {
                 ) : null}
 
                 {activeTab === 'layouts' ? (
-                  <ObjectDataList title="Layouts" rows={objectData.layouts}
+                  <ObjectDataList title="Forms / Layouts" rows={objectData.layouts}
                     primary={(row) => row.name || row.label || row.layout_key || 'Layout'}
                     secondary={(row) => row.layout_key || row.page_type || ''}
-                    meta={(row) => row.page_type || 'layout'} />
+                    meta={(row) => row.page_type || 'layout'}
+                    actionLabel="Layout"
+                    onAdd={() => setEditor({ kind: 'layout', item: null, pageType: 'detail' })}
+                    onRowClick={(row) => setEditor({ kind: 'layout', item: row })} />
                 ) : null}
 
                 {activeTab === 'validation' ? (
