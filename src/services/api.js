@@ -198,6 +198,37 @@ export function getStoredUser() {
   }
 }
 
+export async function ensureActingCompanyContext() {
+  const user = getStoredUser()
+  if (!user?.isPlatformDeveloper) return user?.companyId || getActingCompanyId() || ''
+
+  const rememberedCompanyId = getActingCompanyId()
+  setActingCompanyId('')
+  try {
+    const companiesResponse = await apiRequest('/api/platform/developer/companies')
+    const companies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
+    const companyId = companies.some((company) => String(company.id) === String(rememberedCompanyId))
+      ? rememberedCompanyId
+      : companies.length === 1
+        ? companies[0].id
+        : ''
+
+    if (!companyId) return ''
+
+    await apiRequest('/api/platform/developer/acting-company', {
+      method: 'PUT',
+      body: JSON.stringify({ actingCompanyId: companyId }),
+    })
+    setActingCompanyId(companyId)
+    const resolvedUser = { ...user, companyId }
+    sessionStorage.setItem('onepos_user', JSON.stringify(resolvedUser))
+    return companyId
+  } catch (error) {
+    setActingCompanyId('')
+    throw error
+  }
+}
+
 export function logout() {
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
