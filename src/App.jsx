@@ -114,6 +114,7 @@ import {
   Moon,
   Clock3,
   Settings2,
+  Settings as GearIcon,
   CircleUserRound,
   Accessibility,
   Shield,
@@ -151,8 +152,9 @@ const dockItems = [
   { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
   { id: 'builder', label: 'Builder', icon: LayoutGrid },
   { id: 'contacts', label: 'Contacts', icon: Users },
+  { id: 'jarves', label: 'Jarvis', jarves: true },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
-  { id: 'settings', label: 'Settings', icon: Settings2 },
+  { id: 'settings', label: 'Settings', icon: GearIcon },
 ]
 
 const mobileDockItems = [
@@ -160,7 +162,7 @@ const mobileDockItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
   { id: 'workspace', label: 'Workspace', icon: Users },
-  { id: 'settings', label: 'Settings', icon: Settings2 },
+  { id: 'settings', label: 'Settings', icon: GearIcon },
 ]
 
 function useClock() {
@@ -2514,7 +2516,7 @@ function Desktop({ onLock, onSignOut }) {
             title="Settings"
             onClick={() => { setTopPanel(''); setRoute('settings', 'general'); setActiveApp('settings') }}
           >
-            <Settings2 size={17} strokeWidth={2.1} />
+            <GearIcon size={17} strokeWidth={2.1} />
           </button>
           <button
             type="button"
