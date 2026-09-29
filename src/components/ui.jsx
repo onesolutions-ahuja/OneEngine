@@ -1,3 +1,7 @@
+export function cx(...values) {
+  return values.flatMap((value) => Array.isArray(value) ? value : [value]).filter(Boolean).join(' ')
+}
+
 export function Toggle({checked=false,onChange,disabled=false,...props}){
   return (
     <button
