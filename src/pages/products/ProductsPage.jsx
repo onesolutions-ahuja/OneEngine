@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, History, Plus, RefreshCw, Upload, X } from 'lucide-react'
-import { apiRequest, apiUrl } from '../../services/api'
+import { apiFetch, apiRequest } from '../../services/api'
 import RecordListView from '../../components/RecordListView'
 
 const CORE_FIELD_NAMES = new Set([
@@ -102,8 +102,7 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
   const doExport=async()=>{
     try{
       setExportBusy(true);setError('')
-      const token=localStorage.getItem('onepos_token')
-      const response=await fetch(apiUrl('/api/products/export'),{headers:{Accept:'text/csv',...(token?{Authorization:`Bearer ${token}`}:{})}})
+      const response=await apiFetch('/api/products/export',{headers:{Accept:'text/csv'}})
       if(!response.ok){ const data=await response.json().catch(()=>({})); throw new Error(data.message||'Export failed') }
       const blob=await response.blob()
       const url=URL.createObjectURL(blob)
