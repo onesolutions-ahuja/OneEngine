@@ -536,6 +536,14 @@ function SettingsPage() {
   const visibleItems = visibleGroups.flat()
   const current = visibleItems.find((item) => item.key === active) || visibleItems[0] || null
   const platformOnlySection = current?.key === 'objects' || current?.key === 'platform'
+  /*
+   * Server/API configuration is device/platform configuration, not tenant
+   * company settings. A Platform Superadmin legitimately has no company_id,
+   * so do not force an acting-company context for this section. Visibility is
+   * still controlled by settingSectionAccess(), where Server Configuration is
+   * Superadmin-only.
+   */
+  const companyIndependentSection = platformOnlySection || (current?.key === 'server-api' && isSuperadmin)
   const hasCompanyContext = context?.hasCompanyContext === true
   const companySettingsError = context?.settingsError || ''
 
@@ -804,9 +812,9 @@ function SettingsPage() {
           {error ? <div className="settings-error">{error}</div> : null}
           {loading ? (
             <div className="settings-card settings-state-card">Loading settings…</div>
-          ) : !platformOnlySection && !hasCompanyContext ? (
+          ) : !companyIndependentSection && !hasCompanyContext ? (
             <div className="settings-card settings-state-card">Select a company context to manage company settings.</div>
-          ) : !platformOnlySection && !settings ? (
+          ) : !companyIndependentSection && !settings ? (
             <div className="settings-card settings-state-card">{companySettingsError || 'No settings data available.'}</div>
           ) : (
             <div className="settings-card">
@@ -968,7 +976,7 @@ function SettingsPage() {
             </div>
           )}
 
-          {!loading && !platformOnlySection && hasCompanyContext && (
+          {!loading && !companyIndependentSection && hasCompanyContext && (
             <div className="settings-rbac-note">
               {canManage ? 'Editing allowed by settings.manage.' : 'Read-only: your role does not have settings.manage.'}
             </div>
