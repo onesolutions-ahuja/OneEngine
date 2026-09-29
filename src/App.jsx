@@ -26,6 +26,7 @@ const GlobalProductLookupPage = lazy(() => import('./pages/products/GlobalProduc
 const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage'))
 const ReplenishmentPage = lazy(() => import('./pages/inventory/ReplenishmentPage'))
 const PurchasesPage = lazy(() => import('./pages/purchases/PurchasesPage'))
+const SuppliersPage = lazy(() => import('./pages/suppliers/SuppliersPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -462,6 +463,7 @@ function readRoute() {
   if (parts[0] === 'inventory') return { app: 'inventory', section: null }
   if (parts[0] === 'replenishment') return { app: 'replenishment', section: null }
   if (parts[0] === 'purchases') return { app: 'purchases', section: null }
+  if (parts[0] === 'suppliers') return { app: 'suppliers', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -496,6 +498,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/replenishment`
       : app === 'purchases'
         ? `${base}/purchases`
+      : app === 'suppliers'
+        ? `${base}/suppliers`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1743,6 +1747,11 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'suppliers') {
+      setRoute('suppliers')
+      setActiveApp('suppliers')
+      return
+    }
     if (id === 'purchases') {
       setRoute('purchases')
       setActiveApp('purchases')
@@ -1980,6 +1989,8 @@ function Desktop({ onLock }) {
           <ReplenishmentPage onBack={() => openItem('inventory')} />
         ) : activeApp === 'purchases' ? (
           <PurchasesPage />
+        ) : activeApp === 'suppliers' ? (
+          <SuppliersPage />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
