@@ -144,6 +144,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
           <dl><div><dt>Version</dt><dd>{selected.version||'—'}</dd></div><div><dt>Package</dt><dd>{selected.package_type||'APPLICATION'}</dd></div><div><dt>Licence</dt><dd>{selected.licence_mode==='TECHNICAL'||selected.licensed?'Included':'Required'}</dd></div><div><dt>Availability</dt><dd>{selected.billable===false?'Included':selected.licensed?'Available':'Requires licence'}</dd></div></dl>
           {version?<div className="onestore-version"><span>Installed v{version.installedVersion}</span><span>Latest v{version.latestVersion}</span><strong>{version.label}</strong></div>:null}
           {dependencies.length?<div className="onestore-deps"><b>Dependencies</b>{dependencies.map(dep=><div key={dep.key}><span>{packages.find(p=>p.package_key===dep.key)?.name||dep.key}</span><small>{installedKeys.has(dep.key)?'Included':'Installed automatically'}{dep.optional?' · Optional':''}</small></div>)}</div>:null}
+          {workingKey===selected.package_key?<progress className="onestore-action-progress" aria-label="App action in progress"/>:null}
           <div className="onestore-actions">
             {selectedAction?.secondary?<button disabled={!canManage||workingKey===selected.package_key} onClick={()=>run(selected,selectedAction.secondary)}>Deactivate</button>:null}
             {selected?.company_installation&&storefrontStatus(selected)==='INSTALLED'?<button onClick={openInstalled}>Open</button>:null}
