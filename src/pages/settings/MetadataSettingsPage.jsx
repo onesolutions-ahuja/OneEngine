@@ -42,9 +42,18 @@ function optionRows(field) {
   }))
 }
 
-function MetadataField({ field, value, disabled, onChange }) {
+function MetadataField({ field, value, disabled, onChange, lookupOptions = [] }) {
   const type = String(field?.field_type || 'text').toLowerCase()
   const options = optionRows(field)
+
+  if (type === 'lookup' && lookupOptions.length) {
+    return (
+      <select value={value ?? ''} disabled={disabled} onChange={(event) => onChange(event.target.value || null)}>
+        <option value="">Select…</option>
+        {lookupOptions.map((option) => <option key={String(option.value)} value={option.value}>{option.label}</option>)}
+      </select>
+    )
+  }
 
   if (type === 'boolean') {
     return (
@@ -88,6 +97,7 @@ function GenericObjectSettings({ object, superadmin }) {
   const [fields, setFields] = useState([])
   const [rows, setRows] = useState([])
   const [permissions, setPermissions] = useState(null)
+  const [lookupOptions, setLookupOptions] = useState({})
   const [selectedId, setSelectedId] = useState('')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState({})
@@ -106,9 +116,24 @@ function GenericObjectSettings({ object, superadmin }) {
       ])
       const nextFields = Array.isArray(fieldRes?.data) ? fieldRes.data : []
       const nextRows = Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : []
+      const lookupFields = nextFields.filter((field) => String(field.field_type || '').toLowerCase() === 'lookup' && (field?.config?.relatedObjectKey || field?.config?.related_object_key))
+      const lookupPairs = await Promise.all(lookupFields.map(async (field) => {
+        const relatedKey = field?.config?.relatedObjectKey || field?.config?.related_object_key
+        try {
+          const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(relatedKey)}/records?page=1&pageSize=500`)
+          const records = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
+          return [field.api_name, records.map((row) => ({
+            value: row.id,
+            label: row.name || row.label || row.full_name || row.username || row.code || row.api_name || row.id,
+          }))]
+        } catch {
+          return [field.api_name, []]
+        }
+      }))
       setFields(nextFields)
       setRows(nextRows)
       setPermissions(permissionRes?.data || null)
+      setLookupOptions(Object.fromEntries(lookupPairs))
       setSelectedId((current) => nextRows.some((row) => String(row.id) === String(current)) ? current : (nextRows[0]?.id || ''))
     } catch (err) {
       setError(err?.message || 'Unable to load settings object')
@@ -193,7 +218,7 @@ function GenericObjectSettings({ object, superadmin }) {
           {writable.map((field) => (
             <div className="settings-row" key={field.id || field.api_name}>
               <div><strong>{field.label || field.api_name}</strong>{field.description ? <p>{field.description}</p> : null}</div>
-              <MetadataField field={field} value={draft[field.api_name]} disabled={false} onChange={(value) => setDraft((current) => ({ ...current, [field.api_name]: value }))} />
+              <MetadataField field={field} value={draft[field.api_name]} disabled={false} lookupOptions={lookupOptions[field.api_name] || []} onChange={(value) => setDraft((current) => ({ ...current, [field.api_name]: value }))} />
             </div>
           ))}
           <div className="metadata-settings-form-actions"><button type="button" onClick={() => setEditing(false)}>Cancel</button><button type="submit" className="is-primary">Save</button></div>
@@ -258,10 +283,10 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const systemObject = objects.find((object) => objectKey(object) === 'system_settings') || null
+  const sectionedObjects = objects.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
   const superadmin = user?.isSuperadmin === true || user?.is_superadmin === true
 
-  const loadSystemRows = async (object = systemObject) => {
+  const loadSystemRows = async (object) => {
     if (!object) return
     const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=10`)
     setSystemRows(Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [])
@@ -291,11 +316,12 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
       if (!live) return
       setObjectPermissions(Object.fromEntries(permissionPairs))
 
-      const system = hosts.find((object) => objectKey(object) === 'system_settings')
-      if (system) {
+      const sectioned = hosts.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
+      if (sectioned.length) {
+        const system = sectioned[0]
         const [fieldRes, recordRes] = await Promise.all([
           apiRequest(`/api/platform/objects/${encodeURIComponent(system.id)}/fields`),
-          apiRequest('/api/platform/objects/system_settings/records?page=1&pageSize=10'),
+          apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(system))}/records?page=1&pageSize=10`),
         ])
         if (!live) return
         setSystemFields(Array.isArray(fieldRes?.data) ? fieldRes.data : [])
@@ -307,18 +333,18 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
 
   const entries = useMemo(() => {
     const rows = []
-    if (systemObject) {
+    for (const sectionedObject of sectionedObjects) {
       const sections = new Map()
       for (const field of systemFields) {
         if (field.active === false || field.readable === false) continue
         const label = fieldSection(field)
         const key = sectionKey(label)
-        if (!sections.has(key)) sections.set(key, { key: `system:${key}`, label, group: fieldGroup(field, systemObject), type: 'system', section: label, object: systemObject })
+        if (!sections.has(key)) sections.set(key, { key: `sectioned:${objectKey(sectionedObject)}:${key}`, label, group: fieldGroup(field, sectionedObject), type: 'system', section: label, object: sectionedObject })
       }
       rows.push(...sections.values())
     }
     for (const object of objects) {
-      if (object === systemObject) continue
+      if (sectionedObjects.includes(object)) continue
       rows.push({
         key: `object:${objectKey(object)}`,
         label: objectLabel(object),
@@ -329,7 +355,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
       })
     }
     return rows.sort((a, b) => (a.order || 0) - (b.order || 0) || a.label.localeCompare(b.label))
-  }, [objects, systemFields, systemObject])
+  }, [objects, systemFields, sectionedObjects])
 
   const permittedEntries = entries.filter((entry) => {
     if (superadmin) return true
