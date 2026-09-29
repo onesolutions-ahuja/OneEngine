@@ -35,6 +35,25 @@ const STATE_COPY = Object.freeze({
   [ORB_STATES.RESPONSE]: "Here you go",
 });
 
+function JarvisVideo({ src = "https://onepos.onrender.com/assets/jarvis/jarves-transparent.webm" }) {
+  // The source asset already contains the complete JARVES animation. Rendering
+  // it as native video avoids a permanent WebGL/Three.js runtime for a 50px
+  // launcher and preserves the supplied video without synthetic deformation.
+  return (
+    <video
+      src={src}
+      className="jarvis-orb-video"
+      data-legacy-layer="jarvis-orb-core"
+      aria-hidden="true"
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="metadata"
+    />
+  );
+}
+
 function describeOrbState(state, open) {
   if (open) return "JARVES panel is open";
   if (state === ORB_STATES.LISTENING) return "JARVES is listening - open the panel";
