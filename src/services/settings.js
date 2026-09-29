@@ -1,4 +1,4 @@
-import { apiRequest, getActingCompanyId } from './api'
+import { apiRequest, getActingCompanyId, setActingCompanyId } from './api'
 
 export async function loadSettingsContext() {
   // Identity + RBAC are platform/session concerns and must not be discarded
@@ -16,7 +16,33 @@ export async function loadSettingsContext() {
   // identities may instead use the validated acting-company header supplied by
   // apiRequest(). Treat either as an effective company context so every
   // company-scoped Settings page follows the same rule.
-  const actingCompanyId = getActingCompanyId()
+  let actingCompanyId = getActingCompanyId()
+
+  /*
+   * Self-heal an existing Smart Theme session that was created before the
+   * acting-company bootstrap existed (or whose browser storage was cleared).
+   * If this Platform Developer has exactly one authorised company, select it
+   * automatically instead of leaving every company Settings page unusable.
+   */
+  if (!user?.companyId && !actingCompanyId && user?.isPlatformDeveloper === true) {
+    try {
+      const companiesResponse = await apiRequest('/api/platform/developer/companies')
+      const companies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
+      if (companies.length === 1) {
+        actingCompanyId = String(companies[0].id || '')
+        if (actingCompanyId) {
+          await apiRequest('/api/platform/developer/acting-company', {
+            method: 'PUT',
+            body: JSON.stringify({ actingCompanyId }),
+          })
+          setActingCompanyId(actingCompanyId)
+        }
+      }
+    } catch {
+      actingCompanyId = ''
+    }
+  }
+
   const hasCompanyContext = Boolean(user?.companyId || actingCompanyId)
 
   if (hasCompanyContext) {
