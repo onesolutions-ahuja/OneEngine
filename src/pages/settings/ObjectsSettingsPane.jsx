@@ -75,11 +75,12 @@ function isWorkflowRule(rule) {
 }
 
 export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
+  const focusedTab = initialTab === 'assignment' || initialTab === 'sharing' ? initialTab : ''
   const [objects, setObjects] = useState([])
   const [query, setQuery] = useState('')
   const [selectedKey, setSelectedKey] = useState('')
   const [activeTab, setActiveTab] = useState(initialTab || 'details')
-  const [mobileStage, setMobileStage] = useState('objects')
+  const [mobileStage, setMobileStage] = useState(focusedTab ? 'detail' : 'objects')
   const [fields, setFields] = useState([])
   const [editor, setEditor] = useState(null)
   const [objectLoading, setObjectLoading] = useState(false)
@@ -109,7 +110,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
     if (!initialTab) return
     setEditor(null)
     setActiveTab(initialTab)
-    setMobileStage('objects')
+    setMobileStage(focusedTab ? 'detail' : 'objects')
   }, [initialTab])
 
   useEffect(() => {
@@ -174,7 +175,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
   useEffect(() => {
     if (!selectedId || activeTab === 'details') return undefined
 
-    const wantsFields = activeTab === 'fields' || activeTab === 'formula'
+    const wantsFields = activeTab === 'fields' || activeTab === 'formula' || activeTab === 'assignment' || activeTab === 'sharing'
     const wantsRelationships = activeTab === 'relationships'
     const wantsRules = activeTab === 'validation' || activeTab === 'actions' || activeTab === 'automation'
     const wantsPermissions = activeTab === 'permissions'
@@ -409,7 +410,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                 key={object.id || key}
                 type="button"
                 className={`objects-list-item ${active ? 'is-active' : ''}`}
-                onClick={() => { setSelectedKey(key); setActiveTab('details'); setMobileStage('menu') }}
+                onClick={() => { setSelectedKey(key); setActiveTab(focusedTab || 'details'); setMobileStage(focusedTab ? 'detail' : 'menu') }}
               >
                 <span className="objects-list-icon"><Box size={14} /></span>
                 <span className="objects-list-copy">
@@ -454,19 +455,21 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
             </div>
 
             <div className="objects-config-workspace">
-              <nav className="objects-config-tabs" aria-label="Object configuration">
-                {TABS.map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={activeTab === key ? 'is-active' : ''}
-                    onClick={() => { setActiveTab(key); setMobileStage('detail') }}
-                  >
-                    <span>{label}</span>
-                    <ChevronRight size={12} />
-                  </button>
-                ))}
-              </nav>
+              {!focusedTab ? (
+                <nav className="objects-config-tabs" aria-label="Object configuration">
+                  {TABS.map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={activeTab === key ? 'is-active' : ''}
+                      onClick={() => { setActiveTab(key); setMobileStage('detail') }}
+                    >
+                      <span>{label}</span>
+                      <ChevronRight size={12} />
+                    </button>
+                  ))}
+                </nav>
+              ) : null}
 
               <div className="objects-config-content">
                 {editor?.kind === 'field' ? (
