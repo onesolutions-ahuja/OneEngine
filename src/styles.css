@@ -8159,3 +8159,40 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Settings responsive navigation: the back control is mobile-only. */
+.settings-mobile-back {
+  display: none;
+}
+
+@media (max-width: 620px) {
+  .settings-page.is-mobile-list .settings-sidebar {
+    display: flex;
+  }
+
+  .settings-page.is-mobile-list .settings-content {
+    display: none;
+  }
+
+  .settings-page.is-mobile-detail .settings-sidebar {
+    display: none;
+  }
+
+  .settings-page.is-mobile-detail .settings-content {
+    display: flex;
+  }
+
+  .settings-mobile-back {
+    position: absolute;
+    left: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    border: 0;
+    background: transparent;
+    color: #0a84ff;
+    font-size: 13px;
+    font-weight: 600;
+  }
+}
