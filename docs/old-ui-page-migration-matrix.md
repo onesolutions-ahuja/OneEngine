@@ -17,14 +17,14 @@ Zero-loss rule: an old UI page/section is deleted only after its Smart Theme rep
 | Hardware | Yes | Yes | Yes | Barcode scanner, cash drawer and receipt printer configuration, scanner test capture, paper width, active state and device-test actions migrated. |
 | Users | Yes | Pending full comparison | No | Pending |
 | Roles & Permissions | Yes | Pending full comparison | No | Pending |
-| AI assistant | Navigation only / pending | No | No | Pending |
+| AI assistant | Yes | Yes | Yes | Company JARVES allowance, enabled/remaining seats and server-enforced allowance validation migrated; per-user toggles remain on Users. |
 | Connections | Navigation only / pending | No | No | Pending |
 | Uber Eats | Navigation only / pending | No | No | Pending |
 | Deliveroo | Navigation only / pending | No | No | Pending |
 | WhatsApp Assistant | Navigation only / pending | No | No | Pending |
 | SMS Delivery | Navigation only / pending | No | No | Pending |
 | Email Delivery | Navigation only / pending | No | No | Pending |
-| Server / API Configuration | Yes | Pending parity audit | No | Superadmin/no-company access already fixed. |
+| Server / API Configuration | Partial | No | No | HOLD — Superadmin/no-company visibility is fixed, but hosted Smart Theme currently forces the production API base while the old page allows a real device-level server override. Business rule needs final decision. |
 | Platform / Builder | Yes | Partial | No | Approval/workflow/dashboard administration parity still needs page-level audit. |
 | Message Templates | Navigation only / pending | No | No | Pending |
 
