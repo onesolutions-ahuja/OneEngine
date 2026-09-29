@@ -829,36 +829,8 @@ function SettingsPage({ onOpenProfile }) {
     try {
       setLoading(true)
       setError('')
-      setSettingsCatalogError('')
       const nextContext = await loadSettingsContext()
       setContext(nextContext)
-
-      try {
-        const rows = await loadSettingsCatalog()
-        const hasEntries = Array.isArray(rows)
-          ? rows.length > 0
-          : Boolean(rows && typeof rows === 'object' && Array.isArray(rows.sections) && rows.sections.length > 0)
-        if (hasEntries) {
-          writeSettingsNavCache(rows)
-          setSettingsCatalog(rows)
-        } else {
-          const cached = readSettingsNavCache()
-          const hasCachedEntries = Array.isArray(cached)
-            ? cached.length > 0
-            : Boolean(cached && typeof cached === 'object' && Array.isArray(cached.sections) && cached.sections.length > 0)
-          if (!hasCachedEntries) setSettingsCatalogError('Settings catalogue is unavailable.')
-        }
-      } catch (catalogError) {
-        const cached = readSettingsNavCache()
-        const hasCachedEntries = Array.isArray(cached)
-          ? cached.length > 0
-          : Boolean(cached && typeof cached === 'object' && Array.isArray(cached.sections) && cached.sections.length > 0)
-        if (!hasCachedEntries) {
-          setSettingsCatalogError(catalogError?.message || 'Unable to load Settings catalogue.')
-        }
-      } finally {
-        setSettingsCatalogLoaded(true)
-      }
     } catch (err) {
       setError(err?.message || 'Unable to load settings')
     } finally {
@@ -868,6 +840,47 @@ function SettingsPage({ onOpenProfile }) {
 
   useEffect(() => {
     void load()
+  }, [])
+
+  useEffect(() => {
+    let live = true
+    setSettingsCatalogError('')
+
+    loadSettingsCatalog()
+      .then((rows) => {
+        if (!live) return
+        const hasEntries = Array.isArray(rows)
+          ? rows.length > 0
+          : Boolean(rows && typeof rows === 'object' && Array.isArray(rows.sections) && rows.sections.length > 0)
+        if (hasEntries) {
+          writeSettingsNavCache(rows)
+          setSettingsCatalog(rows)
+          return
+        }
+
+        const cached = readSettingsNavCache()
+        const hasCachedEntries = Array.isArray(cached)
+          ? cached.length > 0
+          : Boolean(cached && typeof cached === 'object' && Array.isArray(cached.sections) && cached.sections.length > 0)
+        if (!hasCachedEntries) setSettingsCatalogError('Settings catalogue is unavailable.')
+      })
+      .catch((catalogError) => {
+        if (!live) return
+        const cached = readSettingsNavCache()
+        const hasCachedEntries = Array.isArray(cached)
+          ? cached.length > 0
+          : Boolean(cached && typeof cached === 'object' && Array.isArray(cached.sections) && cached.sections.length > 0)
+        if (!hasCachedEntries) {
+          setSettingsCatalogError(catalogError?.message || 'Unable to load Settings catalogue.')
+        }
+      })
+      .finally(() => {
+        if (live) setSettingsCatalogLoaded(true)
+      })
+
+    return () => {
+      live = false
+    }
   }, [])
 
   const permissions = context?.permissions || {}
