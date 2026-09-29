@@ -72,6 +72,8 @@ export default function RecordListView({
   objectKey = null,
   objectLabel = null,
   onDataChanged,
+  selectedRowId = null,
+  onRowSelect,
 }) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
@@ -411,14 +413,18 @@ export default function RecordListView({
             </thead>
             <tbody>
               {filtered.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  className={String(selectedRowId) === String(row.id) ? 'is-selected' : ''}
+                  onClick={() => onRowSelect?.(row)}
+                >
                   {canEdit ? (
                     <td className="record-list-edit-cell">
                       <button
                         type="button"
                         className="record-edit-button"
                         aria-label={`Edit ${row.name || row.full_name || row.username || 'record'}`}
-                        onClick={() => onEdit?.(row)}
+                        onClick={(event) => { event.stopPropagation(); onEdit?.(row) }}
                       >
                         <Pencil size={13} />
                       </button>
