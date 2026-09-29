@@ -1035,7 +1035,7 @@ function TopbarAppsMenu({ apps, query, onClose }) {
         whileTap={{ scale: 0.97 }}
       >
         <span className="topbar-app-icon">
-          {icon ? <img src={icon} alt="" draggable="false" /> : <ShoppingBag size={20} />}
+          {icon ? <img src={icon} alt="" draggable="false" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = localAppIcon('default-app') }} /> : <ShoppingBag size={20} />}
         </span>
         <span><strong>{item.name || item.package_key}</strong><small>{item.category || 'App'}</small></span>
       </motion.button>
@@ -1106,26 +1106,45 @@ function DevicesMenu({ onOpenSettings }) {
   )
 }
 
-function ControlCenterMenu() {
+function ControlCenterMenu({ onOpenWifi, onOpenBluetooth }) {
+  const [focusOn, setFocusOn] = useState(false)
+  const [volume, setVolume] = useState(58)
   return (
-    <motion.div className="mac-popover control-center-menu git-control-center" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
+    <motion.div
+      className="mac-popover control-center-menu git-control-center"
+      initial={{ opacity: 0, y: -10, scale: 0.9, transformOrigin: 'top right' }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8, scale: 0.94 }}
+      transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}
+    >
       <div className="git-control-main">
-        <button type="button" className="git-control-line">
+        <motion.button type="button" className="git-control-line" onClick={onOpenWifi} whileTap={{ scale: .98 }}>
           <span className="git-control-circle is-blue"><Wifi size={16}/></span>
           <span><strong>Wi-Fi</strong><small>onePOS network</small></span>
-        </button>
-        <button type="button" className="git-control-line">
+          <ChevronRight size={14} className="git-control-row-chevron"/>
+        </motion.button>
+        <motion.button type="button" className="git-control-line" onClick={onOpenBluetooth} whileTap={{ scale: .98 }}>
           <span className="git-control-circle is-blue"><Bluetooth size={16}/></span>
           <span><strong>Bluetooth</strong><small>Devices</small></span>
-        </button>
-        <button type="button" className="git-control-line">
-          <span className="git-control-circle"><Moon size={15}/></span>
-          <span><strong>Focus</strong><small>Off</small></span>
-        </button>
+          <ChevronRight size={14} className="git-control-row-chevron"/>
+        </motion.button>
+        <motion.button type="button" className="git-control-line" onClick={() => setFocusOn((value) => !value)} whileTap={{ scale: .98 }}>
+          <span className={`git-control-circle ${focusOn ? 'is-purple' : ''}`}><Moon size={15}/></span>
+          <span><strong>Focus</strong><small>{focusOn ? 'On' : 'Off'}</small></span>
+          <span className={`git-macos-switch ${focusOn ? 'is-on' : ''}`}><i /></span>
+        </motion.button>
       </div>
       <div className="git-control-slider-card">
         <div className="git-control-slider-title"><span>Sound</span><Volume2 size={15}/></div>
-        <div className="git-control-slider-track"><span /></div>
+        <input
+          className="git-control-volume"
+          type="range"
+          min="0"
+          max="100"
+          value={volume}
+          aria-label="Sound volume"
+          onChange={(event) => setVolume(Number(event.target.value))}
+        />
       </div>
     </motion.div>
   )
@@ -1278,25 +1297,31 @@ function Desktop({ onLock }) {
             </AnimatePresence>
           </div>
           <div className="topbar-status-wrap">
-            <button type="button" className="status-button" aria-label="Connection health" onClick={() => setTopPanel(topPanel === 'wifi' ? '' : 'wifi')}>
+            <button type="button" className={`status-button ${topPanel === 'wifi' ? 'is-active' : ''}`} aria-label="Connection health" aria-expanded={topPanel === 'wifi'} onClick={() => setTopPanel(topPanel === 'wifi' ? '' : 'wifi')}>
               <Wifi size={17} strokeWidth={2.1} />
             </button>
-            {topPanel === 'wifi' ? <ConnectionMenu health={connectionHealth} onRefresh={async () => {
-              const health = await checkBackend().catch(() => null)
-              setConnectionHealth({ status: health ? 'Connected' : 'Offline', database: health?.database || (health ? 'Connected' : 'Unavailable') })
-            }} /> : null}
+            <AnimatePresence>
+              {topPanel === 'wifi' ? <ConnectionMenu health={connectionHealth} onRefresh={async () => {
+                const health = await checkBackend().catch(() => null)
+                setConnectionHealth({ status: health ? 'Connected' : 'Offline', database: health?.database || (health ? 'Connected' : 'Unavailable') })
+              }} /> : null}
+            </AnimatePresence>
           </div>
           <div className="topbar-status-wrap">
-            <button type="button" className="status-button" aria-label="Devices" onClick={() => setTopPanel(topPanel === 'bluetooth' ? '' : 'bluetooth')}>
+            <button type="button" className={`status-button ${topPanel === 'bluetooth' ? 'is-active' : ''}`} aria-label="Devices" aria-expanded={topPanel === 'bluetooth'} onClick={() => setTopPanel(topPanel === 'bluetooth' ? '' : 'bluetooth')}>
               <Bluetooth size={17} strokeWidth={2.1} />
             </button>
-            {topPanel === 'bluetooth' ? <DevicesMenu onOpenSettings={() => { setRoute('settings', 'hardware'); setActiveApp('settings'); setTopPanel('') }} /> : null}
+            <AnimatePresence>
+              {topPanel === 'bluetooth' ? <DevicesMenu onOpenSettings={() => { setRoute('settings', 'hardware'); setActiveApp('settings'); setTopPanel('') }} /> : null}
+            </AnimatePresence>
           </div>
           <div className="topbar-status-wrap">
-            <button type="button" className="status-button" aria-label="Control Center" onClick={() => setTopPanel(topPanel === 'control' ? '' : 'control')}>
+            <button type="button" className={`status-button ${topPanel === 'control' ? 'is-active' : ''}`} aria-label="Control Center" aria-expanded={topPanel === 'control'} onClick={() => setTopPanel(topPanel === 'control' ? '' : 'control')}>
               <SlidersHorizontal size={18} strokeWidth={2.2} />
             </button>
-            {topPanel === 'control' ? <ControlCenterMenu /> : null}
+            <AnimatePresence>
+              {topPanel === 'control' ? <ControlCenterMenu onOpenWifi={() => setTopPanel('wifi')} onOpenBluetooth={() => setTopPanel('bluetooth')} /> : null}
+            </AnimatePresence>
           </div>
           <button
             type="button"
