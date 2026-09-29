@@ -114,7 +114,11 @@ export async function login(username, password) {
     try {
       return await apiRequest('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username,
+          password,
+          actingCompanyId: getActingCompanyId() || null,
+        }),
         signal: controller.signal,
       })
     } finally {
@@ -145,33 +149,13 @@ export async function login(username, password) {
   let resolvedUser = data.user || {}
   if (resolvedUser?.isPlatformDeveloper === true) {
     /*
-     * Smart Theme is a separate frontend from the legacy onePOS shell, so it
-     * must hydrate the same authorised acting-company context after login.
-     * Without this, a mapped Platform Developer/Superadmin reaches Settings
-     * with no X-Acting-Company-Id and every tenant-backed page appears empty.
+     * The login endpoint validates and resolves the optional acting company in
+     * the same request. Do not block sign-in with follow-up company discovery
+     * and validation HTTP calls.
      */
-    const rememberedCompanyId = getActingCompanyId()
-    setActingCompanyId('')
-    try {
-      const companiesResponse = await apiRequest('/api/platform/developer/companies')
-      const companies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
-      const companyId = companies.some((company) => String(company.id) === String(rememberedCompanyId))
-        ? rememberedCompanyId
-        : companies.length === 1
-          ? companies[0].id
-          : ''
-
-      if (companyId) {
-        await apiRequest('/api/platform/developer/acting-company', {
-          method: 'PUT',
-          body: JSON.stringify({ actingCompanyId: companyId }),
-        })
-        setActingCompanyId(companyId)
-        resolvedUser = { ...resolvedUser, companyId }
-      }
-    } catch {
-      setActingCompanyId('')
-    }
+    const companyId = String(data?.actingCompanyId || '')
+    setActingCompanyId(companyId)
+    if (companyId) resolvedUser = { ...resolvedUser, companyId }
   } else {
     // Tenant logins must never inherit a previous developer company context.
     setActingCompanyId('')
