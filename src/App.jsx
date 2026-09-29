@@ -1792,6 +1792,20 @@ function SettingsPage({ onOpenProfile }) {
 }
 
 
+const MARKETPLACE_BRAND_MATCHES = [
+  [/quickbooks/i, 'quickbooks'],
+  [/shopify/i, 'shopify'],
+  [/xero/i, 'xero-accounting'],
+  [/sage/i, 'sage-business-cloud-accounting'],
+  [/prestashop/i, 'prestashop'],
+  [/woocommerce|woo commerce/i, 'woocommerce'],
+  [/wix/i, 'wix'],
+  [/uber\s*eats/i, 'uber-eats'],
+  [/deliveroo/i, 'deliveroo'],
+  [/just\s*eat/i, 'just-eat'],
+  [/whatsapp/i, 'whatsapp'],
+]
+
 const MARKETPLACE_ICON_ALIASES = {
   uber_eats: 'uber-eats',
   'uber-eats': 'uber-eats',
@@ -1830,6 +1844,12 @@ function marketplaceIcon(item) {
     if (value.startsWith('/icons/apps/')) return `${import.meta.env.BASE_URL || '/'}${value.replace(/^\//, '')}`
     return apiUrl(value.startsWith('/') ? value : `/${value}`)
   }
+
+  const brandText = [item?.name, item?.publisher, item?.package_key, provider?.providerKey, provider?.provider_key]
+    .filter(Boolean)
+    .join(' ')
+  const brandMatch = MARKETPLACE_BRAND_MATCHES.find(([pattern]) => pattern.test(brandText))
+  if (brandMatch) return localAppIcon(brandMatch[1])
 
   const keys = [
     item?.icon_asset_key,
@@ -2665,6 +2685,7 @@ export default function App() {
   // Lock during the current session.
   const [locked, setLocked] = useState(() => !hasSession())
   const [sessionContextReady, setSessionContextReady] = useState(() => !hasSession())
+  const [pendingUnlock, setPendingUnlock] = useState(false)
 
   const [transitioning, setTransitioning] = useState(false)
 
@@ -2683,12 +2704,19 @@ export default function App() {
 
   const unlock = () => {
     if (transitioning) return
-    setTransitioning(true)
-    window.setTimeout(() => {
-      setLocked(false)
-      setTransitioning(false)
-    }, 320)
+    setPendingUnlock(true)
   }
+
+  useEffect(() => {
+    if (!pendingUnlock || !sessionContextReady || transitioning) return
+    setTransitioning(true)
+    const timer = window.setTimeout(() => {
+      setLocked(false)
+      setPendingUnlock(false)
+      setTransitioning(false)
+    }, 180)
+    return () => window.clearTimeout(timer)
+  }, [pendingUnlock, sessionContextReady, transitioning])
 
   const lock = () => {
     if (transitioning) return
@@ -2708,8 +2736,6 @@ export default function App() {
     <div className={`app-shell ${transitioning ? 'is-transitioning' : ''}`}>
       {locked ? (
         <LockScreen onUnlock={unlock} onSignOut={signOut} />
-      ) : !sessionContextReady ? (
-        <div className="route-loading" role="status">Preparing company context…</div>
       ) : (
         <Desktop onLock={lock} onSignOut={signOut} />
       )}
