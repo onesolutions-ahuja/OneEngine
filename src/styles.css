@@ -5599,3 +5599,99 @@ button:focus-visible {
   color: rgba(43,55,75,.48);
   font-size: 8px;
 }
+
+
+.till-connectivity-status {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+}
+.till-connectivity-status i {
+  width: 8px;
+  height: 8px;
+  display: block;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 0 3px rgba(255,59,48,.10);
+}
+.till-connectivity-status i.is-online {
+  background: #34c759;
+  box-shadow: 0 0 0 3px rgba(52,199,89,.10);
+}
+.till-queue-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.till-queue-icon small {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ff3b30;
+  color: white;
+  font-size: 8px;
+  line-height: 1;
+}
+.till-stock-warning-row,
+.till-offline-row,
+.till-payment-remaining {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.till-stock-warning-row {
+  padding: 8px 9px;
+  border: 1px solid rgba(245,158,11,.22);
+  border-radius: 8px;
+  background: rgba(245,158,11,.06);
+}
+.till-stock-warning-row span {
+  color: rgba(40,50,65,.58);
+  font-size: 10px;
+}
+.till-modifier-group {
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid rgba(46,61,82,.08);
+  border-radius: 9px;
+}
+.till-modifier-option {
+  display: grid !important;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.till-modifier-option small {
+  color: rgba(40,50,65,.52);
+}
+.till-offline-queue {
+  display: grid;
+  gap: 8px;
+}
+.till-offline-row {
+  min-height: 56px;
+  padding: 9px 10px;
+  border: 1px solid rgba(46,61,82,.08);
+  border-radius: 9px;
+  background: rgba(248,249,251,.82);
+}
+.till-offline-row > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.till-offline-row span,
+.till-offline-row small {
+  color: rgba(40,50,65,.55);
+  font-size: 9px;
+}
