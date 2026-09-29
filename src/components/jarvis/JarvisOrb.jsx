@@ -86,16 +86,7 @@ export default function JarvisOrb({ state = ORB_STATES.IDLE, open = false, onCli
         >
           <span className="jarvis-orb-halo" aria-hidden="true" />
           <span className="jarvis-orb-ring" aria-hidden="true" />
-          <span className="jarvis-orb-core" aria-hidden="true">
-            <span className="jarvis-orb-flow" />
-            <span className="jarvis-orb-flow2" />
-            <span className="jarvis-orb-flow3" />
-            <span className="jarvis-orb-flow4" />
-            <span className="jarvis-orb-sheen" />
-            <span className="jarvis-orb-glint" />
-            <span className="jarvis-orb-glint2" />
-            <span className="jarvis-orb-spark-orbit"><span className="jarvis-orb-spark" /></span>
-          </span>
+          <JarvisVideo />
         </button>
       </div>
       {STATE_COPY[state] && !open && (
