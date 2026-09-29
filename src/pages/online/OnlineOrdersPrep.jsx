@@ -32,13 +32,34 @@ import {
 
 const PREP_FILTER_STATUSES = ["ACCEPTED", "PREPARING", "READY"];
 
-export default function OnlineOrdersPrep({ permissions = { isAdmin: false, permissions: [] } }) {
+export default function OnlineOrdersPrep({ permissions = null }) {
+  const [resolvedPermissions, setResolvedPermissions] = useState(permissions);
+  useEffect(() => {
+    if (permissions) {
+      setResolvedPermissions(permissions);
+      return;
+    }
+    let live = true;
+    apiRequest("/api/auth/me/permissions")
+      .then((response) => {
+        if (!live) return;
+        setResolvedPermissions({
+          isAdmin: response?.data?.isAdmin === true,
+          permissions: Array.isArray(response?.data?.permissions) ? response.data.permissions : [],
+        });
+      })
+      .catch(() => {
+        if (live) setResolvedPermissions({ isAdmin: false, permissions: [] });
+      });
+    return () => { live = false; };
+  }, [permissions]);
+
   const canView =
-    permissions.isAdmin ||
-    (permissions.permissions || []).includes("online_orders.view");
+    resolvedPermissions?.isAdmin ||
+    (resolvedPermissions?.permissions || []).includes("online_orders.view");
   const canManage =
-    permissions.isAdmin ||
-    (permissions.permissions || []).includes("online_orders.manage");
+    resolvedPermissions?.isAdmin ||
+    (resolvedPermissions?.permissions || []).includes("online_orders.manage");
 
   const [orders, setOrders] = useState([]);
   const [details, setDetails] = useState({});
