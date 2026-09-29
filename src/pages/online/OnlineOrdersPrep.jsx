@@ -5,9 +5,7 @@ import { apiRequest } from "../../services/api.js";
 import OnlineOrderCard from "../../components/online/OnlineOrderCard.jsx";
 import CompleteOrderModal from "../../components/online/CompleteOrderModal.jsx";
 import { printOnlineOrder } from "../../utils/onlineOrderPrint.js";
-import {
-  PREP_STATUS_ACTIONS,
-} from "./onlineOrdersShared.js";
+import useOnlineOrderMetadata from "./useOnlineOrderMetadata.js";
 
 /*
  * Restricted Online Orders processing view ("Order Prep").
@@ -33,6 +31,7 @@ import {
 const PREP_FILTER_STATUSES = ["ACCEPTED", "PREPARING", "READY"];
 
 export default function OnlineOrdersPrep({ permissions = null }) {
+  const orderMetadata = useOnlineOrderMetadata();
   const [resolvedPermissions, setResolvedPermissions] = useState(permissions);
   useEffect(() => {
     if (permissions) {
@@ -236,7 +235,7 @@ export default function OnlineOrdersPrep({ permissions = null }) {
               order={order}
               detail={details[order.id] || null}
               busyAction={busyActions[order.id] ? { orderId: order.id, action: busyActions[order.id] } : null}
-              allowedActions={canManage ? PREP_STATUS_ACTIONS[order.status] || [] : []}
+              allowedActions={canManage ? orderMetadata.actionsFor(order, { prepOnly: true }) : []}
               onAction={runAction}
               onPrint={handlePrint}
             />
