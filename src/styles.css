@@ -7020,3 +7020,69 @@ button:focus-visible {
 .superadmin-theme main{max-width:1600px;margin:0 auto}.superadmin-theme h1,.superadmin-theme h2,.superadmin-theme h3,.superadmin-theme h4{margin-top:0}
 @media(max-width:1000px){.superadmin-theme .xl\:grid-cols-5{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:720px){.superadmin-theme{padding:14px 12px 105px}.superadmin-theme .grid-cols-2,.superadmin-theme .md\:grid-cols-2,.superadmin-theme .md\:grid-cols-3,.superadmin-theme .lg\:grid-cols-2,.superadmin-theme .xl\:grid-cols-5{grid-template-columns:1fr}}
+
+
+/* Dashboard Builder compatibility layer
+   Keeps the migrated metadata/runtime builder lightweight: no Tailwind runtime
+   or second design system is added to Smart Theme. */
+:root {
+  --onepos-border: rgba(0,0,0,.12);
+  --onepos-surface-raised: #fff;
+  --onepos-surface-alt: #f4f5f7;
+  --onepos-text-primary: #1d1d1f;
+  --onepos-text-heading: #111114;
+  --onepos-text-secondary: rgba(29,29,31,.72);
+  --onepos-text-muted: rgba(29,29,31,.52);
+  --onepos-text-body: #2c2c2e;
+  --onepos-accent-400: #4f9cf9;
+  --onepos-accent-600: #0a84ff;
+  --onepos-accent-700: #066ed4;
+  --onepos-card-bg: #fff;
+  --onepos-card-border: rgba(0,0,0,.10);
+  --onepos-card-border-width: 1px;
+  --onepos-card-radius: 16px;
+  --onepos-card-pad: 18px;
+  --onepos-shadow-card: 0 8px 24px rgba(0,0,0,.06);
+}
+.onepos-page-title{margin:0;color:var(--onepos-text-heading);font-size:26px;line-height:1.15;font-weight:700;letter-spacing:-.03em}
+.onepos-page-subtitle{margin:.35rem 0 0;color:var(--onepos-text-muted);font-size:13px}
+.onepos-btn{min-height:34px;padding:0 12px;border:1px solid var(--onepos-border);border-radius:9px;background:#fff;color:var(--onepos-text-primary);font-weight:600;cursor:pointer}
+.onepos-btn:hover{background:#f5f5f7}
+.onepos-btn:disabled{opacity:.5;cursor:default}
+.onepos-btn-sm{min-height:30px;padding:0 10px;font-size:12px}
+.onepos-btn-primary{border-color:#0a84ff;background:#0a84ff;color:#fff}
+.onepos-btn-primary:hover{background:#0077ed}
+.onepos-input{min-height:34px;padding:0 9px;border:1px solid var(--onepos-border);border-radius:8px;background:#fff;color:var(--onepos-text-primary)}
+.block{display:block}.inline-flex{display:inline-flex}.flex{display:flex}.grid{display:grid}.absolute{position:absolute}.relative{position:relative}
+.inset-0{inset:0}.left-1{left:.25rem}.z-10{z-index:10}.flex-1{flex:1 1 0%}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}
+.items-center{align-items:center}.items-start{align-items:flex-start}.items-end{align-items:flex-end}.justify-between{justify-content:space-between}.justify-center{justify-content:center}.justify-end{justify-content:flex-end}.place-items-center{place-items:center}
+.gap-1{gap:.25rem}.gap-1\.5{gap:.375rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}
+.grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.w-full{width:100%}.w-2\.5{width:.625rem}.w-6{width:1.5rem}.w-9{width:2.25rem}.w-32{width:8rem}
+.h-full{height:100%}.h-2\.5{height:.625rem}.h-6{height:1.5rem}.h-9{height:2.25rem}.h-32{height:8rem}.min-h-0{min-height:0}.min-h-\[120px\]{min-height:120px}.min-h-\[140px\]{min-height:140px}.min-h-\[150px\]{min-height:150px}.min-h-\[260px\]{min-height:260px}.min-h-\[340px\]{min-height:340px}.min-h-\[420px\]{min-height:420px}.min-w-0{min-width:0}.max-w-\[120px\]{max-width:120px}
+.overflow-auto{overflow:auto}.shrink-0{flex-shrink:0}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.select-none{user-select:none}.touch-pan-y{touch-action:pan-y}
+.rounded-sm{border-radius:.125rem}.rounded-md{border-radius:.375rem}.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}.rounded-full{border-radius:9999px}.rounded-t{border-radius:.25rem .25rem 0 0}
+.border-2{border-width:2px;border-style:solid}.border-t{border-top:1px solid var(--onepos-border)}.border-white{border-color:#fff}.shadow-sm{box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.p-3{padding:.75rem}.p-4{padding:1rem}.p-8{padding:2rem}.px-1\.5{padding-left:.375rem;padding-right:.375rem}.px-2{padding-left:.5rem;padding-right:.5rem}.px-3{padding-left:.75rem;padding-right:.75rem}.py-0\.5{padding-top:.125rem;padding-bottom:.125rem}.py-1\.5{padding-top:.375rem;padding-bottom:.375rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.pt-2{padding-top:.5rem}.pb-2{padding-bottom:.5rem}
+.mt-0\.5{margin-top:.125rem}.mt-1{margin-top:.25rem}.mt-1\.5{margin-top:.375rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}.mt-4{margin-top:1rem}.mb-1{margin-bottom:.25rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-5{margin-bottom:1.25rem}
+.space-y-1\.5>*+*{margin-top:.375rem}.space-y-4>*+*{margin-top:1rem}.divide-y>*+*{border-top:1px solid var(--onepos-border)}
+.text-left{text-align:left}.text-center{text-align:center}.text-xs{font-size:.75rem}.text-sm{font-size:.875rem}.text-base{font-size:1rem}.text-lg{font-size:1.125rem}.text-2xl{font-size:1.5rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.font-medium{font-weight:500}.font-semibold{font-weight:600}.font-bold{font-weight:700}.uppercase{text-transform:uppercase}.capitalize{text-transform:capitalize}.leading-none{line-height:1}.tabular-nums{font-variant-numeric:tabular-nums}.opacity-80{opacity:.8}.tracking-\[0\.14em\]{letter-spacing:.14em}
+.order-1{order:1}.order-2{order:2}.transition-\[height\]{transition-property:height}.duration-300{transition-duration:300ms}.animate-pulse{animation:dashboard-pulse 1.4s ease-in-out infinite}
+.col-span-4{grid-column:span 4/span 4}
+@keyframes dashboard-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+@media (min-width:640px){
+  .sm\:flex-row{flex-direction:row}.sm\:col-span-1{grid-column:span 1/span 1}.sm\:col-span-2{grid-column:span 2/span 2}.sm\:col-span-3{grid-column:span 3/span 3}.sm\:col-span-4{grid-column:span 4/span 4}.sm\:col-span-6{grid-column:span 6/span 6}
+  .sm\:grid-cols-\[100px_minmax\(0\,1fr\)_100px_auto\]{grid-template-columns:100px minmax(0,1fr) 100px auto}
+  .sm\:grid-cols-\[100px_minmax\(0\,1fr\)_120px_90px_auto\]{grid-template-columns:100px minmax(0,1fr) 120px 90px auto}
+  .sm\:grid-cols-\[140px_minmax\(0\,1fr\)_100px_auto\]{grid-template-columns:140px minmax(0,1fr) 100px auto}
+  .sm\:grid-cols-\[140px_minmax\(0\,1fr\)_120px_auto\]{grid-template-columns:140px minmax(0,1fr) 120px auto}
+}
+@media (min-width:768px){
+  .md\:col-span-2{grid-column:span 2/span 2}.md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .md\:grid-cols-\[1fr_1fr_1fr_auto\]{grid-template-columns:1fr 1fr 1fr auto}
+}
+@media (min-width:1024px){
+  .lg\:col-span-3{grid-column:span 3/span 3}.lg\:col-span-4{grid-column:span 4/span 4}.lg\:col-span-6{grid-column:span 6/span 6}.lg\:col-span-7{grid-column:span 7/span 7}.lg\:col-span-8{grid-column:span 8/span 8}.lg\:col-span-9{grid-column:span 9/span 9}.lg\:col-span-10{grid-column:span 10/span 10}.lg\:col-span-11{grid-column:span 11/span 11}.lg\:col-span-12{grid-column:span 12/span 12}
+}
+@media (min-width:1280px){
+  .xl\:grid-cols-\[minmax\(0\,1fr\)_400px\]{grid-template-columns:minmax(0,1fr) 400px}.xl\:order-1{order:1}.xl\:order-2{order:2}.xl\:sticky{position:sticky}
+}
