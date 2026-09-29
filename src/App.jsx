@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, apiUrl, checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
 import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
-import RecordListView from './components/RecordListView'
-import OneBuilder from './pages/settings/OneBuilder'
-import MetadataSettingsPage from './pages/settings/MetadataSettingsPage'
-import ObjectsSettingsPane from './pages/settings/ObjectsSettingsPane'
-import ClientWebShopSettings from './pages/settings/ClientWebShopSettings'
-import PaymentTerminalSettings from './pages/settings/PaymentTerminalSettings'
-import HardwareSettings from './pages/settings/HardwareSettings'
-import AiAssistantSettings from './pages/settings/AiAssistantSettings'
-import ConnectionsSettings from './pages/settings/ConnectionsSettings'
-import TillPage from './pages/till/TillPage'
-import WorkspacePage from './pages/workspace/WorkspacePage'
-import DashboardPage from './pages/dashboard/DashboardPage'
-import ProfilePage from './pages/profile/ProfilePage'
+const RecordListView = lazy(() => import('./components/RecordListView'))
+const OneBuilder = lazy(() => import('./pages/settings/OneBuilder'))
+const MetadataSettingsPage = lazy(() => import('./pages/settings/MetadataSettingsPage'))
+const ObjectsSettingsPane = lazy(() => import('./pages/settings/ObjectsSettingsPane'))
+const ClientWebShopSettings = lazy(() => import('./pages/settings/ClientWebShopSettings'))
+const PaymentTerminalSettings = lazy(() => import('./pages/settings/PaymentTerminalSettings'))
+const HardwareSettings = lazy(() => import('./pages/settings/HardwareSettings'))
+const AiAssistantSettings = lazy(() => import('./pages/settings/AiAssistantSettings'))
+const ConnectionsSettings = lazy(() => import('./pages/settings/ConnectionsSettings'))
+const TillPage = lazy(() => import('./pages/till/TillPage'))
+const WorkspacePage = lazy(() => import('./pages/workspace/WorkspacePage'))
+const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -1619,6 +1619,7 @@ function Desktop({ onLock }) {
   const [topPanel, setTopPanel] = useState('')
   const [appSearch, setAppSearch] = useState('')
   const [storeApps, setStoreApps] = useState([])
+  const [storeAppsLoaded, setStoreAppsLoaded] = useState(false)
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
   const topbarPanelRef = useRef(null)
   const now = useClock()
@@ -1653,19 +1654,33 @@ function Desktop({ onLock }) {
 
   useEffect(() => {
     let live = true
-    Promise.all([
-      apiRequest('/api/packages/marketplace').catch(() => ({ data: [] })),
-      checkBackend().catch(() => null),
-    ]).then(([packages, health]) => {
-      if (!live) return
-      setStoreApps(Array.isArray(packages?.data) ? packages.data : [])
-      setConnectionHealth({
-        status: health ? 'Connected' : 'Offline',
-        database: health?.database || (health ? 'Connected' : 'Unavailable'),
+    checkBackend()
+      .catch(() => null)
+      .then((health) => {
+        if (!live) return
+        document.documentElement.setAttribute('data-onepos-backend', health ? 'connected' : 'offline')
+        setConnectionHealth({
+          status: health ? 'Connected' : 'Offline',
+          database: health?.database || (health ? 'Connected' : 'Unavailable'),
+        })
       })
-    })
     return () => { live = false }
   }, [])
+
+  useEffect(() => {
+    if (storeAppsLoaded || (topPanel !== 'apps' && topPanel !== 'store')) return undefined
+    let live = true
+    apiRequest('/api/packages/marketplace')
+      .then((packages) => {
+        if (!live) return
+        setStoreApps(Array.isArray(packages?.data) ? packages.data : [])
+        setStoreAppsLoaded(true)
+      })
+      .catch(() => {
+        if (live) setStoreAppsLoaded(true)
+      })
+    return () => { live = false }
+  }, [topPanel, storeAppsLoaded])
 
   const dateTime = useMemo(
     () =>
@@ -1825,36 +1840,38 @@ function Desktop({ onLock }) {
         </div>
       </header>
 
-      {activeApp === 'settings' ? (
-        <SettingsPage onOpenProfile={() => {
-          const next = { app: 'profile', section: null }
-          setRouteState(next)
-          setRoute('profile')
-          setActiveApp('profile')
-        }} />
-      ) : activeApp === 'till' ? (
-        <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
-      ) : activeApp === 'profile' ? (
-        <ProfilePage onBack={() => {
-          const next = { app: 'settings', section: 'general' }
-          setRouteState(next)
-          setRoute('settings', 'general')
-          setActiveApp('settings')
-        }} />
-      ) : activeApp === 'workspace' ? (
-        <WorkspacePage
-          initialObjectKey={routeState.objectKey || ''}
-          initialRecordId={routeState.recordId || ''}
-          onNavigate={openItem}
-          onRouteChange={(objectKey, recordId) => {
-            const next = { app: 'workspace', section: null, objectKey, recordId }
+      <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>
+        {activeApp === 'settings' ? (
+          <SettingsPage onOpenProfile={() => {
+            const next = { app: 'profile', section: null }
             setRouteState(next)
-            setRoute('workspace', null, { objectKey, recordId })
-          }}
-        />
-      ) : (
-        <DashboardPage />
-      )}
+            setRoute('profile')
+            setActiveApp('profile')
+          }} />
+        ) : activeApp === 'till' ? (
+          <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
+        ) : activeApp === 'profile' ? (
+          <ProfilePage onBack={() => {
+            const next = { app: 'settings', section: 'general' }
+            setRouteState(next)
+            setRoute('settings', 'general')
+            setActiveApp('settings')
+          }} />
+        ) : activeApp === 'workspace' ? (
+          <WorkspacePage
+            initialObjectKey={routeState.objectKey || ''}
+            initialRecordId={routeState.recordId || ''}
+            onNavigate={openItem}
+            onRouteChange={(objectKey, recordId) => {
+              const next = { app: 'workspace', section: null, objectKey, recordId }
+              setRouteState(next)
+              setRoute('workspace', null, { objectKey, recordId })
+            }}
+          />
+        ) : (
+          <DashboardPage />
+        )}
+      </Suspense>
 
       <Dock onItemOpen={openItem} />
     </main>
@@ -1867,11 +1884,6 @@ export default function App() {
   // Lock during the current session.
   const [locked, setLocked] = useState(() => !hasSession())
 
-  useEffect(() => {
-    checkBackend()
-      .then(() => document.documentElement.setAttribute('data-onepos-backend', 'connected'))
-      .catch(() => document.documentElement.setAttribute('data-onepos-backend', 'offline'))
-  }, [])
   const [transitioning, setTransitioning] = useState(false)
 
   const unlock = () => {
