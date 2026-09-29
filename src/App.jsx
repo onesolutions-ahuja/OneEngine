@@ -22,6 +22,7 @@ const HardwareSettings = lazy(() => import('./pages/settings/HardwareSettings'))
 const AiAssistantSettings = lazy(() => import('./pages/settings/AiAssistantSettings'))
 const ConnectionsSettings = lazy(() => import('./pages/settings/ConnectionsSettings'))
 const TillPage = lazy(() => import('./pages/till/TillPage'))
+const CustomerDisplay = lazy(() => import('./pages/till/CustomerDisplay'))
 const WorkspacePage = lazy(() => import('./pages/workspace/WorkspacePage'))
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'))
@@ -254,6 +255,7 @@ function LockScreen({ onUnlock, onSignOut }) {
   const now = useClock()
   const sessionMode = hasSession()
   const storedUser = getStoredUser()
+  const canManagePlatform = desktopPermissions.includes('platform.manage')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
@@ -546,6 +548,7 @@ function readRoute() {
   const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
   if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'general' }
   if (parts[0] === 'till') return { app: 'till', section: null }
+  if (parts[0] === 'customer-display') return { app: 'customer-display', section: null }
   if (parts[0] === 'profile') return { app: 'profile', section: null }
   if (parts[0] === 'sales') return { app: 'sales', section: null }
   if (parts[0] === 'returns') return { app: 'returns', section: null }
@@ -1958,6 +1961,7 @@ function Desktop({ onLock }) {
   const [storeApps, setStoreApps] = useState([])
   const [storeAppsLoaded, setStoreAppsLoaded] = useState(false)
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
+  const [desktopPermissions, setDesktopPermissions] = useState([])
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
   const isTillUser = /till|cashier|sales/i.test(String(storedUser?.role || ''))
@@ -2013,6 +2017,16 @@ function Desktop({ onLock }) {
       document.removeEventListener('keydown', closeEscape)
     }
   }, [topPanel])
+
+  useEffect(() => {
+    let live = true
+    apiRequest('/api/auth/me/permissions')
+      .then((response) => {
+        if (live) setDesktopPermissions(Array.isArray(response?.data?.permissions) ? response.data.permissions : [])
+      })
+      .catch(() => { if (live) setDesktopPermissions([]) })
+    return () => { live = false }
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -2444,9 +2458,9 @@ function Desktop({ onLock }) {
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
-          storedUser?.isSuperadmin === true ? <div className="superadmin-theme"><LicensingAdmin /></div> : <div className="module-state">Superadmin access required.</div>
+          canManagePlatform ? <div className="superadmin-theme"><LicensingAdmin /></div> : <div className="module-state">Platform Management permission required.</div>
         ) : activeApp === 'app-releases' ? (
-          storedUser?.isSuperadmin === true ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : <div className="module-state">Superadmin access required.</div>
+          canManagePlatform ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : <div className="module-state">Platform Management permission required.</div>
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
@@ -2476,6 +2490,11 @@ function Desktop({ onLock }) {
 }
 
 export default function App() {
+  const route = readRoute()
+  if (route.app === 'customer-display') {
+    return <Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense>
+  }
+
   // A browser refresh should restore an authenticated session, not behave like
   // an explicit workstation lock. PIN is only required after the user chooses
   // Lock during the current session.
