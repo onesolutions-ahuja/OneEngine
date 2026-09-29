@@ -304,6 +304,15 @@ export default function RecordListView({
                     <th
                       key={column.key}
                       className={`record-list-column-head ${draggingKey === column.key ? 'is-dragging' : ''}`}
+                      tabIndex={0}
+                      aria-label={`${column.label}. Hold Alt and use left or right arrow to reorder.`}
+                      onKeyDown={(event) => {
+                        if (!event.altKey || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return
+                        event.preventDefault()
+                        const index = orderedColumns.findIndex((item) => item.key === column.key)
+                        const target = event.key === 'ArrowLeft' ? orderedColumns[index - 1] : orderedColumns[index + 1]
+                        if (target) moveColumn(column.key, target.key)
+                      }}
                       draggable
                       onDragStart={(event) => {
                         setDraggingKey(column.key)
@@ -417,6 +426,13 @@ export default function RecordListView({
                   key={row.id}
                   className={String(selectedRowId) === String(row.id) ? 'is-selected' : ''}
                   onClick={() => onRowSelect?.(row)}
+                  tabIndex={onRowSelect ? 0 : undefined}
+                  role={onRowSelect ? 'button' : undefined}
+                  onKeyDown={(event) => {
+                    if (!onRowSelect || !['Enter', ' '].includes(event.key)) return
+                    event.preventDefault()
+                    onRowSelect(row)
+                  }}
                 >
                   {canEdit ? (
                     <td className="record-list-edit-cell">
