@@ -531,7 +531,6 @@ function SettingsPage() {
 
   const permissions = context?.permissions || {}
   const permissionCodes = Array.isArray(permissions.permissions) ? permissions.permissions : []
-  const isSuperadmin = permissions.isSuperadmin === true
   const isAdmin = permissions.isAdmin === true
   const isPlatformDeveloper = context?.user?.isPlatformDeveloper === true
   const entitlements = permissions.entitlements || {}
@@ -544,9 +543,7 @@ function SettingsPage() {
   const canManageRoles = permissionCodes.includes('role.manage')
 
   const access = settingSectionAccess({
-    isAdmin,
-    isSuperadmin,
-    isPlatformDeveloper,
+    permissions: permissionCodes,
     loyalty: entitlements.loyalty === true,
   })
 
@@ -577,12 +574,10 @@ function SettingsPage() {
   const platformOnlySection = current?.key === 'objects' || current?.key === 'platform'
   /*
    * Server/API configuration is device/platform configuration, not tenant
-   * company settings. A Platform Superadmin legitimately has no company_id,
-   * so do not force an acting-company context for this section. Visibility is
-   * still controlled by settingSectionAccess(), where Server Configuration is
-   * Superadmin-only.
+   * company settings. Access is granted by platform.manage.
    */
-  const companyIndependentSection = platformOnlySection || (current?.key === 'server-api' && isSuperadmin)
+  const companyIndependentSection = platformOnlySection
+    || (current?.key === 'server-api' && permissionCodes.includes('platform.manage'))
   const hasCompanyContext = context?.hasCompanyContext === true
   const companySettingsError = context?.settingsError || ''
 
@@ -837,7 +832,7 @@ function SettingsPage() {
   }
 
   const profileName = user?.name || user?.username || 'User'
-  const profileRole = isSuperadmin ? 'Superadmin' : user?.role || 'User'
+  const profileRole = user?.role || 'User'
   const initial = profileName.trim().charAt(0).toUpperCase() || 'U'
 
   return (
@@ -1585,7 +1580,7 @@ function Desktop({ onLock }) {
   const topbarPanelRef = useRef(null)
   const now = useClock()
   const storedUser = getStoredUser()
-  const isTillUser = !storedUser?.isSuperadmin && /till|cashier|sales/i.test(String(storedUser?.role || ''))
+  const isTillUser = /till|cashier|sales/i.test(String(storedUser?.role || ''))
 
   useEffect(() => {
     const syncRoute = () => setActiveApp(readRoute().app)
