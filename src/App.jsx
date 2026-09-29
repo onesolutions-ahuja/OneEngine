@@ -18,6 +18,8 @@ const WorkspacePage = lazy(() => import('./pages/workspace/WorkspacePage'))
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'))
 const SalesPage = lazy(() => import('./pages/sales/SalesPage'))
+const ReturnsPage = lazy(() => import('./pages/returns/ReturnsPage'))
+const SupplierReturnsPage = lazy(() => import('./pages/returns/SupplierReturnsPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -446,6 +448,8 @@ function readRoute() {
   if (parts[0] === 'till') return { app: 'till', section: null }
   if (parts[0] === 'profile') return { app: 'profile', section: null }
   if (parts[0] === 'sales') return { app: 'sales', section: null }
+  if (parts[0] === 'returns') return { app: 'returns', section: null }
+  if (parts[0] === 'supplier-returns') return { app: 'supplier-returns', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -464,6 +468,10 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/profile`
       : app === 'sales'
         ? `${base}/sales`
+      : app === 'returns'
+        ? `${base}/returns`
+      : app === 'supplier-returns'
+        ? `${base}/supplier-returns`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1711,6 +1719,16 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'returns') {
+      setRoute('returns')
+      setActiveApp('returns')
+      return
+    }
+    if (id === 'supplier-returns') {
+      setRoute('supplier-returns')
+      setActiveApp('supplier-returns')
+      return
+    }
     if (id === 'sales') {
       setRoute('sales')
       setActiveApp('sales')
@@ -1879,7 +1897,14 @@ function Desktop({ onLock }) {
         ) : activeApp === 'till' ? (
           <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
         ) : activeApp === 'sales' ? (
-          <SalesPage />
+          <SalesPage
+            onOpenReturns={() => openItem('returns')}
+            onOpenSupplierReturns={() => openItem('supplier-returns')}
+          />
+        ) : activeApp === 'returns' ? (
+          <ReturnsPage />
+        ) : activeApp === 'supplier-returns' ? (
+          <SupplierReturnsPage />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
