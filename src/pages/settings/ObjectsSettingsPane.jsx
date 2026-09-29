@@ -6,6 +6,9 @@ import FieldEditor from './Platform/FieldEditor.jsx'
 import RelationshipEditor from './Platform/RelationshipEditor.jsx'
 import RecordTypeEditor from './Platform/RecordTypeEditor.jsx'
 import LayoutEditor from './Platform/LayoutEditor.jsx'
+import RuleEditor from './Platform/RuleEditor.jsx'
+import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
+import ActionsAdmin from './Platform/ActionsAdmin.jsx'
 
 const TABS = [
   ['details', 'Details'],
@@ -341,6 +344,25 @@ export default function ObjectsSettingsPane() {
     closeEditor()
   }
 
+  const refreshRules = async () => {
+    if (!selectedId) return
+    const response = await apiRequest('/api/platform/rules')
+    const rules = Array.isArray(response?.data) ? response.data : []
+    setObjectData((current) => ({
+      ...current,
+      rules: rules.filter((row) =>
+        String(row.object_id) === String(selectedId)
+        || (Array.isArray(row.referenced_object_ids)
+          && row.referenced_object_ids.some((objectId) => String(objectId) === String(selectedId)))),
+    }))
+    setLoadedSections((current) => ({ ...current, rules: true }))
+  }
+
+  const saveRule = async () => {
+    await refreshRules()
+    closeEditor()
+  }
+
 
   return (
     <div className={`objects-settings-shell mobile-stage-${mobileStage}`}>
@@ -457,6 +479,23 @@ export default function ObjectsSettingsPane() {
                     onSave={saveLayout}
                     onCancel={closeEditor}
                   />
+                ) : editor?.kind === 'rule' ? (
+                  <RuleEditor
+                    rule={editor.item || null}
+                    objects={objects}
+                    initialObjectId={selectedId}
+                    onSave={saveRule}
+                    onCancel={closeEditor}
+                  />
+                ) : editor?.kind === 'workflow' ? (
+                  <WorkflowAdmin
+                    embedded
+                    initialWorkflow={editor.item || { object_id: selectedId, object_key: objectKey(selected), objectKey: objectKey(selected), trigger_key: 'after_update', active: false, action: { type: 'workflow', match: 'all', actions: [] } }}
+                    onMessage={() => {}}
+                    onError={(value) => setError(value || '')}
+                    onClose={closeEditor}
+                    onSaved={saveRule}
+                  />
                 ) : activeTab === 'details' ? (
                   <div className="objects-detail-card">
                     <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
@@ -548,14 +587,22 @@ export default function ObjectsSettingsPane() {
                   <ObjectDataList title="Validation Rules" rows={validationRules}
                     primary={(row) => row.name || row.rule_key || 'Validation Rule'}
                     secondary={(row) => row.description || row.trigger_key || row.trigger || ''}
-                    meta={(row) => row.active === false ? 'Inactive' : 'Active'} />
+                    meta={(row) => row.active === false ? 'Inactive' : 'Active'}
+                    actionLabel="Rule"
+                    onAdd={() => setEditor({ kind: 'rule', item: null })}
+                    onRowClick={(row) => setEditor({ kind: 'rule', item: row })} />
                 ) : null}
 
                 {activeTab === 'actions' ? (
-                  <ObjectDataList title="Actions & Bindings" rows={actionRows}
-                    primary={(row) => row.label || row.name || row.action_key || row.event_key || row.rule_key || 'Action'}
-                    secondary={(row) => row.description || row.handler_key || row.event_key || row.trigger_key || row.action_key || ''}
-                    meta={(row) => row._kind || ruleActionType(row) || 'action'} />
+                  <div className="objects-config-list objects-config-list--stacked">
+                    <ObjectDataList title="Object Actions & Bindings" rows={actionRows}
+                      primary={(row) => row.label || row.name || row.action_key || row.event_key || row.rule_key || 'Action'}
+                      secondary={(row) => row.description || row.handler_key || row.event_key || row.trigger_key || row.action_key || ''}
+                      meta={(row) => row._kind || ruleActionType(row) || 'action'} />
+                    <div className="objects-config-subsection">
+                      <ActionsAdmin onError={(value) => setError(value || '')} />
+                    </div>
+                  </div>
                 ) : null}
 
                 {activeTab === 'automation' ? (
@@ -565,7 +612,10 @@ export default function ObjectsSettingsPane() {
                     meta={(row) => {
                       const steps = Array.isArray(row.action?.actions) ? row.action.actions.length : 0
                       return `${row.active === false ? 'Inactive' : 'Active'} · ${steps} step${steps === 1 ? '' : 's'}`
-                    }} />
+                    }}
+                    actionLabel="Workflow"
+                    onAdd={() => setEditor({ kind: 'workflow', item: null })}
+                    onRowClick={(row) => setEditor({ kind: 'workflow', item: row })} />
                 ) : null}
 
                 {activeTab === 'list-views' ? (
