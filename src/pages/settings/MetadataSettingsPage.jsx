@@ -100,6 +100,7 @@ function GenericObjectSettings({ object, superadmin }) {
   const [lookupOptions, setLookupOptions] = useState({})
   const [selectedId, setSelectedId] = useState('')
   const [editing, setEditing] = useState(false)
+  const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -156,38 +157,43 @@ function GenericObjectSettings({ object, superadmin }) {
 
   const startEdit = () => {
     if (!selected || !canEdit) return
+    setCreating(false)
     setDraft(Object.fromEntries(writable.map((field) => [field.api_name, selected[field.api_name] ?? ''])))
+    setEditing(true)
+  }
+
+  const startCreate = () => {
+    if (!canCreate) return
+    const values = {}
+    for (const field of writable) {
+      const defaultValue = field?.config?.defaultValue ?? field?.config?.default_value
+      values[field.api_name] = defaultValue !== undefined
+        ? defaultValue
+        : String(field.field_type || '').toLowerCase() === 'boolean' ? false : ''
+    }
+    setSelectedId('')
+    setDraft(values)
+    setCreating(true)
     setEditing(true)
   }
 
   const save = async (event) => {
     event.preventDefault()
-    if (!selected || !canEdit) return
+    if (creating ? !canCreate : (!selected || !canEdit)) return
     try {
-      await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records/${encodeURIComponent(selected.id)}`, {
-        method: 'PUT',
+      const target = creating
+        ? `/api/platform/objects/${encodeURIComponent(key)}/records`
+        : `/api/platform/objects/${encodeURIComponent(key)}/records/${encodeURIComponent(selected.id)}`
+      const response = await apiRequest(target, {
+        method: creating ? 'POST' : 'PUT',
         body: JSON.stringify({ data: draft }),
       })
       setEditing(false)
+      setCreating(false)
       await load()
+      if (creating && response?.data?.id) setSelectedId(response.data.id)
     } catch (err) {
-      setError(err?.message || 'Unable to save record')
-    }
-  }
-
-  const create = async () => {
-    if (!canCreate) return
-    const values = {}
-    for (const field of writable) values[field.api_name] = field.field_type === 'boolean' ? false : ''
-    try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records`, {
-        method: 'POST',
-        body: JSON.stringify({ data: values }),
-      })
-      await load()
-      if (response?.data?.id) setSelectedId(response.data.id)
-    } catch (err) {
-      setError(err?.message || 'Unable to create record')
+      setError(err?.message || (creating ? 'Unable to create record' : 'Unable to save record'))
     }
   }
 
@@ -207,16 +213,16 @@ function GenericObjectSettings({ object, superadmin }) {
     <div className="metadata-settings-object">
       {error ? <div className="settings-error">{error}</div> : null}
       <div className="metadata-settings-object-toolbar">
-        <label><Search size={14}/><select value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setEditing(false) }}>
+        <label><Search size={14}/><select value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setEditing(false); setCreating(false) }}>
           <option value="">Select record…</option>
           {rows.map((row) => <option key={row.id} value={row.id}>{row.name || row.full_name || row.username || row.code || row.id}</option>)}
         </select></label>
-        {canCreate ? <button type="button" onClick={create}>New</button> : null}
-        {selected && canEdit ? <button type="button" onClick={startEdit}>Edit</button> : null}
+        {canCreate ? <button type="button" onClick={startCreate}>New</button> : null}
+        {selected && canEdit && !creating ? <button type="button" onClick={startEdit}>Edit</button> : null}
         {selected && canDelete ? <button type="button" className="is-danger" onClick={remove}>Delete</button> : null}
       </div>
 
-      {!selected ? <div className="settings-card settings-state-card">Select a record.</div> : editing ? (
+      {editing ? (
         <form className="settings-card metadata-settings-form" onSubmit={save}>
           {writable.map((field) => (
             <div className="settings-row" key={field.id || field.api_name}>
@@ -224,9 +230,12 @@ function GenericObjectSettings({ object, superadmin }) {
               <MetadataField field={field} value={draft[field.api_name]} disabled={false} lookupOptions={lookupOptions[field.api_name] || []} onChange={(value) => setDraft((current) => ({ ...current, [field.api_name]: value }))} />
             </div>
           ))}
-          <div className="metadata-settings-form-actions"><button type="button" onClick={() => setEditing(false)}>Cancel</button><button type="submit" className="is-primary">Save</button></div>
+          <div className="metadata-settings-form-actions">
+            <button type="button" onClick={() => { setEditing(false); setCreating(false) }}>Cancel</button>
+            <button type="submit" className="is-primary">{creating ? 'Create' : 'Save'}</button>
+          </div>
         </form>
-      ) : (
+      ) : !selected ? <div className="settings-card settings-state-card">Select a record.</div> : (
         <div className="settings-card">
           {readable.map((field) => <div className="settings-row" key={field.id || field.api_name}><strong>{field.label || field.api_name}</strong><span className="settings-value">{displayValue(fieldValue(selected, field))}</span></div>)}
         </div>
