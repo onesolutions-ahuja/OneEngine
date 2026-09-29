@@ -7401,3 +7401,49 @@ button:focus-visible {
     min-height: 44px;
   }
 }
+
+
+/* Developer Settings group — compact visual separation from business settings. */
+.settings-group--developer {
+  margin-top: 8px;
+  padding-top: 4px;
+}
+
+.settings-developer-divider {
+  position: relative;
+  height: 22px;
+  margin: 1px 7px 4px;
+  display: flex;
+  align-items: center;
+}
+
+.settings-developer-divider::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(110,118,129,.22), rgba(110,118,129,.08), transparent);
+}
+
+.settings-developer-divider span {
+  position: relative;
+  padding-right: 7px;
+  background: var(--settings-sidebar-bg, rgba(248,248,250,.96));
+  color: rgba(60,60,67,.48);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 680px) {
+  .settings-group--developer {
+    margin-top: 6px;
+  }
+
+  .settings-developer-divider {
+    margin-inline: 5px;
+  }
+}
