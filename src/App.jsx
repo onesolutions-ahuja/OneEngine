@@ -1203,7 +1203,25 @@ function SettingsPage() {
                       <span />
                     </button>
                   </div>
-                  <div className="settings-row"><strong>Earning rate</strong><span className="settings-value">{Number(settings.loyalty?.earningRate || 0) * 100}%</span></div>
+                  <div className="settings-row">
+                    <div><strong>Earning rate</strong><p>Percentage of purchase total earned as points (1% = 1 point per £1).</p></div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      defaultValue={(Number(settings.loyalty?.earningRate || 0) * 100).toFixed(2)}
+                      disabled={!canManage || saving === 'loyaltyEarningRate'}
+                      onBlur={(event) => {
+                        const percent = Number(event.target.value)
+                        if (Number.isFinite(percent) && percent >= 0 && percent <= 100) {
+                          const next = percent / 100
+                          if (next !== Number(settings.loyalty?.earningRate || 0)) update('loyaltyEarningRate', next)
+                        }
+                      }}
+                      aria-label="Loyalty earning rate"
+                    />
+                  </div>
                 </>
               ) : current?.key === 'hardware' ? (
                 <HardwareSettings />
