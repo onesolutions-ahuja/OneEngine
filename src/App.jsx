@@ -1979,7 +1979,7 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
                     onOpenRoute?.(route)
                   } else {
                     onClose?.()
-                    onOpenStore?.()
+                    onOpenStore?.(item.package_key)
                   }
                 }}
               >
@@ -2121,6 +2121,7 @@ function Desktop({ onLock, onSignOut }) {
   const [launcherOpen, setLauncherOpen] = useState(false)
   const [appSearch, setAppSearch] = useState('')
   const [storeApps, setStoreApps] = useState([])
+  const [storeFocusPackageKey, setStoreFocusPackageKey] = useState('')
   const [storeAppsLoaded, setStoreAppsLoaded] = useState(false)
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
   const [desktopPermissions, setDesktopPermissions] = useState([])
@@ -2148,8 +2149,9 @@ function Desktop({ onLock, onSignOut }) {
   }, [])
 
   useEffect(() => {
-    const openStore = () => {
+    const openStore = (event) => {
       setAppSearch('')
+      setStoreFocusPackageKey(String(event?.detail?.packageKey || ''))
       setTopPanel('store')
     }
     window.addEventListener('onepos:open-store', openStore)
@@ -2399,6 +2401,7 @@ function Desktop({ onLock, onSignOut }) {
     }
     if (id === 'store') {
       setAppSearch('')
+      setStoreFocusPackageKey('')
       setTopPanel('store')
       return
     }
@@ -2488,12 +2491,16 @@ function Desktop({ onLock, onSignOut }) {
                   mode="launcher"
                   onClose={() => setTopPanel('')}
                   onOpenRoute={openRoutePath}
-                  onOpenStore={() => setTopPanel('store')}
+                  onOpenStore={(packageKey) => {
+                    setStoreFocusPackageKey(packageKey || '')
+                    setTopPanel('store')
+                  }}
                 />
               ) : null}
               {topPanel === 'store' ? (
                 <OneStorePopover
                   initialPackages={storeApps}
+                  initialSelectedPackageKey={storeFocusPackageKey}
                   onPackagesChange={setStoreApps}
                   canManagePackages={desktopPermissions.includes('package.install')}
                   onClose={() => setTopPanel('')}
@@ -2559,8 +2566,9 @@ function Desktop({ onLock, onSignOut }) {
             onQueryChange={setAppSearch}
             onClose={() => setLauncherOpen(false)}
             onOpenRoute={openRoutePath}
-            onOpenStore={() => {
+            onOpenStore={(packageKey) => {
               setAppSearch('')
+              setStoreFocusPackageKey(packageKey || '')
               setTopPanel('store')
             }}
           />
