@@ -5883,3 +5883,49 @@ button:focus-visible {
     padding-bottom: calc(84px + env(safe-area-inset-bottom));
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   GLOBAL DESKTOP DOCK CLEARANCE
+   All Settings/data surfaces share one bottom boundary: 6px above the dock.
+   The dock is 60px high with an 8px bottom offset, so content reserves 74px
+   from the viewport bottom (60 + 8 + 6). This replaces the older mixed
+   92/106/110px safety gaps that left dead space above the dock.
+   -------------------------------------------------------------------------- */
+@media (min-width: 681px) {
+  :root {
+    --onepos-dock-clearance: 74px;
+  }
+
+  .settings-content-body,
+  .settings-nav {
+    padding-bottom: var(--onepos-dock-clearance);
+  }
+
+  .settings-card:has(.record-list-view),
+  .settings-card:has(.objects-settings-shell),
+  .settings-card:has(.onebuilder) {
+    max-height: calc(100vh - 28px - 28px - 12px - var(--onepos-dock-clearance));
+  }
+
+  .objects-settings-shell {
+    height: calc(100vh - 28px - 28px - 12px - var(--onepos-dock-clearance));
+    max-height: calc(100vh - 28px - 28px - 12px - var(--onepos-dock-clearance));
+  }
+
+  .objects-config-workspace {
+    max-height: calc(100vh - 28px - 28px - 12px - 48px - 9px - var(--onepos-dock-clearance));
+  }
+
+  .record-list-view {
+    max-height: calc(100vh - 28px - 28px - 12px - var(--onepos-dock-clearance));
+  }
+
+  .record-list-table-wrap {
+    max-height: calc(100vh - 28px - 28px - 12px - 40px - 10px - var(--onepos-dock-clearance));
+  }
+
+  .workspace-page {
+    padding-bottom: var(--onepos-dock-clearance);
+  }
+}
