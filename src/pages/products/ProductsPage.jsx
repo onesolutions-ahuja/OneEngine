@@ -227,7 +227,7 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
   </section>
 }
 
-function ProductEditor({mode,product,preset,categories,onClose,onSaved}){
+export function ProductEditor({mode,product,preset,categories,onClose,onSaved}){
   const [values,setValues]=useState(()=>({
     name:product?.name||preset?.name||'',
     sku:product?.sku||'',
