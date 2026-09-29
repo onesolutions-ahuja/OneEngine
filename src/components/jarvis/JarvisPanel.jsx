@@ -289,8 +289,7 @@ export default function JarvisPanel({ onClose, onActivityChange, embedded = fals
                   : "bg-slate-800 border-white/10 text-slate-500"
             }`}
           >
-            {listening ? <Mic size={18} /> : <MicOff size={18} className={speechSupported ? "hidden" : ""} />}
-            {speechSupported && !listening && <Mic size={18} className={listening ? "hidden" : ""} />}
+            {listening ? <Mic size={18} /> : speechSupported ? <Mic size={18} /> : <MicOff size={18} />}
           </button>
 
           <input
