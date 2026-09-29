@@ -35,6 +35,38 @@ function recordTitle(record, fields) {
   return record?.id ? String(record.id) : 'Record'
 }
 
+function layoutFieldKeys(layout) {
+  const definition = layout?.definition || {}
+  const components = Array.isArray(definition.components) ? definition.components : []
+  return components
+    .filter((component) => component?.type === 'field' || component?.component_key === 'field')
+    .sort((a, b) => Number(a.order ?? 999) - Number(b.order ?? 999))
+    .map((component) => component.field_key || component.fieldKey || component.api_name || component.props?.fieldKey || component.props?.field_key)
+    .filter(Boolean)
+}
+
+function fieldsForLayout(fields, layout) {
+  const readable = (fields || []).filter((field) => field.active !== false && field.readable !== false)
+  const keys = layoutFieldKeys(layout)
+  if (!keys.length) return readable
+  const byKey = new Map(readable.map((field) => [field.api_name, field]))
+  return keys.map((key) => byKey.get(key)).filter(Boolean)
+}
+
+function resolveRecordLayout(layouts, pageType, recordTypeId, fallback = null) {
+  const candidates = (layouts || []).filter((layout) => layout.page_type === pageType)
+  if (!candidates.length) return fallback
+  if (recordTypeId) {
+    const typed = candidates.filter((layout) => String(layout.record_type_id || '') === String(recordTypeId))
+    const typedDefault = typed.find((layout) => layout.is_default === true) || typed[0]
+    if (typedDefault) return typedDefault
+  }
+  return candidates.find((layout) => !layout.record_type_id && layout.is_default === true)
+    || candidates.find((layout) => !layout.record_type_id)
+    || fallback
+    || candidates[0]
+}
+
 function makeColumns(fields, listView = null) {
   const readable = (fields || [])
     .filter((field) => field.readable !== false && field.active !== false)
@@ -174,8 +206,9 @@ export default function WorkspacePage() {
   const canDelete = permissions?.can_delete === true
 
   const defaultRecordTypeId = runtimeMeta.recordTypes.find((item) => item.is_default === true)?.id || ''
+  const createLayout = resolveRecordLayout(runtimeMeta.layouts, 'create', defaultRecordTypeId, runtimeMeta.defaultCreateLayout)
   const openCreate = () => setEditor({ mode: 'create', values: {}, recordTypeId: defaultRecordTypeId })
-  const openEdit = (row) => setEditor({ mode: 'edit', id: row.id, values: { ...row }, recordTypeId: row.recordTypeId || '' })
+  const openEdit = (row) => setEditor({ mode: 'edit', id: row.id, values: { ...row }, recordTypeId: row.recordTypeId || row.record_type_id || '' })
 
   const saveRecord = async (event) => {
     event.preventDefault()
@@ -214,7 +247,10 @@ export default function WorkspacePage() {
   }
 
   const detailRecord = detail?.record || rows.find((row) => String(row.id) === String(selectedId)) || null
-  const detailFields = detail?.fields || fields
+  const rawDetailFields = detail?.fields || fields
+  const detailRecordTypeId = detailRecord?.recordTypeId || detailRecord?.record_type_id || null
+  const detailLayout = resolveRecordLayout(runtimeMeta.layouts, 'detail', detailRecordTypeId, runtimeMeta.defaultDetailLayout)
+  const detailFields = fieldsForLayout(rawDetailFields, detailLayout)
   const outboundRelationships = runtimeMeta.relationships.filter((relationship) => String(relationship.parent_object_id) === String(selectedObject?.id))
   const selectedRecordType = runtimeMeta.recordTypes.find((item) => String(item.id) === String(detailRecord?.recordTypeId || detailRecord?.record_type_id || '')) || null
 
@@ -365,7 +401,10 @@ export default function WorkspacePage() {
             <div className="workspace-editor-body">
               {editor.error ? <div className="workspace-editor-error">{editor.error}</div> : null}
               {runtimeMeta.recordTypes.length ? <label><span>Record Type</span><select value={editor.recordTypeId || ''} onChange={(e) => setEditor((current) => ({ ...current, recordTypeId: e.target.value }))}><option value="">Default</option>{runtimeMeta.recordTypes.map((type) => <option key={type.id} value={type.id}>{type.name || type.label || type.record_type_key}</option>)}</select></label> : null}
-              {fields.filter((field) => field.active !== false && field.writable !== false && !['formula','rollup'].includes(field.field_type)).map((field) => (
+              {fieldsForLayout(
+                fields.filter((field) => field.active !== false && field.writable !== false && !['formula','rollup'].includes(field.field_type)),
+                resolveRecordLayout(runtimeMeta.layouts, editor.mode === 'create' ? 'create' : 'edit', editor.recordTypeId, editor.mode === 'create' ? createLayout : detailLayout),
+              ).map((field) => (
                 <WorkspaceField key={field.id || field.api_name} field={field} value={editor.values?.[field.api_name]} onChange={(value) => setEditor((current) => ({ ...current, values: { ...current.values, [field.api_name]: value } }))} />
               ))}
             </div>
