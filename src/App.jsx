@@ -272,14 +272,6 @@ function Dock({ onItemOpen }) {
                 </span>
               </button>
             ))}
-            <button
-              type="button"
-              className="dock-mobile-item"
-              onClick={() => setJarvesOpen(true)}
-              aria-label="JARVES"
-            >
-              <Sparkles className="dock-lucide-icon" size={24} strokeWidth={1.8} />
-            </button>
           </div>
         </motion.div>
       </div>
@@ -2243,6 +2235,9 @@ function Desktop({ onLock, onSignOut }) {
   const openRoutePath = (route) => {
     const value = String(route || '').split('?')[0].trim()
     if (!value) return
+    setTopPanel('')
+    setLauncherOpen(false)
+    setAppSearch('')
     const parts = value.split('/').filter(Boolean)
     const settingsIndex = parts.indexOf('settings')
     if (settingsIndex >= 0) {
