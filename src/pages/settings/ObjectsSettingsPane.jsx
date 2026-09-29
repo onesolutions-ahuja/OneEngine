@@ -4,6 +4,7 @@ import { apiRequest } from '../../services/api'
 import { loadPlatformObjects } from '../../services/settings'
 import FieldEditor from './Platform/FieldEditor.jsx'
 import RelationshipEditor from './Platform/RelationshipEditor.jsx'
+import RecordTypeEditor from './Platform/RecordTypeEditor.jsx'
 
 const TABS = [
   ['details', 'Details'],
@@ -493,10 +494,7 @@ export default function ObjectsSettingsPane() {
                 ) : null}
 
                 {activeTab === 'record-types' ? (
-                  <ObjectDataList title="Record Types" rows={objectData.recordTypes}
-                    primary={(row) => row.label || row.name || row.record_type_key || 'Record Type'}
-                    secondary={(row) => row.record_type_key || row.api_name || ''}
-                    meta={(row) => row.default_record_type ? 'Default' : 'Active'} />
+                  <RecordTypeEditor object={{ ...selected, id: selectedId }} fields={fields} />
                 ) : null}
 
                 {activeTab === 'layouts' ? (
