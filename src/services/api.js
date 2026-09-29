@@ -38,7 +38,6 @@ export async function login(username, password) {
     body: JSON.stringify({ username, password }),
   })
   if (!data?.success || !data?.token) throw new Error(data?.message || 'Login failed')
-  if (data?.user?.isSuperadmin !== true) throw new Error('Superadmin access is required for this test build')
   sessionStorage.setItem('onepos_token', data.token)
   sessionStorage.setItem('onepos_user', JSON.stringify(data.user || {}))
   return data
