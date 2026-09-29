@@ -431,6 +431,8 @@ const settingsFallbackGroups = [
   ],
   [
     { key: 'objects', label: 'Objects', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['objects', 'object manager', 'fields', 'metadata', 'api name'] },
+    { key: 'assignment-rules', label: 'Assignment Rules', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['assignment rules', 'routing', 'owner', 'assign'] },
+    { key: 'sharing-rules', label: 'Sharing Rules', icon: ShieldCheck, tone: 'cyan', developer: true, searchTerms: ['sharing rules', 'record access', 'sharing', 'permissions'] },
     { key: 'platform', label: 'Builders', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['workflow', 'approval flow', 'page builder', 'dashboard builder', 'report builder', 'canvas', 'components'] },
     { key: 'workflow-runs', label: 'Workflow Runs', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['workflow', 'runs', 'automation', 'history'] },
     { key: 'work-items', label: 'Work Items', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['work items', 'workflow', 'approval', 'tasks'] },
@@ -465,6 +467,8 @@ const settingsFallbackEntries = settingsFallbackGroups.flat()
 
 const DEVELOPER_SETTINGS_KEYS = new Set([
   'objects',
+  'assignment-rules',
+  'sharing-rules',
   'platform',
   'workflow-runs',
   'work-items',
@@ -1517,6 +1521,10 @@ function SettingsPage({ onOpenProfile }) {
                 />
               ) : current?.key === 'objects' ? (
                 <ObjectsSettingsPane />
+              ) : current?.key === 'assignment-rules' ? (
+                <ObjectsSettingsPane initialTab="assignment" />
+              ) : current?.key === 'sharing-rules' ? (
+                <ObjectsSettingsPane initialTab="sharing" />
               ) : current?.key === 'platform' ? (
                 <OneBuilder />
               ) : current?.key === 'workflow-runs' ? (
