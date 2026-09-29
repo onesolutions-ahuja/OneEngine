@@ -70,6 +70,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const report = config.report || {};
   const isPlatform = report.dataSource === "platform_object";
   const isChart = ["pie", "donut", "bar", "chart"].includes(component.type);
+  const isUtility = ["clock_widget", "calendar_widget", "weather_widget"].includes(component.type);
   const { objects, error: objectsError } = useObjects();
   const { fields, loading, error: fieldsError } = useFields(isPlatform ? report.objectId : null);
   const choices = platformFieldChoices(fields);
@@ -93,7 +94,26 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const selectAggregate = (value) => { setConfig({ aggregate: value }); if (config.valueField) setReport({ summaries: [{ aggregate: value, field: config.valueField }] }); };
   return <div className="mt-3 grid gap-3 md:grid-cols-2">
     <div className="md:col-span-2"><span className={LABEL}>Title</span><input className={FIELD} style={STYLE} value={component.title || ""} onChange={(event) => onChange({ ...component, title: event.target.value })} /></div>
-    {component.type === "text" ? <div className="md:col-span-2"><span className={LABEL}>Content</span><textarea className={FIELD} rows={3} style={STYLE} value={config.content || ""} onChange={(event) => setConfig({ content: event.target.value })} /></div> : <>
+    {component.type === "text" ? <div className="md:col-span-2"><span className={LABEL}>Content</span><textarea className={FIELD} rows={3} style={STYLE} value={config.content || ""} onChange={(event) => setConfig({ content: event.target.value })} /></div> : isUtility ? <>
+      <div><span className={LABEL}>Time zone</span><input className={FIELD} style={STYLE} value={config.timeZone || ""} placeholder="Browser default" onChange={(event) => setConfig({ timeZone: event.target.value })} /></div>
+      {component.type === "clock_widget" ? <>
+        <div><span className={LABEL}>Clock format</span><select className={FIELD} style={STYLE} value={config.hour12 === false ? "24" : "12"} onChange={(event) => setConfig({ hour12: event.target.value === "12" })}><option value="24">24 hour</option><option value="12">12 hour</option></select></div>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.showSeconds === true} onChange={(event) => setConfig({ showSeconds: event.target.checked })}/> Show seconds</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.showDate !== false} onChange={(event) => setConfig({ showDate: event.target.checked })}/> Show date</label>
+      </> : null}
+      {component.type === "calendar_widget" ? <>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.showWeekday !== false} onChange={(event) => setConfig({ showWeekday: event.target.checked })}/> Show weekday</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.showMonth !== false} onChange={(event) => setConfig({ showMonth: event.target.checked })}/> Show month</label>
+      </> : null}
+      {component.type === "weather_widget" ? <>
+        <div><span className={LABEL}>Location</span><input className={FIELD} style={STYLE} value={config.location || ""} placeholder="e.g. London" onChange={(event) => setConfig({ location: event.target.value })} /></div>
+        <div><span className={LABEL}>Unit</span><select className={FIELD} style={STYLE} value={config.unit || "C"} onChange={(event) => setConfig({ unit: event.target.value })}><option value="C">°C</option><option value="F">°F</option></select></div>
+        <div><span className={LABEL}>Temperature</span><input className={FIELD} style={STYLE} value={config.temperature || ""} placeholder="Optional display value" onChange={(event) => setConfig({ temperature: event.target.value })} /></div>
+        <div><span className={LABEL}>Condition</span><input className={FIELD} style={STYLE} value={config.condition || ""} placeholder="Optional condition" onChange={(event) => setConfig({ condition: event.target.value })} /></div>
+      </> : null}
+      <div><span className={LABEL}>Width (grid columns, 1–12)</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.w ?? 3} onChange={layout("w")} /></div>
+      <div><span className={LABEL}>Height</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.h ?? 2} onChange={layout("h")} /></div>
+    </> : <>
       <div><span className={LABEL}>Data source</span><select className={FIELD} style={STYLE} value={report.dataSource || "sales"} onChange={(event) => setReport({ dataSource: event.target.value, objectId: null, fields: [], groupBy: [], filters: [] })}><option value="sales">Sales (reporting engine)</option><option value="platform_object">Platform Object</option></select></div>
       {isPlatform ? <div><span className={LABEL}>Object</span><select className={FIELD} style={STYLE} value={report.objectId || ""} onChange={(event) => setReport({ objectId: event.target.value, fields: [], groupBy: [], filters: [] })}><option value="">{objectsError || (loading ? "Loading fields…" : "Select an Object")}</option>{objects.map((object) => <option key={object.id} value={object.id}>{object.label || object.object_key}</option>)}</select>{fieldsError ? <p className="text-xs" style={{ color: "#b91c1c" }}>{fieldsError}</p> : null}</div> : null}
       <div><span className={LABEL}>Metric field</span><select data-testid="metric-field" className={FIELD} style={STYLE} value={config.valueField || ""} onChange={(event) => selectMetric(event.target.value)}><option value="">Select a metric</option>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select>{isPlatform && report.objectId && !loading && !metrics.length ? <p className="text-xs" style={{ color: "var(--onepos-text-muted)" }}>This Object has no aggregatable fields.</p> : null}</div>
