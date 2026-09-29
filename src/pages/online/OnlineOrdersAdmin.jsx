@@ -407,7 +407,7 @@ export default function OnlineOrdersAdmin() {
       </div>
       {viewMode === "processing" ? (
         pendingOrders.length ? <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-          {pendingOrders.map((order) => <OnlineOrderCard key={order.id} order={order} detail={orderDetails[order.id]} busyAction={busyActions[order.id] ? { orderId: order.id, action: busyActions[order.id] } : null} allowedActions={STATUS_ACTIONS[order.status] || []} onAction={runAction} onOpenDetail={openDetail} onPrint={handlePrint} />)}
+          {pendingOrders.map((order) => <OnlineOrderCard key={order.id} order={order} detail={orderDetails[order.id]} busyAction={busyActions[order.id] ? { orderId: order.id, action: busyActions[order.id] } : null} allowedActions={orderMetadata.actionsFor(order)} onAction={runAction} onOpenDetail={openDetail} onPrint={handlePrint} />)}
         </div> : <div className="onepos-card onepos-card-body text-center text-slate-500">{loading ? "Loading orders..." : "No pending orders"}</div>
       ) : (
       <div className="onepos-card overflow-hidden">
