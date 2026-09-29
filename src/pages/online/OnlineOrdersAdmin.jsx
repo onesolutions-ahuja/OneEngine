@@ -11,9 +11,8 @@ import {
   ACTIVE_STATUSES,
   TERMINAL_STATUSES,
   STATUS_BADGES,
-  ORDER_ACTIONS,
-  STATUS_ACTIONS,
 } from "./onlineOrdersShared.js";
+import useOnlineOrderMetadata, { actionKeyForButton, busyLabel, buttonStyle } from "./useOnlineOrderMetadata.js";
 
 /*
  * Admin UI for the Online Orders workflow (Uber Eats / Deliveroo).
@@ -30,6 +29,7 @@ import {
  */
 
 export default function OnlineOrdersAdmin() {
+  const orderMetadata = useOnlineOrderMetadata();
   const [orders, setOrders] = useState([]);
   /*
    * Unfiltered list (all statuses) that feeds the summary strip and the
@@ -259,7 +259,7 @@ export default function OnlineOrdersAdmin() {
    * status filter, Refresh and the detail view stay fully usable.
    */
   const renderOrderActions = (order) => {
-    const actions = STATUS_ACTIONS[order.status] || [];
+    const actions = orderMetadata.actionsFor(order);
 
     if (!actions.length) {
       return (
@@ -273,21 +273,20 @@ export default function OnlineOrdersAdmin() {
 
     return (
       <span className="inline-flex items-center gap-1">
-        {actions.map((action) => {
-          const meta = ORDER_ACTIONS[action];
+        {actions.map((button) => {
+          const action = actionKeyForButton(button);
           const isBusy = busyForOrder === action;
-
           return (
             <button
-              key={action}
+              key={button.button_key || action}
               type="button"
               onClick={() => runAction(order, action)}
               disabled={Boolean(busyForOrder)}
               aria-busy={isBusy}
-              className={`px-3 py-1.5 rounded text-xs inline-flex items-center gap-1.5 ${meta.className} disabled:opacity-60 disabled:cursor-not-allowed`}
+              className={`px-3 py-1.5 rounded text-xs inline-flex items-center gap-1.5 ${buttonStyle(button)} disabled:opacity-60 disabled:cursor-not-allowed`}
             >
               {isBusy && <Loader2 size={13} className="animate-spin" />}
-              {isBusy ? meta.busy : meta.label}
+              {isBusy ? busyLabel(button) : button.label}
             </button>
           );
         })}
