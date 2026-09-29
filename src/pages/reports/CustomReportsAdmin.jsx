@@ -215,6 +215,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       if (!response.success) throw new Error(response.message);
       setNotice("Report duplicated.");
       await load();
+      onSaved?.();
     } catch (duplicateError) {
       setError(errorMessage(duplicateError));
     }
@@ -231,6 +232,8 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
         setResults(null);
       }
       await load();
+      if (embedded) onClose?.();
+      else onSaved?.();
     } catch (archiveError) {
       setError(errorMessage(archiveError));
     }
