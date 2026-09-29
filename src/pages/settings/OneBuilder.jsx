@@ -56,21 +56,45 @@ function BuilderNode({ item, index, selected, onSelect, onRemove }) {
   )
 }
 
+function SchemaPropertyEditor({ name, spec = {}, value, fields = [], onChange }) {
+  const type = spec.type || 'string'
+  const label = spec.title || name.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase())
+  if (type === 'boolean') return <label className="onebuilder-schema-toggle"><input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)}/> {label}</label>
+  if (type === 'number' || type === 'integer') return <label>{label}<input type="number" step={type === 'integer' ? '1' : 'any'} value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}/></label>
+  if (Array.isArray(spec.enum)) return <label>{label}<select value={value ?? ''} onChange={(e) => onChange(e.target.value)}><option value="">Select…</option>{spec.enum.map((option) => <option key={String(option)} value={option}>{String(option)}</option>)}</select></label>
+  if (type === 'object') {
+    if (name === 'fieldValues' && fields.length) {
+      return <label>{label}<textarea rows="7" placeholder="Use JSON field mappings, e.g. { &quot;status&quot;: &quot;OPEN&quot; }" value={value && typeof value === 'object' ? JSON.stringify(value, null, 2) : ''} onChange={(e) => { try { onChange(e.target.value.trim() ? JSON.parse(e.target.value) : {}) } catch {} }}/><small>{fields.map((field) => field.api_name).slice(0, 12).join(', ')}</small></label>
+    }
+    return <label>{label}<textarea rows="7" value={value && typeof value === 'object' ? JSON.stringify(value, null, 2) : ''} onChange={(e) => { try { onChange(e.target.value.trim() ? JSON.parse(e.target.value) : {}) } catch {} }}/></label>
+  }
+  if (type === 'array') return <label>{label}<textarea rows="5" value={Array.isArray(value) ? JSON.stringify(value, null, 2) : ''} onChange={(e) => { try { onChange(e.target.value.trim() ? JSON.parse(e.target.value) : []) } catch {} }}/></label>
+  return <label>{label}<input value={value ?? ''} onChange={(e) => onChange(e.target.value)}/></label>
+}
+
+
 function GenericProperties({ item, fields = [], actionRegistry = [], roles = [], onChange }) {
   if (!item) return <span className="onebuilder-properties-empty">Select a node to configure it.</span>
 
   const patchConfig = (patch) => onChange({ ...item, config: { ...(item.config || {}), ...patch } })
 
   if (item.builderType === 'workflow') {
+    const definition = actionRegistry.find((row) => row.key === item.key) || {}
+    const properties = definition?.schema?.properties || {}
     return (
       <div className="onebuilder-properties-form">
         <label>Label<input value={item.label || ''} onChange={(e) => onChange({ ...item, label: e.target.value })}/></label>
-        <label>Action<select value={item.key} onChange={(e) => {
+        <label>Registered action<select value={item.key} onChange={(e) => {
           const action = actionRegistry.find((row) => row.key === e.target.value)
           onChange({ ...item, key: e.target.value, label: action?.label || e.target.value, config: {} })
         }}>{actionRegistry.map((action) => <option key={action.key} value={action.key}>{action.label}</option>)}</select></label>
-        {fields.length ? <label>Field<select value={item.config?.field || ''} onChange={(e) => patchConfig({ field: e.target.value })}><option value="">No field</option>{fields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label}</option>)}</select></label> : null}
-        <label>Configuration<textarea rows="10" value={JSON.stringify(item.config || {}, null, 2)} onChange={(e) => { try { onChange({ ...item, config: JSON.parse(e.target.value) }) } catch {} }}/></label>
+        {definition.description ? <p className="onebuilder-property-help">{definition.description}</p> : null}
+        {Object.entries(properties).map(([name, spec]) => (
+          <SchemaPropertyEditor key={name} name={name} spec={spec} value={item.config?.[name]} fields={fields} onChange={(value) => patchConfig({ [name]: value })}/>
+        ))}
+        {!Object.keys(properties).length ? <label>Configuration<textarea rows="10" value={JSON.stringify(item.config || {}, null, 2)} onChange={(e) => { try { onChange({ ...item, config: JSON.parse(e.target.value) }) } catch {} }}/></label> : (
+          <details className="onebuilder-advanced-config"><summary>Advanced JSON</summary><textarea rows="8" value={JSON.stringify(item.config || {}, null, 2)} onChange={(e) => { try { onChange({ ...item, config: JSON.parse(e.target.value) }) } catch {} }}/></details>
+        )}
       </div>
     )
   }
@@ -298,6 +322,8 @@ export default function OneBuilder() {
     try {
       if (tab === 'workflow') {
         if (!activeMeta.name || !activeMeta.triggerKey) throw new Error('Workflow name and trigger are required.')
+        const trigger = triggers.find((row) => row.key === activeMeta.triggerKey)
+        if (trigger?.kind !== 'event' && !activeMeta.objectId) throw new Error('Record-triggered workflows require an object.')
         const object = objects.find((row) => String(row.id) === String(activeMeta.objectId))
         const payload = {
           name: activeMeta.name,
@@ -369,6 +395,15 @@ export default function OneBuilder() {
       </div>
 
       {error ? <div className="onebuilder-error">{error}</div> : null}
+      {tab === 'approval' ? (
+        <div className="onebuilder-approval-options">
+          {[
+            ['lockRecord','Lock record while pending'],
+            ['allowReassign','Allow reassignment'],
+            ['requireCommentOnReject','Require rejection comment'],
+          ].map(([key, label]) => <label key={key}><input type="checkbox" checked={activeMeta.config?.[key] !== false} onChange={(e) => patchMeta({ config: { ...(activeMeta.config || {}), [key]: e.target.checked } })}/> {label}</label>)}
+        </div>
+      ) : null}
       <div className="onebuilder-workspace onebuilder-workspace--functional">
         <main className="onebuilder-canvas-card" onDragOver={(event) => event.preventDefault()} onDrop={drop}>
           <div className="onebuilder-canvas-header"><div><strong>{activeTab?.label}</strong><span>{tab === 'workflow' ? 'Registered actions + events' : tab === 'report' ? 'Platform report metadata' : 'Canvas'}</span></div><button type="button" className="onebuilder-clear" disabled={!items.length} onClick={() => setCanvas((current) => ({ ...current, [tab]: [] }))}>Clear</button></div>
