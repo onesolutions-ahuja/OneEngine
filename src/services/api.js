@@ -1,8 +1,41 @@
-const API_BASE = String(import.meta.env.VITE_API_BASE || 'https://onepos.onrender.com').replace(/\/$/, '')
+const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://onepos.onrender.com').replace(/\/$/, '')
+export const SERVER_ADDRESS_STORAGE_KEY = 'onepos_server_address'
+
+export function normaliseServerAddress(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw)
+  if (hasScheme && !/^https?:\/\//i.test(raw)) return ''
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`
+  try {
+    const parsed = new URL(candidate)
+    return parsed.hostname ? parsed.origin : ''
+  } catch {
+    return ''
+  }
+}
+
+export function getApiBase() {
+  try {
+    const stored = normaliseServerAddress(localStorage.getItem(SERVER_ADDRESS_STORAGE_KEY))
+    if (stored) return stored
+  } catch {}
+  return DEFAULT_API_BASE
+}
+
+export function setDeviceServerAddress(value) {
+  const next = normaliseServerAddress(value)
+  try {
+    if (next) localStorage.setItem(SERVER_ADDRESS_STORAGE_KEY, next)
+    else localStorage.removeItem(SERVER_ADDRESS_STORAGE_KEY)
+  } catch {}
+  return next
+}
 
 export function apiUrl(path) {
   if (/^https?:\/\//i.test(path)) return path
-  return `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`
+  const base = getApiBase()
+  return `${base}${path.startsWith('/') ? path : `/${path}`}`
 }
 
 export async function apiRequest(path, options = {}) {
@@ -75,4 +108,4 @@ export async function checkBackend() {
   return apiRequest('/api/health')
 }
 
-export { API_BASE }
+export const API_BASE = DEFAULT_API_BASE
