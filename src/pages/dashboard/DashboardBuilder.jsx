@@ -74,6 +74,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [inspectorTab, setInspectorTab] = useState("components");
   const [principals, setPrincipals] = useState(null);
   const [principalType, setPrincipalType] = useState("USER");
   const [principalId, setPrincipalId] = useState("");
@@ -81,7 +82,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   const [defaultType, setDefaultType] = useState("USER");
   const [defaultId, setDefaultId] = useState("");
   const [defaultPriority, setDefaultPriority] = useState("100");
-  const [permissions, setPermissions] = useState({ codes: [], isAdmin: false });
+  const [permissions, setPermissions] = useState({ codes: [] });
 
   const selectedIndex = Math.max(0, (current?.components || []).findIndex((component) => component.id === selectedId));
   const selectedComponent = (current?.components || [])[selectedIndex] || null;
@@ -90,7 +91,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
     const [response, permissionResponse] = await Promise.all([
       apiRequest("/api/dashboards/principals"), apiRequest("/api/auth/me/permissions"),
     ]);
-    setPermissions({ codes: permissionResponse.data?.permissions || [], isAdmin: permissionResponse.data?.isAdmin === true });
+    setPermissions({ codes: permissionResponse.data?.permissions || [] });
     if (response.success) setPrincipals(response.data);
     else setPrincipals(null);
   };
@@ -109,10 +110,10 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   const optionLabel = (type, item) => type === "USER" && String(item.id) === String(principals?.currentUserId)
     ? `Me (${item.full_name || item.username})`
     : item.full_name || item.name || item.username;
-  const canShare = permissions.isAdmin || permissions.codes.includes("dashboard.share");
-  const canAssignDefaults = permissions.isAdmin || permissions.codes.includes("dashboard.assign_default");
-  const canEdit = permissions.isAdmin || permissions.codes.includes("dashboard.edit");
-  const canCreate = permissions.isAdmin || permissions.codes.includes("dashboard.create");
+  const canShare = permissions.codes.includes("dashboard.share");
+  const canAssignDefaults = permissions.codes.includes("dashboard.assign_default");
+  const canEdit = permissions.codes.includes("dashboard.edit");
+  const canCreate = permissions.codes.includes("dashboard.create");
 
   const persistAccess = async (access) => {
     const response = await apiRequest(`/api/dashboards/${current.id}/access`, { method: "PUT", body: JSON.stringify({ access }) });
@@ -252,7 +253,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
     </div>
 
 
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px] items-start">
+    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px] items-start dashboard-builder-workspace">
       <div className="min-w-0 space-y-4 order-2 xl:order-1">
         <div className="p-4" style={CARD}>
           <span className={LABEL}>Dashboard name</span>
@@ -335,48 +336,55 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
             results={preview ? runtime : []}
             loading={false}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={(id) => { setSelectedId(id); setInspectorTab("properties"); }}
             onChange={(components) => setCurrent({ ...current, components })}
           />
-          {/* Component picker — the ONE registry visual language (shared icon
-              map), keeping this builder's pinned data-testid contract. */}
-          <div className="flex flex-wrap gap-2 mt-4">
-            {dashboardPalette.map((spec) => {
-              const Icon = componentIcon(spec.key);
-              return (
-                <button key={spec.key} type="button" className="onepos-btn onepos-btn-sm" data-testid={`add-component-${spec.key}`} onClick={() => addComponent(spec.key)}>
-                  <Icon size={13} className="shrink-0" aria-hidden="true" /> {spec.label}
-                </button>
-              );
-            })}
-          </div>
           {!(current.components || []).length ? <p className="text-sm mt-3" style={{ color: "var(--onepos-text-muted)" }}>No components yet — add a Metric, Pie, Donut or Bar.</p> : null}
         </div>
       </div>
 
-      {/* Properties for the selected component. */}
-      <div className="min-w-0 order-1 xl:order-2">
-        <div className="p-4 xl:sticky" style={{ ...CARD, top: 0 }} data-testid="dashboard-properties-panel">
-          <div className="font-semibold text-sm mb-1">Properties</div>
-          {selectedComponent ? (
-            <>
-              <p className="text-xs mb-3 capitalize" style={{ color: "var(--onepos-text-muted)" }}>
-                {selectedComponent.type} — {selectedComponent.title || "untitled"}
-              </p>
-              <div className="flex items-center gap-2 mb-3">
-                <button className="onepos-btn onepos-btn-sm" onClick={() => moveComponent(selectedIndex, -1)} disabled={selectedIndex <= 0}>Move up</button>
-                <button className="onepos-btn onepos-btn-sm" onClick={() => moveComponent(selectedIndex, 1)} disabled={selectedIndex === (current.components || []).length - 1}>Move down</button>
-                <button className="onepos-btn onepos-btn-sm" onClick={() => removeComponent(selectedIndex)}>Remove</button>
+      <aside className="min-w-0 order-1 xl:order-2 dashboard-builder-inspector">
+        <div className="xl:sticky dashboard-builder-inspector-card" style={{ ...CARD, top: 0 }} data-testid="dashboard-properties-panel">
+          <div className="dashboard-builder-inspector-tabs">
+            <button type="button" className={inspectorTab === "components" ? "is-active" : ""} onClick={() => setInspectorTab("components")}>Components</button>
+            <button type="button" className={inspectorTab === "properties" ? "is-active" : ""} onClick={() => setInspectorTab("properties")}>Properties</button>
+          </div>
+
+          {inspectorTab === "components" ? (
+            <div className="dashboard-builder-palette">
+              {dashboardPalette.map((spec) => {
+                const Icon = componentIcon(spec.key);
+                return (
+                  <button key={spec.key} type="button" className="dashboard-builder-palette-item" data-testid={`add-component-${spec.key}`} onClick={() => { addComponent(spec.key); setInspectorTab("properties"); }}>
+                    <span className="dashboard-builder-palette-icon"><Icon size={14} aria-hidden="true" /></span>
+                    <span>{spec.label}</span>
+                    <b>+</b>
+                  </button>
+                );
+              })}
+            </div>
+          ) : selectedComponent ? (
+            <div className="dashboard-builder-properties">
+              <div className="dashboard-builder-properties-head">
+                <div>
+                  <strong>{selectedComponent.title || "Untitled"}</strong>
+                  <small>{selectedComponent.type}</small>
+                </div>
+                <div className="dashboard-builder-properties-actions">
+                  <button type="button" onClick={() => moveComponent(selectedIndex, -1)} disabled={selectedIndex <= 0}>↑</button>
+                  <button type="button" onClick={() => moveComponent(selectedIndex, 1)} disabled={selectedIndex === (current.components || []).length - 1}>↓</button>
+                  <button type="button" onClick={() => removeComponent(selectedIndex)}>×</button>
+                </div>
               </div>
               <DashboardComponentProperties component={selectedComponent} onChange={(next) => updateComponent(selectedIndex, next)} />
-            </>
+            </div>
           ) : (
-            <p className="text-sm" style={{ color: "var(--onepos-text-muted)" }}>
-              Select a component on the layout canvas to configure its data source, metric, grouping, conditions, date range and formatting.
-            </p>
+            <div className="dashboard-builder-properties-empty">
+              Select a component on the canvas to edit its properties.
+            </div>
           )}
         </div>
-      </div>
+      </aside>
     </div>
     {error ? <p className="text-sm mt-3" style={{ color: "#b91c1c" }}>{error}</p> : null}
   </div>;
