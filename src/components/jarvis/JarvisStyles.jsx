@@ -1034,6 +1034,171 @@ html[data-platform-theme="theme4"] .onepos-shell-header .jarvis-corner > [data-t
 
 
 
+
+/* ------------------------------------------------------ panel base layout */
+/* Smart Theme intentionally has no Tailwind runtime. The original JARVES
+   panel used Tailwind utilities, so these namespaced rules reproduce that
+   existing surface without adding a second CSS framework. */
+.jarvis-panel-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 12px;
+}
+.jarvis-panel-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0,0,0,.4);
+}
+[data-testid="jarvis-panel"] {
+  position: relative;
+  width: min(420px, calc(100vw - 24px));
+  max-height: 78dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(8,13,17,.92);
+  color: #f1f5f9;
+  box-shadow: 0 24px 70px rgba(2,6,16,.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+[data-testid="jarvis-panel"] > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  background: rgba(10,20,26,.95);
+  color: #fff;
+}
+[data-testid="jarvis-panel"] > header > span {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 34% 28%,#eef7f6 0%,#b0d9d5 18%,#4fa69e 42%,#176F6A 68%,#104744 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
+}
+[data-testid="jarvis-panel"] > header > div { flex: 1; min-width: 0; }
+[data-testid="jarvis-panel"] > header h2 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .2em; }
+[data-testid="jarvis-panel"] > header p { margin: 2px 0 0; font-size: 11px; color: rgba(204,251,241,.9); line-height: 1.2; }
+[data-testid="jarvis-panel-close"] {
+  border: 0;
+  padding: 6px;
+  border-radius: 8px;
+  color: rgba(204,251,241,.8);
+  background: transparent;
+  cursor: pointer;
+}
+[data-testid="jarvis-panel-close"]:hover { background: rgba(255,255,255,.1); color: #fff; }
+
+[data-testid="jarvis-messages"] {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(23,111,106,.24),rgba(8,13,17,0) 58%),
+    rgba(8,13,17,.55);
+}
+[data-testid="jarvis-empty"] { text-align: center; padding: 12px 0; }
+[data-testid="jarvis-empty"] > svg { margin: 0 auto; color: #6ee7b7; }
+[data-testid="jarvis-empty"] > p { margin: 4px 0 0; font-size: 14px; font-weight: 600; color: #fff; }
+[data-testid="jarvis-empty"] > div { margin-top: 12px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+[data-testid="jarvis-suggestion"] {
+  border: 1px solid rgba(94,234,212,.3);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(45,212,191,.1);
+  color: #f0fdfa;
+  font-size: 12px;
+  cursor: pointer;
+}
+[data-testid="jarvis-suggestion"]:hover { background: rgba(45,212,191,.2); border-color: rgba(153,246,228,.4); }
+
+.jarvis-message { display: flex; margin-top: 12px; }
+[data-testid="jarvis-message-user"] { justify-content: flex-end; }
+[data-testid="jarvis-message-assistant"], [data-testid="jarvis-thinking"] { justify-content: flex-start; }
+.jarvis-message > div {
+  max-width: 85%;
+  white-space: pre-wrap;
+  border-radius: 16px;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+[data-testid="jarvis-message-user"] > div {
+  background: rgba(13,148,136,.35);
+  color: #f0fdfa;
+  border: 1px solid rgba(94,234,212,.25);
+  border-bottom-right-radius: 4px;
+}
+[data-testid="jarvis-message-assistant"] > div,
+[data-testid="jarvis-thinking"] > div {
+  background: rgba(255,255,255,.07);
+  color: #f1f5f9;
+  border: 1px solid rgba(255,255,255,.12);
+  border-bottom-left-radius: 4px;
+}
+[data-testid="jarvis-thinking"] > div { display: flex; align-items: center; gap: 4px; padding: 12px 16px; }
+
+[data-testid="jarvis-notice"] { padding: 8px 16px; }
+[data-testid="jarvis-notice"] > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+[data-testid="jarvis-notice"] > div:first-child { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+[data-testid="jarvis-notice"] button { margin-left: auto; border: 0; background: transparent; color: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+[data-testid="jarvis-form"] {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid rgba(255,255,255,.1);
+  background: rgba(7,12,16,.95);
+}
+[data-testid="jarvis-mic"], [data-testid="jarvis-ask"] {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+[data-testid="jarvis-mic"] { border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.08); color: #f0fdfa; }
+[data-testid="jarvis-mic"][data-listening="true"] { background: #10b981; border-color: rgba(110,231,183,.6); color: #fff; }
+[data-testid="jarvis-input"] {
+  flex: 1;
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.08);
+  color: #fff;
+  font-size: 14px;
+  padding: 10px 12px;
+  outline: none;
+}
+[data-testid="jarvis-input"]::placeholder { color: rgba(203,213,225,.8); }
+[data-testid="jarvis-input"]:focus { border-color: rgba(110,231,183,.6); box-shadow: 0 0 0 2px rgba(52,211,153,.45); }
+[data-testid="jarvis-ask"] { border: 0; background: #34d399; color: #07130f; box-shadow: 0 2px 10px rgba(52,211,153,.45); }
+[data-testid="jarvis-ask"]:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+
+@media (min-width: 640px) {
+  .jarvis-panel-overlay { padding: 20px; }
+}
+
+
 /* ------------------------------------------------- panel messages + mic */
 
 
