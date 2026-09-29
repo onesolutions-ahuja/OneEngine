@@ -137,7 +137,6 @@ export default function TillPage({ onOpenSettings }) {
   const [online, setOnline] = useState(() => navigator.onLine !== false)
   const [connectivity, setConnectivity] = useState({ server: 'unknown', database: 'unknown', internet: navigator.onLine === false ? 'disconnected' : 'unknown' })
   const [permissions, setPermissions] = useState([])
-  const [isAdmin, setIsAdmin] = useState(false)
   const [onlineOrderCount, setOnlineOrderCount] = useState(0)
   const [onlineOrderToast, setOnlineOrderToast] = useState('')
   const [saleCompleteNotice, setSaleCompleteNotice] = useState(null)
@@ -204,7 +203,7 @@ export default function TillPage({ onOpenSettings }) {
         apiRequest('/api/platform/runtime/objects/sale/buttons'),
         apiRequest('/api/connector-capabilities/payment.sale').catch(() => ({ data: { available: false } })),
         apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] })),
-        apiRequest('/api/auth/me/permissions').catch(() => ({ data: { permissions: [], isAdmin: false } })),
+        apiRequest('/api/auth/me/permissions').catch(() => ({ data: { permissions: [] } })),
       ])
       const catalogue = mergeCatalogueResponse(cached?.catalogue, catalogueDelta)
       const paymentRows = paymentResponse?.data || []
@@ -212,7 +211,6 @@ export default function TillPage({ onOpenSettings }) {
       cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [], paymentMethods: paymentRows })
       setPaymentCapability(capability?.data?.available === true)
       setPermissions(permissionResponse?.data?.permissions || [])
-      setIsAdmin(permissionResponse?.data?.isAdmin === true)
       setOnline(true)
       await loadTill()
     } catch (err) {
@@ -306,13 +304,14 @@ export default function TillPage({ onOpenSettings }) {
       hasDiscount: discount.type !== null && Number(discount.value || 0) > 0,
       hasCustomer: Boolean(selectedCustomer),
       storeName: settings?.store?.name || 'Till',
+      currency,
     }
     try { billChannelRef.current.postMessage(payload) } catch {}
     const heartbeat = window.setInterval(() => {
       try { billChannelRef.current?.postMessage(payload) } catch {}
     }, 2000)
     return () => window.clearInterval(heartbeat)
-  }, [basket, miscLines, subtotal, vat, total, discountAmount, discount.type, discount.value, selectedCustomer, settings?.store?.name])
+  }, [basket, miscLines, subtotal, vat, total, discountAmount, discount.type, discount.value, selectedCustomer, settings?.store?.name, currency])
 
   const allowNegativeBilling = settings?.inventory?.allowNegativeInventoryBilling === true
 
@@ -406,7 +405,7 @@ export default function TillPage({ onOpenSettings }) {
   }, [online, till?.terminal_id, products])
 
   useEffect(() => {
-    if (!online || !(isAdmin || permissions.includes('online_orders.view'))) return undefined
+    if (!online || !permissions.includes('online_orders.view')) return undefined
     let stopped = false
     const loadOrders = async () => {
       try {
@@ -426,7 +425,7 @@ export default function TillPage({ onOpenSettings }) {
       stopped = true
       window.clearInterval(timer)
     }
-  }, [online, isAdmin, permissions])
+  }, [online, permissions])
 
   const changeQty = (id, delta) => setBasket((current) => current.map((item) => {
     if (item.id !== id) return item
