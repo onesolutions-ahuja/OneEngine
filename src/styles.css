@@ -5550,3 +5550,52 @@ button:focus-visible {
   position: relative;
   z-index: 41;
 }
+
+
+.workspace-detail-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 0 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(46,61,82,.07);
+}
+.workspace-detail-tabs button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #4b586f;
+  font-size: 9px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.workspace-detail-tabs button:hover,
+.workspace-detail-tabs button.is-active {
+  color: #0878ef;
+  background: rgba(10,132,255,.08);
+}
+.workspace-related-row {
+  width: 100%;
+  min-height: 42px;
+  padding: 7px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 0;
+  border-bottom: 1px solid rgba(46,61,82,.055);
+  background: transparent;
+  color: #273247;
+  text-align: left;
+}
+.workspace-related-row:last-child {
+  border-bottom: 0;
+}
+.workspace-related-row strong {
+  font-size: 9.5px;
+}
+.workspace-related-row span {
+  color: rgba(43,55,75,.48);
+  font-size: 8px;
+}
