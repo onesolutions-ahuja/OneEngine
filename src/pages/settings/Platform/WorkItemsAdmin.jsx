@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 
 function formatDate(value) {
@@ -21,7 +22,7 @@ function statusBadge(status) {
 
 export default function WorkItemsAdmin({ onMessage, onError }) {
   const [items, setItems] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [statusFilter, setStatusFilter] = useState("");
   const [flowFilter, setFlowFilter] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("");
   const [queueFilter, setQueueFilter] = useState("");
@@ -93,91 +94,107 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
   };
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[350px_1fr]">
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <strong className="text-sm text-slate-800">Work Items</strong>
-          <button type="button" className="text-xs text-blue-700" onClick={loadItems}>Refresh</button>
+    <div className="work-items-shell">
+      <div className="work-items-toolbar">
+        <div className="work-items-heading">
+          <strong>Work Items</strong>
+          <span>{loading ? "Loading…" : `${filteredItems.length} shown`}</span>
         </div>
-        <div className="space-y-3 p-3">
-          <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-            Status
-            <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="">All</option>
-            </select>
-          </label>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-1">
-            <input className="rounded-lg border border-slate-300 px-2 py-2 text-sm" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} placeholder="Assignee" />
-            <input className="rounded-lg border border-slate-300 px-2 py-2 text-sm" value={queueFilter} onChange={(event) => setQueueFilter(event.target.value)} placeholder="Queue or group" />
-            <input className="rounded-lg border border-slate-300 px-2 py-2 text-sm" value={flowFilter} onChange={(event) => setFlowFilter(event.target.value)} placeholder="Flow" />
-            <input className="rounded-lg border border-slate-300 px-2 py-2 text-sm" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} />
-          </div>
+        <button type="button" className="work-items-icon-button" onClick={loadItems} disabled={loading} title="Refresh work items" aria-label="Refresh work items">
+          <RefreshCw size={14} className={loading ? "is-spinning" : ""} />
+        </button>
+      </div>
+
+      <div className="work-items-filters">
+        <label>
+          <span>Status</span>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
+        <input value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} placeholder="Assignee" />
+        <input value={queueFilter} onChange={(event) => setQueueFilter(event.target.value)} placeholder="Queue or group" />
+        <input value={flowFilter} onChange={(event) => setFlowFilter(event.target.value)} placeholder="Flow" />
+        <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} />
+      </div>
+
+      {loading ? (
+        <div className="work-items-empty">Loading work items…</div>
+      ) : filteredItems.length === 0 ? (
+        <div className="work-items-empty">
+          <strong>No work items found</strong>
+          <span>Change the filters or refresh to check again.</span>
         </div>
-        <div className="max-h-[70vh] overflow-auto border-t border-slate-200">
-          {loading ? (
-            <div className="p-4 text-sm text-slate-500">Loading work items…</div>
-          ) : filteredItems.length === 0 ? (
-            <div className="p-4 text-sm text-slate-500">No work items match this filter.</div>
-          ) : (
-            filteredItems.map((item) => (
-              <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} className={`block w-full border-b border-slate-100 px-4 py-3 text-left ${selected?.id === item.id ? "bg-blue-50" : "bg-white"}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-700">{item.process_name || item.flow_name || "Workflow item"}</span>
-                  {statusBadge(item.status)}
+      ) : (
+        <div className="work-items-layout">
+          <div className="work-items-list" role="list">
+            {filteredItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`work-items-list-row ${selected?.id === item.id ? "is-selected" : ""}`}
+                onClick={() => setSelectedId(item.id)}
+              >
+                <div className="work-items-list-main">
+                  <strong>{item.process_name || item.flow_name || "Workflow item"}</strong>
+                  <span>{item.assignee_name || item.assigned_to || "Unassigned"} · {item.queue_name || item.queue || "No queue"}</span>
+                  <small>{formatDate(item.submitted_at || item.created_at)}</small>
                 </div>
-                <div className="mt-1 text-[11px] text-slate-500">Record {item.record_id || "—"}</div>
-                <div className="mt-1 text-[11px] text-slate-500">{item.assignee_name || item.assigned_to || "Unassigned"} · {item.queue_name || item.queue || "No queue"}</div>
-                <div className="mt-1 text-[11px] text-slate-500">{formatDate(item.submitted_at)}</div>
+                <span className={statusBadge(item.status)}>{String(item.status || "pending")}</span>
               </button>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        {!selected ? (
-          <div className="text-sm text-slate-500">Select a work item to review the flow and complete it.</div>
-        ) : (
-          <div className="space-y-5">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">Work Item</div>
-              <h3 className="mt-1 text-xl font-semibold text-slate-800">{selected.process_name || selected.flow_name || "Workflow item"}</h3>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Status</div><div className="mt-2">{statusBadge(selected.status)}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Assignee</div><div className="mt-2">{selected.assignee_name || selected.assigned_to || "Unassigned"}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Queue</div><div className="mt-2">{selected.queue_name || selected.queue || "No queue"}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Due</div><div className="mt-2">{formatDate(selected.due_at || selected.due_date)}</div></div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 text-sm">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Related record</div><div className="mt-2">{selected.record_id || "—"}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Flow / execution</div><div className="mt-2">{selected.process_name || selected.flow_name || "—"}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Created</div><div className="mt-2">{formatDate(selected.submitted_at || selected.created_at)}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Completed</div><div className="mt-2">{formatDate(selected.resolved_at || selected.completed_at)}</div></div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Completion outcome</div>
-              <div className="mt-2 text-sm text-slate-700">{selected.result || selected.decision || "No outcome yet"}</div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button type="button" disabled={working === selected.id || selected.status === "approved" || selected.status === "rejected" || selected.status === "cancelled"} onClick={() => updateItem(selected.id, "approve")} className="rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">
-                {working === selected.id ? "Completing…" : "Complete / Approve"}
-              </button>
-              <button type="button" disabled={working === selected.id || selected.status === "approved" || selected.status === "rejected" || selected.status === "cancelled"} onClick={() => updateItem(selected.id, "reject")} className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
-                Reject
-              </button>
-            </div>
+            ))}
           </div>
-        )}
-      </section>
+
+          {selected ? (
+            <section className="work-items-detail">
+              <div className="work-items-detail-header">
+                <div>
+                  <span>Work Item</span>
+                  <strong>{selected.process_name || selected.flow_name || "Workflow item"}</strong>
+                </div>
+                <span className={statusBadge(selected.status)}>{String(selected.status || "pending")}</span>
+              </div>
+
+              <div className="work-items-detail-grid">
+                <div><span>Assignee</span><strong>{selected.assignee_name || selected.assigned_to || "Unassigned"}</strong></div>
+                <div><span>Queue</span><strong>{selected.queue_name || selected.queue || "No queue"}</strong></div>
+                <div><span>Related record</span><strong>{selected.record_id || "—"}</strong></div>
+                <div><span>Due</span><strong>{formatDate(selected.due_at || selected.due_date)}</strong></div>
+                <div><span>Created</span><strong>{formatDate(selected.submitted_at || selected.created_at)}</strong></div>
+                <div><span>Completed</span><strong>{formatDate(selected.resolved_at || selected.completed_at)}</strong></div>
+              </div>
+
+              <div className="work-items-outcome">
+                <span>Outcome</span>
+                <strong>{selected.result || selected.decision || "No outcome yet"}</strong>
+              </div>
+
+              <div className="work-items-actions">
+                <button
+                  type="button"
+                  className="work-items-primary"
+                  disabled={working === selected.id || ["approved","rejected","cancelled"].includes(String(selected.status || "").toLowerCase())}
+                  onClick={() => updateItem(selected.id, "approve")}
+                >
+                  {working === selected.id ? "Completing…" : "Complete / Approve"}
+                </button>
+                <button
+                  type="button"
+                  className="work-items-danger"
+                  disabled={working === selected.id || ["approved","rejected","cancelled"].includes(String(selected.status || "").toLowerCase())}
+                  onClick={() => updateItem(selected.id, "reject")}
+                >
+                  Reject
+                </button>
+              </div>
+            </section>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
