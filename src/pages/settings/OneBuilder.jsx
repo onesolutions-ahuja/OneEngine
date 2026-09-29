@@ -12,10 +12,12 @@ import WorkflowRunsAdmin from './Platform/WorkflowRunsAdmin.jsx'
 import WorkItemsAdmin from './Platform/WorkItemsAdmin.jsx'
 import DeploymentAdmin from './Platform/DeploymentAdmin.jsx'
 import PlatformAppsAdmin from './Platform/PlatformAppsAdmin.jsx'
+import PageBuilder from './Platform/PageBuilder.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
   { key: 'approval', label: 'Approval Flow', icon: UserCheck },
+  { key: 'page', label: 'Page Builder', icon: AppWindow },
   { key: 'dashboard', label: 'Dashboard Builder', icon: LayoutDashboard },
   { key: 'report', label: 'Report Builder', icon: BarChart3 },
   { key: 'runs', label: 'Workflow Runs', icon: PlayCircle },
@@ -475,6 +477,8 @@ export default function OneBuilder() {
         <WorkflowRunsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : tab === 'work-items' ? (
         <WorkItemsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
+      ) : tab === 'page' ? (
+        <PageBuilder onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : tab === 'platform-apps' ? (
         <PlatformAppsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : tab === 'deployments' ? (
