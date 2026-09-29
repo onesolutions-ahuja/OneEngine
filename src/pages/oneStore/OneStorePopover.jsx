@@ -8,6 +8,12 @@ import {
   storefrontStatus,
 } from './oneStoreModel'
 
+const BRAND_ICON_MATCHES=[
+  [/quickbooks/i,'quickbooks'],[/shopify/i,'shopify'],[/xero/i,'xero-accounting'],[/sage/i,'sage-business-cloud-accounting'],
+  [/prestashop/i,'prestashop'],[/woocommerce|woo commerce/i,'woocommerce'],[/wix/i,'wix'],[/uber\s*eats/i,'uber-eats'],
+  [/deliveroo/i,'deliveroo'],[/just\s*eat/i,'just-eat'],[/whatsapp/i,'whatsapp'],
+]
+
 const STATUS_LABELS={
   AVAILABLE:'Available',INSTALLED:'Installed',INACTIVE:'Inactive',UPDATE_AVAILABLE:'Update available',
   LICENCE_REQUIRED:'Requires licence',NOT_INSTALLABLE:'Not installable',NOT_AVAILABLE:'Not available',
@@ -18,6 +24,9 @@ function appIcon(item){
   const provider=manifest.providerConnector||manifest.provider_connector||{}
   const explicit=item?.icon_url||item?.logo_url||item?.icon||manifest.iconUrl||manifest.icon_url||manifest.logoUrl||manifest.logo_url||manifest.icon||provider.iconUrl||provider.logoUrl
   if(typeof explicit==='string'&&explicit.trim())return explicit.trim()
+  const brandText=[item?.name,item?.publisher,item?.package_key,provider?.providerKey,provider?.provider_key].filter(Boolean).join(' ')
+  const brandMatch=BRAND_ICON_MATCHES.find(([pattern])=>pattern.test(brandText))
+  if(brandMatch)return `${import.meta.env.BASE_URL||'/'}icons/apps/${brandMatch[1]}.svg`
   const key=item?.icon_asset_key||item?.iconAssetKey||manifest.iconAssetKey||manifest.icon_asset_key||provider.providerKey||provider.provider_key||item?.package_key
   if(!key)return ''
   return `${import.meta.env.BASE_URL||'/'}icons/apps/${String(key).trim().toLowerCase().replaceAll('_','-')}.svg`
