@@ -1135,6 +1135,59 @@ function SettingsPage() {
                     />
                   </div>
                 </>
+              ) : current?.key === 'receipts' ? (
+                <>
+                  <div className="settings-row">
+                    <div><strong>Header company</strong><p>Company name used on receipts.</p></div>
+                    <span className="settings-value">{settings.company?.name || '—'}</span>
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>VAT display</strong><p>Uses the company VAT configuration.</p></div>
+                    <button
+                      type="button"
+                      className={`mac-switch ${settings.tax?.vatEnabled ? 'is-on' : ''}`}
+                      disabled={!canManage || saving === 'vatEnabled'}
+                      onClick={() => update('vatEnabled', !settings.tax?.vatEnabled)}
+                      aria-label="VAT display"
+                    >
+                      <span />
+                    </button>
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>Default VAT rate</strong><p>Rate shown when VAT is enabled.</p></div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      defaultValue={Number(settings.tax?.defaultVatRate ?? 20)}
+                      disabled={!canManage || saving === 'defaultVatRate'}
+                      onBlur={(event) => {
+                        const next = Number(event.target.value)
+                        if (Number.isFinite(next) && next >= 0 && next <= 100 && next !== Number(settings.tax?.defaultVatRate ?? 20)) {
+                          update('defaultVatRate', next)
+                        }
+                      }}
+                      aria-label="Receipt VAT rate"
+                    />
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>Date format</strong><p>Date format printed on receipts.</p></div>
+                    <select
+                      value={settings.general?.dateFormat || 'DD/MM/YYYY'}
+                      disabled={!canManage || saving === 'dateFormat'}
+                      onChange={(event) => update('dateFormat', event.target.value)}
+                    >
+                      <option>DD/MM/YYYY</option>
+                      <option>MM/DD/YYYY</option>
+                      <option>YYYY-MM-DD</option>
+                    </select>
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>Paper width</strong><p>Printer and paper settings are managed under Hardware.</p></div>
+                    <span className="settings-value">Configure under Hardware</span>
+                  </div>
+                </>
               ) : current?.key === 'customer-loyalty' ? (
                 <>
                   <div className="settings-row">
