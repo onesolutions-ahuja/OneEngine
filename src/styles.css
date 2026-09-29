@@ -5719,3 +5719,57 @@ button:focus-visible {
   color: rgba(40,50,65,.52);
   font-size: 8px;
 }
+
+
+/* Phase 5 — topbar interaction parity */
+.status-button.is-active {
+  background: rgba(255,255,255,.34);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
+}
+
+.git-control-line {
+  position: relative;
+}
+
+.git-control-line > span:nth-child(2) {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.git-control-row-chevron {
+  flex: 0 0 auto;
+  color: rgba(0,0,0,.34);
+}
+
+.git-control-circle.is-purple {
+  background: linear-gradient(180deg, #9b72f2, #7357d7);
+}
+
+.git-control-volume {
+  width: 100%;
+  height: 16px;
+  margin-top: 6px;
+  accent-color: #8e8e93;
+  cursor: pointer;
+}
+
+.git-macos-panel,
+.git-control-center,
+.topbar-app-menu {
+  will-change: transform, opacity;
+}
+
+.topbar-app-icon img {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .git-macos-panel,
+  .git-control-center,
+  .topbar-app-menu,
+  .dock,
+  .dock-item {
+    transition: none !important;
+    animation: none !important;
+  }
+}
