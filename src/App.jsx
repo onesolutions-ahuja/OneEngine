@@ -102,6 +102,7 @@ const mobileDockItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
   { id: 'workspace', label: 'Workspace', icon: Users },
+  { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
 ]
 
 function useClock() {
