@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, apiUrl, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, setActingCompanyId, startGoogleLogin, verifyPin } from './services/api'
+import { apiRequest, apiUrl, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, startGoogleLogin, verifyPin } from './services/api'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
@@ -812,27 +812,6 @@ function SettingsPage({ onOpenProfile }) {
     || (current?.key === 'server-api' && permissionCodes.includes('platform.manage'))
   const hasCompanyContext = context?.hasCompanyContext === true
   const companySettingsError = context?.settingsError || ''
-  const authorisedCompanies = Array.isArray(context?.authorisedCompanies) ? context.authorisedCompanies : []
-
-  const chooseCompanyContext = async (companyId) => {
-    if (!companyId) return
-    try {
-      setLoading(true)
-      setError('')
-      await apiRequest('/api/platform/developer/acting-company', {
-        method: 'PUT',
-        body: JSON.stringify({ actingCompanyId: companyId }),
-      })
-      setActingCompanyId(companyId)
-      await load()
-    } catch (err) {
-      setError(err?.message || 'Unable to select company')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-
   useEffect(() => {
     if (current && current.key !== active) {
       setActive(current.key)
