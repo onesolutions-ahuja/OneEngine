@@ -58,6 +58,7 @@ const OneStorePopover = lazy(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazy(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazy(() => import('./pages/superadmin/AppReleasesAdmin'))
 const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
+const DeliverySettingsPage = lazy(() => import('./pages/settings/DeliverySettingsPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -1508,6 +1509,10 @@ function SettingsPage({ onOpenProfile }) {
                 <HardwareSettings />
               ) : current?.key === 'connections' ? (
                 <ConnectionsSettings />
+              ) : current?.key === 'email-delivery' ? (
+                <DeliverySettingsPage channel="email" />
+              ) : current?.key === 'sms-delivery' ? (
+                <DeliverySettingsPage channel="sms" />
               ) : current?.key === 'ai-assistant' ? (
                 <AiAssistantSettings />
               ) : current?.key === 'users' ? (
@@ -2150,6 +2155,23 @@ function Desktop({ onLock, onSignOut }) {
     [now],
   )
 
+  const openRoutePath = (route) => {
+    const value = String(route || '').split('?')[0].trim()
+    if (!value) return
+    const parts = value.split('/').filter(Boolean)
+    const settingsIndex = parts.indexOf('settings')
+    if (settingsIndex >= 0) {
+      const section = parts[settingsIndex + 1] || 'general'
+      setRoute('settings', section)
+      setRouteState({ app: 'settings', section })
+      setActiveApp('settings')
+      return
+    }
+    const appIndex = parts.indexOf('app')
+    const slug = parts[appIndex >= 0 ? appIndex + 1 : parts.length - 1]
+    if (slug) openItem(slug)
+  }
+
   const openItem = (id) => {
     if (id === 'integrations') {
       setRoute('integrations')
@@ -2387,10 +2409,7 @@ function Desktop({ onLock, onSignOut }) {
                   query={appSearch}
                   mode="launcher"
                   onClose={() => setTopPanel('')}
-                  onOpenRoute={(route) => {
-                    const slug = String(route || '').split('?')[0].split('/').filter(Boolean).pop()
-                    if (slug) openItem(slug)
-                  }}
+                  onOpenRoute={openRoutePath}
                 />
               ) : null}
               {topPanel === 'store' ? (
@@ -2399,10 +2418,7 @@ function Desktop({ onLock, onSignOut }) {
                   onPackagesChange={setStoreApps}
                   canManagePackages={desktopPermissions.includes('package.install')}
                   onClose={() => setTopPanel('')}
-                  onOpenRoute={(route) => {
-                    const slug = String(route || '').split('?')[0].split('/').filter(Boolean).pop()
-                    if (slug) openItem(slug)
-                  }}
+                  onOpenRoute={openRoutePath}
                 />
               ) : null}
             </AnimatePresence>
@@ -2463,10 +2479,7 @@ function Desktop({ onLock, onSignOut }) {
             query={appSearch}
             onQueryChange={setAppSearch}
             onClose={() => setLauncherOpen(false)}
-            onOpenRoute={(route) => {
-              const slug = String(route || '').split('?')[0].split('/').filter(Boolean).pop()
-              if (slug) openItem(slug)
-            }}
+            onOpenRoute={openRoutePath}
             onOpenStore={() => {
               setAppSearch('')
               setTopPanel('store')
