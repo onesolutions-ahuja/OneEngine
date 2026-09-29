@@ -241,7 +241,7 @@ export function ProductEditor({mode,product,preset,categories,onClose,onSaved}){
     low_stock_level:fieldValue(product,'low_stock_level')||0,
     track_stock:product?.track_stock!==false,
     batch_tracking:product?.batch_tracking===true,
-    category_id:fieldValue(product,'category_id')||'',
+    category_id:fieldValue(product,'category_id')||preset?.categoryId||'',
     image_url:fieldValue(product,'image_url')||preset?.imageUrl||'',
     stock_quantity:0,
   }))
