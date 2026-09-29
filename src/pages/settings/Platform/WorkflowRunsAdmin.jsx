@@ -9,17 +9,8 @@ function formatDate(value) {
 }
 
 function statusBadge(status) {
-  const normalized = String(status || "").toUpperCase();
-  const palette = {
-    COMPLETED: "bg-emerald-100 text-emerald-700",
-    FAILED: "bg-red-100 text-red-700",
-    WAITING: "bg-amber-100 text-amber-700",
-    RUNNING: "bg-sky-100 text-sky-700",
-    PENDING: "bg-slate-200 text-slate-700",
-    STOPPED: "bg-slate-200 text-slate-700",
-    SKIPPED: "bg-slate-200 text-slate-700",
-  };
-  return `inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${palette[normalized] || "bg-slate-200 text-slate-700"}`;
+  const normalized = String(status || "PENDING").toUpperCase();
+  return `workflow-run-status workflow-run-status--${normalized.toLowerCase()}`;
 }
 
 function redact(value) {
@@ -78,104 +69,89 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
   const run = useMemo(() => details?.run || null, [details]);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
-      <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <strong>Workflow Runs</strong>
-          <button type="button" onClick={loadRuns} className="text-xs text-blue-700">Refresh</button>
+    <div className="workflow-runs-shell">
+      <aside className="workflow-runs-list">
+        <div className="workflow-runs-toolbar">
+          <div><strong>Workflow Runs</strong><span>{loading ? "Loading…" : `${runs.length} recent run${runs.length === 1 ? "" : "s"}`}</span></div>
+          <button type="button" onClick={loadRuns} disabled={loading}>Refresh</button>
         </div>
-        <div className="max-h-[72vh] overflow-auto">
+        <div className="workflow-runs-scroll">
           {loading ? (
-            <div className="p-4 text-sm text-slate-500">Loading runs…</div>
+            <div className="workflow-runs-empty">Loading runs…</div>
           ) : runs.length === 0 ? (
-            <div className="p-4 text-sm text-slate-500">No workflow runs yet.</div>
-          ) : (
-            runs.map((currentRun) => (
-              <button
-                key={currentRun.id}
-                type="button"
-                onClick={() => setSelectedRunId(currentRun.id)}
-                className={`block w-full border-b border-slate-100 px-4 py-3 text-left ${selectedRunId === currentRun.id ? "bg-blue-50" : "bg-white"}`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-sm text-slate-700">{currentRun.workflow_name || "Workflow"}</span>
-                  {statusBadge(currentRun.status)}
-                </div>
-                <div className="mt-1 text-[11px] text-slate-500">Run #{currentRun.id?.slice(0, 8) || ""}</div>
-                <div className="mt-2 text-[11px] text-slate-500">{currentRun.trigger_key || "trigger"} • {currentRun.record_id ? "record" : "object"}</div>
-                <div className="mt-1 text-[11px] text-slate-500">{formatDate(currentRun.started_at)}</div>
-              </button>
-            ))
-          )}
+            <div className="workflow-runs-empty"><strong>No workflow runs yet</strong><span>Runs will appear here after workflows execute.</span></div>
+          ) : runs.map((currentRun) => (
+            <button
+              key={currentRun.id}
+              type="button"
+              onClick={() => setSelectedRunId(currentRun.id)}
+              className={`workflow-run-row ${selectedRunId === currentRun.id ? "is-selected" : ""}`}
+            >
+              <div className="workflow-run-row-main">
+                <strong>{currentRun.workflow_name || "Workflow"}</strong>
+                <span>{currentRun.trigger_key || "trigger"} · {currentRun.record_id ? "record" : "object"}</span>
+                <small>{formatDate(currentRun.started_at)}</small>
+              </div>
+              <span className={statusBadge(currentRun.status)}>{String(currentRun.status || "pending")}</span>
+            </button>
+          ))}
         </div>
-      </section>
+      </aside>
 
-      <section className="bg-white border border-slate-200 rounded-xl p-4">
+      <section className="workflow-run-detail">
         {loadingDetail ? (
-          <div className="text-sm text-slate-500">Loading run details…</div>
+          <div className="workflow-runs-empty">Loading run details…</div>
         ) : !run ? (
-          <div className="text-sm text-slate-500">Select a run to view details.</div>
+          <div className="workflow-runs-empty"><strong>No run selected</strong><span>Select a workflow run to inspect its execution.</span></div>
         ) : (
-          <div className="space-y-5">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">Workflow</div>
-              <h3 className="mt-1 text-xl font-semibold text-slate-800">{run.workflow_name || "Workflow"}</h3>
-              <div className="mt-2 text-sm text-slate-600">Run #{run.id?.slice(0, 8) || ""}</div>
+          <>
+            <div className="workflow-run-detail-header">
+              <div><span>Workflow</span><strong>{run.workflow_name || "Workflow"}</strong><small>Run #{run.id?.slice(0, 8) || ""}</small></div>
+              <span className={statusBadge(run.status)}>{String(run.status || "pending")}</span>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Status</div><div className="mt-2">{statusBadge(run.status)}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Version</div><div className="mt-2">{run.workflow_version ?? 1}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Started</div><div className="mt-2">{formatDate(run.started_at)}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Completed</div><div className="mt-2">{formatDate(run.completed_at)}</div></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-slate-500">Trigger</div><div className="mt-2">{run.trigger_key || "—"}</div></div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 text-sm">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="text-xs uppercase tracking-wide text-slate-500">Trigger record</div><div className="mt-2 text-slate-700">{run.record_id || run.object_id || "—"}</div></div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="text-xs uppercase tracking-wide text-slate-500">Retry count</div><div className="mt-2 text-slate-700">{run.metadata?.retryCount ?? run.retry_count ?? 0}</div></div>
+            <div className="workflow-run-metrics">
+              <div><span>Version</span><strong>{run.workflow_version ?? 1}</strong></div>
+              <div><span>Started</span><strong>{formatDate(run.started_at)}</strong></div>
+              <div><span>Completed</span><strong>{formatDate(run.completed_at)}</strong></div>
+              <div><span>Trigger</span><strong>{run.trigger_key || "—"}</strong></div>
+              <div><span>Retry count</span><strong>{run.metadata?.retryCount ?? run.retry_count ?? 0}</strong></div>
+              <div><span>Record</span><strong>{run.record_id || run.object_id || "—"}</strong></div>
             </div>
 
             {run.error_text || run.metadata?.last_error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                <div className="text-xs uppercase tracking-wide">Failure summary</div>
-                <div className="mt-2">{run.error_text || run.metadata?.last_error || "Execution failed"}</div>
-              </div>
+              <div className="workflow-run-error"><strong>Failure summary</strong><span>{run.error_text || run.metadata?.last_error || "Execution failed"}</span></div>
             ) : null}
 
             {run.metadata ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-                <div className="text-xs uppercase tracking-wide text-slate-500">Trace summary</div>
-                <pre className="mt-2 overflow-auto whitespace-pre-wrap break-words">{JSON.stringify(redact(run.metadata), null, 2)}</pre>
-              </div>
+              <details className="workflow-run-trace">
+                <summary>Trace summary</summary>
+                <pre>{JSON.stringify(redact(run.metadata), null, 2)}</pre>
+              </details>
             ) : null}
 
-            <div className="space-y-3">
-              <div className="text-sm font-semibold text-slate-700">Step history</div>
+            <div className="workflow-run-steps">
+              <div className="workflow-run-section-title">Step history</div>
               {(details?.steps || []).length === 0 ? (
-                <div className="text-sm text-slate-500">No step history recorded.</div>
-              ) : (
-                <div className="space-y-2">
-                  {(details.steps || []).map((step) => (
-                    <div key={step.id} className="rounded-xl border border-slate-200 p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="font-medium text-sm text-slate-700">{step.step_order}. {step.action_type || "Step"}</div>
-                        {statusBadge(step.status)}
-                      </div>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2 text-xs text-slate-600">
-                        <div><span className="text-slate-500">Started:</span> {formatDate(step.started_at)}</div>
-                        <div><span className="text-slate-500">Completed:</span> {formatDate(step.completed_at)}</div>
-                      </div>
-                      {step.error_text ? <div className="mt-2 rounded bg-red-50 border border-red-200 px-2 py-2 text-xs text-red-700">{step.error_text}</div> : null}
-                      {step.durable_job_id ? <div className="mt-2 text-xs text-slate-600">Durable job: {step.durable_job_id}</div> : null}
-                      {step.child_run_id ? <div className="mt-2 text-xs text-slate-600">Child run: {step.child_run_id}</div> : null}
-                      {step.job?.status ? <div className="mt-2 text-xs text-slate-600">Job: {step.job.status} • attempts {step.job.attempts || 0}</div> : null}
-                    </div>
-                  ))}
+                <div className="workflow-runs-empty compact">No step history recorded.</div>
+              ) : (details.steps || []).map((step) => (
+                <div key={step.id} className="workflow-run-step">
+                  <div className="workflow-run-step-head">
+                    <strong>{step.step_order}. {step.action_type || "Step"}</strong>
+                    <span className={statusBadge(step.status)}>{String(step.status || "pending")}</span>
+                  </div>
+                  <div className="workflow-run-step-meta">
+                    <span>Started: {formatDate(step.started_at)}</span>
+                    <span>Completed: {formatDate(step.completed_at)}</span>
+                    {step.durable_job_id ? <span>Durable job: {step.durable_job_id}</span> : null}
+                    {step.child_run_id ? <span>Child run: {step.child_run_id}</span> : null}
+                    {step.job?.status ? <span>Job: {step.job.status} · attempts {step.job.attempts || 0}</span> : null}
+                  </div>
+                  {step.error_text ? <div className="workflow-run-error compact">{step.error_text}</div> : null}
                 </div>
-              )}
+              ))}
             </div>
-          </div>
+          </>
         )}
       </section>
     </div>
