@@ -16,6 +16,14 @@ export function normaliseServerAddress(value) {
 }
 
 export function getApiBase() {
+  /*
+   * GitHub Pages / hosted Smart Theme must always use the configured production
+   * API. A stale device override from local/mobile testing must never redirect
+   * authentication to an old backend.
+   */
+  if (typeof window !== 'undefined' && /\.github\.io$/i.test(window.location.hostname)) {
+    return DEFAULT_API_BASE
+  }
   try {
     const stored = normaliseServerAddress(localStorage.getItem(SERVER_ADDRESS_STORAGE_KEY))
     if (stored) return stored
@@ -66,6 +74,15 @@ export async function apiRequest(path, options = {}) {
 }
 
 export async function login(username, password) {
+  /*
+   * A fresh password login must not inherit an old bearer token from a
+   * previous mobile/browser session.
+   */
+  sessionStorage.removeItem('onepos_token')
+  sessionStorage.removeItem('onepos_user')
+  localStorage.removeItem('onepos_token')
+  localStorage.removeItem('onepos_user')
+
   const data = await apiRequest('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
