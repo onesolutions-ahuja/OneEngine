@@ -16,6 +16,7 @@ import ConnectionsSettings from './pages/settings/ConnectionsSettings'
 import TillPage from './pages/till/TillPage'
 import WorkspacePage from './pages/workspace/WorkspacePage'
 import DashboardPage from './pages/dashboard/DashboardPage'
+import ProfilePage from './pages/profile/ProfilePage'
 import {
   Bluetooth,
   LockKeyhole,
@@ -433,6 +434,7 @@ function readRoute() {
   const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
   if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'general' }
   if (parts[0] === 'till') return { app: 'till', section: null }
+  if (parts[0] === 'profile') return { app: 'profile', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -447,6 +449,8 @@ function setRoute(app, section = null, options = {}) {
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
     : app === 'till'
       ? `${base}/till`
+      : app === 'profile'
+        ? `${base}/profile`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -493,7 +497,7 @@ function compressCompanyLogo(file) {
   })
 }
 
-function SettingsPage() {
+function SettingsPage({ onOpenProfile }) {
   const [active, setActive] = useState(() => readRoute().section || 'general')
   const [query, setQuery] = useState('')
   const [context, setContext] = useState(null)
@@ -861,13 +865,13 @@ function SettingsPage() {
           />
         </label>
 
-        <div className="settings-profile">
+        <button type="button" className="settings-profile" onClick={onOpenProfile} aria-label="Open my profile">
           <div className="settings-avatar">{initial}</div>
           <div>
             <strong>{profileName}</strong>
             <span>{profileRole}</span>
           </div>
-        </div>
+        </button>
 
         <div className="settings-nav">
           {visibleGroups.map((group, groupIndex) => (
@@ -1824,9 +1828,21 @@ function Desktop({ onLock }) {
       </header>
 
       {activeApp === 'settings' ? (
-        <SettingsPage />
+        <SettingsPage onOpenProfile={() => {
+          const next = { app: 'profile', section: null }
+          setRouteState(next)
+          setRoute('profile')
+          setActiveApp('profile')
+        }} />
       ) : activeApp === 'till' ? (
         <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
+      ) : activeApp === 'profile' ? (
+        <ProfilePage onBack={() => {
+          const next = { app: 'settings', section: 'general' }
+          setRouteState(next)
+          setRoute('settings', 'general')
+          setActiveApp('settings')
+        }} />
       ) : activeApp === 'workspace' ? (
         <WorkspacePage
           initialObjectKey={routeState.objectKey || ''}
