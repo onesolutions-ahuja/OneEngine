@@ -228,7 +228,7 @@ export default function TillPage({ onOpenSettings }) {
     setCashReceived('')
   }
 
-  const buildSalePayload = (paymentMethod) => ({
+  const buildSalePayload = (paymentMethod, verifiedOverride = false) => ({
     clientRequestId: crypto.randomUUID(),
     items: basket.map((item) => {
       const line = Number(item.price) * item.quantity
@@ -254,7 +254,7 @@ export default function TillPage({ onOpenSettings }) {
     paymentMethod,
     discountType: discount.type,
     discountValue: discount.value,
-    ageVerified: hasAgeRestricted ? ageVerified : undefined,
+    ageVerified: hasAgeRestricted ? (ageVerified || verifiedOverride) : undefined,
   })
 
   const maybeShowReceiptQr = async (sale) => {
@@ -269,9 +269,9 @@ export default function TillPage({ onOpenSettings }) {
     await generateReceiptQr(sale.id)
   }
 
-  const completeSale = async (paymentMethod) => {
+  const completeSale = async (paymentMethod, { verifiedOverride = false } = {}) => {
     if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
-    if (hasAgeRestricted && !ageVerified) {
+    if (hasAgeRestricted && !ageVerified && !verifiedOverride) {
       setPendingPayment(paymentMethod)
       setModal('age')
       return
@@ -287,7 +287,7 @@ export default function TillPage({ onOpenSettings }) {
 
     setBusy(true)
     setError('')
-    const payload = buildSalePayload(paymentMethod)
+    const payload = buildSalePayload(paymentMethod, verifiedOverride)
     try {
       if (!online && paymentMethod === 'cash') {
         const entry = await enqueueOfflineCashSale(payload, till?.terminal_number || till?.terminalNumber || 'T')
@@ -500,7 +500,7 @@ export default function TillPage({ onOpenSettings }) {
       {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
       {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError}/></Modal> : null}
-      {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const payment = pendingPayment; setAgeVerified(true); setPendingPayment(null); setModal(null); window.setTimeout(() => completeSale(payment), 0) }}>Age verified</button></div></Modal> : null}
+      {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const payment = pendingPayment; setAgeVerified(true); setPendingPayment(null); setModal(null); window.setTimeout(() => completeSale(payment, { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
       {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={(price, reason) => { setBasket((rows) => rows.map((row) => row.id === priceTarget.id ? { ...row, price, priceOverride: price, priceOverrideReason: reason } : row)); setPriceTarget(null); setModal(null) }}/></Modal> : null}
       {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { setReceiptQr(null); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}<p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p></div></Modal> : null}
       {modal === 'print' ? <Modal title="Receipt" onClose={() => setModal(null)} wide><div className="till-print-preview"><pre>{JSON.stringify(receiptDetail || lastSale, null, 2)}</pre><button type="button" className="till-primary" onClick={() => window.print()}>Print</button></div></Modal> : null}
