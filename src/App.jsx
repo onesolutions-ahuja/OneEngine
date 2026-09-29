@@ -73,16 +73,27 @@ function useClock() {
 
 function Dock({ onItemOpen }) {
   const mouseX = useMotionValue(Number.POSITIVE_INFINITY)
+  const resetMagnification = () => mouseX.set(Number.POSITIVE_INFINITY)
+  const trackTouch = (event) => {
+    const touch = event.touches?.[0]
+    if (touch) mouseX.set(touch.clientX)
+  }
 
   return (
     <div className="dock-zone">
       <motion.div
         className="dock"
-        onMouseMove={(event) => mouseX.set(event.pageX)}
-        onMouseLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
+        onMouseMove={(event) => mouseX.set(event.clientX)}
+        onMouseLeave={resetMagnification}
         aria-label="Smart Theme dock"
       >
-        <div className="dock-magnify-zone">
+        <div
+          className="dock-magnify-zone"
+          onTouchStart={trackTouch}
+          onTouchMove={trackTouch}
+          onTouchEnd={resetMagnification}
+          onTouchCancel={resetMagnification}
+        >
           {dockItems.map((item) => (
             <DockItem
               key={item.id}
