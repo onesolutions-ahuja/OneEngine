@@ -224,6 +224,26 @@ export default function TillPage({ onOpenSettings }) {
   const total = subtotal
   const hasAgeRestricted = basket.some((item) => item.ageRestricted)
 
+  useEffect(() => {
+    if (!billChannelRef.current) return undefined
+    const payload = {
+      type: 'BILL',
+      basket: [...basket, ...miscLines.map((line, index) => ({ id: `misc-${index}`, name: line.description, price: line.price, quantity: line.quantity }))],
+      subtotal,
+      vat,
+      total,
+      discountAmount,
+      hasDiscount: discount.type !== null && Number(discount.value || 0) > 0,
+      hasCustomer: Boolean(selectedCustomer),
+      storeName: settings?.store?.name || 'Till',
+    }
+    try { billChannelRef.current.postMessage(payload) } catch {}
+    const heartbeat = window.setInterval(() => {
+      try { billChannelRef.current?.postMessage(payload) } catch {}
+    }, 2000)
+    return () => window.clearInterval(heartbeat)
+  }, [basket, miscLines, subtotal, vat, total, discountAmount, discount.type, discount.value, selectedCustomer, settings?.store?.name])
+
   const addProduct = (product) => {
     setError('')
     setBasket((current) => {
@@ -236,6 +256,7 @@ export default function TillPage({ onOpenSettings }) {
   const changeQty = (id, delta) => setBasket((current) => current.map((item) => item.id === id ? { ...item, quantity: item.quantity + delta } : item).filter((item) => item.quantity > 0))
 
   const clearSale = () => {
+    if (receiptQr?.saleId && settings?.receiptQr?.autoCloseOnNewSale !== false) void revokeReceiptQr(receiptQr.saleId)
     setBasket([])
     setMiscLines([])
     setSelectedCustomer(null)
@@ -303,7 +324,7 @@ export default function TillPage({ onOpenSettings }) {
     if (paymentMethod === 'card' && !paymentCapability) return setError('No healthy payment connector is assigned to this till.')
     if (paymentMethod === 'customer_credit' && !selectedCustomer) return setError('Select a customer before using customer credit.')
     if (paymentMethod === 'gift_card' && !giftCardCode.trim()) return setError('Enter a gift card code.')
-    const received = paymentMethod === 'cash' ? Number(cashReceivedOverride ?? cashReceived || total) : total
+    const received = paymentMethod === 'cash' ? Number((cashReceivedOverride ?? cashReceived) || total) : total
     if (paymentMethod === 'cash' && received < total) return setError('Cash received is less than the sale total.')
 
     setBusy(true)
@@ -377,18 +398,47 @@ export default function TillPage({ onOpenSettings }) {
     } catch (err) { setError(err?.message || 'Unable to resume sale') }
   }
 
+  useEffect(() => {
+    const customerId = selectedCustomer?.id
+    if (!customerId || !online) {
+      setLiveCredit(null)
+      return
+    }
+    let active = true
+    apiRequest(`/api/customers/${encodeURIComponent(customerId)}/credit`)
+      .then((response) => { if (active) setLiveCredit(response?.data || null) })
+      .catch(() => { if (active) setLiveCredit(null) })
+    return () => { active = false }
+  }, [selectedCustomer?.id, online])
+
   const searchCustomers = async (value) => {
     setCustomerSearch(value)
     if (!value.trim()) return setCustomers([])
     try { const response = await apiRequest(`/api/customer-lookup?search=${encodeURIComponent(value.trim())}`); setCustomers(response?.data || []) } catch { setCustomers([]) }
   }
 
+  const emitReceiptQr = (payload = {}) => {
+    try { billChannelRef.current?.postMessage({ type: 'RECEIPT_QR', ...payload }) } catch {}
+  }
+
+  const revokeReceiptQr = async (saleId = receiptQr?.saleId || lastSale?.id) => {
+    if (saleId) {
+      try { await apiRequest(`/api/sales/${encodeURIComponent(saleId)}/receipt-qr`, { method: 'DELETE' }) } catch {}
+    }
+    emitReceiptQr({ active: false, cleared: true, saleId: saleId || null })
+    setReceiptQr(null)
+  }
+
   const generateReceiptQr = async (saleId = lastSale?.id) => {
     if (!saleId) return setError('A synced completed sale is required for Receipt QR.')
     try {
-      const response = await apiRequest(`/api/sales/${encodeURIComponent(saleId)}/receipt-qr`, { method: 'POST', body: JSON.stringify({}) })
+      if (receiptQr?.saleId && receiptQr.saleId !== saleId) await revokeReceiptQr(receiptQr.saleId)
+      const expiryMinutes = Number(settings?.receiptQr?.expiryMinutes || 5)
+      const response = await apiRequest(`/api/sales/${encodeURIComponent(saleId)}/receipt-qr`, { method: 'POST', body: JSON.stringify({ expiryMinutes }) })
       if (!response?.success || !response?.data?.qrcodeUrl) throw new Error(response?.message || 'Unable to create Receipt QR')
-      setReceiptQr(response.data)
+      const next = { ...response.data, saleId: response.data.saleId || saleId }
+      setReceiptQr(next)
+      emitReceiptQr({ active: true, ...next })
       setModal('receipt_qr')
     } catch (err) { setError(err?.message || 'Unable to create Receipt QR') }
   }
@@ -523,11 +573,49 @@ export default function TillPage({ onOpenSettings }) {
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
       {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError}/></Modal> : null}
       {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const payment = pendingPayment; setAgeVerified(true); setPendingPayment(null); setModal(null); window.setTimeout(() => completeSale(payment, { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
+      {modal === 'payment' ? <Modal title="Payment" onClose={() => setModal(null)} wide><PaymentSheet total={total} methods={paymentMethods} online={online} cardAvailable={paymentCapability} customer={selectedCustomer} credit={liveCredit || selectedCustomer?.credit || null} onPay={async (method, options) => { await completeSale(method, options || {}); setModal(null) }}/></Modal> : null}
       {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={(price, reason) => { setBasket((rows) => rows.map((row) => row.id === priceTarget.id ? { ...row, price, priceOverride: price, priceOverrideReason: reason } : row)); setPriceTarget(null); setModal(null) }}/></Modal> : null}
-      {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { setReceiptQr(null); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}<p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p></div></Modal> : null}
+      {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { void revokeReceiptQr(); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}<p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p></div></Modal> : null}
       {modal === 'print' ? <Modal title="Receipt" onClose={() => setModal(null)} wide><div className="till-print-preview"><pre>{JSON.stringify(receiptDetail || lastSale, null, 2)}</pre><button type="button" className="till-primary" onClick={() => window.print()}>Print</button></div></Modal> : null}
     </section>
   )
+}
+
+function PaymentSheet({ total, methods, online, cardAvailable, customer, credit, onPay }) {
+  const activeMethods = (methods || []).filter((method) => method.active !== false)
+  const [mode, setMode] = useState('single')
+  const [method, setMethod] = useState(activeMethods[0]?.code || 'cash')
+  const [cashReceived, setCashReceived] = useState('')
+  const [giftCardCode, setGiftCardCode] = useState('')
+  const [split, setSplit] = useState(() => Object.fromEntries(activeMethods.map((item) => [item.code, ''])))
+  const selected = activeMethods.find((item) => item.code === method)
+  const splitEligible = activeMethods.filter((item) => !['customer_credit','gift_card'].includes(item.code) && (item.code !== 'card' || cardAvailable))
+  const splitLines = splitEligible.map((item) => ({ paymentMethod: item.code, amount: Math.round((Number(split[item.code]) || 0) * 100) / 100 })).filter((line) => line.amount > 0)
+  const splitTotal = splitLines.reduce((sum, line) => sum + line.amount, 0)
+  const remaining = Math.round((total - splitTotal) * 100) / 100
+  const unavailable = !online && selected?.allowOffline !== true
+    || method === 'card' && !cardAvailable
+    || method === 'customer_credit' && !customer
+
+  if (mode === 'split') return <div className="till-form">
+    <p>Split the total across configured payment methods. The amounts must equal the sale total.</p>
+    {splitEligible.map((item) => <label key={item.code}>{item.label}<input type="number" min="0" step="0.01" value={split[item.code] || ''} onChange={(e) => setSplit((current) => ({ ...current, [item.code]: e.target.value }))}/></label>)}
+    <div className="till-payment-remaining"><span>Remaining</span><strong>{money(remaining)}</strong></div>
+    <div className="till-form-actions"><button type="button" onClick={() => setMode('single')}>Back</button><button type="button" className="till-primary" disabled={!splitLines.length || remaining !== 0} onClick={() => onPay('split', { payments: splitLines })}>Complete Split Payment</button></div>
+  </div>
+
+  return <div className="till-form">
+    <label>Payment method<select value={method} onChange={(e) => setMethod(e.target.value)}>{activeMethods.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
+    {!online ? <p>Offline mode only allows payment methods marked for offline use.</p> : null}
+    {method === 'card' && !cardAvailable ? <p>No healthy payment connector is assigned to this till.</p> : null}
+    {method === 'customer_credit' ? <p>{customer ? `${customer.name || 'Customer'} · Available ${money(credit?.available || 0)}` : 'Select a customer before using customer credit.'}</p> : null}
+    {method === 'gift_card' ? <label>Gift card code<input value={giftCardCode} onChange={(e) => setGiftCardCode(e.target.value)} placeholder="Scan or enter gift card code"/></label> : null}
+    {method === 'cash' ? <label>Cash received<input type="number" min="0" step="0.01" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} placeholder={money(total)}/></label> : null}
+    <div className="till-form-actions">
+      <button type="button" disabled={!online} onClick={() => setMode('split')}><Layers size={14}/> Split Payment</button>
+      <button type="button" className="till-primary" disabled={unavailable || (method === 'gift_card' && !giftCardCode.trim())} onClick={() => onPay(method, { cashReceivedOverride: method === 'cash' ? Number(cashReceived || total) : null, giftCardCode })}>Pay {selected?.label || method}</button>
+    </div>
+  </div>
 }
 
 function DiscountForm({ value, onApply }) {
