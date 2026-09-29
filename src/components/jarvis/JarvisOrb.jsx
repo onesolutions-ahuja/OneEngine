@@ -35,27 +35,6 @@ const STATE_COPY = Object.freeze({
   [ORB_STATES.RESPONSE]: "Here you go",
 });
 
-function JarvisVideo() {
-  // Use the original supplied JARVES animation. Keep a public repository source
-  // as a second source so the dock visual is not dependent on Render serving
-  // the media asset at the exact moment the shell loads.
-  return (
-    <video
-      className="jarvis-orb-video"
-      data-legacy-layer="jarvis-orb-core"
-      aria-hidden="true"
-      autoPlay
-      loop
-      muted
-      playsInline
-      preload="auto"
-    >
-      <source src="https://onepos.onrender.com/assets/jarvis/jarves-transparent.webm" type="video/webm" />
-      <source src="https://raw.githubusercontent.com/onesolutions-ahuja/onePOS/main/public/assets/jarvis/jarves-transparent.webm" type="video/webm" />
-    </video>
-  );
-}
-
 function describeOrbState(state, open) {
   if (open) return "JARVES panel is open";
   if (state === ORB_STATES.LISTENING) return "JARVES is listening - open the panel";
