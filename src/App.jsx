@@ -958,10 +958,10 @@ function SettingsPage() {
 
 const MARKETPLACE_ICON_ALIASES = {
   uber_eats: 'uber-eats',
-  uber-eats: 'uber-eats',
+  'uber-eats': 'uber-eats',
   deliveroo: 'deliveroo',
   just_eat: 'just-eat',
-  just-eat: 'just-eat',
+  'just-eat': 'just-eat',
   quickbooks_online: 'quickbooks',
   quickbooks: 'quickbooks',
   shopify: 'shopify',
