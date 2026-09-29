@@ -6787,3 +6787,22 @@ button:focus-visible {
 .returns-theme .fixed.inset-0{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px}.returns-theme .shadow-2xl{box-shadow:0 22px 60px rgba(0,0,0,.22)}
 @media(max-width:900px){.returns-theme{padding:14px 12px 105px}}
 @media(max-width:640px){.returns-theme .sm\:grid-cols-3,.returns-theme .grid-cols-2{grid-template-columns:1fr}.returns-theme table{min-width:720px}}
+
+
+/* Audit Log */
+.audit-filters{max-width:1600px;margin:0 auto 10px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.audit-filters>input,.audit-filters>select{height:32px;border:1px solid #dfe2e6;border-radius:8px;background:#fff;padding:0 8px;font-size:9px}
+.audit-filter-actions{display:flex;justify-content:flex-end;gap:6px;grid-column:span 2}
+.audit-filter-actions button,.audit-view-button,.audit-pagination button{height:29px;border:1px solid #dfe2e6;border-radius:7px;background:#fff;padding:0 8px;font-size:9px;display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.audit-view-button{height:26px}
+.audit-pagination{padding:8px 10px;border-top:1px solid #eef0f2;display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#7b828b}
+.audit-pagination>div{display:flex;gap:5px}
+.audit-detail-modal{width:min(780px,calc(100vw - 24px))}
+.audit-detail-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.audit-detail-body>div{border:1px solid #eceef0;border-radius:8px;background:#fafbfc;padding:8px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.audit-detail-body span{font-size:8px;color:#858b93}.audit-detail-body strong,.audit-detail-body code{font-size:9px;word-break:break-word}
+.audit-detail-full{grid-column:1/-1}.audit-detail-body pre{margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:9px ui-monospace,SFMono-Regular,Menlo,monospace}
+.module-status-pill.is-danger{background:#fff1f1;color:#aa4545}.module-status-pill.is-warning{background:#fff7e6;color:#946116}
+.is-spinning{animation:audit-spin .8s linear infinite}@keyframes audit-spin{to{transform:rotate(360deg)}}
+@media(max-width:1000px){.audit-filters{grid-template-columns:repeat(3,minmax(0,1fr))}.audit-filter-actions{grid-column:auto}}
+@media(max-width:620px){.audit-filters,.audit-detail-body{grid-template-columns:1fr}.audit-detail-full{grid-column:auto}}
