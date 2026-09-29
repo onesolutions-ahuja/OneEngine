@@ -5038,3 +5038,77 @@ button:focus-visible {
     border-inline: 1px solid rgba(46,61,82,.075);
   }
 }
+
+
+/* Metadata Settings additions — navigation labels and generic Object editing. */
+.metadata-settings-group-label {
+  padding: 8px 10px 4px;
+  color: rgba(30, 39, 56, .42);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+.metadata-settings-object { min-width: 0; }
+.metadata-settings-object-toolbar {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.metadata-settings-object-toolbar label {
+  min-width: 240px;
+  height: 34px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(0,0,0,.09);
+  border-radius: 9px;
+  background: rgba(255,255,255,.88);
+}
+.metadata-settings-object-toolbar select {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+.metadata-settings-object-toolbar > button,
+.metadata-settings-form-actions button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(0,0,0,.1);
+  border-radius: 8px;
+  background: white;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+}
+.metadata-settings-object-toolbar > button.is-danger { color: #b42318; }
+.metadata-settings-form input,
+.metadata-settings-form select,
+.settings-row > input,
+.settings-row > select {
+  min-width: 170px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid rgba(0,0,0,.11);
+  border-radius: 7px;
+  background: rgba(255,255,255,.96);
+  color: #1d1d1f;
+  font: inherit;
+  font-size: 10px;
+}
+.metadata-settings-form-actions {
+  padding: 10px 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  border-top: 1px solid rgba(0,0,0,.06);
+}
+.metadata-settings-form-actions .is-primary {
+  color: white;
+  border-color: #0a84ff;
+  background: #0a84ff;
+}
