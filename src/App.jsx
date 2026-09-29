@@ -956,18 +956,62 @@ function SettingsPage() {
 }
 
 
+const MARKETPLACE_ICON_ALIASES = {
+  uber_eats: 'uber-eats',
+  uber-eats: 'uber-eats',
+  deliveroo: 'deliveroo',
+  just_eat: 'just-eat',
+  just-eat: 'just-eat',
+  quickbooks_online: 'quickbooks',
+  quickbooks: 'quickbooks',
+  shopify: 'shopify',
+  xero_accounting: 'xero-accounting',
+  xero: 'xero',
+  sage_business_cloud_accounting: 'sage-business-cloud-accounting',
+  sage_accounting: 'sage-business-cloud-accounting',
+  sage: 'sage',
+  whatsapp_connector: 'whatsapp',
+  whatsapp: 'whatsapp',
+}
+
+function localAppIcon(assetKey) {
+  const clean = String(assetKey || '').trim().toLowerCase().replaceAll('_', '-')
+  if (!clean || !/^[a-z0-9-]+$/.test(clean)) return ''
+  const base = import.meta.env.BASE_URL || '/'
+  return `${base}icons/apps/${clean}.svg`
+}
+
 function marketplaceIcon(item) {
   const manifest = item?.manifest || {}
-  const raw = item?.icon_url || item?.logo_url || item?.icon
+  const provider = manifest.providerConnector || manifest.provider_connector || {}
+  const explicit = item?.icon_url || item?.logo_url || item?.icon
     || manifest.iconUrl || manifest.icon_url || manifest.logoUrl || manifest.logo_url || manifest.icon
-  if (typeof raw === 'string' && raw.trim()) {
-    const value = raw.trim()
-    return /^https?:\/\//i.test(value) ? value : apiUrl(value.startsWith('/') ? value : `/${value}`)
+    || provider.iconUrl || provider.logoUrl
+
+  if (typeof explicit === 'string' && explicit.trim()) {
+    const value = explicit.trim()
+    if (/^https?:\/\//i.test(value)) return value
+    if (value.startsWith('/icons/apps/')) return `${import.meta.env.BASE_URL || '/'}${value.replace(/^\//, '')}`
+    return apiUrl(value.startsWith('/') ? value : `/${value}`)
   }
-  const assetKey = item?.icon_asset_key || item?.iconAssetKey || manifest.iconAssetKey || manifest.icon_asset_key
-  return typeof assetKey === 'string' && /^[a-z0-9-]+$/i.test(assetKey)
-    ? apiUrl(`/icons/apps/${assetKey}.svg`)
-    : ''
+
+  const keys = [
+    item?.icon_asset_key,
+    item?.iconAssetKey,
+    manifest.iconAssetKey,
+    manifest.icon_asset_key,
+    provider.providerKey,
+    provider.provider_key,
+    item?.package_key,
+  ].filter(Boolean)
+
+  for (const key of keys) {
+    const normalized = String(key).trim().toLowerCase().replace(/[\s-]+/g, '_')
+    const alias = MARKETPLACE_ICON_ALIASES[normalized] || String(key).trim().toLowerCase().replaceAll('_', '-')
+    if (/^[a-z0-9-]+$/.test(alias)) return localAppIcon(alias)
+  }
+
+  return localAppIcon('default-app')
 }
 
 function TopbarAppsMenu({ apps, query, onClose }) {
@@ -1276,7 +1320,7 @@ function Desktop({ onLock }) {
         </section>
       )}
 
-      {!(activeApp === 'till' && isTillUser) ? <Dock onItemOpen={openItem} /> : null}
+      <Dock onItemOpen={openItem} />
     </main>
   )
 }
