@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, apiUrl, checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
+import { apiRequest, apiUrl, checkBackend, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
@@ -2526,8 +2526,24 @@ export default function App() {
   // an explicit workstation lock. PIN is only required after the user chooses
   // Lock during the current session.
   const [locked, setLocked] = useState(() => !hasSession())
+  const [sessionContextReady, setSessionContextReady] = useState(() => {
+    const user = getStoredUser()
+    return !hasSession() || user?.isPlatformDeveloper !== true || Boolean(user?.companyId)
+  })
 
   const [transitioning, setTransitioning] = useState(false)
+
+  useEffect(() => {
+    if (!hasSession() || getStoredUser()?.isPlatformDeveloper !== true) {
+      setSessionContextReady(true)
+      return
+    }
+    let live = true
+    ensureActingCompanyContext()
+      .catch(() => '')
+      .finally(() => { if (live) setSessionContextReady(true) })
+    return () => { live = false }
+  }, [locked])
 
   const unlock = () => {
     if (transitioning) return
@@ -2554,7 +2570,13 @@ export default function App() {
 
   return (
     <div className={`app-shell ${transitioning ? 'is-transitioning' : ''}`}>
-      {locked ? <LockScreen onUnlock={unlock} onSignOut={signOut} /> : <Desktop onLock={lock} />}
+      {locked ? (
+        <LockScreen onUnlock={unlock} onSignOut={signOut} />
+      ) : !sessionContextReady ? (
+        <div className="route-loading" role="status">Preparing company context…</div>
+      ) : (
+        <Desktop onLock={lock} />
+      )}
     </div>
   )
 }
