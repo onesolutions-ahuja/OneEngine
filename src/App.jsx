@@ -11,6 +11,7 @@ import ObjectsSettingsPane from './pages/settings/ObjectsSettingsPane'
 import ClientWebShopSettings from './pages/settings/ClientWebShopSettings'
 import PaymentTerminalSettings from './pages/settings/PaymentTerminalSettings'
 import HardwareSettings from './pages/settings/HardwareSettings'
+import AiAssistantSettings from './pages/settings/AiAssistantSettings'
 import TillPage from './pages/till/TillPage'
 import WorkspacePage from './pages/workspace/WorkspacePage'
 import {
@@ -1225,6 +1226,8 @@ function SettingsPage() {
                 </>
               ) : current?.key === 'hardware' ? (
                 <HardwareSettings />
+              ) : current?.key === 'ai-assistant' ? (
+                <AiAssistantSettings />
               ) : current?.key === 'users' ? (
                 <RecordListView
                   title="Users"
