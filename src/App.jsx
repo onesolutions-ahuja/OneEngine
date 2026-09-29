@@ -1898,6 +1898,14 @@ function Desktop({ onLock }) {
   const isTillUser = /till|cashier|sales/i.test(String(storedUser?.role || ''))
 
   useEffect(() => {
+    if (!isTillUser || activeApp !== 'home') return
+    const next = { app: 'till', section: null }
+    setRouteState(next)
+    setRoute('till')
+    setActiveApp('till')
+  }, [isTillUser, activeApp])
+
+  useEffect(() => {
     const syncRoute = () => {
       const route = readRoute()
       setRouteState(route)
