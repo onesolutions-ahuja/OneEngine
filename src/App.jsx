@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
+import { apiRequest, checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
 import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsContext, loadUsers, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
@@ -45,6 +45,8 @@ import {
   MonitorSmartphone,
   LayoutGrid,
   Mail,
+  ShoppingBag,
+  RefreshCw,
 } from 'lucide-react'
 
 const dockItems = [
@@ -948,15 +950,95 @@ function SettingsPage() {
   )
 }
 
+
+function TopbarAppsMenu({ apps, query, onClose }) {
+  const q = String(query || '').trim().toLowerCase()
+  const visible = apps.filter((item) => item?.visible !== false && item?.system_only !== true)
+    .filter((item) => !q || `${item.name || ''} ${item.package_key || ''} ${item.category || ''}`.toLowerCase().includes(q))
+  const installed = visible.filter((item) => Boolean(item.company_installation))
+  const available = visible.filter((item) => !item.company_installation)
+  const renderRows = (rows) => rows.slice(0, 10).map((item) => (
+    <button key={item.package_key || item.id} type="button" className="topbar-app-row" onClick={onClose}>
+      <span className="topbar-app-icon"><ShoppingBag size={14} /></span>
+      <span><strong>{item.name || item.package_key}</strong><small>{item.category || 'App'}</small></span>
+    </button>
+  ))
+  return (
+    <div className="mac-popover topbar-app-menu">
+      <div className="mac-popover-title">OneStore</div>
+      <section><b>Installed</b>{installed.length ? renderRows(installed) : <p>No installed apps match.</p>}</section>
+      <section><b>Available</b>{available.length ? renderRows(available) : <p>No available apps match.</p>}</section>
+    </div>
+  )
+}
+
+function ConnectionMenu({ health, onRefresh }) {
+  const online = health?.status === 'Connected'
+  return (
+    <div className="mac-popover connection-menu">
+      <div className="mac-popover-title">Connection</div>
+      <div className="control-row"><span className={`health-dot ${online ? 'is-online' : ''}`} /><div><strong>{health?.status || 'Unknown'}</strong><small>onePOS API</small></div></div>
+      <div className="control-row"><span className="control-symbol">DB</span><div><strong>{health?.database || 'Unknown'}</strong><small>Database</small></div></div>
+      <button type="button" className="popover-action" onClick={onRefresh}><RefreshCw size={13} /> Refresh status</button>
+    </div>
+  )
+}
+
+function DevicesMenu({ onOpenSettings }) {
+  return (
+    <div className="mac-popover devices-menu">
+      <div className="mac-popover-title">Devices</div>
+      <div className="control-row"><Bluetooth size={17} /><div><strong>Bluetooth devices</strong><small>Scanners, printers and accessories</small></div></div>
+      <div className="control-row"><Printer size={17} /><div><strong>POS hardware</strong><small>Manage assigned devices</small></div></div>
+      <button type="button" className="popover-action" onClick={onOpenSettings}>Open Hardware Settings</button>
+    </div>
+  )
+}
+
+function ControlCenterMenu() {
+  return (
+    <div className="mac-popover control-center-menu">
+      <div className="mac-control-grid">
+        <div className="mac-control-tile"><Wifi size={18}/><strong>Wi-Fi</strong><small>onePOS network</small></div>
+        <div className="mac-control-tile"><Bluetooth size={18}/><strong>Bluetooth</strong><small>Devices</small></div>
+        <div className="mac-control-tile"><Volume2 size={18}/><strong>Sound</strong><small>System</small></div>
+        <div className="mac-control-tile"><Moon size={18}/><strong>Focus</strong><small>Off</small></div>
+      </div>
+    </div>
+  )
+}
+
 function Desktop({ onLock }) {
   const [message, setMessage] = useState('Hello.')
   const [activeApp, setActiveApp] = useState(() => readRoute().app)
+  const [topPanel, setTopPanel] = useState('')
+  const [appSearch, setAppSearch] = useState('')
+  const [storeApps, setStoreApps] = useState([])
+  const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
   const now = useClock()
+  const storedUser = getStoredUser()
+  const isTillUser = !storedUser?.isSuperadmin && /till|cashier|sales/i.test(String(storedUser?.role || ''))
 
   useEffect(() => {
     const syncRoute = () => setActiveApp(readRoute().app)
     window.addEventListener('popstate', syncRoute)
     return () => window.removeEventListener('popstate', syncRoute)
+  }, [])
+
+  useEffect(() => {
+    let live = true
+    Promise.all([
+      apiRequest('/api/packages/marketplace').catch(() => ({ data: [] })),
+      checkBackend().catch(() => null),
+    ]).then(([packages, health]) => {
+      if (!live) return
+      setStoreApps(Array.isArray(packages?.data) ? packages.data : [])
+      setConnectionHealth({
+        status: health ? 'Connected' : 'Offline',
+        database: health?.database || (health ? 'Connected' : 'Unavailable'),
+      })
+    })
+    return () => { live = false }
   }, [])
 
   const dateTime = useMemo(
@@ -1002,8 +1084,7 @@ function Desktop({ onLock }) {
             onClick={() => { setMessage('Hello.'); setRoute('home'); setActiveApp('home') }}
             aria-label="One Solutions"
           >
-            <span className="one-logo-mark" aria-hidden="true">O</span>
-            <span className="one-logo-text" aria-hidden="true">ne</span>
+            <span className="one-logo-play" aria-hidden="true"><span>1</span></span>
           </button>
 
           <button type="button" className="menu-text menu-text--strong">Finder</button>
@@ -1018,26 +1099,42 @@ function Desktop({ onLock }) {
         <div className="menubar-spacer" />
 
         <div className="menubar-right">
-          <button type="button" className="status-button" aria-label="Search">
-            <Search size={18} strokeWidth={2.1} />
-          </button>
-          <button type="button" className="status-button" aria-label="Wi-Fi">
-            <Wifi size={17} strokeWidth={2.1} />
-          </button>
-          <button type="button" className="status-button" aria-label="Bluetooth">
-            <Bluetooth size={17} strokeWidth={2.1} />
-          </button>
-          <button type="button" className="status-button" aria-label="Control Center">
-            <SlidersHorizontal size={18} strokeWidth={2.2} />
-          </button>
-          <button type="button" className="status-button" aria-label="Assistant">
-            <img
-              className="siri-image"
-              src="https://rdvnui.com/assets/siri-icon-DMUdF73Y.png"
-              alt=""
-              draggable="false"
-            />
-          </button>
+          <div className="topbar-search-wrap">
+            <label className="topbar-search-pill">
+              <Search size={14} strokeWidth={2.1} />
+              <input
+                value={appSearch}
+                onFocus={() => setTopPanel('apps')}
+                onChange={(event) => { setAppSearch(event.target.value); setTopPanel('apps') }}
+                placeholder="Search apps"
+                aria-label="Search apps"
+              />
+            </label>
+            {topPanel === 'apps' ? (
+              <TopbarAppsMenu apps={storeApps} query={appSearch} onClose={() => setTopPanel('')} />
+            ) : null}
+          </div>
+          <div className="topbar-status-wrap">
+            <button type="button" className="status-button" aria-label="Connection health" onClick={() => setTopPanel(topPanel === 'wifi' ? '' : 'wifi')}>
+              <Wifi size={17} strokeWidth={2.1} />
+            </button>
+            {topPanel === 'wifi' ? <ConnectionMenu health={connectionHealth} onRefresh={async () => {
+              const health = await checkBackend().catch(() => null)
+              setConnectionHealth({ status: health ? 'Connected' : 'Offline', database: health?.database || (health ? 'Connected' : 'Unavailable') })
+            }} /> : null}
+          </div>
+          <div className="topbar-status-wrap">
+            <button type="button" className="status-button" aria-label="Devices" onClick={() => setTopPanel(topPanel === 'bluetooth' ? '' : 'bluetooth')}>
+              <Bluetooth size={17} strokeWidth={2.1} />
+            </button>
+            {topPanel === 'bluetooth' ? <DevicesMenu onOpenSettings={() => { setRoute('settings', 'hardware'); setActiveApp('settings'); setTopPanel('') }} /> : null}
+          </div>
+          <div className="topbar-status-wrap">
+            <button type="button" className="status-button" aria-label="Control Center" onClick={() => setTopPanel(topPanel === 'control' ? '' : 'control')}>
+              <SlidersHorizontal size={18} strokeWidth={2.2} />
+            </button>
+            {topPanel === 'control' ? <ControlCenterMenu /> : null}
+          </div>
           <button type="button" className="menubar-time-button">
             {dateTime}
           </button>
@@ -1047,7 +1144,7 @@ function Desktop({ onLock }) {
       {activeApp === 'settings' ? (
         <SettingsPage />
       ) : activeApp === 'till' ? (
-        <TillPage />
+        <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
       ) : (
         <section className="hello-stage">
           <p className="eyebrow">SMART THEME</p>
@@ -1058,7 +1155,7 @@ function Desktop({ onLock }) {
         </section>
       )}
 
-      <Dock onItemOpen={openItem} />
+      {!(activeApp === 'till' && isTillUser) ? <Dock onItemOpen={openItem} /> : null}
     </main>
   )
 }
