@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
-  ListChecks, PlayCircle, Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
+  AppWindow, BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
+  ListChecks, PlayCircle, Plus, RefreshCw, Rocket, Search, Table2, TextCursorInput, UserCheck, Workflow,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
@@ -10,6 +10,8 @@ import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import WorkflowRunsAdmin from './Platform/WorkflowRunsAdmin.jsx'
 import WorkItemsAdmin from './Platform/WorkItemsAdmin.jsx'
+import DeploymentAdmin from './Platform/DeploymentAdmin.jsx'
+import PlatformAppsAdmin from './Platform/PlatformAppsAdmin.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
@@ -18,6 +20,8 @@ const TABS = [
   { key: 'report', label: 'Report Builder', icon: BarChart3 },
   { key: 'runs', label: 'Workflow Runs', icon: PlayCircle },
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
+  { key: 'platform-apps', label: 'Platform Apps', icon: AppWindow },
+  { key: 'deployments', label: 'Deployments', icon: Rocket },
 ]
 
 const APPROVAL_STRUCTURAL_COMPONENTS = [
@@ -471,6 +475,10 @@ export default function OneBuilder() {
         <WorkflowRunsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : tab === 'work-items' ? (
         <WorkItemsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
+      ) : tab === 'platform-apps' ? (
+        <PlatformAppsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
+      ) : tab === 'deployments' ? (
+        <DeploymentAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : mode === 'list' ? (
         <section className="onebuilder-list-view">
           <header className="onebuilder-list-header">
