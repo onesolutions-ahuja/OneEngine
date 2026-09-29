@@ -8,6 +8,12 @@ const RecordListView = lazy(() => import('./components/RecordListView'))
 const MetadataRecordFormModal = lazy(() => import('./components/MetadataRecordFormModal'))
 const UserStoreAccessModal = lazy(() => import('./components/UserStoreAccessModal'))
 const OneBuilder = lazy(() => import('./pages/settings/OneBuilder'))
+const WorkflowRunsAdmin = lazy(() => import('./pages/settings/Platform/WorkflowRunsAdmin'))
+const WorkItemsAdmin = lazy(() => import('./pages/settings/Platform/WorkItemsAdmin'))
+const PlatformAppsAdmin = lazy(() => import('./pages/settings/Platform/PlatformAppsAdmin'))
+const DeploymentAdmin = lazy(() => import('./pages/settings/Platform/DeploymentAdmin'))
+const NotificationSubscriptionsAdmin = lazy(() => import('./pages/settings/Platform/NotificationSubscriptionsAdmin'))
+const ValueSetList = lazy(() => import('./pages/settings/Platform/ValueSetList'))
 const MetadataSettingsPage = lazy(() => import('./pages/settings/MetadataSettingsPage'))
 const ObjectsSettingsPane = lazy(() => import('./pages/settings/ObjectsSettingsPane'))
 const ClientWebShopSettings = lazy(() => import('./pages/settings/ClientWebShopSettings'))
@@ -424,9 +430,15 @@ const settingsFallbackGroups = [
     { key: 'server-api', label: 'Server Configuration', icon: MonitorCog, tone: 'gray' },
   ],
   [
-    { key: 'objects', label: 'Objects', icon: LayoutGrid, tone: 'cyan', searchTerms: ['objects', 'object manager', 'fields', 'metadata', 'api name'] },
-    { key: 'platform', label: 'Platform', icon: LayoutGrid, tone: 'cyan', searchTerms: ['onebuilder', 'workflow', 'approval flow', 'dashboard builder', 'report builder', 'canvas', 'components'] },
-    { key: 'message-templates', label: 'Message Templates', icon: ReceiptText, tone: 'cyan' },
+    { key: 'objects', label: 'Objects', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['objects', 'object manager', 'fields', 'metadata', 'api name'] },
+    { key: 'platform', label: 'Builders', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['workflow', 'approval flow', 'page builder', 'dashboard builder', 'report builder', 'canvas', 'components'] },
+    { key: 'workflow-runs', label: 'Workflow Runs', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['workflow', 'runs', 'automation', 'history'] },
+    { key: 'work-items', label: 'Work Items', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['work items', 'workflow', 'approval', 'tasks'] },
+    { key: 'platform-apps', label: 'Platform Apps', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['platform apps', 'apps', 'metadata'] },
+    { key: 'deployments', label: 'Deployments', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['deployments', 'release', 'promotion'] },
+    { key: 'notifications', label: 'Notifications', icon: Bell, tone: 'cyan', developer: true, searchTerms: ['notification subscriptions', 'events'] },
+    { key: 'value-sets', label: 'Value Sets', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['value sets', 'picklist', 'reusable values'] },
+    { key: 'message-templates', label: 'Message Templates', icon: ReceiptText, tone: 'cyan', developer: true },
   ],
 ]
 
@@ -451,6 +463,18 @@ function writeSettingsNavCache(value) {
 
 const settingsFallbackEntries = settingsFallbackGroups.flat()
 
+const DEVELOPER_SETTINGS_KEYS = new Set([
+  'objects',
+  'platform',
+  'workflow-runs',
+  'work-items',
+  'platform-apps',
+  'deployments',
+  'notifications',
+  'value-sets',
+  'message-templates',
+])
+
 function settingsVisual(label, explicitKey = '') {
   const labelSlug = settingsNavSlug(label)
   const match = settingsFallbackEntries.find((entry) =>
@@ -461,6 +485,7 @@ function settingsVisual(label, explicitKey = '') {
     icon: match?.icon || Settings2,
     tone: match?.tone || 'gray',
     searchTerms: match?.searchTerms || [],
+    developer: DEVELOPER_SETTINGS_KEYS.has(explicitKey || match?.key || labelSlug),
   }
 }
 
@@ -749,7 +774,7 @@ function SettingsPage({ onOpenProfile }) {
 
   const visibleItems = visibleGroups.flat()
   const current = visibleItems.find((item) => item.key === active) || visibleItems[0] || null
-  const platformOnlySection = current?.key === 'objects' || current?.key === 'platform'
+  const platformOnlySection = DEVELOPER_SETTINGS_KEYS.has(current?.key)
   /*
    * Server/API configuration is device/platform configuration, not tenant
    * company settings. Access is granted by platform.manage.
@@ -1022,8 +1047,11 @@ function SettingsPage({ onOpenProfile }) {
         </button>
 
         <div className="settings-nav">
-          {visibleGroups.map((group, groupIndex) => (
-            <div className="settings-group" key={groupIndex}>
+          {visibleGroups.map((group, groupIndex) => {
+            const isDeveloperGroup = group.some((item) => item.developer === true || DEVELOPER_SETTINGS_KEYS.has(item.key))
+            return (
+            <div className={`settings-group ${isDeveloperGroup ? 'settings-group--developer' : ''}`} key={groupIndex}>
+              {isDeveloperGroup ? <div className="settings-developer-divider"><span>Developer</span></div> : null}
               {group.map(({ key, label, icon: Icon, tone }) => (
                 <button
                   key={key}
@@ -1039,7 +1067,8 @@ function SettingsPage({ onOpenProfile }) {
                 </button>
               ))}
             </div>
-          ))}
+            )
+          })}
         </div>
       </aside>
 
@@ -1490,6 +1519,18 @@ function SettingsPage({ onOpenProfile }) {
                 <ObjectsSettingsPane />
               ) : current?.key === 'platform' ? (
                 <OneBuilder />
+              ) : current?.key === 'workflow-runs' ? (
+                <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+              ) : current?.key === 'work-items' ? (
+                <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+              ) : current?.key === 'platform-apps' ? (
+                <PlatformAppsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+              ) : current?.key === 'deployments' ? (
+                <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+              ) : current?.key === 'notifications' ? (
+                <NotificationSubscriptionsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+              ) : current?.key === 'value-sets' ? (
+                <ValueSetList onMessage={() => {}} onError={(value) => setError(value || '')} />
               ) : (
                 <div className="settings-row">
                   <div>
