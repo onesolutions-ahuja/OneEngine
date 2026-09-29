@@ -52,12 +52,12 @@ import {
 } from 'lucide-react'
 
 const dockItems = [
-  { id: 'workspace', label: 'Workspace', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
-  { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
-  { id: 'launchpad', label: 'Launchpad', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
+  { id: 'launchpad', label: 'Launcher', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
+  { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
+  { id: 'builder', label: 'Builder', icon: LayoutGrid },
+  { id: 'contacts', label: 'Contacts', icon: Users },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
-  { id: 'maps', label: 'Maps', src: 'https://rdvnui.com/assets/Maps-C7aNhhUR.png', scaled: true },
-  { id: 'notes', label: 'Notes', src: 'https://rdvnui.com/assets/Notes-fm-2Meh1.png', scaled: true },
+  { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
 ]
 
 function useClock() {
@@ -1014,12 +1014,13 @@ function marketplaceIcon(item) {
   return localAppIcon('default-app')
 }
 
-function TopbarAppsMenu({ apps, query, onClose }) {
+function TopbarAppsMenu({ apps, query, onClose, mode = 'launcher' }) {
   const q = String(query || '').trim().toLowerCase()
   const visible = apps.filter((item) => item?.visible !== false && item?.system_only !== true)
     .filter((item) => !q || `${item.name || ''} ${item.package_key || ''} ${item.category || ''}`.toLowerCase().includes(q))
   const installed = visible.filter((item) => Boolean(item.company_installation))
   const available = visible.filter((item) => !item.company_installation)
+  const showInstalled = mode !== 'store'
   const renderRows = (rows, start = 0) => rows.slice(0, 12).map((item, index) => {
     const icon = marketplaceIcon(item)
     return (
@@ -1049,10 +1050,10 @@ function TopbarAppsMenu({ apps, query, onClose }) {
       exit={{ opacity: 0, y: -12, scale: 0.9 }}
       transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}
     >
-      <div className="mac-popover-title">OneStore</div>
+      <div className="mac-popover-title">{mode === 'store' ? 'oneStore' : 'Launcher'}</div>
       <div className="topbar-app-sections">
-        <section><b>Installed</b><div className="topbar-app-grid">{installed.length ? renderRows(installed, 0) : <p>No installed apps match.</p>}</div></section>
-        <section><b>Available in oneStore</b><div className="topbar-app-grid">{available.length ? renderRows(available, installed.length) : <p>No available apps match.</p>}</div></section>
+        {showInstalled ? <section><b>Installed</b><div className="topbar-app-grid">{installed.length ? renderRows(installed, 0) : <p>No installed apps match.</p>}</div></section> : null}
+        <section><b>Available in oneStore</b><div className="topbar-app-grid">{available.length ? renderRows(available, showInstalled ? installed.length : 0) : <p>No available apps match.</p>}</div></section>
       </div>
     </motion.div>
   )
@@ -1218,6 +1219,26 @@ function Desktop({ onLock }) {
       setActiveApp('workspace')
       return
     }
+    if (id === 'launchpad') {
+      setAppSearch('')
+      setTopPanel('apps')
+      return
+    }
+    if (id === 'store') {
+      setAppSearch('')
+      setTopPanel('store')
+      return
+    }
+    if (id === 'builder') {
+      setRoute('settings', 'platform')
+      setActiveApp('settings')
+      return
+    }
+    if (id === 'contacts') {
+      setRoute('workspace')
+      setActiveApp('workspace')
+      return
+    }
     if (id === 'settings') {
       setRoute('settings', readRoute().section || 'general')
       setActiveApp('settings')
@@ -1291,8 +1312,8 @@ function Desktop({ onLock }) {
               />
             </motion.label>
             <AnimatePresence>
-              {topPanel === 'apps' ? (
-                <TopbarAppsMenu apps={storeApps} query={appSearch} onClose={() => setTopPanel('')} />
+              {topPanel === 'apps' || topPanel === 'store' ? (
+                <TopbarAppsMenu apps={storeApps} query={appSearch} mode={topPanel === 'store' ? 'store' : 'launcher'} onClose={() => setTopPanel('')} />
               ) : null}
             </AnimatePresence>
           </div>
