@@ -40,6 +40,26 @@ function money(value, currency = 'GBP') {
   }
 }
 
+function mergeCatalogueResponse(cachedCatalogue, incomingCatalogue) {
+  const cachedPayload = cachedCatalogue?.data || cachedCatalogue || {}
+  const incomingPayload = incomingCatalogue?.data || incomingCatalogue || {}
+  if (incomingPayload.full !== false || !Array.isArray(cachedPayload.products)) return incomingCatalogue
+  const byId = new Map(cachedPayload.products.map((row) => [String(row.id), row]))
+  for (const row of incomingPayload.products || []) {
+    if (!row?.id) continue
+    if (row.deleted === true || row.active === false && row.tombstone === true) byId.delete(String(row.id))
+    else byId.set(String(row.id), { ...(byId.get(String(row.id)) || {}), ...row })
+  }
+  const merged = {
+    ...cachedPayload,
+    ...incomingPayload,
+    products: [...byId.values()],
+    categories: Array.isArray(incomingPayload.categories) && incomingPayload.categories.length ? incomingPayload.categories : cachedPayload.categories || [],
+    full: true,
+  }
+  return incomingCatalogue?.data ? { ...incomingCatalogue, data: merged } : merged
+}
+
 function normaliseProduct(product) {
   return {
     id: product.id,
@@ -157,15 +177,23 @@ export default function TillPage({ onOpenSettings }) {
   const load = async () => {
     setLoading(true)
     setError('')
+    const cached = loadTillBootstrapCache()
+    if (cached) {
+      applyBootstrap(cached.catalogue, cached.settingsResponse, cached.buttons, cached.paymentMethods || [])
+      setLoading(false)
+    }
     try {
-      const [catalogue, settingsResponse, buttonResponse, capability, paymentResponse, permissionResponse] = await Promise.all([
-        apiRequest('/api/products/catalogue'),
+      const cachedVersion = cached?.catalogue?.data?.version || cached?.catalogue?.version || ''
+      const cataloguePath = `/api/products/catalogue${cachedVersion ? `?since=${encodeURIComponent(cachedVersion)}` : ''}`
+      const [catalogueDelta, settingsResponse, buttonResponse, capability, paymentResponse, permissionResponse] = await Promise.all([
+        apiRequest(cataloguePath),
         apiRequest('/api/settings'),
         apiRequest('/api/platform/runtime/objects/sale/buttons'),
         apiRequest('/api/connector-capabilities/payment.sale').catch(() => ({ data: { available: false } })),
         apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] })),
         apiRequest('/api/auth/me/permissions').catch(() => ({ data: { permissions: [], isAdmin: false } })),
       ])
+      const catalogue = mergeCatalogueResponse(cached?.catalogue, catalogueDelta)
       const paymentRows = paymentResponse?.data || []
       applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [], paymentRows)
       cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [], paymentMethods: paymentRows })
@@ -175,7 +203,6 @@ export default function TillPage({ onOpenSettings }) {
       setOnline(true)
       await loadTill()
     } catch (err) {
-      const cached = loadTillBootstrapCache()
       if (cached) {
         applyBootstrap(cached.catalogue, cached.settingsResponse, cached.buttons, cached.paymentMethods || [])
         setOnline(false)
