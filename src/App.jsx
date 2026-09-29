@@ -95,6 +95,8 @@ import {
   Mail,
   ShoppingBag,
   RefreshCw,
+  LogOut,
+  SunMedium,
 } from 'lucide-react'
 
 const dockItems = [
@@ -1913,9 +1915,10 @@ function DevicesMenu({ onOpenSettings }) {
   )
 }
 
-function ControlCenterMenu({ onOpenWifi, onOpenBluetooth }) {
+function ControlCenterMenu({ onOpenWifi, onOpenBluetooth, onLock, onLogout }) {
   const [focusOn, setFocusOn] = useState(false)
   const [volume, setVolume] = useState(58)
+  const [brightness, setBrightness] = useState(72)
   return (
     <motion.div
       className="mac-popover control-center-menu git-control-center"
@@ -1924,40 +1927,50 @@ function ControlCenterMenu({ onOpenWifi, onOpenBluetooth }) {
       exit={{ opacity: 0, y: -8, scale: 0.94 }}
       transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}
     >
-      <div className="git-control-main">
-        <motion.button type="button" className="git-control-line" onClick={onOpenWifi} whileTap={{ scale: .98 }}>
-          <span className="git-control-circle is-blue"><Wifi size={16}/></span>
-          <span><strong>Wi-Fi</strong><small>onePOS network</small></span>
-          <ChevronRight size={14} className="git-control-row-chevron"/>
-        </motion.button>
-        <motion.button type="button" className="git-control-line" onClick={onOpenBluetooth} whileTap={{ scale: .98 }}>
-          <span className="git-control-circle is-blue"><Bluetooth size={16}/></span>
-          <span><strong>Bluetooth</strong><small>Devices</small></span>
-          <ChevronRight size={14} className="git-control-row-chevron"/>
-        </motion.button>
-        <motion.button type="button" className="git-control-line" onClick={() => setFocusOn((value) => !value)} whileTap={{ scale: .98 }}>
-          <span className={`git-control-circle ${focusOn ? 'is-purple' : ''}`}><Moon size={15}/></span>
-          <span><strong>Focus</strong><small>{focusOn ? 'On' : 'Off'}</small></span>
-          <span className={`git-macos-switch ${focusOn ? 'is-on' : ''}`}><i /></span>
-        </motion.button>
+      <div className="git-control-grid">
+        <div className="git-control-main">
+          <motion.button type="button" className="git-control-line" onClick={onOpenWifi} whileTap={{ scale: .98 }}>
+            <span className="git-control-circle is-blue"><Wifi size={16}/></span>
+            <span><strong>Wi-Fi</strong><small>onePOS network</small></span>
+            <ChevronRight size={14} className="git-control-row-chevron"/>
+          </motion.button>
+          <motion.button type="button" className="git-control-line" onClick={onOpenBluetooth} whileTap={{ scale: .98 }}>
+            <span className="git-control-circle is-blue"><Bluetooth size={16}/></span>
+            <span><strong>Bluetooth</strong><small>Devices</small></span>
+            <ChevronRight size={14} className="git-control-row-chevron"/>
+          </motion.button>
+        </div>
+        <div className="git-control-side">
+          <motion.button type="button" className={`git-control-tile ${focusOn ? 'is-active' : ''}`} onClick={() => setFocusOn((value) => !value)} whileTap={{ scale: .97 }}>
+            <span className={`git-control-circle ${focusOn ? 'is-purple' : ''}`}><Moon size={15}/></span>
+            <strong>Focus</strong>
+            <small>{focusOn ? 'On' : 'Off'}</small>
+          </motion.button>
+          <div className="git-control-tile">
+            <span className="git-control-circle"><BatteryCharging size={15}/></span>
+            <strong>Battery</strong>
+            <small>Power</small>
+          </div>
+        </div>
+      </div>
+
+      <div className="git-control-slider-card">
+        <div className="git-control-slider-title"><span><SunMedium size={14}/> Display</span><small>{brightness}%</small></div>
+        <input className="git-control-volume" type="range" min="10" max="100" value={brightness} aria-label="Display brightness" onChange={(event) => setBrightness(Number(event.target.value))}/>
       </div>
       <div className="git-control-slider-card">
-        <div className="git-control-slider-title"><span>Sound</span><Volume2 size={15}/></div>
-        <input
-          className="git-control-volume"
-          type="range"
-          min="0"
-          max="100"
-          value={volume}
-          aria-label="Sound volume"
-          onChange={(event) => setVolume(Number(event.target.value))}
-        />
+        <div className="git-control-slider-title"><span><Volume2 size={14}/> Sound</span><small>{volume}%</small></div>
+        <input className="git-control-volume" type="range" min="0" max="100" value={volume} aria-label="Sound volume" onChange={(event) => setVolume(Number(event.target.value))}/>
+      </div>
+      <div className="git-control-actions">
+        <button type="button" onClick={onLock}><LockKeyhole size={14}/><span>Lock</span></button>
+        <button type="button" className="is-danger" onClick={onLogout}><LogOut size={14}/><span>Log Out</span></button>
       </div>
     </motion.div>
   )
 }
 
-function Desktop({ onLock }) {
+function Desktop({ onLock, onSignOut }) {
   const now = useClock()
   const [message, setMessage] = useState('Hello.')
   const [activeApp, setActiveApp] = useState(() => readRoute().app)
@@ -2372,7 +2385,7 @@ function Desktop({ onLock }) {
               <SlidersHorizontal size={18} strokeWidth={2.2} />
             </button>
             <AnimatePresence>
-              {topPanel === 'control' ? <ControlCenterMenu onOpenWifi={() => setTopPanel('wifi')} onOpenBluetooth={() => setTopPanel('bluetooth')} /> : null}
+              {topPanel === 'control' ? <ControlCenterMenu onOpenWifi={() => setTopPanel('wifi')} onOpenBluetooth={() => setTopPanel('bluetooth')} onLock={() => { setTopPanel(''); onLock?.() }} onLogout={() => { setTopPanel(''); onSignOut?.() }} /> : null}
             </AnimatePresence>
           </div>
           <button
@@ -2575,7 +2588,7 @@ export default function App() {
       ) : !sessionContextReady ? (
         <div className="route-loading" role="status">Preparing company context…</div>
       ) : (
-        <Desktop onLock={lock} />
+        <Desktop onLock={lock} onSignOut={signOut} />
       )}
     </div>
   )
