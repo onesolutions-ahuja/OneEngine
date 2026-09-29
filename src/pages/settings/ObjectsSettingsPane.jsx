@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Box, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { Box, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { loadPlatformObjects } from '../../services/settings'
+import FieldEditor from './Platform/FieldEditor.jsx'
+import RelationshipEditor from './Platform/RelationshipEditor.jsx'
 
 const TABS = [
   ['details', 'Details'],
@@ -67,6 +69,7 @@ export default function ObjectsSettingsPane() {
   const [activeTab, setActiveTab] = useState('details')
   const [mobileStage, setMobileStage] = useState('objects')
   const [fields, setFields] = useState([])
+  const [editor, setEditor] = useState(null)
   const [objectLoading, setObjectLoading] = useState(false)
   const [loadedSections, setLoadedSections] = useState({})
   const [objectData, setObjectData] = useState({
@@ -125,6 +128,7 @@ export default function ObjectsSettingsPane() {
   const selectedId = selected?.id || selected?.object_id || ''
 
   useEffect(() => {
+    setEditor(null)
     setFields([])
     setLoadedSections({})
     setObjectLoading(false)
@@ -276,6 +280,39 @@ export default function ObjectsSettingsPane() {
     ...actionRules.map((row) => ({ ...row, _kind: 'Rule Action' })),
   ]
 
+  const refreshFields = async () => {
+    if (!selectedId) return
+    const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/fields`)
+    setFields(Array.isArray(response?.data) ? response.data : [])
+    setLoadedSections((current) => ({ ...current, fields: true }))
+  }
+
+  const refreshRelationships = async () => {
+    if (!selectedId) return
+    const response = await apiRequest('/api/platform/relationships')
+    const relationships = Array.isArray(response?.data) ? response.data : []
+    setObjectData((current) => ({
+      ...current,
+      relationships: relationships.filter((row) =>
+        String(row.parent_object_id) === String(selectedId)
+        || String(row.child_object_id) === String(selectedId)),
+    }))
+    setLoadedSections((current) => ({ ...current, relationships: true }))
+  }
+
+  const closeEditor = () => setEditor(null)
+
+  const saveField = async () => {
+    await refreshFields()
+    closeEditor()
+  }
+
+  const saveRelationship = async () => {
+    await refreshRelationships()
+    closeEditor()
+  }
+
+
   return (
     <div className={`objects-settings-shell mobile-stage-${mobileStage}`}>
       <aside className="objects-list-pane">
@@ -366,7 +403,23 @@ export default function ObjectsSettingsPane() {
               </nav>
 
               <div className="objects-config-content">
-                {activeTab === 'details' ? (
+                {editor?.kind === 'field' ? (
+                  <FieldEditor
+                    object={selected}
+                    field={editor.item || null}
+                    fields={fields}
+                    onSave={saveField}
+                    onCancel={closeEditor}
+                  />
+                ) : editor?.kind === 'relationship' ? (
+                  <RelationshipEditor
+                    relationship={editor.item || null}
+                    objects={objects}
+                    initialObjectId={selectedId}
+                    onSave={saveRelationship}
+                    onCancel={closeEditor}
+                  />
+                ) : activeTab === 'details' ? (
                   <div className="objects-detail-card">
                     <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
                     <div><span>Source table</span><strong>{selected.source_table || 'Metadata object'}</strong></div>
@@ -379,19 +432,20 @@ export default function ObjectsSettingsPane() {
                   <div className="objects-config-list">
                     <div className="objects-config-list-head">
                       <strong>Fields & Relationships</strong>
+                      <button type="button" className="objects-config-add" onClick={() => setEditor({ kind: 'field', item: null })}><Plus size={13}/> Field</button>
                     </div>
                     {objectLoading ? (
                       <div className="objects-detail-placeholder">Loading fields…</div>
                     ) : normalFields.length ? (
                       <div className="objects-config-rows">
                         {normalFields.map((field) => (
-                          <div key={field.id || field.field_id || field.api_name}>
+                          <button type="button" className="objects-config-row-button" key={field.id || field.field_id || field.api_name} onClick={() => setEditor({ kind: 'field', item: field })}>
                             <span>
                               <strong>{fieldName(field)}</strong>
                               <small>{field.api_name || field.field_key || '—'}</small>
                             </span>
                             <span>{isRelationshipField(field) ? `Related · ${field.field_type || field.type || 'lookup'}` : (field.field_type || field.type || 'text')}</span>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     ) : (
@@ -402,13 +456,13 @@ export default function ObjectsSettingsPane() {
                       {relationshipFields.length ? (
                         <div className="objects-config-rows">
                           {relationshipFields.map((field) => (
-                            <div key={`related-${field.id || field.field_id || field.api_name}`}>
+                            <button type="button" className="objects-config-row-button" key={`related-${field.id || field.field_id || field.api_name}`} onClick={() => setEditor({ kind: 'field', item: field })}>
                               <span>
                                 <strong>{fieldName(field)}</strong>
                                 <small>{field.api_name || field.field_key || '—'}</small>
                               </span>
                               <span>{field.lookup_object_key || field.config?.lookupObjectKey || field.field_type || 'lookup'}</span>
-                            </div>
+                            </button>
                           ))}
                         </div>
                       ) : (
@@ -422,14 +476,20 @@ export default function ObjectsSettingsPane() {
                   <ObjectDataList title="Formula Fields" rows={formulaFields}
                     primary={(field) => fieldName(field)}
                     secondary={(field) => field.api_name || field.field_key || '—'}
-                    meta={(field) => field.field_type || field.type || 'formula'} />
+                    meta={(field) => field.field_type || field.type || 'formula'}
+                    actionLabel="Formula"
+                    onAdd={() => setEditor({ kind: 'field', item: { field_type: 'formula', config: {} } })}
+                    onRowClick={(field) => setEditor({ kind: 'field', item: field })} />
                 ) : null}
 
                 {activeTab === 'relationships' ? (
                   <ObjectDataList title="Relationships" rows={objectData.relationships}
                     primary={(row) => row.relationship_key || 'Relationship'}
                     secondary={(row) => `${row.parent_object_key || ''} → ${row.child_object_key || ''}`}
-                    meta={(row) => row.relationship_type || 'lookup'} />
+                    meta={(row) => row.relationship_type || 'lookup'}
+                    actionLabel="Relationship"
+                    onAdd={() => setEditor({ kind: 'relationship', item: null })}
+                    onRowClick={(row) => setEditor({ kind: 'relationship', item: row })} />
                 ) : null}
 
                 {activeTab === 'record-types' ? (
@@ -568,22 +628,33 @@ export default function ObjectsSettingsPane() {
 }
 
 
-function ObjectDataList({ title, rows = [], primary, secondary, meta }) {
+function ObjectDataList({ title, rows = [], primary, secondary, meta, onAdd, actionLabel = 'New', onRowClick }) {
   return (
     <div className="objects-config-list">
       <div className="objects-config-list-head">
         <strong>{title}</strong>
+        {onAdd ? <button type="button" className="objects-config-add" onClick={onAdd}><Plus size={13}/> {actionLabel}</button> : null}
       </div>
       {rows.length ? (
         <div className="objects-config-rows">
           {rows.map((row, index) => (
-            <div key={row.id || row.rule_id || row.layout_id || row.relationship_id || row.button_id || index}>
-              <span>
-                <strong>{primary(row)}</strong>
-                <small>{secondary(row)}</small>
-              </span>
-              <span>{meta(row)}</span>
-            </div>
+            onRowClick ? (
+              <button type="button" className="objects-config-row-button" key={row.id || row.rule_id || row.layout_id || row.relationship_id || row.button_id || index} onClick={() => onRowClick(row)}>
+                <span>
+                  <strong>{primary(row)}</strong>
+                  <small>{secondary(row)}</small>
+                </span>
+                <span>{meta(row)}</span>
+              </button>
+            ) : (
+              <div key={row.id || row.rule_id || row.layout_id || row.relationship_id || row.button_id || index}>
+                <span>
+                  <strong>{primary(row)}</strong>
+                  <small>{secondary(row)}</small>
+                </span>
+                <span>{meta(row)}</span>
+              </div>
+            )
           ))}
         </div>
       ) : (
