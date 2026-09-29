@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Search, Settings2, ShieldCheck } from 'lucide-react'
-import { apiRequest } from '../../services/api'
+import { apiRequest, setDeviceServerAddress } from '../../services/api'
 
 function objectKey(object) {
   return object?.object_key || object?.api_name || object?.key || ''
@@ -24,6 +24,28 @@ function fieldGroup(field, object) {
 
 function fieldValue(record, field) {
   return record?.[field.api_name] ?? ''
+}
+
+function currentDeviceKey() {
+  const storageKey = 'onepos_device_key'
+  try {
+    let value = localStorage.getItem(storageKey)
+    if (!value) {
+      value = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `device-${Date.now()}`
+      localStorage.setItem(storageKey, value)
+    }
+    return value
+  } catch {
+    return 'device-local'
+  }
+}
+
+function currentDeviceName() {
+  try {
+    return navigator.userAgentData?.platform || navigator.platform || 'This device'
+  } catch {
+    return 'This device'
+  }
 }
 
 function displayValue(value) {
@@ -110,9 +132,12 @@ function GenericObjectSettings({ object, superadmin }) {
     setLoading(true)
     setError('')
     try {
+      const deviceScoped = object?.config?.settingsDeviceScoped === true || object?.config?.settings_device_scoped === true
+      const deviceKeyField = object?.config?.settingsDeviceKeyField || object?.config?.settings_device_key_field || 'device_key'
+      const filter = deviceScoped ? `&filter=${encodeURIComponent(JSON.stringify({ [deviceKeyField]: currentDeviceKey() }))}` : ''
       const [fieldRes, recordRes, permissionRes] = await Promise.all([
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`),
-        apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200`),
+        apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${filter}`),
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`),
       ])
       const nextFields = Array.isArray(fieldRes?.data) ? fieldRes.data : []
@@ -147,7 +172,9 @@ function GenericObjectSettings({ object, superadmin }) {
 
   const selected = rows.find((row) => String(row.id) === String(selectedId)) || null
   const readable = fields.filter((field) => field.active !== false && field.readable !== false && !['company_id'].includes(field.api_name))
-  const writable = readable.filter((field) => field.writable === true && !['formula', 'rollup'].includes(String(field.field_type || '').toLowerCase()))
+  const writable = fields.filter((field) => field.active !== false && field.writable === true && !['formula', 'rollup'].includes(String(field.field_type || '').toLowerCase()))
+  const visibleReadable = readable.filter((field) => field?.config?.settingsHidden !== true && field?.config?.settings_hidden !== true)
+  const visibleWritable = writable.filter((field) => field?.config?.settingsHidden !== true && field?.config?.settings_hidden !== true)
   const allowCreate = object?.config?.settingsAllowCreate !== false && object?.config?.settings_allow_create !== false
   const allowEdit = object?.config?.settingsAllowEdit !== false && object?.config?.settings_allow_edit !== false
   const allowDelete = object?.config?.settingsAllowDelete !== false && object?.config?.settings_allow_delete !== false
@@ -167,9 +194,15 @@ function GenericObjectSettings({ object, superadmin }) {
     const values = {}
     for (const field of writable) {
       const defaultValue = field?.config?.defaultValue ?? field?.config?.default_value
-      values[field.api_name] = defaultValue !== undefined
-        ? defaultValue
-        : String(field.field_type || '').toLowerCase() === 'boolean' ? false : ''
+      if (field?.config?.defaultFromDeviceKey === true || field?.config?.default_from_device_key === true) {
+        values[field.api_name] = currentDeviceKey()
+      } else if (field?.config?.defaultFromDeviceName === true || field?.config?.default_from_device_name === true) {
+        values[field.api_name] = currentDeviceName()
+      } else {
+        values[field.api_name] = defaultValue !== undefined
+          ? defaultValue
+          : String(field.field_type || '').toLowerCase() === 'boolean' ? false : ''
+      }
     }
     setSelectedId('')
     setDraft(values)
@@ -188,6 +221,10 @@ function GenericObjectSettings({ object, superadmin }) {
         method: creating ? 'POST' : 'PUT',
         body: JSON.stringify({ data: draft }),
       })
+      const serverUrlField = object?.config?.settingsServerUrlField || object?.config?.settings_server_url_field
+      if (serverUrlField && Object.prototype.hasOwnProperty.call(draft, serverUrlField)) {
+        setDeviceServerAddress(draft[serverUrlField])
+      }
       setEditing(false)
       setCreating(false)
       await load()
@@ -224,7 +261,7 @@ function GenericObjectSettings({ object, superadmin }) {
 
       {editing ? (
         <form className="settings-card metadata-settings-form" onSubmit={save}>
-          {writable.map((field) => (
+          {visibleWritable.map((field) => (
             <div className="settings-row" key={field.id || field.api_name}>
               <div><strong>{field.label || field.api_name}</strong>{field.description ? <p>{field.description}</p> : null}</div>
               <MetadataField field={field} value={draft[field.api_name]} disabled={false} lookupOptions={lookupOptions[field.api_name] || []} onChange={(value) => setDraft((current) => ({ ...current, [field.api_name]: value }))} />
@@ -237,7 +274,7 @@ function GenericObjectSettings({ object, superadmin }) {
         </form>
       ) : !selected ? <div className="settings-card settings-state-card">Select a record.</div> : (
         <div className="settings-card">
-          {readable.map((field) => <div className="settings-row" key={field.id || field.api_name}><strong>{field.label || field.api_name}</strong><span className="settings-value">{displayValue(fieldValue(selected, field))}</span></div>)}
+          {visibleReadable.map((field) => <div className="settings-row" key={field.id || field.api_name}><strong>{field.label || field.api_name}</strong><span className="settings-value">{displayValue(fieldValue(selected, field))}</span></div>)}
         </div>
       )}
     </div>
