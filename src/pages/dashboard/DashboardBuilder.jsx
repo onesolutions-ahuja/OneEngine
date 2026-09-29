@@ -24,33 +24,42 @@ const LABEL = "block text-xs font-semibold mb-1";
 
 const blankComponent = (type) => {
   const modern = ["folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile"];
+  const utility = ["clock_widget", "calendar_widget", "weather_widget"];
   const isModern = modern.includes(type);
+  const isUtility = utility.includes(type);
+  const utilityConfig = type === "clock_widget"
+    ? { timeZone: "", hour12: false, showSeconds: false, showDate: true }
+    : type === "calendar_widget"
+      ? { timeZone: "", showWeekday: true, showMonth: true }
+      : { location: "", unit: "C", temperature: "", condition: "" };
   return {
     id: crypto.randomUUID(),
     type,
-    title: type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, " "),
+    title: type === "clock_widget" ? "Clock" : type === "calendar_widget" ? "Calendar" : type === "weather_widget" ? "Weather" : type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, " "),
     config: type === "text"
       ? { content: "" }
-      : isModern
-        ? {
-            title: type === "folder_card" ? "New folder" : type === "avatar_group" ? "Team" : "Modern component",
-            subtitle: type === "folder_card" ? "Overview" : type === "avatar_group" ? "People" : "Summary",
-            metric: type === "folder_card" ? 12 : type === "modern_kpi_card" ? 125000 : null,
-            icon: type === "icon_action_tile" ? "sparkles" : "folder",
-            accentStyle: "gradient",
-            visibility: "always",
-          }
-        : {
-            report: { dataSource: "sales", fields: [], groupBy: [], sort: [], filters: [], filterLogic: "all" },
-            valueField: AGGREGATE_FIELDS[0]?.key || null,
-            labelField: null,
-            format: "number",
-            size: "medium",
-            maxCategories: 6,
-            limit: 12,
-            dateRange: "this_month",
-          },
-    layout: type === "kpi" || type === "modern_kpi_card" ? { x: 0, y: 0, w: 3, h: 1 } : { x: 0, y: 0, w: 6, h: 4 },
+      : isUtility
+        ? utilityConfig
+        : isModern
+          ? {
+              title: type === "folder_card" ? "New folder" : type === "avatar_group" ? "Team" : "Modern component",
+              subtitle: type === "folder_card" ? "Overview" : type === "avatar_group" ? "People" : "Summary",
+              metric: type === "folder_card" ? 12 : type === "modern_kpi_card" ? 125000 : null,
+              icon: type === "icon_action_tile" ? "sparkles" : "folder",
+              accentStyle: "gradient",
+              visibility: "always",
+            }
+          : {
+              report: { dataSource: "sales", fields: [], groupBy: [], sort: [], filters: [], filterLogic: "all" },
+              valueField: AGGREGATE_FIELDS[0]?.key || null,
+              labelField: null,
+              format: "number",
+              size: "medium",
+              maxCategories: 6,
+              limit: 12,
+              dateRange: "this_month",
+            },
+    layout: type === "kpi" || type === "modern_kpi_card" || isUtility ? { x: 0, y: 0, w: 3, h: 2 } : { x: 0, y: 0, w: 6, h: 4 },
   };
 };
 
