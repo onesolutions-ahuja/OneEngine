@@ -6,6 +6,7 @@ import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
 import RecordListView from './components/RecordListView'
 import OneBuilder from './pages/settings/OneBuilder'
+import MetadataSettingsPage from './pages/settings/MetadataSettingsPage'
 import ObjectsSettingsPane from './pages/settings/ObjectsSettingsPane'
 import TillPage from './pages/till/TillPage'
 import WorkspacePage from './pages/workspace/WorkspacePage'
@@ -1219,7 +1220,7 @@ function Desktop({ onLock }) {
       </header>
 
       {activeApp === 'settings' ? (
-        <SettingsPage />
+        <MetadataSettingsPage initialSection={readRoute().section || ''} />
       ) : activeApp === 'till' ? (
         <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
       ) : activeApp === 'workspace' ? (
