@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
+import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
@@ -513,6 +514,29 @@ export default function OneBuilder() {
             ) : null}
           </div>
         </section>
+      ) : tab === 'workflow' ? (
+        <WorkflowAdmin
+          embedded
+          initialWorkflow={selectedSavedId ? saved.workflow.find((item) => String(item.id) === String(selectedSavedId)) || null : null}
+          onMessage={(value) => setMessage(value || '')}
+          onError={(value) => setError(value || '')}
+          onClose={() => {
+            setMode('list')
+            setSelectedSavedId('')
+            setSelectedNodeId('')
+            setSideTab('components')
+            setError('')
+            void loadSavedDefinitions('workflow')
+          }}
+          onSaved={() => {
+            setMessage('Saved.')
+            setMode('list')
+            setSelectedSavedId('')
+            setSelectedNodeId('')
+            setSideTab('components')
+            void loadSavedDefinitions('workflow')
+          }}
+        />
       ) : tab === 'dashboard' ? (
         <DashboardBuilder
           embedded
