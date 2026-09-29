@@ -7676,6 +7676,56 @@ button:focus-visible {
 
 
 /* Dashboard Builder — large canvas + compact Components/Properties inspector. */
+.dashboard-builder-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+  align-items: start;
+}
+
+.dashboard-builder-main {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.dashboard-builder-inspector {
+  grid-column: 2;
+  min-width: 0;
+  align-self: start;
+  position: sticky;
+  top: 10px;
+}
+
+.dashboard-builder-inspector-card {
+  width: 100%;
+  max-height: calc(100vh - 235px);
+  min-height: 280px;
+  overflow: hidden;
+}
+
+.dashboard-builder-workspace > .dashboard-builder-main > div[style] {
+  box-shadow: none;
+}
+
+.dashboard-builder-workspace [data-testid="dashboard-layout-panel"] {
+  min-height: 260px;
+  padding: 12px !important;
+}
+
+.dashboard-builder-workspace [data-testid="dashboard-security-panel"] {
+  padding: 10px 12px !important;
+}
+
+.dashboard-builder-workspace [data-testid="dashboard-properties-panel"] {
+  border-radius: 12px !important;
+}
+
+.dashboard-builder-inspector-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
 .dashboard-builder-inspector-card {
   overflow: hidden;
 }
@@ -7817,13 +7867,23 @@ button:focus-visible {
   text-align: center;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 900px) {
   .dashboard-builder-workspace {
     grid-template-columns: 1fr;
   }
 
+  .dashboard-builder-main,
+  .dashboard-builder-inspector {
+    grid-column: 1;
+  }
+
+  .dashboard-builder-inspector {
+    position: static;
+  }
+
   .dashboard-builder-inspector-card {
-    max-height: 330px;
+    max-height: 340px;
+    min-height: 0;
   }
 
   .dashboard-builder-palette,
