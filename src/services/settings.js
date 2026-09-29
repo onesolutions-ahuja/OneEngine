@@ -14,6 +14,11 @@ export async function loadSettingsContext() {
   }
 }
 
+export async function loadSettingsCatalog() {
+  const payload = await apiRequest('/api/platform/runtime/settings-catalog')
+  return Array.isArray(payload?.data) ? payload.data : []
+}
+
 export async function patchSettings(patch) {
   return apiRequest('/api/settings', {
     method: 'PATCH',
