@@ -8,6 +8,7 @@ import RecordListView from './components/RecordListView'
 import OneBuilder from './pages/settings/OneBuilder'
 import MetadataSettingsPage from './pages/settings/MetadataSettingsPage'
 import ObjectsSettingsPane from './pages/settings/ObjectsSettingsPane'
+import ClientWebShopSettings from './pages/settings/ClientWebShopSettings'
 import TillPage from './pages/till/TillPage'
 import WorkspacePage from './pages/workspace/WorkspacePage'
 import {
@@ -1098,6 +1099,8 @@ function SettingsPage() {
                   <div className="settings-row"><strong>Terminal number</strong><span className="settings-value">{settings.till?.terminalNumber || '—'}</span></div>
                   <div className="settings-row"><strong>Product view</strong><span className="settings-value">{settings.till?.productView || 'image'}</span></div>
                 </>
+              ) : current?.key === 'client-web-shop' ? (
+                <ClientWebShopSettings />
               ) : current?.key === 'tax-vat' ? (
                 <>
                   <div className="settings-row">
