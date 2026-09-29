@@ -120,6 +120,8 @@ function GenericObjectSettings({ object, superadmin }) {
   const [rows, setRows] = useState([])
   const [permissions, setPermissions] = useState(null)
   const [lookupOptions, setLookupOptions] = useState({})
+  const [buttons, setButtons] = useState([])
+  const [actionBusy, setActionBusy] = useState('')
   const [selectedId, setSelectedId] = useState('')
   const [editing, setEditing] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -135,10 +137,11 @@ function GenericObjectSettings({ object, superadmin }) {
       const deviceScoped = object?.config?.settingsDeviceScoped === true || object?.config?.settings_device_scoped === true
       const deviceKeyField = object?.config?.settingsDeviceKeyField || object?.config?.settings_device_key_field || 'device_key'
       const filter = deviceScoped ? `&filter=${encodeURIComponent(JSON.stringify({ [deviceKeyField]: currentDeviceKey() }))}` : ''
-      const [fieldRes, recordRes, permissionRes] = await Promise.all([
+      const [fieldRes, recordRes, permissionRes, buttonRes] = await Promise.all([
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`),
         apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${filter}`),
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`),
+        apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(key)}/buttons`).catch(() => ({ data: [] })),
       ])
       const nextFields = Array.isArray(fieldRes?.data) ? fieldRes.data : []
       const nextRows = Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : []
@@ -160,6 +163,7 @@ function GenericObjectSettings({ object, superadmin }) {
       setRows(nextRows)
       setPermissions(permissionRes?.data || null)
       setLookupOptions(Object.fromEntries(lookupPairs))
+      setButtons(Array.isArray(buttonRes?.data) ? buttonRes.data : [])
       setSelectedId((current) => nextRows.some((row) => String(row.id) === String(current)) ? current : (nextRows[0]?.id || ''))
     } catch (err) {
       setError(err?.message || 'Unable to load settings object')
@@ -234,6 +238,24 @@ function GenericObjectSettings({ object, superadmin }) {
     }
   }
 
+  const executeButton = async (button) => {
+    if (!selected?.id || !button?.button_key) return
+    setActionBusy(button.button_key)
+    setError('')
+    try {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records/${encodeURIComponent(selected.id)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      if (response?.success === false) throw new Error(response.message || 'Unable to execute action')
+      await load()
+    } catch (err) {
+      setError(err?.message || 'Unable to execute action')
+    } finally {
+      setActionBusy('')
+    }
+  }
+
   const remove = async () => {
     if (!selected || !canDelete || !window.confirm(`Delete ${objectLabel(object)} record?`)) return
     try {
@@ -254,6 +276,9 @@ function GenericObjectSettings({ object, superadmin }) {
           <option value="">Select record…</option>
           {rows.map((row) => <option key={row.id} value={row.id}>{row.name || row.full_name || row.username || row.code || row.id}</option>)}
         </select></label>
+        {selected ? buttons.filter((button) => ['record','settings_record'].includes(button.placement) || !button.placement).map((button) => (
+          <button key={button.id || button.button_key} type="button" disabled={actionBusy === button.button_key} onClick={() => executeButton(button)}>{button.label}</button>
+        )) : null}
         {canCreate ? <button type="button" onClick={startCreate}>New</button> : null}
         {selected && canEdit && !creating ? <button type="button" onClick={startEdit}>Edit</button> : null}
         {selected && canDelete ? <button type="button" className="is-danger" onClick={remove}>Delete</button> : null}
