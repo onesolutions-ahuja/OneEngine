@@ -1,53 +1,54 @@
-# Phase 4 — Zero-Loss Frontend Migration Audit
+# Phase 4A — Extended Zero-Loss Frontend Migration Audit
+
+Parent phase: **Phase 4 core — COMPLETE**
 
 Status: **IN PROGRESS**
+
+This document is the extended Phase 4A verification/cleanup pass. Phase 4 core UI migration work was already completed; Phase 4A exists to prove zero-loss parity before any old frontend is deleted.
 
 Deletion rule: **If even one label, action, trigger, permission, field, API behaviour, validation rule, workflow path, or user-visible function still exists only in the old frontend, the old frontend section is retained.**
 
 ## Current decision
 
-| Area | Delete old frontend now? | Current blocker |
+| Area | Delete old frontend now? | Current status / blocker |
 |---|---:|---|
-| Settings | NO | Protected/specialised commands still need complete metadata-action parity and final old-vs-new label/API audit. |
-| Builder | NO | Functional parity still needs final verification across Workflow, Approval, Report and Dashboard builders. |
-| Till / POS | NO | Receipt printing still contains browser-print fallback; final old POS parity audit remains; specialised sale flows must be verified one-by-one. |
-| Workspace / Object runtime | NO | List rendering still derives columns locally (including a capped field slice) instead of consuming the full active list/layout metadata runtime. |
+| Settings | NO | Full Settings shell is visible again, but the current shell still contains a hard-coded navigation catalogue in `App.jsx`. Metadata Settings exists separately. Phase 4A must reconcile these into a non-blocking metadata-authoritative model before old Settings UI can be removed. |
+| Builder | NO | OneBuilder contains Workflow, Approval, Report and Dashboard builder support and registry-backed foundations. Final old-vs-new control/label/API round-trip verification is still required before deletion. |
+| Till / POS | NO | Previous `window.print()` blocker is resolved. Receipt printing now executes the metadata record button / canonical backend action. Full old POS line-by-line parity and integrated browser QA are still required. |
+| Workspace / Object runtime | NO | Previous capped-column blocker is resolved. Workspace now consumes the runtime workspace endpoint, default list-view metadata, record types, relationships, layouts and buttons. Final record-page/action/related-list/mobile-fallback parity still requires verification. |
 
 ## Settings audit gate
 
 Required before deleting old Settings UI:
 
-- Navigation must come from Settings-hosted Platform Object/field metadata.
-- Labels must come from metadata.
+- Navigation must ultimately be authoritative from Settings-hosted Platform Object/field metadata.
+- Labels must come from metadata where configurable.
 - Values must use Platform Object APIs or registered protected actions.
 - RBAC/FLS must control visibility and editability.
-- No frontend permission catalogue.
+- No duplicate frontend permission catalogue should become authoritative.
 - Only Superadmin may remain an explicit application exception.
 - Protected operations (user invitation/password reset, JARVES licence enforcement, provider credentials, terminal/hardware tests, device-local server configuration) must retain their specialised protected command path rather than being downgraded to generic CRUD.
 - Every old Settings label and behaviour must be mapped before deletion.
+- Settings shell/navigation must render immediately; metadata loading must be lazy/local and must not block the whole Settings app.
 
-Current new Settings host already uses:
-- `settingsHost`
-- `settingsSectionSource`
-- Platform Object records/fields
-- effective permissions
-- Superadmin exception
-
-Deletion remains blocked until the protected-action and label audit is complete.
+Current findings:
+- `MetadataSettingsPage.jsx` is metadata-backed.
+- The live desktop route currently uses `SettingsPage` from `App.jsx` so Users/Roles/Store & Till remain visible and fast.
+- `App.jsx` still has a hard-coded `settingsGroups` catalogue. This is the primary current Settings Phase 4A blocker.
+- Do not switch back to globally blocking `MetadataSettingsPage`; instead merge metadata authority with the fast existing shell.
 
 ## Builder audit gate
 
-The new OneBuilder now consumes:
-- workflow trigger registry
-- workflow action registry
-- approval roles/process APIs
-- report-builder registry
-- Platform reports
-- dashboard APIs/component registry
+Current implementation evidence:
+- OneBuilder includes workflow trigger/action registry support.
+- Approval builder functionality is present.
+- Report builder functionality is present.
+- Dashboard builder functionality is present.
+- Metadata/platform APIs are used.
 
 Before deletion:
 - Verify all record events and registered Platform events can start a workflow.
-- Verify every registered workflow action schema renders/edit/saves correctly.
+- Verify every registered workflow action schema renders, edits and saves correctly.
 - Verify ordered approval steps, approver types, conditions and approval actions round-trip.
 - Verify saved Platform reports reopen without losing fields, filters, grouping, metrics or sorting.
 - Verify Dashboard save/edit/preview/sharing/default assignment parity.
@@ -55,7 +56,7 @@ Before deletion:
 
 ## Till / POS audit gate
 
-The new Till already consumes runtime Sale buttons from Platform metadata and company payment methods.
+Current Till uses runtime Sale buttons from Platform metadata and company payment methods.
 
 Migrated foundations include:
 - Hold / Resume
@@ -76,26 +77,40 @@ Migrated foundations include:
 - Offline cash queue
 - Customer display bill mirror
 - Age-verification gate
+- Metadata action buttons
+- Canonical receipt print action through the Sale record button/backend path
+
+Resolved Phase 4A blocker:
+- `window.print()` is no longer present in the Smart Theme Till.
 
 Deletion is still blocked because:
-- receipt printing still contains `window.print()` fallback and must be reconciled with the canonical printer/hardware path;
 - every old POS flow still needs line-by-line parity verification before removal;
-- payment and offline behaviour require final integrated browser QA.
+- payment/offline/hardware behaviour requires final integrated browser QA;
+- no old Till/POS file may be removed while any old-only label/action remains.
 
 ## Workspace audit gate
 
-Workspace is metadata-backed for object discovery and records, but it must not create a second presentation policy.
+Current Workspace now:
+- loads object workspace metadata from `/api/platform/runtime/objects/:key/workspace`;
+- uses default list-view metadata for columns;
+- consumes record types;
+- consumes relationships;
+- consumes layouts;
+- consumes metadata buttons;
+- uses the runtime record-page endpoint for selected records.
 
-Current blocker found:
-- local list-column derivation still contains a capped field slice rather than relying entirely on active list/page/layout metadata.
+Resolved Phase 4A blocker:
+- the previous local `slice(0, 8)` column cap is gone.
 
 Before deleting the old generic runtime:
-- list columns must come from active list/layout metadata;
-- active Page Builder record/detail layout must render directly;
-- metadata buttons/actions must be surfaced through the canonical action runtime;
-- relationships/related lists, record types, mobile layout fallback and page interactions must be verified.
+- verify active Page Builder record/detail layout renders with full parity;
+- verify every metadata button/action routes through the canonical action runtime;
+- verify relationships/related lists;
+- verify record types;
+- verify mobile layout fallback;
+- verify page interactions and state preservation.
 
-## Deletion procedure
+## Phase 4A deletion procedure
 
 1. Audit one old file/component against the new runtime.
 2. Record every label/action/trigger/API behaviour it owns.
@@ -103,6 +118,32 @@ Before deleting the old generic runtime:
 4. If parity is complete, remove the old file.
 5. Re-scan imports/routes.
 6. Build/test.
-7. Continue to the next old file.
+7. Browser-test the deployed GitHub Pages route.
+8. Continue to the next old file.
+
+## Current Phase 4A sequence
+
+1. **Settings parity reconciliation — IN PROGRESS**
+   - remove the hard-coded navigation catalogue as authority without reintroducing the slow global metadata load;
+   - keep Users/Roles/Store & Till immediately visible when authorised;
+   - preserve specialised protected actions.
+
+2. **Builder parity audit — PENDING**
+   - workflow;
+   - approval;
+   - report;
+   - dashboard;
+   - old label/control/API comparison.
+
+3. **Till/POS parity audit — PENDING**
+   - old-vs-new line-by-line audit;
+   - payment/offline/hardware browser QA.
+
+4. **Workspace parity audit — PENDING**
+   - action runtime;
+   - record-page/layout;
+   - relationships;
+   - mobile fallback;
+   - state preservation.
 
 No old frontend file is authorised for deletion yet.
