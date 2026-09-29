@@ -1,16 +1,35 @@
 import { apiRequest } from './api'
 
 export async function loadSettingsContext() {
-  const [me, permissions, settings] = await Promise.all([
+  // Identity + RBAC are platform/session concerns and must not be discarded
+  // just because tenant/company settings are unavailable.
+  const [me, permissions] = await Promise.all([
     apiRequest('/api/auth/me'),
     apiRequest('/api/auth/me/permissions'),
-    apiRequest('/api/settings'),
   ])
 
+  const user = me?.user || null
+  let settings = null
+  let settingsError = ''
+
+  // Platform identities may legitimately have no company_id. In that case
+  // Objects/Platform Settings still work; tenant Settings require an acting
+  // company context instead of treating this as an authorization failure.
+  if (user?.companyId) {
+    try {
+      const response = await apiRequest('/api/settings')
+      settings = response?.data || null
+    } catch (error) {
+      settingsError = error?.message || 'Unable to load company settings'
+    }
+  }
+
   return {
-    user: me?.user || null,
+    user,
     permissions: permissions?.data || {},
-    settings: settings?.data || null,
+    settings,
+    settingsError,
+    hasCompanyContext: Boolean(user?.companyId),
   }
 }
 
