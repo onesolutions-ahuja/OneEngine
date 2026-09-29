@@ -7284,3 +7284,120 @@ button:focus-visible {
   .lab-grid { grid-template-columns: 1fr; }
   .lab-properties { position: static; }
 }
+
+
+/* --------------------------------------------------------------------------
+   FLOW BUILDER GUIDED STEPPER
+   Blue=current, green=complete, red=invalid, grey=optional/not configured.
+   -------------------------------------------------------------------------- */
+.one-flow-guide {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  padding: 6px;
+  border: 1px solid rgba(0,0,0,.075);
+  border-radius: 12px;
+  background: rgba(255,255,255,.86);
+}
+
+.one-flow-guide-step {
+  min-width: 0;
+  min-height: 48px;
+  padding: 6px 8px;
+  display: grid;
+  grid-template-columns: 24px minmax(0,1fr);
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #5f6670;
+  text-align: left;
+  cursor: pointer;
+}
+
+.one-flow-guide-step:hover {
+  background: rgba(0,0,0,.025);
+}
+
+.one-flow-guide-dot {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e7e9ec;
+  color: #757b84;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.one-flow-guide-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.one-flow-guide-copy strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.one-flow-guide-copy small {
+  overflow: hidden;
+  color: currentColor;
+  opacity: .68;
+  font-size: 7.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.one-flow-guide-step.is-complete {
+  color: #237a48;
+  background: rgba(52,199,89,.055);
+}
+
+.one-flow-guide-step.is-complete .one-flow-guide-dot {
+  color: #fff;
+  background: #34c759;
+}
+
+.one-flow-guide-step.is-error {
+  color: #b53d3d;
+  background: rgba(255,69,58,.055);
+}
+
+.one-flow-guide-step.is-error .one-flow-guide-dot {
+  color: #fff;
+  background: #ff453a;
+}
+
+.one-flow-guide-step.is-idle .one-flow-guide-dot {
+  background: #e7e9ec;
+}
+
+.one-flow-guide-step.is-current {
+  border-color: rgba(10,132,255,.38);
+  color: #086fda;
+  background: rgba(10,132,255,.075);
+  box-shadow: 0 0 0 1px rgba(10,132,255,.04);
+}
+
+.one-flow-guide-step.is-current .one-flow-guide-dot {
+  color: #fff;
+  background: #0a84ff;
+}
+
+@media (max-width: 680px) {
+  .one-flow-guide {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .one-flow-guide-step {
+    min-height: 44px;
+  }
+}
