@@ -307,6 +307,33 @@ export default function TillPage({ onOpenSettings }) {
   }
 
   useEffect(() => {
+    let scanned = ''
+    let timer
+    const onKeyDown = (event) => {
+      if (event.key === 'Enter') {
+        const barcode = scanned.trim()
+        scanned = ''
+        if (barcode) {
+          const product = products.find((item) => String(item.barcode || '') === barcode)
+          if (product) void selectProduct(product)
+          else setError(`Unknown barcode: ${barcode}`)
+        }
+        return
+      }
+      if (event.key?.length === 1) {
+        scanned += event.key
+        window.clearTimeout(timer)
+        timer = window.setTimeout(() => { scanned = '' }, 120)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.clearTimeout(timer)
+    }
+  }, [products, online])
+
+  useEffect(() => {
     if (!online || !till?.terminal_id) return undefined
     let stopped = false
     let timer
