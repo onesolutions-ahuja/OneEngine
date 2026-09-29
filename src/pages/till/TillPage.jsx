@@ -312,7 +312,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     try { billChannelRef.current.postMessage(payload) } catch {}
     const heartbeat = window.setInterval(() => {
       try { billChannelRef.current?.postMessage(payload) } catch {}
-    }, 2000)
+    }, 5000)
     return () => window.clearInterval(heartbeat)
   }, [basket, miscLines, subtotal, vat, total, discountAmount, discount.type, discount.value, selectedCustomer, settings?.store?.name, currency])
 
