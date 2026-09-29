@@ -12,7 +12,7 @@ Deletion rule: **If even one label, action, trigger, permission, field, API beha
 
 | Area | Delete old frontend now? | Final Phase 4A finding |
 |---|---:|---|
-| Settings | NO | Metadata Settings now has a bounded, cache-backed catalogue path and protected registered actions, but the live fast Settings shell in `App.jsx` still uses the legacy hard-coded `settingsGroups` navigation. Keep old Settings code until the live shell consumes the metadata catalogue as its navigation authority without reintroducing whole-page loading. |
+| Settings | NO | The live fast Settings shell now consumes the runtime metadata catalogue as its navigation authority. Keep protected specialised Settings code only where parity/deletion gates are still explicitly open. |
 | Builder | NO | OneBuilder is registry-backed for workflow actions/triggers, reports and dashboard components, and supports approval configuration. Final parity is not proven for the old approval-request queue / admin surface, workflow-runs administration, and dashboard sharing/default-assignment controls. Keep the old Builder surfaces. |
 | Till / POS | NO | Core functional parity has materially advanced and the old `window.print()` blocker is gone. Receipt printing uses the registered Sale record action. Connectivity, scanner, modifiers, stock warnings, durable offline cash queue, retries/statistics, age verification, online-order notices, customer display and receipt-QR policy are present. Final integrated browser/device/payment/printer QA is still required before deletion. |
 | Workspace / Object runtime | NO | The previous local eight-column cap is gone. Workspace consumes runtime list views, record types, relationships, layouts, record-page metadata and registered buttons, including related-record loading and canonical action execution. Mobile-layout fallback and cross-navigation state preservation still require runtime verification before the older generic runtime can be deleted. |
@@ -177,7 +177,7 @@ Phase 4A itself is **COMPLETE**.
 
 The remaining items are implementation/QA work, not missing audit work:
 
-1. Make the live fast Settings shell use the metadata Settings catalogue as navigation authority and remove the remaining hard-coded `settingsGroups` authority only after label/action parity is preserved.
+1. Re-verify the remaining specialised Settings deletion gates before removing protected legacy implementations.
 2. Close Builder admin-surface gaps before deleting old Builder files.
 3. Complete live printer/payment/offline device QA before deleting old Till/POS files.
 4. Complete Workspace mobile-layout/state-preservation runtime QA before deleting the old generic runtime.
