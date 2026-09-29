@@ -75,6 +75,67 @@ const TRIGGER_LABELS = {
 };
 const getTriggerLabel = (value) => TRIGGER_LABELS[value] || value || "Manual trigger";
 
+const RECORD_ACTION_TYPES = new Set([
+  "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
+  "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
+]);
+
+function conditionIsValid(condition) {
+  const rules = Array.isArray(condition?.rules) ? condition.rules : [];
+  if (!rules.length) return false;
+  return rules.every((rule) => {
+    if (!rule?.field) return false;
+    const operator = rule.operator || "equals";
+    if (["is_empty","changed"].includes(operator)) return true;
+    return rule.value !== undefined && rule.value !== null && String(rule.value).trim() !== "";
+  });
+}
+
+function workflowActionIssue(step) {
+  if (!step || step.enabled === false) return "";
+  const config = step.config || {};
+  if (step.type === "CONDITION") {
+    return conditionIsValid(config.condition) ? "" : "Complete the condition field/operator/value.";
+  }
+  if (RECORD_ACTION_TYPES.has(step.type) && !config.object) return "Choose the target object.";
+  if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP"].includes(step.type)) {
+    if (!config.templateId && !config.template) return "Choose a message template.";
+    if (!config.recipient) return "Choose a recipient.";
+  }
+  if (step.type === "IN_APP_NOTIFICATION" && (!config.title || !config.message || !config.recipient)) {
+    return "Add title, message and recipient.";
+  }
+  if (step.type === "CALL_FUNCTION" && !config.functionKey) return "Choose a registered function.";
+  if (step.type === "RUN_SUBFLOW" && !config.workflowId) return "Choose a subflow.";
+  if (step.type === "WEBHOOK" && !config.url) return "Enter the webhook URL.";
+  if (step.type === "WAIT" && !Number(config.durationSeconds || 0) && !config.resumeAt) return "Set a wait duration or resume time.";
+  return "";
+}
+
+function FlowGuide({ steps, current, onSelect }) {
+  return (
+    <div className="one-flow-guide" aria-label="Flow builder progress">
+      {steps.map((step, index) => (
+        <button
+          key={step.key}
+          type="button"
+          className={`one-flow-guide-step is-${step.status} ${current === step.key ? "is-current" : ""}`}
+          onClick={() => onSelect(step.key)}
+          title={step.message || step.label}
+        >
+          <span className="one-flow-guide-dot">
+            {step.status === "complete" ? "✓" : step.status === "error" ? "!" : index + 1}
+          </span>
+          <span className="one-flow-guide-copy">
+            <strong>{step.label}</strong>
+            <small>{step.message || (step.status === "complete" ? "Complete" : "Not configured")}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ProviderStatusPill({ available }) {
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${available ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
@@ -368,7 +429,7 @@ function StepEditor({ step, index, updateStep, moveStep, duplicateStep, deleteSt
 }
 
 
-function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null }) {
+function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange }) {
   const [selectedId, setSelectedId] = useState(workflow.steps?.[0]?.id || null);
   const selectedIndex = Math.max(0, workflow.steps.findIndex((step) => step.id === selectedId));
   const selectedStep = workflow.steps[selectedIndex] || null;
@@ -407,7 +468,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <div className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-800">Start · {getTriggerLabel(workflow.trigger)}</div>
           <div className="h-8 w-px bg-slate-300" />
           {workflow.steps.map((step, index) => <div key={step.id} className="flex w-full flex-col items-center" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
-            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => setSelectedId(step.id)} className={`w-full rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition ${selectedId === step.id ? "border-blue-400 ring-2 ring-blue-100" : "border-slate-200 hover:border-slate-300"} ${step.enabled === false ? "opacity-50" : ""}`}>
+            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`w-full rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition ${selectedId === step.id ? "border-blue-400 ring-2 ring-blue-100" : "border-slate-200 hover:border-slate-300"} ${step.enabled === false ? "opacity-50" : ""}`}>
               <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-400">{getActionLabel(step.type)}</span>
               <span className="mt-0.5 block font-semibold text-slate-800">{step.label || getActionLabel(step.type)}</span>
               {step.type === "CONDITION" ? <span className="mt-2 block text-xs text-slate-500">Decision branches are evaluated from metadata conditions.</span> : null}
@@ -497,6 +558,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     };
   });
 
+  const [guideStep, setGuideStep] = useState("trigger");
   const [showBuilder, setShowBuilder] = useState(embedded);
   const [savedWorkflows, setSavedWorkflows] = useState(() => {
     if (embedded && normalizedInitialWorkflow) return [normalizedInitialWorkflow];
@@ -640,6 +702,43 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     }));
   };
 
+  const enabledSteps = (workflow.steps || []).filter((step) => step.enabled !== false);
+  const conditionSteps = enabledSteps.filter((step) => step.type === "CONDITION");
+  const actionSteps = enabledSteps.filter((step) => step.type !== "CONDITION");
+  const triggerNeedsObject = !["manual","whatsapp_message_received"].includes(workflow.trigger);
+  const triggerIssue = !workflow.trigger
+    ? "Choose a trigger."
+    : triggerNeedsObject && !workflow.object
+      ? "Choose the trigger object."
+      : "";
+  const conditionIssue = conditionSteps.length && conditionSteps.some((step) => workflowActionIssue(step))
+    ? "One or more conditions are incomplete."
+    : "";
+  const actionIssues = actionSteps.map(workflowActionIssue).filter(Boolean);
+  const actionsIssue = !actionSteps.length
+    ? "Add at least one action."
+    : actionIssues[0] || "";
+  const reviewIssue = triggerIssue || conditionIssue || actionsIssue || (!workflow.name ? "Enter a workflow name." : "");
+  const guideSteps = [
+    { key: "trigger", label: "Trigger", status: triggerIssue ? "error" : "complete", message: triggerIssue },
+    {
+      key: "conditions",
+      label: "Conditions",
+      status: conditionIssue ? "error" : conditionSteps.length ? "complete" : "idle",
+      message: conditionIssue || (conditionSteps.length ? "" : "Optional"),
+    },
+    { key: "actions", label: "Actions", status: actionsIssue ? "error" : "complete", message: actionsIssue },
+    { key: "review", label: "Review", status: reviewIssue ? "error" : "complete", message: reviewIssue },
+  ];
+
+  const navigateGuide = (key) => {
+    setGuideStep(key);
+    const targetId = key === "trigger" ? "workflow-trigger-section"
+      : key === "review" ? "workflow-review-section"
+        : "workflow-canvas-section";
+    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const saveWorkflow = () => {
     const payload = {
       objectId: workflow.objectId || null,
@@ -737,7 +836,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <FlowGuide steps={guideSteps} current={guideStep} onSelect={navigateGuide} />
+      <div id="workflow-trigger-section" className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Workflow name</label>
@@ -770,7 +870,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       </div>
 
-      <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} />
+      <div id="workflow-canvas-section">
+        <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} />
+      </div>
+      <div id="workflow-review-section" className={`rounded-xl border p-3 text-sm ${reviewIssue ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+        <strong>{reviewIssue ? "Flow needs attention" : "Flow is ready"}</strong>
+        <span className="ml-2">{reviewIssue || "Trigger, conditions and actions are valid."}</span>
+      </div>
     </div>
   );
 }
