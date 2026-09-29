@@ -1093,7 +1093,19 @@ function Desktop({ onLock }) {
             onClick={() => { setMessage('Hello.'); setRoute('home'); setActiveApp('home') }}
             aria-label="One Solutions"
           >
-            <span className="one-logo-play" aria-hidden="true"><span>1</span></span>
+            <svg className="one-logo-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <defs>
+                <linearGradient id="oneLogoGradient" x1="2" y1="3" x2="22" y2="21" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#ff6f61" />
+                  <stop offset="24%" stopColor="#ffb347" />
+                  <stop offset="48%" stopColor="#e34acb" />
+                  <stop offset="72%" stopColor="#7a5cff" />
+                  <stop offset="100%" stopColor="#38bdf8" />
+                </linearGradient>
+              </defs>
+              <path d="M7.35 3.15c-2.3 0-4.2 1.88-4.2 4.2v9.3c0 2.32 1.9 4.2 4.2 4.2h9.3c2.32 0 4.2-1.88 4.2-4.2v-9.3c0-2.32-1.88-4.2-4.2-4.2h-9.3Z" fill="url(#oneLogoGradient)" />
+              <path d="M9.5 7.9 16.3 12 9.5 16.1V7.9Z" fill="#fff" />
+            </svg>
           </button>
 
           <button type="button" className="menu-text menu-text--strong">Finder</button>
