@@ -6,6 +6,7 @@ import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
 const RecordListView = lazy(() => import('./components/RecordListView'))
 const MetadataRecordFormModal = lazy(() => import('./components/MetadataRecordFormModal'))
+const UserStoreAccessModal = lazy(() => import('./components/UserStoreAccessModal'))
 const OneBuilder = lazy(() => import('./pages/settings/OneBuilder'))
 const MetadataSettingsPage = lazy(() => import('./pages/settings/MetadataSettingsPage'))
 const ObjectsSettingsPane = lazy(() => import('./pages/settings/ObjectsSettingsPane'))
@@ -575,6 +576,7 @@ function SettingsPage({ onOpenProfile }) {
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersError, setUsersError] = useState('')
   const [userEditor, setUserEditor] = useState(null)
+  const [userStoreEditor, setUserStoreEditor] = useState(null)
   const [jarvesState, setJarvesState] = useState(null)
   const [roles, setRoles] = useState([])
   const [rolesLoading, setRolesLoading] = useState(false)
@@ -1310,7 +1312,24 @@ function SettingsPage({ onOpenProfile }) {
                     { key: 'username', label: 'Username' },
                     { key: 'email', label: 'Email', render: (row) => row.email || '—' },
                     { key: 'role_name', label: 'Role', render: (row) => row.role_name || '—' },
-                    { key: 'store_name', label: 'Store', render: (row) => row.store_name || 'All stores' },
+                    { key: 'store_name', label: 'Primary Store', render: (row) => row.store_name || 'Unassigned' },
+                    {
+                      key: 'store_access',
+                      label: 'Store Access',
+                      sortValue: () => '',
+                      render: (row) => (
+                        <button
+                          type="button"
+                          className="user-store-access-button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setUserStoreEditor(row)
+                          }}
+                        >
+                          Manage
+                        </button>
+                      ),
+                    },
                     {
                       key: 'jarves_enabled',
                       label: 'JARVES',
@@ -1397,6 +1416,16 @@ function SettingsPage({ onOpenProfile }) {
           )}
         </div>
       </div>
+
+      {userStoreEditor ? (
+        <UserStoreAccessModal
+          user={userStoreEditor}
+          currentUserId={user?.id}
+          canEdit={canEditUsers}
+          onClose={() => setUserStoreEditor(null)}
+          onSaved={refreshUsers}
+        />
+      ) : null}
 
       {userEditor ? (
         <MetadataRecordFormModal
