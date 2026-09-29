@@ -42,10 +42,25 @@ function seriesFrom(config, result) {
   }))
 }
 
+function mergeCaseInsensitiveSeries(points) {
+  const merged = new Map()
+  for (const point of points || []) {
+    const label = String(point?.label ?? '').trim()
+    const key = label.toLowerCase()
+    if (!key) continue
+    const existing = merged.get(key)
+    if (existing) existing.value += Number(point?.value) || 0
+    else merged.set(key, { ...point, label, value: Number(point?.value) || 0 })
+  }
+  return [...merged.values()]
+}
+
 function ComponentCard({ component, result, loading, currency }) {
   const config = component?.config || {}
   const type = component?.type === 'chart' ? (config.chartType || 'bar') : component?.type
-  const points = seriesFrom(config, result)
+  const rawPoints = seriesFrom(config, result)
+  const normalizePaymentLabels = /payment\s*(method|type|tender)/i.test(`${component?.title || ''} ${config?.labelField || ''}`)
+  const points = normalizePaymentLabels ? mergeCaseInsensitiveSeries(rawPoints) : rawPoints
   const rows = Array.isArray(result?.data?.rows) ? result.data.rows : []
   const columns = Array.isArray(result?.data?.columns) ? result.data.columns : []
 
