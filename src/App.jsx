@@ -1017,34 +1017,71 @@ function TopbarAppsMenu({ apps, query, onClose }) {
 function ConnectionMenu({ health, onRefresh }) {
   const online = health?.status === 'Connected'
   return (
-    <motion.div className="mac-popover connection-menu" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
-      <div className="mac-popover-title">Connection</div>
-      <div className="control-row"><span className={`health-dot ${online ? 'is-online' : ''}`} /><div><strong>{health?.status || 'Unknown'}</strong><small>onePOS API</small></div></div>
-      <div className="control-row"><span className="control-symbol">DB</span><div><strong>{health?.database || 'Unknown'}</strong><small>Database</small></div></div>
-      <button type="button" className="popover-action" onClick={onRefresh}><RefreshCw size={13} /> Refresh status</button>
+    <motion.div className="mac-popover connection-menu git-macos-panel" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
+      <div className="git-macos-card">
+        <div className="git-macos-row git-macos-row--top">
+          <span className="git-macos-icon git-macos-icon--blue"><Wifi size={16} /></span>
+          <div className="git-macos-copy"><strong>Wi-Fi</strong><small>{online ? 'Connected to onePOS network' : 'Wi-Fi is off'}</small></div>
+          <span className={`git-macos-switch ${online ? 'is-on' : ''}`}><i /></span>
+        </div>
+        <div className="git-macos-status"><span className={`git-macos-status-dot ${online ? 'is-online' : ''}`} />{health?.status || 'Unknown'}</div>
+      </div>
+      <div className="git-macos-card">
+        <div className="git-macos-row">
+          <span className="git-macos-icon git-macos-icon--gray">DB</span>
+          <div className="git-macos-copy"><strong>Network</strong><small>{health?.database || 'Unknown'}</small></div>
+        </div>
+      </div>
+      <button type="button" className="git-macos-footer-button" onClick={onRefresh}><RefreshCw size={13} /> Refresh status</button>
     </motion.div>
   )
 }
 
 function DevicesMenu({ onOpenSettings }) {
   return (
-    <motion.div className="mac-popover devices-menu" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
-      <div className="mac-popover-title">Devices</div>
-      <div className="control-row"><Bluetooth size={17} /><div><strong>Bluetooth devices</strong><small>Scanners, printers and accessories</small></div></div>
-      <div className="control-row"><Printer size={17} /><div><strong>POS hardware</strong><small>Manage assigned devices</small></div></div>
-      <button type="button" className="popover-action" onClick={onOpenSettings}>Open Hardware Settings</button>
+    <motion.div className="mac-popover devices-menu git-macos-panel" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
+      <div className="git-macos-card">
+        <div className="git-macos-row git-macos-row--top">
+          <span className="git-macos-icon git-macos-icon--blue"><Bluetooth size={16} /></span>
+          <div className="git-macos-copy"><strong>Bluetooth</strong><small>This device is discoverable while Bluetooth settings are open.</small></div>
+          <span className="git-macos-switch"><i /></span>
+        </div>
+      </div>
+      <div className="git-macos-section-title">My Devices</div>
+      <div className="git-macos-card">
+        <div className="git-macos-row">
+          <span className="git-macos-icon git-macos-icon--gray"><Printer size={15} /></span>
+          <div className="git-macos-copy"><strong>POS hardware</strong><small>Scanners, printers and accessories</small></div>
+          <span className="git-macos-chevron">›</span>
+        </div>
+      </div>
+      <div className="git-macos-section-title git-macos-section-title--nearby">Nearby Devices <span className="git-macos-spinner" /></div>
+      <div className="git-macos-card git-macos-card--center">Searching…</div>
+      <button type="button" className="git-macos-footer-button" onClick={onOpenSettings}>Open Hardware Settings</button>
     </motion.div>
   )
 }
 
 function ControlCenterMenu() {
   return (
-    <motion.div className="mac-popover control-center-menu" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
-      <div className="mac-control-grid">
-        <div className="mac-control-tile"><Wifi size={18}/><strong>Wi-Fi</strong><small>onePOS network</small></div>
-        <div className="mac-control-tile"><Bluetooth size={18}/><strong>Bluetooth</strong><small>Devices</small></div>
-        <div className="mac-control-tile"><Volume2 size={18}/><strong>Sound</strong><small>System</small></div>
-        <div className="mac-control-tile"><Moon size={18}/><strong>Focus</strong><small>Off</small></div>
+    <motion.div className="mac-popover control-center-menu git-control-center" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
+      <div className="git-control-main">
+        <button type="button" className="git-control-line">
+          <span className="git-control-circle is-blue"><Wifi size={16}/></span>
+          <span><strong>Wi-Fi</strong><small>onePOS network</small></span>
+        </button>
+        <button type="button" className="git-control-line">
+          <span className="git-control-circle is-blue"><Bluetooth size={16}/></span>
+          <span><strong>Bluetooth</strong><small>Devices</small></span>
+        </button>
+        <button type="button" className="git-control-line">
+          <span className="git-control-circle"><Moon size={15}/></span>
+          <span><strong>Focus</strong><small>Off</small></span>
+        </button>
+      </div>
+      <div className="git-control-slider-card">
+        <div className="git-control-slider-title"><span>Sound</span><Volume2 size={15}/></div>
+        <div className="git-control-slider-track"><span /></div>
       </div>
     </motion.div>
   )
