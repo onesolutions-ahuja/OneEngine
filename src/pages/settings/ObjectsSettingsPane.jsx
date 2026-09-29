@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Box, ChevronRight, Plus, Search } from 'lucide-react'
+import { Box, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { loadPlatformObjects } from '../../services/settings'
 
@@ -65,6 +65,7 @@ export default function ObjectsSettingsPane() {
   const [query, setQuery] = useState('')
   const [selectedKey, setSelectedKey] = useState('')
   const [activeTab, setActiveTab] = useState('details')
+  const [mobileStage, setMobileStage] = useState('objects')
   const [fields, setFields] = useState([])
   const [objectLoading, setObjectLoading] = useState(false)
   const [objectData, setObjectData] = useState({
@@ -193,7 +194,7 @@ export default function ObjectsSettingsPane() {
   ]
 
   return (
-    <div className="objects-settings-shell">
+    <div className={`objects-settings-shell mobile-stage-${mobileStage}`}>
       <aside className="objects-list-pane">
         <div className="objects-pane-header">
           <div>
@@ -225,7 +226,7 @@ export default function ObjectsSettingsPane() {
                 key={object.id || key}
                 type="button"
                 className={`objects-list-item ${active ? 'is-active' : ''}`}
-                onClick={() => setSelectedKey(key)}
+                onClick={() => { setSelectedKey(key); setMobileStage('menu') }}
               >
                 <span className="objects-list-icon"><Box size={14} /></span>
                 <span className="objects-list-copy">
@@ -246,6 +247,22 @@ export default function ObjectsSettingsPane() {
         {selected ? (
           <>
             <div className="objects-detail-header">
+              <button
+                type="button"
+                className="objects-mobile-back objects-mobile-back--objects"
+                onClick={() => setMobileStage('objects')}
+                aria-label="Back to Objects"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                className="objects-mobile-back objects-mobile-back--menu"
+                onClick={() => setMobileStage('menu')}
+                aria-label="Back to object menu"
+              >
+                <ChevronLeft size={16} />
+              </button>
               <div className="objects-detail-icon"><Box size={18} /></div>
               <div>
                 <strong>{objectName(selected)}</strong>
@@ -260,7 +277,7 @@ export default function ObjectsSettingsPane() {
                     key={key}
                     type="button"
                     className={activeTab === key ? 'is-active' : ''}
-                    onClick={() => setActiveTab(key)}
+                    onClick={() => { setActiveTab(key); setMobileStage('detail') }}
                   >
                     <span>{label}</span>
                     <ChevronRight size={12} />
