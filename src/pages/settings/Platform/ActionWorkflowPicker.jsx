@@ -96,6 +96,7 @@ function NavigationTargetSelector({ value, onChange }) {
     return () => { cancelled = true; };
   }, []);
 
+  const { customPages, objectPages } = targets;
   const type = value?.type || "";
   const selectType = (nextType) => {
     if (!nextType) {
