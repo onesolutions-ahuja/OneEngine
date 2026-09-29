@@ -34,7 +34,7 @@ export async function loadSettingsContext() {
       authorisedCompanies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
       const rememberedIsAuthorised = authorisedCompanies.some((company) => String(company.id) === String(actingCompanyId))
       if (!rememberedIsAuthorised) actingCompanyId = ''
-      if (!actingCompanyId && authorisedCompanies.length === 1) {
+      if (!actingCompanyId && authorisedCompanies.length >= 1) {
         actingCompanyId = String(authorisedCompanies[0].id || '')
       }
       if (actingCompanyId) {
