@@ -1,6 +1,5 @@
 import { Loader2, Printer } from "lucide-react";
 import {
-  ORDER_ACTIONS,
   STATUS_BADGES,
   TERMINAL_STATUSES,
   formatOrderTime,
@@ -8,6 +7,7 @@ import {
   platformLabel,
   timeAgo,
 } from "../../pages/online/onlineOrdersShared.js";
+import { actionKeyForButton, busyLabel, buttonStyle } from "../../pages/online/useOnlineOrderMetadata.js";
 import { fmt } from "../../utils/formatters.js";
 
 /*
@@ -118,21 +118,20 @@ export default function OnlineOrderCard({
         <span className="flex-1" />
 
         {actions.length ? (
-          actions.map((action) => {
-            const meta = ORDER_ACTIONS[action];
+          actions.map((button) => {
+            const action = actionKeyForButton(button);
             const isBusy = busyForOrder === action;
-
             return (
               <button
-                key={action}
+                key={button.button_key || action}
                 type="button"
                 onClick={() => onAction && onAction(order, action)}
                 disabled={Boolean(busyForOrder)}
                 aria-busy={isBusy}
-                className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1 ${meta.className} disabled:opacity-60 disabled:cursor-not-allowed`}
+                className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1 ${buttonStyle(button)} disabled:opacity-60 disabled:cursor-not-allowed`}
               >
                 {isBusy && <Loader2 size={12} className="animate-spin" />}
-                {isBusy ? meta.busy : meta.label}
+                {isBusy ? busyLabel(button) : button.label}
               </button>
             );
           })
