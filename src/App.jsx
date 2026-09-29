@@ -104,6 +104,7 @@ const dockItems = [
   { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
   { id: 'builder', label: 'Builder', icon: LayoutGrid },
   { id: 'contacts', label: 'Contacts', icon: Users },
+  { id: 'jarves', label: 'JARVES', jarves: true },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
   { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
 ]
@@ -171,7 +172,11 @@ function Dock({ onItemOpen }) {
           onTouchEnd={resetMagnification}
           onTouchCancel={resetMagnification}
         >
-          {dockItems.map((item) => (
+          {dockItems.map((item) => item.jarves ? (
+            <div key={item.id} className="dock-jarves-slot">
+              <JarvisOrb onClick={() => onItemOpen?.('jarves')} />
+            </div>
+          ) : (
             <DockItem
               key={item.id}
               item={item}
@@ -203,12 +208,6 @@ function Dock({ onItemOpen }) {
               </span>
             </button>
           ))}
-        </div>
-        <div className="dock-fixed-zone">
-          <div className="dock-separator" aria-hidden="true" />
-          <div className="dock-jarves-slot">
-            <JarvisOrb onClick={() => onItemOpen?.('jarves')} />
-          </div>
         </div>
       </motion.div>
     </div>
@@ -398,56 +397,38 @@ function LockScreen({ onUnlock, onSignOut }) {
   )
 }
 
-const settingsFallbackGroups = [
-  [
-    { key: 'general', label: 'General', icon: Settings2, tone: 'orange', searchTerms: ['date format', 'currency', 'timezone', 'regional'] },
-    { key: 'company', label: 'Company', icon: Building2, tone: 'blue', searchTerms: ['company name', 'legal name', 'company email', 'company phone', 'logo'] },
-    { key: 'store-till', label: 'Store & Till', icon: Store, tone: 'blue', searchTerms: ['store', 'till', 'terminal', 'terminal number', 'product view', 'invoice'] },
-    { key: 'client-web-shop', label: 'Client Web Shop', icon: ShoppingCart, tone: 'green' },
-  ],
-  [
-    { key: 'tax-vat', label: 'Tax / VAT', icon: ReceiptText, tone: 'green', searchTerms: ['vat', 'tax', 'vat enabled', 'default vat rate', 'rate'] },
-    { key: 'receipts', label: 'Receipts', icon: ReceiptText, tone: 'green' },
-    { key: 'payment-terminals', label: 'Payment Terminals', icon: CreditCard, tone: 'green' },
-    { key: 'customer-loyalty', label: 'Customer Loyalty', icon: Sparkles, tone: 'purple', searchTerms: ['loyalty', 'earning rate', 'points', 'redeem', 'rewards'] },
-  ],
-  [
-    { key: 'hardware', label: 'Hardware', icon: HardDrive, tone: 'gray' },
-  ],
-  [
-    { key: 'users', label: 'Users', icon: Users, tone: 'blue', searchTerms: ['user', 'username', 'email', 'role', 'store', 'active', 'inactive'] },
-    { key: 'roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck, tone: 'blue', searchTerms: ['role', 'permission', 'permissions', 'parent role', 'system role', 'custom role'] },
-  ],
-  [
-    { key: 'ai-assistant', label: 'AI assistant', icon: Sparkles, tone: 'purple' },
-  ],
-  [
-    { key: 'connections', label: 'Connections', icon: Cable, tone: 'purple' },
-    { key: 'uber-eats', label: 'Uber Eats', icon: Cable, tone: 'purple' },
-    { key: 'deliveroo', label: 'Deliveroo', icon: Cable, tone: 'purple' },
-    { key: 'whatsapp', label: 'WhatsApp', icon: Cable, tone: 'green' },
-  ],
-  [
-    { key: 'sms-delivery', label: 'SMS Delivery', icon: CreditCard, tone: 'pink' },
-    { key: 'email-delivery', label: 'Email Delivery', icon: Mail, tone: 'pink' },
-  ],
-  [
-    { key: 'server-api', label: 'Server Configuration', icon: MonitorCog, tone: 'gray' },
-  ],
-  [
-    { key: 'objects', label: 'Objects', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['objects', 'object manager', 'fields', 'metadata', 'api name'] },
-    { key: 'assignment-rules', label: 'Assignment Rules', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['assignment rules', 'routing', 'owner', 'assign'] },
-    { key: 'sharing-rules', label: 'Sharing Rules', icon: ShieldCheck, tone: 'cyan', developer: true, searchTerms: ['sharing rules', 'record access', 'sharing', 'permissions'] },
-    { key: 'platform', label: 'Builders', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['workflow', 'approval flow', 'page builder', 'dashboard builder', 'report builder', 'canvas', 'components'] },
-    { key: 'workflow-runs', label: 'Workflow Runs', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['workflow', 'runs', 'automation', 'history'] },
-    { key: 'work-items', label: 'Work Items', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['work items', 'workflow', 'approval', 'tasks'] },
-    { key: 'platform-apps', label: 'Platform Apps', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['platform apps', 'apps', 'metadata'] },
-    { key: 'deployments', label: 'Deployments', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['deployments', 'release', 'promotion'] },
-    { key: 'notifications', label: 'Notifications', icon: Bell, tone: 'cyan', developer: true, searchTerms: ['notification subscriptions', 'events'] },
-    { key: 'value-sets', label: 'Value Sets', icon: LayoutGrid, tone: 'cyan', developer: true, searchTerms: ['value sets', 'picklist', 'reusable values'] },
-    { key: 'message-templates', label: 'Message Templates', icon: ReceiptText, tone: 'cyan', developer: true },
-  ],
-]
+const SETTINGS_VISUALS = {
+  general: { icon: Settings2, tone: 'orange', searchTerms: ['date format', 'currency', 'timezone', 'regional'] },
+  company: { icon: Building2, tone: 'blue', searchTerms: ['company name', 'legal name', 'company email', 'company phone', 'logo'] },
+  'store-till': { icon: Store, tone: 'blue', searchTerms: ['store', 'till', 'terminal', 'terminal number', 'product view', 'invoice'] },
+  'client-web-shop': { icon: ShoppingCart, tone: 'green' },
+  'tax-vat': { icon: ReceiptText, tone: 'green', searchTerms: ['vat', 'tax', 'vat enabled', 'default vat rate', 'rate'] },
+  receipts: { icon: ReceiptText, tone: 'green' },
+  'payment-terminals': { icon: CreditCard, tone: 'green' },
+  'customer-loyalty': { icon: Sparkles, tone: 'purple', searchTerms: ['loyalty', 'earning rate', 'points', 'redeem', 'rewards'] },
+  hardware: { icon: HardDrive, tone: 'gray' },
+  users: { icon: Users, tone: 'blue', searchTerms: ['user', 'username', 'email', 'role', 'store', 'active', 'inactive'] },
+  'roles-permissions': { icon: ShieldCheck, tone: 'blue', searchTerms: ['role', 'permission', 'permissions', 'parent role', 'system role', 'custom role'] },
+  'ai-assistant': { icon: Sparkles, tone: 'purple' },
+  connections: { icon: Cable, tone: 'purple' },
+  'uber-eats': { icon: Cable, tone: 'purple' },
+  deliveroo: { icon: Cable, tone: 'purple' },
+  whatsapp: { icon: Cable, tone: 'green' },
+  'sms-delivery': { icon: CreditCard, tone: 'pink' },
+  'email-delivery': { icon: Mail, tone: 'pink' },
+  'server-api': { icon: MonitorCog, tone: 'gray' },
+  objects: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['objects', 'object manager', 'fields', 'metadata', 'api name'] },
+  'assignment-rules': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['assignment rules', 'routing', 'owner', 'assign'] },
+  'sharing-rules': { icon: ShieldCheck, tone: 'cyan', searchTerms: ['sharing rules', 'record access', 'sharing', 'permissions'] },
+  platform: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['workflow', 'approval flow', 'page builder', 'dashboard builder', 'report builder', 'canvas', 'components'] },
+  'workflow-runs': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['workflow', 'runs', 'automation', 'history'] },
+  'work-items': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['work items', 'workflow', 'approval', 'tasks'] },
+  'platform-apps': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['platform apps', 'apps', 'metadata'] },
+  deployments: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['deployments', 'release', 'promotion'] },
+  notifications: { icon: Bell, tone: 'cyan', searchTerms: ['notification subscriptions', 'events'] },
+  'value-sets': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['value sets', 'picklist', 'reusable values'] },
+  'message-templates': { icon: ReceiptText, tone: 'cyan' },
+}
 
 const SETTINGS_NAV_CACHE_KEY = 'onepos.settings.nav.v1'
 
@@ -468,8 +449,6 @@ function writeSettingsNavCache(value) {
   try { sessionStorage.setItem(SETTINGS_NAV_CACHE_KEY, JSON.stringify(Array.isArray(value) ? value : [])) } catch {}
 }
 
-const settingsFallbackEntries = settingsFallbackGroups.flat()
-
 const DEVELOPER_SETTINGS_KEYS = new Set([
   'objects',
   'assignment-rules',
@@ -486,15 +465,14 @@ const DEVELOPER_SETTINGS_KEYS = new Set([
 
 function settingsVisual(label, explicitKey = '') {
   const labelSlug = settingsNavSlug(label)
-  const match = settingsFallbackEntries.find((entry) =>
-    entry.key === explicitKey || settingsNavSlug(entry.label) === labelSlug
-  )
+  const key = explicitKey || labelSlug
+  const visual = SETTINGS_VISUALS[key] || {}
   return {
-    key: explicitKey || match?.key || labelSlug,
-    icon: match?.icon || Settings2,
-    tone: match?.tone || 'gray',
-    searchTerms: match?.searchTerms || [],
-    developer: DEVELOPER_SETTINGS_KEYS.has(explicitKey || match?.key || labelSlug),
+    key,
+    icon: visual.icon || Settings2,
+    tone: visual.tone || 'gray',
+    searchTerms: visual.searchTerms || [],
+    developer: DEVELOPER_SETTINGS_KEYS.has(key),
   }
 }
 
@@ -579,8 +557,6 @@ function readRoute() {
   if (parts[0] === 'online-orders') return { app: 'online-orders', section: null }
   if (parts[0] === 'order-prep') return { app: 'order-prep', section: null }
   if (parts[0] === 'own-delivery') return { app: 'own-delivery', section: null }
-  if (parts[0] === 'returns') return { app: 'returns', section: null }
-  if (parts[0] === 'supplier-returns') return { app: 'supplier-returns', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -2256,16 +2232,6 @@ function Desktop({ onLock, onSignOut }) {
       setActiveApp('products')
       return
     }
-    if (id === 'returns') {
-      setRoute('returns')
-      setActiveApp('returns')
-      return
-    }
-    if (id === 'supplier-returns') {
-      setRoute('supplier-returns')
-      setActiveApp('supplier-returns')
-      return
-    }
     if (id === 'sales') {
       setRoute('sales')
       setActiveApp('sales')
@@ -2576,7 +2542,7 @@ export default function App() {
   const [locked, setLocked] = useState(() => !hasSession())
   const [sessionContextReady, setSessionContextReady] = useState(() => {
     const user = getStoredUser()
-    return !hasSession() || user?.isPlatformDeveloper !== true || Boolean(user?.companyId)
+    return !hasSession() || user?.isPlatformDeveloper !== true
   })
 
   const [transitioning, setTransitioning] = useState(false)
