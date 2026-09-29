@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArchiveRestore, BadgePoundSterling, Banknote, CreditCard, FileText, HandCoins,
   Minus, Pause, Pencil, Plus, Printer, QrCode, ReceiptText, Search, Settings2,
-  ShoppingBag, Tag, UserRound, X,
+  ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import {
@@ -24,6 +24,7 @@ const ICONS = {
   printer: Printer,
   'qr-code': QrCode,
   'shopping-bag': ShoppingBag,
+  layers: Layers,
   tag: Tag,
   'user-round': UserRound,
   x: X,
@@ -88,6 +89,9 @@ export default function TillPage({ onOpenSettings }) {
   const [buttons, setButtons] = useState([])
   const [till, setTill] = useState(null)
   const [paymentCapability, setPaymentCapability] = useState(false)
+  const [paymentMethods, setPaymentMethods] = useState([])
+  const [liveCredit, setLiveCredit] = useState(null)
+  const billChannelRef = useRef(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -118,13 +122,14 @@ export default function TillPage({ onOpenSettings }) {
     }
   }
 
-  const applyBootstrap = (catalogue, settingsResponse, buttonRows) => {
+  const applyBootstrap = (catalogue, settingsResponse, buttonRows, paymentRows = []) => {
     const payload = catalogue?.data || catalogue || {}
     const rows = Array.isArray(payload.products) ? payload.products.map(normaliseProduct).filter((product) => product.active) : []
     setProducts(rows)
     setCategories(['All', ...new Set(rows.map((product) => product.category).filter(Boolean))])
     setSettings(settingsResponse?.data || settingsResponse || null)
     setButtons(Array.isArray(buttonRows) ? buttonRows : [])
+    setPaymentMethods(Array.isArray(paymentRows) ? paymentRows.filter((method) => method?.active !== false) : [])
   }
 
   const refreshOfflineCount = async () => {
@@ -135,21 +140,23 @@ export default function TillPage({ onOpenSettings }) {
     setLoading(true)
     setError('')
     try {
-      const [catalogue, settingsResponse, buttonResponse, capability] = await Promise.all([
+      const [catalogue, settingsResponse, buttonResponse, capability, paymentResponse] = await Promise.all([
         apiRequest('/api/products/catalogue'),
         apiRequest('/api/settings'),
         apiRequest('/api/platform/runtime/objects/sale/buttons'),
         apiRequest('/api/connector-capabilities/payment.sale').catch(() => ({ data: { available: false } })),
+        apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] })),
       ])
-      applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [])
-      cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [] })
+      const paymentRows = paymentResponse?.data || []
+      applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [], paymentRows)
+      cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [], paymentMethods: paymentRows })
       setPaymentCapability(capability?.data?.available === true)
       setOnline(true)
       await loadTill()
     } catch (err) {
       const cached = loadTillBootstrapCache()
       if (cached) {
-        applyBootstrap(cached.catalogue, cached.settingsResponse, cached.buttons)
+        applyBootstrap(cached.catalogue, cached.settingsResponse, cached.buttons, cached.paymentMethods || [])
         setOnline(false)
         setError('Server unavailable — cached Till loaded. Cash sales only.')
       } else {
@@ -160,6 +167,15 @@ export default function TillPage({ onOpenSettings }) {
       await refreshOfflineCount()
     }
   }
+
+  useEffect(() => {
+    if (typeof BroadcastChannel !== 'function') return undefined
+    billChannelRef.current = new BroadcastChannel('onepos-customer-display')
+    return () => {
+      try { billChannelRef.current?.close() } catch {}
+      billChannelRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     void load()
@@ -228,7 +244,7 @@ export default function TillPage({ onOpenSettings }) {
     setCashReceived('')
   }
 
-  const buildSalePayload = (paymentMethod, verifiedOverride = false) => ({
+  const buildSalePayload = (paymentMethod, verifiedOverride = false, options = {}) => ({
     clientRequestId: crypto.randomUUID(),
     items: basket.map((item) => {
       const line = Number(item.price) * item.quantity
@@ -252,6 +268,8 @@ export default function TillPage({ onOpenSettings }) {
     discount: discountAmount,
     total,
     paymentMethod,
+    ...(Array.isArray(options.payments) && options.payments.length ? { payments: options.payments } : {}),
+    ...(options.giftCardCode ? { giftCardCode: options.giftCardCode } : {}),
     discountType: discount.type,
     discountValue: discount.value,
     ageVerified: hasAgeRestricted ? (ageVerified || verifiedOverride) : undefined,
@@ -269,7 +287,7 @@ export default function TillPage({ onOpenSettings }) {
     await generateReceiptQr(sale.id)
   }
 
-  const completeSale = async (paymentMethod, { verifiedOverride = false } = {}) => {
+  const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, giftCardCode = '', cashReceivedOverride = null } = {}) => {
     if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
     if (hasAgeRestricted && !ageVerified && !verifiedOverride) {
       setPendingPayment(paymentMethod)
@@ -280,14 +298,17 @@ export default function TillPage({ onOpenSettings }) {
       setModal('till')
       return setError('Open a till session before completing a sale.')
     }
-    if (paymentMethod === 'card' && !online) return setError('Card payment requires an online connection.')
+    const selectedMethod = paymentMethods.find((method) => method.code === paymentMethod)
+    if (!online && paymentMethod !== 'cash' && selectedMethod?.allowOffline !== true) return setError('This payment method requires an online connection.')
     if (paymentMethod === 'card' && !paymentCapability) return setError('No healthy payment connector is assigned to this till.')
-    const received = paymentMethod === 'cash' ? Number(cashReceived || total) : total
+    if (paymentMethod === 'customer_credit' && !selectedCustomer) return setError('Select a customer before using customer credit.')
+    if (paymentMethod === 'gift_card' && !giftCardCode.trim()) return setError('Enter a gift card code.')
+    const received = paymentMethod === 'cash' ? Number(cashReceivedOverride ?? cashReceived || total) : total
     if (paymentMethod === 'cash' && received < total) return setError('Cash received is less than the sale total.')
 
     setBusy(true)
     setError('')
-    const payload = buildSalePayload(paymentMethod, verifiedOverride)
+    const payload = buildSalePayload(paymentMethod, verifiedOverride, { payments, giftCardCode })
     try {
       if (!online && paymentMethod === 'cash') {
         const entry = await enqueueOfflineCashSale(payload, till?.terminal_number || till?.terminalNumber || 'T')
@@ -304,7 +325,7 @@ export default function TillPage({ onOpenSettings }) {
       clearSale()
       setMessage(paymentMethod === 'cash'
         ? `Sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''} · Change ${money(Math.max(0, received - total), currency)}`
-        : `Card sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''}`)
+        : `${selectedMethod?.label || paymentMethod} sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''}`)
       await maybeShowReceiptQr(sale)
       await load()
     } catch (err) {
@@ -416,6 +437,7 @@ export default function TillPage({ onOpenSettings }) {
     if (action === 'open_drawer') return openDrawer()
     if (action === 'pay_cash') return completeSale('cash')
     if (action === 'pay_card') return completeSale('card')
+    if (action === 'pay_more') return setModal('payment')
     if (action === 'price_override' && item) { setPriceTarget(item); setModal('price_override') }
   }
 
