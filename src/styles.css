@@ -8196,3 +8196,79 @@ button:focus-visible {
     font-weight: 600;
   }
 }
+
+
+/* macOS-style Control Center parity */
+.git-control-center {
+  width: 318px;
+  padding: 11px;
+  border: 1px solid rgba(255,255,255,.52);
+  background: rgba(244,246,250,.72);
+  box-shadow: 0 18px 46px rgba(20,28,44,.18), inset 0 1px rgba(255,255,255,.82);
+  backdrop-filter: blur(28px) saturate(1.28);
+  -webkit-backdrop-filter: blur(28px) saturate(1.28);
+}
+.git-control-grid {
+  display: grid;
+  grid-template-columns: minmax(0,1.7fr) minmax(94px,.85fr);
+  gap: 9px;
+}
+.git-control-side {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 9px;
+}
+.git-control-tile {
+  min-height: 65px;
+  padding: 9px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  border: 1px solid rgba(0,0,0,.055);
+  border-radius: 11px;
+  background: rgba(255,255,255,.58);
+  color: #1d1d1f;
+  text-align: left;
+  box-shadow: inset 0 1px rgba(255,255,255,.72);
+}
+button.git-control-tile { cursor: pointer; }
+.git-control-tile .git-control-circle { grid-row: 1 / span 2; }
+.git-control-tile strong { align-self: end; font-size: 11px; }
+.git-control-tile small { align-self: start; color: rgba(0,0,0,.48); font-size: 9px; }
+.git-control-tile.is-active { background: rgba(255,255,255,.78); }
+.git-control-slider-title > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.git-control-slider-title small {
+  color: rgba(0,0,0,.42);
+  font-size: 9px;
+  font-weight: 600;
+}
+.git-control-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.git-control-actions button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 10px;
+  background: rgba(255,255,255,.62);
+  color: #2b2b2f;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.git-control-actions button:hover { background: rgba(255,255,255,.86); }
+.git-control-actions button.is-danger { color: #d83b35; }
+@media (max-width: 520px) {
+  .git-control-center { width: min(318px, calc(100vw - 24px)); }
+}
