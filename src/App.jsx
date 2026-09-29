@@ -29,6 +29,7 @@ const PurchasesPage = lazy(() => import('./pages/purchases/PurchasesPage'))
 const SuppliersPage = lazy(() => import('./pages/suppliers/SuppliersPage'))
 const CustomersPage = lazy(() => import('./pages/customers/CustomersPage'))
 const GiftCardsPage = lazy(() => import('./pages/customers/GiftCardsPage'))
+const AttendancePage = lazy(() => import('./pages/employees/AttendancePage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -468,6 +469,7 @@ function readRoute() {
   if (parts[0] === 'suppliers') return { app: 'suppliers', section: null }
   if (parts[0] === 'customers') return { app: 'customers', section: null }
   if (parts[0] === 'gift-cards') return { app: 'gift-cards', section: null }
+  if (parts[0] === 'employees') return { app: 'employees', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -508,6 +510,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/customers`
       : app === 'gift-cards'
         ? `${base}/gift-cards`
+      : app === 'employees'
+        ? `${base}/employees`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1755,6 +1759,11 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'employees') {
+      setRoute('employees')
+      setActiveApp('employees')
+      return
+    }
     if (id === 'customers') {
       setRoute('customers')
       setActiveApp('customers')
@@ -2013,6 +2022,8 @@ function Desktop({ onLock }) {
           <CustomersPage onOpenGiftCards={() => openItem('gift-cards')} />
         ) : activeApp === 'gift-cards' ? (
           <GiftCardsPage onBack={() => openItem('customers')} />
+        ) : activeApp === 'employees' ? (
+          <AttendancePage />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
