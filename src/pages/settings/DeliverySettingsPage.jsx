@@ -63,7 +63,7 @@ export default function DeliverySettingsPage({ channel = 'email' }) {
   const save=async()=>{
     try{
       setSaving(true);setError('');setMessage('')
-      const response=await apiRequest(`/api/invoice-delivery/${channel}/settings`,{method:'PUT',body:payload()})
+      const response=await apiRequest(`/api/invoice-delivery/${channel}/settings`,{method:'PUT',body:JSON.stringify(payload())})
       setMessage(response?.message||`${label} settings saved.`)
       const data=response?.data||{}
       setEnabled(data.enabled===true)
@@ -76,7 +76,7 @@ export default function DeliverySettingsPage({ channel = 'email' }) {
   const test=async()=>{
     try{
       setTesting(true);setError('');setMessage('')
-      const response=await apiRequest(`/api/invoice-delivery/${channel}/test-connection`,{method:'POST',body:payload()})
+      const response=await apiRequest(`/api/invoice-delivery/${channel}/test-connection`,{method:'POST',body:JSON.stringify(payload())})
       if(response?.success===false) throw new Error(response?.data?.error||response?.message||'Connection test failed.')
       const token=response?.data?.testToken||''
       setTestToken(token)
