@@ -7447,3 +7447,181 @@ button:focus-visible {
     margin-inline: 5px;
   }
 }
+
+
+/* Object Manager rule editors: compact shared authoring surface. */
+.objects-rule-editor {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.objects-rule-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(0,0,0,.07);
+}
+
+.objects-rule-editor-head > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.objects-rule-editor-head strong {
+  font-size: 12px;
+}
+
+.objects-rule-editor-head span {
+  color: rgba(39,50,71,.5);
+  font-size: 8.5px;
+}
+
+.objects-rule-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.objects-rule-editor-actions button,
+.objects-rule-conditions button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(0,0,0,.09);
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  font-size: 9px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.objects-rule-editor-actions .objects-rule-primary {
+  border-color: rgba(10,132,255,.28);
+  background: #0a84ff;
+  color: #fff;
+}
+
+.objects-rule-editor-actions .objects-rule-danger {
+  border-color: rgba(255,69,58,.22);
+  color: #c23a32;
+  background: rgba(255,69,58,.045);
+}
+
+.objects-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.objects-rule-grid label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  color: rgba(39,50,71,.68);
+  font-size: 8.5px;
+  font-weight: 650;
+}
+
+.objects-rule-grid input,
+.objects-rule-grid select,
+.objects-rule-conditions input,
+.objects-rule-conditions select {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(0,0,0,.09);
+  border-radius: 7px;
+  background: rgba(255,255,255,.94);
+  color: #273247;
+  font-size: 9px;
+  outline: none;
+}
+
+.objects-rule-grid input:focus,
+.objects-rule-grid select:focus,
+.objects-rule-conditions input:focus,
+.objects-rule-conditions select:focus {
+  border-color: rgba(10,132,255,.45);
+  box-shadow: 0 0 0 2px rgba(10,132,255,.06);
+}
+
+.objects-rule-toggle {
+  justify-content: flex-end;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+  min-height: 30px;
+}
+
+.objects-rule-toggle input {
+  width: auto;
+  height: auto;
+}
+
+.objects-rule-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.objects-rule-conditions .objects-config-list-head > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.objects-rule-conditions .objects-config-list-head select {
+  width: auto;
+  min-width: 92px;
+}
+
+.objects-rule-condition {
+  display: grid;
+  grid-template-columns: minmax(130px,1.2fr) minmax(135px,1fr) minmax(120px,1fr) 30px;
+  gap: 6px;
+  align-items: center;
+}
+
+.objects-rule-condition > button {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+}
+
+@media (max-width: 900px) {
+  .objects-rule-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .objects-rule-editor-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .objects-rule-editor-actions {
+    justify-content: flex-end;
+  }
+
+  .objects-rule-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .objects-rule-condition {
+    grid-template-columns: 1fr;
+  }
+
+  .objects-rule-condition > button {
+    justify-self: end;
+  }
+}
