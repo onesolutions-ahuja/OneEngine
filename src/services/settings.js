@@ -76,7 +76,10 @@ export async function loadSettingsContext() {
 
 export async function loadSettingsCatalog() {
   const payload = await apiRequest('/api/platform/runtime/settings-catalog')
-  return Array.isArray(payload?.data) ? payload.data : []
+  const catalog = payload?.data
+  if (Array.isArray(catalog)) return catalog
+  if (catalog && typeof catalog === 'object' && Array.isArray(catalog.sections)) return catalog
+  return []
 }
 
 export async function patchSettings(patch) {
