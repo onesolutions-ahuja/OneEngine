@@ -15,6 +15,7 @@ import AiAssistantSettings from './pages/settings/AiAssistantSettings'
 import ConnectionsSettings from './pages/settings/ConnectionsSettings'
 import TillPage from './pages/till/TillPage'
 import WorkspacePage from './pages/workspace/WorkspacePage'
+import DashboardPage from './pages/dashboard/DashboardPage'
 import {
   Bluetooth,
   LockKeyhole,
@@ -1838,13 +1839,7 @@ function Desktop({ onLock }) {
           }}
         />
       ) : (
-        <section className="hello-stage">
-          <p className="eyebrow">SMART THEME</p>
-          <h1>{message}</h1>
-          <p className="hello-subtitle">
-            Clean macOS-inspired UI foundation, built independently for onePOS.
-          </p>
-        </section>
+        <DashboardPage />
       )}
 
       <Dock onItemOpen={openItem} />
