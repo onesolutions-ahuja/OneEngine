@@ -5779,3 +5779,103 @@ button:focus-visible {
     animation: none !important;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   MOBILE DOCK
+   Keep the dock pinned to the actual visual viewport on phones. The app-icon
+   lane scrolls horizontally by touch with no visible scrollbar, while the
+   Jarvis/fixed zone remains anchored on the right.
+   -------------------------------------------------------------------------- */
+@media (max-width: 680px) {
+  .dock-zone {
+    position: fixed;
+    left: 6px;
+    right: 6px;
+    bottom: max(6px, env(safe-area-inset-bottom));
+    z-index: 2000;
+    width: auto;
+    display: block;
+    pointer-events: none;
+  }
+
+  .dock {
+    position: relative;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    height: 62px;
+    min-height: 62px;
+    margin: 0;
+    padding: 0 82px 10px 8px;
+    overflow: visible;
+    box-sizing: border-box;
+    pointer-events: auto;
+  }
+
+  .dock-magnify-zone {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 52px;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: visible;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    clip-path: none;
+    padding: 0 2px;
+  }
+
+  .dock-magnify-zone::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dock-magnify-zone .dock-item {
+    flex: 0 0 40px;
+    width: 40px !important;
+  }
+
+  .dock-fixed-zone {
+    position: absolute;
+    right: 2px;
+    bottom: 10px;
+    width: 78px;
+    height: 44px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 1px;
+    z-index: 3;
+    pointer-events: auto;
+    background: inherit;
+  }
+
+  .dock-fixed-zone .dock-separator {
+    margin: 0 1px 0 0;
+  }
+
+  .dock-jarves-slot {
+    width: 70px;
+    flex-basis: 70px;
+  }
+
+  .dock-jarves-slot .jarvis-orb-host {
+    left: 50%;
+  }
+
+  /* Content must remain reachable above the fixed mobile dock. */
+  .settings-content-body,
+  .settings-nav {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+
+  .till-theme-page,
+  .workspace-page {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
