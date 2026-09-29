@@ -3662,10 +3662,12 @@ button:focus-visible {
   align-items: flex-end;
   gap: 12px;
   overflow: visible;
-  /* Keep the original magnification physics, but make the Jarves divider a
-     hard visual boundary. Negative top/bottom/left insets preserve the
-     existing rise and left-side motion; only the right edge is clipped. */
-  clip-path: inset(-120px 0 -120px -120px);
+  /* Keep the original magnification physics. Jarves is deliberately nudged
+     right inside the fixed slot, so clipping at the fixed-zone edge created a
+     large transparent "freeze" gap before the visible orb. Let magnified icons
+     travel 38px farther right: this places the freeze boundary about 1-2px
+     outside the visible Jarves circle without moving Jarves itself. */
+  clip-path: inset(-120px -38px -120px -120px);
 }
 
 .dock-fixed-zone {
