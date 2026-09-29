@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, ExternalLink, MapPin, Phone, RefreshCw, Truck } from "lucide-react";
-import { apiRequest } from "../../services/api.js";
+import { apiRequest, getStoredUser } from "../../services/api.js";
 import { getConnectivity, subscribeConnectivity } from "../../services/connectivity.js";
 import { buildDirectionsUrl } from "./directionsAdapter.js";
 
@@ -67,9 +67,7 @@ export default function OwnDeliveryWorkspace() {
       const storeResponse = await apiRequest("/api/own-delivery/stores");
       const accessibleStores = storeResponse.data || [];
       setStores(accessibleStores);
-      const token = localStorage.getItem("onepos_token");
-      let sessionStoreId = "";
-      try { sessionStoreId = JSON.parse(atob((token || "").split(".")[1] || "")).storeId || ""; } catch { /* Server remains authoritative. */ }
+      const sessionStoreId = getStoredUser()?.storeId || "";
       const selected = accessibleStores.find((store) => store.id === sessionStoreId) || accessibleStores[0];
       if (selected) setStoreId(selected.id);
       else setError("No stores are available to this dispatcher.");
