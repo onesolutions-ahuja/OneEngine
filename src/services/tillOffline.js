@@ -101,6 +101,24 @@ export async function offlineQueueEntries() {
   })
 }
 
+export async function retryOfflineCashSale(id) {
+  if (!id) return false
+  const rows = await offlineQueueEntries()
+  const current = rows.find((entry) => entry.id === id)
+  if (!current || current.status !== 'failed') return false
+  await transaction('readwrite', (store) => store.put({ ...current, status: 'pending', lastError: null }))
+  return true
+}
+
+export async function retryAllOfflineCashSales() {
+  const rows = await offlineQueueEntries()
+  const failed = rows.filter((entry) => entry.status === 'failed')
+  for (const entry of failed) {
+    await transaction('readwrite', (store) => store.put({ ...entry, status: 'pending', lastError: null }))
+  }
+  return failed.length
+}
+
 export async function syncOfflineCashSales(apiRequest) {
   const rows = await offlineQueueEntries()
   let synced = 0
