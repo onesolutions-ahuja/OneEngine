@@ -1000,15 +1000,15 @@ function TopbarAppsMenu({ apps, query, onClose }) {
   return (
     <motion.div
       className="mac-popover topbar-app-menu"
-      initial={{ opacity: 0, y: -10, scale: 0.94, transformOrigin: 'top center' }}
+      initial={{ opacity: 0, y: -16, scale: 0.86, transformOrigin: 'top right' }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -8, scale: 0.96 }}
-      transition={{ type: 'spring', mass: 0.16, stiffness: 300, damping: 24 }}
+      exit={{ opacity: 0, y: -12, scale: 0.9 }}
+      transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}
     >
       <div className="mac-popover-title">OneStore</div>
-      <div className="topbar-app-columns">
-        <section><b>Installed</b>{installed.length ? renderRows(installed, 0) : <p>No installed apps match.</p>}</section>
-        <section><b>Available in oneStore</b>{available.length ? renderRows(available, installed.length) : <p>No available apps match.</p>}</section>
+      <div className="topbar-app-sections">
+        <section><b>Installed</b><div className="topbar-app-grid">{installed.length ? renderRows(installed, 0) : <p>No installed apps match.</p>}</div></section>
+        <section><b>Available in oneStore</b><div className="topbar-app-grid">{available.length ? renderRows(available, installed.length) : <p>No available apps match.</p>}</div></section>
       </div>
     </motion.div>
   )
@@ -1017,36 +1017,36 @@ function TopbarAppsMenu({ apps, query, onClose }) {
 function ConnectionMenu({ health, onRefresh }) {
   const online = health?.status === 'Connected'
   return (
-    <div className="mac-popover connection-menu">
+    <motion.div className="mac-popover connection-menu" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
       <div className="mac-popover-title">Connection</div>
       <div className="control-row"><span className={`health-dot ${online ? 'is-online' : ''}`} /><div><strong>{health?.status || 'Unknown'}</strong><small>onePOS API</small></div></div>
       <div className="control-row"><span className="control-symbol">DB</span><div><strong>{health?.database || 'Unknown'}</strong><small>Database</small></div></div>
       <button type="button" className="popover-action" onClick={onRefresh}><RefreshCw size={13} /> Refresh status</button>
-    </div>
+    </motion.div>
   )
 }
 
 function DevicesMenu({ onOpenSettings }) {
   return (
-    <div className="mac-popover devices-menu">
+    <motion.div className="mac-popover devices-menu" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
       <div className="mac-popover-title">Devices</div>
       <div className="control-row"><Bluetooth size={17} /><div><strong>Bluetooth devices</strong><small>Scanners, printers and accessories</small></div></div>
       <div className="control-row"><Printer size={17} /><div><strong>POS hardware</strong><small>Manage assigned devices</small></div></div>
       <button type="button" className="popover-action" onClick={onOpenSettings}>Open Hardware Settings</button>
-    </div>
+    </motion.div>
   )
 }
 
 function ControlCenterMenu() {
   return (
-    <div className="mac-popover control-center-menu">
+    <motion.div className="mac-popover control-center-menu" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
       <div className="mac-control-grid">
         <div className="mac-control-tile"><Wifi size={18}/><strong>Wi-Fi</strong><small>onePOS network</small></div>
         <div className="mac-control-tile"><Bluetooth size={18}/><strong>Bluetooth</strong><small>Devices</small></div>
         <div className="mac-control-tile"><Volume2 size={18}/><strong>Sound</strong><small>System</small></div>
         <div className="mac-control-tile"><Moon size={18}/><strong>Focus</strong><small>Off</small></div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -1176,7 +1176,11 @@ function Desktop({ onLock }) {
 
         <div className="menubar-right" ref={topbarPanelRef}>
           <div className="topbar-search-wrap">
-            <label className="topbar-search-pill">
+            <motion.label
+              className="topbar-search-pill"
+              animate={{ width: topPanel === 'apps' ? 360 : 210 }}
+              transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}
+            >
               <Search size={14} strokeWidth={2.1} />
               <input
                 value={appSearch}
@@ -1185,7 +1189,7 @@ function Desktop({ onLock }) {
                 placeholder="Search apps"
                 aria-label="Search apps"
               />
-            </label>
+            </motion.label>
             <AnimatePresence>
               {topPanel === 'apps' ? (
                 <TopbarAppsMenu apps={storeApps} query={appSearch} onClose={() => setTopPanel('')} />
