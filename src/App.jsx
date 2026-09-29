@@ -43,6 +43,7 @@ const OwnDeliveryWorkspace = lazy(() => import('./pages/online/OwnDeliveryWorksp
 const ReturnsAdmin = lazy(() => import('./pages/returns/ReturnsAdmin'))
 const SupplierReturnsAdmin = lazy(() => import('./pages/returns/ReturnsAdmin').then((module) => ({ default: module.SupplierReturnsAdmin })))
 const AuditLogPage = lazy(() => import('./pages/audit/AuditLogPage'))
+const OneStorePopover = lazy(() => import('./pages/oneStore/OneStorePopover'))
 const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
 import {
   Bluetooth,
@@ -2069,11 +2070,20 @@ function Desktop({ onLock }) {
               />
             </motion.label>
             <AnimatePresence>
-              {topPanel === 'apps' || topPanel === 'store' ? (
+              {topPanel === 'apps' ? (
                 <TopbarAppsMenu
                   apps={storeApps}
                   query={appSearch}
-                  mode={topPanel === 'store' ? 'store' : 'launcher'}
+                  mode="launcher"
+                  onClose={() => setTopPanel('')}
+                  onOpenRoute={(route) => {
+                    const slug = String(route || '').split('?')[0].split('/').filter(Boolean).pop()
+                    if (slug) openItem(slug)
+                  }}
+                />
+              ) : null}
+              {topPanel === 'store' ? (
+                <OneStorePopover
                   onClose={() => setTopPanel('')}
                   onOpenRoute={(route) => {
                     const slug = String(route || '').split('?')[0].split('/').filter(Boolean).pop()
