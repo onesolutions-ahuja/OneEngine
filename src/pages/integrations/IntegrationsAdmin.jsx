@@ -107,7 +107,7 @@ export default function IntegrationsAdmin({ storeId }) {
   };
 
   return (
-    <div className="max-w-6xl">
+    <div className="integration-theme">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
