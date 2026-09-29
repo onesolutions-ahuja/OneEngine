@@ -1834,6 +1834,12 @@ function localAppIcon(assetKey) {
 function marketplaceIcon(item) {
   const manifest = item?.manifest || {}
   const provider = manifest.providerConnector || manifest.provider_connector || {}
+  const brandText = [item?.name, item?.publisher, item?.package_key, provider?.providerKey, provider?.provider_key]
+    .filter(Boolean)
+    .join(' ')
+  const brandMatch = MARKETPLACE_BRAND_MATCHES.find(([pattern]) => pattern.test(brandText))
+  if (brandMatch) return localAppIcon(brandMatch[1])
+
   const explicit = item?.icon_url || item?.logo_url || item?.icon
     || manifest.iconUrl || manifest.icon_url || manifest.logoUrl || manifest.logo_url || manifest.icon
     || provider.iconUrl || provider.logoUrl
@@ -1844,12 +1850,6 @@ function marketplaceIcon(item) {
     if (value.startsWith('/icons/apps/')) return `${import.meta.env.BASE_URL || '/'}${value.replace(/^\//, '')}`
     return apiUrl(value.startsWith('/') ? value : `/${value}`)
   }
-
-  const brandText = [item?.name, item?.publisher, item?.package_key, provider?.providerKey, provider?.provider_key]
-    .filter(Boolean)
-    .join(' ')
-  const brandMatch = MARKETPLACE_BRAND_MATCHES.find(([pattern]) => pattern.test(brandText))
-  if (brandMatch) return localAppIcon(brandMatch[1])
 
   const keys = [
     item?.icon_asset_key,
