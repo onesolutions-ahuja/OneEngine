@@ -22,11 +22,11 @@ const STATUS_LABELS={
 function appIcon(item){
   const manifest=item?.manifest||{}
   const provider=manifest.providerConnector||manifest.provider_connector||{}
-  const explicit=item?.icon_url||item?.logo_url||item?.icon||manifest.iconUrl||manifest.icon_url||manifest.logoUrl||manifest.logo_url||manifest.icon||provider.iconUrl||provider.logoUrl
-  if(typeof explicit==='string'&&explicit.trim())return explicit.trim()
   const brandText=[item?.name,item?.publisher,item?.package_key,provider?.providerKey,provider?.provider_key].filter(Boolean).join(' ')
   const brandMatch=BRAND_ICON_MATCHES.find(([pattern])=>pattern.test(brandText))
   if(brandMatch)return `${import.meta.env.BASE_URL||'/'}icons/apps/${brandMatch[1]}.svg`
+  const explicit=item?.icon_url||item?.logo_url||item?.icon||manifest.iconUrl||manifest.icon_url||manifest.logoUrl||manifest.logo_url||manifest.icon||provider.iconUrl||provider.logoUrl
+  if(typeof explicit==='string'&&explicit.trim())return explicit.trim()
   const key=item?.icon_asset_key||item?.iconAssetKey||manifest.iconAssetKey||manifest.icon_asset_key||provider.providerKey||provider.provider_key||item?.package_key
   if(!key)return ''
   return `${import.meta.env.BASE_URL||'/'}icons/apps/${String(key).trim().toLowerCase().replaceAll('_','-')}.svg`
