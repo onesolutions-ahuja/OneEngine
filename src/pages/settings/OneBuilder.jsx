@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  AppWindow, BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
+  AppWindow, BarChart3, Bell, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
   ListChecks, PlayCircle, Plus, RefreshCw, Rocket, Search, Table2, TextCursorInput, UserCheck, Workflow,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
@@ -12,6 +12,7 @@ import WorkflowRunsAdmin from './Platform/WorkflowRunsAdmin.jsx'
 import WorkItemsAdmin from './Platform/WorkItemsAdmin.jsx'
 import DeploymentAdmin from './Platform/DeploymentAdmin.jsx'
 import PlatformAppsAdmin from './Platform/PlatformAppsAdmin.jsx'
+import NotificationSubscriptionsAdmin from './Platform/NotificationSubscriptionsAdmin.jsx'
 import PageBuilder from './Platform/PageBuilder.jsx'
 
 const TABS = [
@@ -24,6 +25,7 @@ const TABS = [
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
   { key: 'platform-apps', label: 'Platform Apps', icon: AppWindow },
   { key: 'deployments', label: 'Deployments', icon: Rocket },
+  { key: 'notifications', label: 'Notifications', icon: Bell },
 ]
 
 const APPROVAL_STRUCTURAL_COMPONENTS = [
@@ -483,6 +485,8 @@ export default function OneBuilder() {
         <PlatformAppsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : tab === 'deployments' ? (
         <DeploymentAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
+      ) : tab === 'notifications' ? (
+        <NotificationSubscriptionsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : mode === 'list' ? (
         <section className="onebuilder-list-view">
           <header className="onebuilder-list-header">
