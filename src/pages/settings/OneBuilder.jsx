@@ -13,7 +13,8 @@ import WorkItemsAdmin from './Platform/WorkItemsAdmin.jsx'
 import DeploymentAdmin from './Platform/DeploymentAdmin.jsx'
 import PlatformAppsAdmin from './Platform/PlatformAppsAdmin.jsx'
 import NotificationSubscriptionsAdmin from './Platform/NotificationSubscriptionsAdmin.jsx'
-import PageBuilder from './Platform/PageBuilder.jsx'
+import CustomPageBuilder from './Platform/CustomPageBuilder.jsx'
+import ValueSetList from './Platform/ValueSetList.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
@@ -26,6 +27,7 @@ const TABS = [
   { key: 'platform-apps', label: 'Platform Apps', icon: AppWindow },
   { key: 'deployments', label: 'Deployments', icon: Rocket },
   { key: 'notifications', label: 'Notifications', icon: Bell },
+  { key: 'value-sets', label: 'Value Sets', icon: Table2 },
 ]
 
 const APPROVAL_STRUCTURAL_COMPONENTS = [
@@ -480,13 +482,15 @@ export default function OneBuilder() {
       ) : tab === 'work-items' ? (
         <WorkItemsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : tab === 'page' ? (
-        <PageBuilder onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
+        <CustomPageBuilder onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : tab === 'platform-apps' ? (
         <PlatformAppsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : tab === 'deployments' ? (
         <DeploymentAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : tab === 'notifications' ? (
         <NotificationSubscriptionsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
+      ) : tab === 'value-sets' ? (
+        <ValueSetList onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
       ) : mode === 'list' ? (
         <section className="onebuilder-list-view">
           <header className="onebuilder-list-header">
