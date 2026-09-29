@@ -112,6 +112,11 @@ export default function TillPage({ onOpenSettings }) {
   const [pendingSaleRequest, setPendingSaleRequest] = useState(null)
   const [offlineCount, setOfflineCount] = useState(0)
   const [online, setOnline] = useState(() => navigator.onLine !== false)
+  const [permissions, setPermissions] = useState([])
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [onlineOrderCount, setOnlineOrderCount] = useState(0)
+  const [onlineOrderToast, setOnlineOrderToast] = useState('')
+  const [saleCompleteNotice, setSaleCompleteNotice] = useState(null)
 
   const currency = settings?.company?.currency || 'GBP'
   const meta = useMemo(() => buttonMap(buttons), [buttons])
@@ -143,17 +148,20 @@ export default function TillPage({ onOpenSettings }) {
     setLoading(true)
     setError('')
     try {
-      const [catalogue, settingsResponse, buttonResponse, capability, paymentResponse] = await Promise.all([
+      const [catalogue, settingsResponse, buttonResponse, capability, paymentResponse, permissionResponse] = await Promise.all([
         apiRequest('/api/products/catalogue'),
         apiRequest('/api/settings'),
         apiRequest('/api/platform/runtime/objects/sale/buttons'),
         apiRequest('/api/connector-capabilities/payment.sale').catch(() => ({ data: { available: false } })),
         apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] })),
+        apiRequest('/api/auth/me/permissions').catch(() => ({ data: { permissions: [], isAdmin: false } })),
       ])
       const paymentRows = paymentResponse?.data || []
       applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [], paymentRows)
       cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [], paymentMethods: paymentRows })
       setPaymentCapability(capability?.data?.available === true)
+      setPermissions(permissionResponse?.data?.permissions || [])
+      setIsAdmin(permissionResponse?.data?.isAdmin === true)
       setOnline(true)
       await loadTill()
     } catch (err) {
@@ -287,6 +295,53 @@ export default function TillPage({ onOpenSettings }) {
     else addLine(product)
   }
 
+  useEffect(() => {
+    if (!online || !till?.terminal_id) return undefined
+    let stopped = false
+    let timer
+    const poll = async () => {
+      try {
+        const response = await apiRequest(`/api/mobile-scanner/events?terminalId=${encodeURIComponent(till.terminal_id)}`)
+        if (!stopped && response?.success) {
+          for (const event of response.data || []) {
+            const barcode = String(event?.barcode || '').trim()
+            const product = products.find((item) => String(item.barcode || '') === barcode)
+            if (product) await selectProduct(product)
+          }
+        }
+      } catch {}
+      if (!stopped) timer = window.setTimeout(poll, 900)
+    }
+    void poll()
+    return () => {
+      stopped = true
+      window.clearTimeout(timer)
+    }
+  }, [online, till?.terminal_id, products])
+
+  useEffect(() => {
+    if (!online || !(isAdmin || permissions.includes('online_orders.view'))) return undefined
+    let stopped = false
+    const loadOrders = async () => {
+      try {
+        const response = await apiRequest('/api/online/orders?status=RECEIVED&limit=50')
+        if (!stopped && response?.success) {
+          const next = Array.isArray(response.data) ? response.data.length : 0
+          setOnlineOrderCount((previous) => {
+            if (next > previous) setOnlineOrderToast('New online order received')
+            return next
+          })
+        }
+      } catch {}
+    }
+    void loadOrders()
+    const timer = window.setInterval(loadOrders, 15000)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+    }
+  }, [online, isAdmin, permissions])
+
   const changeQty = (id, delta) => setBasket((current) => current.map((item) => {
     if (item.id !== id) return item
     const next = item.quantity + delta
@@ -355,6 +410,7 @@ export default function TillPage({ onOpenSettings }) {
     if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
     if (hasAgeRestricted && !ageVerified && !verifiedOverride) {
       setPendingPayment(paymentMethod)
+      setPendingSaleRequest({ paymentMethod, options: { verifiedOverride: true, payments, giftCardCode, cashReceivedOverride } })
       setModal('age')
       return
     }
@@ -393,6 +449,7 @@ export default function TillPage({ onOpenSettings }) {
         clearSale()
         setLastSale({ id: null, receipt_number: entry.provisionalReceipt, total, offline: true })
         setMessage(`Cash sale saved offline · ${entry.provisionalReceipt} · Pending sync.`)
+        setSaleCompleteNotice({ receiptNumber: entry.provisionalReceipt, total, received, change: Math.max(0, received - total), pendingSync: true })
         await refreshOfflineCount()
         return
       }
@@ -402,8 +459,16 @@ export default function TillPage({ onOpenSettings }) {
       if (durableCashEntry) await removeOfflineCashSale(durableCashEntry.id)
       setLastSale(sale)
       clearSale()
+      const change = paymentMethod === 'cash' ? Math.max(0, received - total) : 0
+      setSaleCompleteNotice({
+        receiptNumber: sale.receipt_number || null,
+        total,
+        received: paymentMethod === 'cash' ? received : null,
+        change,
+        pendingSync: false,
+      })
       setMessage(paymentMethod === 'cash'
-        ? `Sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''} · Change ${money(Math.max(0, received - total), currency)}`
+        ? `Sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''} · Change ${money(change, currency)}`
         : `${selectedMethod?.label || paymentMethod} sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''}`)
       await maybeShowReceiptQr(sale)
       await load()
@@ -413,6 +478,7 @@ export default function TillPage({ onOpenSettings }) {
         setLastSale({ id: null, receipt_number: durableCashEntry.provisionalReceipt, total, offline: true })
         setOnline(false)
         setMessage(`Cash sale saved offline · ${durableCashEntry.provisionalReceipt} · Pending sync.`)
+        setSaleCompleteNotice({ receiptNumber: durableCashEntry.provisionalReceipt, total, received, change: Math.max(0, received - total), pendingSync: true })
         await refreshOfflineCount()
         return
       }
@@ -587,6 +653,8 @@ export default function TillPage({ onOpenSettings }) {
             </div>
 
             {!online ? <div className="till-notice">Offline mode · cash only · sales are stored durably and synced later.</div> : null}
+            {onlineOrderCount ? <div className="till-notice">{onlineOrderCount} online order${onlineOrderCount === 1 ? '' : 's'} waiting</div> : null}
+            {onlineOrderToast ? <button type="button" className="till-notice" onClick={() => setOnlineOrderToast('')}>{onlineOrderToast}</button> : null}
             {error ? <div className="till-notice is-error">{error}</div> : null}
             {message ? <div className="till-notice">{message}</div> : null}
 
@@ -633,7 +701,7 @@ export default function TillPage({ onOpenSettings }) {
         </div>
       </div>
 
-      {modifierPicker ? <ModifierPicker product={modifierPicker.product} groups={modifierPicker.groups} onClose={() => setModifierPicker(null)} onConfirm={(modifiers) => { addLine(modifierPicker.product, modifiers); setModifierPicker(null) }}/ > : null}
+      {modifierPicker ? <ModifierPicker product={modifierPicker.product} groups={modifierPicker.groups} onClose={() => setModifierPicker(null)} onConfirm={(modifiers) => { addLine(modifierPicker.product, modifiers); setModifierPicker(null) }}/> : null}
       {modal === 'negative_stock' && negativeStockNotice ? <Modal title="Stock warning" onClose={() => { setNegativeStockNotice(null); setPendingSaleRequest(null); setModal(null) }}><div className="till-form"><p>The following items exceed recorded stock. Continue only if this sale is intentional.</p>{negativeStockNotice.map((line) => <div key={line.name} className="till-stock-warning-row"><strong>{line.name}</strong><span>{line.recordedStock} recorded · {line.requestedQuantity} requested</span></div>)}<button type="button" className="till-primary" onClick={() => { const pending = pendingSaleRequest; setNegativeStockNotice(null); setPendingSaleRequest(null); setModal(null); if (pending) void completeSale(pending.paymentMethod, pending.options) }}>Continue Sale</button></div></Modal> : null}
       {modal === 'discount' ? <Modal title={meta.discount?.label || 'Discount'} onClose={() => setModal(null)}><DiscountForm value={discount} onApply={(next) => { setDiscount(next); setModal(null) }}/></Modal> : null}
       {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settings?.tax?.defaultVatRate ?? 0)} onAdd={(line) => { setMiscLines((rows) => [...rows, line]); setModal(null) }}/></Modal> : null}
@@ -641,10 +709,11 @@ export default function TillPage({ onOpenSettings }) {
       {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
       {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError}/></Modal> : null}
-      {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const payment = pendingPayment; setAgeVerified(true); setPendingPayment(null); setModal(null); window.setTimeout(() => completeSale(payment, { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
+      {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setPendingSaleRequest(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const pending = pendingSaleRequest || { paymentMethod: pendingPayment, options: { verifiedOverride: true } }; setAgeVerified(true); setPendingPayment(null); setPendingSaleRequest(null); setModal(null); window.setTimeout(() => completeSale(pending.paymentMethod, pending.options), 0) }}>Age verified</button></div></Modal> : null}
       {modal === 'payment' ? <Modal title="Payment" onClose={() => setModal(null)} wide><PaymentSheet total={total} methods={paymentMethods} online={online} cardAvailable={paymentCapability} customer={selectedCustomer} credit={liveCredit || selectedCustomer?.credit || null} onPay={async (method, options) => { await completeSale(method, options || {}); setModal(null) }}/></Modal> : null}
       {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={(price, reason) => { setBasket((rows) => rows.map((row) => row.id === priceTarget.id ? { ...row, price, priceOverride: price, priceOverrideReason: reason } : row)); setPriceTarget(null); setModal(null) }}/></Modal> : null}
       {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { void revokeReceiptQr(); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}<p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p></div></Modal> : null}
+      {saleCompleteNotice ? <Modal title={saleCompleteNotice.pendingSync ? 'Sale saved — pending sync' : 'Transaction complete'} onClose={() => setSaleCompleteNotice(null)}><div className="till-form"><p>{saleCompleteNotice.receiptNumber ? `Receipt ${saleCompleteNotice.receiptNumber}` : 'Sale complete'}</p><div className="till-payment-remaining"><span>Total</span><strong>{money(saleCompleteNotice.total, currency)}</strong></div>{saleCompleteNotice.received != null ? <div className="till-payment-remaining"><span>Cash received</span><strong>{money(saleCompleteNotice.received, currency)}</strong></div> : null}<div className="till-payment-remaining"><span>Change</span><strong>{money(saleCompleteNotice.change, currency)}</strong></div><button type="button" className="till-primary" onClick={() => setSaleCompleteNotice(null)}>OK</button></div></Modal> : null}
     </section>
   )
 }
