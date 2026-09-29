@@ -4,6 +4,7 @@ import {
   Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
@@ -512,6 +513,27 @@ export default function OneBuilder() {
             ) : null}
           </div>
         </section>
+      ) : tab === 'dashboard' ? (
+        <DashboardBuilder
+          embedded
+          initialDashboard={selectedSavedId ? saved.dashboard.find((item) => String(item.id) === String(selectedSavedId)) || null : null}
+          onClose={() => {
+            setMode('list')
+            setSelectedSavedId('')
+            setSelectedNodeId('')
+            setSideTab('components')
+            setError('')
+            void loadSavedDefinitions('dashboard')
+          }}
+          onSaved={() => {
+            setMessage('Saved.')
+            setMode('list')
+            setSelectedSavedId('')
+            setSelectedNodeId('')
+            setSideTab('components')
+            void loadSavedDefinitions('dashboard')
+          }}
+        />
       ) : (
         <>
           <div className="onebuilder-definition-bar onebuilder-definition-bar--builder">
