@@ -443,6 +443,44 @@ function setRoute(app, section = null) {
   if (window.location.pathname !== next) window.history.pushState(null, '', next)
 }
 
+function compressCompanyLogo(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve('')
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      try {
+        const maxSize = 200
+        let { width, height } = img
+        if (width > height && width > maxSize) {
+          height = Math.round((height * maxSize) / width)
+          width = maxSize
+        } else if (height >= width && height > maxSize) {
+          width = Math.round((width * maxSize) / height)
+          height = maxSize
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx.fillStyle = 'white'
+        ctx.fillRect(0, 0, width, height)
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/png', 0.85))
+      } catch (error) {
+        reject(error)
+      } finally {
+        URL.revokeObjectURL(objectUrl)
+      }
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error('Unable to read logo image'))
+    }
+    img.src = objectUrl
+  })
+}
+
 function SettingsPage() {
   const [active, setActive] = useState(() => readRoute().section || 'general')
   const [query, setQuery] = useState('')
@@ -985,10 +1023,78 @@ function SettingsPage() {
                 </>
               ) : current?.key === 'company' ? (
                 <>
-                  <div className="settings-row"><strong>Company name</strong><span className="settings-value">{settings.company?.name || '—'}</span></div>
-                  <div className="settings-row"><strong>Legal name</strong><span className="settings-value">{settings.company?.legalName || '—'}</span></div>
-                  <div className="settings-row"><strong>Company email</strong><span className="settings-value">{settings.company?.email || '—'}</span></div>
-                  <div className="settings-row"><strong>Company phone</strong><span className="settings-value">{settings.company?.phone || '—'}</span></div>
+                  {[
+                    ['name', 'Company name', 'Company identity used across onePOS.'],
+                    ['legalName', 'Legal / business name', 'Legal trading name shown on business documents.'],
+                    ['email', 'Company email', 'Main company contact email.'],
+                    ['phone', 'Company phone', 'Main company contact number.'],
+                    ['currency', 'Currency', 'Default company currency.'],
+                    ['timezone', 'Timezone', 'Default company timezone.'],
+                  ].map(([field, label, help]) => (
+                    <div className="settings-row" key={field}>
+                      <div><strong>{label}</strong><p>{help}</p></div>
+                      <input
+                        defaultValue={settings.company?.[field] || ''}
+                        disabled={!canManage || saving === `company.${field}`}
+                        onBlur={(event) => updateCompany(field, event.target.value)}
+                        aria-label={label}
+                      />
+                    </div>
+                  ))}
+                  <div className="settings-row">
+                    <div><strong>Company logo</strong><p>Used in company branding and supported business documents.</p></div>
+                    <div className="settings-inline-actions">
+                      {settings.company?.logoUrl ? (
+                        <img
+                          src={settings.company.logoUrl}
+                          alt="Company logo"
+                          style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8 }}
+                        />
+                      ) : <span className="settings-value">Not configured</span>}
+                      <label className="settings-file-button">
+                        <span>Choose file</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          hidden
+                          disabled={!canManage || saving === 'company.logoUrl'}
+                          onChange={async (event) => {
+                            const file = event.target.files?.[0]
+                            if (!file) return
+                            try {
+                              const dataUrl = await compressCompanyLogo(file)
+                              await updateCompany('logoUrl', dataUrl)
+                            } catch (err) {
+                              setError(err?.message || 'Unable to prepare company logo')
+                            } finally {
+                              event.target.value = ''
+                            }
+                          }}
+                        />
+                      </label>
+                      {settings.company?.logoUrl ? (
+                        <button
+                          type="button"
+                          className="settings-secondary-button"
+                          disabled={!canManage || saving === 'company.logoUrl'}
+                          onClick={() => updateCompany('logoUrl', '')}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div>
+                      <strong>Licence</strong>
+                      <p>Read-only entitlement information for this company.</p>
+                    </div>
+                    <span className="settings-value">
+                      {Object.entries(entitlements).filter(([, enabled]) => enabled === true).length
+                        ? `${Object.entries(entitlements).filter(([, enabled]) => enabled === true).length} modules enabled`
+                        : 'Base licence active'}
+                    </span>
+                  </div>
                 </>
               ) : current?.key === 'store-till' ? (
                 <>
