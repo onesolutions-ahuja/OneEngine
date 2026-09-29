@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArchiveRestore, BadgePoundSterling, Banknote, CreditCard, FileText, HandCoins,
   Minus, Pause, Pencil, Plus, Printer, QrCode, ReceiptText, Search, Settings2,
-  ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor,
+  ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor, RefreshCw, ArrowLeftRight,
 } from 'lucide-react'
 import { apiRequest, getActingCompanyId, getStoredUser } from '../../services/api'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
@@ -30,6 +30,8 @@ const ICONS = {
   tag: Tag,
   'user-round': UserRound,
   monitor: Monitor,
+  'refresh-cw': RefreshCw,
+  'arrow-left-right': ArrowLeftRight,
   x: X,
 }
 
