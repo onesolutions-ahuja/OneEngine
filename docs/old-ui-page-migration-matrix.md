@@ -14,7 +14,7 @@ Zero-loss rule: an old UI page/section is deleted only after its Smart Theme rep
 | Client Web Shop | Yes | Yes | Yes | Full settings form, store/price-list selection, pickup/delivery, own-delivery, sandbox payments, fees/minimum order, save and public storefront link migrated. |
 | Payment Terminals | Yes | Yes | Yes | Configure/add/edit terminals, masked credentials, active state and connection testing migrated. |
 | Customer Loyalty | Partial | No | No | Pending full comparison |
-| Hardware | Navigation only / pending | No | No | Pending |
+| Hardware | Yes | Yes | Yes | Barcode scanner, cash drawer and receipt printer configuration, scanner test capture, paper width, active state and device-test actions migrated. |
 | Users | Yes | Pending full comparison | No | Pending |
 | Roles & Permissions | Yes | Pending full comparison | No | Pending |
 | AI assistant | Navigation only / pending | No | No | Pending |
