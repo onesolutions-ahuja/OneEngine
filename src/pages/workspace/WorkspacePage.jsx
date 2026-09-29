@@ -35,11 +35,14 @@ function recordTitle(record, fields) {
   return record?.id ? String(record.id) : 'Record'
 }
 
-function makeColumns(fields) {
-  const safe = (fields || [])
+function makeColumns(fields, listView = null) {
+  const readable = (fields || [])
     .filter((field) => field.readable !== false && field.active !== false)
     .filter((field) => field.api_name && !['company_id','store_id'].includes(field.api_name))
-    .slice(0, 8)
+  const configured = Array.isArray(listView?.columns) ? listView.columns : []
+  const safe = configured.length
+    ? readable.filter((field) => configured.includes(field.api_name) || configured.includes(field.id))
+    : readable
   return safe.map((field) => ({
     key: field.api_name,
     label: field.label || field.api_name,
@@ -54,6 +57,7 @@ export default function WorkspacePage() {
   const [fields, setFields] = useState([])
   const [rows, setRows] = useState([])
   const [permissions, setPermissions] = useState(null)
+  const [runtimeMeta, setRuntimeMeta] = useState({ listViews: [], defaultListView: null, recordTypes: [], relationships: [], layouts: [], buttons: [] })
   const [selectedId, setSelectedId] = useState('')
   const [detail, setDetail] = useState(null)
   const [loadingObjects, setLoadingObjects] = useState(true)
@@ -61,6 +65,9 @@ export default function WorkspacePage() {
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [error, setError] = useState('')
   const [editor, setEditor] = useState(null)
+  const [detailTab, setDetailTab] = useState('details')
+  const [relatedState, setRelatedState] = useState({ key: '', loading: false, rows: [], error: '' })
+  const [actionBusy, setActionBusy] = useState('')
 
   useEffect(() => {
     let live = true
@@ -86,12 +93,14 @@ export default function WorkspacePage() {
     setLoadingRows(true)
     setError('')
     try {
-      const [fieldRes, recordRes, permissionRes] = await Promise.all([
-        apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`),
-        apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200`),
+      const [workspaceRes, permissionRes] = await Promise.all([
+        apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(key)}/workspace`),
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`),
       ])
-      const nextFields = Array.isArray(fieldRes?.data) ? fieldRes.data : []
+      const meta = workspaceRes?.data || {}
+      const listViewId = meta?.defaultListView?.id || ''
+      const recordRes = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`)
+      const nextFields = Array.isArray(meta.fields) ? meta.fields : []
       const nextRows = Array.isArray(recordRes?.records)
         ? recordRes.records
         : Array.isArray(recordRes?.data)
@@ -99,6 +108,16 @@ export default function WorkspacePage() {
           : []
       setFields(nextFields)
       setRows(nextRows)
+      setRuntimeMeta({
+        listViews: meta.listViews || [],
+        defaultListView: meta.defaultListView || null,
+        recordTypes: meta.recordTypes || [],
+        relationships: meta.relationships || [],
+        layouts: meta.layouts || [],
+        defaultDetailLayout: meta.defaultDetailLayout || null,
+        defaultCreateLayout: meta.defaultCreateLayout || null,
+        buttons: meta.buttons || [],
+      })
       setPermissions(permissionRes?.data || null)
       const first = nextRows[0]?.id || ''
       setSelectedId((current) => nextRows.some((row) => String(row.id) === String(current)) ? current : first)
@@ -106,6 +125,7 @@ export default function WorkspacePage() {
       setFields([])
       setRows([])
       setPermissions(null)
+      setRuntimeMeta({ listViews: [], defaultListView: null, recordTypes: [], relationships: [], layouts: [], buttons: [] })
       setSelectedId('')
       setDetail(null)
       setError(err?.message || 'Unable to load records')
@@ -147,14 +167,15 @@ export default function WorkspacePage() {
     )
   }, [objects, query])
 
-  const columns = useMemo(() => makeColumns(fields), [fields])
+  const columns = useMemo(() => makeColumns(fields, runtimeMeta.defaultListView), [fields, runtimeMeta.defaultListView])
   const searchKeys = useMemo(() => columns.map((column) => column.key), [columns])
   const canCreate = permissions?.can_create === true
   const canEdit = permissions?.can_edit === true
   const canDelete = permissions?.can_delete === true
 
-  const openCreate = () => setEditor({ mode: 'create', values: {} })
-  const openEdit = (row) => setEditor({ mode: 'edit', id: row.id, values: { ...row } })
+  const defaultRecordTypeId = runtimeMeta.recordTypes.find((item) => item.is_default === true)?.id || ''
+  const openCreate = () => setEditor({ mode: 'create', values: {}, recordTypeId: defaultRecordTypeId })
+  const openEdit = (row) => setEditor({ mode: 'edit', id: row.id, values: { ...row }, recordTypeId: row.recordTypeId || '' })
 
   const saveRecord = async (event) => {
     event.preventDefault()
@@ -170,7 +191,7 @@ export default function WorkspacePage() {
         : `/api/platform/objects/${encodeURIComponent(key)}/records/${encodeURIComponent(editor.id)}`
       const response = await apiRequest(url, {
         method: editor.mode === 'create' ? 'POST' : 'PUT',
-        body: JSON.stringify({ data: values }),
+        body: JSON.stringify({ data: values, recordTypeId: editor.recordTypeId || null }),
       })
       if (response?.success === false) throw new Error(response.message || 'Unable to save record')
       setEditor(null)
@@ -194,6 +215,38 @@ export default function WorkspacePage() {
 
   const detailRecord = detail?.record || rows.find((row) => String(row.id) === String(selectedId)) || null
   const detailFields = detail?.fields || fields
+  const outboundRelationships = runtimeMeta.relationships.filter((relationship) => String(relationship.parent_object_id) === String(selectedObject?.id))
+  const selectedRecordType = runtimeMeta.recordTypes.find((item) => String(item.id) === String(detailRecord?.recordTypeId || detailRecord?.record_type_id || '')) || null
+
+  const runMetadataButton = async (button) => {
+    if (!selectedObject || !selectedId || !button?.button_key) return
+    setActionBusy(button.button_key)
+    setError('')
+    try {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      if (response?.success === false) throw new Error(response.message || 'Action failed')
+      await loadObject(selectedObject)
+    } catch (err) {
+      setError(err?.message || 'Unable to execute action')
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  const loadRelated = async (relationship) => {
+    if (!selectedObject || !selectedId || !relationship?.relationship_key) return
+    setDetailTab('related')
+    setRelatedState({ key: relationship.relationship_key, loading: true, rows: [], error: '' })
+    try {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/related/${encodeURIComponent(relationship.relationship_key)}?pageSize=100`)
+      setRelatedState({ key: relationship.relationship_key, loading: false, rows: response?.records || response?.data || [], error: '' })
+    } catch (err) {
+      setRelatedState({ key: relationship.relationship_key, loading: false, rows: [], error: err?.message || 'Unable to load related records' })
+    }
+  }
 
   return (
     <section className="workspace-page">
@@ -251,26 +304,53 @@ export default function WorkspacePage() {
                 <small>{detailRecord.id}</small>
               </div>
               <div className="workspace-detail-actions">
+                {runtimeMeta.buttons.filter((button) => ['record','workspace_record','detail'].includes(button.placement) || !button.placement).map((button) => (
+                  <button key={button.id || button.button_key} type="button" disabled={actionBusy === button.button_key} onClick={() => runMetadataButton(button)}>
+                    {button.label}
+                  </button>
+                ))}
                 {canEdit ? <button type="button" onClick={() => openEdit(detailRecord)}><Pencil size={13}/> Edit</button> : null}
                 {canDelete ? <button type="button" className="is-danger" onClick={deleteRecord}><Trash2 size={13}/></button> : null}
               </div>
             </div>
             <div className="workspace-detail-scroll">
-              <section className="workspace-detail-card">
-                <h3>Details</h3>
-                {(detailFields || []).filter((field) => field.readable !== false).map((field) => (
-                  <div className="workspace-detail-row" key={field.id || field.api_name}>
-                    <span>{field.label || field.api_name}</span>
-                    <strong>{readableValue(detailRecord?.[field.api_name])}</strong>
-                  </div>
+              <div className="workspace-detail-tabs">
+                <button type="button" className={detailTab === 'details' ? 'is-active' : ''} onClick={() => setDetailTab('details')}>Details</button>
+                {outboundRelationships.map((relationship) => (
+                  <button key={relationship.id || relationship.relationship_key} type="button" className={detailTab === 'related' && relatedState.key === relationship.relationship_key ? 'is-active' : ''} onClick={() => loadRelated(relationship)}>
+                    {relationship.label || relationship.child_object_label || relationship.relationship_key}
+                  </button>
                 ))}
-              </section>
-              <section className="workspace-detail-card">
-                <h3>Record Information</h3>
-                <div className="workspace-detail-row"><span>ID</span><strong>{detailRecord.id}</strong></div>
-                {detailRecord.created_at ? <div className="workspace-detail-row"><span>Created</span><strong>{readableValue(detailRecord.created_at)}</strong></div> : null}
-                {detailRecord.updated_at ? <div className="workspace-detail-row"><span>Last modified</span><strong>{readableValue(detailRecord.updated_at)}</strong></div> : null}
-              </section>
+              </div>
+              {detailTab === 'related' ? (
+                <section className="workspace-detail-card">
+                  <h3>Related Records</h3>
+                  {relatedState.loading ? <div className="workspace-state">Loading related records…</div> : relatedState.error ? <div className="workspace-state">{relatedState.error}</div> : relatedState.rows.length ? relatedState.rows.map((row) => (
+                    <button className="workspace-related-row" type="button" key={row.id}>
+                      <strong>{recordTitle(row, detailFields)}</strong><span>{row.id}</span>
+                    </button>
+                  )) : <div className="workspace-state">No related records.</div>}
+                </section>
+              ) : (
+                <>
+                  <section className="workspace-detail-card">
+                    <h3>Details</h3>
+                    {(detailFields || []).filter((field) => field.readable !== false).map((field) => (
+                      <div className="workspace-detail-row" key={field.id || field.api_name}>
+                        <span>{field.label || field.api_name}</span>
+                        <strong>{readableValue(detailRecord?.[field.api_name])}</strong>
+                      </div>
+                    ))}
+                  </section>
+                  <section className="workspace-detail-card">
+                    <h3>Record Information</h3>
+                    <div className="workspace-detail-row"><span>ID</span><strong>{detailRecord.id}</strong></div>
+                    {selectedRecordType ? <div className="workspace-detail-row"><span>Record Type</span><strong>{selectedRecordType.name || selectedRecordType.label || selectedRecordType.record_type_key}</strong></div> : null}
+                    {detailRecord.created_at ? <div className="workspace-detail-row"><span>Created</span><strong>{readableValue(detailRecord.created_at)}</strong></div> : null}
+                    {detailRecord.updated_at ? <div className="workspace-detail-row"><span>Last modified</span><strong>{readableValue(detailRecord.updated_at)}</strong></div> : null}
+                  </section>
+                </>
+              )}
             </div>
           </>
         ) : (
@@ -284,6 +364,7 @@ export default function WorkspacePage() {
             <header><div><strong>{editor.mode === 'create' ? 'New' : 'Edit'} {objectLabel(selectedObject)}</strong></div><button type="button" onClick={() => setEditor(null)}><X size={15}/></button></header>
             <div className="workspace-editor-body">
               {editor.error ? <div className="workspace-editor-error">{editor.error}</div> : null}
+              {runtimeMeta.recordTypes.length ? <label><span>Record Type</span><select value={editor.recordTypeId || ''} onChange={(e) => setEditor((current) => ({ ...current, recordTypeId: e.target.value }))}><option value="">Default</option>{runtimeMeta.recordTypes.map((type) => <option key={type.id} value={type.id}>{type.name || type.label || type.record_type_key}</option>)}</select></label> : null}
               {fields.filter((field) => field.active !== false && field.writable !== false && !['formula','rollup'].includes(field.field_type)).map((field) => (
                 <WorkspaceField key={field.id || field.api_name} field={field} value={editor.values?.[field.api_name]} onChange={(value) => setEditor((current) => ({ ...current, values: { ...current.values, [field.api_name]: value } }))} />
               ))}
