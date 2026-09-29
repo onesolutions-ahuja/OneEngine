@@ -708,6 +708,8 @@ function SettingsPage({ onOpenProfile }) {
   const [recordForm, setRecordForm] = useState({})
   const [recordSaving, setRecordSaving] = useState(false)
   const [settingsCatalog, setSettingsCatalog] = useState(() => readSettingsNavCache())
+  const [settingsCatalogLoaded, setSettingsCatalogLoaded] = useState(false)
+  const [settingsCatalogError, setSettingsCatalogError] = useState('')
   const [mobileSettingsDetail, setMobileSettingsDetail] = useState(() => Boolean(readRoute().section && readRoute().section !== 'general'))
 
   const load = async () => {
@@ -728,13 +730,25 @@ function SettingsPage({ onOpenProfile }) {
 
   useEffect(() => {
     let live = true
+    setSettingsCatalogError('')
     loadSettingsCatalog()
       .then((rows) => {
-        if (!live || !rows.length) return
-        writeSettingsNavCache(rows)
-        setSettingsCatalog(rows)
+        if (!live) return
+        if (Array.isArray(rows) && rows.length) {
+          writeSettingsNavCache(rows)
+          setSettingsCatalog(rows)
+          return
+        }
+        if (!settingsCatalog.length) setSettingsCatalogError('Settings catalogue is unavailable.')
       })
-      .catch(() => {})
+      .catch((error) => {
+        if (live && !settingsCatalog.length) {
+          setSettingsCatalogError(error?.message || 'Unable to load Settings catalogue.')
+        }
+      })
+      .finally(() => {
+        if (live) setSettingsCatalogLoaded(true)
+      })
     return () => { live = false }
   }, [])
 
@@ -764,7 +778,7 @@ function SettingsPage({ onOpenProfile }) {
   }
 
   const metadataGroups = buildSettingsGroupsFromCatalog(settingsCatalog)
-  const navigationGroups = metadataGroups.length ? metadataGroups : settingsFallbackGroups
+  const navigationGroups = metadataGroups
 
   const visibleGroups = navigationGroups
     .map((group) =>
@@ -1051,6 +1065,8 @@ function SettingsPage({ onOpenProfile }) {
         </button>
 
         <div className="settings-nav">
+          {!settingsCatalogLoaded && !metadataGroups.length ? <div className="settings-catalog-state">Loading Settings…</div> : null}
+          {settingsCatalogLoaded && !metadataGroups.length ? <div className="settings-catalog-state settings-catalog-state--error">{settingsCatalogError || 'Settings catalogue is unavailable.'}</div> : null}
           {visibleGroups.map((group, groupIndex) => {
             const isDeveloperGroup = group.some((item) => item.developer === true || DEVELOPER_SETTINGS_KEYS.has(item.key))
             return (
