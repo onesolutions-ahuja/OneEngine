@@ -1305,7 +1305,7 @@ function Desktop({ onLock }) {
       </header>
 
       {activeApp === 'settings' ? (
-        <MetadataSettingsPage initialSection={readRoute().section || ''} />
+        <SettingsPage />
       ) : activeApp === 'till' ? (
         <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
       ) : activeApp === 'workspace' ? (
