@@ -432,18 +432,24 @@ function readRoute() {
   const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
   if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'general' }
   if (parts[0] === 'till') return { app: 'till', section: null }
-  if (parts[0] === 'workspace') return { app: 'workspace', section: null }
+  if (parts[0] === 'workspace') {
+    const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
+    const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
+    return { app: 'workspace', section: null, objectKey, recordId }
+  }
   return { app: 'home', section: null }
 }
 
-function setRoute(app, section = null) {
+function setRoute(app, section = null, options = {}) {
   const base = APP_BASE || ''
   const next = app === 'settings'
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
     : app === 'till'
       ? `${base}/till`
       : app === 'workspace'
-        ? `${base}/workspace`
+        ? options?.objectKey
+          ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
+          : `${base}/workspace`
         : `${base}/`
   if (window.location.pathname !== next) window.history.pushState(null, '', next)
 }
@@ -1606,6 +1612,7 @@ function ControlCenterMenu({ onOpenWifi, onOpenBluetooth }) {
 function Desktop({ onLock }) {
   const [message, setMessage] = useState('Hello.')
   const [activeApp, setActiveApp] = useState(() => readRoute().app)
+  const [routeState, setRouteState] = useState(() => readRoute())
   const [topPanel, setTopPanel] = useState('')
   const [appSearch, setAppSearch] = useState('')
   const [storeApps, setStoreApps] = useState([])
@@ -1616,7 +1623,11 @@ function Desktop({ onLock }) {
   const isTillUser = /till|cashier|sales/i.test(String(storedUser?.role || ''))
 
   useEffect(() => {
-    const syncRoute = () => setActiveApp(readRoute().app)
+    const syncRoute = () => {
+      const route = readRoute()
+      setRouteState(route)
+      setActiveApp(route.app)
+    }
     window.addEventListener('popstate', syncRoute)
     return () => window.removeEventListener('popstate', syncRoute)
   }, [])
@@ -1816,7 +1827,16 @@ function Desktop({ onLock }) {
       ) : activeApp === 'till' ? (
         <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
       ) : activeApp === 'workspace' ? (
-        <WorkspacePage onNavigate={openItem} />
+        <WorkspacePage
+          initialObjectKey={routeState.objectKey || ''}
+          initialRecordId={routeState.recordId || ''}
+          onNavigate={openItem}
+          onRouteChange={(objectKey, recordId) => {
+            const next = { app: 'workspace', section: null, objectKey, recordId }
+            setRouteState(next)
+            setRoute('workspace', null, { objectKey, recordId })
+          }}
+        />
       ) : (
         <section className="hello-stage">
           <p className="eyebrow">SMART THEME</p>
