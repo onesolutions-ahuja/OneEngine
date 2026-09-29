@@ -2427,6 +2427,15 @@ function Desktop({ onLock, onSignOut }) {
           >
             <Settings2 size={17} strokeWidth={2.1} />
           </button>
+          <button
+            type="button"
+            className="status-button"
+            aria-label="Log out"
+            title="Log Out"
+            onClick={() => { setTopPanel(''); onSignOut?.() }}
+          >
+            <LogOut size={17} strokeWidth={2.1} />
+          </button>
           <MenuBarClock />
         </div>
       </header>
