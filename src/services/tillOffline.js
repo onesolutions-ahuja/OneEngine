@@ -1,6 +1,26 @@
 const DB_NAME = 'onepos_smart_theme_offline'
 const DB_VERSION = 1
 const STORE = 'sales'
+const SYNC_STATS_KEY_PREFIX = 'onepos_smart_offline_sync_stats'
+
+function syncStatsKey(tenant) {
+  return `${SYNC_STATS_KEY_PREFIX}_${tenant.companyId}_${tenant.storeId}`
+}
+function readSyncStats(tenant = currentTenant()) {
+  if (!tenant) return { syncedTotal: 0, lastSyncedAt: null, lastError: null }
+  try {
+    return { syncedTotal: 0, lastSyncedAt: null, lastError: null, ...(JSON.parse(localStorage.getItem(syncStatsKey(tenant)) || 'null') || {}) }
+  } catch {
+    return { syncedTotal: 0, lastSyncedAt: null, lastError: null }
+  }
+}
+function writeSyncStats(stats, tenant = currentTenant()) {
+  if (!tenant) return
+  try { localStorage.setItem(syncStatsKey(tenant), JSON.stringify(stats)) } catch {}
+}
+export function getOfflineSyncStats() {
+  return readSyncStats()
+}
 
 function tokenPayload() {
   try {
@@ -128,11 +148,16 @@ export async function syncOfflineCashSales(apiRequest) {
       const response = await apiRequest('/api/sales', { method: 'POST', body: JSON.stringify(entry.payload) })
       if (!response?.success || !response?.sale?.id) throw Object.assign(new Error(response?.message || 'Unconfirmed sale response'), { serverResponse: true })
       await transaction('readwrite', (store) => store.delete(entry.id))
+      const stats = readSyncStats()
+      writeSyncStats({ syncedTotal: Number(stats.syncedTotal || 0) + 1, lastSyncedAt: new Date().toISOString(), lastError: null })
       synced += 1
     } catch (error) {
       if (error instanceof TypeError || !navigator.onLine) break
-      const next = { ...entry, status: 'failed', attempts: Number(entry.attempts || 0) + 1, lastError: error?.message || 'Server rejected sale' }
+      const message = error?.message || 'Server rejected sale'
+      const next = { ...entry, status: 'failed', attempts: Number(entry.attempts || 0) + 1, lastError: message }
       await transaction('readwrite', (store) => store.put(next))
+      const stats = readSyncStats()
+      writeSyncStats({ ...stats, lastError: message })
     }
   }
   return { synced, remaining: (await offlineQueueEntries()).length }
