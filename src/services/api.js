@@ -1,5 +1,17 @@
 const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://onepos.onrender.com').replace(/\/$/, '')
 export const SERVER_ADDRESS_STORAGE_KEY = 'onepos_server_address'
+export const ACTING_COMPANY_STORAGE_KEY = 'onepos_acting_company_id'
+
+export function getActingCompanyId() {
+  try { return localStorage.getItem(ACTING_COMPANY_STORAGE_KEY) || '' } catch { return '' }
+}
+
+export function setActingCompanyId(companyId) {
+  try {
+    if (companyId) localStorage.setItem(ACTING_COMPANY_STORAGE_KEY, String(companyId))
+    else localStorage.removeItem(ACTING_COMPANY_STORAGE_KEY)
+  } catch {}
+}
 
 export function normaliseServerAddress(value) {
   const raw = String(value ?? '').trim()
@@ -54,6 +66,7 @@ export async function apiRequest(path, options = {}) {
       Accept: 'application/json',
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(getActingCompanyId() ? { 'X-Acting-Company-Id': getActingCompanyId() } : {}),
       ...(options.headers || {}),
     },
   })
