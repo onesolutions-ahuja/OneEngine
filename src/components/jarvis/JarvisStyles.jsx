@@ -375,30 +375,13 @@ html[data-platform-theme="theme4"] .onepos-shell-header .jarvis-corner > [data-t
   position: absolute;
   inset: -7px;
   border-radius: 50%;
-  background: radial-gradient(circle at 32% 24%, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.88) 52%, rgba(255,255,255,0.72) 100%);
-  border: 1px solid rgba(255,255,255,0.96);
-  box-shadow: 0 8px 20px rgba(46,89,120,0.16), 0 0 18px rgba(90,215,255,0.24), inset 0 1px 2px rgba(255,255,255,0.95), inset 0 -2px 8px rgba(111,130,180,0.08);
+  background: radial-gradient(circle at 32% 24%, rgba(255,255,255,0.52) 0%, rgba(255,255,255,0.28) 38%, rgba(255,255,255,0.14) 73%, rgba(255,255,255,0.08) 100%);
+  border: 1px solid rgba(255,255,255,0.82);
+  box-shadow: 0 8px 20px rgba(46,89,120,0.16), 0 0 18px rgba(90,215,255,0.24), inset 0 1px 2px rgba(255,255,255,0.85), inset 0 -2px 8px rgba(111,130,180,0.1);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 0;
   pointer-events: none;
-}
-
-.jarvis-orb-container::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  background: conic-gradient(from 0deg, #00e5ff, #4f7cff, #9b5cff, #ff4db8, #ff8a00, #ffe600, #38f59b, #00e5ff);
-  filter: blur(5px) saturate(1.35);
-  opacity: .82;
-  animation: jarvis-dock-colour-orbit 5.5s linear infinite;
-  z-index: 0;
-  pointer-events: none;
-}
-
-@keyframes jarvis-dock-colour-orbit {
-  to { transform: rotate(360deg); }
 }
 
 .jarvis-orb:hover {
