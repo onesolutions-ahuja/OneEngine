@@ -1982,6 +1982,7 @@ function Desktop({ onLock, onSignOut }) {
   const [storeAppsLoaded, setStoreAppsLoaded] = useState(false)
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
   const [desktopPermissions, setDesktopPermissions] = useState([])
+  const canManagePlatform = desktopPermissions.includes('platform.manage')
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
   const isTillUser = /till|cashier|sales/i.test(String(storedUser?.role || ''))
