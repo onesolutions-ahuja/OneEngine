@@ -1,4 +1,4 @@
-import { apiRequest } from './api'
+import { apiRequest, getActingCompanyId } from './api'
 
 export async function loadSettingsContext() {
   // Identity + RBAC are platform/session concerns and must not be discarded
@@ -12,11 +12,17 @@ export async function loadSettingsContext() {
   let settings = null
   let settingsError = ''
 
-  // Platform identities may legitimately have no company_id. In that case
-  // Objects/Platform Settings still work; tenant Settings require an acting
-  // company context instead of treating this as an authorization failure.
-  if (user?.companyId) {
+  // A company-scoped user carries companyId directly. Platform/operator
+  // identities may instead use the validated acting-company header supplied by
+  // apiRequest(). Treat either as an effective company context so every
+  // company-scoped Settings page follows the same rule.
+  const actingCompanyId = getActingCompanyId()
+  const hasCompanyContext = Boolean(user?.companyId || actingCompanyId)
+
+  if (hasCompanyContext) {
     try {
+      // The backend remains authoritative: apiRequest attaches
+      // X-Acting-Company-Id when present and the API validates that context.
       const response = await apiRequest('/api/settings')
       settings = response?.data || null
     } catch (error) {
@@ -29,7 +35,8 @@ export async function loadSettingsContext() {
     permissions: permissions?.data || {},
     settings,
     settingsError,
-    hasCompanyContext: Boolean(user?.companyId),
+    hasCompanyContext,
+    actingCompanyId: actingCompanyId || null,
   }
 }
 
