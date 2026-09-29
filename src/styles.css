@@ -6657,3 +6657,9 @@ button:focus-visible {
 .till-editor-modal{width:min(520px,calc(100vw - 24px))}.till-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.till-editor-full{grid-column:1/-1}.settings-toggle-line{display:flex;align-items:center;justify-content:space-between;border:1px solid #eceef0;border-radius:8px;background:#fafbfc;padding:8px 10px;font-size:10px}
 @media(max-width:950px){.store-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.store-card-grid,.invoice-prefix-grid,.till-editor-grid{grid-template-columns:1fr}.till-editor-full{grid-column:auto}.self-checkout-store-list>div{grid-template-columns:1fr}.store-card-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+
+/* User multi-store access */
+.user-store-access-button{height:27px;border:1px solid #dfe2e6;border-radius:6px;background:#fff;padding:0 8px;font-size:9px;cursor:pointer}
+.user-store-access-modal{width:min(520px,calc(100vw - 24px))}
+.user-store-access-list{display:grid;gap:6px}.user-store-access-list label{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #eceef0;border-radius:8px;background:#fafbfc;padding:8px 9px}.user-store-access-list label>span{display:grid;grid-template-columns:auto auto;column-gap:6px;align-items:center}.user-store-access-list b{font-size:9px}.user-store-access-list small{grid-column:2;font-size:8px;color:#858b93}.user-store-access-list input{width:15px;height:15px}
