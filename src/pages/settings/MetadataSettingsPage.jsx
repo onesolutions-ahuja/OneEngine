@@ -2,6 +2,21 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Search, Settings2, ShieldCheck } from 'lucide-react'
 import { apiRequest, setDeviceServerAddress } from '../../services/api'
 
+const SETTINGS_CATALOG_CACHE_KEY = 'onepos.settings.catalog.v1'
+
+function readSettingsCatalogCache() {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(SETTINGS_CATALOG_CACHE_KEY) || 'null')
+    return Array.isArray(value) ? value : []
+  } catch {
+    return []
+  }
+}
+
+function writeSettingsCatalogCache(rows) {
+  try { sessionStorage.setItem(SETTINGS_CATALOG_CACHE_KEY, JSON.stringify(Array.isArray(rows) ? rows : [])) } catch {}
+}
+
 function objectKey(object) {
   return object?.object_key || object?.api_name || object?.key || ''
 }
@@ -347,13 +362,16 @@ function SystemSettingsSection({ object, fields, record, permissions, superadmin
 }
 
 export default function MetadataSettingsPage({ initialSection = '' }) {
+  const cachedCatalog = useMemo(() => readSettingsCatalogCache(), [])
   const [query, setQuery] = useState('')
-  const [objects, setObjects] = useState([])
-  const [objectPermissions, setObjectPermissions] = useState({})
-  const [sectionedData, setSectionedData] = useState({})
+  const [objects, setObjects] = useState(cachedCatalog)
+  const [objectPermissions, setObjectPermissions] = useState(() => Object.fromEntries(cachedCatalog.map((object) => [object.id, object.permissions || null])))
+  const [sectionedData, setSectionedData] = useState(() => Object.fromEntries(cachedCatalog
+    .filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
+    .map((object) => [object.id, { fields: Array.isArray(object.fields) ? object.fields : [], rows: [] }])))
   const [active, setActive] = useState(initialSection || '')
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(cachedCatalog.length === 0)
   const [error, setError] = useState('')
 
   const sectionedObjects = objects.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
@@ -372,42 +390,43 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
 
   useEffect(() => {
     let live = true
-    setLoading(true)
+    if (!cachedCatalog.length) setLoading(true)
+    setError('')
     Promise.all([
-      apiRequest('/api/platform/objects'),
+      apiRequest('/api/platform/runtime/settings-catalog'),
       apiRequest('/api/auth/me'),
-    ]).then(async ([objectRes, meRes]) => {
+    ]).then(async ([catalogRes, meRes]) => {
       if (!live) return
-      const rows = objectRes?.data?.objects || objectRes?.data || []
-      const hosts = Array.isArray(rows) ? rows.filter((object) => object?.active !== false && object?.config?.settingsHost === true) : []
+      const hosts = Array.isArray(catalogRes?.data) ? catalogRes.data : []
+      writeSettingsCatalogCache(hosts)
       setObjects(hosts)
+      setObjectPermissions(Object.fromEntries(hosts.map((object) => [object.id, object.permissions || null])))
       setUser(meRes?.user || meRes?.data?.user || null)
 
-      const permissionPairs = await Promise.all(hosts.map(async (object) => {
+      const sectioned = hosts.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
+      setSectionedData((current) => Object.fromEntries(sectioned.map((object) => [object.id, {
+        ...(current[object.id] || {}),
+        fields: Array.isArray(object.fields) ? object.fields : [],
+        rows: current[object.id]?.rows || [],
+      }])))
+
+      const sectionedPairs = await Promise.all(sectioned.map(async (object) => {
         try {
-          const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`)
-          return [object.id, response?.data || null]
+          const recordRes = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=10`)
+          return [object.id, {
+            fields: Array.isArray(object.fields) ? object.fields : [],
+            rows: Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : [],
+          }]
         } catch {
-          return [object.id, null]
+          return [object.id, {
+            fields: Array.isArray(object.fields) ? object.fields : [],
+            rows: [],
+          }]
         }
       }))
       if (!live) return
-      setObjectPermissions(Object.fromEntries(permissionPairs))
-
-      const sectioned = hosts.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
-      const sectionedPairs = await Promise.all(sectioned.map(async (object) => {
-        const [fieldRes, recordRes] = await Promise.all([
-          apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`),
-          apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=10`),
-        ])
-        return [object.id, {
-          fields: Array.isArray(fieldRes?.data) ? fieldRes.data : [],
-          rows: Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : [],
-        }]
-      }))
-      if (!live) return
       setSectionedData(Object.fromEntries(sectionedPairs))
-    }).catch((err) => live && setError(err?.message || 'Unable to load metadata settings')).finally(() => live && setLoading(false))
+    }).catch((err) => live && setError(err?.message || 'Unable to refresh Settings metadata')).finally(() => live && setLoading(false))
     return () => { live = false }
   }, [])
 
@@ -489,7 +508,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
         <div className="settings-content-header"><h2>{current?.label || 'Settings'}</h2></div>
         <div className="settings-content-body">
           {error ? <div className="settings-error">{error}</div> : null}
-          {loading ? <div className="settings-card settings-state-card">Loading metadata settings…</div> : !current ? (
+          {loading && !current ? <div className="settings-card settings-state-card">Loading Settings…</div> : !current ? (
             <div className="settings-card settings-state-card">No Settings metadata is available for this user.</div>
           ) : current.type === 'system' ? (
             <SystemSettingsSection
