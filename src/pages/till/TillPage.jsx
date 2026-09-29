@@ -81,6 +81,13 @@ function normaliseProduct(product) {
   }
 }
 
+function ProductImage({ src }) {
+  const [failed, setFailed] = useState(false)
+  useEffect(() => { setFailed(false) }, [src])
+  if (!src || failed) return <ShoppingBag size={24}/>
+  return <img src={src} alt="" onError={() => setFailed(true)} />
+}
+
 function Modal({ title, children, onClose, wide = false }) {
   return (
     <div className="till-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose?.()}>
@@ -836,7 +843,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
             <div className={`till-product-grid ${productView === 'compact' ? 'is-compact' : ''}`}>
               {loading ? <div className="till-empty">Loading catalogue…</div> : filtered.map((product) => (
                 <button key={product.id} type="button" className="till-product-card" onClick={() => selectProduct(product)}>
-                  {productView !== 'compact' ? <div className="till-product-image">{product.imageUrl ? <img src={product.imageUrl} alt=""/> : <ShoppingBag size={24}/>}</div> : null}
+                  {productView !== 'compact' ? <div className="till-product-image"><ProductImage src={product.imageUrl}/></div> : null}
                   <strong>{product.name}</strong><span>{money(product.price, currency)}</span>{product.trackStock ? <small>{product.stock} in stock</small> : <small>Non-stock</small>}
                 </button>
               ))}
