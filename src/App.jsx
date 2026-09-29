@@ -35,6 +35,7 @@ const AttendancePage = lazy(() => import('./pages/employees/AttendancePage'))
 const StoresPage = lazy(() => import('./pages/stores/StoresPage'))
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'))
 const CustomReportsPage = lazy(() => import('./pages/reports/CustomReportsPage'))
+const IntegrationsAdmin = lazy(() => import('./pages/integrations/IntegrationsAdmin'))
 const StoreTillSettingsPage = lazy(() => import('./pages/settings/StoreTillSettingsPage'))
 import {
   Bluetooth,
@@ -491,6 +492,7 @@ function readRoute() {
   if (parts[0] === 'stores') return { app: 'stores', section: null }
   if (parts[0] === 'reports') return { app: 'reports', section: null }
   if (parts[0] === 'custom-reports') return { app: 'custom-reports', section: null }
+  if (parts[0] === 'integrations') return { app: 'integrations', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -539,6 +541,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/reports`
       : app === 'custom-reports'
         ? `${base}/custom-reports`
+      : app === 'integrations'
+        ? `${base}/integrations`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1751,6 +1755,15 @@ function Desktop({ onLock }) {
   }, [])
 
   useEffect(() => {
+    const openStore = () => {
+      setAppSearch('')
+      setTopPanel('store')
+    }
+    window.addEventListener('onepos:open-store', openStore)
+    return () => window.removeEventListener('onepos:open-store', openStore)
+  }, [])
+
+  useEffect(() => {
     if (!topPanel) return undefined
     const closeOutside = (event) => {
       if (!topbarPanelRef.current?.contains(event.target)) setTopPanel('')
@@ -1809,6 +1822,11 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'integrations') {
+      setRoute('integrations')
+      setActiveApp('integrations')
+      return
+    }
     if (id === 'reports') {
       setRoute('reports')
       setActiveApp('reports')
@@ -2095,6 +2113,8 @@ function Desktop({ onLock }) {
           <ReportsPage onOpenCustomReports={() => openItem('custom-reports')} />
         ) : activeApp === 'custom-reports' ? (
           <CustomReportsPage onBack={() => openItem('reports')} />
+        ) : activeApp === 'integrations' ? (
+          <IntegrationsAdmin storeId={routeState?.storeId || storedUser?.storeId || null} />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
