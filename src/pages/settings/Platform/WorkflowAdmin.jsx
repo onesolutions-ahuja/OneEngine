@@ -426,9 +426,35 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   );
 }
 
-export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, title = "Workflows", description = "Create and manage workflow builder configurations." }) {
-  const [workflowId, setWorkflowId] = useState(null);
+export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, title = "Workflows", description = "Create and manage workflow builder configurations.", embedded = false, initialWorkflow = null, onClose, onSaved }) {
+  const normalizedInitialWorkflow = initialWorkflow ? {
+    id: initialWorkflow.id || null,
+    name: initialWorkflow.name || "",
+    object: initialWorkflow.object || initialWorkflow.object_key || initialWorkflow.objectKey || "",
+    objectId: initialWorkflow.objectId || initialWorkflow.object_id || null,
+    objectKey: initialWorkflow.objectKey || initialWorkflow.object_key || initialWorkflow.object || "",
+    trigger: initialWorkflow.trigger || initialWorkflow.trigger_key || initialWorkflow.triggerKey || "manual",
+    version: Number(initialWorkflow.version || 1),
+    lifecycleStatus: initialWorkflow.lifecycleStatus || initialWorkflow.lifecycle_status || (initialWorkflow.active === false ? "INACTIVE" : "ACTIVE"),
+    active: initialWorkflow.active !== false,
+    conditions: initialWorkflow.conditions || [],
+    match: initialWorkflow.action?.match || initialWorkflow.match || "all",
+    steps: (initialWorkflow.steps || initialWorkflow.action?.actions || []).map((step) => ({
+      ...makeStep(step.type || step.key || "CREATE_RECORD"),
+      ...step,
+      type: step.type || step.key || "CREATE_RECORD",
+      enabled: step.enabled !== false,
+      label: step.label || getActionLabel(step.type || step.key),
+      config: {
+        ...(makeStep(step.type || step.key || "CREATE_RECORD").config),
+        ...(step.config || {}),
+        ...Object.fromEntries(Object.entries(step).filter(([key]) => !["id","type","key","label","enabled","expanded","config","_visual"].includes(key))),
+      },
+    })),
+  } : null;
+  const [workflowId, setWorkflowId] = useState(() => normalizedInitialWorkflow?.id || null);
   const [workflow, setWorkflow] = useState(() => {
+    if (normalizedInitialWorkflow) return normalizedInitialWorkflow;
     try {
       const cached = scopeKey ? null : localStorage.getItem("onepos_workflow_builder");
       if (cached) {
@@ -471,8 +497,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     };
   });
 
-  const [showBuilder, setShowBuilder] = useState(false);
+  const [showBuilder, setShowBuilder] = useState(embedded);
   const [savedWorkflows, setSavedWorkflows] = useState(() => {
+    if (embedded && normalizedInitialWorkflow) return [normalizedInitialWorkflow];
     try {
       const cached = scopeKey ? null : localStorage.getItem("onepos_workflow_builder");
       const parsed = cached ? JSON.parse(cached) : null;
@@ -485,6 +512,26 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [registryOptions, setRegistryOptions] = useState(scopeKey ? [] : actionOptions);
   const [functionRegistry, setFunctionRegistry] = useState([]);
   const [messageTemplates, setMessageTemplates] = useState([]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    if (normalizedInitialWorkflow) {
+      setWorkflowId(normalizedInitialWorkflow.id || null);
+      setWorkflow(normalizedInitialWorkflow);
+    } else {
+      setWorkflowId(null);
+      setWorkflow({
+        name: "",
+        object: "",
+        trigger: "manual",
+        version: 1,
+        lifecycleStatus: "DRAFT",
+        active: false,
+        steps: [],
+      });
+    }
+    setShowBuilder(true);
+  }, [embedded, initialWorkflow?.id]);
 
   useEffect(() => {
     apiRequest(scopeKey
@@ -622,12 +669,16 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       const saved = response?.data || {};
       setWorkflowId(saved.id || workflowId);
       setSavedWorkflows((current) => [{ ...workflow, ...saved, id: saved.id || workflowId }, ...current.filter((item) => item.id !== (saved.id || workflowId))]);
-      setShowBuilder(false);
+      if (embedded) {
+        onSaved?.({ ...workflow, ...saved, id: saved.id || workflowId });
+      } else {
+        setShowBuilder(false);
+      }
       onMessage?.("Workflow saved.");
     }).catch((error) => onError?.(error.message || "Unable to save workflow."));
   };
 
-  if (!showBuilder) {
+  if (!showBuilder && !embedded) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
