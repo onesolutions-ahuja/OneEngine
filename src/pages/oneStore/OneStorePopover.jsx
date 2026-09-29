@@ -23,8 +23,8 @@ function appIcon(item){
   return `${import.meta.env.BASE_URL||'/'}icons/apps/${String(key).trim().toLowerCase().replaceAll('_','-')}.svg`
 }
 
-export default function OneStorePopover({onClose,onOpenRoute}){
-  const [packages,setPackages]=useState([])
+export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],onPackagesChange}){
+  const [packages,setPackages]=useState(()=>Array.isArray(initialPackages)?initialPackages:[])
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
   const [notice,setNotice]=useState('')
@@ -35,21 +35,24 @@ export default function OneStorePopover({onClose,onOpenRoute}){
   const [workingKey,setWorkingKey]=useState('')
   const [canManage,setCanManage]=useState(false)
 
-  const load=async()=>{
+  const load=async({refreshCatalogue=false}={})=>{
     try{
       setLoading(true);setError('')
       const [catalogue,perm]=await Promise.all([
-        apiRequest('/api/packages/marketplace'),
+        refreshCatalogue||!packages.length?apiRequest('/api/packages/marketplace'):Promise.resolve({success:true,data:packages}),
         apiRequest('/api/auth/me/permissions').catch(()=>null),
       ])
       if(!catalogue?.success)throw new Error(catalogue?.message||'Unable to load oneStore')
-      setPackages(Array.isArray(catalogue.data)?catalogue.data:[])
+      const nextPackages=Array.isArray(catalogue.data)?catalogue.data:[]
+      setPackages(nextPackages)
+      onPackagesChange?.(nextPackages)
       const codes=perm?.data?.permissions||[]
       setCanManage(perm?.data?.isAdmin===true||perm?.data?.isSuperadmin===true||codes.includes('package.install'))
     }catch(err){setError(err?.message||'Unable to load oneStore')}
     finally{setLoading(false)}
   }
   useEffect(()=>{void load()},[])
+  useEffect(()=>{if(Array.isArray(initialPackages)&&initialPackages.length)setPackages(initialPackages)},[initialPackages])
 
   const hasPending=packages.some(item=>['QUEUED','UPDATING'].includes(String(item.company_installation?.update_status||'').toUpperCase()))
   useEffect(()=>{
@@ -97,7 +100,7 @@ export default function OneStorePopover({onClose,onOpenRoute}){
         if(r?.success===false)throw new Error(r?.message||`Unable to ${action} app`)
         setNotice(action==='install'?`${item.name} installed.`:action==='activate'?`${item.name} activated.`:`${item.name} deactivated.`)
       }
-      await load()
+      await load({refreshCatalogue:true})
     }catch(err){setError(err?.message||'Package action failed')}
     finally{setWorkingKey('')}
   }
