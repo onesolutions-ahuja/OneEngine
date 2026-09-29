@@ -53,6 +53,17 @@ Zero-loss rule: an old UI page/section is deleted only after its Smart Theme rep
 | Supplier Returns | Yes | Yes | Partial | ✅ Available received stock, quantity validation, supplier return posting and history migrated. ✅ Unused standalone duplicate SupplierReturnsAdmin.jsx deleted. ⏳ Embedded legacy component remains inside ReturnsAdmin until AdminLayout cutover. |
 | Sale detail shared modal | Replaced in SalesPage | Yes for Sales | No | ⏳ Customers still imports the legacy SaleDetailModal; delete after Customers migration. |
 
+## Phase 4 — Products + Categories
+
+| Old UI page / runtime | Smart Theme replacement | Logic fully migrated? | Old UI deleted? | Status / note |
+|---|---|---:|---:|---|
+| Products | Yes | Yes | No | ✅ Protected Product Master migrated with Product list/search, stats, create/edit, server-authoritative SKU/barcode uniqueness, VAT/stock/batch controls, Platform extension fields + record types, Product history, import/export and activate/deactivate. ⏳ DELETE BLOCKER: legacy AdminLayout still imports ProductsAdmin. |
+| Categories | Yes | Yes | No | ✅ Create, inline edit, display order, product counts, status, refresh and deactivate/uncategorise confirmation migrated. ⏳ DELETE BLOCKER: legacy AdminLayout still imports CategoriesAdmin. |
+| Global Product Lookup | Yes | Yes | No | ✅ Provider discovery/configuration, test/save, barcode lookup, provider-status handling and Add to company catalogue flow migrated using the shared protected Product editor. ⏳ DELETE BLOCKER: legacy AdminLayout still imports GlobalProductLookupAdmin. |
+| Legacy GlobalProductsAdmin.jsx duplicate | Not required | Yes | Yes | ✅ Deleted — legacy shell never imported this duplicate page. |
+| ProductFormModal legacy adapter | Replaced by Smart Theme ProductEditor | Yes for migrated Product/Lookup pages | No | ⏳ Old ProductsAdmin + GlobalProductLookupAdmin still import it until AdminLayout cutover. |
+| Variants / Bundles / Modifiers admin page | No old UI page existed | N/A | N/A | Backend/POS/package capabilities existed, but there was no legacy admin page to migrate. No replacement invented during cleanup. |
+
 ## Later phases
 
 - Core workspace/object pages
