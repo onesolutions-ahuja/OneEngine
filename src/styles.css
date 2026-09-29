@@ -5838,8 +5838,10 @@ button:focus-visible {
   }
 
   .dock-magnify-zone .dock-item {
-    flex: 0 0 40px;
-    width: 40px !important;
+    /* Keep the exact desktop spring-driven width on touch. The previous
+       !important 40px lock disabled Framer Motion on phones. */
+    flex: 0 0 auto;
+    min-width: 40px;
   }
 
   .dock-fixed-zone {
