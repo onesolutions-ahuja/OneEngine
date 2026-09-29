@@ -4,7 +4,7 @@ import {
   Minus, Pause, Pencil, Plus, Printer, QrCode, ReceiptText, Search, Settings2,
   ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet,
 } from 'lucide-react'
-import { apiRequest } from '../../services/api'
+import { apiRequest, getActingCompanyId, getStoredUser } from '../../services/api'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
 import {
   cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
@@ -180,6 +180,16 @@ export default function TillPage({ onOpenSettings }) {
   const load = async () => {
     setLoading(true)
     setError('')
+
+    const sessionUser = getStoredUser()
+    const companyContext = sessionUser?.companyId || sessionUser?.company_id || getActingCompanyId()
+    if (!companyContext) {
+      setLoading(false)
+      setError('Select a company context before opening Till.')
+      await refreshOfflineCount()
+      return
+    }
+
     const cached = loadTillBootstrapCache()
     if (cached) {
       applyBootstrap(cached.catalogue, cached.settingsResponse, cached.buttons, cached.paymentMethods || [])
