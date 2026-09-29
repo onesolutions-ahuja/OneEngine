@@ -27,6 +27,8 @@ const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage'))
 const ReplenishmentPage = lazy(() => import('./pages/inventory/ReplenishmentPage'))
 const PurchasesPage = lazy(() => import('./pages/purchases/PurchasesPage'))
 const SuppliersPage = lazy(() => import('./pages/suppliers/SuppliersPage'))
+const CustomersPage = lazy(() => import('./pages/customers/CustomersPage'))
+const GiftCardsPage = lazy(() => import('./pages/customers/GiftCardsPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -464,6 +466,8 @@ function readRoute() {
   if (parts[0] === 'replenishment') return { app: 'replenishment', section: null }
   if (parts[0] === 'purchases') return { app: 'purchases', section: null }
   if (parts[0] === 'suppliers') return { app: 'suppliers', section: null }
+  if (parts[0] === 'customers') return { app: 'customers', section: null }
+  if (parts[0] === 'gift-cards') return { app: 'gift-cards', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -500,6 +504,10 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/purchases`
       : app === 'suppliers'
         ? `${base}/suppliers`
+      : app === 'customers'
+        ? `${base}/customers`
+      : app === 'gift-cards'
+        ? `${base}/gift-cards`
       : app === 'workspace'
         ? options?.objectKey
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
@@ -1747,6 +1755,16 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'customers') {
+      setRoute('customers')
+      setActiveApp('customers')
+      return
+    }
+    if (id === 'gift-cards') {
+      setRoute('gift-cards')
+      setActiveApp('gift-cards')
+      return
+    }
     if (id === 'suppliers') {
       setRoute('suppliers')
       setActiveApp('suppliers')
@@ -1991,6 +2009,10 @@ function Desktop({ onLock }) {
           <PurchasesPage />
         ) : activeApp === 'suppliers' ? (
           <SuppliersPage />
+        ) : activeApp === 'customers' ? (
+          <CustomersPage onOpenGiftCards={() => openItem('gift-cards')} />
+        ) : activeApp === 'gift-cards' ? (
+          <GiftCardsPage onBack={() => openItem('customers')} />
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'general' }
