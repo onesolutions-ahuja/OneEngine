@@ -99,6 +99,18 @@ function useClock() {
 
 function MenuBarClock() {
   const now = useClock()
+  const dateTime = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(now),
+    [now],
+  )
+
   return (
     <button type="button" className="menubar-time-button">
       {dateTime}
