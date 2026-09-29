@@ -254,7 +254,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
 
 
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px] items-start dashboard-builder-workspace">
-      <div className="min-w-0 space-y-4 order-2 xl:order-1">
+      <div className="min-w-0 space-y-3 dashboard-builder-main">
         <div className="p-4" style={CARD}>
           <span className={LABEL}>Dashboard name</span>
           <input className={FIELD} style={FIELD_STYLE} value={current.name || ""} onChange={(e) => setCurrent({ ...current, name: e.target.value, apiKey: current.apiKey || current.api_key || current.metadataKey || (e.target.value || "dashboard").trim() || "dashboard" })} />
@@ -343,10 +343,10 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
         </div>
       </div>
 
-      <aside className="min-w-0 order-1 xl:order-2 dashboard-builder-inspector">
+      <aside className="min-w-0 dashboard-builder-inspector">
         <div className="xl:sticky dashboard-builder-inspector-card" style={{ ...CARD, top: 0 }} data-testid="dashboard-properties-panel">
           <div className="dashboard-builder-inspector-tabs">
-            <button type="button" className={inspectorTab === "components" ? "is-active" : ""} onClick={() => setInspectorTab("components")}>Components</button>
+            <button type="button" className={inspectorTab === "components" ? "is-active" : ""} onClick={() => setInspectorTab("components")}>Objects</button>
             <button type="button" className={inspectorTab === "properties" ? "is-active" : ""} onClick={() => setInspectorTab("properties")}>Properties</button>
           </div>
 
