@@ -28,6 +28,8 @@ const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'))
 const SalesPage = lazy(() => import('./pages/sales/SalesPage'))
 const ReturnsPage = lazy(() => import('./pages/returns/ReturnsPage'))
+const ExchangePage = lazy(() => import('./pages/returns/ExchangePage'))
+const LayawayPage = lazy(() => import('./pages/sales/LayawayPage'))
 const SupplierReturnsPage = lazy(() => import('./pages/returns/SupplierReturnsPage'))
 const ProductsPage = lazy(() => import('./pages/products/ProductsPage'))
 const CategoriesPage = lazy(() => import('./pages/products/CategoriesPage'))
@@ -552,6 +554,8 @@ function readRoute() {
   if (parts[0] === 'profile') return { app: 'profile', section: null }
   if (parts[0] === 'sales') return { app: 'sales', section: null }
   if (parts[0] === 'returns') return { app: 'returns', section: null }
+  if (parts[0] === 'exchange') return { app: 'exchange', section: null }
+  if (parts[0] === 'layaway') return { app: 'layaway', section: null }
   if (parts[0] === 'supplier-returns') return { app: 'supplier-returns', section: null }
   if (parts[0] === 'audit-log') return { app: 'audit-log', section: null }
   if (parts[0] === 'licensing') return { app: 'licensing', section: null }
@@ -596,6 +600,10 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/sales`
       : app === 'returns'
         ? `${base}/returns`
+      : app === 'exchange'
+        ? `${base}/exchange`
+      : app === 'layaway'
+        ? `${base}/layaway`
       : app === 'supplier-returns'
         ? `${base}/supplier-returns`
       : app === 'products'
@@ -2101,6 +2109,16 @@ function Desktop({ onLock }) {
       setActiveApp('returns')
       return
     }
+    if (id === 'exchange') {
+      setRoute('exchange')
+      setActiveApp('exchange')
+      return
+    }
+    if (id === 'layaway') {
+      setRoute('layaway')
+      setActiveApp('layaway')
+      return
+    }
     if (id === 'supplier-returns') {
       setRoute('supplier-returns')
       setActiveApp('supplier-returns')
@@ -2396,7 +2414,10 @@ function Desktop({ onLock }) {
             setActiveApp('profile')
           }} />
         ) : activeApp === 'till' ? (
-          <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
+          <TillPage
+            onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
+            onNavigate={openItem}
+          />
         ) : activeApp === 'sales' ? (
           <SalesPage
             onOpenReturns={() => openItem('returns')}
@@ -2404,6 +2425,10 @@ function Desktop({ onLock }) {
           />
         ) : activeApp === 'returns' ? (
           <ReturnsPage />
+        ) : activeApp === 'exchange' ? (
+          <ExchangePage />
+        ) : activeApp === 'layaway' ? (
+          <LayawayPage />
         ) : activeApp === 'supplier-returns' ? (
           <SupplierReturnsPage />
         ) : activeApp === 'products' ? (
