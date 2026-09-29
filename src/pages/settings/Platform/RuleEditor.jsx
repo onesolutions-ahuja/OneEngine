@@ -252,6 +252,9 @@ export default function RuleEditor({
     );
   }
 
+  const selectedObject = availableObjects.find((object) => String(object?.id || object?.object_id) === String(form.object_id));
+  const selectedObjectApi = selectedObject?.api_name || selectedObject?.object_key || selectedObject?.key || selectedObject?.label || "Object";
+
   return (
     <div className="platform-rule-editor">
       <div className="platform-rule-header">
@@ -504,6 +507,8 @@ export default function RuleEditor({
                                     ...item,
                                     field: event.target.value,
                                     fieldId: selectedField?.id || selectedField?.field_id || null,
+                                    fieldObjectId: form.object_id || null,
+                                    fieldPath: selectedField ? `${selectedObjectApi}.${fieldKey(selectedField)}` : null,
                                   }
                                 : item
                             );
@@ -523,7 +528,7 @@ export default function RuleEditor({
                                 key={key}
                                 value={key}
                               >
-                                {fieldLabel(
+                                {selectedObjectApi}.{key} — {fieldLabel(
                                   field
                                 )}
                               </option>
