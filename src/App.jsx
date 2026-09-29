@@ -257,7 +257,6 @@ function LockScreen({ onUnlock, onSignOut }) {
   const now = useClock()
   const sessionMode = hasSession()
   const storedUser = getStoredUser()
-  const canManagePlatform = desktopPermissions.includes('platform.manage')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
