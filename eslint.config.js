@@ -8,8 +8,9 @@ export default [
       globals: {
         window: 'readonly', document: 'readonly', navigator: 'readonly',
         localStorage: 'readonly', sessionStorage: 'readonly',
-        URL: 'readonly', Image: 'readonly', BroadcastChannel: 'readonly',
-        AbortSignal: 'readonly', fetch: 'readonly', console: 'readonly',
+        URL: 'readonly', URLSearchParams: 'readonly', Image: 'readonly', BroadcastChannel: 'readonly',
+        AbortSignal: 'readonly', AbortController: 'readonly', fetch: 'readonly', console: 'readonly',
+        atob: 'readonly', btoa: 'readonly', crypto: 'readonly', indexedDB: 'readonly',
         setTimeout: 'readonly', clearTimeout: 'readonly',
         setInterval: 'readonly', clearInterval: 'readonly',
         structuredClone: 'readonly', FormData: 'readonly', FileReader: 'readonly',
