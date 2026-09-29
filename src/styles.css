@@ -5539,3 +5539,14 @@ button:focus-visible {
 .dock-jarves-slot .jarvis-orb-host {
   left: calc(50% + 25px);
 }
+
+
+/* Keep dock clickable above Till workspace. */
+.dock-zone {
+  z-index: 40;
+}
+
+.dock {
+  position: relative;
+  z-index: 41;
+}
