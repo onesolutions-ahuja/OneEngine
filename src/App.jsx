@@ -2538,19 +2538,17 @@ export default function App() {
   // an explicit workstation lock. PIN is only required after the user chooses
   // Lock during the current session.
   const [locked, setLocked] = useState(() => !hasSession())
-  const [sessionContextReady, setSessionContextReady] = useState(() => {
-    const user = getStoredUser()
-    return !hasSession() || user?.isPlatformDeveloper !== true
-  })
+  const [sessionContextReady, setSessionContextReady] = useState(() => !hasSession())
 
   const [transitioning, setTransitioning] = useState(false)
 
   useEffect(() => {
-    if (!hasSession() || getStoredUser()?.isPlatformDeveloper !== true) {
+    if (!hasSession()) {
       setSessionContextReady(true)
       return
     }
     let live = true
+    setSessionContextReady(false)
     ensureActingCompanyContext()
       .catch(() => '')
       .finally(() => { if (live) setSessionContextReady(true) })
