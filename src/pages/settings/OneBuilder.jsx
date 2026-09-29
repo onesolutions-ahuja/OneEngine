@@ -135,6 +135,8 @@ export default function OneBuilder() {
   const [selectedSavedId, setSelectedSavedId] = useState('')
   const [paletteSearch, setPaletteSearch] = useState('')
   const [selectedNodeId, setSelectedNodeId] = useState('')
+  const [mode, setMode] = useState('list')
+  const [sideTab, setSideTab] = useState('components')
   const [canvas, setCanvas] = useState({ workflow: [], approval: [], dashboard: [], report: [] })
   const [meta, setMeta] = useState({
     workflow: { name: '', objectId: '', triggerKey: '', active: false },
@@ -262,6 +264,8 @@ export default function OneBuilder() {
   }
 
   const newDefinition = () => {
+    setMode('builder')
+    setSideTab('components')
     setSelectedSavedId('')
     setSelectedNodeId('')
     setCanvas((current) => ({ ...current, [tab]: [] }))
@@ -276,6 +280,8 @@ export default function OneBuilder() {
 
   const openSaved = async (id) => {
     if (!id) return newDefinition()
+    setMode('builder')
+    setSideTab('components')
     setError('')
     try {
       if (tab === 'workflow') {
@@ -377,6 +383,9 @@ export default function OneBuilder() {
         setSaved((current) => ({ ...current, report: Array.isArray(response?.data) ? response.data : [] }))
       }
       setMessage('Saved.')
+      setMode('list')
+      setSelectedNodeId('')
+      setSideTab('components')
     } catch (err) {
       setError(err?.message || 'Unable to save')
     }
@@ -384,52 +393,191 @@ export default function OneBuilder() {
 
   const activeTab = TABS.find((item) => item.key === tab)
   const ActiveTabIcon = activeTab?.icon || LayoutDashboard
+  const listRows = saved[tab] || []
+
+  const rowTitle = (item) => item?.name || item?.label || item?.report_key || item?.api_key || 'Untitled'
+  const rowSubtitle = (item) => {
+    if (tab === 'workflow') return item?.trigger_key || 'Workflow'
+    if (tab === 'approval') return item?.active === false ? 'Inactive' : 'Active'
+    if (tab === 'dashboard') return item?.description || item?.api_key || 'Dashboard'
+    return item?.description || item?.report_key || 'Report'
+  }
 
   return (
     <div className="onebuilder">
-      <div className="onebuilder-tabs" role="tablist" aria-label="OneBuilder tools">
-        {TABS.map(({ key, label, icon: Icon }) => <button key={key} type="button" role="tab" aria-selected={tab === key} className={`onebuilder-tab ${tab === key ? 'is-active' : ''}`} onClick={() => { setTab(key); setPaletteSearch(''); setSelectedNodeId(''); setSelectedSavedId(''); setMessage(''); setError('') }}><Icon size={16}/><span>{label}</span></button>)}
-      </div>
-
-      <div className="onebuilder-definition-bar">
-        <select value={selectedSavedId} onChange={(e) => openSaved(e.target.value)}><option value="">New {activeTab?.label}</option>{(saved[tab] || []).map((item) => <option key={item.id} value={item.id}>{item.name || item.label || item.report_key || item.api_key}</option>)}</select>
-        {tab === 'report' ? <input placeholder="Report name" value={activeMeta.label || ''} onChange={(e) => patchMeta({ label: e.target.value })}/> : <input placeholder={`${activeTab?.label} name`} value={activeMeta.name || ''} onChange={(e) => patchMeta({ name: e.target.value })}/>}
-        {['workflow','approval','report'].includes(tab) ? <select value={activeMeta.objectId || ''} onChange={(e) => { patchMeta({ objectId: e.target.value }); if (tab === 'report') setSelectedSavedId('') }}><option value="">Select object</option>{objects.map((object) => <option key={object.id} value={object.id}>{object.label}</option>)}</select> : null}
-        {tab === 'workflow' ? <select value={activeMeta.triggerKey || ''} onChange={(e) => patchMeta({ triggerKey: e.target.value })}><option value="">Select trigger/event</option>{triggers.map((trigger) => <option key={trigger.key} value={trigger.key}>{trigger.kind === 'event' ? 'Event · ' : ''}{trigger.label}</option>)}</select> : null}
-        {['workflow','approval'].includes(tab) ? <label className="onebuilder-active-toggle"><input type="checkbox" checked={activeMeta.active === true} onChange={(e) => patchMeta({ active: e.target.checked })}/> Active</label> : null}
-        <button type="button" onClick={newDefinition}>New</button>
-        <button type="button" className="onebuilder-save" onClick={saveDefinition}>Save</button>
+      <div className="onebuilder-tabs onebuilder-tabs--compact" role="tablist" aria-label="OneBuilder tools">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            className={`onebuilder-tab ${tab === key ? 'is-active' : ''}`}
+            onClick={() => {
+              setTab(key)
+              setMode('list')
+              setSideTab('components')
+              setPaletteSearch('')
+              setSelectedNodeId('')
+              setSelectedSavedId('')
+              setMessage('')
+              setError('')
+            }}
+          >
+            <Icon size={14}/>
+            <span>{label}</span>
+          </button>
+        ))}
       </div>
 
       {error ? <div className="onebuilder-error">{error}</div> : null}
-      {tab === 'approval' ? (
-        <div className="onebuilder-approval-options">
-          {[
-            ['lockRecord','Lock record while pending'],
-            ['allowReassign','Allow reassignment'],
-            ['requireCommentOnReject','Require rejection comment'],
-          ].map(([key, label]) => <label key={key}><input type="checkbox" checked={activeMeta.config?.[key] !== false} onChange={(e) => patchMeta({ config: { ...(activeMeta.config || {}), [key]: e.target.checked } })}/> {label}</label>)}
-        </div>
-      ) : null}
-      <div className="onebuilder-workspace onebuilder-workspace--functional">
-        <main className="onebuilder-canvas-card" onDragOver={(event) => event.preventDefault()} onDrop={drop}>
-          <div className="onebuilder-canvas-header"><div><strong>{activeTab?.label}</strong><span>{tab === 'workflow' ? 'Registered actions + events' : tab === 'report' ? 'Platform report metadata' : 'Canvas'}</span></div><button type="button" className="onebuilder-clear" disabled={!items.length} onClick={() => setCanvas((current) => ({ ...current, [tab]: [] }))}>Clear</button></div>
-          <div className="onebuilder-canvas">
-            {!items.length ? <div className="onebuilder-empty"><ActiveTabIcon size={34}/><strong>Start building</strong><span>Drag components from the right panel or click one to add it.</span></div> : <div className="onebuilder-canvas-stack">{items.map((item, index) => <BuilderNode key={item.id} item={item} index={index} selected={item.id === selectedNodeId} onSelect={() => setSelectedNodeId(item.id)} onRemove={() => removeNode(item.id)}/>)}</div>}
+
+      {mode === 'list' ? (
+        <section className="onebuilder-list-view">
+          <header className="onebuilder-list-header">
+            <div>
+              <strong>{activeTab?.label}</strong>
+              <span>{listRows.length} existing</span>
+            </div>
+            <button type="button" className="onebuilder-list-add" onClick={newDefinition} title={`New ${activeTab?.label}`} aria-label={`New ${activeTab?.label}`}>
+              <Plus size={15}/>
+            </button>
+          </header>
+
+          <div className="onebuilder-list-body">
+            {loading ? <div className="onebuilder-list-empty">Loading…</div> : null}
+            {!loading && listRows.length ? listRows.map((item) => (
+              <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
+                <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
+                <span className="onebuilder-list-row-copy">
+                  <strong>{rowTitle(item)}</strong>
+                  <small>{rowSubtitle(item)}</small>
+                </span>
+                <span className="onebuilder-list-row-state">{item.active === false ? 'Inactive' : ''}</span>
+                <span className="onebuilder-list-row-chevron">›</span>
+              </button>
+            )) : null}
+            {!loading && !listRows.length ? (
+              <div className="onebuilder-list-empty">
+                <ActiveTabIcon size={28}/>
+                <strong>No {activeTab?.label?.toLowerCase()} configured</strong>
+                <span>Use + to create the first one.</span>
+              </div>
+            ) : null}
           </div>
-        </main>
+        </section>
+      ) : (
+        <>
+          <div className="onebuilder-definition-bar onebuilder-definition-bar--builder">
+            <button type="button" className="onebuilder-cancel" onClick={() => { setMode('list'); setSelectedNodeId(''); setSideTab('components'); setError('') }}>Cancel</button>
+            {tab === 'report'
+              ? <input placeholder="Report name" value={activeMeta.label || ''} onChange={(e) => patchMeta({ label: e.target.value })}/>
+              : <input placeholder={`${activeTab?.label} name`} value={activeMeta.name || ''} onChange={(e) => patchMeta({ name: e.target.value })}/>}
+            {['workflow','approval','report'].includes(tab) ? (
+              <select value={activeMeta.objectId || ''} onChange={(e) => { patchMeta({ objectId: e.target.value }); if (tab === 'report') setSelectedSavedId('') }}>
+                <option value="">Select object</option>
+                {objects.map((object) => <option key={object.id} value={object.id}>{object.label}</option>)}
+              </select>
+            ) : null}
+            {tab === 'workflow' ? (
+              <select value={activeMeta.triggerKey || ''} onChange={(e) => patchMeta({ triggerKey: e.target.value })}>
+                <option value="">Select trigger/event</option>
+                {triggers.map((trigger) => <option key={trigger.key} value={trigger.key}>{trigger.kind === 'event' ? 'Event · ' : ''}{trigger.label}</option>)}
+              </select>
+            ) : null}
+            {['workflow','approval'].includes(tab) ? (
+              <label className="onebuilder-active-toggle"><input type="checkbox" checked={activeMeta.active === true} onChange={(e) => patchMeta({ active: e.target.checked })}/> Active</label>
+            ) : null}
+            <span className="onebuilder-definition-spacer"/>
+            <button type="button" className="onebuilder-save" onClick={saveDefinition}>Save</button>
+          </div>
 
-        <aside className="onebuilder-components">
-          <div className="onebuilder-components-header"><strong>Components</strong><span>{loading ? 'Loading registry…' : `${palette.length} available`}</span></div>
-          <label className="onebuilder-component-search"><Search size={15}/><input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder="Search components"/></label>
-          <div className="onebuilder-component-list">{palette.map((component) => { const Icon = component.icon || LayoutDashboard; return <button type="button" draggable className="onebuilder-component" key={component.key} onDragStart={(event) => dragStart(event, component)} onClick={() => addComponent(component)}><span className="onebuilder-component-icon"><Icon size={15}/></span><span><b>{component.label}</b><small>{component.category}</small></span><Plus size={14}/></button> })}</div>
-        </aside>
+          {tab === 'approval' ? (
+            <div className="onebuilder-approval-options">
+              {[
+                ['lockRecord','Lock record while pending'],
+                ['allowReassign','Allow reassignment'],
+                ['requireCommentOnReject','Require rejection comment'],
+              ].map(([key, label]) => <label key={key}><input type="checkbox" checked={activeMeta.config?.[key] !== false} onChange={(e) => patchMeta({ config: { ...(activeMeta.config || {}), [key]: e.target.checked } })}/> {label}</label>)}
+            </div>
+          ) : null}
 
-        <aside className="onebuilder-properties">
-          <div className="onebuilder-components-header"><strong>Properties</strong><span>{selectedNode ? selectedNode.label : 'No selection'}</span></div>
-          <GenericProperties item={selectedNode} fields={fields} actionRegistry={actionRegistry} roles={roles} onChange={patchNode}/>
-        </aside>
-      </div>
+          <div className="onebuilder-workspace onebuilder-workspace--compact-inspector">
+            <main className="onebuilder-canvas-card" onDragOver={(event) => event.preventDefault()} onDrop={drop}>
+              <div className="onebuilder-canvas-header">
+                <div><strong>{activeTab?.label}</strong><span>{tab === 'workflow' ? 'Registered actions + events' : tab === 'report' ? 'Platform report metadata' : 'Canvas'}</span></div>
+                <button type="button" className="onebuilder-clear" disabled={!items.length} onClick={() => setCanvas((current) => ({ ...current, [tab]: [] }))}>Clear</button>
+              </div>
+              <div className="onebuilder-canvas">
+                {!items.length ? (
+                  <div className="onebuilder-empty">
+                    <ActiveTabIcon size={30}/>
+                    <strong>Start building</strong>
+                    <span>Add a component from the inspector.</span>
+                  </div>
+                ) : (
+                  <div className="onebuilder-canvas-stack">
+                    {items.map((item, index) => (
+                      <BuilderNode
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        selected={item.id === selectedNodeId}
+                        onSelect={() => { setSelectedNodeId(item.id); setSideTab('properties') }}
+                        onRemove={() => removeNode(item.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </main>
+
+            <aside className="onebuilder-inspector">
+              <div className="onebuilder-inspector-tabs">
+                <button type="button" className={sideTab === 'components' ? 'is-active' : ''} onClick={() => setSideTab('components')}>Components</button>
+                <button type="button" className={sideTab === 'properties' ? 'is-active' : ''} onClick={() => setSideTab('properties')}>Properties</button>
+              </div>
+
+              {sideTab === 'components' ? (
+                <div className="onebuilder-inspector-panel">
+                  <label className="onebuilder-component-search onebuilder-component-search--compact">
+                    <Search size={13}/>
+                    <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder="Search"/>
+                  </label>
+                  <div className="onebuilder-component-list onebuilder-component-list--compact">
+                    {palette.map((component) => {
+                      const Icon = component.icon || LayoutDashboard
+                      return (
+                        <button
+                          type="button"
+                          draggable
+                          className="onebuilder-component onebuilder-component--compact"
+                          key={component.key}
+                          onDragStart={(event) => dragStart(event, component)}
+                          onClick={() => addComponent(component)}
+                        >
+                          <span className="onebuilder-component-icon onebuilder-component-icon--compact"><Icon size={14}/></span>
+                          <span><b>{component.label}</b><small>{component.category}</small></span>
+                          <Plus size={12}/>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="onebuilder-inspector-panel onebuilder-inspector-properties">
+                  <div className="onebuilder-inspector-title">
+                    <strong>Properties</strong>
+                    <span>{selectedNode ? selectedNode.label : 'No selection'}</span>
+                  </div>
+                  <GenericProperties item={selectedNode} fields={fields} actionRegistry={actionRegistry} roles={roles} onChange={patchNode}/>
+                </div>
+              )}
+            </aside>
+          </div>
+        </>
+      )}
+
       {message ? <div className="onebuilder-message">{message}</div> : null}
     </div>
   )
