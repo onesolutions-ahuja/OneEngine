@@ -468,14 +468,19 @@ function settingsNavSlug(value) {
 function readSettingsNavCache() {
   try {
     const value = JSON.parse(sessionStorage.getItem(SETTINGS_NAV_CACHE_KEY) || 'null')
-    return Array.isArray(value) ? value : []
+    if (Array.isArray(value)) return value
+    if (value && typeof value === 'object' && Array.isArray(value.sections)) return value
+    return []
   } catch {
     return []
   }
 }
 
 function writeSettingsNavCache(value) {
-  try { sessionStorage.setItem(SETTINGS_NAV_CACHE_KEY, JSON.stringify(Array.isArray(value) ? value : [])) } catch {}
+  try {
+    const valid = Array.isArray(value) || (value && typeof value === 'object' && Array.isArray(value.sections))
+    sessionStorage.setItem(SETTINGS_NAV_CACHE_KEY, JSON.stringify(valid ? value : []))
+  } catch {}
 }
 
 const DEVELOPER_SETTINGS_KEYS = new Set([
@@ -506,6 +511,27 @@ function settingsVisual(label, explicitKey = '') {
 }
 
 function buildSettingsGroupsFromCatalog(catalog) {
+  if (catalog && !Array.isArray(catalog) && Array.isArray(catalog.sections)) {
+    const groupDefinitions = Array.isArray(catalog.groups) ? catalog.groups : []
+    const groupLabels = new Map(groupDefinitions.map((group) => [String(group.key), String(group.label || group.key)]))
+    const grouped = new Map()
+
+    for (const section of catalog.sections) {
+      if (!section?.key || !section?.label) continue
+      const groupKey = String(section.groupKey || 'settings')
+      const groupLabel = groupLabels.get(groupKey) || groupKey
+      if (!grouped.has(groupLabel)) grouped.set(groupLabel, [])
+      grouped.get(groupLabel).push({
+        ...settingsVisual(section.label, section.key),
+        label: section.label,
+        action: section.action || null,
+        description: section.description || '',
+      })
+    }
+
+    return Array.from(grouped.values())
+  }
+
   if (!Array.isArray(catalog) || catalog.length === 0) return []
   const grouped = new Map()
   const seen = new Set()
@@ -739,14 +765,25 @@ function SettingsPage({ onOpenProfile }) {
 
       try {
         const rows = await loadSettingsCatalog()
-        if (Array.isArray(rows) && rows.length) {
+        const hasEntries = Array.isArray(rows)
+          ? rows.length > 0
+          : Boolean(rows && typeof rows === 'object' && Array.isArray(rows.sections) && rows.sections.length > 0)
+        if (hasEntries) {
           writeSettingsNavCache(rows)
           setSettingsCatalog(rows)
-        } else if (!readSettingsNavCache().length) {
-          setSettingsCatalogError('Settings catalogue is unavailable.')
+        } else {
+          const cached = readSettingsNavCache()
+          const hasCachedEntries = Array.isArray(cached)
+            ? cached.length > 0
+            : Boolean(cached && typeof cached === 'object' && Array.isArray(cached.sections) && cached.sections.length > 0)
+          if (!hasCachedEntries) setSettingsCatalogError('Settings catalogue is unavailable.')
         }
       } catch (catalogError) {
-        if (!readSettingsNavCache().length) {
+        const cached = readSettingsNavCache()
+        const hasCachedEntries = Array.isArray(cached)
+          ? cached.length > 0
+          : Boolean(cached && typeof cached === 'object' && Array.isArray(cached.sections) && cached.sections.length > 0)
+        if (!hasCachedEntries) {
           setSettingsCatalogError(catalogError?.message || 'Unable to load Settings catalogue.')
         }
       } finally {
