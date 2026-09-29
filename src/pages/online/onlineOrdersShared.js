@@ -1,18 +1,8 @@
 /*
  * Shared constants + helpers for the Online Orders UI (Uber Eats / Deliveroo).
  *
- * Used by BOTH the full admin page (OnlineOrdersAdmin) and the restricted
- * processing view (OnlineOrdersPrep) so the lifecycle matrix, busy feedback
- * and platform naming can never drift apart.
- *
- * UI action matrix - backend lifecycle validation remains unchanged:
- *   RECEIVED  -> ACCEPTED (accept; internal workflow enters PREPARING) / REJECTED (reject)
- *   ACCEPTED  -> PREPARING is internal-only (no "Preparing" button)
- *   PREPARING -> READY (ready)
- *   READY     -> COMPLETED (complete)
- *   any active status -> CANCELLED (cancel)
- * PREPARING is a STATUS: it never offers a "Preparing" action of its own.
- * Terminal orders (COMPLETED / REJECTED / CANCELLED) offer nothing.
+ * Used by the Online Orders views for provider-facing status presentation.
+ * Lifecycle actions themselves come from Platform button metadata.
  */
 
 export const ACTIVE_STATUSES = ["RECEIVED", "ACCEPTED", "PREPARING", "READY"];
@@ -29,42 +19,9 @@ export const STATUS_BADGES = {
   CANCELLED: "bg-red-50 text-red-700",
 };
 
-/*
- * Every lifecycle action. `label` is the button text at rest, `busy` is the
- * text shown the instant the button is clicked, so a click is always visibly
- * acknowledged while the platform call is in flight.
- */
-export const ORDER_ACTIONS = {
-  accept: { label: "Accept Order", busy: "Accepting...", className: "bg-indigo-600 text-white hover:bg-indigo-700" },
-  reject: { label: "Reject", busy: "Rejecting...", className: "bg-red-50 text-red-600 hover:bg-red-100" },
-  ready: { label: "Mark Ready", busy: "Marking ready...", className: "bg-emerald-600 text-white hover:bg-emerald-700" },
-  complete: { label: "Complete Order", busy: "Completing...", className: "bg-blue-600 text-white hover:bg-blue-700" },
-  cancel: { label: "Cancel", busy: "Cancelling...", className: "bg-slate-100 text-slate-600 hover:bg-slate-200" },
-};
-
-/*
- * Which actions each status offers on the main admin page.
- * ACCEPTED orders are internally PREPARING (auto-advanced on accept); the
- * "Preparing" button is deliberately gone from the kitchen workflow.
- */
-export const STATUS_ACTIONS = {
-  RECEIVED: ["accept", "reject", "cancel"],
-  ACCEPTED: ["ready", "cancel"],
-  PREPARING: ["ready", "cancel"],
-  READY: ["complete", "cancel"],
-};
-
-/*
- * Restricted processing view: only ACCEPTED / PREPARING / READY orders, and
- * only the actions of that workflow (no accept/reject of new orders, and
- * Complete is offered from READY only - it stays permission-gated separately).
- * ACCEPTED shows "Mark Ready" directly - no "Preparing" button.
- */
-export const PREP_STATUS_ACTIONS = {
-  ACCEPTED: ["ready", "cancel"],
-  PREPARING: ["ready", "cancel"],
-  READY: ["complete", "cancel"],
-};
+/* Lifecycle action visibility/labels are intentionally NOT defined here.
+ * Smart Theme reads package-owned Platform button metadata instead. Provider
+ * names/status presentation remain protocol-facing display helpers only. */
 
 export function platformLabel(platform) {
   return platform === "uber" ? "Uber Eats" : platform === "deliveroo" ? "Deliveroo" : platform || "-";
