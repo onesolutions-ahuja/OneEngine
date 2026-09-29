@@ -9,6 +9,7 @@ import LayoutEditor from './Platform/LayoutEditor.jsx'
 import RuleEditor from './Platform/RuleEditor.jsx'
 import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 import ActionsAdmin from './Platform/ActionsAdmin.jsx'
+import ObjectActionEditor from './Platform/ObjectActionEditor.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import ObjectReportsAdmin from './Platform/ObjectReportsAdmin.jsx'
 import PermissionSetsAdmin from './Platform/PermissionSetsAdmin.jsx'
@@ -538,6 +539,14 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     onCancel={closeEditor}
                     onSaved={async () => { await refreshConfiguration(); closeEditor() }}
                   />
+                ) : editor?.kind === 'object-action' ? (
+                  <ObjectActionEditor
+                    object={{ ...selected, id: selectedId }}
+                    action={editor.item || null}
+                    onError={(value) => setError(value || '')}
+                    onCancel={closeEditor}
+                    onSaved={async () => { await refreshConfiguration(); closeEditor() }}
+                  />
                 ) : activeTab === 'details' ? (
                   <div className="objects-detail-card">
                     <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
@@ -637,13 +646,17 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
 
                 {activeTab === 'actions' ? (
                   <div className="objects-config-list objects-config-list--stacked">
-                    <ObjectDataList title="Object Actions & Bindings" rows={actionRows}
-                      primary={(row) => row.label || row.name || row.action_key || row.event_key || row.rule_key || 'Action'}
-                      secondary={(row) => row.description || row.handler_key || row.event_key || row.trigger_key || row.action_key || ''}
-                      meta={(row) => row._kind || ruleActionType(row) || 'action'} />
-                    <div className="objects-config-subsection">
-                      <ActionsAdmin onError={(value) => setError(value || '')} />
-                    </div>
+                    <ObjectDataList title="Object Actions" rows={objectData.registeredActions}
+                      primary={(row) => row.label || row.action_key || 'Action'}
+                      secondary={(row) => row.description || row.handler_key || row.action_key || ''}
+                      meta={(row) => row.handler_key || 'action'}
+                      actionLabel="Action"
+                      onAdd={() => setEditor({ kind: 'object-action', item: null })}
+                      onRowClick={(row) => setEditor({ kind: 'object-action', item: row })} />
+                    <ObjectDataList title="Action Bindings" rows={objectData.actionBindings}
+                      primary={(row) => row.event_key || row.action_key || 'Binding'}
+                      secondary={(row) => row.action_key || ''}
+                      meta={(row) => `Order ${row.execution_order ?? 100}`} />
                   </div>
                 ) : null}
 
