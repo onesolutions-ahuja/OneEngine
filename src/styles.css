@@ -9009,3 +9009,43 @@ button.git-control-tile { cursor: pointer; }
   .workflow-runs-scroll { max-height: 260px; }
   .workflow-run-metrics { grid-template-columns: 1fr 1fr; }
 }
+
+/* Keep all login/unlock actions reachable on short-height and landscape screens. */
+@media (max-height: 680px) {
+  .lock-screen {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .lock-content {
+    min-height: max(100dvh, 560px);
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
+  .lock-date {
+    font-size: 16px;
+  }
+
+  .lock-time {
+    font-size: clamp(56px, 14vh, 92px);
+  }
+
+  .login-glass-card {
+    margin-top: 16px;
+    margin-bottom: 20px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .lock-content {
+    min-height: 560px;
+    padding-top: 12px;
+  }
+
+  .lock-time {
+    font-size: 58px;
+  }
+}
