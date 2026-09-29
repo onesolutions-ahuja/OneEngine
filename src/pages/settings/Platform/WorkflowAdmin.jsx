@@ -764,7 +764,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             </select>
           </div>
           <div className="flex gap-2">
-            <button type="button" className="rounded border border-slate-200 px-4 py-2 text-sm text-slate-600" onClick={() => setShowBuilder(false)}>Cancel</button>
+            <button type="button" className="rounded border border-slate-200 px-4 py-2 text-sm text-slate-600" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>Cancel</button>
             <button type="button" className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={saveWorkflow}>Save workflow</button>
           </div>
         </div>
