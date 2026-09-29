@@ -8669,3 +8669,110 @@ button.git-control-tile { cursor: pointer; }
     grid-template-columns: 1fr 1fr;
   }
 }
+
+
+/* Compact company logo and delivery-settings controls */
+.settings-inline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-file-button,
+.settings-secondary-button,
+.delivery-settings-actions .module-primary-button {
+  min-height: 32px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-file-button,
+.settings-secondary-button {
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.92);
+  color: #1d1d1f;
+}
+
+.settings-file-button:hover,
+.settings-secondary-button:hover {
+  background: #f4f5f7;
+}
+
+.delivery-settings {
+  width: 100%;
+}
+
+.delivery-settings-state {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  color: rgba(31,42,58,.52);
+  font-size: 12px;
+}
+
+.delivery-settings-actions {
+  min-height: 54px;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-alert {
+  margin: 10px 16px 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.settings-alert--error {
+  border: 1px solid rgba(255,59,48,.22);
+  background: rgba(255,59,48,.07);
+  color: #b42318;
+}
+
+.settings-alert--success {
+  border: 1px solid rgba(52,199,89,.22);
+  background: rgba(52,199,89,.07);
+  color: #217a35;
+}
+
+.delivery-settings .settings-row input {
+  width: min(320px, 42vw);
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+}
+
+.delivery-settings .settings-row input:focus {
+  border-color: rgba(10,132,255,.55);
+  box-shadow: 0 0 0 2px rgba(10,132,255,.10);
+}
+
+@media (max-width: 780px) {
+  .settings-inline-actions,
+  .delivery-settings-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .delivery-settings .settings-row input {
+    width: 100%;
+  }
+}
