@@ -200,11 +200,19 @@ export function getStoredUser() {
 
 export async function ensureActingCompanyContext() {
   const user = getStoredUser()
-  if (!user?.isPlatformDeveloper) return user?.companyId || getActingCompanyId() || ''
+  if (user?.companyId) return user.companyId
 
   const rememberedCompanyId = getActingCompanyId()
-  setActingCompanyId('')
   try {
+    const permissionResponse = await apiRequest('/api/auth/me/permissions')
+    const permissionCodes = Array.isArray(permissionResponse?.data?.permissions)
+      ? permissionResponse.data.permissions
+      : []
+    const canActForCompany = permissionCodes.includes('platform.manage') || user?.isPlatformDeveloper === true
+
+    if (!canActForCompany) return rememberedCompanyId || ''
+
+    setActingCompanyId('')
     const companiesResponse = await apiRequest('/api/platform/developer/companies')
     const companies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
     const companyId = companies.some((company) => String(company.id) === String(rememberedCompanyId))
