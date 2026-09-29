@@ -32,7 +32,7 @@ function appIcon(item){
   return `${import.meta.env.BASE_URL||'/'}icons/apps/${String(key).trim().toLowerCase().replaceAll('_','-')}.svg`
 }
 
-export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],onPackagesChange,canManagePackages=false}){
+export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],initialSelectedPackageKey='',onPackagesChange,canManagePackages=false}){
   const [packages,setPackages]=useState(()=>Array.isArray(initialPackages)?initialPackages:[])
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
@@ -40,7 +40,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   const [query,setQuery]=useState('')
   const [view,setView]=useState('All')
   const [category,setCategory]=useState('All')
-  const [selectedKey,setSelectedKey]=useState('')
+  const [selectedKey,setSelectedKey]=useState(()=>String(initialSelectedPackageKey||''))
   const [workingKey,setWorkingKey]=useState('')
   const canManage=canManagePackages
 
@@ -57,6 +57,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   }
   useEffect(()=>{void load()},[])
   useEffect(()=>{if(Array.isArray(initialPackages)&&initialPackages.length)setPackages(initialPackages)},[initialPackages])
+  useEffect(()=>{setSelectedKey(String(initialSelectedPackageKey||''))},[initialSelectedPackageKey])
 
   const hasPending=packages.some(item=>['QUEUED','UPDATING'].includes(String(item.company_installation?.update_status||'').toUpperCase()))
   useEffect(()=>{
