@@ -82,15 +82,15 @@ function makeColumns(fields, listView = null) {
   }))
 }
 
-export default function WorkspacePage() {
+export default function WorkspacePage({ initialObjectKey = '', initialRecordId = '', onRouteChange = null }) {
   const [objects, setObjects] = useState([])
   const [query, setQuery] = useState('')
-  const [selectedKey, setSelectedKey] = useState('')
+  const [selectedKey, setSelectedKey] = useState(initialObjectKey || '')
   const [fields, setFields] = useState([])
   const [rows, setRows] = useState([])
   const [permissions, setPermissions] = useState(null)
   const [runtimeMeta, setRuntimeMeta] = useState({ listViews: [], defaultListView: null, recordTypes: [], relationships: [], layouts: [], buttons: [] })
-  const [selectedId, setSelectedId] = useState('')
+  const [selectedId, setSelectedId] = useState(initialRecordId || '')
   const [detail, setDetail] = useState(null)
   const [loadingObjects, setLoadingObjects] = useState(true)
   const [loadingRows, setLoadingRows] = useState(false)
@@ -111,12 +111,25 @@ export default function WorkspacePage() {
         const data = response?.data?.objects || response?.data || []
         const list = Array.isArray(data) ? data.filter((item) => item?.active !== false && item?.source_table) : []
         setObjects(list)
-        if (!selectedKey && list.length) setSelectedKey(objectKey(list[0]))
+        if (!selectedKey && !initialObjectKey && list.length) setSelectedKey(objectKey(list[0]))
       })
       .catch((err) => live && setError(err?.message || 'Unable to load Workspace objects'))
       .finally(() => live && setLoadingObjects(false))
     return () => { live = false }
   }, [])
+
+  useEffect(() => {
+    if (initialObjectKey && initialObjectKey !== selectedKey) setSelectedKey(initialObjectKey)
+  }, [initialObjectKey])
+
+  useEffect(() => {
+    if (initialRecordId && initialRecordId !== selectedId) setSelectedId(initialRecordId)
+  }, [initialRecordId])
+
+  useEffect(() => {
+    if (!selectedKey) return
+    onRouteChange?.(selectedKey, selectedId || '')
+  }, [selectedKey, selectedId])
 
   const selectedObject = objects.find((item) => objectKey(item) === selectedKey) || null
 
@@ -153,7 +166,11 @@ export default function WorkspacePage() {
       })
       setPermissions(permissionRes?.data || null)
       const first = nextRows[0]?.id || ''
-      setSelectedId((current) => nextRows.some((row) => String(row.id) === String(current)) ? current : first)
+      setSelectedId((current) => {
+        if (current && nextRows.some((row) => String(row.id) === String(current))) return current
+        if (initialRecordId && nextRows.some((row) => String(row.id) === String(initialRecordId))) return initialRecordId
+        return first
+      })
     } catch (err) {
       setFields([])
       setRows([])
@@ -411,7 +428,7 @@ export default function WorkspacePage() {
           {loadingObjects ? <div className="workspace-state">Loading…</div> : filteredObjects.map((object) => {
             const key = objectKey(object)
             return (
-              <button key={object.id || key} type="button" className={key === selectedKey ? 'is-active' : ''} onClick={() => setSelectedKey(key)}>
+              <button key={object.id || key} type="button" className={key === selectedKey ? 'is-active' : ''} onClick={() => { setSelectedKey(key); setSelectedId(''); setDetailTab('details') }}>
                 <span className="workspace-object-icon"><Box size={14}/></span>
                 <span><strong>{objectLabel(object)}</strong><small>{key}</small></span>
                 <ChevronRight size={13}/>
@@ -439,7 +456,7 @@ export default function WorkspacePage() {
             objectLabel={objectLabel(selectedObject)}
             onDataChanged={() => loadObject(selectedObject)}
             selectedRowId={selectedId}
-            onRowSelect={(row) => setSelectedId(row.id)}
+            onRowSelect={(row) => { setSelectedId(row.id); setDetailTab('details') }}
           />
         ) : <div className="workspace-state">Select an object.</div>}
       </main>
