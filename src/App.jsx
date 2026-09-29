@@ -8,6 +8,7 @@ import RecordListView from './components/RecordListView'
 import OneBuilder from './pages/settings/OneBuilder'
 import ObjectsSettingsPane from './pages/settings/ObjectsSettingsPane'
 import TillPage from './pages/till/TillPage'
+import WorkspacePage from './pages/workspace/WorkspacePage'
 import {
   Bluetooth,
   LockKeyhole,
@@ -50,7 +51,7 @@ import {
 } from 'lucide-react'
 
 const dockItems = [
-  { id: 'finder', label: 'Finder', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
+  { id: 'workspace', label: 'Workspace', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
   { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
   { id: 'launchpad', label: 'Launchpad', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
@@ -337,6 +338,7 @@ function readRoute() {
   const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
   if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'general' }
   if (parts[0] === 'till') return { app: 'till', section: null }
+  if (parts[0] === 'workspace') return { app: 'workspace', section: null }
   return { app: 'home', section: null }
 }
 
@@ -346,7 +348,9 @@ function setRoute(app, section = null) {
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
     : app === 'till'
       ? `${base}/till`
-      : `${base}/`
+      : app === 'workspace'
+        ? `${base}/workspace`
+        : `${base}/`
   if (window.location.pathname !== next) window.history.pushState(null, '', next)
 }
 
@@ -1054,6 +1058,11 @@ function Desktop({ onLock }) {
   )
 
   const openItem = (id) => {
+    if (id === 'workspace') {
+      setRoute('workspace')
+      setActiveApp('workspace')
+      return
+    }
     if (id === 'settings') {
       setRoute('settings', readRoute().section || 'general')
       setActiveApp('settings')
@@ -1145,6 +1154,8 @@ function Desktop({ onLock }) {
         <SettingsPage />
       ) : activeApp === 'till' ? (
         <TillPage onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }} />
+      ) : activeApp === 'workspace' ? (
+        <WorkspacePage />
       ) : (
         <section className="hello-stage">
           <p className="eyebrow">SMART THEME</p>
