@@ -35,13 +35,12 @@ const STATE_COPY = Object.freeze({
   [ORB_STATES.RESPONSE]: "Here you go",
 });
 
-function JarvisVideo({ src = "https://onepos.onrender.com/assets/jarvis/jarves-transparent.webm" }) {
-  // The source asset already contains the complete JARVES animation. Rendering
-  // it as native video avoids a permanent WebGL/Three.js runtime for a 50px
-  // launcher and preserves the supplied video without synthetic deformation.
+function JarvisVideo() {
+  // Use the original supplied JARVES animation. Keep a public repository source
+  // as a second source so the dock visual is not dependent on Render serving
+  // the media asset at the exact moment the shell loads.
   return (
     <video
-      src={src}
       className="jarvis-orb-video"
       data-legacy-layer="jarvis-orb-core"
       aria-hidden="true"
@@ -49,8 +48,11 @@ function JarvisVideo({ src = "https://onepos.onrender.com/assets/jarvis/jarves-t
       loop
       muted
       playsInline
-      preload="metadata"
-    />
+      preload="auto"
+    >
+      <source src="https://onepos.onrender.com/assets/jarvis/jarves-transparent.webm" type="video/webm" />
+      <source src="https://raw.githubusercontent.com/onesolutions-ahuja/onePOS/main/public/assets/jarvis/jarves-transparent.webm" type="video/webm" />
+    </video>
   );
 }
 
