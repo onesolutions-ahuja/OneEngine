@@ -71,6 +71,24 @@ export async function enqueueOfflineCashSale(payload, terminalNumber = 'T') {
   return entry
 }
 
+export async function removeOfflineCashSale(id) {
+  if (!id) return
+  await transaction('readwrite', (store) => store.delete(id))
+}
+
+export async function failOfflineCashSale(id, message = 'Server rejected sale') {
+  if (!id) return
+  const rows = await offlineQueueEntries()
+  const current = rows.find((entry) => entry.id === id)
+  if (!current) return
+  await transaction('readwrite', (store) => store.put({
+    ...current,
+    status: 'failed',
+    attempts: Number(current.attempts || 0) + 1,
+    lastError: String(message || 'Server rejected sale'),
+  }))
+}
+
 export async function offlineQueueEntries() {
   const tenant = currentTenant()
   if (!tenant) return []
@@ -100,6 +118,28 @@ export async function syncOfflineCashSales(apiRequest) {
     }
   }
   return { synced, remaining: (await offlineQueueEntries()).length }
+}
+
+export function cacheProductModifiers(productId, rows) {
+  const tenant = currentTenant()
+  if (!tenant || !productId) return
+  try {
+    localStorage.setItem(
+      `onepos_smart_modifiers_${tenant.companyId}_${tenant.storeId}_${productId}`,
+      JSON.stringify({ savedAt: Date.now(), rows: Array.isArray(rows) ? rows : [] }),
+    )
+  } catch {}
+}
+
+export function loadProductModifiers(productId) {
+  const tenant = currentTenant()
+  if (!tenant || !productId) return null
+  try {
+    const value = JSON.parse(localStorage.getItem(`onepos_smart_modifiers_${tenant.companyId}_${tenant.storeId}_${productId}`) || 'null')
+    return Array.isArray(value?.rows) ? value.rows : null
+  } catch {
+    return null
+  }
 }
 
 export function cacheTillBootstrap(value) {
