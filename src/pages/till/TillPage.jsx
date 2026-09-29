@@ -6,8 +6,9 @@ import {
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import {
-  cacheTillBootstrap, enqueueOfflineCashSale, loadTillBootstrapCache,
-  offlineQueueEntries, syncOfflineCashSales,
+  cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
+  loadProductModifiers, loadTillBootstrapCache, offlineQueueEntries, removeOfflineCashSale,
+  syncOfflineCashSales,
 } from '../../services/tillOffline'
 
 const ICONS = {
@@ -106,6 +107,9 @@ export default function TillPage({ onOpenSettings }) {
   const [pendingPayment, setPendingPayment] = useState(null)
   const [receiptQr, setReceiptQr] = useState(null)
   const [priceTarget, setPriceTarget] = useState(null)
+  const [modifierPicker, setModifierPicker] = useState(null)
+  const [negativeStockNotice, setNegativeStockNotice] = useState(null)
+  const [pendingSaleRequest, setPendingSaleRequest] = useState(null)
   const [offlineCount, setOfflineCount] = useState(0)
   const [online, setOnline] = useState(() => navigator.onLine !== false)
 
@@ -243,16 +247,55 @@ export default function TillPage({ onOpenSettings }) {
     return () => window.clearInterval(heartbeat)
   }, [basket, miscLines, subtotal, vat, total, discountAmount, discount.type, discount.value, selectedCustomer, settings?.store?.name])
 
-  const addProduct = (product) => {
+  const allowNegativeBilling = settings?.inventory?.allowNegativeInventoryBilling === true
+
+  const addLine = (product, modifiers = []) => {
     setError('')
     setBasket((current) => {
+      const existingQty = current.reduce((sum, item) => item.id === product.id ? sum + Number(item.quantity || 0) : sum, 0)
+      if (!allowNegativeBilling && product.trackStock !== false && existingQty >= Number(product.stock || 0)) {
+        setError(`Only ${Number(product.stock || 0)} left in stock for ${product.name}.`)
+        return current
+      }
       const found = current.find((item) => item.id === product.id)
       if (found) return current.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
-      return [...current, { ...product, quantity: 1 }]
+      return [...current, { ...product, quantity: 1, modifiers }]
     })
   }
 
-  const changeQty = (id, delta) => setBasket((current) => current.map((item) => item.id === id ? { ...item, quantity: item.quantity + delta } : item).filter((item) => item.quantity > 0))
+  const selectProduct = async (product) => {
+    let rows = []
+    try {
+      if (online) {
+        const response = await apiRequest(`/api/products/${encodeURIComponent(product.id)}/modifiers`)
+        rows = response?.success && Array.isArray(response.data) ? response.data : []
+        cacheProductModifiers(product.id, rows)
+      } else {
+        rows = loadProductModifiers(product.id) || []
+      }
+    } catch {
+      rows = loadProductModifiers(product.id) || []
+    }
+    const groups = [...new Map(rows.map((row) => [row.group_id, row])).values()].map((row) => ({
+      id: row.group_id,
+      name: row.group_name,
+      required: row.required === true,
+      maxSelections: Number(row.max_selections) || 1,
+      options: rows.filter((option) => option.group_id === row.group_id && option.id),
+    }))
+    if (groups.length) setModifierPicker({ product, groups })
+    else addLine(product)
+  }
+
+  const changeQty = (id, delta) => setBasket((current) => current.map((item) => {
+    if (item.id !== id) return item
+    const next = item.quantity + delta
+    if (delta > 0 && !allowNegativeBilling && item.trackStock !== false && next > Number(item.stock || 0)) {
+      setError(`Only ${Number(item.stock || 0)} left in stock for ${item.name}.`)
+      return item
+    }
+    return { ...item, quantity: next }
+  }).filter((item) => item.quantity > 0))
 
   const clearSale = () => {
     if (receiptQr?.saleId && settings?.receiptQr?.autoCloseOnNewSale !== false) void revokeReceiptQr(receiptQr.saleId)
@@ -276,6 +319,7 @@ export default function TillPage({ onOpenSettings }) {
         tax: 0,
         discount: lineDiscount,
         total: Math.max(0, line - lineDiscount),
+        ...(Array.isArray(item.modifiers) && item.modifiers.length ? { modifiers: item.modifiers } : {}),
         ...(item.priceOverride ? { priceOverride: item.priceOverride, priceOverrideReason: item.priceOverrideReason || null } : {}),
       }
     }),
@@ -307,11 +351,21 @@ export default function TillPage({ onOpenSettings }) {
     await generateReceiptQr(sale.id)
   }
 
-  const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, giftCardCode = '', cashReceivedOverride = null } = {}) => {
+  const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, giftCardCode = '', cashReceivedOverride = null, skipStockWarning = false } = {}) => {
     if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
     if (hasAgeRestricted && !ageVerified && !verifiedOverride) {
       setPendingPayment(paymentMethod)
       setModal('age')
+      return
+    }
+    const stockShortfalls = basket
+      .filter((item) => item.trackStock !== false)
+      .filter((item) => Number(item.stock || 0) < Number(item.quantity || 0))
+      .map((item) => ({ name: item.name, recordedStock: Number(item.stock || 0), requestedQuantity: Number(item.quantity || 0) }))
+    if (allowNegativeBilling && stockShortfalls.length && !skipStockWarning) {
+      setPendingSaleRequest({ paymentMethod, options: { verifiedOverride, payments, giftCardCode, cashReceivedOverride, skipStockWarning: true } })
+      setNegativeStockNotice(stockShortfalls)
+      setModal('negative_stock')
       return
     }
     if (!till && online) {
@@ -329,9 +383,13 @@ export default function TillPage({ onOpenSettings }) {
     setBusy(true)
     setError('')
     const payload = buildSalePayload(paymentMethod, verifiedOverride, { payments, giftCardCode })
+    let durableCashEntry = null
     try {
+      if (paymentMethod === 'cash') {
+        durableCashEntry = await enqueueOfflineCashSale(payload, till?.terminal_number || till?.terminalNumber || 'T')
+      }
       if (!online && paymentMethod === 'cash') {
-        const entry = await enqueueOfflineCashSale(payload, till?.terminal_number || till?.terminalNumber || 'T')
+        const entry = durableCashEntry
         clearSale()
         setLastSale({ id: null, receipt_number: entry.provisionalReceipt, total, offline: true })
         setMessage(`Cash sale saved offline · ${entry.provisionalReceipt} · Pending sync.`)
@@ -341,6 +399,7 @@ export default function TillPage({ onOpenSettings }) {
       const response = await apiRequest('/api/sales', { method: 'POST', body: JSON.stringify(payload) })
       if (!response?.success || !response?.sale?.id) throw new Error(response?.message || 'Sale could not be confirmed')
       const sale = response.sale
+      if (durableCashEntry) await removeOfflineCashSale(durableCashEntry.id)
       setLastSale(sale)
       clearSale()
       setMessage(paymentMethod === 'cash'
@@ -349,17 +408,15 @@ export default function TillPage({ onOpenSettings }) {
       await maybeShowReceiptQr(sale)
       await load()
     } catch (err) {
-      if (paymentMethod === 'cash' && (err instanceof TypeError || err?.status >= 500 || navigator.onLine === false)) {
-        try {
-          const entry = await enqueueOfflineCashSale(payload, till?.terminal_number || till?.terminalNumber || 'T')
-          clearSale()
-          setLastSale({ id: null, receipt_number: entry.provisionalReceipt, total, offline: true })
-          setOnline(false)
-          setMessage(`Cash sale saved offline · ${entry.provisionalReceipt} · Pending sync.`)
-          await refreshOfflineCount()
-          return
-        } catch {}
+      if (paymentMethod === 'cash' && durableCashEntry && (err instanceof TypeError || err?.status >= 500 || navigator.onLine === false)) {
+        clearSale()
+        setLastSale({ id: null, receipt_number: durableCashEntry.provisionalReceipt, total, offline: true })
+        setOnline(false)
+        setMessage(`Cash sale saved offline · ${durableCashEntry.provisionalReceipt} · Pending sync.`)
+        await refreshOfflineCount()
+        return
       }
+      if (durableCashEntry) await failOfflineCashSale(durableCashEntry.id, err?.message)
       setError(err?.message || 'Unable to complete sale')
     } finally {
       setBusy(false)
@@ -535,7 +592,7 @@ export default function TillPage({ onOpenSettings }) {
 
             <div className={`till-product-grid ${productView === 'compact' ? 'is-compact' : ''}`}>
               {loading ? <div className="till-empty">Loading catalogue…</div> : filtered.map((product) => (
-                <button key={product.id} type="button" className="till-product-card" onClick={() => addProduct(product)}>
+                <button key={product.id} type="button" className="till-product-card" onClick={() => selectProduct(product)}>
                   {productView !== 'compact' ? <div className="till-product-image">{product.imageUrl ? <img src={product.imageUrl} alt=""/> : <ShoppingBag size={24}/>}</div> : null}
                   <strong>{product.name}</strong><span>{money(product.price, currency)}</span>{product.trackStock ? <small>{product.stock} in stock</small> : <small>Non-stock</small>}
                 </button>
@@ -576,6 +633,8 @@ export default function TillPage({ onOpenSettings }) {
         </div>
       </div>
 
+      {modifierPicker ? <ModifierPicker product={modifierPicker.product} groups={modifierPicker.groups} onClose={() => setModifierPicker(null)} onConfirm={(modifiers) => { addLine(modifierPicker.product, modifiers); setModifierPicker(null) }}/ > : null}
+      {modal === 'negative_stock' && negativeStockNotice ? <Modal title="Stock warning" onClose={() => { setNegativeStockNotice(null); setPendingSaleRequest(null); setModal(null) }}><div className="till-form"><p>The following items exceed recorded stock. Continue only if this sale is intentional.</p>{negativeStockNotice.map((line) => <div key={line.name} className="till-stock-warning-row"><strong>{line.name}</strong><span>{line.recordedStock} recorded · {line.requestedQuantity} requested</span></div>)}<button type="button" className="till-primary" onClick={() => { const pending = pendingSaleRequest; setNegativeStockNotice(null); setPendingSaleRequest(null); setModal(null); if (pending) void completeSale(pending.paymentMethod, pending.options) }}>Continue Sale</button></div></Modal> : null}
       {modal === 'discount' ? <Modal title={meta.discount?.label || 'Discount'} onClose={() => setModal(null)}><DiscountForm value={discount} onApply={(next) => { setDiscount(next); setModal(null) }}/></Modal> : null}
       {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settings?.tax?.defaultVatRate ?? 0)} onAdd={(line) => { setMiscLines((rows) => [...rows, line]); setModal(null) }}/></Modal> : null}
       {modal === 'petty' ? <Modal title={meta.petty?.label || 'Petty Cash'} onClose={() => setModal(null)}><PettyForm onSubmit={recordPettyCash}/></Modal> : null}
@@ -625,6 +684,22 @@ function PaymentSheet({ total, methods, online, cardAvailable, customer, credit,
       <button type="button" className="till-primary" disabled={unavailable || (method === 'gift_card' && !giftCardCode.trim())} onClick={() => onPay(method, { cashReceivedOverride: method === 'cash' ? Number(cashReceived || total) : null, giftCardCode })}>Pay {selected?.label || method}</button>
     </div>
   </div>
+}
+
+function ModifierPicker({ product, groups, onClose, onConfirm }) {
+  const [selected, setSelected] = useState([])
+  const toggle = (group, option) => {
+    setSelected((current) => {
+      const groupIds = group.options.map((entry) => entry.id)
+      const currentGroup = current.filter((id) => groupIds.includes(id))
+      if (currentGroup.includes(option.id)) return current.filter((id) => id !== option.id)
+      if (group.maxSelections <= 1) return [...current.filter((id) => !groupIds.includes(id)), option.id]
+      if (currentGroup.length >= group.maxSelections) return current
+      return [...current, option.id]
+    })
+  }
+  const missingRequired = groups.some((group) => group.required && !group.options.some((option) => selected.includes(option.id)))
+  return <Modal title={product.name} onClose={onClose}><div className="till-form"><p>Choose options</p>{groups.map((group) => <section key={group.id} className="till-modifier-group"><strong>{group.name}</strong>{group.options.map((option) => <label key={option.id} className="till-modifier-option"><input type={group.maxSelections > 1 ? 'checkbox' : 'radio'} name={`modifier-${group.id}`} checked={selected.includes(option.id)} onChange={() => toggle(group, option)}/><span>{option.name}</span><small>{Number(option.price || 0) > 0 ? `+${money(option.price)}` : 'Free'}</small></label>)}</section>)}<button type="button" className="till-primary" disabled={missingRequired} onClick={() => onConfirm(selected.map((optionId) => ({ optionId })))}>Add</button></div></Modal>
 }
 
 function DiscountForm({ value, onApply }) {
