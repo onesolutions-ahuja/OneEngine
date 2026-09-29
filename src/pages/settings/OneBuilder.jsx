@@ -1,19 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
-  Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
+  ListChecks, PlayCircle, Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
 import CustomReportsAdmin from '../reports/CustomReportsAdmin.jsx'
 import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
+import WorkflowRunsAdmin from './Platform/WorkflowRunsAdmin.jsx'
+import WorkItemsAdmin from './Platform/WorkItemsAdmin.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
   { key: 'approval', label: 'Approval Flow', icon: UserCheck },
   { key: 'dashboard', label: 'Dashboard Builder', icon: LayoutDashboard },
   { key: 'report', label: 'Report Builder', icon: BarChart3 },
+  { key: 'runs', label: 'Workflow Runs', icon: PlayCircle },
+  { key: 'work-items', label: 'Work Items', icon: ListChecks },
 ]
 
 const APPROVAL_STRUCTURAL_COMPONENTS = [
@@ -463,7 +467,11 @@ export default function OneBuilder() {
 
       {error ? <div className="onebuilder-error">{error}</div> : null}
 
-      {mode === 'list' ? (
+      {tab === 'runs' ? (
+        <WorkflowRunsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
+      ) : tab === 'work-items' ? (
+        <WorkItemsAdmin onMessage={(value) => setMessage(value || '')} onError={(value) => setError(value || '')} />
+      ) : mode === 'list' ? (
         <section className="onebuilder-list-view">
           <header className="onebuilder-list-header">
             <div>
