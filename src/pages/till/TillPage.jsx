@@ -99,7 +99,7 @@ function buttonMap(buttons) {
   return Object.fromEntries((buttons || []).map((button) => [button?.config?.uiAction || button?.config?.ui_action || button?.action_key, button]))
 }
 
-export default function TillPage({ onOpenSettings }) {
+export default function TillPage({ onOpenSettings, onNavigate }) {
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState(['All'])
   const [category, setCategory] = useState('All')
@@ -781,6 +781,9 @@ export default function TillPage({ onOpenSettings }) {
     if (action === 'price_override' && item) { setPriceTarget(item); setModal('price_override'); return }
     if (action === 'offline_queue') return setModal('offline_queue')
     if (action === 'customer_display') return openCustomerDisplay()
+    if (action === 'returns') return onNavigate?.('returns')
+    if (action === 'exchange') return onNavigate?.('exchange')
+    if (action === 'layaway') return onNavigate?.('layaway')
     if (button) return void executeMetadataButton(button)
   }
 
