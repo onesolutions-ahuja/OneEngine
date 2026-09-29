@@ -25,7 +25,10 @@ export async function loadSettingsContext() {
    * If this Platform Developer has exactly one authorised company, select it
    * automatically instead of leaving every company Settings page unusable.
    */
-  if (!user?.companyId && user?.isPlatformDeveloper === true) {
+  const permissionCodes = Array.isArray(permissions?.data?.permissions) ? permissions.data.permissions : []
+  const canActForCompany = permissionCodes.includes('platform.manage') || user?.isPlatformDeveloper === true
+
+  if (!user?.companyId && canActForCompany) {
     try {
       const companiesResponse = await apiRequest('/api/platform/developer/companies')
       authorisedCompanies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
