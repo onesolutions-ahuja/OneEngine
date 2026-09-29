@@ -120,6 +120,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const [settings, setSettings] = useState(null)
   const [buttons, setButtons] = useState([])
   const [till, setTill] = useState(null)
+  const [tillStatusResolved, setTillStatusResolved] = useState(false)
   const [paymentCapability, setPaymentCapability] = useState(false)
   const [paymentMethods, setPaymentMethods] = useState([])
   const [liveCredit, setLiveCredit] = useState(null)
@@ -155,11 +156,14 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const meta = useMemo(() => buttonMap(buttons), [buttons])
 
   const loadTill = async () => {
+    setTillStatusResolved(false)
     try {
       const response = await apiRequest('/api/till/sessions/current')
       setTill(response?.success ? response.data || null : null)
     } catch {
       setTill(null)
+    } finally {
+      setTillStatusResolved(true)
     }
   }
 
@@ -393,6 +397,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   useEffect(() => {
     if (!online || !till?.terminal_id) return undefined
     let stopped = false
+    let scannerUnavailable = false
     let timer
     const poll = async () => {
       try {
@@ -404,8 +409,12 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
             if (product) await selectProduct(product)
           }
         }
-      } catch {}
-      if (!stopped) timer = window.setTimeout(poll, 900)
+      } catch (err) {
+        if (err?.status === 401 || err?.status === 403 || err?.status === 404) {
+          scannerUnavailable = true
+        }
+      }
+      if (!stopped && !scannerUnavailable) timer = window.setTimeout(poll, 1500)
     }
     void poll()
     return () => {
@@ -812,7 +821,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     <section className="till-theme-page">
       <div className="till-theme-window">
         <header className="till-theme-header">
-          <div><strong>{settings?.store?.name || 'Till'}</strong><span>{till ? `${till.terminal_name || till.terminalNumber || 'Till'} · Open` : 'Till closed'}{offlineCount ? ` · ${offlineCount} pending sync` : ''}</span></div>
+          <div><strong>{settings?.store?.name || 'Till'}</strong><span>{!tillStatusResolved ? 'Checking till…' : till ? `${till.terminal_name || till.terminalNumber || 'Till'} · Open` : 'Till closed'}{offlineCount ? ` · ${offlineCount} pending sync` : ''}</span></div>
           <div className="till-theme-header-actions">
             {offlineCount ? <button type="button" className="till-settings-button" onClick={() => setModal('offline_queue')} title="Offline sales queue" aria-label="Offline sales queue"><CloudQueueIcon count={offlineCount}/></button> : null}
             <span className="till-connectivity-status" title={`Server: ${connectivity.server} · Database: ${connectivity.database}`}>
