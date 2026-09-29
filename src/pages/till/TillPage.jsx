@@ -15,6 +15,7 @@ import {
   Tag,
   UserRound,
   WalletCards,
+  Settings2,
   X,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
@@ -55,7 +56,7 @@ function Modal({ title, children, onClose, wide = false }) {
   )
 }
 
-export default function TillPage() {
+export default function TillPage({ onOpenSettings }) {
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState(['All'])
   const [category, setCategory] = useState('All')
@@ -348,6 +349,7 @@ export default function TillPage() {
             <span>{till ? `${till.terminal_name || 'Till'} · Open` : 'Till closed'}</span>
           </div>
           <div className="till-theme-header-actions">
+            <button type="button" className="till-settings-button" onClick={onOpenSettings} title="Settings" aria-label="Settings"><Settings2 size={15} /></button>
             <button type="button" onClick={() => setModal('till')}><BadgePoundSterling size={15} /> Till</button>
             <button type="button" onClick={() => setModal('customer')}><UserRound size={15} /> {selectedCustomer?.name || 'Customer'}</button>
           </div>
