@@ -1,15 +1,17 @@
 export function settingSectionAccess({
-  isAdmin = false,
-  isSuperadmin = false,
-  isPlatformDeveloper = false,
+  permissions = [],
   loyalty = false,
 } = {}) {
+  const codes = new Set(Array.isArray(permissions) ? permissions : [])
+  const settingsManage = codes.has('settings.manage')
+  const platformManage = codes.has('platform.manage')
+
   return {
-    "Client Web Shop": isAdmin === true || isSuperadmin === true,
-    "Customer Loyalty": loyalty === true,
-    "Server / API Configuration": isSuperadmin === true,
-    Platform: isAdmin === true || isSuperadmin === true || isPlatformDeveloper === true,
-    "Message Templates": isAdmin === true || isSuperadmin === true,
+    'Client Web Shop': settingsManage,
+    'Customer Loyalty': loyalty === true,
+    'Server / API Configuration': platformManage,
+    Platform: platformManage,
+    'Message Templates': settingsManage,
   }
 }
 
