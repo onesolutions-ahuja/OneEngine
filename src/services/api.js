@@ -245,10 +245,19 @@ export function getStoredUser() {
 }
 
 export async function ensureActingCompanyContext() {
-  const user = getStoredUser()
-  // Tenant users are scoped by their authenticated company. Platform users
-  // must always revalidate the acting-company header, even when a companyId
-  // was cached into the session user by a previous bootstrap.
+  let user = getStoredUser()
+
+  // OAuth callbacks intentionally carry only the bearer token. Hydrate the
+  // canonical session user before resolving tenant/company context so Google
+  // login, password login and browser refresh all enter the same bootstrap.
+  if (!user?.id) {
+    const me = await apiRequest('/api/auth/me')
+    user = me?.user || {}
+    if (user?.id) sessionStorage.setItem('onepos_user', JSON.stringify(user))
+  }
+
+  // Tenant users are scoped by their authenticated company. Global platform
+  // accounts continue below so platform.manage can resolve an acting company.
   if (user?.companyId && user?.isPlatformDeveloper !== true) return user.companyId
 
   const rememberedCompanyId = getActingCompanyId() || (user?.isPlatformDeveloper === true ? String(user?.companyId || '') : '')
