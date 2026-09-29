@@ -146,7 +146,10 @@ export default function ObjectsSettingsPane() {
             String(row.child_object_id) === String(selectedId)),
           recordTypes: Array.isArray(recordTypesRes?.data) ? recordTypesRes.data : [],
           layouts: layouts.filter((row) => String(row.object_id) === String(selectedId)),
-          rules: rules.filter((row) => String(row.object_id) === String(selectedId)),
+          rules: rules.filter((row) =>
+            String(row.object_id) === String(selectedId)
+            || (Array.isArray(row.referenced_object_ids)
+              && row.referenced_object_ids.some((objectId) => String(objectId) === String(selectedId)))),
           buttons: Array.isArray(buttonsRes?.data) ? buttonsRes.data : [],
           permissions: permissionsRes?.data || null,
         })
