@@ -9,6 +9,8 @@ import LayoutEditor from './Platform/LayoutEditor.jsx'
 import RuleEditor from './Platform/RuleEditor.jsx'
 import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 import ActionsAdmin from './Platform/ActionsAdmin.jsx'
+import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
+import ObjectReportsAdmin from './Platform/ObjectReportsAdmin.jsx'
 
 const TABS = [
   ['details', 'Details'],
@@ -496,6 +498,16 @@ export default function ObjectsSettingsPane() {
                     onClose={closeEditor}
                     onSaved={saveRule}
                   />
+                ) : editor?.kind === 'approval' ? (
+                  <ApprovalProcessBuilder
+                    embedded
+                    initialProcess={editor.item || null}
+                    initialObjectId={selectedId}
+                    onMessage={() => {}}
+                    onError={(value) => setError(value || '')}
+                    onClose={closeEditor}
+                    onSaved={async () => { await refreshConfiguration(); closeEditor() }}
+                  />
                 ) : activeTab === 'details' ? (
                   <div className="objects-detail-card">
                     <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
@@ -632,21 +644,28 @@ export default function ObjectsSettingsPane() {
                       const steps = Array.isArray(row.steps) ? row.steps : []
                       return steps.length ? steps.map((step) => `${step.step_order}. ${step.label}${step.role_name ? ` · ${step.role_name}` : ''}`).join('  •  ') : 'No approval steps'
                     }}
-                    meta={(row) => `${row.lifecycle_status || (row.active === false ? 'INACTIVE' : 'ACTIVE')} · ${Array.isArray(row.steps) ? row.steps.length : 0} step${Array.isArray(row.steps) && row.steps.length === 1 ? '' : 's'}`} />
+                    meta={(row) => `${row.lifecycle_status || (row.active === false ? 'INACTIVE' : 'ACTIVE')} · ${Array.isArray(row.steps) ? row.steps.length : 0} step${Array.isArray(row.steps) && row.steps.length === 1 ? '' : 's'}`}
+                    actionLabel="Approval"
+                    onAdd={() => setEditor({ kind: 'approval', item: null })}
+                    onRowClick={(row) => setEditor({ kind: 'approval', item: row })} />
                 ) : null}
 
                 {activeTab === 'assignment' ? (
-                  <ObjectDataList title="Assignment Rules" rows={objectData.assignmentRules}
-                    primary={(row) => row.name || row.rule_key || 'Assignment Rule'}
-                    secondary={(row) => row.rule_key || row.assignment_field || ''}
-                    meta={(row) => `${row.target_type || 'Target'} · priority ${row.priority ?? 0}`} />
+                  <div className="objects-config-list">
+                    <ObjectDataList title="Assignment Rules" rows={objectData.assignmentRules}
+                      primary={(row) => row.name || row.rule_key || 'Assignment Rule'}
+                      secondary={(row) => row.rule_key || row.assignment_field || ''}
+                      meta={(row) => `${row.target_type || 'Target'} · priority ${row.priority ?? 0}`} />
+                    <div className="objects-detail-placeholder">The legacy Platform frontend did not include a separate Assignment Rule authoring screen. Existing assignment metadata remains visible here without inventing a second editor.</div>
+                  </div>
                 ) : null}
 
                 {activeTab === 'reports' ? (
-                  <ObjectDataList title="Reports" rows={objectData.reports}
-                    primary={(row) => row.label || row.name || row.report_key || 'Report'}
-                    secondary={(row) => row.report_key || row.description || ''}
-                    meta={(row) => row.active === false ? 'Inactive' : 'Active'} />
+                  <ObjectReportsAdmin
+                    object={{ ...selected, id: selectedId }}
+                    onMessage={() => { void refreshConfiguration() }}
+                    onError={(value) => setError(value || '')}
+                  />
                 ) : null}
 
                 {activeTab === 'sharing' ? (
@@ -671,10 +690,17 @@ export default function ObjectsSettingsPane() {
                 ) : null}
 
                 {activeTab === 'buttons' ? (
-                  <ObjectDataList title="Buttons" rows={objectData.buttons}
-                    primary={(row) => row.label || row.button_key || 'Button'}
-                    secondary={(row) => row.button_key || row.target_key || ''}
-                    meta={(row) => row.placement || row.variant || 'button'} />
+                  <div className="objects-config-list">
+                    <div className="objects-config-list-head">
+                      <strong>Buttons</strong>
+                      <button type="button" className="objects-config-add" onClick={() => { setActiveTab('layouts'); setEditor({ kind: 'layout', item: null, pageType: 'detail' }) }}><Plus size={13}/> Open Layout Builder</button>
+                    </div>
+                    <ObjectDataList title="Configured Buttons" rows={objectData.buttons}
+                      primary={(row) => row.label || row.button_key || 'Button'}
+                      secondary={(row) => row.button_key || row.target_key || ''}
+                      meta={(row) => row.placement || row.variant || 'button'} />
+                    <div className="objects-detail-placeholder">Buttons and record-action bindings are authored in Forms / Layouts, where placement, variant and target metadata are stored.</div>
+                  </div>
                 ) : null}
 
                 {activeTab === 'permissions' ? (
