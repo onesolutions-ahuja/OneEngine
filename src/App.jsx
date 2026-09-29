@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, apiUrl, checkBackend, getStoredUser, hasSession, login, logout, verifyPin } from './services/api'
-import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole, updateUser } from './services/settings'
+import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb from './components/jarvis/JarvisOrb'
 const RecordListView = lazy(() => import('./components/RecordListView'))
+const MetadataRecordFormModal = lazy(() => import('./components/MetadataRecordFormModal'))
 const OneBuilder = lazy(() => import('./pages/settings/OneBuilder'))
 const MetadataSettingsPage = lazy(() => import('./pages/settings/MetadataSettingsPage'))
 const ObjectsSettingsPane = lazy(() => import('./pages/settings/ObjectsSettingsPane'))
@@ -568,6 +569,8 @@ function SettingsPage({ onOpenProfile }) {
   const [users, setUsers] = useState([])
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersError, setUsersError] = useState('')
+  const [userEditor, setUserEditor] = useState(null)
+  const [jarvesState, setJarvesState] = useState(null)
   const [roles, setRoles] = useState([])
   const [rolesLoading, setRolesLoading] = useState(false)
   const [rolesError, setRolesError] = useState('')
@@ -675,9 +678,14 @@ function SettingsPage({ onOpenProfile }) {
     let alive = true
     setUsersLoading(true)
     setUsersError('')
-    loadUsers()
-      .then((rows) => {
-        if (alive) setUsers(rows)
+    Promise.all([
+      loadUsers(),
+      apiRequest('/api/settings/jarves').catch(() => null),
+    ])
+      .then(([rows, jarves]) => {
+        if (!alive) return
+        setUsers(rows)
+        if (jarves?.success) setJarvesState(jarves.data || null)
       })
       .catch((err) => {
         if (alive) setUsersError(err?.message || 'Unable to load users')
@@ -732,18 +740,31 @@ function SettingsPage({ onOpenProfile }) {
       currentRows.map((item) => item.id === row.id ? { ...item, active: nextActive } : item),
     )
     try {
-      await updateUser(row.id, {
-        fullName: row.full_name,
-        email: row.email || null,
-        roleId: row.role_id || null,
-        storeId: row.store_id || null,
-        active: nextActive,
+      const response = await apiRequest(`/api/platform/objects/employee/records/${encodeURIComponent(row.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ data: { active: nextActive } }),
       })
+      if (response?.success === false) throw new Error(response?.message || 'Unable to update user status')
     } catch (err) {
       setUsers((currentRows) =>
         currentRows.map((item) => item.id === row.id ? { ...item, active: row.active } : item),
       )
       setUsersError(err?.message || 'Unable to update user status')
+    }
+  }
+
+  const toggleUserJarves = async (row) => {
+    if (!canEditUsers || !jarvesState) return
+    try {
+      const response = await apiRequest(`/api/admin/users/${encodeURIComponent(row.id)}/jarves`, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: !row.jarves_enabled }),
+      })
+      if (!response?.success) throw new Error(response?.message || 'Unable to update JARVES for this user')
+      setJarvesState(response.data?.licenceState || jarvesState)
+      await refreshUsers()
+    } catch (err) {
+      setUsersError(err?.message || 'Unable to update JARVES for this user')
     }
   }
 
@@ -753,22 +774,11 @@ function SettingsPage({ onOpenProfile }) {
   }
 
   const openCreateUser = () => {
-    setRecordForm({ username: '', fullName: '', email: '', password: '', roleId: '', storeId: null, active: true })
-    setRecordDialog({ type: 'user', mode: 'create' })
+    setUserEditor({ mode: 'create', record: null })
   }
 
   const openEditUser = (row) => {
-    setRecordForm({
-      id: row.id,
-      username: row.username || '',
-      fullName: row.full_name || '',
-      email: row.email || '',
-      password: '',
-      roleId: row.role_id || '',
-      storeId: row.store_id || null,
-      active: row.active !== false,
-    })
-    setRecordDialog({ type: 'user', mode: 'edit' })
+    setUserEditor({ mode: 'edit', record: row })
   }
 
   const openCreateRole = () => {
@@ -800,28 +810,7 @@ function SettingsPage({ onOpenProfile }) {
     if (!recordDialog) return
     setRecordSaving(true)
     try {
-      if (recordDialog.type === 'user') {
-        if (recordDialog.mode === 'create') {
-          await createUser({
-            username: recordForm.username,
-            fullName: recordForm.fullName,
-            email: recordForm.email || null,
-            password: recordForm.password,
-            roleId: recordForm.roleId || null,
-            storeId: recordForm.storeId || null,
-          })
-        } else {
-          await updateUser(recordForm.id, {
-            fullName: recordForm.fullName,
-            email: recordForm.email || null,
-            roleId: recordForm.roleId || null,
-            storeId: recordForm.storeId || null,
-            active: recordForm.active !== false,
-            ...(recordForm.password ? { password: recordForm.password } : {}),
-          })
-        }
-        await refreshUsers()
-      } else {
+      {
         let roleId = recordForm.id
         if (recordDialog.mode === 'create') {
           const created = await createRole({
@@ -1323,6 +1312,26 @@ function SettingsPage({ onOpenProfile }) {
                     { key: 'role_name', label: 'Role', render: (row) => row.role_name || '—' },
                     { key: 'store_name', label: 'Store', render: (row) => row.store_name || 'All stores' },
                     {
+                      key: 'jarves_enabled',
+                      label: 'JARVES',
+                      sortValue: (row) => row.jarves_enabled ? 'Enabled' : 'Disabled',
+                      render: (row) => jarvesState && canEditUsers ? (
+                        <button
+                          type="button"
+                          className={`record-status-toggle ${row.jarves_enabled ? 'is-on' : ''}`}
+                          aria-pressed={row.jarves_enabled === true}
+                          aria-label={`${row.jarves_enabled ? 'Disable' : 'Enable'} JARVES for ${row.full_name || row.username}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void toggleUserJarves(row)
+                          }}
+                        >
+                          <span className="record-status-toggle-track"><span /></span>
+                          <b>{row.jarves_enabled ? 'Enabled' : 'Disabled'}</b>
+                        </button>
+                      ) : (row.jarves_enabled ? 'Enabled' : '—'),
+                    },
+                    {
                       key: 'active',
                       label: 'Status',
                       sortValue: (row) => row.active ? 'Active' : 'Inactive',
@@ -1333,7 +1342,10 @@ function SettingsPage({ onOpenProfile }) {
                           aria-pressed={row.active}
                           aria-label={`${row.active ? 'Deactivate' : 'Activate'} ${row.full_name || row.username}`}
                           disabled={!canEditUsers}
-                          onClick={() => toggleUserActive(row)}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void toggleUserActive(row)
+                          }}
                         >
                           <span className="record-status-toggle-track"><span /></span>
                           <b>{row.active ? 'Active' : 'Inactive'}</b>
@@ -1386,6 +1398,20 @@ function SettingsPage({ onOpenProfile }) {
         </div>
       </div>
 
+      {userEditor ? (
+        <MetadataRecordFormModal
+          objectKey="employee"
+          record={userEditor.record}
+          mode={userEditor.mode}
+          title={userEditor.mode === 'create' ? 'Add User' : 'Edit User'}
+          onClose={() => setUserEditor(null)}
+          onSaved={async () => {
+            setUserEditor(null)
+            await refreshUsers()
+          }}
+        />
+      ) : null}
+
       {recordDialog ? (
         <div className="record-dialog-backdrop" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !recordSaving) setRecordDialog(null)
@@ -1394,40 +1420,15 @@ function SettingsPage({ onOpenProfile }) {
             <div className="record-dialog-header">
               <div>
                 <strong>
-                  {recordDialog.type === 'user'
-                    ? (recordDialog.mode === 'create' ? 'Create User' : 'Edit User')
-                    : (recordDialog.mode === 'create' ? 'Create Role' : 'Edit Role')}
+                  {recordDialog.mode === 'create' ? 'Create Role' : 'Edit Role'}
                 </strong>
-                <span>{recordDialog.type === 'role' ? 'Role and permission record' : 'User account record'}</span>
+                <span>Role and permission record</span>
               </div>
               <button type="button" className="record-dialog-close" onClick={() => setRecordDialog(null)}>×</button>
             </div>
 
             {recordDialog.loading ? (
               <div className="record-dialog-loading">Loading…</div>
-            ) : recordDialog.type === 'user' ? (
-              <div className="record-dialog-body">
-                {recordDialog.mode === 'create' ? (
-                  <label>Username<input value={recordForm.username || ''} onChange={(e) => setRecordForm({ ...recordForm, username: e.target.value })} required /></label>
-                ) : (
-                  <label>Username<input value={recordForm.username || ''} disabled /></label>
-                )}
-                <label>Full name<input value={recordForm.fullName || ''} onChange={(e) => setRecordForm({ ...recordForm, fullName: e.target.value })} required /></label>
-                <label>Email<input type="email" value={recordForm.email || ''} onChange={(e) => setRecordForm({ ...recordForm, email: e.target.value })} /></label>
-                <label>{recordDialog.mode === 'create' ? 'Password' : 'New password (optional)'}<input type="password" value={recordForm.password || ''} onChange={(e) => setRecordForm({ ...recordForm, password: e.target.value })} required={recordDialog.mode === 'create'} /></label>
-                <label>Role
-                  <select value={recordForm.roleId || ''} onChange={(e) => setRecordForm({ ...recordForm, roleId: e.target.value })}>
-                    <option value="">No role</option>
-                    {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
-                  </select>
-                </label>
-                {recordDialog.mode === 'edit' ? (
-                  <label className="record-dialog-checkbox">
-                    <input type="checkbox" checked={recordForm.active !== false} onChange={(e) => setRecordForm({ ...recordForm, active: e.target.checked })} />
-                    Active user
-                  </label>
-                ) : null}
-              </div>
             ) : (
               <div className="record-dialog-body">
                 <label>Role name<input value={recordForm.name || ''} onChange={(e) => setRecordForm({ ...recordForm, name: e.target.value })} required disabled={recordForm.isSystemRole === true} /></label>
