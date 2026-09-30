@@ -79,6 +79,7 @@ import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
 import { createPaypalQrDriver } from "./services/paypalQrConnector.js";
+import { ONE_CONNECT_PROVIDER_DRIVER_KEYS, createOneConnectProviderDriver } from "./services/oneConnectProviders.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
 import createPlatformSchedulesRouter from "./routes/platformSchedules.js";
@@ -258,6 +259,9 @@ const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
 connectorDrivers.register(createReferencePaymentDriver());
 connectorDrivers.register(createPaypalQrDriver());
+for (const providerKey of ONE_CONNECT_PROVIDER_DRIVER_KEYS) {
+  connectorDrivers.register(createOneConnectProviderDriver(providerKey));
+}
 
 async function testPaymentTerminal(terminal) {
   if (!terminal || !terminal.active || !terminal.provider || !terminal.connection_url) {
