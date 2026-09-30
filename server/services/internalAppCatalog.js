@@ -358,7 +358,7 @@ const CATALOG = [
     name: "Google Connect",
     description: "Licensed Google Workspace/OpenID Connect single sign-on for onePOS users with tenant-specific OAuth configuration.",
     route: "/app/google-connect",
-    permissions: ["integration.manage", "connector.test", "connector.view", "connector.manage"],
+    permissions: ["integration.manage"],
     storeScoped: false,
     category: "Identity & Access",
     billable: true,
@@ -699,7 +699,7 @@ const CATALOG = [
     installable: true,
     visibility: "PUBLIC",
     entitlementKey: "communications.sms",
-    dependencies: ["communication_core", "sms_connector"],
+    dependencies: ["connector_core", "communication_core", "sms_connector"],
     capabilities: ["sms_outbound", "sms_inbound", "provider_status", "device_discovery", "appointment_booking"],
     providerConnector: {
       providerKey: "smsgate",
