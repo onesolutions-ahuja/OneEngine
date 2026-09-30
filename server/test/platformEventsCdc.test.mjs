@@ -60,8 +60,11 @@ test("event loop prevention suppresses a repeated signature in the same lineage"
     created_at: new Date().toISOString(),
   };
   let inserts = 0;
-  const db = async (sql) => {
-    if (sql.includes("WHERE root_event_id=$1 AND event_signature=$2")) return { rows: [existing] };
+  const db = async (sql, params = []) => {
+    if (sql.includes("WHERE id = ANY($1::uuid[])")) {
+      return { rows: params[0].map((id) => ({ id, company_id: null })) };
+    }
+    if (sql.includes("WHERE root_event_id=$1") && sql.includes("event_signature=$2")) return { rows: [existing] };
     if (sql.includes("INSERT INTO platform_events")) {
       inserts += 1;
       return { rows: [] };
@@ -91,7 +94,10 @@ test("event loop prevention suppresses a repeated signature in the same lineage"
 test("record change publisher carries prior/current state, lineage, replay and changed fields", async () => {
   let insertParams = null;
   const db = async (sql, params = []) => {
-    if (sql.includes("WHERE root_event_id=$1 AND event_signature=$2")) return { rows: [] };
+    if (sql.includes("WHERE id = ANY($1::uuid[])")) {
+      return { rows: params[0].map((id) => ({ id, company_id: null })) };
+    }
+    if (sql.includes("WHERE root_event_id=$1") && sql.includes("event_signature=$2")) return { rows: [] };
     if (sql.includes("INSERT INTO platform_events")) {
       insertParams = params;
       return {
@@ -190,4 +196,49 @@ test("idempotent event publish replays the existing durable event", async () => 
   assert.equal(result.inserted, false);
   assert.equal(result.event.id, "evt-existing");
   assert.equal(result.event.replayId, 99);
+});
+
+
+test("event lineage rejects cross-company parent/root references", async () => {
+  const db = async (sql, params = []) => {
+    if (sql.includes("WHERE id = ANY($1::uuid[])")) {
+      return {
+        rows: params[0].map((id) => ({
+          id,
+          company_id: "other-company",
+        })),
+      };
+    }
+    throw new Error(`Unexpected SQL: ${sql}`);
+  };
+
+  await assert.rejects(
+    () => publishPlatformEvent({
+      db,
+      companyId: "company-1",
+      eventType: "custom.child",
+      payload: {},
+      causationEventId: "00000000-0000-0000-0000-000000000001",
+      rootEventId: "00000000-0000-0000-0000-000000000002",
+    }),
+    (error) => error.code === "EVENT_LINEAGE_COMPANY_MISMATCH" && error.status === 403,
+  );
+});
+
+test("event lineage rejects missing referenced events", async () => {
+  const db = async (sql) => {
+    if (sql.includes("WHERE id = ANY($1::uuid[])")) return { rows: [] };
+    throw new Error(`Unexpected SQL: ${sql}`);
+  };
+
+  await assert.rejects(
+    () => publishPlatformEvent({
+      db,
+      companyId: "company-1",
+      eventType: "custom.child",
+      payload: {},
+      causationEventId: "00000000-0000-0000-0000-000000000001",
+    }),
+    (error) => error.code === "EVENT_LINEAGE_NOT_FOUND" && error.status === 400,
+  );
 });
