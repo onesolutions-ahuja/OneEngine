@@ -272,6 +272,23 @@ export function packageDefinition(entry) {
     : "APPLICATION";
   const billable = packageType === "APPLICATION" && entry.billable !== false;
   const licenceMode = entry.licenceMode || (packageType === "FOUNDATION" ? "TECHNICAL" : "COMMERCIAL");
+
+  // Connector package permissions are derived from the connector contract so
+  // a package cannot forget runtime permissions that its actions require.
+  // This keeps current and future connector packages aligned automatically.
+  const manifestPermissions = new Set(Array.isArray(entry.permissions) ? entry.permissions : []);
+  if (entry.connectorApp && typeof entry.connectorApp === "object") {
+    manifestPermissions.add("connector.test");
+    manifestPermissions.add("connector.view");
+    manifestPermissions.add("connector.manage");
+    for (const capability of Array.isArray(entry.connectorApp.capabilities) ? entry.connectorApp.capabilities : []) {
+      if (!capability || typeof capability !== "object") continue;
+      for (const permission of Array.isArray(capability.requiredPermissions) ? capability.requiredPermissions : []) {
+        if (permission) manifestPermissions.add(permission);
+      }
+    }
+  }
+
   return {
     packageKey: entry.packageKey || entry.key,
     name: packageNames[entry.key] || entry.name,
@@ -297,7 +314,7 @@ export function packageDefinition(entry) {
       systemOnly: entry.systemOnly === true || packageType === "FOUNDATION",
       displayOrder: Number.isInteger(entry.displayOrder) ? entry.displayOrder : 0,
       lifecycleState: entry.lifecycleState || "PUBLISHED",
-      permissions: entry.permissions,
+      permissions: [...manifestPermissions],
       storeScoped: entry.storeScoped === true,
       dependencies: Array.isArray(entry.dependencies) ? entry.dependencies : (dependencies[entry.key] || []),
       optionalDependencies: Array.isArray(entry.optionalDependencies) ? entry.optionalDependencies : [],
