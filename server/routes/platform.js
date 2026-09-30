@@ -5310,6 +5310,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         pool,
         handler: async (transaction) => {
           const runtimeDb = transaction.query;
+          await runtimeDb(
+            "SELECT pg_advisory_xact_lock(hashtext($1))",
+            [`${req.user.companyId}:${object.id}:${req.params.recordId}`]
+          );
           const lifecycle = await runRecordDeleteLifecycle({
         initialState: {
           object,
