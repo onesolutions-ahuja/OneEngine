@@ -325,7 +325,7 @@ export default function createReturnsRouter({
           return res.status(400).json({ success: false, message: "A receipt number or sale ID is required." });
         }
         const { storeScoped, storeId } = tenantScope(req);
-        const client = await (req.tenantPool || pool).connect();
+        const client = await pool.connect();
         try {
           // Accept either the receipt number or a raw sale UUID.
           const saleIdProbe = await client.query(
@@ -547,7 +547,7 @@ export default function createReturnsRouter({
       if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured." });
 
       const { storeScoped, storeId } = tenantScope(req);
-      const client = await (req.tenantPool || pool).connect();
+      const client = await pool.connect();
       try {
         await client.query("BEGIN");
 
@@ -961,7 +961,7 @@ export default function createReturnsRouter({
       if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured." });
 
       const { storeScoped, storeId } = tenantScope(req);
-      const client = await (req.tenantPool || pool).connect();
+      const client = await pool.connect();
       try {
         await client.query("BEGIN");
 
