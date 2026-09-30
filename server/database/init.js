@@ -354,7 +354,8 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
            WHERE r.company_id IS NULL AND r.api_key='platform_superadmin'
            ON CONFLICT (role_id,permission_id) DO NOTHING`
         );
-      },,
+      },
+    },
     {
       key: "0020_communication_permission_alignment",
       version: "20",
@@ -382,7 +383,6 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
            ON CONFLICT (role_id,permission_id) DO NOTHING`
         );
       },
-    }
     },
   ]);
 
