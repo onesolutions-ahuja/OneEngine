@@ -394,7 +394,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
     setError('')
     Promise.all([
       apiRequest('/api/platform/runtime/settings-catalog'),
-      apiRequest('/api/auth/me'),
+      Promise.resolve({ user: getStoredUser() }),
     ]).then(async ([catalogRes, meRes]) => {
       if (!live) return
       const hosts = Array.isArray(catalogRes?.data) ? catalogRes.data : []
