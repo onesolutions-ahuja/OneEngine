@@ -28,6 +28,11 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
       );
       if (!result.rows[0]) return res.status(401).json({ success: false, message: "Scanner session expired or revoked" });
       req.mobileScanner = result.rows[0];
+      await req.ensureBusinessCommandRun?.({
+        companyId: req.mobileScanner.company_id,
+        userId: null,
+        storeId: req.mobileScanner.store_id,
+      });
       return next();
     } catch (error) {
       console.error("Resolve mobile scanner session error:", error);
@@ -119,7 +124,7 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
         `INSERT INTO mobile_scanner_sessions
            (company_id, store_id, terminal_id, created_by, pairing_token_hash, pairing_expires_at, wifi_mode)
          VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '${PAIRING_TTL_MINUTES} minutes', $6)
-         RETURNING id, store_id, terminal_id, wifi_mode, pairing_expires_at, created_at`,
+         RETURNING id, company_id, store_id, terminal_id, wifi_mode, pairing_expires_at, created_at`,
         [req.user.companyId, req.user.storeId, terminalId, req.user.id, hashToken(pairingToken), wifiMode]
       );
       if (typeof writeAudit === "function") {
@@ -184,6 +189,11 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
         [hashToken(pairingToken), hashToken(sessionToken)]
       );
       if (!paired.rows[0]) return res.status(410).json({ success: false, message: "Pairing link expired or already used" });
+      await req.ensureBusinessCommandRun?.({
+        companyId: paired.rows[0].company_id,
+        userId: null,
+        storeId: paired.rows[0].store_id,
+      });
       return res.status(201).json({ success: true, data: { sessionToken, permission: "SEND_BARCODE_EVENT", expiresInSeconds: SESSION_TTL_HOURS * 3600 } });
     } catch (error) {
       console.error("Establish mobile scanner session error:", error);
