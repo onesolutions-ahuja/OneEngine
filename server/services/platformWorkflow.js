@@ -3654,8 +3654,11 @@ async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId 
   if (!value) return null;
   const result = await db(
     `SELECT * FROM platform_objects
-      WHERE ${where} AND company_id=$2 AND active=true
+      WHERE ${where}
+        AND active=true
         AND source_table IS NOT NULL
+        AND (company_id=$2 OR company_id IS NULL)
+      ORDER BY CASE WHEN company_id=$2 THEN 0 ELSE 1 END, id
       LIMIT 1`,
     [value, companyId]
   );
@@ -3676,7 +3679,9 @@ async function resolveWorkflowTargetObject({ db, action = {}, object = null, com
   const objectKey = requestedObjectKey || (!objectId ? object?.object_key || object?.api_name || null : null);
   const target = await resolveTargetObjectMetadata({ db, objectId, objectKey, companyId: runtimeCompanyId });
   if (!target) throw new Error("Workflow target object is not available for this company");
-  if (!isSafeIdentifier(target.source_table) || target.company_id == null || String(target.company_id) !== String(runtimeCompanyId)) {
+  const tenantOwned = target.company_id != null && String(target.company_id) === String(runtimeCompanyId);
+  const globalTenantScoped = target.company_id == null && target.company_scoped === true;
+  if (!isSafeIdentifier(target.source_table) || (!tenantOwned && !globalTenantScoped)) {
     throw new Error("Workflow target object is not permitted");
   }
   return target;
