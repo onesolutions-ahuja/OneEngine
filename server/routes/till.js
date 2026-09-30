@@ -230,7 +230,7 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
          * the counted amount is never silently overwritten. */
         let client = null;
         try {
-        client = await pool.connect();
+        client = await (req.tenantPool || pool).connect();
         await client.query("BEGIN");
         const session = await client.query(
           `SELECT ts.id, ts.terminal_id, ts.store_id, ts.opening_cash, ts.opened_at
@@ -381,7 +381,7 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
         /* T-TILL: the session lookup, the overdraw guard and the insert run
          * in one row-locked transaction so a concurrent cash-out/close cannot
          * interleave between the balance check and the write. */
-        const client = await pool.connect();
+        const client = await (req.tenantPool || pool).connect();
         clientTill = client;
         try {
         await client.query("BEGIN");
