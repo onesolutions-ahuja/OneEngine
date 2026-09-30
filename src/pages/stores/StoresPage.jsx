@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Archive, Edit3, MapPin, Phone, Plus, RefreshCw, RotateCcw, Store } from 'lucide-react'
-import { apiRequest } from '../../services/api'
+import { apiRequest, loadSessionPermissions } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
 import MetadataRecordFormModal from '../../components/MetadataRecordFormModal'
 
@@ -15,7 +15,6 @@ export default function StoresPage(){
   const [stats,setStats]=useState({})
   const [currency,setCurrency]=useState('GBP')
   const [permissions,setPermissions]=useState([])
-  const [isAdmin,setIsAdmin]=useState(false)
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
   const [showArchived,setShowArchived]=useState(false)
@@ -26,14 +25,13 @@ export default function StoresPage(){
       setLoading(true);setError('')
       const [s,p,settings]=await Promise.all([
         cachedGet('/api/admin/stores',{forceRefresh,onFresh:fresh=>fresh?.success&&setStores(Array.isArray(fresh.data)?fresh.data:[])}),
-        apiRequest('/api/auth/me/permissions').catch(()=>null),
+        loadSessionPermissions().catch(()=>null),
         cachedGet('/api/settings',{cacheKey:'settings:company',forceRefresh,onFresh:fresh=>fresh?.data?.company?.currency&&setCurrency(fresh.data.company.currency)}).catch(()=>null),
       ])
       if(!s?.success)throw new Error(s?.message||'Unable to load stores')
       const rows=Array.isArray(s.data)?s.data:[]
       setStores(rows)
-      setPermissions(p?.data?.permissions||[])
-      setIsAdmin(p?.data?.isAdmin===true)
+      setPermissions(p?.permissions||[])
       setCurrency(settings?.data?.company?.currency||'GBP')
       const entries=await Promise.all(rows.map(store=>
         apiRequest(`/api/admin/stores/${encodeURIComponent(store.id)}/stats`)
@@ -46,9 +44,9 @@ export default function StoresPage(){
   }
   useEffect(()=>{void load()},[])
 
-  const canCreate=isAdmin||permissions.includes('store.create')
-  const canEdit=isAdmin||permissions.includes('store.edit')
-  const canDelete=isAdmin||permissions.includes('store.delete')
+  const canCreate=permissions.includes('store.create')
+  const canEdit=permissions.includes('store.edit')
+  const canDelete=permissions.includes('store.delete')
   const active=stores.filter(s=>s.active!==false)
   const archived=stores.filter(s=>s.active===false)
   const visible=showArchived?stores:active
