@@ -2057,6 +2057,7 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
                 type="button"
                 className="launcher-app"
                 role="listitem"
+                aria-label={installed ? (item.name || item.package_key) : `${item.name || item.package_key} — available in oneStore`}
                 title={installed ? (item.name || item.package_key) : `${item.name || item.package_key} — available in oneStore`}
                 initial={{ opacity: 0, y: 18, scale: 0.9 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
