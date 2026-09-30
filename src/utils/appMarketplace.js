@@ -1,4 +1,4 @@
-import { apiUrl } from '../services/api'
+import { apiUrl, getActingCompanyId, getStoredUser } from '../services/api'
 
 const ICON_ALIASES = Object.freeze({
   onestore: 'onestore',
@@ -79,6 +79,13 @@ const BRAND_ICON_MATCHES = [
 
 export const MARKETPLACE_CACHE_KEY = 'onepos.marketplace.catalog.v1'
 
+function marketplaceCacheKey() {
+  const user = getStoredUser()
+  const userId = String(user?.id || 'anonymous')
+  const companyId = String(getActingCompanyId() || user?.companyId || user?.company_id || 'unscoped')
+  return MARKETPLACE_CACHE_KEY + ':' + userId + ':' + companyId
+}
+
 export function localAppIcon(assetKey = 'default-app') {
   const clean = String(assetKey || 'default-app').trim().toLowerCase().replaceAll('_', '-')
   const safe = /^[a-z0-9-]+$/.test(clean) ? clean : 'default-app'
@@ -126,7 +133,7 @@ export function applyDefaultAppIcon(event) {
 
 export function readMarketplaceCache() {
   try {
-    const parsed = JSON.parse(sessionStorage.getItem(MARKETPLACE_CACHE_KEY) || '[]')
+    const parsed = JSON.parse(sessionStorage.getItem(marketplaceCacheKey()) || '[]')
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
@@ -136,7 +143,7 @@ export function readMarketplaceCache() {
 export function writeMarketplaceCache(items) {
   try {
     if (Array.isArray(items) && items.length) {
-      sessionStorage.setItem(MARKETPLACE_CACHE_KEY, JSON.stringify(items))
+      sessionStorage.setItem(marketplaceCacheKey(), JSON.stringify(items))
     }
   } catch {}
 }

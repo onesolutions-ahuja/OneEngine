@@ -1,17 +1,9 @@
 import { createHash } from "node:crypto";
 import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
+import { TRUSTED_JOB_KINDS, assertTrustedJobKind as assertRegisteredJobKind } from "./platformJobRegistry.js";
 
-export const TRUSTED_JOB_KINDS = Object.freeze([
-  "WAIT",
-  "APP_RELEASE_UPGRADE",
-  "PLATFORM_WEBHOOK_DELIVERY",
-  "PLATFORM_SCHEDULED_WORKFLOW",
-  "PLATFORM_EVENT_WORKFLOW",
-  "SHOPIFY_WEBHOOK_EVENT",
-  "QUICKBOOKS_PROVIDER_SYNC",
-  "SHOPIFY_PROVIDER_SYNC",
-]);
+export { TRUSTED_JOB_KINDS } from "./platformJobRegistry.js";
 
 const PRIVILEGED_ROUTES = Object.freeze([
   { id: "appointments.manage", prefixes: ["/api/appointments"], methods: ["POST","PUT","PATCH","DELETE"] },
@@ -69,7 +61,7 @@ export function isPrivilegedMutation(path, method = "GET") {
 }
 
 export function assertTrustedJobKind(kind) {
-  const key = `job:${String(kind || "")}`;
+  const key = assertRegisteredJobKind(kind);
   if (!TRUSTED_CAPABILITY_MAP[key]) {
     throw Object.assign(new Error(`Unregistered platform job kind: ${kind}`), { code: "UNREGISTERED_JOB_KIND", status: 403, retryable: false });
   }

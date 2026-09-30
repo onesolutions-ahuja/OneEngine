@@ -29,13 +29,19 @@ export function createSelfCheckoutRouter({
   authorize,
   db,
   bcrypt = null,
-  jwtSecret = process.env.JWT_SECRET || "development-secret-change-this",
+  jwtSecret = null,
   modeTtl = SCO_MODE_TTL,
   writeAudit = null,
   requireSelfCheckoutEntitlement = null,
   getCompanyEntitlements = null,
 }) {
   const router = express.Router();
+  const signingSecret = String(jwtSecret || process.env.JWT_SECRET || "").trim();
+  if (!signingSecret) {
+    const error = new Error("JWT_SECRET is required for Self Checkout");
+    error.code = "JWT_SECRET_NOT_CONFIGURED";
+    throw error;
+  }
 
   const signModeToken = (user) =>
     jwt.sign(
@@ -47,7 +53,7 @@ export function createSelfCheckoutRouter({
         username: user.username,
         mode: "self_checkout",
       },
-      jwtSecret,
+      signingSecret,
       { expiresIn: modeTtl }
     );
 
@@ -208,7 +214,7 @@ export function createSelfCheckoutRouter({
           username: operator.username,
           mode: "self_checkout",
         },
-        jwtSecret,
+        signingSecret,
         { expiresIn: modeTtl }
       );
 

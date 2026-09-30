@@ -95,7 +95,7 @@ export const platformSchema = `
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     module_id UUID REFERENCES platform_modules(id) ON DELETE SET NULL,
     package_id UUID REFERENCES package_registry(id) ON DELETE SET NULL,
-    object_key VARCHAR(100) NOT NULL UNIQUE,
+    object_key VARCHAR(100) NOT NULL,
     api_name VARCHAR(100),
     label VARCHAR(200) NOT NULL,
     plural_label VARCHAR(200),
@@ -112,6 +112,11 @@ export const platformSchema = `
   );
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS api_name VARCHAR(100);
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::jsonb;
+  ALTER TABLE platform_objects DROP CONSTRAINT IF EXISTS platform_objects_object_key_key;
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_objects_global_key
+    ON platform_objects(object_key) WHERE company_id IS NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_objects_company_key
+    ON platform_objects(company_id, object_key) WHERE company_id IS NOT NULL;
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS source_package_version VARCHAR(40);
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS managed BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS package_required BOOLEAN NOT NULL DEFAULT FALSE;
@@ -438,8 +443,22 @@ export const platformSchema = `
     new_value JSONB,
     action VARCHAR(20) NOT NULL CHECK (action IN ('create','update','delete')),
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    correlation_id VARCHAR(255),
+    transaction_id UUID,
+    workflow_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL,
+    event_id UUID REFERENCES platform_events(id) ON DELETE SET NULL,
+    source VARCHAR(80),
+    execution_mode VARCHAR(20),
+    runtime_contract_version VARCHAR(40),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255);
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS transaction_id UUID;
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS workflow_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL;
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS event_id UUID REFERENCES platform_events(id) ON DELETE SET NULL;
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS source VARCHAR(80);
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(20);
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS runtime_contract_version VARCHAR(40);
   CREATE TABLE IF NOT EXISTS platform_approval_processes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
@@ -691,6 +710,7 @@ export const platformSchema = `
   CREATE INDEX IF NOT EXISTS idx_platform_fields_object ON platform_fields(object_id, display_order);
   CREATE INDEX IF NOT EXISTS idx_platform_field_security_role ON platform_field_security(role_id, company_id);
   CREATE INDEX IF NOT EXISTS idx_platform_record_history_record ON platform_record_history(object_id, record_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_platform_record_history_correlation ON platform_record_history(company_id, correlation_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_platform_approval_requests_company ON platform_approval_requests(company_id, status, submitted_at DESC);
   CREATE INDEX IF NOT EXISTS idx_platform_value_sets_company ON platform_value_sets(company_id, active);
   CREATE INDEX IF NOT EXISTS idx_platform_value_set_values_set ON platform_value_set_values(value_set_id, display_order);
@@ -1152,7 +1172,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     const objectResult = await pool.query(
       `INSERT INTO platform_objects (module_id, package_id, object_key, label, plural_label, source_table, store_scoped, config)
        VALUES ($1,(SELECT id FROM package_registry WHERE module_id=$1),$2,$3,$4,$5,$6,$7::jsonb)
-       ON CONFLICT (object_key) DO UPDATE SET label=EXCLUDED.label, plural_label=EXCLUDED.plural_label, source_table=EXCLUDED.source_table, store_scoped=EXCLUDED.store_scoped, config=COALESCE(platform_objects.config,'{}'::jsonb) || EXCLUDED.config, active=TRUE
+       ON CONFLICT (object_key) WHERE company_id IS NULL DO UPDATE SET label=EXCLUDED.label, plural_label=EXCLUDED.plural_label, source_table=EXCLUDED.source_table, store_scoped=EXCLUDED.store_scoped, config=COALESCE(platform_objects.config,'{}'::jsonb) || EXCLUDED.config, active=TRUE
        WHERE platform_objects.company_id IS NULL AND platform_objects.module_id=EXCLUDED.module_id
        RETURNING id`,
       [objectModuleId, object.key, object.label, object.plural, object.table, object.storeScoped === true, JSON.stringify(object.config || {})]
@@ -1272,7 +1292,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       const result = await pool.query(
         `INSERT INTO platform_objects (module_id,object_key,label,plural_label,source_table)
          VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (object_key) DO UPDATE SET label=EXCLUDED.label,plural_label=EXCLUDED.plural_label,source_table=EXCLUDED.source_table,active=true
+         ON CONFLICT (object_key) WHERE company_id IS NULL DO UPDATE SET label=EXCLUDED.label,plural_label=EXCLUDED.plural_label,source_table=EXCLUDED.source_table,active=true
          WHERE platform_objects.company_id IS NULL AND platform_objects.module_id=EXCLUDED.module_id
          RETURNING id`,
         [moduleId, object.key, object.label, object.plural, object.table]

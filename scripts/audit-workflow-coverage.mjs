@@ -74,6 +74,7 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
 const functionRegistry = read("server/services/platformFunctionRegistry.js");
 const workflowRuntime = read("server/services/platformWorkflow.js");
 const trustedRuntime = read("server/services/trustedRuntime.js");
+const platformJobRegistry = read("server/services/platformJobRegistry.js");
 const actionRegistry = read("server/services/platformActionRegistry.js");
 const systemWorkflowCatalog = read("server/services/systemWorkflowCatalog.js");
 
@@ -81,7 +82,7 @@ const functions = extractKeys(functionRegistry, /\bkey:\s*"([^"]+)"/g);
 const workflowActions = extractKeys(workflowRuntime, /\bkey:\s*"([A-Z0-9_]+)"/g);
 const coreActions = extractKeys(actionRegistry, /\bkey:\s*"([A-Z0-9_]+)"/g);
 const actions = uniq([...coreActions, ...workflowActions]);
-const jobsSection = trustedRuntime.match(/TRUSTED_JOB_KINDS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/)?.[1] || "";
+const jobsSection = platformJobRegistry.match(/TRUSTED_JOB_KINDS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/)?.[1] || "";
 const jobs = extractKeys(jobsSection, /"([A-Z0-9_]+)"/g);
 
 const serverSource = read("server/server.js");
@@ -109,7 +110,7 @@ const directRuntimeCalls = [];
 for (const file of walk(SERVER)) {
   const fileRel = rel(file);
   const text = fs.readFileSync(file, "utf8");
-  if (fileRel === "server/services/platformWorkflow.js") continue;
+  if (fileRel === "server/services/platformWorkflow.js" || fileRel.startsWith("server/test/")) continue;
   for (const [label, re] of [
     ["executeWorkflowAction", /\bexecuteWorkflowAction\s*\(/g],
     ["executeRegisteredAction", /\bexecuteRegisteredAction\s*\(/g],

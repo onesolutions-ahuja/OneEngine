@@ -13,8 +13,15 @@ export function getActingCompanyId() {
 
 export function setActingCompanyId(companyId) {
   try {
-    if (companyId) localStorage.setItem(ACTING_COMPANY_STORAGE_KEY, String(companyId))
+    const previous = localStorage.getItem(ACTING_COMPANY_STORAGE_KEY) || ''
+    const next = companyId ? String(companyId) : ''
+    if (next) localStorage.setItem(ACTING_COMPANY_STORAGE_KEY, next)
     else localStorage.removeItem(ACTING_COMPANY_STORAGE_KEY)
+    if (previous !== next) {
+      sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
+      sessionStorage.removeItem('onepos.marketplace.catalog.v1')
+      void clearLazyCache()
+    }
   } catch {}
 }
 

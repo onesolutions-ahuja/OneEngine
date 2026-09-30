@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { loadEffectivePermissionSets } from "./platformPermissionSets.js";
+import { platformRuntimeContract } from "./platformConformance.js";
 
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 
@@ -126,7 +127,7 @@ export async function createPlatformExecutionContext({
   if (db && typeof db === "function" && actorId && authoritativeCompanyId) {
     try {
       const result = await db(
-        `SELECT id,company_id,store_id,role_id,is_superadmin
+        `SELECT id,company_id,store_id,role_id
            FROM users
           WHERE id=$1 AND company_id=$2 AND active=true
           LIMIT 1`,
@@ -139,7 +140,6 @@ export async function createPlatformExecutionContext({
           companyId: row.company_id,
           storeId: row.store_id,
           roleId: row.role_id,
-          isSuperadmin: row.is_superadmin === true,
         };
       }
     } catch {
@@ -198,6 +198,7 @@ export async function createPlatformExecutionContext({
     || inherited.$System?.correlationId
     || randomUUID();
 
+  const runtimeContract = platformRuntimeContract();
   const globals = {
     $Record: record ?? inherited.$Record ?? null,
     $RecordPrior: previousRecord ?? inherited.$RecordPrior ?? null,
@@ -234,7 +235,10 @@ export async function createPlatformExecutionContext({
       now: inherited.$System?.now || startedAt,
       correlationId,
       environment: system?.environment || process.env.NODE_ENV || inherited.$System?.environment || null,
-      runtime: "OneEngine",
+      runtime: runtimeContract.runtime,
+      runtimeContractVersion: runtimeContract.runtimeContractVersion,
+      metadataSchemaVersion: runtimeContract.metadataSchemaVersion,
+      apiVersion: runtimeContract.apiVersion,
       executionMode: mode,
       trusted: isTrustedSystem,
     },

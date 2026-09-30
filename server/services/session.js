@@ -9,7 +9,15 @@
  */
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "development-secret-change-this";
+function requireJwtSecret() {
+  const secret = String(process.env.JWT_SECRET || "").trim();
+  if (!secret) {
+    const error = new Error("JWT_SECRET is required");
+    error.code = "JWT_SECRET_NOT_CONFIGURED";
+    throw error;
+  }
+  return secret;
+}
 
 /* POS till sessions: a workday with headroom. Configurable via env because
  * single-device sites may legitimately want longer/shorter sessions. */
@@ -28,7 +36,7 @@ export function createSessionToken(user, userStores = []) {
       username: user.username,
       assignedStoreIds: userStores.map(us => us.store_id),
     },
-    JWT_SECRET,
+    requireJwtSecret(),
     { expiresIn: SESSION_TTL }
   );
 }
@@ -56,11 +64,12 @@ export function createAuthenticate({ onAuthenticated = null } = {}) {
     const token = header.substring(7);
 
     try {
-      req.user = jwt.verify(token, JWT_SECRET);
+      req.user = jwt.verify(token, requireJwtSecret());
       req.__oneposAuthenticated = true;
       if (!onAuthenticated) return next();
       return Promise.resolve(onAuthenticated(req, res, next)).catch((error) => next(error));
-    } catch {
+    } catch (error) {
+      if (error?.code === "JWT_SECRET_NOT_CONFIGURED") return next(error);
       return res.status(401).json({
         success: false,
         message: "Invalid or expired token",
@@ -71,5 +80,5 @@ export function createAuthenticate({ onAuthenticated = null } = {}) {
 
 /** Test/helper hook: sign an arbitrary payload with the same secret. */
 export function signSessionPayload(payload, expiresIn = SESSION_TTL) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn });
+  return jwt.sign(payload, requireJwtSecret(), { expiresIn });
 }

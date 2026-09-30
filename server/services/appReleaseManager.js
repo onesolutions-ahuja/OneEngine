@@ -2,6 +2,7 @@ import { comparePackageVersions, provisionPackageMetadata } from "./packageRegis
 import { createAuditWriter } from "./auditLog.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
 import { deployPackageMetadata, rollbackMetadataDeployment, validateDeploymentManifest } from "./platformMetadataDeployment.js";
+import { PLATFORM_RUNTIME_CONTRACT_VERSION, validatePlatformCompatibility, assertPlatformCompatibility } from "./platformConformance.js";
 
 export const RELEASE_UPDATE_POLICIES = Object.freeze(["OPTIONAL", "FORCED", "STAGED"]);
 export const RELEASE_STATUSES = Object.freeze(["DRAFT", "VALIDATED", "PUBLISHED", "PAUSED", "ARCHIVED"]);
@@ -118,18 +119,19 @@ async function writeReleaseAudit(db, { companyId = null, userId = null, action, 
   await writeAudit.object({ companyId, userId, action, entityType: "package_release", entityId: releaseId, result, metadata });
 }
 
-export function resolveReleaseValidation({ packageVersion, minimumPlatformVersion, companyCount = 0, changes = [], warnings = [], conflicts = [] } = {}) {
+export function resolveReleaseValidation({ packageVersion, minimumPlatformVersion, platformVersion = PLATFORM_RUNTIME_CONTRACT_VERSION, companyCount = 0, changes = [], warnings = [], conflicts = [] } = {}) {
   const releaseVersion = String(packageVersion || "").trim();
   const requiredPlatform = String(minimumPlatformVersion || "").trim();
   const destructive = summariseReleaseChanges(changes).destructive;
   const errors = [];
-  if (requiredPlatform && typeof comparePackageVersions === "function") {
+  if (requiredPlatform) {
     try {
-      if (comparePackageVersions(releaseVersion, requiredPlatform) < 0) {
-        errors.push("Package version is below the required minimum platform version.");
+      const compatibility = validatePlatformCompatibility(requiredPlatform, platformVersion);
+      if (!compatibility.compatible) {
+        errors.push(`Package requires platform runtime ${requiredPlatform}; current runtime is ${platformVersion}.`);
       }
     } catch {
-      /* ignore invalid platform version strings here; validation can still continue */
+      errors.push("Minimum platform version is invalid.");
     }
   }
   if (destructive > 0) errors.push("Destructive migration changes require explicit approval.");
@@ -142,6 +144,7 @@ export function resolveReleaseValidation({ packageVersion, minimumPlatformVersio
     conflicts: Array.isArray(conflicts) ? conflicts : [],
     companiesAffected: Number(companyCount) || 0,
     destructiveChanges: destructive,
+    platformVersion,
   };
 }
 
@@ -577,6 +580,12 @@ export async function executeTenantReleaseUpgrade({ db, releaseId, companyId, pa
   );
   if (!packageRow || !Array.isArray(packageRow.rows) || !packageRow.rows.length) throw new Error("Package not found");
   const packageDefinition = packageRow.rows[0];
+  assertPlatformCompatibility(
+    release.minimumPlatformVersion
+      || release.minimum_platform_version
+      || packageDefinition.required_platform_version
+      || null
+  );
   const packageId = packageDefinition.id;
   const current = await db(
     `SELECT id, company_id, package_id, version, installed_version, target_version, update_status, auto_update_policy

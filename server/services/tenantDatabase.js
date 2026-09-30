@@ -169,6 +169,23 @@ export function createTenantDatabaseRouter({ controlPool, sharedPool, PoolFactor
   return { cache, loadConfig, resolveForCompany, getPoolForConfig, testExternalConfig, closeAll };
 }
 
+export function createHostnameDatabaseMiddleware({ tenantPoolManager, fallbackPool }) {
+  return function hostnameDatabaseContext(req, res, next) {
+    const hostnamePool = tenantPoolManager?.getPoolForRequest?.(req) || fallbackPool || null;
+    if (!hostnamePool) return next();
+    const context = {
+      companyId: null,
+      mode: req.tenant?.databaseMode || "ONEPOS_MANAGED",
+      pool: hostnamePool,
+      config: null,
+      source: "hostname",
+    };
+    req.tenantPool = hostnamePool;
+    req.db = (query, params = []) => hostnamePool.query(query, params);
+    return requestStore.run(context, next);
+  };
+}
+
 export function createAuthenticatedDatabaseMiddleware({ router, pool }) {
   return async (req, res, next) => {
     /*
@@ -241,6 +258,22 @@ export function getRequestDatabaseContext() {
 
 export function getRequestPool(fallback = null) {
   return getRequestDatabaseContext()?.pool || fallback;
+}
+
+export function createRequestAwarePool(fallbackPool) {
+  if (!fallbackPool) return null;
+  return new Proxy(fallbackPool, {
+    get(target, property, receiver) {
+      if (property === "query") {
+        return (...args) => (getRequestPool(fallbackPool) || fallbackPool).query(...args);
+      }
+      if (property === "connect") {
+        return (...args) => (getRequestPool(fallbackPool) || fallbackPool).connect(...args);
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
 }
 
 export async function validateTenantSchema(pool) {

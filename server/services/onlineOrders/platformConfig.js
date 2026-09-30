@@ -74,12 +74,17 @@ export function sanitizeUberStoreMenuMappings(value) {
 }
 
 function encryptionKey() {
-  const secret =
+  const secret = String(
     process.env.ONLINE_PLATFORMS_SECRET ||
     process.env.JWT_SECRET ||
-    "development-secret-change-this";
-
-  return crypto.createHash("sha256").update(String(secret)).digest();
+    ""
+  ).trim();
+  if (!secret) {
+    const error = new Error("ONLINE_PLATFORMS_SECRET or JWT_SECRET is required");
+    error.code = "PLATFORM_SECRET_NOT_CONFIGURED";
+    throw error;
+  }
+  return crypto.createHash("sha256").update(secret).digest();
 }
 
 export function encryptSecret(value) {

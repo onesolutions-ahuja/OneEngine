@@ -98,6 +98,9 @@ test("legacy encrypted credentials migrate lazily into the connection credential
         }],
       };
     }
+    if (sql.includes("FROM integration_connections") && sql.includes("connector_definition_id") && !sql.includes("LEFT JOIN platform_connector_definitions")) {
+      return { rows: [{ id: "conn1", company_id: "co1", connector_definition_id: null }] };
+    }
     if (sql.includes("SELECT id FROM platform_credentials")) return { rows: [] };
     if (sql.includes("INSERT INTO platform_credentials")) {
       insertedCredential = {

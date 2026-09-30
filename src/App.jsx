@@ -2673,8 +2673,6 @@ function Desktop({ onLock, onSignOut }) {
                   initialSelectedPackageKey={storeFocusPackageKey}
                   onPackagesChange={setStoreApps}
                   canManagePackages={
-                    storedUser?.isSuperadmin === true ||
-                    storedUser?.is_superadmin === true ||
                     desktopPermissions.includes('package.install') ||
                     desktopPermissions.includes('package.manage') ||
                     desktopPermissions.includes('settings.manage') ||

@@ -2361,8 +2361,8 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     const storeScoped = typeof definition.storeScoped === "boolean" ? definition.storeScoped : null;
     if (sourceTable && !safeMetadataKey(sourceTable)) throw new Error(`Invalid package source table: ${sourceTable}`);
     const existing = await db(
-      "SELECT id,package_id,module_id,company_id FROM platform_objects WHERE object_key=$1",
-      [objectKey]
+      "SELECT id,package_id,module_id,company_id FROM platform_objects WHERE object_key=$1 AND company_id IS NOT DISTINCT FROM $2 LIMIT 1",
+      [objectKey, objectCompanyId]
     );
     let object;
     if (existing.rows.length) {
@@ -2433,7 +2433,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
         throw new Error(`Invalid package field source column on ${objectKey}.${apiName}`);
       }
       const existingField = await db(
-        "SELECT id,company_id,source_package_id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id IS NULL OR company_id=$3) ORDER BY company_id NULLS FIRST LIMIT 1",
+        "SELECT id,company_id,source_package_id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND company_id IS NOT DISTINCT FROM $3 LIMIT 1",
         [object.id, apiName, fieldCompanyId]
       );
       if (existingField.rows.length) {
@@ -2504,7 +2504,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     let childObjectId = objectIds.get(childKey);
     if (!parentObjectId || !childObjectId) {
       const external = await db(
-        "SELECT id,object_key FROM platform_objects WHERE object_key=ANY($1::text[]) AND (company_id IS NULL OR company_id=$2)",
+        "SELECT DISTINCT ON (object_key) id,object_key FROM platform_objects WHERE object_key=ANY($1::text[]) AND (company_id=$2 OR company_id IS NULL) ORDER BY object_key, CASE WHEN company_id=$2 THEN 0 ELSE 1 END, id",
         [[parentKey, childKey], companyId]
       );
       const byKey = new Map(external.rows.map((row) => [row.object_key, row.id]));
@@ -2520,7 +2520,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
       const relationshipType = relationship.relationshipType || relationship.relationship_type || "lookup";
       const fieldObjectId = relationshipType === "lookup" ? parentObjectId : childObjectId;
       const fieldResult = await db(
-        "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id IS NULL OR company_id=$3) LIMIT 1",
+        "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id=$3 OR company_id IS NULL) ORDER BY CASE WHEN company_id=$3 THEN 0 ELSE 1 END, id LIMIT 1",
         [fieldObjectId, childFieldKey, companyId]
       );
       if (!fieldResult.rows[0]?.id) throw new Error(`Package relationship field not found: ${childFieldKey}`);
@@ -2530,7 +2530,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     const relationshipType = relationship.relationshipType || relationship.relationship_type || "lookup";
     if (relationshipType === "lookup" && parentFieldKey) {
       const parentFieldResult = await db(
-        "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id IS NULL OR company_id=$3) LIMIT 1",
+        "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id=$3 OR company_id IS NULL) ORDER BY CASE WHEN company_id=$3 THEN 0 ELSE 1 END, id LIMIT 1",
         [parentObjectId, parentFieldKey, companyId]
       );
       if (!parentFieldResult.rows.length) throw new Error(`Package relationship field not found: ${parentFieldKey}`);
@@ -2729,7 +2729,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     let objectId = objectIds.get(objectKey);
     if (!objectId) {
       const external = await db(
-        "SELECT id FROM platform_objects WHERE object_key=$1 AND (company_id IS NULL OR company_id=$2) LIMIT 1",
+        "SELECT id FROM platform_objects WHERE object_key=$1 AND (company_id=$2 OR company_id IS NULL) ORDER BY CASE WHEN company_id=$2 THEN 0 ELSE 1 END, id LIMIT 1",
         [objectKey, companyId]
       );
       objectId = external.rows[0]?.id;
@@ -2766,7 +2766,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
             packageVersion: owner.version || owner.manifest?.version || "1.0.0",
           });
           const resolved = await db(
-            "SELECT id FROM platform_objects WHERE object_key=$1 AND (company_id IS NULL OR company_id=$2) LIMIT 1",
+            "SELECT id FROM platform_objects WHERE object_key=$1 AND (company_id=$2 OR company_id IS NULL) ORDER BY CASE WHEN company_id=$2 THEN 0 ELSE 1 END, id LIMIT 1",
             [objectKey, companyId]
           );
           objectId = resolved.rows[0]?.id;
@@ -3013,7 +3013,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
       throw new Error("Package field permissions require a declared field, role, and company scope");
     }
     const field = await db(
-      "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id IS NULL OR company_id=$3)",
+      "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id=$3 OR company_id IS NULL) ORDER BY CASE WHEN company_id=$3 THEN 0 ELSE 1 END, id LIMIT 1",
       [objectId, fieldApiName, companyId]
     );
     if (!field.rows.length) throw new Error(`Package permission field is not available: ${fieldApiName}`);

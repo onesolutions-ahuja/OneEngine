@@ -1,0 +1,116 @@
+name: Phase 1-10 Runtime QA
+
+on:
+  push:
+    branches:
+      - phase10-runtime-conformance
+  workflow_dispatch:
+
+concurrency:
+  group: phase-1-10-runtime-qa
+  cancel-in-progress: true
+
+jobs:
+  runtime-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install server dependencies
+        run: npm install --prefix server --no-audit --no-fund
+
+      - name: Run deep project module audit
+        id: deep_module_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/deep-project-audit.mjs 2>&1 | tee deep-project-module-audit.log
+
+      - name: Run project consistency audit
+        id: consistency_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/audit-project-deep.mjs --enforce 2>&1 | tee project-consistency-audit.log
+
+      - name: Run API contract audit
+        id: api_contract_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/audit-api-contracts.mjs 2>&1 | tee api-contract-audit.log
+
+      - name: Run app surface audit
+        id: app_surface_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/audit-app-surfaces.mjs 2>&1 | tee app-surface-audit.log
+
+      - name: Run complete server test suite
+        id: server_tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test server/test/*.test.mjs 2>&1 | tee server-tests.log
+
+      - name: Run server trusted-runtime build checks
+        id: server_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build --prefix server 2>&1 | tee server-build.log
+
+      - name: Run frontend trusted-runtime build
+        id: frontend_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee frontend-build.log
+
+      - name: Upload QA logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-1-10-runtime-qa-logs
+          path: |
+            deep-project-module-audit.log
+            project-consistency-audit.log
+            api-contract-audit.log
+            app-surface-audit.log
+            artifacts/deep-project-audit.json
+            artifacts/project-consistency-audit.json
+            artifacts/project-consistency-audit.md
+            artifacts/api-contract-audit.json
+            server-tests.log
+            server-build.log
+            frontend-build.log
+            artifacts/deep-project-audit.json
+          if-no-files-found: warn
+
+      - name: Fail if any QA stage failed
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.deep_module_audit.outcome }}" = "success"
+          test "${{ steps.consistency_audit.outcome }}" = "success"
+          test "${{ steps.app_surface_audit.outcome }}" = "success"
+          test "${{ steps.server_tests.outcome }}" = "success"
+          test "${{ steps.server_build.outcome }}" = "success"
+          test "${{ steps.frontend_build.outcome }}" = "success"
