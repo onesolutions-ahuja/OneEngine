@@ -1,4 +1,4 @@
-import { apiRequest, getActingCompanyId, getStoredUser, setActingCompanyId } from './api'
+import { apiRequest, getActingCompanyId, getStoredUser, loadSessionPermissions, setActingCompanyId } from './api'
 
 const SETTINGS_CONTEXT_CACHE_KEY = 'onepos.settings.context.v2'
 
@@ -93,7 +93,7 @@ export async function loadSettingsContext() {
    * Licence checks are intentionally NOT part of Settings bootstrap; licensed
    * actions enforce licence validity at execution time.
    */
-  const permissionsPromise = apiRequest('/api/auth/me/permissions?includeEntitlements=0')
+  const permissionsPromise = loadSessionPermissions({ includeEntitlements: false })
   const settingsPromise = hasCompanyContext
     ? apiRequest('/api/settings').catch((error) => ({ __settingsError: error }))
     : Promise.resolve(null)
@@ -111,7 +111,7 @@ export async function loadSettingsContext() {
 
   const context = {
     user,
-    permissions: permissions?.data || {},
+    permissions: permissions || {},
     settings,
     settingsError,
     hasCompanyContext,
