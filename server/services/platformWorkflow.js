@@ -1966,11 +1966,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const previousClauses = ["id=$1"];
       if (targetObject.company_scoped) {
         previousParams.push(req?.user?.companyId || companyId || null);
-        previousClauses.push(`company_id=${previousParams.length}`);
+        previousClauses.push(`company_id=$${previousParams.length}`);
       }
       if (targetObject.store_scoped) {
         previousParams.push(req?.user?.storeId || null);
-        previousClauses.push(`store_id=${previousParams.length}`);
+        previousClauses.push(`store_id=$${previousParams.length}`);
       }
       const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
       const query = `UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`;
@@ -2033,7 +2033,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
       });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: action.recordId });
-      const sets = mappedFields.map((field, index) => `"${field.source_column}"=${index + 1}`).join(", ");
+      const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
       const params = [...entries.map(([, value]) => value), action.recordId];
       const clauses = ["id=$" + params.length];
       if (req?.user?.companyId) {
@@ -2044,7 +2044,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const previousClauses = ["id=$1"];
       if (req?.user?.companyId) {
         previousParams.push(req.user.companyId);
-        previousClauses.push(`company_id=${previousParams.length}`);
+        previousClauses.push(`company_id=$${previousParams.length}`);
       }
       const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
       const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
@@ -2170,7 +2170,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const scopeClauses = ["id=$1"];
       if (targetObject.company_scoped) {
         scopeParams.push(req?.user?.companyId || companyId);
-        scopeClauses.push(`company_id=${scopeParams.length}`);
+        scopeClauses.push(`company_id=$${scopeParams.length}`);
       }
       const previous = (await db(`SELECT * FROM "${table}" WHERE ${scopeClauses.join(" AND ")} LIMIT 1`, scopeParams)).rows[0] || null;
       const hasActive = await db(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'`, [table]);
