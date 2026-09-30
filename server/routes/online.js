@@ -175,22 +175,32 @@ export default function createOnlineRouter({
    * deduction (permanent consumption); cancelling/rejecting restores it
    * (ONLINE_RELEASE). Only tracked products are reserved.
    */
-  async function reserveOrderInventory(client, { companyId, storeId, order, items, userId }) {
+  async function reserveOrderInventory(client, { companyId, storeId, order, items, userId, req = null, sourceType = "internal" }) {
     for (const item of items) {
       if (!item.trackStock && !item.track_stock) {
         continue;
       }
 
-      await createInventoryMovement(client, {
+      await executeSystemWorkflow({
+        db,
         companyId,
-        productId: item.productId || item.product_id,
+        userId: userId || null,
+        systemKey: "function:inventory.movement.create",
+        req,
         storeId,
-        movementType: "ONLINE_RESERVE",
-        quantityChange: -Number(item.quantity),
-        referenceType: "ONLINE_ORDER",
-        referenceId: order.id,
-        reason: `Reserved for ${order.platform} order ${order.external_order_id}`,
-        createdBy: userId,
+        input: {
+          companyId,
+          productId: item.productId || item.product_id,
+          storeId,
+          movementType: "ONLINE_RESERVE",
+          quantityChange: -Number(item.quantity),
+          referenceType: "ONLINE_ORDER",
+          referenceId: order.id,
+          reason: `Reserved for ${order.platform} order ${order.external_order_id}`,
+          createdBy: userId,
+        },
+        source: { type: sourceType, method: req?.method || "INTERNAL", path: req?.originalUrl || req?.path || "online.reserve", capability: "inventory.movement.create" },
+        extraContext: { client, businessDb: (query, params = []) => client.query(query, params), pool, createInventoryMovement },
       });
       await syncBatchMovement(client, {
         companyId,
@@ -202,22 +212,32 @@ export default function createOnlineRouter({
     }
   }
 
-  async function releaseOrderInventory(client, { companyId, storeId, order, items, userId }) {
+  async function releaseOrderInventory(client, { companyId, storeId, order, items, userId, req = null, sourceType = "internal" }) {
     for (const item of items) {
       if (!item.track_stock) {
         continue;
       }
 
-      await createInventoryMovement(client, {
+      await executeSystemWorkflow({
+        db,
         companyId,
-        productId: item.product_id,
+        userId: userId || null,
+        systemKey: "function:inventory.movement.create",
+        req,
         storeId,
-        movementType: "ONLINE_RELEASE",
-        quantityChange: Number(item.quantity),
-        referenceType: "ONLINE_ORDER",
-        referenceId: order.id,
-        reason: `Released reservation for ${order.platform} order ${order.external_order_id}`,
-        createdBy: userId,
+        input: {
+          companyId,
+          productId: item.product_id,
+          storeId,
+          movementType: "ONLINE_RELEASE",
+          quantityChange: Number(item.quantity),
+          referenceType: "ONLINE_ORDER",
+          referenceId: order.id,
+          reason: `Released reservation for ${order.platform} order ${order.external_order_id}`,
+          createdBy: userId,
+        },
+        source: { type: sourceType, method: req?.method || "INTERNAL", path: req?.originalUrl || req?.path || "online.release", capability: "inventory.movement.create" },
+        extraContext: { client, businessDb: (query, params = []) => client.query(query, params), pool, createInventoryMovement },
       });
       await syncBatchMovement(client, {
         companyId,
@@ -1350,6 +1370,8 @@ export default function createOnlineRouter({
         order,
         items: resolvedItems,
         userId: req.user.id,
+        req,
+        sourceType: "api",
       });
 
       await recordEvent(client, {
@@ -1645,6 +1667,8 @@ export default function createOnlineRouter({
           order,
           items,
           userId: req.user.id,
+          req,
+          sourceType: "api",
         });
         console.timeEnd(`[${req.params.id}] ${toStatus} - releaseOrderInventory`);
       }
@@ -2216,6 +2240,7 @@ export default function createOnlineRouter({
           order,
           items: reservable,
           userId: null,
+          sourceType: "webhook",
         });
         await client.query(
           "UPDATE online_orders SET inventory_reserved = TRUE, updated_at = NOW() WHERE id = $1",
