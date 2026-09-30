@@ -54,6 +54,7 @@ const RecordListView = lazyWithRecovery(() => import('./components/RecordListVie
 const MetadataRecordFormModal = lazyWithRecovery(() => import('./components/MetadataRecordFormModal'))
 const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
 const OneBuilder = lazyWithRecovery(() => import('./pages/settings/OneBuilder'))
+const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
 const WorkflowRunsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/WorkflowRunsAdmin'))
 const WorkItemsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/WorkItemsAdmin'))
 const PlatformAppsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/PlatformAppsAdmin'))
@@ -152,7 +153,7 @@ import {
 const dockItems = [
   { id: 'launchpad', label: 'Launcher', icon: LayoutGrid },
   { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
-  { id: 'builder', label: 'Builder', icon: LayoutGrid },
+  { id: 'builder', label: 'OneDeveloper', icon: LayoutGrid },
   { id: 'contacts', label: 'Contacts', icon: Users },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
   { id: 'settings', label: 'Settings', icon: GearIcon },
@@ -611,6 +612,7 @@ function buildSettingsGroupsFromCatalog(catalog) {
       if (!section?.key || !section?.label) continue
       const groupKey = String(section.groupKey || 'settings')
       const groupLabel = groupLabels.get(groupKey) || groupKey
+      if (DEVELOPER_SETTINGS_KEYS.has(String(section.key)) || ['developer', 'platform'].includes(groupKey.toLowerCase()) || ['developer', 'platform'].includes(groupLabel.toLowerCase())) continue
       if (!grouped.has(groupLabel)) grouped.set(groupLabel, [])
       grouped.get(groupLabel).push({
         ...settingsVisual(section.label, section.key),
@@ -647,10 +649,10 @@ function buildSettingsGroupsFromCatalog(catalog) {
         const label = fieldConfig.settingsSection || fieldConfig.settings_section || 'General'
         const explicitKey = fieldConfig.settingsKey || fieldConfig.settings_key || ''
         const visual = settingsVisual(label, explicitKey)
-        push(
-          fieldConfig.settingsGroup || fieldConfig.settings_group || config.settingsGroup || config.settings_group || 'Settings',
-          { ...visual, label },
-        )
+        const targetGroup = fieldConfig.settingsGroup || fieldConfig.settings_group || config.settingsGroup || config.settings_group || 'Settings'
+        if (!visual.developer && !['developer', 'platform'].includes(String(targetGroup).toLowerCase())) {
+          push(targetGroup, { ...visual, label })
+        }
       }
       continue
     }
@@ -659,7 +661,10 @@ function buildSettingsGroupsFromCatalog(catalog) {
     if (!label) continue
     const explicitKey = config.settingsRouteKey || config.settings_route_key || config.settingsKey || config.settings_key || ''
     const visual = settingsVisual(label, explicitKey)
-    push(config.settingsGroup || config.settings_group || 'Settings', { ...visual, label })
+    const targetGroup = config.settingsGroup || config.settings_group || 'Settings'
+    if (!visual.developer && !['developer', 'platform'].includes(String(targetGroup).toLowerCase())) {
+      push(targetGroup, { ...visual, label })
+    }
   }
 
   return [...grouped.values()].filter((group) => group.length)
@@ -673,7 +678,12 @@ function readRoute() {
     ? window.location.pathname.slice(base.length)
     : window.location.pathname
   const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
-  if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'general' }
+  if (parts[0] === 'settings') {
+    const section = parts[1] || 'general'
+    if (DEVELOPER_SETTINGS_KEYS.has(section)) return { app: 'developer', section }
+    return { app: 'settings', section }
+  }
+  if (parts[0] === 'developer') return { app: 'developer', section: parts[1] || 'objects' }
   if (parts[0] === 'dashboard') return { app: 'dashboard', section: null }
   if (parts[0] === 'till') return { app: 'till', section: null }
   if (parts[0] === 'customer-display') return { app: 'customer-display', section: null }
@@ -716,6 +726,8 @@ function setRoute(app, section = null, options = {}) {
   const base = APP_BASE || ''
   const next = app === 'settings'
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
+    : app === 'developer'
+      ? `${base}/developer${section && section !== 'objects' ? `/${section}` : ''}`
     : app === 'dashboard'
       ? `${base}/dashboard`
     : app === 'till'
@@ -2560,8 +2572,8 @@ function Desktop({ onLock, onSignOut }) {
       return
     }
     if (id === 'builder') {
-      setRoute('settings', 'platform')
-      setActiveApp('settings')
+      setRoute('developer', 'objects')
+      setActiveApp('developer')
       return
     }
     if (id === 'contacts') {
@@ -2732,7 +2744,18 @@ function Desktop({ onLock, onSignOut }) {
 
       <LazyLoadBoundary>
       <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>
-        {activeApp === 'settings' ? (
+        {activeApp === 'developer' ? (
+          canManagePlatform ? (
+            <OneDeveloperPage
+              initialSection={routeState?.section || 'objects'}
+              onSectionChange={(section) => {
+                const next = { app: 'developer', section }
+                setRouteState(next)
+                setRoute('developer', section)
+              }}
+            />
+          ) : <div className="module-state">Platform Management permission required.</div>
+        ) : activeApp === 'settings' ? (
           <SettingsPage onOpenProfile={() => {
             const next = { app: 'profile', section: null }
             setRouteState(next)
