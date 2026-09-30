@@ -8,6 +8,9 @@ function safeSource(req, source = null) {
     method: source?.method || req?.method || null,
     path: source?.path || req?.originalUrl || req?.path || null,
     capability: source?.capability || null,
+    packageKey: source?.packageKey || null,
+    appName: source?.appName || null,
+    connectorInstanceId: source?.connectorInstanceId || null,
   };
 }
 
