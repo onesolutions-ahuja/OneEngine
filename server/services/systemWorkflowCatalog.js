@@ -101,6 +101,18 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
     (existingResult.rows || []).map((row) => [String(row.action?.systemKey || ""), row])
   );
 
+  // System workflows are executable defaults. Respect developer edits, but
+  // repair untouched rows created by older catalogue versions.
+  await db(
+    `UPDATE platform_rules
+        SET active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW()
+      WHERE company_id=$1
+        AND action->>'systemGenerated'='true'
+        AND COALESCE(user_modified,FALSE)=FALSE
+        AND (active=FALSE OR lifecycle_status<>'ACTIVE')`,
+    [companyId]
+  );
+
   let created = 0;
   for (const definition of definitions) {
     if (existing.has(definition.systemKey)) continue;
@@ -108,7 +120,7 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
       `INSERT INTO platform_rules
          (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,company_id,created_by,managed,package_required,user_modified)
        VALUES
-         (NULL,$1,$2,'[]'::jsonb,$3::jsonb,FALSE,'DRAFT',1,$4,$5,TRUE,FALSE,FALSE)`,
+         (NULL,$1,$2,'[]'::jsonb,$3::jsonb,TRUE,'ACTIVE',1,$4,$5,TRUE,FALSE,FALSE)`,
       [
         definition.name,
         definition.triggerKey,
