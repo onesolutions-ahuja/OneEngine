@@ -20,7 +20,7 @@ function extractKeys(text, pattern) {
 }
 
 function routeBlocks(file, text, globalGatewayEnabled = false) {
-  const routerLevelAuth = /\brouter\.use\s*\(\s*authenticate\b/.test(text);
+  const routerLevelAuth = /\brouter\.use\s*\(\s*(?:(?:"[^"]+"|'[^']+'|`[^`]+`)\s*,\s*)?authenticate\b/.test(text);
   const authAliases = [...text.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*\[([\s\S]*?)\]/g)]
     .filter((match) => /\bauthenticate\b/.test(match[2]))
     .map((match) => match[1]);
@@ -35,6 +35,7 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
     const executesWorkflow = /\bexecuteWorkflowActions?\s*\(/.test(body);
     const executesSystemWorkflow = /\bexecuteSystemWorkflow\s*\(/.test(body);
     const executesRegisteredAction = /\bexecuteRegisteredAction\s*\(/.test(body);
+    const ensuresBusinessCommand = /\bensureBusinessCommandRun\??\.\s*\(/.test(body);
     const invokesFunctionRegistry = /\b(?:getRegisteredFunction|executePlatformFunction|CALL_FUNCTION)\b/.test(body);
     const authenticated = routerLevelAuth
       || /\bauthenticate\b/.test(body)
@@ -43,11 +44,12 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
       file: rel(file),
       method,
       route,
-      workflowMediated: executesSystemWorkflow || (createsRun && executesWorkflow) || (globalGatewayEnabled && authenticated),
+      workflowMediated: executesSystemWorkflow || ensuresBusinessCommand || (createsRun && executesWorkflow) || (globalGatewayEnabled && authenticated),
       createsRun,
       executesWorkflow,
       executesSystemWorkflow,
       executesRegisteredAction,
+      ensuresBusinessCommand,
       invokesFunctionRegistry,
       authenticated,
       globalGatewayCovered: globalGatewayEnabled && authenticated,
