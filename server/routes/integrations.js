@@ -19,12 +19,16 @@
 import express from "express";
 import crypto from "crypto";
 import {
-  encryptCredentials,
-  decryptCredentials,
   redactHeadersForLog,
   redactBodyForLog,
   toPublicIntegration,
 } from "../services/integrationCredentials.js";
+import {
+  ONE_CONNECTION_AUTH_TYPES,
+  buildOneConnectionAuthHeaders,
+  resolveOneConnection,
+  saveOneConnectionCredential,
+} from "../services/oneConnection.js";
 import { buildPayload } from "../services/integrationFieldResolver.js";
 import { getIntegrationDispatchStatus } from "../services/integrationDispatcher.js";
 import {
@@ -36,7 +40,7 @@ import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const AUTH_TYPES = ["none", "api_key", "bearer", "basic"];
+const AUTH_TYPES = [...ONE_CONNECTION_AUTH_TYPES];
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const ENTITY_TYPES = ["sale", "purchase", "product", "customer", "custom"];
 const MAPPING_TYPES = ["direct", "constant", "template"];
@@ -773,34 +777,19 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
       return { ok: false, status: 0, error: "Target host is not allowed", logId: null };
     }
 
-    // Build auth material from the decrypted credentials.
-    let credentials = null;
-    try {
-      credentials = decryptCredentials(integration.credentials_encrypted);
-    } catch {
-      credentials = null;
-    }
+    const loadedConnection = await resolveOneConnection({
+      db,
+      companyId: integration.company_id,
+      connectionId: integration.id,
+      includeSecrets: true,
+      migrateLegacy: true,
+    });
+    const credentials = loadedConnection?.secrets || {};
     const headers = { Accept: "application/json" };
-    let authHeader = null;
-    const authType = integration.auth_type;
-    /* authHeader is merged into `headers` for the outbound request below;
-       logs always receive the redacted copy. */
-
-    if (authType === "bearer" && credentials?.token) {
-      authHeader = `Bearer ${credentials.token}`;
-    } else if (authType === "api_key") {
-      const key = credentials?.apiKey ?? credentials?.api_key ?? credentials?.key;
-      if (key) {
-        const headerName = credentials?.headerName || credentials?.header_name || "X-API-Key";
-        headers[headerName] = key;
-      }
-      if (credentials?.username && credentials?.password) {
-        authHeader = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64")}`;
-      }
-    } else if (authType === "basic" && credentials?.username && credentials?.password) {
-      authHeader = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64")}`;
-    }
-    if (authHeader) headers.Authorization = authHeader;
+    const authType = loadedConnection?.connection?.effective_auth_type || integration.auth_type || "none";
+    const authHeaders = buildOneConnectionAuthHeaders(authType, credentials);
+    Object.assign(headers, authHeaders);
+    const authHeader = headers.Authorization || null;
 
     // For endpoint tests, build a payload from field mappings when sample data is supplied.
     let body = null;
