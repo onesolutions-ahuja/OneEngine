@@ -40,6 +40,7 @@ import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js
 import { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { runRecordSaveLifecycle, runRecordDeleteLifecycle, RecordLifecycleError } from "../services/platformRecordLifecycle.js";
+import { withPlatformTransaction, PlatformTransactionError } from "../services/platformTransaction.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
@@ -4960,7 +4961,41 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return { version: current.__validation_version, current };
   }
 
-  async function executeCanonicalRecordWrite({ req, object, metadataFields, fields, input, action, recordId = null }) {
+  async function executeCanonicalRecordWrite({ req, object, metadataFields, fields, input, action, recordId = null, transaction = null, runtimeDb = db }) {
+    if (!transaction && pool?.connect) {
+      try {
+        const txResult = await withPlatformTransaction({
+          pool,
+          handler: async (tx) => executeCanonicalRecordWrite({
+            req,
+            object,
+            metadataFields,
+            fields,
+            input,
+            action,
+            recordId,
+            transaction: tx,
+            runtimeDb: tx.query,
+          }),
+        });
+        return {
+          ...txResult.result,
+          transactionId: txResult.transactionId,
+          committed: txResult.committed,
+          afterCommitResults: txResult.afterCommit,
+        };
+      } catch (error) {
+        const cause = error instanceof PlatformTransactionError ? (error.cause || error) : error;
+        return {
+          status: cause.status || 422,
+          code: cause.code || error.code || "PLATFORM_TRANSACTION_FAILED",
+          message: cause.message || error.message,
+          transactionId: error.transactionId || null,
+          transactionPhase: error.phase || null,
+        };
+      }
+    }
+
     const permissionAction = action === "update" ? "edit" : "create";
     if (!(await hasPlatformObjectPermission(db, req, object.id, permissionAction))) {
       return { status: 403, code: "IMPORT_PERMISSION_REQUIRED", message: `${permissionAction} permission is required` };
@@ -5064,7 +5099,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
             if (state.ruleCheck.version !== undefined) { params.push(state.ruleCheck.version); clauses.push(`xmin::text=$${params.length}`); }
             const returning = recordReturning(fields, state.validation.values);
-            const result = await db(`UPDATE "${object.source_table}" SET ${assignments.join(",")} WHERE ${clauses.join(" AND ")} RETURNING ${returning.join(",")}`, params);
+            const result = await runtimeDb(`UPDATE "${object.source_table}" SET ${assignments.join(",")} WHERE ${clauses.join(" AND ")} RETURNING ${returning.join(",")}`, params);
             if (!result.rows.length) lifecycleFailure(state.ruleCheck.version !== undefined ? 409 : 404, "RECORD_NOT_AVAILABLE", "Record not found or changed while validating");
             saved = result.rows[0];
             await writeRecordHistory(object, saved.id, fields, state.ruleCheck.current, saved, "update", req);
@@ -5075,7 +5110,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             if (object.company_scoped) { columns.push('"company_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.companyId); }
             if (object.store_scoped) { columns.push('"store_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.storeId); }
             const returning = recordReturning(fields, state.validation.values);
-            const result = await db(`INSERT INTO "${object.source_table}" (${columns.join(",")}) VALUES (${placeholders.join(",")}) RETURNING ${returning.join(",")}`, params);
+            const result = await runtimeDb(`INSERT INTO "${object.source_table}" (${columns.join(",")}) VALUES (${placeholders.join(",")}) RETURNING ${returning.join(",")}`, params);
             saved = result.rows[0];
             await writeRecordHistory(object, saved.id, fields, null, saved, "create", req);
           }
@@ -5085,7 +5120,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         afterSave: async (state) => {
           const calculate = compileFormulas(metadataFields);
           const automation = await executePlatformAutomations({
-            db,
+            db: runtimeDb,
             object,
             fields: metadataFields,
             record: calculate(state.saved),
@@ -5095,14 +5130,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             req,
           });
           const approval = await submitPlatformApproval({
-            db,
+            db: runtimeDb,
             object,
             fields: metadataFields,
             recordId: state.saved.id,
             record: calculate(automation.record),
             req,
           });
-          const hydrated = await populateRollups(db, object, metadataFields, [calculate(automation.record)], req);
+          const hydrated = await populateRollups(runtimeDb, object, metadataFields, [calculate(automation.record)], req);
           return { ...state, automation, approval, hydrated };
         },
 
@@ -5120,6 +5155,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           }
           return state;
         },
+        transaction,
       });
 
       return {
