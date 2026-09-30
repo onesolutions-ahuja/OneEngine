@@ -80,14 +80,26 @@ export async function createPlatformExecutionContext({
   system = null,
   request = null,
   executionContext = null,
+  executionMode = null,
+  trustedSystem = false,
 } = {}) {
   const reqUser = req?.user || {};
   const inherited = executionContext?.globals || executionContext || {};
   const inheritedCompany = inherited.$Company?.id || inherited.companyId || null;
   const authoritativeCompanyId = reqUser.companyId || inheritedCompany || companyId || null;
+  const inheritedMode = inherited.$System?.executionMode || null;
+  const requestedMode = String(executionMode || req?.executionMode || inheritedMode || "USER").toUpperCase();
+  const mode = requestedMode === "SYSTEM" ? "SYSTEM" : "USER";
+  const isTrustedSystem = trustedSystem === true || req?.trustedSystemExecution === true || inherited.$System?.trusted === true;
+  if (mode === "SYSTEM" && !isTrustedSystem) {
+    const error = new Error("SYSTEM execution requires a trusted runtime entry point");
+    error.code = "UNTRUSTED_SYSTEM_EXECUTION";
+    error.status = 403;
+    throw error;
+  }
 
   let persistedUser = null;
-  const actorId = userId || reqUser.id || inherited.$User?.id || null;
+  const actorId = reqUser.id || inherited.$User?.id || (mode === "SYSTEM" ? userId : null);
   if (db && typeof db === "function" && actorId && authoritativeCompanyId && !reqUser.roleId && !inherited.$User?.roleId) {
     try {
       const result = await db(
@@ -110,6 +122,19 @@ export async function createPlatformExecutionContext({
     } catch {
       persistedUser = null;
     }
+  }
+
+  if (reqUser.id && userId && String(reqUser.id) !== String(userId)) {
+    const error = new Error("Authenticated execution cannot impersonate another user");
+    error.code = "EXECUTION_CONTEXT_USER_MISMATCH";
+    error.status = 403;
+    throw error;
+  }
+  if (mode === "USER" && !actorId) {
+    const error = new Error("USER execution requires an authenticated actor");
+    error.code = "EXECUTION_CONTEXT_ACTOR_REQUIRED";
+    error.status = 403;
+    throw error;
   }
 
   if (reqUser.companyId && companyId && String(reqUser.companyId) !== String(companyId)) {
@@ -181,6 +206,8 @@ export async function createPlatformExecutionContext({
       correlationId,
       environment: system?.environment || process.env.NODE_ENV || inherited.$System?.environment || null,
       runtime: "OneEngine",
+      executionMode: mode,
+      trusted: isTrustedSystem,
     },
   };
 
