@@ -319,8 +319,8 @@ export default function createInventoryRouter({
           success: true,
           message: "Inventory adjustment created",
           data: {
-            movement: result.movement,
-            balance: result.balance,
+            movement: result.result?.movement,
+            balance: result.result?.balance,
           },
         });
       } catch (error) {
@@ -791,10 +791,10 @@ export default function createInventoryRouter({
           }
           executedLines.push({
             productId: line.productId,
-            productName: out.product.name,
+            productName: out.result?.product?.name,
             quantity: line.quantity,
-            sourceBalanceAfter: out.storeBalance,
-            destinationBalanceAfter: inn.storeBalance,
+            sourceBalanceAfter: out.result?.storeBalance,
+            destinationBalanceAfter: inn.result?.storeBalance,
           });
         }
 
