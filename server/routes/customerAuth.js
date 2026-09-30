@@ -172,6 +172,10 @@ router.post("/customer-auth/register", async (req, res) => {
       return res.status(400).json({ success: false, message: "Phone or email required" });
     }
 
+    const companyCheck = await pool.query("SELECT id FROM companies WHERE id=$1 AND active=true", [companyId]);
+    if (!companyCheck.rows.length) return res.status(400).json({ success: false, message: "Company is not available" });
+    await req.ensureBusinessCommandRun?.({ companyId, userId: null });
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
