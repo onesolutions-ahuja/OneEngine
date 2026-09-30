@@ -147,7 +147,11 @@ export async function resolveOneConnection({
   }
 
   const effectiveBaseUrl = row.base_url || row.definition_base_url || null;
-  const effectiveAuthType = String(row.auth_type || row.definition_auth_type || "none").toLowerCase();
+  const effectiveAuthType = String(
+    row.connector_definition_id && String(row.auth_type || "none").toLowerCase() === "none" && row.definition_auth_type
+      ? row.definition_auth_type
+      : (row.auth_type || row.definition_auth_type || "none")
+  ).toLowerCase();
   if (!ONE_CONNECTION_AUTH_TYPES.includes(effectiveAuthType)) throw new Error("Unsupported OneConnection auth type");
 
   const connection = {
