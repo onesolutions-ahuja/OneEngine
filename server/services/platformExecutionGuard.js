@@ -87,6 +87,7 @@ export async function claimPersistentExecution({
   idempotencyKey,
   fingerprint = null,
   metadata = {},
+  leaseSeconds = 300,
 }) {
   if (!db || !companyId || !scope || !idempotencyKey) {
     throw new PlatformExecutionGuardError("Persistent execution claim requires db, company, scope and idempotency key", {
@@ -96,11 +97,11 @@ export async function claimPersistentExecution({
   }
   const derivedFingerprint = fingerprint || executionFingerprint({ scope, idempotencyKey, metadata });
   const result = await db(
-    `INSERT INTO platform_execution_claims(company_id,scope_key,idempotency_key,fingerprint,status,metadata)
-     VALUES($1,$2,$3,$4,'CLAIMED',$5::jsonb)
+    `INSERT INTO platform_execution_claims(company_id,scope_key,idempotency_key,fingerprint,status,locked_until,metadata)
+     VALUES($1,$2,$3,$4,'CLAIMED',NOW() + ($6 * INTERVAL '1 second'),$5::jsonb)
      ON CONFLICT(company_id,scope_key,idempotency_key) DO NOTHING
      RETURNING *`,
-    [companyId, scope, idempotencyKey, derivedFingerprint, JSON.stringify(metadata || {})]
+    [companyId, scope, idempotencyKey, derivedFingerprint, JSON.stringify(metadata || {}), Math.min(Math.max(Number(leaseSeconds) || 300, 30), 3600)]
   );
   if (result.rows?.[0]) return { claimed: true, duplicate: false, row: result.rows[0] };
 
@@ -117,13 +118,13 @@ export async function claimPersistentExecution({
       details: { scope, idempotencyKey },
     });
   }
-  if (row?.status === "FAILED") {
+  if (row?.status === "FAILED" || (row?.status === "CLAIMED" && row?.locked_until && new Date(row.locked_until).getTime() <= Date.now())) {
     const retry = await db(
       `UPDATE platform_execution_claims
-          SET status='CLAIMED',result=NULL,error=NULL,updated_at=NOW()
-        WHERE id=$1 AND status='FAILED'
+          SET status='CLAIMED',result=NULL,error=NULL,locked_until=NOW() + ($2 * INTERVAL '1 second'),updated_at=NOW()
+        WHERE id=$1 AND (status='FAILED' OR (status='CLAIMED' AND locked_until <= NOW()))
         RETURNING *`,
-      [row.id]
+      [row.id, Math.min(Math.max(Number(leaseSeconds) || 300, 30), 3600)]
     );
     if (retry.rows?.[0]) {
       row = retry.rows[0];
@@ -137,7 +138,7 @@ export async function completePersistentExecution({ db, claimId, status = "COMPL
   if (!claimId) return;
   await db(
     `UPDATE platform_execution_claims
-        SET status=$1,result=$2::jsonb,error=$3::jsonb,updated_at=NOW()
+        SET status=$1,result=$2::jsonb,error=$3::jsonb,locked_until=NULL,updated_at=NOW()
       WHERE id=$4`,
     [status, JSON.stringify(result), JSON.stringify(error), claimId]
   );
