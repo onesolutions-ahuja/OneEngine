@@ -99,7 +99,7 @@ import { createJarvesAccessChecker } from "./services/jarvis/licensing.js"; // J
 import { companyAdministrativeAccess, permissionAllows } from "./services/authorization.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
 import { createTenantPoolManager, getRequestHostname, resolveTenantFromHostname } from "./services/tenantResolver.js";
-import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, getRequestDatabaseContext, getRequestPool } from "./services/tenantDatabase.js";
+import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, getRequestDatabaseContext, getRequestPool, createRequestAwarePool } from "./services/tenantDatabase.js";
 /* Inventory primitives live in services/inventory.js (shared with every
  * stock writer: POS sales, purchases, returns, adjustments). */
 import {
@@ -200,11 +200,13 @@ const tenantPoolManager = createTenantPoolManager({
   },
 });
 
-app.locals.pool = pool;
 app.locals.tenantPoolManager = tenantPoolManager;
 const tenantDatabaseRouter = pool
   ? createTenantDatabaseRouter({ controlPool: pool, sharedPool: pool, PoolFactory: Pool, env: process.env })
   : null;
+const requestAwarePool = createRequestAwarePool(pool);
+app.locals.controlPool = pool;
+app.locals.pool = requestAwarePool;
 app.locals.tenantDatabaseRouter = tenantDatabaseRouter;
 
 app.use((req, res, next) => {
@@ -1256,8 +1258,7 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-    canViewCompanyCustomers,
+    pool: requestAwarePool, canViewCompanyCustomers,
     hasCompanyAdminAccess,
     associateCustomerWithStore,
     savePlatformRecord: saveDomainConfiguration,
@@ -1288,7 +1289,7 @@ app.use("/api", createSelfCheckoutRouter({
 
 /* T10P: Scan & Go — customer scan sessions (token-authenticated, store/company
  * resolved server-side from the session; see routes/scanAndGo.js). */
-app.use("/api", createScanGoRouter({ authenticate, db, pool, writeAudit }));
+app.use("/api", createScanGoRouter({ authenticate, db, pool: requestAwarePool, writeAudit }));
 app.use("/api", createMobileScannerRouter({ authenticate, authorize, db, writeAudit }));
 
 app.use("/api", createGlobalProductLookupRouter({
@@ -1319,34 +1320,32 @@ app.use(
   })
 );
 app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env }));
-app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers }));
+app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool: requestAwarePool, canViewCompanyCustomers }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
-app.use("/api", createHospitalityRouter({ authenticate, authorize, db, pool, canAccessStore }));
+app.use("/api", createHospitalityRouter({ authenticate, authorize, db, pool: requestAwarePool, canAccessStore }));
 app.use("/api", createClientWebShopRouter({
   authenticate,
   authorize,
   db,
-  pool,
-  createInventoryMovement,
+  pool: requestAwarePool, createInventoryMovement,
   getCompanyEntitlements: (companyId) => getCompanyEntitlements(db, companyId),
 }));
 app.use("/api", createOwnDeliveryRouter({
   authenticate,
   authorize,
   db,
-  pool,
-  canAccessStore,
+  pool: requestAwarePool, canAccessStore,
   createInventoryMovement,
   writeAudit,
 }));
-app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
+app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool: requestAwarePool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));
 app.use("/api", createPaypalQrRouter({ authenticate, authorize, db, connectorDrivers, writeAudit }));
 app.use("/api", createGoogleConnectRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformFilesRouter({ authenticate, db }));
-app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool }));
+app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool: requestAwarePool }));
 app.use("/api", createPlatformSchedulesRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformEventsRouter({
   authenticate,
@@ -1402,8 +1401,7 @@ app.use("/api", createSettingsRouter({
   authenticate,
   authorize,
   db,
-  pool,
-  writeAudit,
+  pool: requestAwarePool, writeAudit,
   testPaymentTerminal,
   requireLoyaltyEntitlement: (req, res, next) => {
     const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
@@ -1412,9 +1410,9 @@ app.use("/api", createSettingsRouter({
   },
 }));
 app.use("/api", createCustomerAuthRouter); /* routes/customerAuth.js exports a router instance (self-contained) */
-app.use("/api", createWhatsAppSettingsRouter({ authenticate, authorize, db, pool, writeAudit }));
-app.use("/api", createOneAssistantRouter({ pool, authenticate, authorize }));
-app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool, writeAudit }));
+app.use("/api", createWhatsAppSettingsRouter({ authenticate, authorize, db, pool: requestAwarePool, writeAudit }));
+app.use("/api", createOneAssistantRouter({ pool: requestAwarePool, authenticate, authorize }));
+app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool: requestAwarePool, writeAudit }));
 
 /*
 |--------------------------------------------------------------------------
@@ -1442,8 +1440,7 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-    createInventoryMovement,
+    pool: requestAwarePool, createInventoryMovement,
     writeAudit,
     canAccessStore,
     savePlatformRecord: saveDomainConfiguration,
@@ -1455,12 +1452,11 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-  })
+    pool: requestAwarePool, })
 );
 app.use(
   "/api",
-  createPricingRouter({ authenticate, authorize, db, pool })
+  createPricingRouter({ authenticate, authorize, db, pool: requestAwarePool })
 );
 
 /*
@@ -1469,7 +1465,7 @@ app.use(
 |--------------------------------------------------------------------------
 |
 | Inventory routes are registered via routes/inventory.js, receiving the
-| existing authenticate, authorize, db, pool, createInventoryMovement
+| existing authenticate, authorize, db, pool: requestAwarePool, createInventoryMovement
 | and inventoryMovementTypes so behaviour is unchanged.
 |
 | Route ordering preserved:
@@ -1483,8 +1479,7 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-    createInventoryMovement,
+    pool: requestAwarePool, createInventoryMovement,
     inventoryMovementTypes,
     canAccessStore,
     canViewCompanyCustomers,
@@ -1501,8 +1496,7 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-    canAccessStore,
+    pool: requestAwarePool, canAccessStore,
   })
 );
 
@@ -1532,8 +1526,7 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-    savePlatformRecord: saveDomainConfiguration,
+    pool: requestAwarePool, savePlatformRecord: saveDomainConfiguration,
   })
 );
 
@@ -1558,22 +1551,21 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-    createInventoryMovement,
+    pool: requestAwarePool, createInventoryMovement,
     savePlatformRecord: saveDomainConfiguration,
   })
 );
 app.use(
   "/api",
-  createSupplierAccountsRouter({ authenticate, authorize, db, pool })
+  createSupplierAccountsRouter({ authenticate, authorize, db, pool: requestAwarePool })
 );
 
-app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, createInventoryMovement, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
-app.use("/api", createLayawaysRouter({ authenticate, authorize, db, pool, createInventoryMovement }));
+app.use("/api", createSalesRouter({ authenticate, authorize, db, pool: requestAwarePool, requestPool: getRequestPool, createInventoryMovement, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createLayawaysRouter({ authenticate, authorize, db, pool: requestAwarePool, createInventoryMovement }));
 
-app.use("/api", createReturnsRouter({ authenticate, authorize, db, pool, createInventoryMovement, writeAudit, canonicalTransactionWriter: createCanonicalRelatedTransaction }));
+app.use("/api", createReturnsRouter({ authenticate, authorize, db, pool: requestAwarePool, createInventoryMovement, writeAudit, canonicalTransactionWriter: createCanonicalRelatedTransaction }));
 
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, bcrypt, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createAdminRouter({ authenticate, authorize, db, pool: requestAwarePool, canViewCompanyCustomers, hasCompanyAdminAccess, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
 /*
 |--------------------------------------------------------------------------
@@ -1623,7 +1615,7 @@ app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStor
 | storage, generic 404s) plus admin create/revoke endpoints under
 | /api/sales/:saleId/secure-links using the existing permission model.
 */
-app.use(createSecureInvoiceRouter({ db, pool, authenticate, authorize, writeAudit }));
+app.use(createSecureInvoiceRouter({ db, pool: requestAwarePool, authenticate, authorize, writeAudit }));
 
 /*
 | Online Orders (Uber Eats / Deliveroo foundation) - product platform
@@ -1637,8 +1629,7 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-    writeAudit,
+    pool: requestAwarePool, writeAudit,
     createInventoryMovement,
   })
 );
@@ -1668,8 +1659,7 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-    writeAudit,
+    pool: requestAwarePool, writeAudit,
   })
 );
 
@@ -1721,8 +1711,7 @@ app.use(
     authenticate,
     authorize,
     db,
-    pool,
-    getRolePermissionCodes,
+    pool: requestAwarePool, getRolePermissionCodes,
     canViewCompanyCustomers,
   })
 );
