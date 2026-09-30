@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Clock, LogIn, LogOut, RefreshCw, Search } from 'lucide-react'
-import { apiRequest } from '../../services/api'
+import { apiRequest, loadSessionPermissions } from '../../services/api'
 
 export function formatWorked(minutes){
   const total=Math.max(0,Math.floor(Number(minutes)||0))
@@ -21,15 +21,14 @@ function isNetworkError(error){
 
 export default function AttendancePage(){
   const [tab,setTab]=useState('mine')
-  const [permissions,setPermissions]=useState({loaded:false,isAdmin:false,canManage:false})
+  const [permissions,setPermissions]=useState({loaded:false,canManage:false})
   useEffect(()=>{
     let live=true
-    apiRequest('/api/auth/me/permissions').then(r=>{
+    loadSessionPermissions().then(r=>{
       if(!live)return
-      const codes=Array.isArray(r?.data?.permissions)?r.data.permissions:[]
-      const isAdmin=r?.data?.isAdmin===true
-      setPermissions({loaded:true,isAdmin,canManage:isAdmin||codes.includes('attendance.view')})
-    }).catch(()=>live&&setPermissions({loaded:true,isAdmin:false,canManage:false}))
+      const codes=Array.isArray(r?.permissions)?r.permissions:[]
+      setPermissions({loaded:true,canManage:codes.includes('attendance.view')})
+    }).catch(()=>live&&setPermissions({loaded:true,canManage:false}))
     return()=>{live=false}
   },[])
 
