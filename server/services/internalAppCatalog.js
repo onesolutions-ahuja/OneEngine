@@ -956,7 +956,7 @@ const CATALOG = [
     permissions: ["appointments.view", "appointments.manage", "appointments.configure", "appointments.payment"],
     storeScoped: false,
     category: "Business",
-    version: "1.0.0",
+    version: "1.1.0",
     packageType: "APPLICATION",
     billable: true,
     licenceRequired: true,
@@ -965,21 +965,78 @@ const CATALOG = [
     visibility: "PUBLIC",
     entitlementKey: "one_assistant",
     dependencies: ["customers", "platform"],
-    optionalDependencies: ["whatsapp_connector", "communication_core", "connector_core"],
-    capabilities: ["appointments","appointment_calendar","appointment_availability","appointment_slot_holds","appointment_payments","conversation_sessions","workflow_automation","human_handoff"],
+    optionalDependencies: ["email_connector", "sms_connector", "whatsapp_connector", "communication_core", "connector_core"],
+    capabilities: ["appointments","appointment_calendar","appointment_availability","appointment_slot_holds","appointment_payments","conversation_sessions","workflow_automation","human_handoff","email_booking","sms_booking","whatsapp_booking","public_booking_links","capability_subflows"],
     events: [
       { eventType: "appointment.slot_held", description: "A temporary appointment slot hold was created." },
       { eventType: "appointment.payment_required", description: "A booking requires an advance payment before confirmation." },
       { eventType: "appointment.confirmed", description: "An appointment was confirmed." },
-      { eventType: "appointment.cancelled", description: "An appointment was cancelled." }
+      { eventType: "appointment.cancelled", description: "An appointment was cancelled." },
+      { eventType: "appointment.booking_case_created", description: "An inbound communication was converted into a booking case." },
+      { eventType: "appointment.slot_selected", description: "A customer selected a slot from a public booking link." }
     ],
-    workflowTemplates: [{
-      key: "one_assistant_booking",
-      label: "OneAssistant - Book appointment",
-      triggerKey: "communication_message_received",
-      activeByDefault: false,
-      description: "Customer chooses a service, receives available slots, optionally pays an advance, then receives booking confirmation."
-    }]
+    workflowTemplates: [
+      {
+        key: "one_assistant_booking_router",
+        label: "OneAssistant - Booking channel router",
+        triggerKey: "communication_message_received",
+        activeByDefault: false,
+        description: "Inspect the inbound channel/message intent, create a booking case, then call the matching communication subflow."
+      },
+      {
+        key: "one_assistant_email_booking",
+        label: "OneAssistant - Email booking",
+        triggerKey: "communication_message_received",
+        channel: "EMAIL",
+        subflowCapability: "assistant.communication.EMAIL",
+        requiredPackageKey: "email_connector",
+        activeByDefault: false,
+        description: "Email-to-case booking flow: send an expiring public booking link, then payment and confirmation messages."
+      },
+      {
+        key: "one_assistant_sms_booking",
+        label: "OneAssistant - SMS booking",
+        triggerKey: "communication_message_received",
+        channel: "SMS",
+        subflowCapability: "assistant.communication.SMS",
+        requiredPackageKey: "sms_connector",
+        activeByDefault: false,
+        description: "SMS booking subflow using the same appointment case and booking-link engine."
+      },
+      {
+        key: "one_assistant_whatsapp_booking",
+        label: "OneAssistant - WhatsApp booking",
+        triggerKey: "communication_message_received",
+        channel: "WHATSAPP",
+        subflowCapability: "assistant.communication.WHATSAPP",
+        requiredPackageKey: "whatsapp_connector",
+        activeByDefault: false,
+        description: "WhatsApp booking subflow using the same appointment case and booking engine."
+      },
+      {
+        key: "one_assistant_payment_router",
+        label: "OneAssistant - Payment router",
+        triggerKey: "appointment_payment_required",
+        subflowCapability: "assistant.payment",
+        activeByDefault: false,
+        description: "Resolve an installed payment-provider subflow. Provider-specific flows finish with Complete Appointment Payment."
+      },
+      {
+        key: "one_assistant_confirmation_router",
+        label: "OneAssistant - Confirmation router",
+        triggerKey: "appointment_confirmed",
+        subflowCapability: "assistant.confirmation",
+        activeByDefault: false,
+        description: "Send the channel-specific confirmation/invoice template after the appointment is confirmed."
+      }
+    ],
+    subflowContracts: {
+      communication: ["assistant.communication.EMAIL","assistant.communication.SMS","assistant.communication.WHATSAPP"],
+      payment: "assistant.payment",
+      confirmation: "assistant.confirmation",
+      paymentCompletionAction: "COMPLETE_APPOINTMENT_PAYMENT",
+      resolverAction: "RUN_ASSISTANT_SUBFLOW"
+    }
   },
   {
     key: "platform",

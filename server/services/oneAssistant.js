@@ -1,3 +1,6 @@
+import { createHash, randomBytes } from "node:crypto";
+import { publishPlatformEvent } from "./platformEvents.js";
+
 const HOLD_MINUTES_DEFAULT = 10;
 const MAX_SLOT_RESULTS = 20;
 
@@ -158,6 +161,46 @@ export const oneAssistantSchema = `
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (company_id, channel, external_conversation_id)
   );
+
+  CREATE TABLE IF NOT EXISTS appointment_booking_cases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP','WEB')),
+    source_message_id VARCHAR(255),
+    sender VARCHAR(255),
+    recipient VARCHAR(255),
+    subject TEXT,
+    body TEXT,
+    status VARCHAR(30) NOT NULL DEFAULT 'NEW'
+      CHECK (status IN ('NEW','LINK_SENT','SLOT_SELECTED','AWAITING_PAYMENT','CONFIRMED','CANCELLED','EXPIRED')),
+    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+    service_id UUID REFERENCES appointment_services(id) ON DELETE SET NULL,
+    hold_id UUID REFERENCES appointment_slot_holds(id) ON DELETE SET NULL,
+    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    payment_request_id UUID REFERENCES appointment_payment_requests(id) ON DELETE SET NULL,
+    state JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_appointment_booking_cases_company
+    ON appointment_booking_cases(company_id,status,created_at DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_appointment_booking_case_source
+    ON appointment_booking_cases(company_id,channel,source_message_id)
+    WHERE source_message_id IS NOT NULL;
+
+  CREATE TABLE IF NOT EXISTS appointment_public_links (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    booking_case_id UUID NOT NULL REFERENCES appointment_booking_cases(id) ON DELETE CASCADE,
+    purpose VARCHAR(30) NOT NULL CHECK (purpose IN ('BOOK_SLOT','PAYMENT','MANAGE')),
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_appointment_public_links_case
+    ON appointment_public_links(company_id,booking_case_id,purpose,expires_at);
 
   INSERT INTO permissions(code,name,description) VALUES
     ('appointments.view','View Appointments','View OneAssistant appointment records and calendar'),
@@ -414,4 +457,306 @@ export function calculateAppointmentPayment(service) {
     case 'PERCENT_DEPOSIT': return Math.min(price, Math.round((price * deposit / 100) * 100) / 100);
     default: return 0;
   }
+}
+
+
+function hashBookingToken(token) {
+  return createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+export async function createAppointmentBookingCase(db, {
+  companyId, channel = "EMAIL", sourceMessageId = null, sender = null, recipient = null,
+  subject = null, body = null, customerId = null, state = {},
+} = {}) {
+  if (!companyId) throw new Error("companyId is required");
+  const normalizedChannel = String(channel || "EMAIL").toUpperCase();
+  if (!["EMAIL","SMS","WHATSAPP","WEB"].includes(normalizedChannel)) throw new Error("Unsupported booking channel");
+  if (sourceMessageId) {
+    const existing = await db(
+      `SELECT * FROM appointment_booking_cases
+        WHERE company_id=$1 AND channel=$2 AND source_message_id=$3 LIMIT 1`,
+      [companyId, normalizedChannel, sourceMessageId]
+    );
+    if (existing.rows[0]) return existing.rows[0];
+  }
+  const result = await db(
+    `INSERT INTO appointment_booking_cases
+      (company_id,channel,source_message_id,sender,recipient,subject,body,customer_id,state)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
+     RETURNING *`,
+    [companyId, normalizedChannel, sourceMessageId, sender, recipient, subject, body, customerId, JSON.stringify(state || {})]
+  );
+  const bookingCase = result.rows[0];
+  await publishPlatformEvent({
+    db,
+    companyId,
+    eventType: "appointment.booking_case_created",
+    payload: { bookingCaseId: bookingCase.id, channel: normalizedChannel, sender, subject, body },
+    idempotencyKey: `appointment-booking-case:${bookingCase.id}`,
+  });
+  return bookingCase;
+}
+
+export async function issueAppointmentPublicLink(db, {
+  companyId, bookingCaseId, purpose = "BOOK_SLOT", ttlMinutes = 30, publicBaseUrl = "",
+  metadata = {},
+} = {}) {
+  if (!companyId || !bookingCaseId) throw new Error("companyId and bookingCaseId are required");
+  const bookingCase = await db(
+    "SELECT id FROM appointment_booking_cases WHERE id=$1 AND company_id=$2 LIMIT 1",
+    [bookingCaseId, companyId]
+  );
+  if (!bookingCase.rows[0]) throw new Error("Appointment booking case not found");
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + Math.max(5, Number(ttlMinutes) || 30) * 60000);
+  const result = await db(
+    `INSERT INTO appointment_public_links(company_id,booking_case_id,purpose,token_hash,expires_at,metadata)
+     VALUES($1,$2,$3,$4,$5,$6::jsonb) RETURNING id,booking_case_id,purpose,expires_at`,
+    [companyId, bookingCaseId, purpose, hashBookingToken(token), expiresAt.toISOString(), JSON.stringify(metadata || {})]
+  );
+  await db(
+    `UPDATE appointment_booking_cases
+        SET status=CASE WHEN status='NEW' THEN 'LINK_SENT' ELSE status END, updated_at=NOW()
+      WHERE id=$1 AND company_id=$2`,
+    [bookingCaseId, companyId]
+  );
+  const base = String(publicBaseUrl || "").replace(/\/$/, "");
+  return { ...result.rows[0], token, url: `${base}/assistant/book/${encodeURIComponent(token)}` };
+}
+
+export async function resolveAppointmentPublicLink(db, token, { purpose = null } = {}) {
+  const result = await db(
+    `SELECT l.*,c.channel,c.sender,c.recipient,c.subject,c.body,c.status AS case_status,
+            c.customer_id,c.service_id,c.hold_id,c.appointment_id,c.payment_request_id,c.state
+       FROM appointment_public_links l
+       JOIN appointment_booking_cases c ON c.id=l.booking_case_id AND c.company_id=l.company_id
+      WHERE l.token_hash=$1
+        AND l.consumed_at IS NULL
+        AND l.expires_at>NOW()
+        AND ($2::text IS NULL OR l.purpose=$2)
+      LIMIT 1`,
+    [hashBookingToken(token), purpose]
+  );
+  return result.rows[0] || null;
+}
+
+export async function resolveAssistantSubflow(db, {
+  companyId, capability, channel = null, providerPackageKey = null,
+} = {}) {
+  if (!companyId || !capability) return null;
+  const normalizedChannel = channel ? String(channel).toUpperCase() : null;
+  const values = [companyId, capability, normalizedChannel, providerPackageKey || null];
+  const result = await db(
+    `SELECT r.id,r.name,r.action,r.updated_at
+       FROM platform_rules r
+      WHERE r.company_id=$1
+        AND r.active=true
+        AND r.action->>'type'='workflow'
+        AND r.action->>'subflowCapability'=$2
+        AND ($3::text IS NULL OR COALESCE(UPPER(r.action->>'channel'),'') IN ('', $3))
+        AND ($4::text IS NULL OR COALESCE(r.action->>'providerPackageKey','') IN ('', $4))
+      ORDER BY COALESCE((r.action->>'priority')::int,100),r.updated_at DESC
+      LIMIT 20`,
+    values
+  );
+  for (const row of result.rows || []) {
+    const action = row.action || {};
+    const requiredPackage = action.requiredPackageKey || action.providerPackageKey || null;
+    if (requiredPackage) {
+      const installed = await db(
+        `SELECT 1
+           FROM company_package_installations i
+           JOIN package_registry p ON p.id=i.package_id
+          WHERE i.company_id=$1 AND p.package_key=$2 AND i.status='active'
+            AND COALESCE(i.suspended_by_entitlement,false)=false
+          LIMIT 1`,
+        [companyId, requiredPackage]
+      );
+      if (!installed.rows.length) continue;
+    }
+    return row;
+  }
+  return null;
+}
+
+export async function selectPublicAppointmentSlot(client, {
+  publicLink, serviceId, resourceId, startsAt, endsAt, holdMinutes = 10,
+} = {}) {
+  if (!publicLink) throw new Error("Booking link is required");
+  const companyId = publicLink.company_id;
+  const bookingCaseId = publicLink.booking_case_id;
+  if (!["NEW","LINK_SENT"].includes(String(publicLink.case_status || ""))) {
+    const error = new Error("This booking request has already progressed");
+    error.code = "BOOKING_ALREADY_USED";
+    throw error;
+  }
+  const allowedSlots = await findAvailableAppointmentSlots(client.query.bind(client), {
+    companyId,
+    serviceId,
+    resourceId,
+    from: startsAt,
+    to: endsAt,
+    limit: 20,
+  });
+  const selectedAllowed = allowedSlots.some((slot) =>
+    String(slot.resourceId) === String(resourceId)
+      && new Date(slot.startsAt).toISOString() === new Date(startsAt).toISOString()
+      && new Date(slot.endsAt).toISOString() === new Date(endsAt).toISOString()
+  );
+  if (!selectedAllowed) {
+    const error = new Error("Selected time is not available for this service/resource");
+    error.code = "SLOT_UNAVAILABLE";
+    throw error;
+  }
+  const hold = await holdAppointmentSlot(client, {
+    companyId,
+    serviceId,
+    resourceId,
+    startsAt,
+    endsAt,
+    holdMinutes,
+    conversationId: `booking-case:${bookingCaseId}`,
+    idempotencyKey: `public-booking:${bookingCaseId}:${resourceId}:${startsAt}`,
+    metadata: { bookingCaseId, channel: publicLink.channel },
+  });
+  const serviceResult = await client.query(
+    `SELECT id,name,price,currency,payment_policy,deposit_value
+       FROM appointment_services WHERE id=$1 AND company_id=$2 LIMIT 1`,
+    [serviceId, companyId]
+  );
+  const service = serviceResult.rows[0];
+  if (!service) throw new Error("Appointment service not found");
+  const amount = calculateAppointmentPayment(service);
+  let paymentRequest = null;
+  if (amount > 0) {
+    const providers = await listPaymentRequestProviders(client.query.bind(client), companyId);
+    paymentRequest = await createAppointmentPaymentRequest(client.query.bind(client), {
+      companyId,
+      holdId: hold.id,
+      providerPackageKey: providers[0]?.packageKey || null,
+      amount,
+      currency: service.currency,
+      expiresAt: hold.expires_at,
+      metadata: { bookingCaseId, channel: publicLink.channel },
+    });
+  }
+  await client.query(
+    `UPDATE appointment_booking_cases
+        SET service_id=$3,hold_id=$4,payment_request_id=$5,
+            status=CASE WHEN $6::numeric>0 THEN 'AWAITING_PAYMENT' ELSE 'SLOT_SELECTED' END,
+            state=state||jsonb_build_object('selectedStartsAt',$7::text,'selectedEndsAt',$8::text),
+            updated_at=NOW()
+      WHERE id=$1 AND company_id=$2`,
+    [bookingCaseId, companyId, serviceId, hold.id, paymentRequest?.id || null, amount, startsAt, endsAt]
+  );
+  let appointment=null;
+  if(amount<=0){
+    appointment=await confirmAppointmentFromHold(client,{
+      companyId,
+      holdId:hold.id,
+      customerEmail:publicLink.channel==="EMAIL"?publicLink.sender:null,
+      sourceChannel:publicLink.channel||"WEB",
+      paymentStatus:"NOT_REQUIRED",
+      amountDue:0,
+      amountPaid:0,
+      metadata:{bookingCaseId},
+    });
+    await client.query(
+      `UPDATE appointment_booking_cases
+          SET appointment_id=$3,status='CONFIRMED',updated_at=NOW()
+        WHERE id=$1 AND company_id=$2`,
+      [bookingCaseId,companyId,appointment.id]
+    );
+  }
+  await client.query(
+    "UPDATE appointment_public_links SET consumed_at=NOW() WHERE id=$1 AND company_id=$2 AND consumed_at IS NULL",
+    [publicLink.id,companyId]
+  );
+  await publishPlatformEvent({
+    db: client.query.bind(client),
+    companyId,
+    eventType: amount > 0 ? "appointment.payment_required" : "appointment.confirmed",
+    payload: {
+      bookingCaseId,
+      appointmentId:appointment?.id||null,
+      channel: publicLink.channel,
+      holdId: hold.id,
+      serviceId,
+      paymentRequestId: paymentRequest?.id || null,
+      amount,
+      currency: service.currency,
+    },
+    idempotencyKey: `appointment-public-slot:${bookingCaseId}:${hold.id}`,
+  });
+  return { hold, service, amount, paymentRequest, appointment };
+}
+
+
+export async function completeAppointmentPayment(client, {
+  companyId, paymentRequestId, providerReference = null, paymentUrl = null, amountPaid = null,
+} = {}) {
+  if (!companyId || !paymentRequestId) throw new Error("companyId and paymentRequestId are required");
+  const requestResult = await client.query(
+    `SELECT pr.*,c.id AS booking_case_id,c.channel,c.sender,c.recipient,c.subject,c.body,c.customer_id,c.state
+       FROM appointment_payment_requests pr
+       LEFT JOIN appointment_booking_cases c ON c.payment_request_id=pr.id AND c.company_id=pr.company_id
+      WHERE pr.id=$1 AND pr.company_id=$2
+      FOR UPDATE OF pr`,
+    [paymentRequestId, companyId]
+  );
+  const payment = requestResult.rows[0];
+  if (!payment) throw new Error("Appointment payment request not found");
+  if (payment.status === "SUCCEEDED") {
+    const existing = payment.appointment_id
+      ? await client.query("SELECT * FROM appointments WHERE id=$1 AND company_id=$2 LIMIT 1",[payment.appointment_id,companyId])
+      : null;
+    return { payment, appointment: existing?.rows?.[0] || null, bookingCaseId: payment.booking_case_id || null };
+  }
+  if (!payment.hold_id) throw new Error("Appointment payment request is not linked to a slot hold");
+
+  const bookingCase = payment.booking_case_id
+    ? await client.query("SELECT * FROM appointment_booking_cases WHERE id=$1 AND company_id=$2 LIMIT 1",[payment.booking_case_id,companyId])
+    : null;
+  const booking = bookingCase?.rows?.[0] || null;
+  const paid = amountPaid == null ? Number(payment.amount || 0) : Number(amountPaid);
+  const appointment = await confirmAppointmentFromHold(client,{
+    companyId,
+    holdId:payment.hold_id,
+    customerId:booking?.customer_id || null,
+    customerEmail:booking?.channel === "EMAIL" ? booking.sender : null,
+    sourceChannel:booking?.channel || "PAYMENT",
+    paymentStatus:"PAID",
+    amountDue:Number(payment.amount || 0),
+    amountPaid:paid,
+    metadata:{bookingCaseId:booking?.id || null,paymentRequestId},
+  });
+  await client.query(
+    `UPDATE appointment_payment_requests
+        SET status='SUCCEEDED',appointment_id=$3,provider_reference=COALESCE($4,provider_reference),
+            payment_url=COALESCE($5,payment_url),updated_at=NOW()
+      WHERE id=$1 AND company_id=$2`,
+    [paymentRequestId,companyId,appointment.id,providerReference,paymentUrl]
+  );
+  if (booking?.id) {
+    await client.query(
+      `UPDATE appointment_booking_cases
+          SET appointment_id=$3,status='CONFIRMED',updated_at=NOW()
+        WHERE id=$1 AND company_id=$2`,
+      [booking.id,companyId,appointment.id]
+    );
+  }
+  await publishPlatformEvent({
+    db:client.query.bind(client),
+    companyId,
+    eventType:"appointment.confirmed",
+    payload:{
+      appointmentId:appointment.id,
+      bookingCaseId:booking?.id || null,
+      channel:booking?.channel || null,
+      paymentRequestId,
+      providerReference,
+    },
+    idempotencyKey:`appointment-payment-confirmed:${paymentRequestId}`,
+  });
+  return {paymentRequestId,appointment,bookingCaseId:booking?.id || null};
 }

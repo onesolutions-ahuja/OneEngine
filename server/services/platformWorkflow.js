@@ -30,6 +30,10 @@ import {
   listPaymentRequestProviders,
   createAppointmentPaymentRequest,
   calculateAppointmentPayment,
+  createAppointmentBookingCase,
+  issueAppointmentPublicLink,
+  resolveAssistantSubflow,
+  completeAppointmentPayment,
 } from "./oneAssistant.js";
 
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
@@ -769,11 +773,11 @@ async function executeUberItemAction(context, operation) {
     : { ...response, code: response.code || "UBER_ITEM_UPDATE_FAILED", productId: resolved.product.id, itemId: resolved.itemId, storeId: resolved.storeId };
 }
 
-function resolveCommunicationWorkflowAction(action, record, object = null) {
+function resolveCommunicationWorkflowAction(action, record, object = null, workflowVariables = null) {
   const rootObjectKey = object?.object_key || object?.objectKey || null;
   const resolveRecipient = (value) => {
     if (value && typeof value === "object") {
-      const resolved = resolveBindingTree(value, { record, rootObjectKey });
+      const resolved = resolveBindingTree(value, { record, rootObjectKey, variables: workflowVariables });
       return resolved == null ? value : resolved;
     }
     if (typeof value === "string" && record) {
@@ -787,7 +791,7 @@ function resolveCommunicationWorkflowAction(action, record, object = null) {
     recipient: resolveRecipient(action?.recipient),
     to: resolveRecipient(action?.to),
     templateContext: action?.templateContext
-      ? resolveBindingTree(action.templateContext, { record, rootObjectKey })
+      ? resolveBindingTree(action.templateContext, { record, rootObjectKey, variables: workflowVariables })
       : (record || {}),
   };
 }
@@ -1050,6 +1054,92 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,
   {
+    key: "CREATE_APPOINTMENT_BOOKING_CASE",
+    displayName: "Appointments - Create Booking Case",
+    description: "Create an appointment booking case from an inbound Email, SMS or WhatsApp workflow.",
+    validation: (action) => {
+      if (!action?.channel) throw new Error("Create Appointment Booking Case requires channel");
+    },
+    async: false,
+    requiredPermissions: ["appointments.manage"],
+    executor: async ({ action, db, companyId, req, record }) => {
+      const tenantId=companyId||req?.user?.companyId;
+      const bookingCase=await createAppointmentBookingCase(db,{
+        companyId:tenantId,
+        channel:action.channel,
+        sourceMessageId:action.sourceMessageId||record?.providerMessageId||record?.provider_message_id||record?.id||null,
+        sender:action.sender||record?.sender||record?.from||null,
+        recipient:action.recipient||record?.recipient||record?.to||null,
+        subject:action.subject||record?.subject||null,
+        body:action.body||record?.body||record?.message||record?.text||null,
+        customerId:action.customerId||record?.customerId||record?.customer_id||null,
+        state:action.state||{},
+      });
+      return {status:"completed",bookingCase};
+    },
+  },
+  {
+    key: "ISSUE_APPOINTMENT_BOOKING_LINK",
+    displayName: "Appointments - Issue Booking Link",
+    description: "Create an expiring no-login booking URL for an appointment booking case.",
+    validation: (action) => {
+      if (!action?.bookingCaseId) throw new Error("Issue Appointment Booking Link requires bookingCaseId");
+    },
+    async: false,
+    requiredPermissions: ["appointments.manage"],
+    executor: async ({ action, db, companyId, req, record, object, workflowVariables }) => {
+      const tenantId=companyId||req?.user?.companyId;
+      const rootObjectKey=object?.object_key||object?.objectKey||null;
+      const resolved=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
+      const link=await issueAppointmentPublicLink(db,{
+        companyId:tenantId,
+        bookingCaseId:resolved.bookingCaseId,
+        purpose:resolved.purpose||"BOOK_SLOT",
+        ttlMinutes:resolved.ttlMinutes||30,
+        publicBaseUrl:resolved.publicBaseUrl||process.env.PUBLIC_APP_URL||process.env.FRONTEND_URL||"",
+        metadata:resolved.metadata||{},
+      });
+      return {status:"completed",link};
+    },
+  },
+  {
+    key: "RUN_ASSISTANT_SUBFLOW",
+    displayName: "Appointments - Run Available Subflow",
+    description: "Resolve and run an active OneAssistant communication or payment subflow whose required package is installed.",
+    validation: (action) => {
+      if (!action?.capability) throw new Error("Run Available Subflow requires capability");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async (context) => {
+      const {action,db,companyId,req,record,object,workflowVariables}=context;
+      const tenantId=companyId||req?.user?.companyId;
+      const rootObjectKey=object?.object_key||object?.objectKey||null;
+      const bound=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
+      const resolved=await resolveAssistantSubflow(db,{
+        companyId:tenantId,
+        capability:bound.capability,
+        channel:bound.channel||null,
+        providerPackageKey:bound.providerPackageKey||null,
+      });
+      if(!resolved){
+        if(bound.required===true) throw new Error(`No active installed subflow is available for ${bound.capability}`);
+        return {status:"skipped",reason:"No compatible installed subflow",capability:bound.capability};
+      }
+      const runner=WORKFLOW_ACTION_REGISTRY.find((item)=>item.key==="RUN_SUBFLOW");
+      if(!runner?.executor) throw new Error("RUN_SUBFLOW is unavailable");
+      const result=await runner.executor({
+        ...context,
+        action:{
+          ...bound,
+          workflowId:resolved.id,
+          inputs:bound.inputs||{},
+        },
+      });
+      return {...result,resolvedWorkflowId:resolved.id,resolvedWorkflowName:resolved.name};
+    },
+  },
+  {
     key: "FIND_APPOINTMENT_SLOTS",
     displayName: "Appointments - Find Available Slots",
     description: "Find available OneAssistant appointment slots for a service and optional resource.",
@@ -1143,6 +1233,30 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         metadata: action.metadata || {},
       }),
     }),
+  },
+  {
+    key: "COMPLETE_APPOINTMENT_PAYMENT",
+    displayName: "Appointments - Complete Payment",
+    description: "Standard payment-subflow callback: mark the payment request successful, confirm the held appointment, and emit appointment.confirmed.",
+    validation: (action) => {
+      if (!action?.paymentRequestId) throw new Error("Complete Appointment Payment requires paymentRequestId");
+    },
+    async: false,
+    requiredPermissions: ["appointments.payment","appointments.manage"],
+    executor: async ({ action, client, db, companyId, req, record, object, workflowVariables }) => {
+      const tenantId=companyId||req?.user?.companyId;
+      const rootObjectKey=object?.object_key||object?.objectKey||null;
+      const resolved=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
+      const queryClient=client||{query:db};
+      const result=await completeAppointmentPayment(queryClient,{
+        companyId:tenantId,
+        paymentRequestId:resolved.paymentRequestId,
+        providerReference:resolved.providerReference||null,
+        paymentUrl:resolved.paymentUrl||null,
+        amountPaid:resolved.amountPaid,
+      });
+      return {status:"completed",...result};
+    },
   },
   {
     key: "CALCULATE_APPOINTMENT_PAYMENT",
@@ -1944,13 +2058,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["communications.send"],
     requiredEntitlement: "communications.email",
-    executor: async ({ db, action, req, companyId, stepRunId, record, object }) => {
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
       const company = companyId || req?.user?.companyId;
       const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
       if (!provider.configured) {
         return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object);
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
@@ -1965,13 +2079,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["communications.send"],
     requiredEntitlement: "communications.sms",
-    executor: async ({ db, action, req, companyId, stepRunId, record, object }) => {
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
       const company = companyId || req?.user?.companyId;
       const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "SMS", stepRunId });
       if (!provider.configured) {
         return { status: "failed", provider: "SMS", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object);
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_SMS", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
@@ -1986,13 +2100,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["communications.send"],
     requiredEntitlement: "communications.whatsapp",
-    executor: async ({ db, action, req, companyId, stepRunId, record, object }) => {
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
       const company = companyId || req?.user?.companyId;
       const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "WHATSAPP", stepRunId });
       if (!provider.configured) {
         return { status: "failed", provider: "WHATSAPP", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object);
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
@@ -3133,6 +3247,10 @@ export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
   const results = [];
   const completed = [];
+  const workflowVariables = {
+    ...(context.workflowVariables || {}),
+    steps: { ...(context.workflowVariables?.steps || {}) },
+  };
   for (const item of actions) {
     if (!item || typeof item !== "object") continue;
     const index = results.length;
@@ -3149,12 +3267,14 @@ export async function executeWorkflowActions({ actions, ...context }) {
     if (stepRun?.status === "COMPLETED" || stepRun?.status === "WAITING") {
       const priorResult = stepRun.metadata?.result || { status: stepRun.status === "WAITING" ? "waiting" : "completed", idempotentReplay: true };
       results.push({ action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
+      workflowVariables.steps[item.id || `step-${index + 1}`] = priorResult;
       completed.push({ action: item, stepRunId: stepRun.id, index });
       continue;
     }
     try {
-      const result = await executeWorkflowAction({ ...context, action: item, stepRunId: stepRun?.id || null });
+      const result = await executeWorkflowAction({ ...context, workflowVariables, action: item, stepRunId: stepRun?.id || null });
       const entry = { action: item.type || item.key, result, stepRunId: stepRun?.id || null };
+      workflowVariables.steps[item.id || `step-${index + 1}`] = result;
       results.push(entry);
       if (result?.status === "failed") throw new WorkflowExecutionError(errorDetails(result.error || result), []);
       if (result?.status === "completed" || result?.status === "queued" || result?.status === "waiting") {
