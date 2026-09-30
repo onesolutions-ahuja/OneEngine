@@ -25,6 +25,8 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const loadRuns = async () => {
     try {
@@ -67,20 +69,76 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
   }, [selectedRunId]);
 
   const run = useMemo(() => details?.run || null, [details]);
+  const filteredRuns = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return runs.filter((currentRun) => {
+      const status = String(currentRun.status || "").toUpperCase();
+      if (statusFilter !== "ALL" && status !== statusFilter) return false;
+      if (!query) return true;
+      const source = currentRun.trigger_key === "business_command"
+        ? `${currentRun.metadata?.method || ""} ${currentRun.metadata?.path || ""}`
+        : `${currentRun.trigger_key || ""} ${currentRun.record_id || ""} ${currentRun.object_id || ""}`;
+      return [
+        currentRun.workflow_name,
+        currentRun.id,
+        status,
+        source,
+        currentRun.metadata?.actorUserId,
+        currentRun.metadata?.storeId,
+      ].filter(Boolean).join(" ").toLowerCase().includes(query);
+    });
+  }, [runs, search, statusFilter]);
 
   return (
     <div className="workflow-runs-shell">
       <aside className="workflow-runs-list">
-        <div className="workflow-runs-toolbar">
-          <div><strong>Workflow Runs</strong><span>{loading ? "Loading…" : `${runs.length} recent run${runs.length === 1 ? "" : "s"}`}</span></div>
-          <button type="button" onClick={loadRuns} disabled={loading}>Refresh</button>
+        <div className="workflow-runs-list-header">
+          <div className="workflow-runs-title-row">
+            <div>
+              <strong>Workflow Runs</strong>
+              <span>{loading ? "Loading…" : `${filteredRuns.length} of ${runs.length} runs`}</span>
+            </div>
+            <button type="button" onClick={loadRuns} disabled={loading}>Refresh</button>
+          </div>
+
+          <div className="workflow-runs-search">
+            <span aria-hidden="true">⌕</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search workflow runs"
+              aria-label="Search workflow runs"
+            />
+          </div>
+
+          <div className="workflow-runs-filters" role="group" aria-label="Workflow run status">
+            {["ALL", "RUNNING", "FAILED", "COMPLETED"].map((status) => (
+              <button
+                key={status}
+                type="button"
+                className={statusFilter === status ? "is-active" : ""}
+                onClick={() => setStatusFilter(status)}
+              >
+                {status === "ALL" ? "All" : status[0] + status.slice(1).toLowerCase()}
+              </button>
+            ))}
+          </div>
+
+          <div className="workflow-runs-column-head">
+            <span>Run</span>
+            <span>Status</span>
+          </div>
         </div>
+
         <div className="workflow-runs-scroll">
           {loading ? (
             <div className="workflow-runs-empty">Loading runs…</div>
           ) : runs.length === 0 ? (
             <div className="workflow-runs-empty"><strong>No workflow runs yet</strong><span>Runs will appear here after workflows execute.</span></div>
-          ) : runs.map((currentRun) => (
+          ) : filteredRuns.length === 0 ? (
+            <div className="workflow-runs-empty"><strong>No matching runs</strong><span>Try a different search or status filter.</span></div>
+          ) : filteredRuns.map((currentRun) => (
             <button
               key={currentRun.id}
               type="button"
@@ -94,7 +152,7 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
                     ? `${currentRun.metadata?.method || "MUTATION"} · ${currentRun.metadata?.path || "API"}`
                     : `${currentRun.trigger_key || "trigger"} · ${currentRun.record_id ? "record" : "object"}`}
                 </span>
-                <small>{formatDate(currentRun.started_at)}</small>
+                <small>{formatDate(currentRun.started_at)} · #{currentRun.id?.slice(0, 8) || ""}</small>
               </div>
               <span className={statusBadge(currentRun.status)}>{String(currentRun.status || "pending")}</span>
             </button>
@@ -114,15 +172,38 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
               <span className={statusBadge(run.status)}>{String(run.status || "pending")}</span>
             </div>
 
-            <div className="workflow-run-metrics">
-              <div><span>Version</span><strong>{run.workflow_version ?? 1}</strong></div>
-              <div><span>Started</span><strong>{formatDate(run.started_at)}</strong></div>
-              <div><span>Completed</span><strong>{formatDate(run.completed_at)}</strong></div>
-              <div><span>Trigger</span><strong>{run.trigger_key || "—"}</strong></div>
-              <div><span>Source</span><strong>{run.metadata?.method ? `${run.metadata.method} ${run.metadata.path || ""}` : run.metadata?.source?.type || run.metadata?.source || "—"}</strong></div>
-              <div><span>Duration</span><strong>{run.metadata?.durationMs != null ? `${run.metadata.durationMs} ms` : "—"}</strong></div>
-              <div><span>Retry count</span><strong>{run.metadata?.retryCount ?? run.retry_count ?? 0}</strong></div>
-              <div><span>Record</span><strong>{run.record_id || run.object_id || "—"}</strong></div>
+            <div className="workflow-run-record">
+              <div className="workflow-run-record-section">
+                <div className="workflow-run-record-section-title">Run details</div>
+                <div className="workflow-run-record-grid">
+                  <div><span>Run ID</span><strong>{run.id || "—"}</strong></div>
+                  <div><span>Workflow</span><strong>{run.workflow_name || "—"}</strong></div>
+                  <div><span>Status</span><strong>{String(run.status || "—")}</strong></div>
+                  <div><span>Version</span><strong>{run.workflow_version ?? 1}</strong></div>
+                  <div><span>Trigger</span><strong>{run.trigger_key || "—"}</strong></div>
+                  <div><span>Retry count</span><strong>{run.metadata?.retryCount ?? run.retry_count ?? 0}</strong></div>
+                </div>
+              </div>
+
+              <div className="workflow-run-record-section">
+                <div className="workflow-run-record-section-title">Timing & source</div>
+                <div className="workflow-run-record-grid">
+                  <div><span>Started</span><strong>{formatDate(run.started_at)}</strong></div>
+                  <div><span>Completed</span><strong>{formatDate(run.completed_at)}</strong></div>
+                  <div><span>Duration</span><strong>{run.metadata?.durationMs != null ? `${run.metadata.durationMs} ms` : "—"}</strong></div>
+                  <div className="wide"><span>Source</span><strong>{run.metadata?.method ? `${run.metadata.method} ${run.metadata.path || ""}` : run.metadata?.source?.type || run.metadata?.source || "—"}</strong></div>
+                </div>
+              </div>
+
+              <div className="workflow-run-record-section">
+                <div className="workflow-run-record-section-title">Context</div>
+                <div className="workflow-run-record-grid">
+                  <div><span>Record</span><strong>{run.record_id || "—"}</strong></div>
+                  <div><span>Object</span><strong>{run.object_id || "—"}</strong></div>
+                  <div><span>Actor</span><strong>{run.metadata?.actorUserId || "—"}</strong></div>
+                  <div><span>Store</span><strong>{run.metadata?.storeId || "—"}</strong></div>
+                </div>
+              </div>
             </div>
 
             {run.error_text || run.metadata?.last_error || run.metadata?.error || run.metadata?.rootError?.message ? (
