@@ -1475,6 +1475,91 @@ export default function createConnectorsRouter({
     }
   });
 
+  router.post("/connector-instances/:id/send-test-sms", authenticate, authorize("communications.send"), async (req, res) => {
+    try {
+      const recipient = String(req.body?.recipient || "").trim();
+      const message = String(req.body?.message || "onePOS SMSGate test message").trim();
+      if (!recipient) return res.status(400).json({ success: false, message: "Test mobile number is required" });
+      if (!message) return res.status(400).json({ success: false, message: "Test message is required" });
+      if (message.length > 500) return res.status(400).json({ success: false, message: "Test message is too long" });
+
+      const instanceResult = await db(
+        `SELECT c.*,p.manifest
+           FROM integration_connections c
+           JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
+          WHERE c.id=$1 AND c.company_id=$2
+          LIMIT 1`,
+        [req.params.id, req.user.companyId]
+      );
+      const instance = instanceResult.rows[0];
+      if (!instance) return res.status(404).json({ success: false, message: "Connector instance not found" });
+      if (instance.connector_package_key !== "smsgate_connector") {
+        return res.status(400).json({ success: false, message: "This test is only available for SMSGate" });
+      }
+      if (instance.enabled !== true) {
+        return res.status(409).json({ success: false, message: "Enable SMSGate before sending a test SMS" });
+      }
+
+      const lastTest = jsonValue(instance.last_test_result, {});
+      if (lastTest?.success !== true || String(instance.connection_status || "").toUpperCase() !== "CONNECTED") {
+        return res.status(409).json({ success: false, message: "Run a successful connection test before sending SMS" });
+      }
+
+      await req.ensureBusinessCommandRun?.({
+        companyId: req.user.companyId,
+        userId: req.user.id || null,
+        storeId: instance.store_id || null,
+      });
+
+      const driver = drivers?.get(instance.connector_package_key);
+      if (!driver || !driver.capabilities?.has?.("sms.send")) {
+        return res.status(409).json({ success: false, message: "SMSGate send capability is unavailable" });
+      }
+      const configuration = {
+        ...jsonValue(instance.connector_configuration, {}),
+        ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
+      };
+      const service = new ConnectorService({
+        connectorKey: instance.connector_package_key,
+        capabilities: ["sms.send"],
+        adapter: driver.createAdapter({
+          instanceId: instance.id,
+          configuration,
+          companyId: instance.company_id,
+          storeId: instance.store_id,
+          tillId: instance.till_id,
+        }),
+      });
+      const connection = await service.connect();
+      if (!connection.healthy) {
+        return res.status(409).json({ success: false, message: connection.lastError || "SMSGate is not healthy" });
+      }
+      const result = await service.execute("sms.send", { recipient, text: message });
+      await writeAudit?.(
+        req.user.companyId,
+        req.user.id || null,
+        "connector.test_sms.sent",
+        "integration_connection",
+        instance.id,
+        { packageKey: instance.connector_package_key, recipientLast4: recipient.slice(-4), providerMessageId: result?.providerMessageId || null }
+      );
+      return res.json({
+        success: true,
+        data: {
+          status: result?.status || "SENT",
+          providerMessageId: result?.providerMessageId || null,
+          message: "Test SMS submitted to SMSGate",
+        },
+      });
+    } catch (error) {
+      console.error("Send SMSGate test SMS error:", error);
+      return res.status(error?.status || 500).json({
+        success: false,
+        message: error?.message || "Unable to send test SMS",
+      });
+    }
+  });
+
   router.get("/connector-capabilities/:capabilityKey", authenticate, authorize("sale.create"), async (req, res) => {
     try {
       let session = await db(
