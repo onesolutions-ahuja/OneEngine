@@ -557,7 +557,7 @@ const SETTINGS_VISUALS = {
   deployments: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['deployments', 'release', 'promotion'] },
   notifications: { icon: Bell, tone: 'cyan', searchTerms: ['notification subscriptions', 'events'] },
   'value-sets': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['value sets', 'picklist', 'reusable values'] },
-  'message-templates': { icon: ReceiptText, tone: 'cyan' },
+  'message-templates': { icon: Mail, tone: 'pink', searchTerms: ['message templates', 'email template', 'sms template', 'whatsapp template'] },
 }
 
 const SETTINGS_NAV_CACHE_KEY = 'onepos.settings.nav.v1'
@@ -595,7 +595,6 @@ const DEVELOPER_SETTINGS_KEYS = new Set([
   'deployments',
   'notifications',
   'value-sets',
-  'message-templates',
 ])
 
 function settingsVisual(label, explicitKey = '') {
