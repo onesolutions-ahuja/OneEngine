@@ -105,6 +105,7 @@ export async function login(username, password) {
    */
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
+  sessionStorage.removeItem('onepos.settings.context.v2')
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
 
@@ -203,6 +204,7 @@ export function consumeGoogleOAuthCallback() {
 
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
+  sessionStorage.removeItem('onepos.settings.context.v2')
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
   setActingCompanyId('')
@@ -282,6 +284,7 @@ export async function ensureActingCompanyContext() {
 export function logout() {
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
+  sessionStorage.removeItem('onepos.settings.context.v2')
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
   setActingCompanyId('')
