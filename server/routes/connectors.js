@@ -6,6 +6,7 @@ import {
 } from "../services/connectorFramework.js";
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
+import { reconcileCompanyPackageEntitlements } from "../services/packageEntitlements.js";
 
 function jsonValue(value, fallback) {
   if (typeof value !== "string") return value ?? fallback;
@@ -1103,6 +1104,7 @@ export default function createConnectorsRouter({
 
   router.get("/connector-apps", authenticate, authorize("integration.manage"), async (req, res) => {
     try {
+      await reconcileCompanyPackageEntitlements(db, req.user.companyId);
       const result = await db(
         `SELECT p.package_key,p.name,p.description,p.manifest,p.category,p.publisher,
                 i.status AS installation_status,i.version AS installed_version
