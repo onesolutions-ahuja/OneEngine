@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Eye, Plus, RefreshCw, Upload, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
 import { parsePurchaseImport } from '../../services/purchaseImport'
 import { buildPurchaseImportPreview } from '../../services/purchaseImportPreview'
@@ -28,20 +29,23 @@ export default function PurchasesPage(){
   const [detail,setDetail]=useState(null)
   const [detailLoading,setDetailLoading]=useState(false)
 
-  const load=async()=>{
+  const applyListData=(p,prods,sups,settings)=>{
+    if(p?.success)setPurchases(Array.isArray(p.data)?p.data:[])
+    if(prods?.success)setProducts(Array.isArray(prods.data)?prods.data:[])
+    if(sups?.success)setSuppliers((Array.isArray(sups.data)?sups.data:[]).filter(s=>s.active!==false))
+    if(settings?.data?.company?.currency)setCurrency(settings.data.company.currency)
+  }
+  const load=async(forceRefresh=false)=>{
     try{
       setLoading(true);setError('')
-      const [p,prods,sups,settings]=await Promise.all([
-        apiRequest('/api/purchases'),
-        apiRequest('/api/products'),
-        apiRequest('/api/suppliers'),
-        apiRequest('/api/settings').catch(()=>null),
+      const [purchaseRows,productRows,supplierRows,settings]=await Promise.all([
+        cachedGet('/api/purchases',{forceRefresh,onFresh:fresh=>fresh?.success&&setPurchases(Array.isArray(fresh.data)?fresh.data:[])}),
+        cachedGet('/api/products',{forceRefresh,onFresh:fresh=>fresh?.success&&setProducts(Array.isArray(fresh.data)?fresh.data:[])}),
+        cachedGet('/api/suppliers',{forceRefresh,onFresh:fresh=>fresh?.success&&setSuppliers((Array.isArray(fresh.data)?fresh.data:[]).filter(s=>s.active!==false))}),
+        cachedGet('/api/settings',{cacheKey:'settings:company',forceRefresh,onFresh:fresh=>fresh?.data?.company?.currency&&setCurrency(fresh.data.company.currency)}).catch(()=>null),
       ])
-      if(!p?.success)throw new Error(p?.message||'Unable to load purchases')
-      setPurchases(Array.isArray(p.data)?p.data:[])
-      setProducts(Array.isArray(prods?.data)?prods.data:[])
-      setSuppliers((Array.isArray(sups?.data)?sups.data:[]).filter(s=>s.active!==false))
-      setCurrency(settings?.data?.company?.currency||'GBP')
+      if(!purchaseRows?.success)throw new Error(purchaseRows?.message||'Unable to load purchases')
+      applyListData(purchaseRows,productRows,supplierRows,settings)
     }catch(err){setError(err?.message||'Unable to load purchases')}
     finally{setLoading(false)}
   }
@@ -70,7 +74,7 @@ export default function PurchasesPage(){
       })
       if(!r?.success)throw new Error(r?.message||'Unable to receive purchase')
       setMessage('Remaining purchase stock received.')
-      await load()
+      await load(true)
       await openDetail(purchase)
     }catch(err){setError(err?.message||'Unable to receive purchase')}
   }
@@ -90,7 +94,7 @@ export default function PurchasesPage(){
     <header className="module-page-header">
       <div><span>Supply</span><h1>Purchases</h1><p>Create supplier purchases and receive stock into the inventory ledger.</p></div>
       <div className="module-header-actions">
-        <button onClick={load}><RefreshCw size={14}/> Refresh</button>
+        <button onClick={()=>load(true)}><RefreshCw size={14}/> Refresh</button>
         <button onClick={()=>setShowImport(true)}><Upload size={14}/> Import</button>
         <button className="module-primary-button" onClick={()=>setShowForm(true)}><Plus size={14}/> New Purchase</button>
       </div>
@@ -118,7 +122,7 @@ export default function PurchasesPage(){
       suppliers={suppliers}
       currency={currency}
       onClose={()=>setShowForm(false)}
-      onSaved={async msg=>{setShowForm(false);setMessage(msg);await load()}}
+      onSaved={async msg=>{setShowForm(false);setMessage(msg);await load(true)}}
     />:null}
 
     {showImport?<PurchaseImport
@@ -126,7 +130,7 @@ export default function PurchasesPage(){
       suppliers={suppliers}
       currency={currency}
       onClose={()=>setShowImport(false)}
-      onImported={async count=>{setShowImport(false);setMessage(`${count} purchase${count===1?'':'s'} imported and received.`);await load()}}
+      onImported={async count=>{setShowImport(false);setMessage(`${count} purchase${count===1?'':'s'} imported and received.`);await load(true)}}
     />:null}
 
     {detail?<PurchaseDetail
