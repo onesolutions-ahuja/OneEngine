@@ -4,11 +4,11 @@ import { apiRequest } from "../../services/api.js";
 
 const inputClass = "h-9 w-full border border-slate-300 rounded px-2 text-sm";
 
-export default function ConnectorInstancesPanel() {
+export default function ConnectorInstancesPanel({ packageKey: requestedPackageKey = "", settingsMode = false }) {
   const [apps, setApps] = useState([]);
   const [instances, setInstances] = useState([]);
   const [stores, setStores] = useState([]);
-  const [packageKey, setPackageKey] = useState("");
+  const [packageKey, setPackageKey] = useState(() => requestedPackageKey);
   const [storeId, setStoreId] = useState("");
   const [tillId, setTillId] = useState("");
   const [fallbackOrder, setFallbackOrder] = useState("0");
@@ -36,9 +36,10 @@ export default function ConnectorInstancesPanel() {
       const allApps = Array.isArray(catalogue?.data) ? catalogue.data : [];
       const installedApps = allApps.filter((app) =>
         app.company_installation?.status === "active" && app.manifest?.connectorApp
+          && (!requestedPackageKey || app.package_key === requestedPackageKey)
       );
       setApps(installedApps);
-      setInstances(Array.isArray(installed?.data) ? installed.data : []);
+      setInstances((Array.isArray(installed?.data) ? installed.data : []).filter((instance) => !requestedPackageKey || instance.packageKey === requestedPackageKey));
       setStores(Array.isArray(storeResult?.data) ? storeResult.data : []);
       if (!installedApps.some((app) => app.package_key === packageKey)) {
         setPackageKey(installedApps[0]?.package_key || "");
@@ -117,8 +118,8 @@ export default function ConnectorInstancesPanel() {
     <section className="mb-6 border border-slate-200 rounded-lg bg-white">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Hardware & Payment Connectors</h2>
-          <p className="text-xs text-slate-500">Installed connector apps and till assignments</p>
+          <h2 className="text-base font-semibold text-slate-900">{settingsMode && selectedApp ? `${selectedApp.name} Settings` : "Hardware & Payment Connectors"}</h2>
+          <p className="text-xs text-slate-500">{settingsMode ? "Configure credentials, store/till assignment and connection health." : "Installed connector apps and till assignments"}</p>
         </div>
         <button type="button" onClick={load} disabled={loading} title="Refresh connectors" className="h-9 w-9 grid place-items-center border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50">
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
@@ -164,11 +165,11 @@ export default function ConnectorInstancesPanel() {
 
           {apps.length ? (
             <form onSubmit={createInstance} className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-5">
-              <label className="text-xs font-medium text-slate-600">Installed app
+              {!requestedPackageKey ? <label className="text-xs font-medium text-slate-600">Installed app
                 <select required value={packageKey} onChange={(event) => setPackageKey(event.target.value)} className={`${inputClass} mt-1`}>
                   {apps.map((app) => <option key={app.package_key} value={app.package_key}>{app.name}</option>)}
                 </select>
-              </label>
+              </label> : null}
               <label className="text-xs font-medium text-slate-600">Store
                 <select required value={storeId} onChange={(event) => { setStoreId(event.target.value); setTillId(""); }} className={`${inputClass} mt-1`}>
                   <option value="">Select store</option>
