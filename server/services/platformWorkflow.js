@@ -566,7 +566,14 @@ export async function executeConnectorWorkflowAction({
       .map((item) => typeof item === "string" ? item : item?.key)
       .filter((key) => key && driver.capabilities.has(key));
     const { ConnectorService } = await import("./connectorRuntime.js");
-    const { decryptCredentials } = await import("./integrationCredentials.js");
+    const loadedConnection = await resolveOneConnection({
+      db,
+      companyId: tenantCompanyId,
+      connectionId: instance.id,
+      includeSecrets: true,
+      migrateLegacy: true,
+      actorUserId: actorUserId || req?.user?.id || null,
+    });
     const service = new ConnectorService({
       connectorKey: instance.connector_package_key,
       capabilities,
@@ -574,7 +581,7 @@ export async function executeConnectorWorkflowAction({
         instanceId: instance.id,
         configuration: {
           ...(typeof instance.connector_configuration === "string" ? JSON.parse(instance.connector_configuration || "{}") : (instance.connector_configuration || {})),
-          ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
+          ...(loadedConnection?.secrets || {}),
         },
         companyId: instance.company_id,
         storeId: instance.store_id,
