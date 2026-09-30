@@ -5,6 +5,8 @@ import {
   releaseAppointmentHold,
   confirmAppointmentFromHold,
   listPaymentRequestProviders,
+  resolveAppointmentPublicLink,
+  selectPublicAppointmentSlot,
 } from "../services/oneAssistant.js";
 
 function errorResponse(res, error) {
@@ -14,6 +16,61 @@ function errorResponse(res, error) {
 
 export default function createOneAssistantRouter({ pool, authenticate, authorize }) {
   const router=express.Router();
+
+
+  router.get("/public/assistant/book/:token", async (req,res)=>{
+    try{
+      const link=await resolveAppointmentPublicLink(pool.query.bind(pool),req.params.token,{purpose:"BOOK_SLOT"});
+      if(!link) return res.status(410).json({success:false,code:"BOOKING_LINK_EXPIRED",message:"This booking link is invalid or has expired"});
+      const services=await pool.query(
+        "SELECT id,name,description,duration_minutes,price,currency,payment_policy,deposit_value FROM appointment_services WHERE company_id=$1 AND active=true ORDER BY name",
+        [link.company_id]
+      );
+      let slots=[];
+      const serviceId=req.query.serviceId||link.service_id||null;
+      if(serviceId){
+        const from=req.query.from||new Date().toISOString();
+        const to=req.query.to||new Date(Date.now()+14*86400000).toISOString();
+        slots=await findAvailableAppointmentSlots(pool.query.bind(pool),{
+          companyId:link.company_id,serviceId,resourceId:req.query.resourceId||null,from,to,limit:req.query.limit||20
+        });
+      }
+      res.json({
+        success:true,
+        data:{
+          bookingCase:{id:link.booking_case_id,channel:link.channel,status:link.case_status},
+          services:services.rows,
+          selectedServiceId:serviceId,
+          slots,
+          expiresAt:link.expires_at
+        }
+      });
+    }catch(error){errorResponse(res,error);}
+  });
+
+  router.post("/public/assistant/book/:token/select", async (req,res)=>{
+    const client=await pool.connect();
+    try{
+      await client.query("BEGIN");
+      const link=await resolveAppointmentPublicLink(client.query.bind(client),req.params.token,{purpose:"BOOK_SLOT"});
+      if(!link){await client.query("ROLLBACK");return res.status(410).json({success:false,code:"BOOKING_LINK_EXPIRED",message:"This booking link is invalid or has expired"});}
+      const {serviceId,resourceId,startsAt,endsAt}=req.body||{};
+      if(!serviceId||!resourceId||!startsAt||!endsAt){await client.query("ROLLBACK");return res.status(400).json({success:false,message:"serviceId, resourceId, startsAt and endsAt are required"});}
+      const selected=await selectPublicAppointmentSlot(client,{publicLink:link,serviceId,resourceId,startsAt,endsAt,holdMinutes:req.body?.holdMinutes||10});
+      await client.query("COMMIT");
+      res.json({
+        success:true,
+        data:{
+          bookingCaseId:link.booking_case_id,
+          hold:selected.hold,
+          amountDue:selected.amount,
+          currency:selected.service.currency,
+          requiresPayment:selected.amount>0,
+          paymentRequest:selected.paymentRequest
+        }
+      });
+    }catch(error){await client.query("ROLLBACK");errorResponse(res,error);}finally{client.release();}
+  });
 
   router.get("/appointments/services", authenticate, authorize("appointments.view"), async (req,res)=>{
     const result=await pool.query("SELECT * FROM appointment_services WHERE company_id=$1 ORDER BY active DESC,name",[req.user.companyId]);
