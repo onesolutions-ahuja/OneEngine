@@ -99,6 +99,7 @@ export async function resolveOneConnection({
   includeSecrets = false,
   migrateLegacy = true,
   actorUserId = null,
+  platformCredentialAccess = false,
 }) {
   if (!db || !companyId || !connectionId) throw new Error("db, companyId and connectionId are required");
   const result = await db(
@@ -118,13 +119,28 @@ export async function resolveOneConnection({
 
   let credentialRow = null;
   let secrets = null;
+  let allowPlatformCredential = false;
+  if (platformCredentialAccess === true && actorUserId) {
+    const gate = await db(
+      `SELECT 1
+         FROM users u
+         JOIN role_permissions rp ON rp.role_id=u.role_id
+         JOIN permissions p ON p.id=rp.permission_id
+        WHERE u.id=$1 AND u.active=TRUE AND p.code='platform.manage'
+        LIMIT 1`,
+      [actorUserId]
+    );
+    allowPlatformCredential = gate.rows?.length > 0;
+  }
+
   if (row.credential_id) {
     const credential = await db(
       `SELECT * FROM platform_credentials
-        WHERE id=$1 AND company_id=$2 AND active=TRUE
+        WHERE id=$1 AND active=TRUE
+          AND (company_id=$2 OR (company_id IS NULL AND $4=TRUE))
           AND (connection_id=$3 OR connection_id IS NULL)
         LIMIT 1`,
-      [row.credential_id, companyId, connectionId]
+      [row.credential_id, companyId, connectionId, allowPlatformCredential]
     );
     credentialRow = credential.rows?.[0] || null;
     if (credentialRow) secrets = decryptCredentials(credentialRow.ciphertext);
