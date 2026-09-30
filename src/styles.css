@@ -3781,7 +3781,11 @@ button:focus-visible {
   background: #e9eaec;
 }
 
-.till-modal > header strong { font-size: 12px; }
+.till-modal > header strong {
+  color: #1d1d1f;
+  font-size: 12px;
+  font-weight: 700;
+}
 .till-modal > header button {
   width: 26px;
   height: 26px;
@@ -3801,6 +3805,47 @@ button:focus-visible {
 .till-form {
   display: grid;
   gap: 9px;
+}
+
+.till-form > p {
+  margin: 0;
+  color: #5f6368;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.till-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 4px;
+}
+
+.till-form-actions button {
+  min-height: 34px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 8px;
+  color: #1d1d1f;
+  background: #fff;
+  font: 700 10.5px/1.2 inherit;
+  cursor: pointer;
+}
+
+.till-form-actions button.till-primary {
+  border-color: #0a84ff;
+  color: #fff;
+  background: #0a84ff;
+}
+
+.till-form-actions button:disabled {
+  opacity: .48;
+  cursor: not-allowed;
 }
 
 .till-form.is-row {
