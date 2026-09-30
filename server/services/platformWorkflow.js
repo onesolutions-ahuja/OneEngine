@@ -21,6 +21,7 @@ import { exportShopifyFulfillment, exportShopifyRefund, syncShopifyInventory, sy
 import { processShopifyWebhookEvent } from "./onlineOrders/shopifyWebhookProcessor.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
+import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { createGlobalProductLookupService, testGlobalProductProvider } from "./globalProductLookup.js";
 import {
   findAvailableAppointmentSlots,
@@ -1857,19 +1858,20 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.create"],
-    executor: async ({ db, action, req, object, companyId, fields }) => {
+    executor: async (context) => {
+      const { db, action, req, object, companyId, fields } = context;
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
-      const executionMode = resolveExecutionMode(arguments[0] || {});
+      const executionMode = resolveExecutionMode(context);
       await assertRuntimeObjectPermission({
         db, req, object: targetObject, action: "create", executionMode,
-        trustedSystem: req?.trustedSystemExecution === true,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
       });
       const table = targetObject.source_table;
       const entries = Object.entries(action.fieldValues || {});
       if (!entries.length) return { status: "completed", created: null };
       const mappedFields = await resolveWorkflowWritableFields({
         db, object: targetObject, fields, entries, req, executionMode,
-        trustedSystem: req?.trustedSystemExecution === true,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
       });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
       const columns = mappedFields.map((field) => `"${field.source_column}"`);
@@ -1991,7 +1993,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, companyId }) => {
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
       if (!action.recordId) throw new Error("Update Related Record requires a recordId");
       const parentObject = await resolveWorkflowTargetObject({ db, action: { objectId: action.parentObjectId }, object, companyId, req });
       let table = null;
@@ -2005,10 +2008,23 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
       }
       if (!table) throw new Error("Update Related Record requires a target table");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       const entries = Object.entries(action.fieldValues || {});
       if (!entries.length) return { status: "completed", recordId: action.recordId, updated: null };
+      const relatedFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      const mappedFields = await resolveWorkflowWritableFields({
+        db, object: targetObject, fields: relatedFields, entries, req, executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: action.recordId });
-      const sets = entries.map(([field], index) => `"${String(field).replace(/"/g, "")}"=$${index + 1}`).join(", ");
+      const sets = mappedFields.map((field, index) => `"${field.source_column}"=${index + 1}`).join(", ");
       const params = [...entries.map(([, value]) => value), action.recordId];
       const clauses = ["id=$" + params.length];
       if (req?.user?.companyId) {
@@ -2050,7 +2066,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.create"],
-    executor: async ({ db, action, req, object, recordId, companyId }) => {
+    executor: async (context) => {
+      const { db, action, req, object, recordId, companyId } = context;
       let relationship = action.relationship || null;
       const parentObject = await resolveWorkflowTargetObject({ db, action: { objectId: action.parentObjectId || action.parent_object_id }, object, companyId, req });
       let table = null;
@@ -2066,6 +2083,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         table = targetObject?.source_table || table;
       }
       if (!table) throw new Error("Create Related Record requires a target table");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "create", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       const fieldValues = { ...(action.fieldValues || {}) };
       let relationField = action.relationshipField || action.relatedField || action.foreignKey || action.foreign_key || null;
       if (!relationField && relationship?.child_field_id && db && typeof db === "function") {
@@ -2077,8 +2099,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       const entries = Object.entries(fieldValues);
       if (!entries.length) return { status: "completed", created: null };
+      const relatedFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      const mappedFields = await resolveWorkflowWritableFields({
+        db, object: targetObject, fields: relatedFields, entries, req, executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
-      const columns = entries.map(([field]) => `"${String(field).replace(/"/g, "")}"`);
+      const columns = mappedFields.map((field) => `"${field.source_column}"`);
       const values = entries.map((_, index) => `$${index + 1}`);
       const params = entries.map(([, value]) => value);
       if (req?.user?.companyId && (targetObject?.company_scoped || action.companyScoped || action.company_scoped || object?.company_scoped)) {
@@ -2165,8 +2195,22 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, companyId }) => {
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const assignmentFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      await assertRuntimeFieldWriteAccess({
+        db, req, object: targetObject, fields: assignmentFields, fieldNames: ["assigned_to"],
+        executionMode, trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       const table = targetObject.source_table;
       const assignee = action.assignee ?? action.assignedTo;
       const params = [assignee, action.recordId];
@@ -3503,23 +3547,37 @@ export function resolveWorkflowActionType(action) {
 }
 
 async function assertWorkflowActionPermission(context, definition) {
+  const mode = resolveExecutionMode(context);
+  if (mode === EXECUTION_MODES.SYSTEM) {
+    if (!(context.trustedSystem === true || context.req?.trustedSystemExecution === true || context.executionContext?.globals?.$System?.trusted === true)) {
+      throw Object.assign(new Error("SYSTEM workflow execution is not trusted"), { status: 403, code: "UNTRUSTED_SYSTEM_EXECUTION" });
+    }
+    return;
+  }
+
   const req = context?.req;
-  if (!req?.user || !req.user.roleId) return;
+  if (!req?.user?.id || !req.user.roleId || !req.user.companyId) {
+    throw Object.assign(new Error("Workflow action requires an authenticated USER execution context"), { status: 403, code: "RUNTIME_ACTOR_REQUIRED" });
+  }
   if (!context?.db || typeof context.db !== "function") {
     throw new Error("Workflow action authorization context is unavailable");
   }
   const required = Array.isArray(definition.requiredPermissions) ? definition.requiredPermissions : [];
   if (!required.length) return;
-  const result = await context.db(
-    `SELECT 1
-     FROM role_permissions rp
-     JOIN permissions p ON p.id=rp.permission_id
-     WHERE rp.role_id=$1 AND p.code = ANY($2::text[])
-     LIMIT 1`,
-    [req.user.roleId, required]
-  );
-  if (!result.rows.length) {
-    throw new Error("You do not have permission to execute this workflow action");
+  const [roleResult, permissionSets] = await Promise.all([
+    context.db(
+      `SELECT 1
+       FROM role_permissions rp
+       JOIN permissions p ON p.id=rp.permission_id
+       WHERE rp.role_id=$1 AND p.code = ANY($2::text[])
+       LIMIT 1`,
+      [req.user.roleId, required]
+    ),
+    loadEffectivePermissionSets(context.db, req.user, req),
+  ]);
+  const setAllowed = required.some((permission) => permissionSetAllowsSystemPermission(permissionSets, permission));
+  if (!roleResult.rows.length && !setAllowed) {
+    throw Object.assign(new Error("You do not have permission to execute this workflow action"), { status: 403, code: "WORKFLOW_ACTION_PERMISSION_REQUIRED" });
   }
 }
 
