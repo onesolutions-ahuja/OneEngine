@@ -98,6 +98,13 @@ export function apiUrl(path) {
 }
 
 export async function apiFetch(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase()
+  if (isPrivilegedMutation(path, method)) {
+    throw Object.assign(new Error('Privileged mutations must use the OneEngine Trusted Runtime API gate'), {
+      status: 403,
+      code: 'TRUSTED_RUNTIME_REQUIRED',
+    })
+  }
   const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   return fetch(apiUrl(path), {
     ...options,
