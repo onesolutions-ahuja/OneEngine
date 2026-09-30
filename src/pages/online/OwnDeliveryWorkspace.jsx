@@ -59,9 +59,9 @@ export default function OwnDeliveryWorkspace() {
 
   async function initialize() {
     try {
-      const response = await apiRequest("/api/auth/me/permissions");
-      const permissions = response.data?.permissions || [];
-      const driverOnly = permissions.includes("delivery.driver") && response.data?.isAdmin !== true && !permissions.includes("online_orders.manage");
+      const permissionState = await loadSessionPermissions();
+      const permissions = permissionState?.permissions || [];
+      const driverOnly = permissions.includes("delivery.driver") && !permissions.includes("online_orders.manage");
       setMode(driverOnly ? "driver" : "dispatcher");
       if (driverOnly) return;
       const storeResponse = await apiRequest("/api/own-delivery/stores");
