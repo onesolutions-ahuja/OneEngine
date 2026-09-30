@@ -9799,3 +9799,79 @@ button.git-control-tile { cursor: pointer; }
     pointer-events: auto;
   }
 }
+
+
+/* OneTheme topbar layout: logo + app search on the left, utilities on the right. */
+.menubar-left {
+  overflow: visible;
+}
+
+.topbar-search-wrap--left {
+  margin-left: 2px;
+}
+
+.topbar-search-wrap--left .mac-popover {
+  left: 0;
+  right: auto;
+}
+
+.help-menu-list {
+  padding: 4px;
+}
+
+.help-menu-row {
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.help-menu-row:hover {
+  background: rgba(0,0,0,.055);
+}
+
+.help-menu-row + .help-menu-row {
+  border-top: 1px solid rgba(0,0,0,.045);
+}
+
+@media (max-width: 760px) {
+  .topbar-search-wrap--left {
+    position: static;
+    display: inline-flex;
+    width: auto;
+    height: auto;
+    overflow: visible;
+  }
+
+  .topbar-search-wrap--left .topbar-search-pill {
+    display: inline-flex;
+    width: min(165px, 38vw) !important;
+  }
+
+  .topbar-search-wrap--left .mac-popover,
+  .topbar-search-wrap--left .topbar-app-menu {
+    position: fixed;
+    top: 36px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 112px);
+    overflow: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar-search-wrap--left .topbar-search-pill {
+    width: min(132px, 34vw) !important;
+  }
+
+  .menubar-time-button {
+    display: none;
+  }
+}
