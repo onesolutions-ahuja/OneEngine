@@ -1,4 +1,5 @@
 import express from "express";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { validateSalesReturn } from "../src/services/salesReturn.js";
 import { upsertBatchRow, syncBatchMovement } from "../services/inventory.js";
@@ -665,7 +666,19 @@ export default function createReturnsRouter({
           // track_stock=false products skip the ledger like POS sales do.
           if (source.trackStock) {
             const returnStoreId = storeScoped ? storeId : loaded.sale.store_id;
-            await createInventoryMovement(client, {
+            await executeSystemWorkflow({
+            db,
+            companyId: req.user.companyId,
+            userId: req.user.id || null,
+            systemKey: "function:inventory.movement.create",
+            req,
+            storeId: req.user.storeId || null,
+            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "inventory.movement.create" },
+            extraContext: {
+              client,
+              businessDb: (query, params = []) => client.query(query, params),
+            },
+            input: {
               companyId: req.user.companyId,
               productId: item.productId,
               storeId: returnStoreId,
@@ -675,7 +688,8 @@ export default function createReturnsRouter({
               referenceId: returnId,
               reason: item.reason || reason,
               createdBy: req.user.id,
-            });
+            },
+          });
             /*
              * Batch tracking: returned goods may not be reshelvable into
              * their original batch (batch often unknown on a return), so
@@ -895,11 +909,15 @@ export default function createReturnsRouter({
         }
 
         /* T9G: fire-and-forget integration dispatch (never blocks/throws). */
-        dispatchIntegrationEvent({
-          event: "SALES_RETURN_CREATED",
-          deps: { db },
-          context: { companyId: req.user.companyId, storeId: storeScoped ? storeId : loaded.sale.store_id },
-          entityId: returnId,
+        executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "function:integration.event.dispatch",
+          req,
+          input: { event: "SALES_RETURN_CREATED", entityId: returnId, storeId: storeScoped ? storeId : loaded.sale.store_id },
+          storeId: storeScoped ? storeId : loaded.sale.store_id,
+          source: { type: "domain_event", method: req.method, path: req.originalUrl || req.path, capability: "integration.event.dispatch" },
         }).catch(() => {});
 
         return res.status(201).json({
@@ -1014,7 +1032,19 @@ export default function createReturnsRouter({
             "INSERT INTO stock_return_items (return_id, product_id, purchase_item_id, quantity, reason) VALUES ($1,$2,$3,$4,$5)",
             [returnId, item.productId, item.purchaseItemId, quantity, item.reason || null]
           );
-          await createInventoryMovement(client, {
+          await executeSystemWorkflow({
+            db,
+            companyId: req.user.companyId,
+            userId: req.user.id || null,
+            systemKey: "function:inventory.movement.create",
+            req,
+            storeId: req.user.storeId || null,
+            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "inventory.movement.create" },
+            extraContext: {
+              client,
+              businessDb: (query, params = []) => client.query(query, params),
+            },
+            input: {
             companyId: req.user.companyId,
             productId: item.productId,
             storeId: storeScoped ? storeId : parent.rows[0].store_id,
@@ -1024,6 +1054,7 @@ export default function createReturnsRouter({
             referenceId: returnId,
             reason: item.reason || reason,
             createdBy: req.user.id,
+          },
           });
           const productInfo = await client.query(
             "SELECT batch_tracking FROM products WHERE id=$1 AND company_id=$2",
