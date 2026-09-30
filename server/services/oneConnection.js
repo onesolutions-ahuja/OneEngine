@@ -233,3 +233,20 @@ export function buildOneConnectionAuthHeaders(authType, secrets = {}) {
   }
   throw new Error("Unsupported OneConnection auth type");
 }
+
+
+export async function clearOneConnectionCredential({ db, companyId, connectionId }) {
+  if (!db || !companyId || !connectionId) throw new Error("db, companyId and connectionId are required");
+  await db(
+    `UPDATE platform_credentials
+        SET active=FALSE,updated_at=NOW()
+      WHERE company_id=$1 AND connection_id=$2 AND active=TRUE`,
+    [companyId, connectionId]
+  );
+  await db(
+    `UPDATE integration_connections
+        SET credential_id=NULL,credentials_encrypted=NULL,updated_at=NOW()
+      WHERE id=$1 AND company_id=$2`,
+    [connectionId, companyId]
+  );
+}
