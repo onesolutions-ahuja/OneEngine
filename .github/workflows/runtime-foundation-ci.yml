@@ -52,6 +52,14 @@ jobs:
           set -o pipefail
           node scripts/audit-api-contracts.mjs 2>&1 | tee api-contract-audit.log
 
+      - name: Run app surface audit
+        id: app_surface_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/audit-app-surfaces.mjs 2>&1 | tee app-surface-audit.log
+
       - name: Run complete server test suite
         id: server_tests
         continue-on-error: true
@@ -85,6 +93,7 @@ jobs:
             deep-project-module-audit.log
             project-consistency-audit.log
             api-contract-audit.log
+            app-surface-audit.log
             artifacts/deep-project-audit.json
             artifacts/project-consistency-audit.json
             artifacts/project-consistency-audit.md
@@ -101,6 +110,7 @@ jobs:
         run: |
           test "${{ steps.deep_module_audit.outcome }}" = "success"
           test "${{ steps.consistency_audit.outcome }}" = "success"
+          test "${{ steps.app_surface_audit.outcome }}" = "success"
           test "${{ steps.server_tests.outcome }}" = "success"
           test "${{ steps.server_build.outcome }}" = "success"
           test "${{ steps.frontend_build.outcome }}" = "success"
