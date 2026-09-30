@@ -1,1 +1,22 @@
-<svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>WhatsApp</title><path fill="#25D366" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WhatsApp connector">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#eef2f7"/></linearGradient>
+ <linearGradient id="one" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#19d8ff"/><stop offset=".48" stop-color="#0874ff"/><stop offset="1" stop-color="#071ca8"/></linearGradient>
+ <filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-opacity=".18"/></filter>
+ <filter id="ps" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-opacity=".25"/></filter>
+</defs>
+<rect x="28" y="28" width="456" height="456" rx="96" fill="url(#bg)" stroke="#dce3eb" stroke-width="3" filter="url(#s)"/>
+<path d="M120 356C82 319 76 169 138 115c53-46 240-44 291 12 43 47 40 155 4 212" fill="none" stroke="#4c5157" stroke-width="18" stroke-linecap="round" filter="url(#ps)"/>
+<g transform="translate(160 147)" filter="url(#ps)"><rect width="192" height="192" rx="44" fill="#25D366"/><circle cx="96" cy="96" r="58" fill="none" stroke="#fff" stroke-width="13"/><path d="M58 146 66 119" stroke="#fff" stroke-width="13" stroke-linecap="round"/><path d="M73 66c7 28 22 43 48 55 8 4 15-5 19-12" fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round"/></g>
+<g filter="url(#ps)" transform="translate(166 350) rotate(-8)">
+ <rect x="0" y="0" width="84" height="76" rx="20" fill="#666c72"/>
+ <rect x="-18" y="22" width="28" height="34" rx="8" fill="#5a6066"/>
+ <rect x="74" y="15" width="54" height="12" rx="6" fill="#aeb5bc"/>
+ <rect x="74" y="47" width="54" height="12" rx="6" fill="#aeb5bc"/>
+</g>
+<path d="M274 484C365 436 413 355 484 295V484Z" fill="#fff" stroke="#e6ebf0" stroke-width="2"/>
+<g transform="translate(372 365)" filter="url(#ps)">
+ <path d="M50 0 98 28v56L50 112 0 84V28Z" fill="url(#one)"/>
+ <path d="M45 24 28 42h13v42h18V24Z" fill="#fff"/>
+</g>
+</svg>
