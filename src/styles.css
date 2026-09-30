@@ -10193,3 +10193,497 @@ button.git-control-tile { cursor: pointer; }
   color: #067647;
   font-size: 13px;
 }
+
+
+/* OneDeveloper shared record-list pattern — aligned with Workspace */
+.developer-record-shell {
+  width: min(1380px, 100%);
+  height: calc(100vh - 205px);
+  min-height: 520px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(340px, 38%) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.035);
+}
+
+.developer-record-list {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(0,0,0,.08);
+  background: #fbfbfc;
+}
+
+.developer-record-list-head {
+  min-height: 52px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  background: #fff;
+}
+
+.developer-record-list-head > div:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.developer-record-list-head strong {
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.developer-record-list-head span {
+  color: rgba(31,42,58,.48);
+  font-size: 9px;
+}
+
+.developer-record-head-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.developer-record-head-actions button,
+.developer-record-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0,0,0,.09);
+  border-radius: 8px;
+  background: #fff;
+  color: #303740;
+  cursor: pointer;
+}
+
+.developer-record-head-actions button:hover,
+.developer-record-icon:hover {
+  color: #0a84ff;
+  background: #f7f9fc;
+}
+
+.developer-record-search,
+.onebuilder-list-search {
+  height: 34px;
+  margin: 10px 12px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 8px;
+  background: #f5f6f8;
+  color: #777e88;
+}
+
+.developer-record-search input,
+.onebuilder-list-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #1d1d1f;
+  font: inherit;
+  font-size: 10.5px;
+}
+
+.developer-record-search:focus-within,
+.onebuilder-list-search:focus-within {
+  border-color: rgba(10,132,255,.45);
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(10,132,255,.08);
+}
+
+.developer-record-filters {
+  padding: 0 12px 9px;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(0,0,0,.055);
+  scrollbar-width: none;
+}
+
+.developer-record-filters::-webkit-scrollbar { display: none; }
+
+.developer-record-filters button {
+  min-height: 25px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #69717a;
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.developer-record-filters button.is-active {
+  color: #0a67c2;
+  background: rgba(10,132,255,.10);
+  font-weight: 700;
+}
+
+.developer-record-list-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  background: #fff;
+}
+
+.developer-record-row {
+  width: 100%;
+  min-height: 60px;
+  padding: 9px 12px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(0,0,0,.055);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.developer-record-row:hover { background: #f7f9fc; }
+
+.developer-record-row.is-selected {
+  background: #eaf3ff;
+  box-shadow: inset 3px 0 0 #0a84ff;
+}
+
+.developer-record-row-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.developer-record-row-copy strong,
+.developer-record-row-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.developer-record-row-copy strong { font-size: 10.5px; }
+.developer-record-row-copy small { color: rgba(31,42,58,.48); font-size: 8.8px; }
+
+.developer-record-status {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #eceef1;
+  color: #59616c;
+  font-size: 8px;
+  font-weight: 750;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.developer-record-status.is-active,
+.developer-record-status.status-approved { color: #237a38; background: rgba(52,199,89,.12); }
+.developer-record-status.is-inactive,
+.developer-record-status.status-rejected,
+.developer-record-status.status-failed { color: #b42318; background: rgba(255,59,48,.11); }
+.developer-record-status.status-pending { color: #9a5c00; background: rgba(255,159,10,.13); }
+.developer-record-status.status-cancelled { color: #59616c; background: #eceef1; }
+
+.developer-record-detail {
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 18px 24px;
+  overflow: auto;
+  background: #fff;
+}
+
+.developer-record-detail-head {
+  min-height: 62px;
+  padding-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.developer-record-detail-head > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.developer-record-detail-head span,
+.developer-record-detail-head small {
+  color: rgba(31,42,58,.48);
+  font-size: 9px;
+}
+
+.developer-record-detail-head strong {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.developer-record-section {
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.developer-record-section-title {
+  margin-bottom: 8px;
+  font-size: 10.5px;
+  font-weight: 720;
+}
+
+.developer-record-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  column-gap: 26px;
+}
+
+.developer-record-fields > div {
+  min-width: 0;
+  min-height: 40px;
+  padding: 7px 0;
+  display: grid;
+  grid-template-columns: 105px minmax(0,1fr);
+  align-items: baseline;
+  gap: 10px;
+  border-bottom: 1px solid rgba(0,0,0,.035);
+}
+
+.developer-record-fields span {
+  color: rgba(31,42,58,.48);
+  font-size: 9px;
+}
+
+.developer-record-fields strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  font-weight: 630;
+}
+
+.developer-record-form-grid {
+  padding: 16px 0;
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px;
+}
+
+.developer-record-form-grid label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  color: #4f5660;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.developer-record-form-grid label.wide { grid-column: 1 / -1; }
+
+.developer-record-form-grid input,
+.developer-record-form-grid textarea,
+.value-set-add-row input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid rgba(0,0,0,.11);
+  border-radius: 8px;
+  outline: 0;
+  background: #fff;
+  color: #1d1d1f;
+  font: inherit;
+  font-size: 10.5px;
+}
+
+.developer-record-form-grid input:focus,
+.developer-record-form-grid textarea:focus,
+.value-set-add-row input:focus {
+  border-color: rgba(10,132,255,.5);
+  box-shadow: 0 0 0 2px rgba(10,132,255,.08);
+}
+
+.developer-record-check {
+  display: flex !important;
+  grid-template-columns: none !important;
+  flex-direction: row !important;
+  align-items: center;
+}
+
+.developer-record-check input {
+  width: auto;
+  min-height: 0;
+}
+
+.developer-record-editor-actions,
+.developer-record-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.developer-record-editor-actions button,
+.developer-record-actions button,
+.value-set-add-row button {
+  min-height: 31px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(0,0,0,.1);
+  border-radius: 8px;
+  background: #fff;
+  color: #1d1d1f;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.developer-record-editor-actions button.is-primary,
+.developer-record-actions button.is-primary {
+  border-color: #0a84ff;
+  background: #0a84ff;
+  color: #fff;
+}
+
+.developer-record-actions button.is-danger {
+  color: #b42318;
+  border-color: rgba(255,59,48,.2);
+  background: rgba(255,59,48,.06);
+}
+
+.developer-record-empty {
+  min-height: 160px;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  color: rgba(31,42,58,.48);
+  text-align: center;
+  font-size: 10px;
+}
+
+.developer-record-empty strong {
+  color: #1d1d1f;
+  font-size: 11px;
+}
+
+.developer-record-empty.compact { min-height: 70px; }
+
+.value-set-add-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto;
+  gap: 7px;
+}
+
+.value-set-values-list {
+  margin-top: 9px;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.value-set-value-row {
+  min-height: 46px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(0,0,0,.05);
+}
+
+.value-set-value-row:last-child { border-bottom: 0; }
+
+.value-set-value-row > div:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.value-set-value-row strong { font-size: 10px; }
+.value-set-value-row span { color: rgba(31,42,58,.48); font-size: 8.5px; }
+
+.value-set-value-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.value-set-value-actions button {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 8.5px;
+  cursor: pointer;
+}
+
+.onebuilder-list-search {
+  flex: 0 0 auto;
+}
+
+.onebuilder-list-row-edit {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: rgba(39,50,71,.48);
+}
+
+.onebuilder-list-row:hover .onebuilder-list-row-edit {
+  color: #0a84ff;
+  background: rgba(10,132,255,.08);
+}
+
+.onebuilder-list-app-select {
+  height: 30px;
+  min-width: 150px;
+  border: 1px solid rgba(0,0,0,.09);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 9.5px;
+}
+
+@media (max-width: 900px) {
+  .developer-record-shell {
+    height: auto;
+    min-height: 0;
+    grid-template-columns: 1fr;
+  }
+  .developer-record-list {
+    max-height: 420px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(0,0,0,.07);
+  }
+  .developer-record-list-body { max-height: 300px; }
+  .developer-record-fields { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .developer-record-detail { padding: 13px; }
+  .developer-record-form-grid { grid-template-columns: 1fr; }
+  .developer-record-form-grid label.wide { grid-column: auto; }
+  .developer-record-fields > div { grid-template-columns: 88px minmax(0,1fr); }
+  .value-set-add-row { grid-template-columns: 1fr; }
+  .value-set-value-row { grid-template-columns: minmax(0,1fr) auto; }
+  .value-set-value-actions { grid-column: 1 / -1; }
+}
