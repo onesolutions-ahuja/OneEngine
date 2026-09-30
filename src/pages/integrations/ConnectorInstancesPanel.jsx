@@ -96,7 +96,10 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     try {
       const result = await apiRequest(`/api/connector-instances/${instance.id}/test`, { method: "POST" });
       const test = result?.data || {};
-      if (test.success) setMessage(test.testMode ? "TEST connector passed its configuration check." : "Connector configuration check passed.");
+      if (test.success) setMessage(
+        test.message
+          || (test.testMode ? "TEST connector passed its configuration check." : "Connector connection verified.")
+      );
       else setError(test.message || test.code || "Connector test failed");
       await load();
     } catch (testError) {
