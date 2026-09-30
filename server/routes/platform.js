@@ -5277,7 +5277,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "write", paramsOffset: params.length });
       if (sharing.sql) { where += ` AND ${sharing.sql}`; params.push(...sharing.params); }
 
-      const lifecycle = await runRecordDeleteLifecycle({
+      const txResult = await withPlatformTransaction({
+        pool,
+        handler: async (transaction) => {
+          const runtimeDb = transaction.query;
+          const lifecycle = await runRecordDeleteLifecycle({
         initialState: {
           object,
           metadataFields,
@@ -5293,7 +5297,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         },
 
         beforeValidation: async (state) => {
-          const existing = await db(`SELECT * FROM "${object.source_table}" WHERE ${where}`, params);
+          const existing = await runtimeDb(`SELECT * FROM "${object.source_table}" WHERE ${where}`, params);
           if (!existing.rows.length) lifecycleFailure(404, "RECORD_NOT_FOUND", "Record not found");
           return { ...state, existing: existing.rows[0] };
         },
@@ -5302,7 +5306,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           const activeField = fields.find(field => field.active !== false && field.source_column === "active");
           if (activeField) return { ...state, activeField, relatedRecords: [] };
 
-          const relationshipResult = await db(
+          const relationshipResult = await runtimeDb(
             `SELECT r.on_delete,r.child_field_id,c.id AS child_object_id,c.object_key AS child_object_key,
                     c.source_table AS child_source_table,c.company_scoped AS child_company_scoped,
                     c.store_scoped AS child_store_scoped,f.source_column AS child_source_column
@@ -5334,7 +5338,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
               childScope.push(`store_id=$${childParams.length}`);
             }
 
-            const children = await db(`SELECT * FROM "${relationship.child_source_table}" WHERE ${childScope.join(" AND ")}`, childParams);
+            const children = await runtimeDb(`SELECT * FROM "${relationship.child_source_table}" WHERE ${childScope.join(" AND ")}`, childParams);
             if (!children.rows.length) continue;
 
             const policy = String(relationship.on_delete || "restrict").toLowerCase();
@@ -5350,23 +5354,23 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
                 company_scoped: relationship.child_company_scoped,
                 store_scoped: relationship.child_store_scoped,
               };
-              if (!(await hasPlatformObjectPermission(db, req, childObject.id, "delete"))) {
+              if (!(await hasPlatformObjectPermission(db: runtimeDb, req, childObject.id, "delete"))) {
                 lifecycleFailure(403, "DELETE_PERMISSION_REQUIRED", "Delete permission is required for a related Object");
               }
 
-              const childFieldsResult = await db(
+              const childFieldsResult = await runtimeDb(
                 "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
                 [relationship.child_object_id, req.user.companyId]
               );
               const childFields = childFieldsResult.rows || [];
-              const childSharing = await buildPlatformSharingScope({ db, object: childObject, fields: childFields, req, access: "write", paramsOffset: childParams.length });
+              const childSharing = await buildPlatformSharingScope({ db: runtimeDb, object: childObject, fields: childFields, req, access: "write", paramsOffset: childParams.length });
               const accessibleScope = [...childScope];
               const accessibleParams = [...childParams];
               if (childSharing.sql) {
                 accessibleScope.push(childSharing.sql);
                 accessibleParams.push(...childSharing.params);
               }
-              const accessible = await db(
+              const accessible = await runtimeDb(
                 `SELECT id FROM "${relationship.child_source_table}" WHERE ${accessibleScope.join(" AND ")}`,
                 accessibleParams
               );
@@ -5385,7 +5389,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
         beforeDelete: async (state) => {
           const beforeDeleteAutomation = await executePlatformAutomations({
-            db,
+            db: runtimeDb,
             object,
             fields: metadataFields,
             record: state.existing,
@@ -5401,19 +5405,19 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           let result;
           let archived = false;
           if (state.activeField) {
-            result = await db(`UPDATE "${object.source_table}" SET active=false WHERE ${where} RETURNING *`, params);
+            result = await runtimeDb(`UPDATE "${object.source_table}" SET active=false WHERE ${where} RETURNING *`, params);
             archived = true;
           } else {
             for (const related of state.relatedRecords) {
               const { relationship, childScope, childParams, children, policy } = related;
               if (policy === "set_null") {
-                await db(`UPDATE "${relationship.child_source_table}" SET "${relationship.child_source_column}"=NULL WHERE ${childScope.join(" AND ")}`, childParams);
+                await runtimeDb(`UPDATE "${relationship.child_source_table}" SET "${relationship.child_source_column}"=NULL WHERE ${childScope.join(" AND ")}`, childParams);
                 continue;
               }
               if (policy !== "cascade") continue;
 
               const childFields = relationship.child_fields || [];
-              const deletedChildren = await db(
+              const deletedChildren = await runtimeDb(
                 `DELETE FROM "${relationship.child_source_table}" WHERE ${relationship.delete_scope.join(" AND ")} RETURNING *`,
                 relationship.delete_params
               );
@@ -5427,15 +5431,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
                   "delete",
                   req
                 );
-                if (typeof writeAudit === "function") {
-                  try { await writeAudit(req.user.companyId, req.user.id, "platform.record.delete", relationship.child_object_key, child.id, { cascadedFrom: req.params.recordId }); }
-                  catch { /* audit transport remains non-fatal */ }
-                }
+                state.pendingAudit ||= [];
+                state.pendingAudit.push({
+                  action: "platform.record.delete",
+                  objectKey: relationship.child_object_key,
+                  recordId: child.id,
+                  details: { cascadedFrom: req.params.recordId },
+                });
               }
             }
 
-            result = await db(`DELETE FROM "${object.source_table}" WHERE ${where} RETURNING *`, params);
-            await db(
+            result = await runtimeDb(`DELETE FROM "${object.source_table}" WHERE ${where} RETURNING *`, params);
+            await runtimeDb(
               "DELETE FROM platform_record_associations WHERE object_id=$1 AND record_id=$2 AND company_id=$3",
               [object.id, req.params.recordId, req.user.companyId]
             );
@@ -5448,7 +5455,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             state.existing,
             archived ? result.rows[0] : null,
             "delete",
-            req
+            req,
+            runtimeDb
           );
 
           return { ...state, result, archived };
@@ -5456,7 +5464,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
         afterDelete: async (state) => {
           const afterDeleteAutomation = await executePlatformAutomations({
-            db,
+            db: runtimeDb,
             object,
             fields: metadataFields,
             record: state.archived ? state.result.rows[0] : state.existing,
@@ -5466,14 +5474,33 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             req,
           });
 
-          if (typeof writeAudit === "function") {
-            try { await writeAudit(req.user.companyId, req.user.id, "platform.record.delete", object.object_key, req.params.recordId, { archived: state.archived }); }
-            catch { /* audit transport remains non-fatal */ }
-          }
-          return { ...state, afterDeleteAutomation };
+          const pendingAudit = [
+            ...(state.pendingAudit || []),
+            {
+              action: "platform.record.delete",
+              objectKey: object.object_key,
+              recordId: req.params.recordId,
+              details: { archived: state.archived },
+            },
+          ];
+          return { ...state, afterDeleteAutomation, pendingAudit };
         },
 
         afterCommit: async (state) => {
+          if (typeof writeAudit === "function") {
+            for (const item of state.pendingAudit || []) {
+              try {
+                await writeAudit(
+                  req.user.companyId,
+                  req.user.id,
+                  item.action,
+                  item.objectKey,
+                  item.recordId,
+                  item.details
+                );
+              } catch { /* post-commit audit transport remains non-fatal */ }
+            }
+          }
           try {
             await publishPlatformEvent({
               db,
@@ -5493,7 +5520,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           }
           return state;
         },
+        transaction,
       });
+          return lifecycle;
+        },
+      });
+      const lifecycle = txResult.result;
 
       res.json({
         success: true,
@@ -5511,6 +5543,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           ...(lifecycle.afterDeleteAutomation?.executions || []),
         ],
         lifecycleTrace: lifecycle.lifecycleTrace,
+        transactionId: txResult.transactionId,
+        committed: txResult.committed,
+        afterCommitResults: txResult.afterCommit,
       });
     } catch (error) {
       if (error instanceof RecordLifecycleError) {
