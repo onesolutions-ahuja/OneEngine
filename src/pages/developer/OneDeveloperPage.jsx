@@ -38,7 +38,8 @@ const DEVELOPER_ITEMS = [
 ]
 
 function normalizeSection(value) {
-  const key = String(value || '').trim().toLowerCase()
+  const raw = String(value || '').trim().toLowerCase()
+  const key = raw === 'platform' ? 'workflow-builder' : raw
   return DEVELOPER_ITEMS.some((item) => item.key === key) ? key : 'objects'
 }
 
