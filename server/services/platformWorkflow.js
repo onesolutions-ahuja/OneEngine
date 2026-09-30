@@ -89,22 +89,17 @@ async function loadProviderConnection(context, providerKey, requestedConnectionI
   const companyId = context.companyId || context.req?.user?.companyId;
   if (!context.db || !companyId) return null;
 
-  const connectionPredicate = requestedConnectionId ? "AND id=$3" : "";
-  const params = [companyId, providerKey];
-  if (requestedConnectionId) params.push(requestedConnectionId);
   const result = await context.db(
     `SELECT id
        FROM integration_connections
       WHERE company_id=$1
         AND enabled=TRUE
         AND lower(COALESCE(provider_name,connector_package_key,integration_type,''))=lower($2)
-        ${connectionPredicate}
+        AND ($3::uuid IS NULL OR id=$3)
       ORDER BY CASE WHEN store_id=$4::uuid THEN 0 WHEN store_id IS NULL THEN 1 ELSE 2 END,
                fallback_order,id
       LIMIT 1`,
-    requestedConnectionId
-      ? [companyId, providerKey, requestedConnectionId, context.storeId || context.req?.user?.storeId || null]
-      : [companyId, providerKey, context.storeId || context.req?.user?.storeId || null]
+    [companyId, providerKey, requestedConnectionId || null, context.storeId || context.req?.user?.storeId || null]
   );
   const connectionId = result.rows?.[0]?.id;
   if (!connectionId) return null;
