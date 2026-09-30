@@ -1894,19 +1894,24 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         db, object: targetObject, fields, entries, req, executionMode,
         trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
       });
-      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
-      const columns = mappedFields.map((field) => `"${field.source_column}"`);
-      const params = entries.map(([, value]) => value);
-      const values = entries.map((_, index) => `$${index + 1}`);
-      if (req?.user?.companyId && targetObject.company_scoped) {
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || context.storeId || null;
+      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req });
+      const writePairs = alignWorkflowWritableValues(mappedFields, entries);
+      const columns = writePairs.map(({ field }) => `"${field.source_column}"`);
+      const params = writePairs.map(({ value }) => value);
+      const values = writePairs.map((_, index) => `${index + 1}`);
+      if (targetObject.company_scoped) {
+        if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
         columns.push('"company_id"');
-        values.push(`$${params.length + 1}`);
-        params.push(req.user.companyId);
+        values.push(`${params.length + 1}`);
+        params.push(runtimeCompanyId);
       }
-      if (req?.user?.storeId && targetObject.store_scoped) {
+      if (targetObject.store_scoped) {
+        if (!runtimeStoreId) throw new Error("Workflow store scope is required");
         columns.push('"store_id"');
-        values.push(`$${params.length + 1}`);
-        params.push(req.user.storeId);
+        values.push(`${params.length + 1}`);
+        params.push(runtimeStoreId);
       }
       const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
       const result = await db(query, params);
@@ -1975,26 +1980,31 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         db, object: targetObject, fields, entries, req, executionMode,
         trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
       });
-      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: action.recordId });
-      const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
-      const params = [...entries.map(([, value]) => value), action.recordId];
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || context.storeId || null;
+      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req, excludeRecordId: action.recordId });
+      const writePairs = alignWorkflowWritableValues(mappedFields, entries);
+      const sets = writePairs.map(({ field }, index) => `"${field.source_column}"=${index + 1}`).join(", ");
+      const params = [...writePairs.map(({ value }) => value), action.recordId];
       const clauses = ["id=$" + params.length];
       if (targetObject.company_scoped) {
-        params.push(req?.user?.companyId || companyId || null);
+        if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
+        params.push(runtimeCompanyId);
         clauses.push(`company_id=$${params.length}`);
       }
       if (targetObject.store_scoped) {
-        params.push(req?.user?.storeId || null);
+        if (!runtimeStoreId) throw new Error("Workflow store scope is required");
+        params.push(runtimeStoreId);
         clauses.push(`store_id=$${params.length}`);
       }
       const previousParams = [action.recordId];
       const previousClauses = ["id=$1"];
       if (targetObject.company_scoped) {
-        previousParams.push(req?.user?.companyId || companyId || null);
+        previousParams.push(runtimeCompanyId);
         previousClauses.push(`company_id=$${previousParams.length}`);
       }
       if (targetObject.store_scoped) {
-        previousParams.push(req?.user?.storeId || null);
+        previousParams.push(runtimeStoreId);
         previousClauses.push(`store_id=$${previousParams.length}`);
       }
       const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
@@ -2070,19 +2080,32 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         db, object: targetObject, fields: relatedFields, entries, req, executionMode,
         trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
       });
-      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: action.recordId });
-      const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
-      const params = [...entries.map(([, value]) => value), action.recordId];
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || context.storeId || null;
+      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req, excludeRecordId: action.recordId });
+      const writePairs = alignWorkflowWritableValues(mappedFields, entries);
+      const sets = writePairs.map(({ field }, index) => `"${field.source_column}"=${index + 1}`).join(", ");
+      const params = [...writePairs.map(({ value }) => value), action.recordId];
       const clauses = ["id=$" + params.length];
-      if (req?.user?.companyId) {
-        params.push(req.user.companyId);
-        clauses.push(`company_id=$${params.length}`);
+      if (targetObject.company_scoped) {
+        if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
+        params.push(runtimeCompanyId);
+        clauses.push(`company_id=${params.length}`);
+      }
+      if (targetObject.store_scoped) {
+        if (!runtimeStoreId) throw new Error("Workflow store scope is required");
+        params.push(runtimeStoreId);
+        clauses.push(`store_id=${params.length}`);
       }
       const previousParams = [action.recordId];
       const previousClauses = ["id=$1"];
-      if (req?.user?.companyId) {
-        previousParams.push(req.user.companyId);
-        previousClauses.push(`company_id=$${previousParams.length}`);
+      if (targetObject.company_scoped) {
+        previousParams.push(runtimeCompanyId);
+        previousClauses.push(`company_id=${previousParams.length}`);
+      }
+      if (targetObject.store_scoped) {
+        previousParams.push(runtimeStoreId);
+        previousClauses.push(`store_id=${previousParams.length}`);
       }
       const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
       const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
@@ -2167,19 +2190,24 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         db, object: targetObject, fields: relatedFields, entries, req, executionMode,
         trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
       });
-      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
-      const columns = mappedFields.map((field) => `"${field.source_column}"`);
-      const values = entries.map((_, index) => `$${index + 1}`);
-      const params = entries.map(([, value]) => value);
-      if (req?.user?.companyId && (targetObject?.company_scoped || action.companyScoped || action.company_scoped || object?.company_scoped)) {
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || context.storeId || null;
+      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req });
+      const writePairs = alignWorkflowWritableValues(mappedFields, entries);
+      const columns = writePairs.map(({ field }) => `"${field.source_column}"`);
+      const values = writePairs.map((_, index) => `${index + 1}`);
+      const params = writePairs.map(({ value }) => value);
+      if (targetObject?.company_scoped || action.companyScoped || action.company_scoped || object?.company_scoped) {
+        if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
         columns.push('"company_id"');
-        values.push(`$${params.length + 1}`);
-        params.push(req.user.companyId);
+        values.push(`${params.length + 1}`);
+        params.push(runtimeCompanyId);
       }
-      if (req?.user?.storeId && (targetObject?.store_scoped || action.storeScoped || action.store_scoped || object?.store_scoped)) {
+      if (targetObject?.store_scoped || action.storeScoped || action.store_scoped || object?.store_scoped) {
+        if (!runtimeStoreId) throw new Error("Workflow store scope is required");
         columns.push('"store_id"');
-        values.push(`$${params.length + 1}`);
-        params.push(req.user.storeId);
+        values.push(`${params.length + 1}`);
+        params.push(runtimeStoreId);
       }
       const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
       const result = await db(query, params);
@@ -3707,6 +3735,17 @@ async function resolveWorkflowWritableFields({ db, object, fields = [], entries,
     trustedSystem,
   });
   return secured.map((field) => ({ ...field, source_column: field.source_column || field.api_name }));
+}
+
+function alignWorkflowWritableValues(mappedFields = [], entries = []) {
+  const requested = new Map(entries.map(([name, value]) => [String(name), value]));
+  return mappedFields.map((field) => {
+    const apiName = String(field.api_name || "");
+    const sourceColumn = String(field.source_column || apiName);
+    if (requested.has(apiName)) return { field, value: requested.get(apiName) };
+    if (requested.has(sourceColumn)) return { field, value: requested.get(sourceColumn) };
+    throw new Error(`Workflow field value is missing for writable field: ${apiName || sourceColumn}`);
+  });
 }
 
 async function checkWorkflowDuplicateRules({ db, object, entries, companyId, req, excludeRecordId = null }) {
