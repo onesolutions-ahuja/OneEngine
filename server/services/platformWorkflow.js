@@ -493,8 +493,8 @@ export async function executeConnectorWorkflowAction({
   const tenantCompanyId = companyId || req?.user?.companyId || null;
   const tenantStoreId = storeId || req?.user?.storeId || null;
   const tenantTillId = tillId || req?.user?.tillId || null;
-  if (!tenantCompanyId || !tenantStoreId || !tenantTillId) {
-    return { success: false, code: "INVALID_SCOPE", message: "Connector workflow action requires a company, store, and till scope" };
+  if (!tenantCompanyId) {
+    return { success: false, code: "INVALID_SCOPE", message: "Connector workflow action requires a company scope" };
   }
   const runtimePayload = payload ?? action?.payload ?? { ...action };
   const explicitInstanceId = action?.connectorInstanceId || action?.instanceId || runtimePayload?.connectorInstanceId || runtimePayload?.instanceId || null;
@@ -518,11 +518,13 @@ export async function executeConnectorWorkflowAction({
     const driver = connectorDrivers?.get(instance.connector_package_key);
     if (!driver) return { success: false, code: "PROVIDER_NOT_SUPPORTED", message: "Connector app has no runtime driver", connectorInstanceId: instance.id };
 
+    const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
     if (requestedKey === "CONNECTOR_ENABLE" || requestedKey === "CONNECTOR_DISABLE") {
       if (requestedKey === "CONNECTOR_ENABLE") {
         const lastTest = typeof instance.last_test_result === "string" ? JSON.parse(instance.last_test_result || "{}") : (instance.last_test_result || {});
-        if (!instance.till_id || lastTest?.success !== true) {
-          return { success: false, code: "TEST_REQUIRED", message: "Assign and successfully test this connector before enabling it", connectorInstanceId: instance.id };
+        const companyScoped = manifest?.connectorApp?.scope === "company";
+        if ((!companyScoped && !instance.till_id) || lastTest?.success !== true) {
+          return { success: false, code: "TEST_REQUIRED", message: companyScoped ? "Successfully test this connector before enabling it" : "Assign and successfully test this connector before enabling it", connectorInstanceId: instance.id };
         }
       }
       const enabled = requestedKey === "CONNECTOR_ENABLE";
@@ -545,7 +547,6 @@ export async function executeConnectorWorkflowAction({
       };
     }
 
-    const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
     const capabilities = (manifest?.connectorApp?.capabilities || [])
       .map((item) => typeof item === "string" ? item : item?.key)
       .filter((key) => key && driver.capabilities.has(key));
@@ -590,6 +591,10 @@ export async function executeConnectorWorkflowAction({
       result: testResult,
       ...(test.success ? {} : { code: test.code || connection.errorCode || "TEST_FAILED", message: test.message || connection.lastError || "Connector test failed" }),
     };
+  }
+
+  if (!tenantStoreId || !tenantTillId) {
+    return { success: false, code: "INVALID_SCOPE", message: "Connector workflow action requires a store and till scope" };
   }
 
   const resolved = await import("./connectorRuntime.js").then(({ resolvePersistedConnectorCapability }) => resolvePersistedConnectorCapability({

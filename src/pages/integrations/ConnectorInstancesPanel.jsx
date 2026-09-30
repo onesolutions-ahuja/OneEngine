@@ -24,6 +24,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const dedicatedName = selectedApp?.name || (requestedPackageKey === "one_connect_square" ? "One Connect - Square" : requestedPackageKey.replaceAll("_", " "));
   const selectedStore = stores.find((store) => store.id === storeId);
   const tills = Array.isArray(selectedStore?.tills) ? selectedStore.tills : [];
+  const companyScoped = selectedApp?.manifest?.connectorApp?.scope === "company";
 
   const load = async () => {
     setLoading(true);
@@ -78,7 +79,13 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     try {
       await apiRequest("/api/connector-instances", {
         method: "POST",
-        body: JSON.stringify({ packageKey, storeId, tillId, fallbackOrder: Number(fallbackOrder), configuration }),
+        body: JSON.stringify({
+          packageKey,
+          storeId: companyScoped ? null : storeId,
+          tillId: companyScoped ? null : tillId,
+          fallbackOrder: Number(fallbackOrder),
+          configuration,
+        }),
       });
       setMessage("Connector instance assigned. Test it before enabling.");
       await load();
@@ -156,7 +163,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                       <div className="font-medium">{instance.name}</div>
                       <div className="text-xs text-slate-500">{instance.packageKey}{instance.health?.testMode ? " · TEST ONLY" : ""}</div>
                     </td>
-                    <td className="px-4 py-2.5 text-xs">{instance.storeName || "No store"} / {instance.tillName || "No till"}</td>
+                    <td className="px-4 py-2.5 text-xs">{companyScoped ? "Company" : `${instance.storeName || "No store"} / ${instance.tillName || "No till"}`}</td>
                     <td className="px-4 py-2.5">{instance.fallbackOrder === 0 ? "Primary" : `Backup ${instance.fallbackOrder}`}</td>
                     <td className="px-4 py-2.5">
                       <span className={instance.status === "CONNECTED" && instance.health?.success ? "text-emerald-700" : "text-amber-700"}>
@@ -183,24 +190,26 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                   {apps.map((app) => <option key={app.package_key} value={app.package_key}>{app.name}</option>)}
                 </select>
               </label> : null}
-              <label className="text-xs font-medium text-slate-600">Store
-                <select required value={storeId} onChange={(event) => { setStoreId(event.target.value); setTillId(""); }} className={`${inputClass} mt-1`}>
-                  <option value="">Select store</option>
-                  {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-                </select>
-              </label>
-              <label className="text-xs font-medium text-slate-600">Till / terminal
-                <select required value={tillId} onChange={(event) => setTillId(event.target.value)} className={`${inputClass} mt-1`}>
-                  <option value="">Select till</option>
-                  {tills.map((till) => <option key={till.id} value={till.id}>{till.name || till.terminalNumber}</option>)}
-                </select>
-              </label>
+              {!companyScoped ? <>
+                <label className="text-xs font-medium text-slate-600">Store
+                  <select required value={storeId} onChange={(event) => { setStoreId(event.target.value); setTillId(""); }} className={`${inputClass} mt-1`}>
+                    <option value="">Select store</option>
+                    {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs font-medium text-slate-600">Till / terminal
+                  <select required value={tillId} onChange={(event) => setTillId(event.target.value)} className={`${inputClass} mt-1`}>
+                    <option value="">Select till</option>
+                    {tills.map((till) => <option key={till.id} value={till.id}>{till.name || till.terminalNumber}</option>)}
+                  </select>
+                </label>
+              </> : null}
               <label className="text-xs font-medium text-slate-600">Fallback order
                 <select value={fallbackOrder} onChange={(event) => setFallbackOrder(event.target.value)} className={`${inputClass} mt-1`}>
                   <option value="0">Primary</option><option value="1">Backup 1</option><option value="2">Backup 2</option>
                 </select>
               </label>
-              <div className="flex items-end"><button type="submit" disabled={saving || !packageKey || !storeId || !tillId} className="h-9 px-3 inline-flex items-center gap-2 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"><Check size={15} />{saving ? "Assigning…" : "Assign connector"}</button></div>
+              <div className="flex items-end"><button type="submit" disabled={saving || !packageKey || (!companyScoped && (!storeId || !tillId))} className="h-9 px-3 inline-flex items-center gap-2 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"><Check size={15} />{saving ? "Saving…" : companyScoped ? "Save connection" : "Assign connector"}</button></div>
               {schema.filter((field) => !["action","readonly","store lookup","till lookup"].includes(field.type)).map((field) => (
                 <label key={field.key} className="text-xs font-medium text-slate-600">{field.label || field.key}
                   {field.enum ? (
