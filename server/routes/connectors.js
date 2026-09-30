@@ -1397,6 +1397,16 @@ export default function createConnectorsRouter({
 
   router.post("/connector-instances/:id/test", authenticate, authorize("integration.manage"), async (req, res) => {
     try {
+      const instanceResult = await db(
+        `SELECT id,name,connector_package_key,store_id,till_id
+           FROM integration_connections
+          WHERE id=$1 AND company_id=$2 AND connector_package_key IS NOT NULL`,
+        [req.params.id, req.user.companyId]
+      );
+      const instance = instanceResult.rows[0];
+      if (!instance) {
+        return res.status(404).json({ success: false, message: "Connector instance not found" });
+      }
       const execution = await executeSystemWorkflow({
         db,
         companyId: req.user.companyId,
@@ -1404,6 +1414,8 @@ export default function createConnectorsRouter({
         systemKey: "action:CONNECTOR_TEST_CONNECTION",
         req,
         input: { connectorInstanceId: req.params.id },
+        storeId: instance.store_id || null,
+        tillId: instance.till_id || null,
         connectorDrivers: drivers,
         writeAudit,
         source: {
@@ -1411,6 +1423,9 @@ export default function createConnectorsRouter({
           method: req.method,
           path: req.originalUrl || req.path,
           capability: "connector.test",
+          packageKey: instance.connector_package_key,
+          appName: instance.name,
+          connectorInstanceId: instance.id,
         },
       });
       const result = execution.result?.result || execution.result || null;
