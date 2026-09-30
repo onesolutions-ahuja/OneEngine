@@ -157,7 +157,7 @@ export async function publishPlatformEvent({
 
   if (lineage.rootEventId && derivedSignature) {
     const loop = await db(
-      `SELECT id,replay_id FROM platform_events
+      `SELECT * FROM platform_events
         WHERE root_event_id=$1 AND event_signature=$2
         LIMIT 1`,
       [lineage.rootEventId, derivedSignature]
