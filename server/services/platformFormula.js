@@ -38,7 +38,7 @@ function fail(message) { throw new FormulaError(message); }
 export function parseFormula(expression) {
   if (typeof expression !== "string" || !expression.trim() || expression.length > 2000) fail("Formula must contain 1–2000 characters");
   const tokens = [];
-  const pattern = /\s*(?:(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|("(?:[^"\\]|\\["\\nrt])*")|([A-Za-z_][A-Za-z_0-9]*)|(\|\||&&|==|!=|>=|<=|[+*/%(),!<>-]))/y;
+  const pattern = /\s*(?:(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|("(?:[^"\\]|\\["\\nrt])*")|([A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*)|(\|\||&&|==|!=|>=|<=|[+*/%(),!<>-]))/y;
   let offset = 0;
   while (offset < expression.trimEnd().length) {
     pattern.lastIndex = offset;
@@ -79,7 +79,8 @@ export function parseFormula(expression) {
         node = { kind: "call", name: token.value, args };
       } else if (["true", "false", "null"].includes(token.value)) node = { kind: "literal", value: JSON.parse(token.value) };
       else {
-        if (!SAFE.test(token.value) || RESERVED.has(token.value)) fail("Use a valid field API name");
+        const parts = token.value.split(".");
+        if (parts.some((part) => !SAFE.test(part) || RESERVED.has(part))) fail("Use a valid field API name");
         node = { kind: "field", name: token.value };
       }
     } else fail("Expected a value, field, or function");
@@ -92,6 +93,20 @@ export function parseFormula(expression) {
   const ast = expressionNode();
   if (index !== tokens.length) fail("Unexpected formula token");
   return ast;
+}
+
+export function formulaDependencies(expression) {
+  const ast = parseFormula(expression);
+  const dependencies = new Set();
+  const walk = node => {
+    if (!node) return;
+    if (node.kind === "field") dependencies.add(node.name);
+    else if (node.kind === "unary") walk(node.value);
+    else if (node.kind === "binary") { walk(node.left); walk(node.right); }
+    else if (node.kind === "call") node.args.forEach(walk);
+  };
+  walk(ast);
+  return [...dependencies];
 }
 
 export function formulaPreviewDependencies(fields, expression) {
@@ -186,6 +201,33 @@ function evaluate(node, get) {
   }
 }
 
+export function buildFormulaDependencyGraph(fields) {
+  const formulas = fields.filter((field) => field.active !== false && field.field_type === "formula");
+  const nodes = new Map(formulas.map((field) => [field.api_name, field]));
+  const edges = new Map();
+  for (const field of formulas) {
+    const deps = formulaDependencies(field.config?.expression || "");
+    edges.set(field.api_name, deps.filter((name) => nodes.has(name)));
+  }
+  const visiting = new Set();
+  const visited = new Set();
+  const order = [];
+  const visit = name => {
+    if (visited.has(name)) return;
+    if (visiting.has(name)) fail(`Circular formula reference: ${name}`);
+    visiting.add(name);
+    for (const dep of edges.get(name) || []) visit(dep);
+    visiting.delete(name);
+    visited.add(name);
+    order.push(name);
+  };
+  for (const name of nodes.keys()) visit(name);
+  return {
+    order,
+    dependencies: Object.fromEntries([...edges.entries()].map(([key, value]) => [key, [...value]])),
+  };
+}
+
 export function compileFormulas(fields) {
   const byName = new Map(fields.filter(f => f.active !== false).map(f => [f.api_name, f]));
   const compiled = new Map(), visiting = new Set(), dependencyDepths = new Map();
@@ -200,8 +242,18 @@ export function compileFormulas(fields) {
     let dependencyDepth = 0;
     const ast = parseFormula(field.config?.expression);
     const resultType = infer(ast, name => {
-      const dependency = byName.get(name);
+      const rootName = name.split(".")[0];
+      const dependency = byName.get(rootName);
       if (!dependency || dependency.readable === false) fail(`Formula references an unavailable field: ${name}`);
+      if (name.includes(".")) {
+        if (dependency.field_type !== "lookup") fail(`Cross-object formula path must start with a lookup field: ${name}`);
+        const configuredType = dependency.config?.relatedFieldTypes?.[name.split(".").slice(1).join(".")]
+          || dependency.config?.related_field_types?.[name.split(".").slice(1).join(".")]
+          || dependency.config?.resultType
+          || "text";
+        if (!TYPES.has(configuredType)) fail(`Unsupported cross-object dependency type: ${name}`);
+        return formulaType(configuredType);
+      }
       if (dependency.field_type === "formula") {
         visit(dependency, depth + 1);
         dependencyDepth = Math.max(dependencyDepth, 1 + dependencyDepths.get(name));
@@ -225,7 +277,20 @@ export function compileFormulas(fields) {
   return record => {
     const result = { ...record };
     for (const [name, { ast }] of compiled) {
-      const value = evaluate(ast, key => valueFor(result[key], effectiveFieldType(byName.get(key))));
+      const value = evaluate(ast, key => {
+        if (key.includes(".")) {
+          const parts = key.split(".");
+          let current = result;
+          for (const part of parts) current = current == null ? null : current[part];
+          const root = byName.get(parts[0]);
+          const configuredType = root?.config?.relatedFieldTypes?.[parts.slice(1).join(".")]
+            || root?.config?.related_field_types?.[parts.slice(1).join(".")]
+            || root?.config?.resultType
+            || "text";
+          return valueFor(current, configuredType);
+        }
+        return valueFor(result[key], effectiveFieldType(byName.get(key)));
+      });
       result[name] = typeof value === "number" && !Number.isFinite(value) ? null : value;
     }
     // Callers project readable fields before sending calculated records to clients.
