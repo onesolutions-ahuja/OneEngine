@@ -1962,6 +1962,21 @@ function localAppIcon(assetKey) {
   return `${base}icons/apps/${clean}.svg`
 }
 
+const STORE_APPS_CACHE_KEY = 'onepos.marketplace.catalog.v1'
+function readStoreAppsCache() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(STORE_APPS_CACHE_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+function writeStoreAppsCache(items) {
+  try {
+    if (Array.isArray(items) && items.length) sessionStorage.setItem(STORE_APPS_CACHE_KEY, JSON.stringify(items))
+  } catch {}
+}
+
 function marketplaceIcon(item) {
   const manifest = item?.manifest || {}
   const provider = manifest.providerConnector || manifest.provider_connector || {}
@@ -2001,7 +2016,7 @@ function marketplaceIcon(item) {
   return localAppIcon('default-app')
 }
 
-function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, mode = 'launcher' }) {
+function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, onRetry, loading = false, error = '', mode = 'launcher' }) {
   const q = String(query || '').trim().toLowerCase()
   const visible = apps.filter((item) => item?.visible !== false && item?.system_only !== true)
     .filter((item) => !q || `${item.name || ''} ${item.package_key || ''} ${item.category || ''}`.toLowerCase().includes(q))
@@ -2050,6 +2065,8 @@ function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, mode =
       transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}
     >
       <div className="mac-popover-title">{mode === 'store' ? 'oneStore' : 'Launcher'}</div>
+      {loading && !apps.length ? <div className="module-state compact">Loading apps…</div> : null}
+      {error ? <div className="onestore-message is-error"><CircleAlert size={13}/><span>{error}</span><button type="button" onClick={onRetry}>Retry</button></div> : null}
       <div className="topbar-app-sections">
         {showInstalled ? <section><b>Installed</b><div className="topbar-app-grid">{installed.length ? renderRows(installed, 0) : <p>No installed apps match.</p>}</div></section> : null}
         <section><b>Available in oneStore</b><div className="topbar-app-grid">{available.length ? renderRows(available, showInstalled ? installed.length : 0) : <p>No available apps match.</p>}</div></section>
@@ -2281,9 +2298,11 @@ function Desktop({ onLock, onSignOut }) {
   const [topPanel, setTopPanel] = useState('')
   const [launcherOpen, setLauncherOpen] = useState(false)
   const [appSearch, setAppSearch] = useState('')
-  const [storeApps, setStoreApps] = useState([])
+  const [storeApps, setStoreApps] = useState(() => readStoreAppsCache())
   const [storeFocusPackageKey, setStoreFocusPackageKey] = useState('')
-  const [storeAppsLoaded, setStoreAppsLoaded] = useState(false)
+  const [storeAppsLoaded, setStoreAppsLoaded] = useState(() => readStoreAppsCache().length > 0)
+  const [storeAppsLoading, setStoreAppsLoading] = useState(false)
+  const [storeAppsError, setStoreAppsError] = useState('')
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
   const [desktopPermissions, setDesktopPermissions] = useState(() => {
     const cached = getStoredSessionPermissions()
@@ -2372,20 +2391,41 @@ function Desktop({ onLock, onSignOut }) {
     return () => { live = false }
   }, [])
 
-  useEffect(() => {
-    if (storeAppsLoaded || (!launcherOpen && topPanel !== 'apps' && topPanel !== 'store')) return undefined
-    let live = true
-    apiRequest('/api/packages/marketplace')
-      .then((packages) => {
-        if (!live) return
-        setStoreApps(Array.isArray(packages?.data) ? packages.data : [])
+  const refreshStoreApps = async ({ silent = false } = {}) => {
+    if (!silent) setStoreAppsLoading(true)
+    setStoreAppsError('')
+    try {
+      const packages = await apiRequest('/api/packages/marketplace')
+      const rows = Array.isArray(packages?.data) ? packages.data : []
+      setStoreApps(rows)
+      writeStoreAppsCache(rows)
+      setStoreAppsLoaded(true)
+      return rows
+    } catch (error) {
+      const cached = readStoreAppsCache()
+      if (cached.length) {
+        setStoreApps(cached)
         setStoreAppsLoaded(true)
-      })
-      .catch(() => {
-        if (live) setStoreAppsLoaded(true)
-      })
+      } else {
+        setStoreAppsLoaded(false)
+      }
+      setStoreAppsError(error?.message || 'Unable to load apps. Please retry.')
+      return cached
+    } finally {
+      if (!silent) setStoreAppsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!launcherOpen && topPanel !== 'apps' && topPanel !== 'store') return undefined
+    if (storeAppsLoaded && storeApps.length) return undefined
+    let live = true
+    ;(async () => {
+      if (!live) return
+      await refreshStoreApps()
+    })()
     return () => { live = false }
-  }, [launcherOpen, topPanel, storeAppsLoaded])
+  }, [launcherOpen, topPanel, storeAppsLoaded, storeApps.length])
 
   const dateTime = useMemo(
     () =>
@@ -2590,6 +2630,7 @@ function Desktop({ onLock, onSignOut }) {
       setAppSearch('')
       setTopPanel('')
       setLauncherOpen(true)
+      if (!storeApps.length || storeAppsError) void refreshStoreApps()
       return
     }
     if (id === 'store') {
@@ -2597,6 +2638,7 @@ function Desktop({ onLock, onSignOut }) {
       setLauncherOpen(false)
       setStoreFocusPackageKey('')
       setTopPanel('store')
+      if (!storeApps.length || storeAppsError) void refreshStoreApps()
       return
     }
     if (id === 'builder') {
@@ -2671,6 +2713,9 @@ function Desktop({ onLock, onSignOut }) {
                   apps={storeApps}
                   query={appSearch}
                   mode="launcher"
+                  loading={storeAppsLoading}
+                  error={storeAppsError}
+                  onRetry={() => refreshStoreApps()}
                   onClose={() => setTopPanel('')}
                   onOpenRoute={openRoutePath}
                   onOpenStore={(packageKey) => {
