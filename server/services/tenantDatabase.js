@@ -169,6 +169,23 @@ export function createTenantDatabaseRouter({ controlPool, sharedPool, PoolFactor
   return { cache, loadConfig, resolveForCompany, getPoolForConfig, testExternalConfig, closeAll };
 }
 
+export function createHostnameDatabaseMiddleware({ tenantPoolManager, fallbackPool }) {
+  return function hostnameDatabaseContext(req, res, next) {
+    const hostnamePool = tenantPoolManager?.getPoolForRequest?.(req) || fallbackPool || null;
+    if (!hostnamePool) return next();
+    const context = {
+      companyId: null,
+      mode: req.tenant?.databaseMode || "ONEPOS_MANAGED",
+      pool: hostnamePool,
+      config: null,
+      source: "hostname",
+    };
+    req.tenantPool = hostnamePool;
+    req.db = (query, params = []) => hostnamePool.query(query, params);
+    return requestStore.run(context, next);
+  };
+}
+
 export function createAuthenticatedDatabaseMiddleware({ router, pool }) {
   return async (req, res, next) => {
     /*
