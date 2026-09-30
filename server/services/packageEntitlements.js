@@ -115,6 +115,30 @@ export async function reconcileCompanyPackageEntitlements(db, companyId) {
     [companyId, DERIVED_SOURCES]
   );
 
+  // Free/technical apps are install-owned, not licence-owned. Keep an
+  // entitlement source for them so reconciliation does not suspend a package
+  // that the company explicitly installed.
+  await db(
+    `INSERT INTO company_package_entitlement_sources
+       (company_id,package_id,source_type,source_key,active,metadata)
+     SELECT i.company_id,i.package_id,'DIRECT_INSTALL',
+            'free-direct-install:' || i.package_id::text,
+            i.status='active' AND i.deactivated_by_user=false,
+            jsonb_build_object('repairedFromInstallation',true)
+       FROM company_package_installations i
+       JOIN package_registry p ON p.id=i.package_id
+      WHERE i.company_id=$1
+        AND p.active=true
+        AND (
+          p.licence_mode='TECHNICAL'
+          OR p.billable=false
+          OR COALESCE((p.manifest->>'licenceRequired')::boolean,false)=false
+        )
+     ON CONFLICT(company_id,package_id,source_type,source_key)
+     DO UPDATE SET active=EXCLUDED.active,metadata=EXCLUDED.metadata`,
+    [companyId]
+  );
+
   await db(
     `INSERT INTO company_package_entitlement_sources
        (company_id,package_id,source_type,source_key,active,starts_at,expires_at,metadata)
