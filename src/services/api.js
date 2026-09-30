@@ -2,6 +2,7 @@ import { clearLazyCache } from './dataCache'
 const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://onepos.onrender.com').replace(/\/$/, '')
 export const SERVER_ADDRESS_STORAGE_KEY = 'onepos_server_address'
 export const ACTING_COMPANY_STORAGE_KEY = 'onepos_acting_company_id'
+export const SESSION_PERMISSIONS_STORAGE_KEY = 'onepos_session_permissions'
 
 export function getActingCompanyId() {
   try { return localStorage.getItem(ACTING_COMPANY_STORAGE_KEY) || '' } catch { return '' }
@@ -12,6 +13,40 @@ export function setActingCompanyId(companyId) {
     if (companyId) localStorage.setItem(ACTING_COMPANY_STORAGE_KEY, String(companyId))
     else localStorage.removeItem(ACTING_COMPANY_STORAGE_KEY)
   } catch {}
+}
+
+export function getStoredSessionPermissions() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(SESSION_PERMISSIONS_STORAGE_KEY) || 'null')
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function setStoredSessionPermissions(value) {
+  try {
+    if (value && typeof value === 'object') sessionStorage.setItem(SESSION_PERMISSIONS_STORAGE_KEY, JSON.stringify(value))
+    else sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
+  } catch {}
+}
+
+let permissionsInFlight = null
+export async function loadSessionPermissions({ force = false, includeEntitlements = false } = {}) {
+  if (!force) {
+    const cached = getStoredSessionPermissions()
+    if (cached) return cached
+  }
+  if (permissionsInFlight) return permissionsInFlight
+  const suffix = includeEntitlements ? '' : '?includeEntitlements=0'
+  permissionsInFlight = apiRequest(`/api/auth/me/permissions${suffix}`)
+    .then((response) => {
+      const data = response?.data || {}
+      setStoredSessionPermissions(data)
+      return data
+    })
+    .finally(() => { permissionsInFlight = null })
+  return permissionsInFlight
 }
 
 export function normaliseServerAddress(value) {
@@ -107,6 +142,7 @@ export async function login(username, password) {
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
   sessionStorage.removeItem('onepos.settings.context.v2')
+  sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
   void clearLazyCache()
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
@@ -165,6 +201,9 @@ export async function login(username, password) {
   }
 
   sessionStorage.setItem('onepos_user', JSON.stringify(resolvedUser))
+  if (data?.permissions && typeof data.permissions === 'object') {
+    setStoredSessionPermissions(data.permissions)
+  }
   return { ...data, user: resolvedUser }
 }
 
@@ -288,6 +327,7 @@ export function logout() {
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
   sessionStorage.removeItem('onepos.settings.context.v2')
+  sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
   setActingCompanyId('')
