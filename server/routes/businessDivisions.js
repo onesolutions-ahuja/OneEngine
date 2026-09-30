@@ -38,7 +38,7 @@ export default function createBusinessDivisionsRouter({ authenticate, authorize,
   router.post("/business-divisions", authenticate, authorize("business_division.manage"), async (req, res) => {
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     if (!req.body.name?.trim()) return res.status(400).json({ success: false, message: "Division name is required" });
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [String(req.user.companyId)]);
