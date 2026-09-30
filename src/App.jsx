@@ -95,6 +95,7 @@ const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStore
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
 const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/StoreTillSettingsPage'))
+const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 import {
@@ -396,6 +397,17 @@ function LockScreen({ onUnlock, onSignOut, preparing = false }) {
     }
   }
 
+  const submitGoogle = async () => {
+    try {
+      setSubmitting(true)
+      setError('')
+      await startGoogleLogin(username.trim())
+    } catch (err) {
+      setError(err?.message || 'SSO not connected. Please login with email/password.')
+      setSubmitting(false)
+    }
+  }
+
   const displayName = storedUser?.name || storedUser?.username || 'User'
   const initial = displayName.trim().charAt(0).toUpperCase() || 'U'
 
@@ -490,8 +502,8 @@ function LockScreen({ onUnlock, onSignOut, preparing = false }) {
               <button
                 className="google-signin-button"
                 type="button"
-                onClick={() => startGoogleLogin()}
-                disabled={submitting}
+                onClick={submitGoogle}
+                disabled={submitting || !username.trim()}
               >
                 <svg className="google-signin-logo" viewBox="0 0 18 18" aria-hidden="true">
                   <path fill="#4285F4" d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.716v2.258h2.909c1.702-1.567 2.684-3.876 2.684-6.615Z"/>
@@ -2770,6 +2782,8 @@ function Desktop({ onLock, onSignOut }) {
             setRoute('profile')
             setActiveApp('profile')
           }} />
+        ) : activeApp === 'google-connect' ? (
+          <GoogleConnectSettings />
         ) : activeApp === 'till' ? (
           <TillPage
             onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
