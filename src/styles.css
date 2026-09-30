@@ -5868,12 +5868,16 @@ button:focus-visible {
 
 /* Keep dock clickable above Till workspace. */
 .dock-zone {
-  z-index: 40;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000;
 }
 
 .dock {
   position: relative;
-  z-index: 41;
+  z-index: 2001;
 }
 
 
