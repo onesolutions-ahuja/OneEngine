@@ -3702,6 +3702,7 @@ async function resolveWorkflowWritableFields({ db, object, fields = [], entries,
     trustedSystem,
   });
   return secured.map((field) => ({ ...field, source_column: field.source_column || field.api_name }));
+}
 
 async function checkWorkflowDuplicateRules({ db, object, entries, companyId, req, excludeRecordId = null }) {
   const metadata = await db(
