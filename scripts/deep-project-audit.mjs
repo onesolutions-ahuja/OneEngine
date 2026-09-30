@@ -19,6 +19,18 @@ const staticFindings=[];
 for (const file of jsFiles) {
   const source=fs.readFileSync(file,"utf8");
   const fileName=rel(file);
+  if (fileName.startsWith("server/routes/") && fileName !== "server/routes/superadmin.js") {
+    for (const match of source.matchAll(/\bpool\.connect\(\)/g)) {
+      staticFindings.push({
+        type:"STATIC",
+        code:"ROUTE_SHARED_POOL_BYPASS",
+        file:fileName,
+        line:source.slice(0,match.index).split("\n").length,
+        excerpt:"pool.connect()",
+      });
+    }
+  }
+
   const suspiciousSqlPatterns=[
     { code:"SQL_PARAM_PLACEHOLDER_MISSING_DOLLAR", re:/(?:company_id|store_id|record_id|user_id|role_id|object_id)=\$\{(?:[A-Za-z_$][\w$]*Params|params)\.length\}/g },
     { code:"SQL_SET_PLACEHOLDER_MISSING_DOLLAR", re:/source_column[^\n]{0,160}="\$\{[^\n]+\}"=\$\{index\s*\+\s*1\}/g },
