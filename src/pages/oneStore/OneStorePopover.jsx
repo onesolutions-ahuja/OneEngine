@@ -9,6 +9,11 @@ import {
 } from './oneStoreModel'
 import { appIconUrl, applyDefaultAppIcon, readMarketplaceCache, resolveAppOpenRoute, writeMarketplaceCache } from '../../utils/appMarketplace'
 
+const STATUS_LABELS={
+  AVAILABLE:'Available',INSTALLED:'Installed',INACTIVE:'Inactive',UPDATE_AVAILABLE:'Update available',
+  LICENCE_REQUIRED:'Requires licence',NOT_INSTALLABLE:'Not installable',NOT_AVAILABLE:'Not available',
+}
+
 export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],initialSelectedPackageKey='',onPackagesChange,canManagePackages=false}){
   const [packages,setPackages]=useState(()=>Array.isArray(initialPackages)&&initialPackages.length?initialPackages:readMarketplaceCache())
   const [loading,setLoading]=useState(true)
