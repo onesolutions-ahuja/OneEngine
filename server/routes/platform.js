@@ -36,7 +36,9 @@ import { buildPlatformSharingScope } from "../services/platformSharing.js";
 import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, resolveDuplicateAction } from "../services/platformDuplicateMatching.js";
 import { publishPlatformEvent } from "../services/platformEvents.js";
 import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
-import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";\nimport { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";\nimport { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";
+import { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
