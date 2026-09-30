@@ -497,6 +497,101 @@ export async function executeConnectorWorkflowAction({
     return { success: false, code: "INVALID_SCOPE", message: "Connector workflow action requires a company, store, and till scope" };
   }
   const runtimePayload = payload ?? action?.payload ?? { ...action };
+  const explicitInstanceId = action?.connectorInstanceId || action?.instanceId || runtimePayload?.connectorInstanceId || runtimePayload?.instanceId || null;
+
+  // Management/test actions must work before a connector is enabled, so they
+  // resolve the explicitly selected instance instead of the enabled-candidate
+  // payment runtime.
+  if (explicitInstanceId && ["CONNECTOR_TEST_CONNECTION","CONNECTOR_ENABLE","CONNECTOR_DISABLE"].includes(requestedKey)) {
+    const instanceResult = await db(
+      `SELECT c.*,p.manifest
+         FROM integration_connections c
+         JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
+         JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=c.company_id
+          AND i.status='active' AND i.suspended_by_entitlement=FALSE
+        WHERE c.id=$1 AND c.company_id=$2
+        LIMIT 1`,
+      [explicitInstanceId, tenantCompanyId]
+    );
+    const instance = instanceResult.rows[0];
+    if (!instance) return { success: false, code: "CONNECTOR_NOT_FOUND", message: "Installed connector instance not found" };
+    const driver = connectorDrivers?.get(instance.connector_package_key);
+    if (!driver) return { success: false, code: "PROVIDER_NOT_SUPPORTED", message: "Connector app has no runtime driver", connectorInstanceId: instance.id };
+
+    if (requestedKey === "CONNECTOR_ENABLE" || requestedKey === "CONNECTOR_DISABLE") {
+      if (requestedKey === "CONNECTOR_ENABLE") {
+        const lastTest = typeof instance.last_test_result === "string" ? JSON.parse(instance.last_test_result || "{}") : (instance.last_test_result || {});
+        if (!instance.till_id || lastTest?.success !== true) {
+          return { success: false, code: "TEST_REQUIRED", message: "Assign and successfully test this connector before enabling it", connectorInstanceId: instance.id };
+        }
+      }
+      const enabled = requestedKey === "CONNECTOR_ENABLE";
+      const updated = await db(
+        `UPDATE integration_connections
+            SET enabled=$1,updated_at=NOW()
+          WHERE id=$2 AND company_id=$3
+          RETURNING id,connector_package_key,enabled,connection_status`,
+        [enabled, instance.id, tenantCompanyId]
+      );
+      await writeAudit?.(tenantCompanyId, actorUserId || req?.user?.id || null, enabled ? "connector.instance.enabled" : "connector.instance.disabled", "integration_connection", instance.id, { packageKey: instance.connector_package_key });
+      return {
+        success: true,
+        status: enabled ? "ENABLED" : "DISABLED",
+        connectorInstanceId: instance.id,
+        connectorPackageKey: instance.connector_package_key,
+        capability,
+        requestedKey,
+        result: updated.rows[0] || { enabled },
+      };
+    }
+
+    const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
+    const capabilities = (manifest?.connectorApp?.capabilities || [])
+      .map((item) => typeof item === "string" ? item : item?.key)
+      .filter((key) => key && driver.capabilities.has(key));
+    const { ConnectorService } = await import("./connectorRuntime.js");
+    const { decryptCredentials } = await import("./integrationCredentials.js");
+    const service = new ConnectorService({
+      connectorKey: instance.connector_package_key,
+      capabilities,
+      adapter: driver.createAdapter({
+        instanceId: instance.id,
+        configuration: {
+          ...(typeof instance.connector_configuration === "string" ? JSON.parse(instance.connector_configuration || "{}") : (instance.connector_configuration || {})),
+          ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
+        },
+        companyId: instance.company_id,
+        storeId: instance.store_id,
+        tillId: instance.till_id,
+      }),
+    });
+    const connection = await service.connect();
+    const test = connection.healthy
+      ? await service.test()
+      : { success: false, status: connection.state, code: connection.errorCode, message: connection.lastError };
+    const testResult = { ...test, testMode: manifest.connectorApp?.mode === "TEST" || (instance.connector_configuration?.mode === "TEST") };
+    await db(
+      `UPDATE integration_connections
+          SET connection_status=$1::varchar,last_error=$2,last_test_at=NOW(),
+              last_test_result=$3::jsonb,
+              last_connected_at=CASE WHEN $1::varchar='CONNECTED' THEN NOW() ELSE last_connected_at END,
+              updated_at=NOW()
+        WHERE id=$4 AND company_id=$5`,
+      [test.success ? "CONNECTED" : connection.state, test.message || null, JSON.stringify(testResult), instance.id, tenantCompanyId]
+    );
+    await writeAudit?.(tenantCompanyId, actorUserId || req?.user?.id || null, "connector.instance.tested", "integration_connection", instance.id, { packageKey: instance.connector_package_key, success: test.success, testMode: testResult.testMode });
+    return {
+      success: test.success === true,
+      status: test.success ? "CONNECTED" : (test.status || connection.state || "ERROR"),
+      connectorInstanceId: instance.id,
+      connectorPackageKey: instance.connector_package_key,
+      capability,
+      requestedKey,
+      result: testResult,
+      ...(test.success ? {} : { code: test.code || connection.errorCode || "TEST_FAILED", message: test.message || connection.lastError || "Connector test failed" }),
+    };
+  }
+
   const resolved = await import("./connectorRuntime.js").then(({ resolvePersistedConnectorCapability }) => resolvePersistedConnectorCapability({
     db,
     drivers: connectorDrivers,
