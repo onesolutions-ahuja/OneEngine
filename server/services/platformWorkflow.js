@@ -2314,15 +2314,21 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["functions.execute"],
-    executor: async ({ action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields }) => {
+    executor: async (context) => {
+      const { action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields, workflowVariables } = context;
       const functionKey = action.functionKey || action.key;
       const functionDefinition = getRegisteredFunction(functionKey);
       if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
       if (typeof functionDefinition.handler !== "function") {
         throw new Error(`Function "${functionKey}" has no handler`);
       }
-      const inputs = resolveBindingTree(action.inputs || {}, { record, rootObjectKey: object?.object_key || object?.objectKey || null });
+      const inputs = resolveBindingTree(action.inputs || {}, {
+        record,
+        rootObjectKey: object?.object_key || object?.objectKey || null,
+        variables: workflowVariables || context.globals || {},
+      });
       return functionDefinition.handler({
+        ...context,
         action,
         inputs,
         db: businessDb || db,
@@ -2423,8 +2429,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         companyId: targetCompanyId || runtimeCompanyId,
         workflowDepth: nextDepth,
         workflowStack: [...stack, workflowKey],
+        workflowId: workflowKey,
+        parentRunId: runId || null,
         runId: childRun?.id || runId || null,
         stepRunId: childStep?.id || stepRunId || null,
+        executionContext: context.executionContext || null,
+        source: { type: "SUBFLOW" },
       });
       if (childRun && db && typeof db === "function") {
         await db(
