@@ -33,7 +33,7 @@ test("execution context exposes canonical record and prior record globals", asyn
   assert.equal(context.globals.$Company.id, "company-1");
   assert.equal(context.globals.$Store.id, "store-1");
   assert.equal(context.globals.$Till.id, "till-1");
-  assert.equal(context.globals.$Permission["sale.view"], true);
+  assert.equal(context.globals.$Permission.sale.view, true);
   assert.equal(context.globals.$Flow.runId, "run-1");
   assert.equal(context.globals.$Flow.id, "flow-1");
   assert.equal(context.globals.$Flow.version, 3);
