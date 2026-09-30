@@ -120,7 +120,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   return <div className="mac-popover onestore-popover">
     <header className="onestore-popover-header">
       <div><strong>oneStore</strong><span>Discover and manage company apps</span></div>
-      <button onClick={onClose}><X size={15}/></button>
+      <button type="button" aria-label="Close oneStore" onClick={onClose}><X size={15}/></button>
     </header>
     <label className="onestore-search"><Search size={13}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search apps"/></label>
     {error?<div className="onestore-message is-error"><CircleAlert size={13}/>{error}</div>:null}
