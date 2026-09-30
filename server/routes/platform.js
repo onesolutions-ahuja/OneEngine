@@ -44,7 +44,7 @@ import { runRecordSaveLifecycle, runRecordDeleteLifecycle, RecordLifecycleError 
 import { withPlatformTransaction, PlatformTransactionError } from "../services/platformTransaction.js";
 import { executeBulk } from "../services/platformBulkExecution.js";
 import { executionFingerprint } from "../services/platformExecutionGuard.js";
-import { auditPlatformConformance, platformRuntimeContract } from "../services/platformConformance.js";
+import { auditPlatformConformance, loadPlatformTrace, platformRuntimeContract } from "../services/platformConformance.js";
 import { writePlatformRecordHistory, readableHistoryRows } from "../services/platformRecordHistory.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
@@ -1228,6 +1228,23 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     try {
       const report = await auditPlatformConformance({ db, companyId: req.user.companyId });
       res.json({ success: true, data: report });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/platform/runtime/traces/:correlationId", ...manage, async (req, res, next) => {
+    try {
+      const correlationId = String(req.params.correlationId || "").trim();
+      if (!correlationId || correlationId.length > 255) {
+        return res.status(400).json({ success: false, message: "A valid correlation identifier is required" });
+      }
+      const trace = await loadPlatformTrace({
+        db,
+        companyId: req.user.companyId,
+        correlationId,
+      });
+      res.json({ success: true, data: trace });
     } catch (error) {
       next(error);
     }
