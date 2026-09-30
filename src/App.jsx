@@ -848,6 +848,9 @@ function SettingsPage({ onOpenProfile }) {
   const [settingsCatalogLoaded, setSettingsCatalogLoaded] = useState(false)
   const [settingsCatalogError, setSettingsCatalogError] = useState('')
   const [mobileSettingsDetail, setMobileSettingsDetail] = useState(() => Boolean(readRoute().section && readRoute().section !== 'general'))
+  const settingsOpenStartedAt = useRef(typeof performance !== 'undefined' ? performance.now() : Date.now())
+  const settingsVisibleLogged = useRef(false)
+  const settingsStartedWithCache = useRef(Boolean(readSettingsContextCache()))
 
   const load = async () => {
     const cached = readSettingsContextCache()
@@ -869,6 +872,18 @@ function SettingsPage({ onOpenProfile }) {
   useEffect(() => {
     void load()
   }, [])
+
+  useEffect(() => {
+    if (settingsVisibleLogged.current || loading || !current) return
+    if (!companyIndependentSection && (!hasCompanyContext || !settings)) return
+    settingsVisibleLogged.current = true
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    console.info('[onePOS] Settings visible', {
+      ms: Math.round(now - settingsOpenStartedAt.current),
+      source: settingsStartedWithCache.current ? 'session-cache' : 'network-first-load',
+      section: current.key,
+    })
+  }, [loading, current?.key, companyIndependentSection, hasCompanyContext, settings])
 
   useEffect(() => {
     let live = true
