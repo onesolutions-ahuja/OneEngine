@@ -2380,9 +2380,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         params.push(req.user.storeId);
         clauses.push(`store_id=$${params.length}`);
       }
+      const previousParams = [relatedRecordId];
+      const previousClauses = ["id=$1"];
+      if (resolved.relationship.child_company_scoped && req?.user?.companyId) {
+        previousParams.push(req.user.companyId);
+        previousClauses.push(`company_id=${previousParams.length}`);
+      }
+      if (resolved.relationship.child_store_scoped && req?.user?.storeId) {
+        previousParams.push(req.user.storeId);
+        previousClauses.push(`store_id=${previousParams.length}`);
+      }
       const previous = (await db(
-        `SELECT * FROM "${resolved.relationship.child_source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`,
-        params.slice(1)
+        `SELECT * FROM "${resolved.relationship.child_source_table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`,
+        previousParams
       )).rows[0] || null;
       const result = await db(
         `UPDATE "${resolved.relationship.child_source_table}" SET "${column}"=$1 WHERE ${clauses.join(" AND ")} RETURNING *`,
