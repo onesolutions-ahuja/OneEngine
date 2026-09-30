@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Box, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react'
+import { Box, ChevronLeft, ChevronRight, Ellipsis, ExternalLink, Pencil, Plus, Search, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { loadPlatformObjects } from '../../services/settings'
 import FieldEditor from './Platform/FieldEditor.jsx'
@@ -105,6 +105,18 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [permissionView, setPermissionView] = useState('effective')
+  const [showMoreTabs, setShowMoreTabs] = useState(false)
+  const [objectModal, setObjectModal] = useState(null)
+  const [objectSaving, setObjectSaving] = useState(false)
+  const [objectForm, setObjectForm] = useState({
+    label: '',
+    pluralLabel: '',
+    objectKey: '',
+    apiName: '',
+    description: '',
+    sourceTable: '',
+    active: true,
+  })
 
   useEffect(() => {
     if (!initialTab) return
@@ -173,13 +185,13 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
   }, [selectedId])
 
   useEffect(() => {
-    if (!selectedId || activeTab === 'details') return undefined
+    if (!selectedId) return undefined
 
-    const wantsFields = activeTab === 'fields' || activeTab === 'formula' || activeTab === 'assignment' || activeTab === 'sharing'
-    const wantsRelationships = activeTab === 'relationships'
-    const wantsRules = activeTab === 'validation' || activeTab === 'actions' || activeTab === 'automation'
+    const wantsFields = activeTab === 'details' || activeTab === 'fields' || activeTab === 'formula' || activeTab === 'assignment' || activeTab === 'sharing'
+    const wantsRelationships = activeTab === 'details' || activeTab === 'relationships'
+    const wantsRules = activeTab === 'details' || activeTab === 'validation' || activeTab === 'actions' || activeTab === 'automation'
     const wantsPermissions = activeTab === 'permissions'
-    const wantsConfiguration = [
+    const wantsConfiguration = activeTab === 'details' || [
       'record-types',
       'layouts',
       'list-views',
@@ -380,6 +392,95 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
   }
 
 
+  const mainTabs = [
+    ['details', 'Details'],
+    ['fields', 'Fields'],
+    ['relationships', 'Relationships'],
+    ['record-types', 'Record Types'],
+    ['layouts', 'Layouts'],
+    ['list-views', 'List Views'],
+    ['validation', 'Validation Rules'],
+    ['actions', 'Actions & Bindings'],
+  ]
+  const moreTabs = TABS.filter(([key]) => !mainTabs.some(([mainKey]) => mainKey === key))
+
+  const refreshObjects = async (preferredKey = '') => {
+    const rows = await loadPlatformObjects()
+    setObjects(rows)
+    const nextKey = preferredKey || selectedKey || objectKey(rows[0])
+    if (nextKey) setSelectedKey(nextKey)
+    return rows
+  }
+
+  const openNewObject = () => {
+    setObjectModal('create')
+    setObjectForm({
+      label: '',
+      pluralLabel: '',
+      objectKey: '',
+      apiName: '',
+      description: '',
+      sourceTable: '',
+      active: true,
+    })
+  }
+
+  const openEditObject = () => {
+    if (!selected) return
+    setObjectModal('edit')
+    setObjectForm({
+      label: objectName(selected),
+      pluralLabel: selected.plural_label || '',
+      objectKey: objectKey(selected),
+      apiName: selected.api_name || objectKey(selected),
+      description: selected.description || '',
+      sourceTable: selected.source_table || '',
+      active: selected.active !== false,
+    })
+  }
+
+  const saveObject = async (event) => {
+    event.preventDefault()
+    setObjectSaving(true)
+    setError('')
+    try {
+      const creating = objectModal === 'create'
+      const response = await apiRequest(
+        creating ? '/api/platform/objects' : `/api/platform/objects/${encodeURIComponent(selectedId)}`,
+        {
+          method: creating ? 'POST' : 'PUT',
+          body: JSON.stringify({
+            label: objectForm.label,
+            pluralLabel: objectForm.pluralLabel || undefined,
+            objectKey: objectForm.objectKey || undefined,
+            apiName: objectForm.apiName || undefined,
+            description: objectForm.description || undefined,
+            sourceTable: objectForm.sourceTable || null,
+            active: objectForm.active,
+          }),
+        },
+      )
+      const saved = response?.data || null
+      await refreshObjects(saved ? objectKey(saved) : objectKey(selected))
+      setObjectModal(null)
+    } catch (err) {
+      setError(err?.message || 'Unable to save object')
+    } finally {
+      setObjectSaving(false)
+    }
+  }
+
+  const openRecords = () => {
+    if (!selected) return
+    const path = window.location.pathname || ''
+    const base = path.includes('/developer') ? path.slice(0, path.indexOf('/developer')) : ''
+    window.location.assign(`${base}/workspace/${encodeURIComponent(objectKey(selected))}`)
+  }
+
+  const defaultRecordType = objectData.recordTypes.find((row) => row.is_default === true) || objectData.recordTypes[0] || null
+  const defaultLayout = objectData.layouts.find((row) => row.is_default === true || row.page_type === 'detail') || objectData.layouts[0] || null
+  const sharing = objectData.sharingSettings || {}
+
   return (
     <div className={`objects-settings-shell mobile-stage-${mobileStage}`}>
       <aside className="objects-list-pane">
@@ -388,6 +489,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
             <strong>Objects</strong>
             <span>{objects.length} configured</span>
           </div>
+          <button type="button" className="objects-primary-action" onClick={openNewObject}><Plus size={14}/> New Object</button>
         </div>
 
         <label className="objects-pane-search">
@@ -430,7 +532,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
       <section className="objects-detail-pane">
         {selected ? (
           <>
-            <div className="objects-detail-header">
+            <div className="objects-detail-header objects-detail-header--hero">
               <button
                 type="button"
                 className="objects-mobile-back objects-mobile-back--objects"
@@ -439,38 +541,51 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
               >
                 <ChevronLeft size={16} />
               </button>
-              <button
-                type="button"
-                className="objects-mobile-back objects-mobile-back--menu"
-                onClick={() => setMobileStage('menu')}
-                aria-label="Back to object menu"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <div className="objects-detail-icon"><Box size={18} /></div>
-              <div>
-                <strong>{objectName(selected)}</strong>
+              <div className="objects-detail-icon"><Box size={19} /></div>
+              <div className="objects-hero-copy">
+                <div className="objects-hero-title">
+                  <strong>{objectName(selected)}</strong>
+                  <span className={`objects-status-pill ${selected.active === false ? 'is-inactive' : 'is-active'}`}>
+                    {selected.active === false ? 'Inactive' : 'Active'}
+                  </span>
+                </div>
                 <span>{objectKey(selected)}</span>
+                <p>{selected.description || `${objectName(selected)} object configuration and metadata.`}</p>
+              </div>
+              <div className="objects-hero-actions">
+                <button type="button" className="objects-icon-action" onClick={() => setShowMoreTabs((value) => !value)} aria-label="More options"><Ellipsis size={16}/></button>
+                <button type="button" className="objects-secondary-action" onClick={openRecords}><ExternalLink size={14}/> View Records</button>
+                <button type="button" className="objects-primary-action" onClick={openEditObject}><Pencil size={14}/> Edit Object</button>
               </div>
             </div>
 
-            <div className="objects-config-workspace">
-              {!focusedTab ? (
-                <nav className="objects-config-tabs" aria-label="Object configuration">
-                  {TABS.map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={activeTab === key ? 'is-active' : ''}
-                      onClick={() => { setActiveTab(key); setMobileStage('detail') }}
-                    >
-                      <span>{label}</span>
-                      <ChevronRight size={12} />
+            {!focusedTab ? (
+              <div className="objects-horizontal-tabs-wrap">
+                <nav className="objects-horizontal-tabs" aria-label="Object configuration">
+                  {mainTabs.map(([key, label]) => (
+                    <button key={key} type="button" className={activeTab === key ? 'is-active' : ''} onClick={() => { setActiveTab(key); setMobileStage('detail') }}>
+                      {label}
                     </button>
                   ))}
+                  <div className="objects-more-tabs">
+                    <button type="button" className={moreTabs.some(([key]) => key === activeTab) ? 'is-active' : ''} onClick={() => setShowMoreTabs((value) => !value)} aria-label="More object configuration">
+                      <Ellipsis size={16}/>
+                    </button>
+                    {showMoreTabs ? (
+                      <div className="objects-more-menu">
+                        {moreTabs.map(([key, label]) => (
+                          <button key={key} type="button" className={activeTab === key ? 'is-active' : ''} onClick={() => { setActiveTab(key); setShowMoreTabs(false); setMobileStage('detail') }}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </nav>
-              ) : null}
+              </div>
+            ) : null}
 
+            <div className="objects-config-workspace objects-config-workspace--two-panel">
               <div className="objects-config-content">
                 {editor?.kind === 'field' ? (
                   <FieldEditor
@@ -551,11 +666,54 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     onSaved={async () => { await refreshConfiguration(); closeEditor() }}
                   />
                 ) : activeTab === 'details' ? (
-                  <div className="objects-detail-card">
-                    <div><span>API name</span><strong>{objectKey(selected)}</strong></div>
-                    <div><span>Source table</span><strong>{selected.source_table || 'Metadata object'}</strong></div>
-                    <div><span>Type</span><strong>{selected.company_id ? 'Custom' : 'Standard'}</strong></div>
-                    <div><span>Status</span><strong>{selected.active === false ? 'Inactive' : 'Active'}</strong></div>
+                  <div className="objects-overview-grid">
+                    <section className="objects-overview-card">
+                      <header><strong>Basic Information</strong><button type="button" onClick={openEditObject} aria-label="Edit object"><Pencil size={13}/></button></header>
+                      <div className="objects-overview-rows">
+                        <div><span>Label</span><strong>{objectName(selected)}</strong></div>
+                        <div><span>API Name</span><strong>{objectKey(selected)}</strong></div>
+                        <div><span>Description</span><strong>{selected.description || '—'}</strong></div>
+                        <div><span>Object Type</span><strong><em className="objects-info-pill">{selected.company_id ? 'Custom' : 'Standard'}</em></strong></div>
+                        <div><span>Status</span><strong><em className={`objects-status-pill ${selected.active === false ? 'is-inactive' : 'is-active'}`}>{selected.active === false ? 'Inactive' : 'Active'}</em></strong></div>
+                        <div><span>Source Table</span><strong>{selected.source_table || 'Metadata object'}</strong></div>
+                        <div><span>Created Date</span><strong>{selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</strong></div>
+                        <div><span>Last Modified</span><strong>{selected.updated_at ? new Date(selected.updated_at).toLocaleString() : '—'}</strong></div>
+                      </div>
+                    </section>
+
+                    <section className="objects-overview-card">
+                      <header><strong>Usage</strong></header>
+                      <div className="objects-overview-rows">
+                        <button type="button" onClick={() => setActiveTab('fields')}><span>Fields</span><strong>{fields.length}</strong></button>
+                        <button type="button" onClick={() => setActiveTab('relationships')}><span>Relationships</span><strong>{objectData.relationships.length}</strong></button>
+                        <button type="button" onClick={() => setActiveTab('record-types')}><span>Record Types</span><strong>{objectData.recordTypes.length}</strong></button>
+                        <button type="button" onClick={() => setActiveTab('layouts')}><span>Page Layouts</span><strong>{objectData.layouts.length}</strong></button>
+                        <button type="button" onClick={() => setActiveTab('list-views')}><span>List Views</span><strong>{objectData.listViews.length}</strong></button>
+                        <button type="button" onClick={() => setActiveTab('validation')}><span>Validation Rules</span><strong>{validationRules.length}</strong></button>
+                        <button type="button" onClick={() => setActiveTab('automation')}><span>Automation / Flows</span><strong>{automationRules.length}</strong></button>
+                      </div>
+                    </section>
+
+                    <section className="objects-overview-card">
+                      <header><strong>Default Settings</strong></header>
+                      <div className="objects-overview-rows">
+                        <div><span>Default Record Type</span><strong>{defaultRecordType?.label || defaultRecordType?.name || 'Master'}</strong></div>
+                        <div><span>Default Page Layout</span><strong>{defaultLayout?.name || defaultLayout?.label || defaultLayout?.layout_key || '—'}</strong></div>
+                        <div><span>Allow Search</span><strong><em className="objects-yes-pill">Yes</em></strong></div>
+                        <div><span>Allow Reports</span><strong><em className="objects-yes-pill">Yes</em></strong></div>
+                        <div><span>Allow Activities</span><strong><em className="objects-yes-pill">Yes</em></strong></div>
+                      </div>
+                    </section>
+
+                    <section className="objects-overview-card">
+                      <header><strong>Sharing & Access</strong><button type="button" onClick={() => setActiveTab('sharing')} aria-label="Edit sharing"><Pencil size={13}/></button></header>
+                      <div className="objects-overview-rows">
+                        <div><span>Organization Default</span><strong>{sharing.default_access || sharing.defaultAccess || 'Private'}</strong></div>
+                        <div><span>External Access</span><strong><em className={sharing.external_access || sharing.externalAccess ? 'objects-yes-pill' : 'objects-no-pill'}>{sharing.external_access || sharing.externalAccess ? 'Yes' : 'No'}</em></strong></div>
+                        <div><span>Allow Sharing Rules</span><strong><em className="objects-yes-pill">Yes</em></strong></div>
+                        <div><span>Assignment Rules</span><strong>{objectData.assignmentRules.length}</strong></div>
+                      </div>
+                    </section>
                   </div>
                 ) : null}
 
@@ -810,6 +968,30 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
           <div className="objects-detail-placeholder">Select an object.</div>
         )}
       </section>
+
+      {objectModal ? (
+        <div className="record-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setObjectModal(null) }}>
+          <form className="record-dialog objects-object-dialog" onSubmit={saveObject}>
+            <div className="record-dialog-header">
+              <div><strong>{objectModal === 'create' ? 'New Object' : 'Edit Object'}</strong><span>{objectModal === 'create' ? 'Create platform metadata object' : objectName(selected)}</span></div>
+              <button type="button" className="record-dialog-close" onClick={() => setObjectModal(null)} aria-label="Close"><X size={18}/></button>
+            </div>
+            <div className="record-dialog-body">
+              <label>Label<input value={objectForm.label} onChange={(event) => setObjectForm((current) => ({ ...current, label: event.target.value }))} required /></label>
+              <label>Plural Label<input value={objectForm.pluralLabel} onChange={(event) => setObjectForm((current) => ({ ...current, pluralLabel: event.target.value }))} /></label>
+              <label>Object Key<input value={objectForm.objectKey} onChange={(event) => setObjectForm((current) => ({ ...current, objectKey: event.target.value }))} placeholder="address" required /></label>
+              <label>API Name<input value={objectForm.apiName} onChange={(event) => setObjectForm((current) => ({ ...current, apiName: event.target.value }))} placeholder="address" required /></label>
+              <label>Source Table<input value={objectForm.sourceTable} onChange={(event) => setObjectForm((current) => ({ ...current, sourceTable: event.target.value }))} placeholder="Optional" /></label>
+              <label>Description<textarea rows={3} value={objectForm.description} onChange={(event) => setObjectForm((current) => ({ ...current, description: event.target.value }))} /></label>
+              <label className="record-dialog-checkbox"><input type="checkbox" checked={objectForm.active} onChange={(event) => setObjectForm((current) => ({ ...current, active: event.target.checked }))}/> Active</label>
+            </div>
+            <div className="record-dialog-footer">
+              <button type="button" className="record-dialog-secondary" onClick={() => setObjectModal(null)}>Cancel</button>
+              <button type="submit" className="record-dialog-primary" disabled={objectSaving}>{objectSaving ? 'Saving…' : objectModal === 'create' ? 'Create Object' : 'Save Changes'}</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   )
 }
