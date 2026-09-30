@@ -6,13 +6,11 @@ import { loadPlatformConfig, decryptSecret } from "../services/onlineOrders/plat
 import { logPlatformApiCall } from "../services/onlineOrders/platformLogger.js";
 import { createSaleForCompletedOrder } from "../services/onlineOrders/saleCreator.js";
 import {
-  createGenericOrder,
   getGenericOrder,
   listGenericOrders,
-  transitionGenericOrder,
 } from "../services/onlineOrders/genericOrderService.js";
 import { syncBatchMovement } from "../services/inventory.js";
-import { executeWorkflowAction } from "../services/platformWorkflow.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { publishPlatformEvent } from "../services/platformEvents.js";
 
 /*
@@ -47,6 +45,58 @@ export default function createOnlineRouter({
   createInventoryMovement,
 }) {
   const router = express.Router();
+
+  async function executeWorkflowAction(context = {}) {
+    const action = context.action || {};
+    const actionKey = String(action.type || action.key || "").toUpperCase();
+    if (!actionKey) throw new Error("Workflow action key is required");
+    const execution = await executeSystemWorkflow({
+      db: context.db || db,
+      companyId: context.companyId || context.req?.user?.companyId,
+      userId: context.req?.user?.id || null,
+      systemKey: `action:${actionKey}`,
+      req: context.req || null,
+      input: { ...action },
+      record: context.record || null,
+      recordId: context.recordId || null,
+      storeId: context.storeId || context.req?.user?.storeId || null,
+      writeAudit,
+      source: {
+        type: context.req ? "api" : "internal",
+        method: context.req?.method || "INTERNAL",
+        path: context.req?.originalUrl || context.req?.path || actionKey,
+        capability: actionKey,
+      },
+      extraContext: {
+        pool: context.pool || pool,
+        client: context.client || null,
+        businessDb: context.client ? ((query, params = []) => context.client.query(query, params)) : null,
+        createInventoryMovement,
+      },
+    });
+    return execution.result;
+  }
+
+  async function executeOnlineOrderFunction({ req = null, companyId, userId = null, storeId = null, functionKey, input, sourceType = "api" }) {
+    const execution = await executeSystemWorkflow({
+      db,
+      companyId,
+      userId,
+      systemKey: `function:${functionKey}`,
+      req,
+      input,
+      storeId,
+      writeAudit,
+      source: {
+        type: sourceType,
+        method: req?.method || "INTERNAL",
+        path: req?.originalUrl || req?.path || functionKey,
+        capability: functionKey,
+      },
+      extraContext: { pool, createInventoryMovement },
+    });
+    return { ...execution, value: execution.result };
+  }
 
   /*
    * ------------------------------------------------------------------
@@ -2848,15 +2898,19 @@ export default function createOnlineRouter({
               } else if (String(resolvedStoreId) !== String(order.store_id)) {
                 cancellationResult.reason = "order_store_mismatch";
               } else {
-                const transition = await transitionGenericOrder({
-                  pool,
+                const transitionExecution = await executeOnlineOrderFunction({
                   companyId,
-                  orderId: order.id,
                   userId: null,
-                  toStatus: "CANCELLED",
-                  reason: `Uber cancellation notification (${event.eventType})`,
-                  createInventoryMovement,
+                  storeId: resolvedStoreId || order.store_id || null,
+                  functionKey: "online_order.transition",
+                  input: {
+                    orderId: order.id,
+                    toStatus: "CANCELLED",
+                    reason: `Uber cancellation notification (${event.eventType})`,
+                  },
+                  sourceType: "webhook",
                 });
+                const transition = transitionExecution.value;
 
                 if (transition.success) {
                   attachedOrderId = order.id;
@@ -3254,21 +3308,23 @@ export default function createOnlineRouter({
     } = req.body;
 
     try {
-      const result = await createGenericOrder({
-        db,
-        pool,
+      const createExecution = await executeOnlineOrderFunction({
+        req,
         companyId: req.user.companyId,
         userId: req.user.id,
         storeId: storeId || req.user.storeId,
-        externalOrderId,
-        fulfilmentType,
-        items,
-        customer,
-        notes,
-        payment,
-        createInventoryMovement,
-        publishEvent: onlineOrderEventPublisher(req.user.companyId),
+        functionKey: "online_order.create",
+        input: {
+          externalOrderId,
+          storeId: storeId || req.user.storeId,
+          fulfilmentType,
+          items,
+          customer,
+          notes,
+          payment,
+        },
       });
+      const result = createExecution.value;
 
       if (result.duplicate) {
         return res.json({
@@ -3343,17 +3399,15 @@ export default function createOnlineRouter({
 
   router.post("/online/orders/generic/:id/accept", authenticate, authorize("online_orders.manage"), async (req, res) => {
     const { reason } = req.body || {};
-    const result = await transitionGenericOrder({
-      pool,
+    const transitionExecution = await executeOnlineOrderFunction({
+      req,
       companyId: req.user.companyId,
-      orderId: req.params.id,
       userId: req.user.id,
-      toStatus: "PREPARING",
-      reason,
-      createSale: (client, context) => createSaleForCompletedOrder(client, context),
-      createInventoryMovement,
-      publishEvent: onlineOrderEventPublisher(req.user.companyId),
+      storeId: req.user.storeId || null,
+      functionKey: "online_order.transition",
+      input: { orderId: req.params.id, toStatus: "PREPARING", reason },
     });
+    const result = transitionExecution.value;
 
     if (!result.success) {
       return res.status(result.error === "Order not found" ? 404 : 409).json({
@@ -3385,15 +3439,15 @@ export default function createOnlineRouter({
           ? "READY_FOR_DELIVERY"
           : "READY";
 
-    const result = await transitionGenericOrder({
-      pool,
+    const transitionExecution = await executeOnlineOrderFunction({
+      req,
       companyId: req.user.companyId,
-      orderId: req.params.id,
       userId: req.user.id,
-      toStatus,
-      reason,
-      publishEvent: onlineOrderEventPublisher(req.user.companyId),
+      storeId: req.user.storeId || null,
+      functionKey: "online_order.transition",
+      input: { orderId: req.params.id, toStatus, reason },
     });
+    const result = transitionExecution.value;
 
     if (!result.success) {
       return res.status(result.error === "Order not found" ? 404 : 409).json({
@@ -3431,16 +3485,15 @@ export default function createOnlineRouter({
       toStatus = "COMPLETED";
     }
 
-    const result = await transitionGenericOrder({
-      pool,
+    const transitionExecution = await executeOnlineOrderFunction({
+      req,
       companyId: req.user.companyId,
-      orderId: req.params.id,
       userId: req.user.id,
-      toStatus,
-      reason,
-      createSale: (client, context) => createSaleForCompletedOrder(client, context),
-      publishEvent: onlineOrderEventPublisher(req.user.companyId),
+      storeId: order.store_id || req.user.storeId || null,
+      functionKey: "online_order.transition",
+      input: { orderId: req.params.id, toStatus, reason },
     });
+    const result = transitionExecution.value;
 
     if (!result.success) {
       return res.status(result.error === "Order not found" ? 404 : 409).json({
@@ -3472,16 +3525,15 @@ export default function createOnlineRouter({
   router.post("/online/orders/generic/:id/cancel", authenticate, authorize("online_orders.manage"), async (req, res) => {
     const { reason } = req.body || {};
 
-    const result = await transitionGenericOrder({
-      pool,
+    const transitionExecution = await executeOnlineOrderFunction({
+      req,
       companyId: req.user.companyId,
-      orderId: req.params.id,
       userId: req.user.id,
-      toStatus: "CANCELLED",
-      reason: reason || "Cancelled",
-      createInventoryMovement,
-      publishEvent: onlineOrderEventPublisher(req.user.companyId),
+      storeId: req.user.storeId || null,
+      functionKey: "online_order.transition",
+      input: { orderId: req.params.id, toStatus: "CANCELLED", reason: reason || "Cancelled" },
     });
+    const result = transitionExecution.value;
 
     if (!result.success) {
       return res.status(result.error === "Order not found" ? 404 : 409).json({
