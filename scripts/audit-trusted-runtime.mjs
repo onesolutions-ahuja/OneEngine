@@ -1,7 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = process.cwd()
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = path.join(ROOT, 'src')
 const API_FILE = path.join(SRC, 'services', 'api.js')
 const RUNTIME_FILE = path.join(SRC, 'services', 'trustedRuntime.js')
