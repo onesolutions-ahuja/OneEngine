@@ -24,8 +24,15 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
   const authAliases = [...text.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*\[([\s\S]*?)\]/g)]
     .filter((match) => /\bauthenticate\b/.test(match[2]))
     .map((match) => match[1]);
-  const gatewayAliases = [...text.matchAll(/\b(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{([\s\S]{0,6000}?)\n\s*\}/g)]
-    .filter((match) => /ensureBusinessCommandRun/.test(match[2]))
+  const functionStarts = [...text.matchAll(/\b(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g)];
+  const gatewayAliases = functionStarts
+    .filter((match, index) => {
+      const start = match.index;
+      const nextFunction = index + 1 < functionStarts.length ? functionStarts[index + 1].index : text.length;
+      const nextRoute = text.indexOf("\n  router.", start + 1);
+      const end = nextRoute >= 0 && nextRoute < nextFunction ? nextRoute : nextFunction;
+      return /ensureBusinessCommandRun/.test(text.slice(start, end));
+    })
     .map((match) => match[1]);
   const matches = [...text.matchAll(/\b(?:router|app)\.(post|put|patch|delete)\s*\(\s*(["'`])([^"'`]+)\2/g)];
   return matches.map((match, index) => {
@@ -79,10 +86,22 @@ const jobs = extractKeys(jobsSection, /"([A-Z0-9_]+)"/g);
 
 const serverSource = read("server/server.js");
 const globalGatewayEnabled = /app\.use\("\/api",\s*createBusinessCommandGateway\(\{\s*db\s*\}\)\)/.test(serverSource);
-const mutationRoutes = [];
+const NON_MUTATING_POST_ROUTES = new Set([
+  "/api/auth/login",
+  "/customer-auth/login",
+  "/client-web-shop/public/:slug/quote",
+]);
+
+const allMutationVerbRoutes = [];
 for (const file of [path.join(SERVER, "server.js"), ...walk(path.join(SERVER, "routes"))]) {
-  mutationRoutes.push(...routeBlocks(file, fs.readFileSync(file, "utf8"), globalGatewayEnabled));
+  allMutationVerbRoutes.push(...routeBlocks(file, fs.readFileSync(file, "utf8"), globalGatewayEnabled));
 }
+const ignoredNonMutatingPostRoutes = allMutationVerbRoutes.filter(
+  (route) => route.method === "POST" && NON_MUTATING_POST_ROUTES.has(route.route)
+);
+const mutationRoutes = allMutationVerbRoutes.filter(
+  (route) => !(route.method === "POST" && NON_MUTATING_POST_ROUTES.has(route.route))
+);
 const bypassRoutes = mutationRoutes.filter((route) => !route.workflowMediated);
 const mediatedRoutes = mutationRoutes.filter((route) => route.workflowMediated);
 
@@ -132,6 +151,7 @@ const report = {
     registeredActions: actions.length,
     trustedJobKinds: jobs.length,
     mutationRoutes: mutationRoutes.length,
+    ignoredNonMutatingPostRoutes: ignoredNonMutatingPostRoutes.length,
     workflowMediatedMutationRoutes: mediatedRoutes.length,
     bypassMutationRoutes: bypassRoutes.length,
     directRuntimeCallSites: directRuntimeCalls.length,
@@ -146,6 +166,7 @@ const report = {
   registeredActions: actions,
   trustedJobKinds: jobs,
   mutationRoutes,
+  ignoredNonMutatingPostRoutes,
   directRuntimeCalls,
   findings,
 };
