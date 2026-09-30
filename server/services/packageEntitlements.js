@@ -89,9 +89,16 @@ async function insertDependencySources(db, companyId) {
        (company_id,package_id,source_type,source_key,parent_package_id,active,starts_at,expires_at,metadata)
      SELECT $1,tree.dependency_id,
             CASE WHEN tree.optional THEN 'OPTIONAL_DEPENDENCY' ELSE 'REQUIRED_DEPENDENCY' END,
-            tree.root_source_type || ':' || tree.root_source_key || ':root:' ||
+            left(
+              tree.root_source_type || ':' || tree.root_source_key || ':root:' ||
               tree.root_package_id::text || ':dependency:' || tree.dependency_id::text ||
               ':parent:' || tree.parent_package_id::text,
+              155
+            ) || ':' || md5(
+              tree.root_source_type || ':' || tree.root_source_key || ':root:' ||
+              tree.root_package_id::text || ':dependency:' || tree.dependency_id::text ||
+              ':parent:' || tree.parent_package_id::text
+            ),
             tree.parent_package_id,true,tree.starts_at,tree.expires_at,
             jsonb_build_object('rootPackageId',tree.root_package_id,
               'rootSourceType',tree.root_source_type,'rootSourceKey',tree.root_source_key,
