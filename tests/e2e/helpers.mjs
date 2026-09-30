@@ -10,8 +10,27 @@ export async function loginIfConfigured(page) {
   if (await usernameField.isVisible().catch(() => false)) {
     await usernameField.fill(username);
     await page.getByPlaceholder("Password").fill(password);
+
+    const loginResponsePromise = page.waitForResponse(
+      (response) => response.url().includes("/api/auth/login") && response.request().method() === "POST",
+      { timeout: 30_000 },
+    );
+
     await page.getByRole("button", { name: /^Sign In$/ }).click();
-    await expect(page.getByRole("button", { name: "Launcher" })).toBeVisible({ timeout: 30_000 });
+    const loginResponse = await loginResponsePromise;
+    let loginBody = null;
+    try { loginBody = await loginResponse.json(); } catch {}
+
+    if (!loginResponse.ok() || loginBody?.success === false) {
+      throw new Error(`Login failed (${loginResponse.status()}): ${loginBody?.message || "authentication rejected"}`);
+    }
+
+    await expect.poll(
+      () => page.evaluate(() => Boolean(sessionStorage.getItem("onepos_token"))),
+      { timeout: 15_000, message: "Login returned success but onepos_token was not stored" },
+    ).toBe(true);
+
+    await expect(usernameField).toBeHidden({ timeout: 15_000 });
   }
   return true;
 }
