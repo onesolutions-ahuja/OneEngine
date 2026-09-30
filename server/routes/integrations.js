@@ -32,7 +32,7 @@ import {
   SUPPLIER_FEED_LIMIT,
 } from "../services/supplierFeedAdapter.js";
 import { matchSupplierFeed } from "../services/supplierFeedMatch.js";
-import { executeWorkflowAction } from "../services/platformWorkflow.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -946,16 +946,23 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
         const type = String(req.body?.type || "").toUpperCase();
         const allowed = new Set(["SHOPIFY_TEST_CONNECTION", "SHOPIFY_SYNC_PRODUCTS", "SHOPIFY_SYNC_INVENTORY", "SHOPIFY_EXPORT_REFUND", "SHOPIFY_RETRY_FAILED_SYNC"]);
         if (!allowed.has(type)) return res.status(400).json({ success: false, message: "Unsupported Shopify manual action" });
-        const result = await executeWorkflowAction({
-          db, pool, req, companyId: req.user.companyId, storeId: integration.store_id,
-          action: {
-            type,
+        const execution = await executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: `action:${type}`,
+          req,
+          storeId: integration.store_id || req.user.storeId || null,
+          input: {
             connectionId: integration.id,
             syncType: req.body?.syncType,
             orderId: req.body?.orderId,
             returnId: req.body?.returnId,
           },
+          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: type },
+          extraContext: { pool },
         });
+        const result = execution.result;
         await writeAudit(req.user.companyId, req.user.id, `shopify_${type.toLowerCase()}`, "integration_connection", integration.id, {
           success: result?.success === true, code: result?.code || null,
         });
