@@ -5,6 +5,7 @@ import {
   toPublicCredential,
 } from "../services/connectorFramework.js";
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
+import { internalAppCatalog } from "../services/internalAppCatalog.js";
 
 function jsonValue(value, fallback) {
   if (typeof value !== "string") return value ?? fallback;
@@ -13,6 +14,22 @@ function jsonValue(value, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function effectiveConnectorManifest(packageKey, storedManifest = {}) {
+  const stored = jsonValue(storedManifest, {});
+  if (stored?.connectorApp) return stored;
+  const catalogEntry = internalAppCatalog.find((entry) =>
+    String(entry.packageKey || entry.key || "") === String(packageKey || "")
+  );
+  if (!catalogEntry?.connectorApp) return stored;
+  return {
+    ...stored,
+    packageKey: stored.packageKey || catalogEntry.packageKey || catalogEntry.key,
+    name: stored.name || catalogEntry.name,
+    category: stored.category || catalogEntry.category,
+    connectorApp: catalogEntry.connectorApp,
+  };
 }
 
 function publicDefinition(row) {
@@ -1097,24 +1114,29 @@ export default function createConnectorsRouter({
             AND i.suspended_by_entitlement=FALSE
           WHERE p.active=TRUE
             AND p.package_type='APPLICATION'
-            AND p.manifest ? 'connectorApp'
           ORDER BY p.name`,
         [req.user.companyId]
       );
       res.json({
         success: true,
-        data: result.rows.map((row) => ({
-          package_key: row.package_key,
-          name: row.name,
-          description: row.description,
-          category: row.category,
-          publisher: row.publisher,
-          manifest: jsonValue(row.manifest, {}),
-          company_installation: {
-            status: row.installation_status,
-            version: row.installed_version,
-          },
-        })),
+        data: result.rows
+          .map((row) => {
+            const manifest = effectiveConnectorManifest(row.package_key, row.manifest);
+            if (!manifest?.connectorApp) return null;
+            return {
+              package_key: row.package_key,
+              name: row.name,
+              description: row.description,
+              category: row.category,
+              publisher: row.publisher,
+              manifest,
+              company_installation: {
+                status: row.installation_status,
+                version: row.installed_version,
+              },
+            };
+          })
+          .filter(Boolean),
       });
     } catch (error) {
       console.error("List connector apps error:", error);
@@ -1155,7 +1177,7 @@ export default function createConnectorsRouter({
         [packageKey, req.user.companyId]
       );
       const packageRow = installed.rows[0];
-      const manifest = jsonValue(packageRow?.manifest, {});
+      const manifest = effectiveConnectorManifest(packageKey, packageRow?.manifest);
       const connectorApp = manifest.connectorApp;
       if (!packageRow || packageRow.package_type !== "APPLICATION" || !connectorApp) {
         return res.status(404).json({ success: false, message: "An installed connector app is required" });
@@ -1225,7 +1247,7 @@ export default function createConnectorsRouter({
       );
       const current = existingResult.rows[0];
       if (!current) return res.status(404).json({ success: false, message: "Connector instance not found" });
-      const manifest = jsonValue(current.manifest, {});
+      const manifest = effectiveConnectorManifest(current.connector_package_key, current.manifest);
       const existingSecrets = (() => { try { return decryptCredentials(current.credentials_encrypted) || {}; } catch { return {}; } })();
       const configuration = req.body?.configuration === undefined
         ? jsonValue(current.connector_configuration, {})
@@ -1300,7 +1322,7 @@ export default function createConnectorsRouter({
       if (!instance) return res.status(404).json({ success: false, message: "Installed connector instance not found" });
       const driver = drivers?.get(instance.connector_package_key);
       if (!driver) return res.json({ success: true, data: { success: false, code: "PROVIDER_NOT_SUPPORTED", status: "ERROR" } });
-      const manifest = jsonValue(instance.manifest, {});
+      const manifest = effectiveConnectorManifest(instance.connector_package_key, instance.manifest);
       const capabilities = (manifest.connectorApp?.capabilities || []).map((item) => typeof item === "string" ? item : item.key).filter((key) => driver.capabilities.has(key));
       const service = new ConnectorService({
         connectorKey: instance.connector_package_key,
