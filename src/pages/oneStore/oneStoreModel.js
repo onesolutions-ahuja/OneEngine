@@ -26,6 +26,7 @@ const PROVIDER_BRANDS = new Map([
   ["one_connect_wonderful", "one-connect-wonderful"], ["wonderful", "one-connect-wonderful"],
   ["one_connect_vyne", "one-connect-vyne"], ["vyne", "one-connect-vyne"],
   ["one_connect_stripe", "one-connect-stripe"], ["stripe", "one-connect-stripe"],
+  ["one_connect_google", "one-connect-google"], ["google", "one-connect-google"],
 ]);
 
 export function isStorefrontPackage(item) {
