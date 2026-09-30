@@ -176,7 +176,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   };
 
   return (
-    <section className="mb-6 border border-slate-200 rounded-lg bg-white">
+    <section className={`mb-6 border border-slate-200 rounded-lg bg-white${settingsMode ? " connector-settings-panel" : ""}`}>
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">{settingsMode ? `${dedicatedName} Settings` : "Hardware & Payment Connectors"}</h2>
@@ -239,7 +239,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
           )}
 
           {requestedPackageKey === "smsgate_connector" && existingInstance?.enabled ? (
-            <div className="mx-4 mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="connector-sms-test-card rounded-lg border border-slate-200 bg-slate-50 p-4">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-slate-900">Send test SMS</h3>
                 <p className="text-xs text-slate-500">Verify the full onePOS → SMSGate → Android phone delivery path without developer assistance.</p>
@@ -280,7 +280,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
           ) : null}
 
           {apps.length ? (
-            <form onSubmit={createInstance} className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-5">
+            <form onSubmit={createInstance} className={`grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-5${settingsMode ? " connector-settings-form" : ""}`}>
               {!requestedPackageKey ? <label className="text-xs font-medium text-slate-600">Installed app
                 <select required value={packageKey} onChange={(event) => setPackageKey(event.target.value)} className={`${inputClass} mt-1`}>
                   {apps.map((app) => <option key={app.package_key} value={app.package_key}>{app.name}</option>)}
