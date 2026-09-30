@@ -31,20 +31,44 @@ function byteLength(value) {
 
 export function createGovernorBudget({ limits = {}, startedAt = Date.now(), counters = {} } = {}) {
   const effective = { ...DEFAULT_PLATFORM_GOVERNOR_LIMITS, ...(limits || {}) };
+  const nonNegative = (value) => Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0);
+  const positiveLimit = (key) => {
+    const value = Number(effective[key]);
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new PlatformGovernorError(`${key} must be a positive finite limit`, {
+        code: "GOVERNOR_LIMIT_CONFIGURATION_INVALID",
+        status: 500,
+        metric: key,
+        actual: effective[key],
+      });
+    }
+    effective[key] = value;
+  };
+  for (const key of Object.keys(DEFAULT_PLATFORM_GOVERNOR_LIMITS)) positiveLimit(key);
+
   const state = {
     startedAt,
     counters: {
-      workflowSteps: Number(counters.workflowSteps || 0),
-      queries: Number(counters.queries || 0),
-      externalActions: Number(counters.externalActions || 0),
-      subflowInvocations: Number(counters.subflowInvocations || 0),
-      queuedJobs: Number(counters.queuedJobs || 0),
-      bulkItems: Number(counters.bulkItems || 0),
+      workflowSteps: nonNegative(counters.workflowSteps),
+      queries: nonNegative(counters.queries),
+      externalActions: nonNegative(counters.externalActions),
+      subflowInvocations: nonNegative(counters.subflowInvocations),
+      queuedJobs: nonNegative(counters.queuedJobs),
+      bulkItems: nonNegative(counters.bulkItems),
     },
   };
 
   const fail = (metric, limit, actual, code) => {
     throw new PlatformGovernorError(`${metric} limit exceeded`, { metric, limit, actual, code });
+  };
+  const consume = (metric, count, limitKey, code) => {
+    this?.checkRuntime?.();
+    const delta = nonNegative(count);
+    state.counters[metric] += delta;
+    if (state.counters[metric] > effective[limitKey]) {
+      fail(metric, effective[limitKey], state.counters[metric], code);
+    }
+    return state.counters[metric];
   };
 
   return {
@@ -57,7 +81,8 @@ export function createGovernorBudget({ limits = {}, startedAt = Date.now(), coun
     },
     consumeWorkflowStep(count = 1) {
       this.checkRuntime();
-      state.counters.workflowSteps += Number(count || 0);
+      const delta = nonNegative(count);
+      state.counters.workflowSteps += delta;
       if (state.counters.workflowSteps > effective.maxWorkflowSteps) {
         fail("workflowSteps", effective.maxWorkflowSteps, state.counters.workflowSteps, "GOVERNOR_WORKFLOW_STEP_LIMIT");
       }
@@ -65,7 +90,8 @@ export function createGovernorBudget({ limits = {}, startedAt = Date.now(), coun
     },
     consumeQuery(count = 1) {
       this.checkRuntime();
-      state.counters.queries += Number(count || 0);
+      const delta = nonNegative(count);
+      state.counters.queries += delta;
       if (state.counters.queries > effective.maxQueries) {
         fail("queries", effective.maxQueries, state.counters.queries, "GOVERNOR_QUERY_LIMIT");
       }
@@ -73,7 +99,8 @@ export function createGovernorBudget({ limits = {}, startedAt = Date.now(), coun
     },
     consumeExternalAction(count = 1) {
       this.checkRuntime();
-      state.counters.externalActions += Number(count || 0);
+      const delta = nonNegative(count);
+      state.counters.externalActions += delta;
       if (state.counters.externalActions > effective.maxExternalActions) {
         fail("externalActions", effective.maxExternalActions, state.counters.externalActions, "GOVERNOR_EXTERNAL_ACTION_LIMIT");
       }
@@ -81,7 +108,8 @@ export function createGovernorBudget({ limits = {}, startedAt = Date.now(), coun
     },
     consumeSubflow(count = 1) {
       this.checkRuntime();
-      state.counters.subflowInvocations += Number(count || 0);
+      const delta = nonNegative(count);
+      state.counters.subflowInvocations += delta;
       if (state.counters.subflowInvocations > effective.maxSubflowInvocations) {
         fail("subflowInvocations", effective.maxSubflowInvocations, state.counters.subflowInvocations, "GOVERNOR_SUBFLOW_INVOCATION_LIMIT");
       }
@@ -96,7 +124,8 @@ export function createGovernorBudget({ limits = {}, startedAt = Date.now(), coun
     },
     consumeQueuedJob(count = 1) {
       this.checkRuntime();
-      state.counters.queuedJobs += Number(count || 0);
+      const delta = nonNegative(count);
+      state.counters.queuedJobs += delta;
       if (state.counters.queuedJobs > effective.maxQueuedJobs) {
         fail("queuedJobs", effective.maxQueuedJobs, state.counters.queuedJobs, "GOVERNOR_JOB_LIMIT");
       }
