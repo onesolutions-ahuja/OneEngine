@@ -626,12 +626,32 @@ export async function selectPublicAppointmentSlot(client, {
       WHERE id=$1 AND company_id=$2`,
     [bookingCaseId, companyId, serviceId, hold.id, paymentRequest?.id || null, amount, startsAt, endsAt]
   );
+  let appointment=null;
+  if(amount<=0){
+    appointment=await confirmAppointmentFromHold(client,{
+      companyId,
+      holdId:hold.id,
+      customerEmail:publicLink.channel==="EMAIL"?publicLink.sender:null,
+      sourceChannel:publicLink.channel||"WEB",
+      paymentStatus:"NOT_REQUIRED",
+      amountDue:0,
+      amountPaid:0,
+      metadata:{bookingCaseId},
+    });
+    await client.query(
+      `UPDATE appointment_booking_cases
+          SET appointment_id=$3,status='CONFIRMED',updated_at=NOW()
+        WHERE id=$1 AND company_id=$2`,
+      [bookingCaseId,companyId,appointment.id]
+    );
+  }
   await publishPlatformEvent({
     db: client.query.bind(client),
     companyId,
-    eventType: amount > 0 ? "appointment.payment_required" : "appointment.slot_selected",
+    eventType: amount > 0 ? "appointment.payment_required" : "appointment.confirmed",
     payload: {
       bookingCaseId,
+      appointmentId:appointment?.id||null,
       channel: publicLink.channel,
       holdId: hold.id,
       serviceId,
@@ -641,5 +661,75 @@ export async function selectPublicAppointmentSlot(client, {
     },
     idempotencyKey: `appointment-public-slot:${bookingCaseId}:${hold.id}`,
   });
-  return { hold, service, amount, paymentRequest };
+  return { hold, service, amount, paymentRequest, appointment };
+}
+
+
+export async function completeAppointmentPayment(client, {
+  companyId, paymentRequestId, providerReference = null, paymentUrl = null, amountPaid = null,
+} = {}) {
+  if (!companyId || !paymentRequestId) throw new Error("companyId and paymentRequestId are required");
+  const requestResult = await client.query(
+    `SELECT pr.*,c.id AS booking_case_id,c.channel,c.sender,c.recipient,c.subject,c.body,c.customer_id,c.state
+       FROM appointment_payment_requests pr
+       LEFT JOIN appointment_booking_cases c ON c.payment_request_id=pr.id AND c.company_id=pr.company_id
+      WHERE pr.id=$1 AND pr.company_id=$2
+      FOR UPDATE OF pr`,
+    [paymentRequestId, companyId]
+  );
+  const payment = requestResult.rows[0];
+  if (!payment) throw new Error("Appointment payment request not found");
+  if (payment.status === "SUCCEEDED") {
+    const existing = payment.appointment_id
+      ? await client.query("SELECT * FROM appointments WHERE id=$1 AND company_id=$2 LIMIT 1",[payment.appointment_id,companyId])
+      : null;
+    return { payment, appointment: existing?.rows?.[0] || null, bookingCaseId: payment.booking_case_id || null };
+  }
+  if (!payment.hold_id) throw new Error("Appointment payment request is not linked to a slot hold");
+
+  const bookingCase = payment.booking_case_id
+    ? await client.query("SELECT * FROM appointment_booking_cases WHERE id=$1 AND company_id=$2 LIMIT 1",[payment.booking_case_id,companyId])
+    : null;
+  const booking = bookingCase?.rows?.[0] || null;
+  const paid = amountPaid == null ? Number(payment.amount || 0) : Number(amountPaid);
+  const appointment = await confirmAppointmentFromHold(client,{
+    companyId,
+    holdId:payment.hold_id,
+    customerId:booking?.customer_id || null,
+    customerEmail:booking?.channel === "EMAIL" ? booking.sender : null,
+    sourceChannel:booking?.channel || "PAYMENT",
+    paymentStatus:"PAID",
+    amountDue:Number(payment.amount || 0),
+    amountPaid:paid,
+    metadata:{bookingCaseId:booking?.id || null,paymentRequestId},
+  });
+  await client.query(
+    `UPDATE appointment_payment_requests
+        SET status='SUCCEEDED',appointment_id=$3,provider_reference=COALESCE($4,provider_reference),
+            payment_url=COALESCE($5,payment_url),updated_at=NOW()
+      WHERE id=$1 AND company_id=$2`,
+    [paymentRequestId,companyId,appointment.id,providerReference,paymentUrl]
+  );
+  if (booking?.id) {
+    await client.query(
+      `UPDATE appointment_booking_cases
+          SET appointment_id=$3,status='CONFIRMED',updated_at=NOW()
+        WHERE id=$1 AND company_id=$2`,
+      [booking.id,companyId,appointment.id]
+    );
+  }
+  await publishPlatformEvent({
+    db:client.query.bind(client),
+    companyId,
+    eventType:"appointment.confirmed",
+    payload:{
+      appointmentId:appointment.id,
+      bookingCaseId:booking?.id || null,
+      channel:booking?.channel || null,
+      paymentRequestId,
+      providerReference,
+    },
+    idempotencyKey:`appointment-payment-confirmed:${paymentRequestId}`,
+  });
+  return {paymentRequestId,appointment,bookingCaseId:booking?.id || null};
 }
