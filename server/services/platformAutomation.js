@@ -2,6 +2,7 @@ import { evaluateCondition } from "./platformConditions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { executeWorkflowActions } from "./platformWorkflow.js";
 import { systemObject, isExtensionField } from "./platformSystemObjects.js";
+import { createPlatformExecutionContext } from "./platformExecutionContext.js";
 
 function apiRecord(fields, record) {
   const result = { ...(record || {}) };
@@ -20,7 +21,7 @@ function ruleMatches(rule, fields, record, previousRecord) {
   }, fields, record, previousRecord);
 }
 
-export async function executePlatformAutomations({ db, object, fields, record, previousRecord = null, recordId, trigger, req, writeExtension }) {
+export async function executePlatformAutomations({ db, object, fields, record, previousRecord = null, recordId, trigger, req, writeExtension, mutateField }) {
   if (!req || req._platformAutomationDepth > 0) return { record, messages: [], executions: [] };
   const allowedTriggers = new Set(["after_create", "after_update", "after_save", "before_save", "before_create", "before_update", "field_changed", "before_delete", "after_delete"]);
   if (!allowedTriggers.has(trigger)) return { record, messages: [], executions: [] };
@@ -33,6 +34,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
         WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)
           AND (
             trigger_key=$3
+            OR ($3 IN ('before_create','before_update') AND trigger_key='before_save')
             OR ($3 IN ('after_create','after_update') AND trigger_key='after_save')
             OR ($3='after_update' AND trigger_key='field_changed')
           )
@@ -46,6 +48,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
   }
   const messages = [];
   const executions = [];
+  const preSave = ["before_create", "before_update", "before_save"].includes(trigger);
   let nextRecord = apiRecord(fields, record);
   const prior = apiRecord(fields, previousRecord);
 
@@ -53,8 +56,36 @@ export async function executePlatformAutomations({ db, object, fields, record, p
     if (!ruleMatches(rule, fields, nextRecord, prior)) continue;
     const actions = Array.isArray(rule.action?.actions) ? rule.action.actions : [rule.action];
     for (const action of actions) {
+      if (preSave && !["set_field", "show_message"].includes(action.type)) {
+        executions.push({ ruleId: rule.id, action: action.type || "unknown", status: "skipped", reason: "Before-save automation is mutation-only" });
+        continue;
+      }
       if (action.type === "workflow") {
-        const workflowResults = await executeWorkflowActions({ actions: action.actions || [], db, object, fields, record: nextRecord, previousRecord: prior, recordId, trigger, req, companyId: req.user.companyId });
+        const executionContext = await createPlatformExecutionContext({
+          db,
+          req,
+          object,
+          record: nextRecord,
+          previousRecord: prior,
+          trigger: {
+            type: trigger,
+            operation: trigger.includes("create") ? "create" : trigger.includes("delete") ? "delete" : "update",
+          },
+          executionContext: req.platformExecutionContext || req.executionContext || null,
+        });
+        const workflowResults = await executeWorkflowActions({
+          actions: action.actions || [],
+          db,
+          object,
+          fields,
+          record: nextRecord,
+          previousRecord: prior,
+          recordId,
+          trigger,
+          req,
+          companyId: req.user.companyId,
+          executionContext,
+        });
         executions.push({ ruleId: rule.id, action: action.type, status: "completed", details: workflowResults });
         continue;
       }
@@ -85,6 +116,11 @@ export async function executePlatformAutomations({ db, object, fields, record, p
         continue;
       }
       const field = fields.find((candidate) => candidate.api_name === action.field && candidate.active !== false);
+      if (field && field.writable !== false && typeof mutateField === "function") {
+        nextRecord = await mutateField(field, action.value, nextRecord);
+        executions.push({ ruleId: rule.id, action: action.type, field: action.field, status: "completed", mode: "in_memory" });
+        continue;
+      }
       if (field && isExtensionField(field) && field.writable !== false && writeExtension) {
         nextRecord = await writeExtension(field, action.value, nextRecord);
         executions.push({ ruleId: rule.id, action: action.type, field: action.field, status: "completed" });

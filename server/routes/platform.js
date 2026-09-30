@@ -39,6 +39,7 @@ import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
 import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";
 import { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { runRecordSaveLifecycle, runRecordDeleteLifecycle, RecordLifecycleError } from "../services/platformRecordLifecycle.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
@@ -4964,74 +4965,216 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (!(await hasPlatformObjectPermission(db, req, object.id, permissionAction))) {
       return { status: 403, code: "IMPORT_PERMISSION_REQUIRED", message: `${permissionAction} permission is required` };
     }
-    const validation = await validateRecordInput(req, object, fields, input, { requireRequired: action === "create" });
-    if (validation.error) return { status: 400, code: "FIELD_VALIDATION_FAILED", message: validation.error };
-    const trigger = action === "update" ? "before_update" : "before_create";
-    const ruleCheck = await recordRuleCheck(req, object, fields, validation.values, trigger, action === "update" ? recordId : null);
-    if (ruleCheck.status) return { status: ruleCheck.status, code: ruleCheck.code, message: ruleCheck.message, errors: ruleCheck.errors };
-    const duplicateMatches = await findDatabaseDuplicateMatches(req, object, fields, input, { allowSameRecordId: action === "update" ? recordId : false });
-    const duplicateAction = resolveDuplicateAction(duplicateMatches);
-    if (duplicateAction === "BLOCK") return {
-      status: 409,
-      code: "EXISTING_RECORD_DUPLICATE",
-      duplicateAction,
-      message: "Record matches an active duplicate rule",
+
+    const lifecycleFailure = (status, code, message, extra = {}) => {
+      throw Object.assign(new Error(message), { status, code, ...extra });
     };
-    let saved;
-    if (action === "update") {
-      const valueParams = validation.values.map(({ value }) => value);
-      const assignments = validation.values.map(({ column }, index) => `"${column}"=$${index + 1}`);
-      const params = [...valueParams, recordId];
-      const clauses = [`id=$${params.length}`];
-      if (object.company_scoped) { params.push(req.user.companyId); clauses.push(`company_id=$${params.length}`); }
-      if (object.store_scoped) { params.push(req.user.storeId); clauses.push(`store_id=$${params.length}`); }
-      const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "write", paramsOffset: params.length });
-      if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
-      if (ruleCheck.version !== undefined) { params.push(ruleCheck.version); clauses.push(`xmin::text=$${params.length}`); }
-      const returning = recordReturning(fields, validation.values);
-      const result = await db(`UPDATE "${object.source_table}" SET ${assignments.join(",")} WHERE ${clauses.join(" AND ")} RETURNING ${returning.join(",")}`, params);
-      if (!result.rows.length) return { status: ruleCheck.version !== undefined ? 409 : 404, code: "RECORD_NOT_AVAILABLE", message: "Record not found or changed while validating" };
-      saved = result.rows[0];
-      await writeRecordHistory(object, saved.id, fields, ruleCheck.current, saved, "update", req);
-    } else {
-      const columns = validation.values.map(({ column }) => `"${column}"`);
-      const params = validation.values.map(({ value }) => value);
-      const placeholders = params.map((_, index) => `$${index + 1}`);
-      if (object.company_scoped) { columns.push('"company_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.companyId); }
-      if (object.store_scoped) { columns.push('"store_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.storeId); }
-      const returning = recordReturning(fields, validation.values);
-      const result = await db(`INSERT INTO "${object.source_table}" (${columns.join(",")}) VALUES (${placeholders.join(",")}) RETURNING ${returning.join(",")}`, params);
-      saved = result.rows[0];
-      await writeRecordHistory(object, saved.id, fields, null, saved, "create", req);
-    }
-    const calculate = compileFormulas(metadataFields);
-    const automation = await executePlatformAutomations({
-      db, object, fields: metadataFields, record: calculate(saved), recordId: saved.id,
-      trigger: action === "update" ? "after_update" : "after_create",
-      previousRecord: action === "update" ? ruleCheck.current : null,
-      req,
-    });
-    const approval = await submitPlatformApproval({ db, object, fields: metadataFields, recordId: saved.id, record: calculate(automation.record), req });
-    const hydrated = await populateRollups(db, object, metadataFields, [calculate(automation.record)], req);
+
     try {
-      await publishPlatformEvent({
-        db,
-        companyId: req.user.companyId,
-        eventType: `platform.object.record.${action === "update" ? "updated" : "created"}`,
-        payload: { objectId: object.id, objectKey: object.object_key, recordId: saved.id, record: hydrated[0] },
-        actorUserId: req.user.id || null,
+      const lifecycle = await runRecordSaveLifecycle({
+        operation: action,
+        initialState: {
+          input: { ...(input || {}) },
+          recordId,
+          object,
+          metadataFields,
+          fields,
+          duplicateAction: null,
+          validation: null,
+          ruleCheck: null,
+          record: null,
+          recordPrior: null,
+          saved: null,
+          automation: { record: null, messages: [], executions: [] },
+          approval: null,
+          hydrated: null,
+        },
+
+        beforeValidation: async (state) => state,
+
+        validate: async (state) => {
+          const validation = await validateRecordInput(req, object, fields, state.input, { requireRequired: action === "create" });
+          if (validation.error) lifecycleFailure(400, "FIELD_VALIDATION_FAILED", validation.error);
+
+          const trigger = action === "update" ? "before_update" : "before_create";
+          const ruleCheck = await recordRuleCheck(req, object, fields, validation.values, trigger, action === "update" ? recordId : null);
+          if (ruleCheck.status) lifecycleFailure(ruleCheck.status, ruleCheck.code, ruleCheck.message, { errors: ruleCheck.errors });
+
+          const duplicateMatches = await findDatabaseDuplicateMatches(req, object, fields, state.input, { allowSameRecordId: action === "update" ? recordId : false });
+          const duplicateAction = resolveDuplicateAction(duplicateMatches);
+          if (duplicateAction === "BLOCK") {
+            lifecycleFailure(409, "EXISTING_RECORD_DUPLICATE", "Record matches an active duplicate rule", { duplicateAction });
+          }
+
+          const recordPrior = action === "update" ? state.ruleCheck.current : null;
+          const record = action === "update"
+            ? { ...(recordPrior || {}), ...Object.fromEntries(validation.values.map(({ field, value }) => [field.api_name, value])) }
+            : Object.fromEntries(validation.values.map(({ field, value }) => [field.api_name, value]));
+          return { ...state, validation, ruleCheck, duplicateAction, record, recordPrior };
+        },
+
+        beforeSave: async (state) => {
+          const baseRecord = state.record || (action === "update"
+            ? { ...(state.ruleCheck.current || {}), ...Object.fromEntries(state.validation.values.map(({ field, value }) => [field.api_name, value])) }
+            : Object.fromEntries(state.validation.values.map(({ field, value }) => [field.api_name, value])));
+
+          const beforeAutomation = await executePlatformAutomations({
+            db,
+            object,
+            fields,
+            record: baseRecord,
+            previousRecord: action === "update" ? state.ruleCheck.current : null,
+            recordId,
+            trigger: action === "update" ? "before_update" : "before_create",
+            req,
+            mutateField: async (field, value, current) => {
+              const error = fieldValueError(field, value);
+              if (error) lifecycleFailure(422, "BEFORE_SAVE_FIELD_INVALID", error);
+              return { ...current, [field.api_name]: normalizeFieldValue(field, value) };
+            },
+          });
+
+          const nextInput = { ...state.input };
+          for (const execution of beforeAutomation.executions || []) {
+            if (execution.status === "completed" && execution.mode === "in_memory" && execution.field) {
+              nextInput[execution.field] = beforeAutomation.record?.[execution.field];
+            }
+          }
+
+          const validation = await validateRecordInput(req, object, fields, nextInput, { requireRequired: action === "create" });
+          if (validation.error) lifecycleFailure(422, "BEFORE_SAVE_VALIDATION_FAILED", validation.error);
+
+          const trigger = action === "update" ? "before_update" : "before_create";
+          const ruleCheck = await recordRuleCheck(req, object, fields, validation.values, trigger, action === "update" ? recordId : null);
+          if (ruleCheck.status) lifecycleFailure(ruleCheck.status, ruleCheck.code, ruleCheck.message, { errors: ruleCheck.errors });
+
+          const recordPrior = action === "update" ? ruleCheck.current : null;
+          const record = action === "update"
+            ? { ...(recordPrior || {}), ...Object.fromEntries(validation.values.map(({ field, value }) => [field.api_name, value])) }
+            : Object.fromEntries(validation.values.map(({ field, value }) => [field.api_name, value]));
+
+          return {
+            ...state,
+            input: nextInput,
+            validation,
+            ruleCheck,
+            beforeAutomation,
+            record,
+            recordPrior,
+          };
+        },
+
+        write: async (state) => {
+          let saved;
+          if (action === "update") {
+            const valueParams = state.validation.values.map(({ value }) => value);
+            const assignments = state.validation.values.map(({ column }, index) => `"${column}"=$${index + 1}`);
+            const params = [...valueParams, recordId];
+            const clauses = [`id=$${params.length}`];
+            if (object.company_scoped) { params.push(req.user.companyId); clauses.push(`company_id=$${params.length}`); }
+            if (object.store_scoped) { params.push(req.user.storeId); clauses.push(`store_id=$${params.length}`); }
+            const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "write", paramsOffset: params.length });
+            if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
+            if (state.ruleCheck.version !== undefined) { params.push(state.ruleCheck.version); clauses.push(`xmin::text=$${params.length}`); }
+            const returning = recordReturning(fields, state.validation.values);
+            const result = await db(`UPDATE "${object.source_table}" SET ${assignments.join(",")} WHERE ${clauses.join(" AND ")} RETURNING ${returning.join(",")}`, params);
+            if (!result.rows.length) lifecycleFailure(state.ruleCheck.version !== undefined ? 409 : 404, "RECORD_NOT_AVAILABLE", "Record not found or changed while validating");
+            saved = result.rows[0];
+            await writeRecordHistory(object, saved.id, fields, state.ruleCheck.current, saved, "update", req);
+          } else {
+            const columns = state.validation.values.map(({ column }) => `"${column}"`);
+            const params = state.validation.values.map(({ value }) => value);
+            const placeholders = params.map((_, index) => `$${index + 1}`);
+            if (object.company_scoped) { columns.push('"company_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.companyId); }
+            if (object.store_scoped) { columns.push('"store_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.storeId); }
+            const returning = recordReturning(fields, state.validation.values);
+            const result = await db(`INSERT INTO "${object.source_table}" (${columns.join(",")}) VALUES (${placeholders.join(",")}) RETURNING ${returning.join(",")}`, params);
+            saved = result.rows[0];
+            await writeRecordHistory(object, saved.id, fields, null, saved, "create", req);
+          }
+          return {
+            ...state,
+            saved,
+            record: saved,
+            recordPrior: action === "update" ? state.ruleCheck.current : null,
+          };
+        },
+
+        afterSave: async (state) => {
+          const calculate = compileFormulas(metadataFields);
+          const automation = await executePlatformAutomations({
+            db,
+            object,
+            fields: metadataFields,
+            record: calculate(state.saved),
+            recordId: state.saved.id,
+            trigger: action === "update" ? "after_update" : "after_create",
+            previousRecord: action === "update" ? state.ruleCheck.current : null,
+            req,
+          });
+          const approval = await submitPlatformApproval({
+            db,
+            object,
+            fields: metadataFields,
+            recordId: state.saved.id,
+            record: calculate(automation.record),
+            req,
+          });
+          const hydrated = await populateRollups(db, object, metadataFields, [calculate(automation.record)], req);
+          return {
+            ...state,
+            automation,
+            approval,
+            hydrated,
+            record: hydrated[0] || automation.record || state.saved,
+            recordPrior: action === "update" ? state.ruleCheck.current : null,
+          };
+        },
+
+        afterCommit: async (state) => {
+          try {
+            await publishPlatformEvent({
+              db,
+              companyId: req.user.companyId,
+              eventType: `platform.object.record.${action === "update" ? "updated" : "created"}`,
+              payload: { objectId: object.id, objectKey: object.object_key, recordId: state.saved.id, record: state.hydrated[0] },
+              actorUserId: req.user.id || null,
+            });
+          } catch (error) {
+            console.error("Platform record event publication error:", error);
+          }
+          return state;
+        },
       });
+
+      return {
+        status: 200,
+        id: lifecycle.saved.id,
+        action,
+        data: { ...publicFormulaRecord(fields, lifecycle.hydrated[0]), approvalStatus: lifecycle.approval?.status || null },
+        messages: lifecycle.duplicateAction === "WARN"
+          ? [...(lifecycle.automation.messages || []), "A possible duplicate record was found"]
+          : (lifecycle.automation.messages || []),
+        automationExecutions: [
+          ...(lifecycle.beforeAutomation?.executions || []),
+          ...(lifecycle.automation?.executions || []),
+        ],
+        lifecycleTrace: lifecycle.lifecycleTrace,
+      };
     } catch (error) {
-      console.error("Platform record event publication error:", error);
+      if (error instanceof RecordLifecycleError) {
+        const cause = error.cause || error;
+        return {
+          status: cause.status || 422,
+          code: cause.code || error.code,
+          message: cause.message || error.message,
+          errors: cause.errors,
+          duplicateAction: cause.duplicateAction,
+          lifecycleStage: error.stage,
+        };
+      }
+      throw error;
     }
-    return {
-      status: 200,
-      id: saved.id,
-      action,
-      data: { ...publicFormulaRecord(fields, hydrated[0]), approvalStatus: approval?.status || null },
-      messages: duplicateAction === "WARN" ? [...automation.messages, "A possible duplicate record was found"] : automation.messages,
-      automationExecutions: automation.executions,
-    };
   }
 
   router.post("/platform/objects/:objectKey/records", ...recordAccess, async (req, res) => {
@@ -5105,6 +5248,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (!object.active) return res.status(400).json({ success: false, message: "Object is inactive" });
       if (!object.source_table || !isSafeIdentifier(object.source_table)) return res.status(404).json({ success: false, message: "Object records are not available" });
       if (object.store_scoped && !req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
+
+      const lifecycleFailure = (status, code, message, extra = {}) => {
+        throw Object.assign(new Error(message), { status, code, ...extra });
+      };
+
       const params = [req.params.recordId];
       let where = "id=$1";
       if (object.company_scoped) {
@@ -5117,156 +5265,260 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
       const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "write", paramsOffset: params.length });
       if (sharing.sql) { where += ` AND ${sharing.sql}`; params.push(...sharing.params); }
-      const existing = await db(`SELECT * FROM "${object.source_table}" WHERE ${where}`, params);
-      if (!existing.rows.length) return res.status(404).json({ success: false, message: "Record not found" });
-      const beforeDeleteAutomation = await executePlatformAutomations({
-        db,
-        object,
-        fields: metadataFields,
-        record: existing.rows[0],
-        previousRecord: existing.rows[0],
-        recordId: req.params.recordId,
-        trigger: "before_delete",
-        req,
-      });
-      // Objects with an active field use archive semantics.  This keeps the
-      // RECORD_DELETE command generic while preserving historical relationships
-      // (sales, stock, invoices, etc.). Objects without an active field may be
-      // physically deleted when their metadata permission allows it.
-      const activeField = fields.find(field => field.active !== false && field.source_column === "active");
-      let result;
-      let archived = false;
-      if (activeField) {
-        result = await db(`UPDATE "${object.source_table}" SET active=false WHERE ${where} RETURNING *`, params);
-        archived = true;
-      } else {
-        const relationshipResult = await db(
-          `SELECT r.on_delete,r.child_field_id,c.id AS child_object_id,c.object_key AS child_object_key,
-                  c.source_table AS child_source_table,c.company_scoped AS child_company_scoped,
-                  c.store_scoped AS child_store_scoped,f.source_column AS child_source_column
-             FROM platform_relationships r
-             JOIN platform_objects c ON c.id=r.child_object_id AND c.active=true
-             LEFT JOIN platform_fields f ON f.id=r.child_field_id AND f.active=true
-            WHERE r.parent_object_id=$1 AND r.active=true
-              AND (c.company_id IS NULL OR c.company_id=$2)
-            ORDER BY r.id`,
-          [object.id, req.user.companyId]
-        );
-        const relatedRecords = [];
-        for (const relationship of relationshipResult.rows || []) {
-          if (!relationship.child_source_table || !isSafeIdentifier(relationship.child_source_table)
-            || !relationship.child_source_column || !isSafeIdentifier(relationship.child_source_column)) {
-            return res.status(409).json({ success: false, code: "RELATIONSHIP_CONFIGURATION_INVALID", message: "A related Object has an invalid delete relationship" });
-          }
-          const childScope = [`"${relationship.child_source_column}"=$1`];
-          const childParams = [req.params.recordId];
-          if (relationship.child_company_scoped) { childParams.push(req.user.companyId); childScope.push(`company_id=$${childParams.length}`); }
-          if (relationship.child_store_scoped) {
-            if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
-            childParams.push(req.user.storeId); childScope.push(`store_id=$${childParams.length}`);
-          }
-          const children = await db(`SELECT * FROM "${relationship.child_source_table}" WHERE ${childScope.join(" AND ")}`, childParams);
-          if (!children.rows.length) continue;
-          const policy = String(relationship.on_delete || "restrict").toLowerCase();
-          if (policy === "restrict") {
-            return res.status(409).json({ success: false, code: "RECORD_REFERENCED", message: "This record is referenced by another Object and cannot be deleted" });
-          }
-          if (policy === "cascade") {
-            const childObject = {
-              id: relationship.child_object_id,
-              object_key: relationship.child_object_key,
-              source_table: relationship.child_source_table,
-              company_scoped: relationship.child_company_scoped,
-              store_scoped: relationship.child_store_scoped,
-            };
-            if (!(await hasPlatformObjectPermission(db, req, childObject.id, "delete"))) {
-              return res.status(403).json({ success: false, message: "Delete permission is required for a related Object" });
-            }
-            const childFieldsResult = await db(
-              "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
-              [relationship.child_object_id, req.user.companyId]
-            );
-            const childFields = childFieldsResult.rows || [];
-            const childSharing = await buildPlatformSharingScope({ db, object: childObject, fields: childFields, req, access: "write", paramsOffset: childParams.length });
-            const accessibleScope = [...childScope];
-            const accessibleParams = [...childParams];
-            if (childSharing.sql) { accessibleScope.push(childSharing.sql); accessibleParams.push(...childSharing.params); }
-            const accessible = await db(
-              `SELECT id FROM "${relationship.child_source_table}" WHERE ${accessibleScope.join(" AND ")}`,
-              accessibleParams
-            );
-            if (accessible.rows.length !== children.rows.length) {
-              return res.status(403).json({ success: false, message: "Delete access to every related record is required" });
-            }
-            relationship.child_fields = childFields;
-            relationship.delete_scope = accessibleScope;
-            relationship.delete_params = accessibleParams;
-          }
-          relatedRecords.push({ relationship, childScope, childParams, children, policy });
-        }
-        for (const related of relatedRecords) {
-          const { relationship, childScope, childParams, children, policy } = related;
-          if (policy === "set_null") {
-            await db(`UPDATE "${relationship.child_source_table}" SET "${relationship.child_source_column}"=NULL WHERE ${childScope.join(" AND ")}`, childParams);
-            continue;
-          }
-          if (policy !== "cascade") continue;
-          const childFields = relationship.child_fields || [];
-          const deletedChildren = await db(
-            `DELETE FROM "${relationship.child_source_table}" WHERE ${relationship.delete_scope.join(" AND ")} RETURNING *`,
-            relationship.delete_params
+
+      const lifecycle = await runRecordDeleteLifecycle({
+        initialState: {
+          object,
+          metadataFields,
+          fields,
+          params,
+          where,
+          existing: null,
+          archived: false,
+          result: null,
+          relatedRecords: [],
+          beforeDeleteAutomation: { messages: [], executions: [] },
+          afterDeleteAutomation: { messages: [], executions: [] },
+        },
+
+        beforeValidation: async (state) => {
+          const existing = await db(`SELECT * FROM "${object.source_table}" WHERE ${where}`, params);
+          if (!existing.rows.length) lifecycleFailure(404, "RECORD_NOT_FOUND", "Record not found");
+          return {
+            ...state,
+            existing: existing.rows[0],
+            record: existing.rows[0],
+            recordPrior: existing.rows[0],
+          };
+        },
+
+        validate: async (state) => {
+          const activeField = fields.find(field => field.active !== false && field.source_column === "active");
+          if (activeField) return { ...state, activeField, relatedRecords: [] };
+
+          const relationshipResult = await db(
+            `SELECT r.on_delete,r.child_field_id,c.id AS child_object_id,c.object_key AS child_object_key,
+                    c.source_table AS child_source_table,c.company_scoped AS child_company_scoped,
+                    c.store_scoped AS child_store_scoped,f.source_column AS child_source_column
+               FROM platform_relationships r
+               JOIN platform_objects c ON c.id=r.child_object_id AND c.active=true
+               LEFT JOIN platform_fields f ON f.id=r.child_field_id AND f.active=true
+              WHERE r.parent_object_id=$1 AND r.active=true
+                AND (c.company_id IS NULL OR c.company_id=$2)
+              ORDER BY r.id`,
+            [object.id, req.user.companyId]
           );
-          for (const child of deletedChildren.rows || children.rows) {
-            await writeRecordHistory(
-              { id: relationship.child_object_id, object_key: relationship.child_object_key },
-              child.id,
-              childFields,
-              child,
-              null,
-              "delete",
-              req
-            );
-            if (typeof writeAudit === "function") {
-              try { await writeAudit(req.user.companyId, req.user.id, "platform.record.delete", relationship.child_object_key, child.id, { cascadedFrom: req.params.recordId }); }
-              catch { /* Keep audit transport failures from masking a completed delete. */ }
+
+          const relatedRecords = [];
+          for (const relationship of relationshipResult.rows || []) {
+            if (!relationship.child_source_table || !isSafeIdentifier(relationship.child_source_table)
+              || !relationship.child_source_column || !isSafeIdentifier(relationship.child_source_column)) {
+              lifecycleFailure(409, "RELATIONSHIP_CONFIGURATION_INVALID", "A related Object has an invalid delete relationship");
             }
+
+            const childScope = [`"${relationship.child_source_column}"=$1`];
+            const childParams = [req.params.recordId];
+            if (relationship.child_company_scoped) {
+              childParams.push(req.user.companyId);
+              childScope.push(`company_id=$${childParams.length}`);
+            }
+            if (relationship.child_store_scoped) {
+              if (!req.user.storeId) lifecycleFailure(403, "STORE_SESSION_REQUIRED", "A store session is required");
+              childParams.push(req.user.storeId);
+              childScope.push(`store_id=$${childParams.length}`);
+            }
+
+            const children = await db(`SELECT * FROM "${relationship.child_source_table}" WHERE ${childScope.join(" AND ")}`, childParams);
+            if (!children.rows.length) continue;
+
+            const policy = String(relationship.on_delete || "restrict").toLowerCase();
+            if (policy === "restrict") {
+              lifecycleFailure(409, "RECORD_REFERENCED", "This record is referenced by another Object and cannot be deleted");
+            }
+
+            if (policy === "cascade") {
+              const childObject = {
+                id: relationship.child_object_id,
+                object_key: relationship.child_object_key,
+                source_table: relationship.child_source_table,
+                company_scoped: relationship.child_company_scoped,
+                store_scoped: relationship.child_store_scoped,
+              };
+              if (!(await hasPlatformObjectPermission(db, req, childObject.id, "delete"))) {
+                lifecycleFailure(403, "DELETE_PERMISSION_REQUIRED", "Delete permission is required for a related Object");
+              }
+
+              const childFieldsResult = await db(
+                "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+                [relationship.child_object_id, req.user.companyId]
+              );
+              const childFields = childFieldsResult.rows || [];
+              const childSharing = await buildPlatformSharingScope({ db, object: childObject, fields: childFields, req, access: "write", paramsOffset: childParams.length });
+              const accessibleScope = [...childScope];
+              const accessibleParams = [...childParams];
+              if (childSharing.sql) {
+                accessibleScope.push(childSharing.sql);
+                accessibleParams.push(...childSharing.params);
+              }
+              const accessible = await db(
+                `SELECT id FROM "${relationship.child_source_table}" WHERE ${accessibleScope.join(" AND ")}`,
+                accessibleParams
+              );
+              if (accessible.rows.length !== children.rows.length) {
+                lifecycleFailure(403, "RELATED_DELETE_ACCESS_REQUIRED", "Delete access to every related record is required");
+              }
+              relationship.child_fields = childFields;
+              relationship.delete_scope = accessibleScope;
+              relationship.delete_params = accessibleParams;
+            }
+
+            relatedRecords.push({ relationship, childScope, childParams, children, policy });
           }
-        }
-        result = await db(`DELETE FROM "${object.source_table}" WHERE ${where} RETURNING *`, params);
-        await db("DELETE FROM platform_record_associations WHERE object_id=$1 AND record_id=$2 AND company_id=$3", [object.id, req.params.recordId, req.user.companyId]);
-      }
-      await writeRecordHistory(object, req.params.recordId, fields, existing.rows[0], archived ? result.rows[0] : null, "delete", req);
-      const afterDeleteAutomation = await executePlatformAutomations({
-        db,
-        object,
-        fields: metadataFields,
-        record: archived ? result.rows[0] : existing.rows[0],
-        previousRecord: existing.rows[0],
-        recordId: req.params.recordId,
-        trigger: "after_delete",
-        req,
+          return { ...state, activeField: null, relatedRecords };
+        },
+
+        beforeDelete: async (state) => {
+          const beforeDeleteAutomation = await executePlatformAutomations({
+            db,
+            object,
+            fields: metadataFields,
+            record: state.existing,
+            previousRecord: state.existing,
+            recordId: req.params.recordId,
+            trigger: "before_delete",
+            req,
+          });
+          return { ...state, beforeDeleteAutomation };
+        },
+
+        write: async (state) => {
+          let result;
+          let archived = false;
+          if (state.activeField) {
+            result = await db(`UPDATE "${object.source_table}" SET active=false WHERE ${where} RETURNING *`, params);
+            archived = true;
+          } else {
+            for (const related of state.relatedRecords) {
+              const { relationship, childScope, childParams, children, policy } = related;
+              if (policy === "set_null") {
+                await db(`UPDATE "${relationship.child_source_table}" SET "${relationship.child_source_column}"=NULL WHERE ${childScope.join(" AND ")}`, childParams);
+                continue;
+              }
+              if (policy !== "cascade") continue;
+
+              const childFields = relationship.child_fields || [];
+              const deletedChildren = await db(
+                `DELETE FROM "${relationship.child_source_table}" WHERE ${relationship.delete_scope.join(" AND ")} RETURNING *`,
+                relationship.delete_params
+              );
+              for (const child of deletedChildren.rows || children.rows) {
+                await writeRecordHistory(
+                  { id: relationship.child_object_id, object_key: relationship.child_object_key },
+                  child.id,
+                  childFields,
+                  child,
+                  null,
+                  "delete",
+                  req
+                );
+                if (typeof writeAudit === "function") {
+                  try { await writeAudit(req.user.companyId, req.user.id, "platform.record.delete", relationship.child_object_key, child.id, { cascadedFrom: req.params.recordId }); }
+                  catch { /* audit transport remains non-fatal */ }
+                }
+              }
+            }
+
+            result = await db(`DELETE FROM "${object.source_table}" WHERE ${where} RETURNING *`, params);
+            await db(
+              "DELETE FROM platform_record_associations WHERE object_id=$1 AND record_id=$2 AND company_id=$3",
+              [object.id, req.params.recordId, req.user.companyId]
+            );
+          }
+
+          await writeRecordHistory(
+            object,
+            req.params.recordId,
+            fields,
+            state.existing,
+            archived ? result.rows[0] : null,
+            "delete",
+            req
+          );
+
+          return { ...state, result, archived };
+        },
+
+        afterDelete: async (state) => {
+          const afterDeleteAutomation = await executePlatformAutomations({
+            db,
+            object,
+            fields: metadataFields,
+            record: state.archived ? state.result.rows[0] : state.existing,
+            previousRecord: state.existing,
+            recordId: req.params.recordId,
+            trigger: "after_delete",
+            req,
+          });
+
+          if (typeof writeAudit === "function") {
+            try { await writeAudit(req.user.companyId, req.user.id, "platform.record.delete", object.object_key, req.params.recordId, { archived: state.archived }); }
+            catch { /* audit transport remains non-fatal */ }
+          }
+          return { ...state, afterDeleteAutomation };
+        },
+
+        afterCommit: async (state) => {
+          try {
+            await publishPlatformEvent({
+              db,
+              companyId: req.user.companyId,
+              eventType: "platform.object.record.deleted",
+              payload: {
+                objectId: object.id,
+                objectKey: object.object_key,
+                recordId: req.params.recordId,
+                record: state.existing,
+                archived: state.archived,
+              },
+              actorUserId: req.user.id || null,
+            });
+          } catch (eventError) {
+            console.error("Platform record event publication error:", eventError);
+          }
+          return state;
+        },
       });
-      if (typeof writeAudit === "function") {
-        try { await writeAudit(req.user.companyId, req.user.id, "platform.record.delete", object.object_key, req.params.recordId, { archived }); }
-        catch { /* Keep audit transport failures from masking a completed delete. */ }
-      }
-      try {
-        await publishPlatformEvent({
-          db,
-          companyId: req.user.companyId,
-          eventType: "platform.object.record.deleted",
-          payload: { objectId: object.id, objectKey: object.object_key, recordId: req.params.recordId, record: existing.rows[0], archived },
-          actorUserId: req.user.id || null,
-        });
-      } catch (eventError) { console.error("Platform record event publication error:", eventError); }
+
       res.json({
         success: true,
-        data: { id: req.params.recordId, deleted: !archived && !!result.rows.length, archived: archived && !!result.rows.length },
-        messages: [...(beforeDeleteAutomation.messages || []), ...(afterDeleteAutomation.messages || [])],
-        automationExecutions: [...(beforeDeleteAutomation.executions || []), ...(afterDeleteAutomation.executions || [])],
+        data: {
+          id: req.params.recordId,
+          deleted: !lifecycle.archived && !!lifecycle.result?.rows?.length,
+          archived: lifecycle.archived && !!lifecycle.result?.rows?.length,
+        },
+        messages: [
+          ...(lifecycle.beforeDeleteAutomation?.messages || []),
+          ...(lifecycle.afterDeleteAutomation?.messages || []),
+        ],
+        automationExecutions: [
+          ...(lifecycle.beforeDeleteAutomation?.executions || []),
+          ...(lifecycle.afterDeleteAutomation?.executions || []),
+        ],
+        lifecycleTrace: lifecycle.lifecycleTrace,
       });
     } catch (error) {
-      if (error.code === "23503" || error.code === "23502") return res.status(409).json({ success: false, code: "RECORD_REFERENCED", message: "The record is referenced by another Object and cannot be deleted" });
+      if (error instanceof RecordLifecycleError) {
+        const cause = error.cause || error;
+        return res.status(cause.status || 422).json({
+          success: false,
+          code: cause.code || error.code,
+          message: cause.message || error.message,
+          lifecycleStage: error.stage,
+        });
+      }
+      if (error.code === "23503" || error.code === "23502") {
+        return res.status(409).json({ success: false, code: "RECORD_REFERENCED", message: "The record is referenced by another Object and cannot be deleted" });
+      }
       console.error("Platform generic record delete error:", error);
       res.status(500).json({ success: false, message: "Unable to delete object record" });
     }
