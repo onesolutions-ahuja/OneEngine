@@ -187,6 +187,25 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       },
     },
     {
+      key: "0014_package_entitlement_source_types",
+      version: "14",
+      name: "Expand package entitlement source types",
+      up: async client => {
+        await client.query(
+          `ALTER TABLE company_package_entitlement_sources
+             DROP CONSTRAINT IF EXISTS company_package_entitlement_sources_source_type_check`
+        );
+        await client.query(
+          `ALTER TABLE company_package_entitlement_sources
+             ADD CONSTRAINT company_package_entitlement_sources_source_type_check
+             CHECK (source_type IN (
+               'DIRECT_LICENCE','DIRECT_INSTALL','BUNDLE','TIER','REQUIRED_DEPENDENCY',
+               'OPTIONAL_DEPENDENCY','PLATFORM_DEFAULT','SUPERADMIN_ASSIGNMENT'
+             ))`
+        );
+      },
+    },
+    {
       key: "0015_runtime_guards_and_cdc",
       version: "15",
       name: "Runtime guards, job leases, and CDC replay metadata",
@@ -235,25 +254,6 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           CREATE INDEX IF NOT EXISTS idx_platform_events_lineage ON platform_events(root_event_id, hop_count);
           CREATE INDEX IF NOT EXISTS idx_platform_events_record_change ON platform_events(company_id, object_id, record_id, replay_id);
         `);
-      },
-    },
-    {
-      key: "0014_package_entitlement_source_types",
-      version: "14",
-      name: "Expand package entitlement source types",
-      up: async client => {
-        await client.query(
-          `ALTER TABLE company_package_entitlement_sources
-             DROP CONSTRAINT IF EXISTS company_package_entitlement_sources_source_type_check`
-        );
-        await client.query(
-          `ALTER TABLE company_package_entitlement_sources
-             ADD CONSTRAINT company_package_entitlement_sources_source_type_check
-             CHECK (source_type IN (
-               'DIRECT_LICENCE','DIRECT_INSTALL','BUNDLE','TIER','REQUIRED_DEPENDENCY',
-               'OPTIONAL_DEPENDENCY','PLATFORM_DEFAULT','SUPERADMIN_ASSIGNMENT'
-             ))`
-        );
       },
     },
   ]);
