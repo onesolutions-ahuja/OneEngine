@@ -472,7 +472,7 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
         });
       }
 
-      const client = await (req.tenantPool || pool).connect();
+      const client = await pool.connect();
       let transactionStarted = false;
 
       try {
@@ -720,7 +720,7 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
       });
     }
 
-    const client = await (req.tenantPool || pool).connect();
+    const client = await pool.connect();
     let transactionStarted = false;
 
     try {
@@ -997,7 +997,7 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
     const db = (...args) => platformClient ? platformClient.query(...args) : domainDb(...args);
     try {
       if (savePlatformRecord) {
-        platformClient = await (req.tenantPool || pool).connect();
+        platformClient = await pool.connect();
         await platformClient.query("BEGIN");
       }
       const {
