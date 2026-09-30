@@ -1,4 +1,5 @@
 import { decryptCredentials } from "./integrationCredentials.js";
+import { internalAppCatalog } from "./internalAppCatalog.js";
 
 export const CONNECTOR_STATUSES = Object.freeze([
   "CONNECTED",
@@ -341,7 +342,7 @@ export async function resolvePersistedConnectorCapability({
 }) {
   const instances = await loadPersistedCandidates({ db, companyId, storeId, tillId });
   const eligible = instances.filter((instance) => {
-    const manifest = jsonValue(instance.manifest, {});
+    const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
     const capability = capabilityDefinition(manifest, capabilityKey);
     if (!capability) return false;
     if (selfCheckout && (typeof capability === "string" || capability.selfCheckoutSupported !== true)) return false;
@@ -359,7 +360,7 @@ export async function resolvePersistedConnectorCapability({
     if (!driver) {
       return { available: false, code: "PROVIDER_NOT_SUPPORTED", message: "Connector app has no runtime driver", connectorInstanceId: instance.id };
     }
-    const manifest = jsonValue(instance.manifest, {});
+    const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
     const capabilities = (manifest?.connectorApp?.capabilities || [])
       .map((item) => typeof item === "string" ? item : item?.key)
       .filter((key) => key && driver.capabilities.has(key));
