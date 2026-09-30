@@ -2318,13 +2318,16 @@ async function startServer() {
                 const results = await executeWorkflowActions({
                   actions,
                   db,
-                  req: { user: { companyId } },
+                  req: { user: { companyId, id: payload.actorUserId || null } },
                   companyId,
+                  userId: payload.actorUserId || null,
                   object: objectResult.rows[0] || null,
                   record: null,
                   recordId: null,
                   runId: run?.id || null,
-                  trigger: "scheduled",
+                  workflowId: workflow.id,
+                  trigger: { type: "scheduled", operation: "EXECUTE" },
+                  source: { type: "JOB", capability: "PLATFORM_SCHEDULED_WORKFLOW" },
                 });
                 await db(
                   "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
@@ -2411,7 +2414,10 @@ async function startServer() {
                   record: payload.record || null,
                   recordId: payload.recordId || null,
                   runId: run?.id || null,
-                  trigger: payload.eventType || workflow.trigger_key,
+                  workflowId: workflow.id,
+                  trigger: { type: payload.eventType || workflow.trigger_key, operation: "EVENT" },
+                  source: { type: "JOB", capability: "PLATFORM_EVENT_WORKFLOW" },
+                  channel: { type: "PLATFORM_EVENT", eventId: payload.eventId || null, eventType: payload.eventType || workflow.trigger_key },
                   writeAudit,
                   createInventoryMovement,
                 });

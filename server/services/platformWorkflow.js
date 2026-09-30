@@ -37,6 +37,7 @@ import {
 } from "./oneAssistant.js";
 
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
+import { createPlatformExecutionContext, applyExecutionContext } from "./platformExecutionContext.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
@@ -2313,15 +2314,21 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["functions.execute"],
-    executor: async ({ action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields }) => {
+    executor: async (context) => {
+      const { action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields, workflowVariables } = context;
       const functionKey = action.functionKey || action.key;
       const functionDefinition = getRegisteredFunction(functionKey);
       if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
       if (typeof functionDefinition.handler !== "function") {
         throw new Error(`Function "${functionKey}" has no handler`);
       }
-      const inputs = resolveBindingTree(action.inputs || {}, { record, rootObjectKey: object?.object_key || object?.objectKey || null });
+      const inputs = resolveBindingTree(action.inputs || {}, {
+        record,
+        rootObjectKey: object?.object_key || object?.objectKey || null,
+        variables: workflowVariables || context.globals || {},
+      });
       return functionDefinition.handler({
+        ...context,
         action,
         inputs,
         db: businessDb || db,
@@ -2422,8 +2429,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         companyId: targetCompanyId || runtimeCompanyId,
         workflowDepth: nextDepth,
         workflowStack: [...stack, workflowKey],
+        workflowId: workflowKey,
+        parentRunId: runId || null,
         runId: childRun?.id || runId || null,
         stepRunId: childStep?.id || stepRunId || null,
+        executionContext: context.executionContext || null,
+        source: { type: "SUBFLOW" },
       });
       if (childRun && db && typeof db === "function") {
         await db(
@@ -3360,20 +3371,32 @@ async function compensateCompletedSteps(completed, context, originalError) {
 
 export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
+
+  const executionContext = await createPlatformExecutionContext({
+    ...context,
+    workflowId: context.workflowId || context.executionContext?.globals?.$Flow?.id || null,
+    workflowVersion: context.workflowVersion || context.executionContext?.globals?.$Flow?.version || null,
+    parentRunId: context.parentRunId || context.executionContext?.globals?.$Flow?.runId || null,
+    executionContext: context.executionContext || null,
+  });
+  const runtimeContext = applyExecutionContext(context, executionContext);
+
   const results = [];
   const completed = [];
   const workflowVariables = {
-    ...(context.workflowVariables || {}),
-    steps: { ...(context.workflowVariables?.steps || {}) },
+    ...executionContext.globals,
+    ...(runtimeContext.workflowVariables || {}),
+    steps: { ...(runtimeContext.workflowVariables?.steps || {}) },
   };
+
   for (const item of actions) {
     if (!item || typeof item !== "object") continue;
     const index = results.length;
     let stepRun = null;
-    if (context.db && context.runId) {
+    if (runtimeContext.db && runtimeContext.runId) {
       stepRun = await getOrCreateWorkflowStepRun({
-        db: context.db,
-        runId: context.runId,
+        db: runtimeContext.db,
+        runId: runtimeContext.runId,
         stepIdentifier: item.id || `step-${index + 1}`,
         stepOrder: index + 1,
         actionType: resolveWorkflowActionType(item),
@@ -3387,7 +3410,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       continue;
     }
     try {
-      const result = await executeWorkflowAction({ ...context, workflowVariables, action: item, stepRunId: stepRun?.id || null });
+      const result = await executeWorkflowAction({ ...runtimeContext, workflowVariables, action: item, stepRunId: stepRun?.id || null });
       const entry = { action: item.type || item.key, result, stepRunId: stepRun?.id || null };
       workflowVariables.steps[item.id || `step-${index + 1}`] = result;
       results.push(entry);
@@ -3395,16 +3418,16 @@ export async function executeWorkflowActions({ actions, ...context }) {
       if (result?.status === "completed" || result?.status === "queued" || result?.status === "waiting") {
         completed.push({ action: item, stepRunId: stepRun?.id || null, index });
       }
-      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: context.db, stepRunId: stepRun.id, status: result?.status === "stopped" ? "STOPPED" : result?.status === "waiting" ? "WAITING" : result?.status === "queued" ? "WAITING" : "COMPLETED", metadata: { result: redact(result), irreversible: IRREVERSIBLE_ACTIONS.has(resolveWorkflowActionType(item)) } });
+      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: runtimeContext.db, stepRunId: stepRun.id, status: result?.status === "stopped" ? "STOPPED" : result?.status === "waiting" ? "WAITING" : result?.status === "queued" ? "WAITING" : "COMPLETED", metadata: { result: redact(result), irreversible: IRREVERSIBLE_ACTIONS.has(resolveWorkflowActionType(item)) } });
       if (result?.status === "stopped") break;
     } catch (error) {
       const details = errorDetails(error);
-      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: context.db, stepRunId: stepRun.id, status: "FAILED", errorText: details.message, metadata: { error: details } });
-      const compensationFailures = await compensateCompletedSteps(completed, context, error);
-      if (context.runId && context.db) {
-        await context.db(
+      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: runtimeContext.db, stepRunId: stepRun.id, status: "FAILED", errorText: details.message, metadata: { error: details } });
+      const compensationFailures = await compensateCompletedSteps(completed, runtimeContext, error);
+      if (runtimeContext.runId && runtimeContext.db) {
+        await runtimeContext.db(
           "UPDATE platform_workflow_runs SET status='FAILED', completed_at=NOW(), error_text=$1, metadata=COALESCE(metadata,'{}'::jsonb) || $2::jsonb, updated_at=NOW() WHERE id=$3 AND company_id=$4",
-          [details.message, JSON.stringify({ rootError: details, compensationFailures }), context.runId, context.companyId || context.req?.user?.companyId]
+          [details.message, JSON.stringify({ rootError: details, compensationFailures }), runtimeContext.runId, runtimeContext.companyId || runtimeContext.req?.user?.companyId]
         );
       }
       throw new WorkflowExecutionError(details, compensationFailures);

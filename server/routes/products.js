@@ -618,6 +618,7 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
         });
       }
 
+      req.executionSource = "IMPORT";
       const result = await executeCsvImport(db, pool, req.user.companyId, req.user.id, rows, { savePlatformRecord, req });
 
       if (typeof writeAudit === "function") {
