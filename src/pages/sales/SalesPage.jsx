@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Mail, MessageCircle, RefreshCw, Smartphone, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
 
 function money(value, currency = 'GBP') {
@@ -31,13 +32,13 @@ export default function SalesPage({ onOpenReturns, onOpenSupplierReturns }) {
   const [detail, setDetail] = useState(null)
   const [currency, setCurrency] = useState('GBP')
 
-  const load = async () => {
+  const load = async (forceRefresh = false) => {
     try {
       setLoading(true)
       setError('')
       const [salesResponse, settingsResponse] = await Promise.all([
-        apiRequest('/api/sales'),
-        apiRequest('/api/settings').catch(() => null),
+        cachedGet('/api/sales', { forceRefresh, onFresh: fresh => fresh?.success && setSales(Array.isArray(fresh.data) ? fresh.data : []) }),
+        cachedGet('/api/settings', { cacheKey: 'settings:company', forceRefresh, onFresh: fresh => fresh?.data?.company?.currency && setCurrency(fresh.data.company.currency) }).catch(() => null),
       ])
       if (!salesResponse?.success) throw new Error(salesResponse?.message || 'Unable to load sales')
       setSales(Array.isArray(salesResponse.data) ? salesResponse.data : [])
@@ -70,7 +71,7 @@ export default function SalesPage({ onOpenReturns, onOpenSupplierReturns }) {
       <div className="module-header-actions">
         {onOpenReturns ? <button type="button" onClick={onOpenReturns}>Customer Returns</button> : null}
         {onOpenSupplierReturns ? <button type="button" onClick={onOpenSupplierReturns}>Supplier Returns</button> : null}
-        <button type="button" onClick={load}><RefreshCw size={14}/> Refresh</button>
+        <button type="button" onClick={()=>load(true)}><RefreshCw size={14}/> Refresh</button>
       </div>
     </header>
 
