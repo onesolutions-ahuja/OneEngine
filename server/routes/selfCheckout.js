@@ -158,6 +158,7 @@ export function createSelfCheckoutRouter({
       if (!pairedStore) {
         return res.status(401).json({ success: false, message: "Invalid Self-Checkout device key" });
       }
+      await req.ensureBusinessCommandRun?.({ companyId: pairedStore.company_id, userId: null, storeId: pairedStore.id });
       if (typeof getCompanyEntitlements === "function") {
         const entitlements = await getCompanyEntitlements(pairedStore.company_id);
         if (entitlements.self_checkout !== true) {
