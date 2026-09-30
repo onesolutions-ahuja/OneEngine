@@ -164,6 +164,8 @@ function validateAppConfiguration(manifest, supplied, { existingSecrets = {} } =
 function publicConnectorInstance(row) {
   const rawConfiguration = jsonValue(row.connector_configuration, {});
   const configuration = Object.fromEntries(Object.entries(rawConfiguration).filter(([key]) => !/(secret|password|token|credential|api[_-]?key|card|pan)/i.test(key)));
+  const health = jsonValue(row.last_test_result, {});
+  const testPassed = health?.success === true && String(row.connection_status || "").toUpperCase() === "CONNECTED";
   const credentialFields = (() => {
     try {
       const secrets = decryptCredentials(row.credentials_encrypted) || {};
@@ -185,7 +187,9 @@ function publicConnectorInstance(row) {
     tillName: row.till_name || null,
     enabled: row.enabled === true,
     status: row.connection_status,
-    health: jsonValue(row.last_test_result, {}),
+    health,
+    testPassed,
+    canEnable: row.enabled === true || testPassed,
     configuration,
     hasCredentials: Boolean(row.credentials_encrypted),
     credentialFields,
