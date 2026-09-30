@@ -116,6 +116,45 @@ export async function apiFetch(path, options = {}) {
   })
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 12000
+const SAFE_GET_RETRY_STATUSES = new Set([429, 502, 503, 504])
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController()
+  const upstreamSignal = options.signal
+  let timedOut = false
+
+  const abortFromUpstream = () => controller.abort(upstreamSignal?.reason)
+  if (upstreamSignal?.aborted) controller.abort(upstreamSignal.reason)
+  else upstreamSignal?.addEventListener('abort', abortFromUpstream, { once: true })
+
+  const timeout = timeoutMs > 0
+    ? setTimeout(() => {
+        timedOut = true
+        controller.abort()
+      }, timeoutMs)
+    : null
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (error) {
+    if (timedOut) {
+      throw Object.assign(
+        new Error(`Server did not respond within ${Math.ceil(timeoutMs / 1000)} seconds. Please retry.`),
+        { name: 'TimeoutError', code: 'API_TIMEOUT' }
+      )
+    }
+    throw error
+  } finally {
+    if (timeout) clearTimeout(timeout)
+    upstreamSignal?.removeEventListener?.('abort', abortFromUpstream)
+  }
+}
+
 export async function apiRequest(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase()
   const capability = resolveTrustedCapability(path, method)
@@ -125,32 +164,61 @@ export async function apiRequest(path, options = {}) {
       code: 'UNREGISTERED_CAPABILITY',
     })
   }
+
+  const {
+    timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+    retryGet = true,
+    ...fetchOptions
+  } = options
   const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
-  const response = await fetch(apiUrl(path), {
-    ...options,
-    headers: {
-      Accept: 'application/json',
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(getActingCompanyId() ? { 'X-Acting-Company-Id': getActingCompanyId() } : {}),
-      ...trustedRuntimeHeaders(capability),
-      ...(options.headers || {}),
-    },
-  })
+  const maxAttempts = method === 'GET' && retryGet ? 2 : 1
+  let lastError = null
 
-  const contentType = response.headers.get('content-type') || ''
-  const body = contentType.includes('application/json') ? await response.json() : await response.text()
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(apiUrl(path), {
+        ...fetchOptions,
+        headers: {
+          Accept: 'application/json',
+          ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(getActingCompanyId() ? { 'X-Acting-Company-Id': getActingCompanyId() } : {}),
+          ...trustedRuntimeHeaders(capability),
+          ...(fetchOptions.headers || {}),
+        },
+      }, timeoutMs)
 
-  if (!response.ok) {
-    const message = typeof body === 'object' && body?.message ? body.message : `Request failed (${response.status})`
-    throw Object.assign(new Error(message), {
-      status: response.status,
-      code: typeof body === 'object' ? body?.code : undefined,
-      payload: body,
-    })
+      if (attempt + 1 < maxAttempts && SAFE_GET_RETRY_STATUSES.has(response.status)) {
+        await delay(700)
+        continue
+      }
+
+      const contentType = response.headers.get('content-type') || ''
+      const body = contentType.includes('application/json') ? await response.json() : await response.text()
+
+      if (!response.ok) {
+        const message = typeof body === 'object' && body?.message ? body.message : `Request failed (${response.status})`
+        throw Object.assign(new Error(message), {
+          status: response.status,
+          code: typeof body === 'object' ? body?.code : undefined,
+          payload: body,
+        })
+      }
+
+      return body
+    } catch (error) {
+      lastError = error
+      const externalAbort = fetchOptions.signal?.aborted === true
+      const retryableNetworkFailure =
+        !externalAbort &&
+        (error?.code === 'API_TIMEOUT' || error?.name === 'TypeError' || error?.name === 'NetworkError')
+
+      if (attempt + 1 >= maxAttempts || !retryableNetworkFailure) throw error
+      await delay(700)
+    }
   }
 
-  return body
+  throw lastError || new Error('Request failed')
 }
 
 export async function login(username, password) {
@@ -188,13 +256,13 @@ export async function login(username, password) {
   try {
     data = await attemptLogin()
   } catch (error) {
-    if (error?.name !== 'AbortError') throw error
+    if (error?.name !== 'AbortError' && error?.code !== 'API_TIMEOUT') throw error
     // Render may briefly be unavailable while a new deployment starts.
     await new Promise((resolve) => window.setTimeout(resolve, 1200))
     try {
       data = await attemptLogin()
     } catch (retryError) {
-      if (retryError?.name === 'AbortError') {
+      if (retryError?.name === 'AbortError' || retryError?.code === 'API_TIMEOUT') {
         throw new Error('Server is starting. Please try again in a few seconds.')
       }
       throw retryError

@@ -30,7 +30,11 @@ export default function StoreTillSettingsPage({settings,onSettingsChanged}){
   const load=async()=>{
     try{
       setLoading(true);setError('')
-      const [s,cfg]=await Promise.all([apiRequest('/api/admin/stores'),apiRequest('/api/settings')])
+      const requestOptions={timeoutMs:7000,retryGet:true}
+      const [s,cfg]=await Promise.all([
+        apiRequest('/api/admin/stores',requestOptions),
+        apiRequest('/api/settings',requestOptions),
+      ])
       if(!s?.success||!cfg?.success)throw new Error(s?.message||cfg?.message||'Unable to load Store & Till')
       setStores(Array.isArray(s.data)?s.data:[])
       const d=cfg.data||{}
@@ -139,7 +143,7 @@ export default function StoreTillSettingsPage({settings,onSettingsChanged}){
 
   return <div className="store-till-settings">
     {message?<div className="module-success"><strong>{message}</strong></div>:null}
-    {error?<div className="module-inline-error">{error}</div>:null}
+    {error?<div className="module-inline-error">{error} <button type="button" disabled={loading} onClick={()=>void load()}>Retry</button></div>:null}
 
     <section className="settings-feature-card">
       <header><div><Store size={16}/><span><strong>Current store and till</strong><small>Authenticated device/session context.</small></span></div></header>
