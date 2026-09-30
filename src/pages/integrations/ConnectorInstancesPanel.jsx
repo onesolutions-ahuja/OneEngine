@@ -18,13 +18,13 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const [workingId, setWorkingId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [testRecipient, setTestRecipient] = useState("");
-  const [testMessage, setTestMessage] = useState("onePOS SMSGate test message");
-  const [sendingTestSms, setSendingTestSms] = useState(false);
+  const [testActionValues, setTestActionValues] = useState({});
+  const [runningTestAction, setRunningTestAction] = useState("");
   const existingInstance = instances.find((instance) => instance.packageKey === packageKey) || null;
 
   const selectedApp = apps.find((app) => app.package_key === packageKey);
   const schema = selectedApp?.manifest?.connectorApp?.configurationSchema || [];
+  const testActions = selectedApp?.manifest?.connectorApp?.testActions || [];
   const dedicatedName = selectedApp?.name || (requestedPackageKey === "one_connect_square" ? "One Connect - Square" : requestedPackageKey.replaceAll("_", " "));
   const selectedStore = stores.find((store) => store.id === storeId);
   const tills = Array.isArray(selectedStore?.tills) ? selectedStore.tills : [];
@@ -137,23 +137,25 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     }
   };
 
-  const sendTestSms = async (instance) => {
-    setSendingTestSms(true);
+  const runPackageTestAction = async (instance, action) => {
+    const values = testActionValues[action.key] || {};
+    setRunningTestAction(action.key);
     setError("");
     setMessage("");
     try {
-      const result = await apiRequest(`/api/connector-instances/${instance.id}/send-test-sms`, {
+      const endpoint = String(action.endpoint || "").replace("{instanceId}", instance.id);
+      const result = await apiRequest(endpoint, {
         method: "POST",
-        body: JSON.stringify({ recipient: testRecipient, message: testMessage }),
+        body: JSON.stringify(values),
       });
       const providerId = result?.data?.providerMessageId;
       setMessage(providerId
-        ? `Test SMS sent successfully. Provider message ID: ${providerId}`
-        : "Test SMS sent successfully.");
-    } catch (sendError) {
-      setError(sendError.message || "Unable to send test SMS");
+        ? `${action.label || "Test"} completed successfully. Provider message ID: ${providerId}`
+        : `${action.label || "Test"} completed successfully.`);
+    } catch (actionError) {
+      setError(actionError.message || `Unable to run ${action.label || "test action"}`);
     } finally {
-      setSendingTestSms(false);
+      setRunningTestAction("");
     }
   };
 
@@ -238,44 +240,50 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
             </div>
           )}
 
-          {requestedPackageKey === "smsgate_connector" && existingInstance?.enabled ? (
-            <div className="connector-sms-test-card rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <div className="mb-3">
-                <h3 className="text-sm font-semibold text-slate-900">Send test SMS</h3>
-                <p className="text-xs text-slate-500">Verify the full onePOS → SMSGate → Android phone delivery path without developer assistance.</p>
-              </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.6fr)_auto]">
-                <label className="text-xs font-medium text-slate-600">
-                  Mobile number
-                  <input
-                    type="tel"
-                    value={testRecipient}
-                    onChange={(event) => setTestRecipient(event.target.value)}
-                    placeholder="+44..."
-                    className={`${inputClass} mt-1`}
-                  />
-                </label>
-                <label className="text-xs font-medium text-slate-600">
-                  Message
-                  <input
-                    type="text"
-                    maxLength={500}
-                    value={testMessage}
-                    onChange={(event) => setTestMessage(event.target.value)}
-                    className={`${inputClass} mt-1`}
-                  />
-                </label>
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={() => sendTestSms(existingInstance)}
-                    disabled={sendingTestSms || !testRecipient.trim() || !testMessage.trim()}
-                    className="h-9 px-4 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"
-                  >
-                    {sendingTestSms ? "Sending…" : "Send test SMS"}
-                  </button>
-                </div>
-              </div>
+          {existingInstance && testActions.length ? (
+            <div className="connector-test-actions">
+              {testActions
+                .filter((action) => !action.requiresEnabled || existingInstance.enabled)
+                .map((action) => {
+                  const values = testActionValues[action.key] || Object.fromEntries(
+                    (action.fields || []).filter((field) => field.default !== undefined).map((field) => [field.key, field.default])
+                  );
+                  const missingRequired = (action.fields || []).some((field) => field.required && !String(values[field.key] ?? "").trim());
+                  return (
+                    <div key={action.key} className="connector-sms-test-card rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <div className="mb-3">
+                        <h3 className="text-sm font-semibold text-slate-900">{action.label || "Test action"}</h3>
+                        <p className="text-xs text-slate-500">{action.description || "Run an end-to-end connector test."}</p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        {(action.fields || []).map((field) => (
+                          <label key={field.key} className="text-xs font-medium text-slate-600">
+                            {field.label || field.key}
+                            <input
+                              type={field.type === "tel" ? "tel" : "text"}
+                              maxLength={field.maxLength}
+                              placeholder={field.placeholder || ""}
+                              value={values[field.key] ?? ""}
+                              onChange={(event) => setTestActionValues((current) => ({
+                                ...current,
+                                [action.key]: { ...values, [field.key]: event.target.value },
+                              }))}
+                              className={`${inputClass} mt-1`}
+                            />
+                          </label>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => runPackageTestAction(existingInstance, action)}
+                          disabled={runningTestAction === action.key || missingRequired}
+                          className="h-9 px-4 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"
+                        >
+                          {runningTestAction === action.key ? "Running…" : action.label || "Run test"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           ) : null}
 
