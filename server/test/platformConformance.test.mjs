@@ -9,7 +9,9 @@ import {
   assertPlatformCompatibility,
   normalizeTraceEnvelope,
   auditPlatformConformance,
+  loadPlatformTrace,
 } from "../services/platformConformance.js";
+import { resolveReleaseValidation } from "../services/appReleaseManager.js";
 
 test("runtime contract exposes stable platform version identifiers", () => {
   const contract = platformRuntimeContract();
@@ -97,4 +99,38 @@ test("clean conformance audit reports compliant", async () => {
   const report = await auditPlatformConformance({ db, companyId: "11111111-1111-1111-1111-111111111111" });
   assert.equal(report.compliant, true);
   assert.deepEqual(report.issues.schemaDrift, []);
+});
+
+
+test("release validation compares minimum platform requirement to OneEngine runtime, not package version", () => {
+  const validation = resolveReleaseValidation({
+    packageVersion: "99.0.0",
+    minimumPlatformVersion: "2.0.0",
+    platformVersion: "1.0.0",
+    changes: [],
+  });
+  assert.equal(validation.valid, false);
+  assert.equal(validation.errors.some((message) => message.includes("requires platform runtime 2.0.0")), true);
+});
+
+test("correlation trace aggregates workflow runs, events and record history", async () => {
+  const db = async (sql, params) => {
+    assert.deepEqual(params, ["c1", "corr-1"]);
+    if (sql.includes("FROM platform_workflow_runs")) {
+      return { rows: [{ id: "run1", correlation_id: "corr-1", steps: [{ id: "step1" }] }] };
+    }
+    if (sql.includes("FROM platform_events")) {
+      return { rows: [{ id: "evt1", correlation_id: "corr-1", replay_id: 10 }] };
+    }
+    if (sql.includes("FROM platform_record_history")) {
+      return { rows: [{ id: "hist1", correlation_id: "corr-1", field_api_name: "name" }] };
+    }
+    throw new Error(`Unexpected SQL: ${sql}`);
+  };
+
+  const trace = await loadPlatformTrace({ db, companyId: "c1", correlationId: "corr-1" });
+  assert.equal(trace.correlationId, "corr-1");
+  assert.equal(trace.workflowRuns[0].id, "run1");
+  assert.equal(trace.events[0].id, "evt1");
+  assert.equal(trace.recordHistory[0].id, "hist1");
 });
