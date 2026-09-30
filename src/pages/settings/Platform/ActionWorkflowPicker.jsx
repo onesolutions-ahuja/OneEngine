@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
-import { apiRequest } from "../../../services/api.js";
+import { apiRequest, loadSessionPermissions } from "../../../services/api.js";
 import WorkflowAdmin from "./WorkflowAdmin.jsx";
 import {
   NAVIGATION_TARGET_TYPES,
@@ -75,12 +75,12 @@ function NavigationTargetSelector({ value, onChange }) {
     setLoading(true);
     setLoadError("");
     Promise.all([
-      apiRequest("/api/auth/me/permissions").catch(() => null),
+      loadSessionPermissions().catch(() => null),
       apiRequest("/api/platform/runtime/navigation-targets").catch(() => null),
     ])
       .then(([permissionResponse, targetResponse]) => {
         if (cancelled) return;
-        const permissionData = permissionResponse?.success ? permissionResponse.data : null;
+        const permissionData = permissionResponse || null;
         const payload = targetResponse?.success ? targetResponse.data : null;
         setPermissionState(permissionData);
         setTargets({
