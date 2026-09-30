@@ -3,8 +3,8 @@ import express from "express";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
 import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
-import { compileFormulas, FormulaError, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, buildFormulaDependencyGraph, formulaDependencies } from "../services/platformFormula.js";
-import { applyDerivedDefaults, recalculateDerivedRecord } from "../services/platformDerivedData.js";
+import { compileFormulas, FormulaError, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, evaluateFormulaExpression } from "../services/platformFormula.js";
+import { applyDerivedDefaults, recalculateDerivedRecord, prepareFormulaFields, buildDerivedDependencyGraph } from "../services/platformDerivedData.js";
 import { ConditionError, evaluateCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
 import { executePlatformAutomations } from "../services/platformAutomation.js";
 import { hasConfiguredCommunicationProvider } from "../services/platformWorkflow.js";
@@ -1831,8 +1831,24 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         if (!["number", "decimal", "currency", "boolean", "text"].includes(storedType)) throw new FormulaError("Rollup result type is unsupported");
       }
     }
-    if (candidate.field_type === "formula" && candidate.active !== false) compileFormulas([{ ...candidate, active: true }, ...fields.filter(field => field !== candidate)]);
-    compileFormulas(fields);
+    const preparedFields = await prepareFormulaFields({ db, fields, req });
+    if (candidate.field_type === "formula" && candidate.active !== false) {
+      compileFormulas(preparedFields);
+    }
+
+    const defaultExpression = candidate.config?.defaultExpression || candidate.config?.default_expression;
+    if (defaultExpression !== undefined) {
+      if (candidate.field_type === "formula" || candidate.field_type === "rollup" || candidate.writable === false) {
+        throw new FormulaError("Default expressions are only available on writable stored fields");
+      }
+      if (typeof defaultExpression !== "string" || !defaultExpression.trim()) {
+        throw new FormulaError("Default expression must be a non-empty formula");
+      }
+      evaluateFormulaExpression(preparedFields, defaultExpression, {}, candidate.field_type);
+    }
+
+    buildDerivedDependencyGraph(preparedFields);
+    compileFormulas(preparedFields);
   }
 
   function hasReferencedFieldInFormula(expression, field) {
