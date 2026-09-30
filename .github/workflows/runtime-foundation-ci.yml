@@ -9,7 +9,7 @@ on:
 jobs:
   runtime-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -25,10 +25,44 @@ jobs:
         run: npm install --prefix server --no-audit --no-fund
 
       - name: Run complete server test suite
-        run: node --test server/test/*.test.mjs
+        id: server_tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test server/test/*.test.mjs 2>&1 | tee server-tests.log
 
       - name: Run server trusted-runtime build checks
-        run: npm run build --prefix server
+        id: server_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build --prefix server 2>&1 | tee server-build.log
 
       - name: Run frontend trusted-runtime build
-        run: npm run build
+        id: frontend_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee frontend-build.log
+
+      - name: Upload QA logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-1-10-runtime-qa-logs
+          path: |
+            server-tests.log
+            server-build.log
+            frontend-build.log
+          if-no-files-found: warn
+
+      - name: Fail if any QA stage failed
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.server_tests.outcome }}" = "success"
+          test "${{ steps.server_build.outcome }}" = "success"
+          test "${{ steps.frontend_build.outcome }}" = "success"
