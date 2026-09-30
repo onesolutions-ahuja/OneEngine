@@ -99,6 +99,7 @@ const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/St
 const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
+const OneAssistantPage = lazyWithRecovery(() => import('./pages/assistant/OneAssistantPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -721,6 +722,7 @@ function readRoute() {
   if (parts[0] === 'online-orders') return { app: 'online-orders', section: null }
   if (parts[0] === 'order-prep') return { app: 'order-prep', section: null }
   if (parts[0] === 'own-delivery') return { app: 'own-delivery', section: null }
+  if (parts[0] === 'assistant') return { app: 'assistant', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -789,6 +791,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/order-prep`
       : app === 'own-delivery'
         ? `${base}/own-delivery`
+      : app === 'assistant'
+        ? `${base}/assistant`
       : app === 'returns'
         ? `${base}/returns`
       : app === 'supplier-returns'
@@ -2428,6 +2432,12 @@ function Desktop({ onLock, onSignOut }) {
       setActiveApp('own-delivery')
       return
     }
+    if (id === 'assistant' || id === 'one_assistant') {
+      setRoute('assistant')
+      setRouteState({ app: 'assistant', section: null })
+      setActiveApp('assistant')
+      return
+    }
     if (id === 'returns') {
       setRoute('returns')
       setActiveApp('returns')
@@ -2827,6 +2837,8 @@ function Desktop({ onLock, onSignOut }) {
           <OnlineOrdersPrep />
         ) : activeApp === 'own-delivery' ? (
           <OwnDeliveryWorkspace />
+        ) : activeApp === 'assistant' ? (
+          <OneAssistantPage />
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
