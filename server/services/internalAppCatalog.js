@@ -688,7 +688,7 @@ const CATALOG = [
     permissions: ["integration.manage", "communications.send"],
     storeScoped: false,
     category: "Communication",
-    entitlementKey: "integrations",
+    entitlementKey: "communications.whatsapp",
     dependencies: ["communication_core"],
     capabilities: ["messaging", "customer_notifications", "provider_status"],
     providerConnector: {
