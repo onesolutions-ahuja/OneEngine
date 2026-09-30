@@ -265,6 +265,24 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
 
 
+  async function ensurePackageTrialsTable(query = db) {
+    await query(`
+      CREATE TABLE IF NOT EXISTS company_package_trials (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        package_id UUID NOT NULL REFERENCES package_registry(id) ON DELETE CASCADE,
+        activated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMPTZ NOT NULL,
+        UNIQUE(company_id, package_id)
+      )
+    `);
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_company_package_trials_company
+        ON company_package_trials(company_id, expires_at)
+    `);
+  }
+
   async function withTransaction(work) {
 
     if (!pool?.connect) return work(db);
@@ -318,77 +336,74 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
 
   router.get("/packages/marketplace", authenticate, async (req, res) => {
+    try {
+      await ensurePackageTrialsTable();
 
-    const result = await db(
+      const result = await db(
+        `SELECT p.*, m.module_key
+           FROM package_registry p
+           LEFT JOIN platform_modules m ON m.id=p.module_id
+          WHERE p.publication_state='PUBLISHED'
+            AND p.visible=true AND p.system_only=false
+            AND (cardinality(p.allowed_companies)=0 OR $1=ANY(p.allowed_companies))
+          ORDER BY p.display_order,p.name`,
+        [req.user.companyId]
+      );
 
-      `SELECT p.*, m.module_key
+      const [packages, entitlements, requests, trials] = await Promise.all([
+        packageState(result.rows, req.user.companyId),
+        getCompanyEntitlements(db, req.user.companyId),
+        db("SELECT package_key,status FROM platform_licence_requests WHERE company_id=$1 AND status='PENDING'", [req.user.companyId]),
+        db(`SELECT p.package_key,t.activated_at,t.expires_at
+              FROM company_package_trials t
+              JOIN package_registry p ON p.id=t.package_id
+             WHERE t.company_id=$1`, [req.user.companyId]),
+      ]);
 
-         FROM package_registry p
-
-         LEFT JOIN platform_modules m ON m.id=p.module_id
-
-        WHERE p.publication_state='PUBLISHED'
-
-          AND p.visible=true AND p.system_only=false
-
-          AND (cardinality(p.allowed_companies)=0 OR $1=ANY(p.allowed_companies))
-
-        ORDER BY p.display_order,p.name`,
-
-      [req.user.companyId]
-
-    );
-
-    const [packages, entitlements, requests, trials] = await Promise.all([
-      packageState(result.rows, req.user.companyId),
-      getCompanyEntitlements(db, req.user.companyId),
-      db("SELECT package_key,status FROM platform_licence_requests WHERE company_id=$1 AND status='PENDING'", [req.user.companyId]),
-      db(`SELECT p.package_key,t.activated_at,t.expires_at
-            FROM company_package_trials t
-            JOIN package_registry p ON p.id=t.package_id
-           WHERE t.company_id=$1`, [req.user.companyId]),
-    ]);
-    const pendingRequests = new Set(requests.rows.map((row) => row.package_key));
-    const trialByPackage = new Map(trials.rows.map((row) => [row.package_key, row]));
-    res.json({
-      success: true,
-      data: await Promise.all(packages.map(async (item) => {
-        const licensed = isPackageLicensed(entitlements, {
-          ...item,
-          licence_required: item.licence_mode !== "TECHNICAL" && item.manifest?.licenceRequired !== false,
-        });
-        const marketplaceEligible = await isMarketplaceEligible(req.user.companyId, item);
-        const storefrontState = item.active !== true
-          ? "UNAVAILABLE"
-          : item.installable !== true
-            ? "NOT_INSTALLABLE"
-            : !licensed || !marketplaceEligible
-              ? "LICENCE_REQUIRED"
-              : item.company_installation?.status === "active"
-                ? "INSTALLED"
-                : "AVAILABLE";
-        const priorTrial = trialByPackage.get(item.package_key) || null;
-        const trialAvailable =
-          item.licence_mode !== "TECHNICAL" &&
-          item.installable === true &&
-          item.active === true &&
-          licensed !== true &&
-          !priorTrial;
-        return {
-          ...item,
-          licensed,
-          licence_request_status: pendingRequests.has(item.package_key) ? "PENDING" : null,
-          storefront_state: storefrontState,
-          can_install: storefrontState === "AVAILABLE" ||
-            (storefrontState === "INSTALLED" && item.company_installation?.deactivated_by_user === true),
-          trial_available: trialAvailable,
-          trial_days: 7,
-          trial_activated_at: priorTrial?.activated_at || null,
-          trial_expires_at: priorTrial?.expires_at || null,
-        };
-      })),
-    });
-
+      const pendingRequests = new Set(requests.rows.map((row) => row.package_key));
+      const trialByPackage = new Map(trials.rows.map((row) => [row.package_key, row]));
+      res.json({
+        success: true,
+        data: await Promise.all(packages.map(async (item) => {
+          const licensed = isPackageLicensed(entitlements, {
+            ...item,
+            licence_required: item.licence_mode !== "TECHNICAL" && item.manifest?.licenceRequired !== false,
+          });
+          const marketplaceEligible = await isMarketplaceEligible(req.user.companyId, item);
+          const storefrontState = item.active !== true
+            ? "UNAVAILABLE"
+            : item.installable !== true
+              ? "NOT_INSTALLABLE"
+              : !licensed || !marketplaceEligible
+                ? "LICENCE_REQUIRED"
+                : item.company_installation?.status === "active"
+                  ? "INSTALLED"
+                  : "AVAILABLE";
+          const priorTrial = trialByPackage.get(item.package_key) || null;
+          const trialAvailable =
+            item.licence_mode !== "TECHNICAL" &&
+            item.installable === true &&
+            item.active === true &&
+            licensed !== true &&
+            !priorTrial;
+          return {
+            ...item,
+            licensed,
+            licence_request_status: pendingRequests.has(item.package_key) ? "PENDING" : null,
+            storefront_state: storefrontState,
+            can_install: storefrontState === "AVAILABLE" ||
+              (storefrontState === "INSTALLED" && item.company_installation?.deactivated_by_user === true),
+            trial_available: trialAvailable,
+            trial_days: 7,
+            trial_activated_at: priorTrial?.activated_at || null,
+            trial_expires_at: priorTrial?.expires_at || null,
+          };
+        })),
+      });
+    } catch (error) {
+      console.error("Marketplace catalogue error:", error);
+      res.status(500).json({ success: false, message: error.message || "Unable to load oneStore catalogue" });
+    }
   });
 
 
@@ -396,6 +411,7 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
   router.post("/packages/:packageKey/activate-trial", ...manage, async (req, res) => {
     const packageKey = req.params.packageKey;
     try {
+      await ensurePackageTrialsTable();
       const packageResult = await db(
         `SELECT id,package_key,name,licence_mode,installable,visible,system_only,publication_state,active
            FROM package_registry
