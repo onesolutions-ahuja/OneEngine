@@ -18,6 +18,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const [workingId, setWorkingId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const existingInstance = instances.find((instance) => instance.packageKey === packageKey) || null;
 
   const selectedApp = apps.find((app) => app.package_key === packageKey);
   const schema = selectedApp?.manifest?.connectorApp?.configurationSchema || [];
@@ -68,8 +69,14 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     const defaults = Object.fromEntries(schema
       .filter((field) => Object.hasOwn(field, "default"))
       .map((field) => [field.key, field.default]));
-    setConfiguration(defaults);
-  }, [packageKey]);
+    const persisted = existingInstance?.configuration || {};
+    setConfiguration({ ...defaults, ...persisted });
+    if (existingInstance) {
+      setFallbackOrder(String(existingInstance.fallbackOrder ?? 0));
+      setStoreId(existingInstance.storeId || "");
+      setTillId(existingInstance.tillId || "");
+    }
+  }, [packageKey, existingInstance?.id]);
 
   const createInstance = async (event) => {
     event.preventDefault();
@@ -77,17 +84,22 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     setError("");
     setMessage("");
     try {
-      await apiRequest("/api/connector-instances", {
-        method: "POST",
+      const endpoint = existingInstance
+        ? `/api/connector-instances/${existingInstance.id}`
+        : "/api/connector-instances";
+      await apiRequest(endpoint, {
+        method: existingInstance ? "PUT" : "POST",
         body: JSON.stringify({
-          packageKey,
+          ...(existingInstance ? {} : { packageKey }),
           storeId: companyScoped ? null : storeId,
           tillId: companyScoped ? null : tillId,
           fallbackOrder: Number(fallbackOrder),
           configuration,
         }),
       });
-      setMessage("Connector instance assigned. Test it before enabling.");
+      setMessage(existingInstance
+        ? "Connection settings saved. Re-test the connection before enabling if credentials changed."
+        : "Connector instance assigned. Test it before enabling.");
       await load();
     } catch (saveError) {
       setError(saveError.message || "Unable to assign connector");
@@ -209,7 +221,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                   <option value="0">Primary</option><option value="1">Backup 1</option><option value="2">Backup 2</option>
                 </select>
               </label>
-              <div className="flex items-end"><button type="submit" disabled={saving || !packageKey || (!companyScoped && (!storeId || !tillId))} className="h-9 px-3 inline-flex items-center gap-2 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"><Check size={15} />{saving ? "Saving…" : companyScoped ? "Save connection" : "Assign connector"}</button></div>
+              <div className="flex items-end"><button type="submit" disabled={saving || !packageKey || (!companyScoped && (!storeId || !tillId))} className="h-9 px-3 inline-flex items-center gap-2 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"><Check size={15} />{saving ? "Saving…" : existingInstance ? "Update connection" : companyScoped ? "Save connection" : "Assign connector"}</button></div>
               {schema.filter((field) => !["action","readonly","store lookup","till lookup"].includes(field.type)).map((field) => (
                 <label key={field.key} className="text-xs font-medium text-slate-600">{field.label || field.key}
                   {field.enum ? (
@@ -219,7 +231,19 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                   ) : field.type === "boolean" ? (
                     <input type="checkbox" checked={Boolean(configuration[field.key] ?? field.default ?? false)} onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: event.target.checked }))} className="mt-3 h-4 w-4" />
                   ) : (
-                    <input type={field.type === "number" ? "number" : field.type === "secret" ? "password" : "text"} autoComplete={field.type === "secret" ? "new-password" : undefined} value={configuration[field.key] ?? field.default ?? ""} onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: field.type === "number" ? Number(event.target.value) : event.target.value }))} className={`${inputClass} mt-1`} />
+                    <div>
+                      <input
+                        type={field.type === "number" ? "number" : field.type === "secret" ? "password" : "text"}
+                        autoComplete={field.type === "secret" ? "new-password" : undefined}
+                        placeholder={field.type === "secret" && existingInstance?.hasCredentials ? "Saved securely — enter only to replace" : ""}
+                        value={configuration[field.key] ?? field.default ?? ""}
+                        onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: field.type === "number" ? Number(event.target.value) : event.target.value }))}
+                        className={`${inputClass} mt-1`}
+                      />
+                      {field.type === "secret" && existingInstance?.hasCredentials ? (
+                        <span className="mt-1 block text-[10px] text-emerald-700">Saved securely</span>
+                      ) : null}
+                    </div>
                   )}
                 </label>
               ))}
