@@ -42,6 +42,7 @@ import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { runRecordSaveLifecycle, runRecordDeleteLifecycle, RecordLifecycleError } from "../services/platformRecordLifecycle.js";
 import { withPlatformTransaction, PlatformTransactionError } from "../services/platformTransaction.js";
 import { executeBulk } from "../services/platformBulkExecution.js";
+import { executionFingerprint } from "../services/platformExecutionGuard.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
@@ -4997,10 +4998,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
     }
 
-    if (transaction && action === "update" && recordId) {
+    if (transaction) {
+      const mutationIdentity = action === "update" && recordId
+        ? `record:${recordId}`
+        : `create:${executionFingerprint(input || {})}`;
       await runtimeDb(
         "SELECT pg_advisory_xact_lock(hashtext($1))",
-        [`${req.user.companyId}:${object.id}:${recordId}`]
+        [`${req.user.companyId}:${object.id}:${mutationIdentity}`]
       );
     }
 
