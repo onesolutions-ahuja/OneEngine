@@ -1,4 +1,5 @@
 import express from "express";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { PAYMENT_METHODS } from "./sales.js";
 import { validateLayawayDeposit, validateLayawayPayment, canCompleteLayaway } from "../services/layawayRules.js";
 
@@ -235,10 +236,28 @@ export default function createLayawaysRouter({
           [sale.rows[0].id, item.product_id, item.product_name, item.quantity, item.unit_price, item.tax, item.total]
         );
         if (item.track_stock !== false) {
-          await createInventoryMovement(client, {
-            companyId: layaway.company_id, storeId: layaway.store_id, productId: item.product_id,
-            movementType: "SALE", quantityChange: -Number(item.quantity), referenceType: "sale",
-            referenceId: sale.rows[0].id, createdBy: req.user.id,
+          await executeSystemWorkflow({
+            db,
+            companyId: layaway.company_id,
+            userId: req.user.id || null,
+            systemKey: "function:inventory.movement.create",
+            req,
+            storeId: layaway.store_id,
+            input: {
+              companyId: layaway.company_id,
+              storeId: layaway.store_id,
+              productId: item.product_id,
+              movementType: "SALE",
+              quantityChange: -Number(item.quantity),
+              referenceType: "sale",
+              referenceId: sale.rows[0].id,
+              createdBy: req.user.id,
+            },
+            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "inventory.movement.create" },
+            extraContext: {
+              client,
+              businessDb: (query, params = []) => client.query(query, params),
+            },
           });
         }
       }
