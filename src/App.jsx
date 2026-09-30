@@ -2751,18 +2751,18 @@ export default function App() {
     if (transitioning || pendingUnlock) return
     setSessionContextReady(true)
     setPendingUnlock(true)
-  }
-
-  useEffect(() => {
-    if (!pendingUnlock || !sessionContextReady || transitioning) return
     setTransitioning(true)
-    const timer = window.setTimeout(() => {
+
+    // Keep the unlock transition timer outside an effect whose dependency
+    // changes would cancel its own cleanup timer. The previous implementation
+    // set transitioning=true inside the effect, causing React to clean up that
+    // effect immediately and clear the timeout before locked could become false.
+    window.setTimeout(() => {
       setLocked(false)
       setPendingUnlock(false)
       setTransitioning(false)
     }, 180)
-    return () => window.clearTimeout(timer)
-  }, [pendingUnlock, sessionContextReady, transitioning])
+  }
 
   const lock = () => {
     if (transitioning) return
