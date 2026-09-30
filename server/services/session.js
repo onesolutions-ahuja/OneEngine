@@ -39,6 +39,11 @@ export function createSessionToken(user, userStores = []) {
  */
 export function createAuthenticate({ onAuthenticated = null } = {}) {
   return function authenticate(req, res, next) {
+    // Routers can compose authenticate at both router and route level. Once
+    // this request has been verified and tenant DB context resolved, reuse it
+    // instead of re-verifying JWT and re-running tenant routing.
+    if (req.__oneposAuthenticated === true && req.user) return next();
+
     const header = req.headers.authorization;
 
     if (!header || !header.startsWith("Bearer ")) {
@@ -52,6 +57,7 @@ export function createAuthenticate({ onAuthenticated = null } = {}) {
 
     try {
       req.user = jwt.verify(token, JWT_SECRET);
+      req.__oneposAuthenticated = true;
       if (!onAuthenticated) return next();
       return Promise.resolve(onAuthenticated(req, res, next)).catch((error) => next(error));
     } catch {
