@@ -34,7 +34,7 @@ import { BUTTON_VARIANTS, validateButtonDefinition } from "../services/platformB
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "../services/platformPermissionSets.js";
 import { buildPlatformSharingScope } from "../services/platformSharing.js";
 import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, resolveDuplicateAction } from "../services/platformDuplicateMatching.js";
-import { publishPlatformEvent } from "../services/platformEvents.js";
+import { publishPlatformEvent, publishRecordChangeEvent } from "../services/platformEvents.js";
 import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
 import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";
 import { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";
@@ -5155,12 +5155,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
         afterCommit: async (state) => {
           try {
-            await publishPlatformEvent({
+            await publishRecordChangeEvent({
               db,
               companyId: req.user.companyId,
-              eventType: `platform.object.record.${action === "update" ? "updated" : "created"}`,
-              payload: { objectId: object.id, objectKey: object.object_key, recordId: state.saved.id, record: state.hydrated[0] },
+              object,
+              record: state.hydrated[0],
+              previousRecord: action === "update" ? state.ruleCheck.current : null,
+              operation: action === "update" ? "UPDATE" : "CREATE",
               actorUserId: req.user.id || null,
+              req,
+              originType: req.executionSource || null,
+              correlationId: transaction?.id || null,
+              idempotencyKey: transaction?.id ? `record-change:${transaction.id}` : null,
             });
           } catch (error) {
             console.error("Platform record event publication error:", error);
@@ -5540,18 +5546,19 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             }
           }
           try {
-            await publishPlatformEvent({
+            await publishRecordChangeEvent({
               db,
               companyId: req.user.companyId,
-              eventType: "platform.object.record.deleted",
-              payload: {
-                objectId: object.id,
-                objectKey: object.object_key,
-                recordId: req.params.recordId,
-                record: state.existing,
-                archived: state.archived,
-              },
+              object,
+              record: state.archived ? state.result?.rows?.[0] || null : null,
+              previousRecord: state.existing,
+              operation: "DELETE",
               actorUserId: req.user.id || null,
+              req,
+              originType: req.executionSource || null,
+              correlationId: transaction?.id || null,
+              idempotencyKey: transaction?.id ? `record-change:${transaction.id}` : null,
+              archived: state.archived,
             });
           } catch (eventError) {
             console.error("Platform record event publication error:", eventError);
