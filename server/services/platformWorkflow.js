@@ -2557,35 +2557,125 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "CALL_WEBHOOK",
     displayName: "Call Webhook",
-    description: "Send a webhook to an approved endpoint.",
+    description: "Send a webhook through OneConnection; legacy direct endpoints remain metadata-compatible.",
     validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a url or endpoint");
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("Call Webhook requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("Call Webhook requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a OneConnection or legacy endpoint");
     },
     async: true,
     requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
   },
   {
     key: "HTTP_REQUEST",
     displayName: "HTTP Request",
-    description: "Send an HTTP request to an approved endpoint.",
+    description: "Send an HTTP request through OneConnection; legacy direct endpoints remain metadata-compatible.",
     validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a url or endpoint");
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("HTTP Request requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("HTTP Request requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a OneConnection or legacy endpoint");
     },
     async: true,
     requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
   },
   {
     key: "WEBHOOK",
     displayName: "Webhook",
-    description: "Send a webhook to an approved endpoint.",
+    description: "Send a webhook through OneConnection; legacy direct endpoints remain metadata-compatible.",
     validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Webhook requires a url or endpoint");
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("Webhook requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("Webhook requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("Webhook requires a OneConnection or legacy endpoint");
     },
     async: true,
     requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
   },
   {
     key: "CONDITION",
