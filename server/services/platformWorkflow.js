@@ -3599,12 +3599,12 @@ export function createWorkflowRun({ db, companyId, workflowId, workflowName, obj
   ).then((result) => result.rows[0] || null);
 }
 
-export function createWorkflowStepRun({ db, runId, stepIdentifier, stepOrder = 0, actionType, status = "PENDING", metadata = {}, jobId = null, childRunId = null }) {
+export function createWorkflowStepRun({ db, runId, stepIdentifier, stepOrder = 0, actionType, status = "PENDING", metadata = {}, jobId = null, childRunId = null, correlationId = null }) {
   if (!db || typeof db !== "function") return null;
   return db(
-    `INSERT INTO platform_workflow_step_runs (run_id, step_identifier, step_order, action_type, status, metadata, durable_job_id, child_run_id)
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8) RETURNING *`,
-    [runId, stepIdentifier || null, stepOrder, actionType || null, status, JSON.stringify(metadata || {}), jobId || null, childRunId || null]
+    `INSERT INTO platform_workflow_step_runs (run_id, step_identifier, step_order, action_type, status, metadata, durable_job_id, child_run_id, correlation_id)
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9) RETURNING *`,
+    [runId, stepIdentifier || null, stepOrder, actionType || null, status, JSON.stringify(metadata || {}), jobId || null, childRunId || null, correlationId || null]
   ).then((result) => result.rows[0] || null);
 }
 
@@ -3670,7 +3670,7 @@ async function recordCompensationFailure({ db, runId, stepRunId, action, error, 
   return details;
 }
 
-async function getOrCreateWorkflowStepRun({ db, runId, stepIdentifier, stepOrder, actionType }) {
+async function getOrCreateWorkflowStepRun({ db, runId, stepIdentifier, stepOrder, actionType, correlationId = null }) {
   const existing = await db(
     "SELECT * FROM platform_workflow_step_runs WHERE run_id=$1 AND step_identifier=$2 ORDER BY created_at DESC LIMIT 1",
     [runId, stepIdentifier]
@@ -3683,6 +3683,7 @@ async function getOrCreateWorkflowStepRun({ db, runId, stepIdentifier, stepOrder
     stepOrder,
     actionType,
     status: "RUNNING",
+    correlationId,
     metadata: { irreversible: IRREVERSIBLE_ACTIONS.has(actionType) },
   });
 }
@@ -3791,6 +3792,30 @@ export async function executeWorkflowActions({ actions, ...context }) {
     workflowStack: [...executionGuard.chain],
   }, executionContext);
 
+  if (runtimeContext.db && runtimeContext.runId) {
+    await runtimeContext.db(
+      `UPDATE platform_workflow_runs
+          SET correlation_id=COALESCE(correlation_id,$1),
+              execution_mode=COALESCE(execution_mode,$2),
+              runtime_contract_version=COALESCE(runtime_contract_version,$3),
+              metadata=COALESCE(metadata,'{}'::jsonb) || $4::jsonb,
+              updated_at=NOW()
+        WHERE id=$5 AND company_id=$6`,
+      [
+        runtimeContext.correlationId || runtimeContext.$System?.correlationId || null,
+        runtimeContext.executionMode || runtimeContext.$System?.executionMode || null,
+        runtimeContext.$System?.runtimeContractVersion || null,
+        JSON.stringify({
+          correlationId: runtimeContext.correlationId || runtimeContext.$System?.correlationId || null,
+          executionMode: runtimeContext.executionMode || runtimeContext.$System?.executionMode || null,
+          runtimeContractVersion: runtimeContext.$System?.runtimeContractVersion || null,
+        }),
+        runtimeContext.runId,
+        runtimeContext.companyId || runtimeContext.req?.user?.companyId,
+      ]
+    );
+  }
+
   const results = [];
   const completed = [];
   const workflowVariables = {
@@ -3834,6 +3859,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
         stepIdentifier: item.id || `step-${index + 1}`,
         stepOrder: index + 1,
         actionType: resolveWorkflowActionType(item),
+        correlationId: runtimeContext.correlationId || runtimeContext.$System?.correlationId || null,
       });
     }
     if (stepRun?.status === "COMPLETED" || stepRun?.status === "WAITING") {
