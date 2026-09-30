@@ -86,6 +86,32 @@ export async function createPlatformExecutionContext({
   const inheritedCompany = inherited.$Company?.id || inherited.companyId || null;
   const authoritativeCompanyId = reqUser.companyId || inheritedCompany || companyId || null;
 
+  let persistedUser = null;
+  const actorId = userId || reqUser.id || inherited.$User?.id || null;
+  if (db && typeof db === "function" && actorId && authoritativeCompanyId && !reqUser.roleId && !inherited.$User?.roleId) {
+    try {
+      const result = await db(
+        `SELECT id,company_id,store_id,role_id,is_superadmin
+           FROM users
+          WHERE id=$1 AND company_id=$2
+          LIMIT 1`,
+        [actorId, authoritativeCompanyId]
+      );
+      if (result.rows?.[0]) {
+        const row = result.rows[0];
+        persistedUser = {
+          id: row.id,
+          companyId: row.company_id,
+          storeId: row.store_id,
+          roleId: row.role_id,
+          isSuperadmin: row.is_superadmin === true,
+        };
+      }
+    } catch {
+      persistedUser = null;
+    }
+  }
+
   if (reqUser.companyId && companyId && String(reqUser.companyId) !== String(companyId)) {
     const error = new Error("Cross-company execution context is not allowed");
     error.code = "EXECUTION_CONTEXT_COMPANY_MISMATCH";
@@ -101,8 +127,9 @@ export async function createPlatformExecutionContext({
 
   const actor = safeObject({
     ...(safeObject(inherited.$User) || {}),
+    ...(safeObject(persistedUser) || {}),
     ...(safeObject(reqUser) || {}),
-    id: userId || reqUser.id || inherited.$User?.id || null,
+    id: actorId,
     companyId: authoritativeCompanyId,
   }) || {};
   const permissions = actor.roleId
