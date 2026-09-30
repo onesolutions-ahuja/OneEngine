@@ -51,6 +51,63 @@ function resolveOutcome(configuration, fallback = "APPROVED") {
   return fallback;
 }
 
+async function testSquareConnection(configuration = {}) {
+  const mode = String(configuration.mode || "DEMO").trim().toUpperCase();
+  if (mode === "DEMO") {
+    return { success: true, healthy: true, code: "DEMO_MODE", status: "DEMO_MODE", message: "Square demo connection is active" };
+  }
+  if (!["SANDBOX", "LIVE"].includes(mode)) {
+    return { success: false, healthy: false, code: "INVALID_MODE", status: "ERROR", message: "Square mode must be DEMO, SANDBOX or LIVE" };
+  }
+  const accessToken = String(configuration.accessToken || "").trim();
+  const locationId = String(configuration.locationId || "").trim();
+  if (!accessToken || !locationId) {
+    return { success: false, healthy: false, code: "NOT_CONFIGURED", status: "ERROR", message: "Square access token and location ID are required" };
+  }
+  const baseUrl = mode === "SANDBOX" ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(`${baseUrl}/v2/locations/${encodeURIComponent(locationId)}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch {}
+    if (!response.ok) {
+      const detail = payload?.errors?.[0]?.detail || payload?.errors?.[0]?.code || `Square returned HTTP ${response.status}`;
+      return { success: false, healthy: false, code: `SQUARE_HTTP_${response.status}`, status: "ERROR", message: detail };
+    }
+    const location = payload?.location;
+    if (!location || String(location.id || "") !== locationId) {
+      return { success: false, healthy: false, code: "LOCATION_NOT_FOUND", status: "ERROR", message: "Square location could not be verified" };
+    }
+    return {
+      success: true,
+      healthy: true,
+      code: mode === "SANDBOX" ? "SANDBOX_CONNECTED" : "LIVE_CONNECTED",
+      status: "CONNECTED",
+      message: `Square ${mode.toLowerCase()} connection verified for ${location.name || location.id}`,
+      locationId: location.id,
+      locationName: location.name || null,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      healthy: false,
+      code: error?.name === "AbortError" ? "TIMEOUT" : "NETWORK_ERROR",
+      status: "ERROR",
+      message: error?.name === "AbortError" ? "Square connection timed out" : String(error?.message || "Unable to reach Square"),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function createOneConnectProviderDriver(providerKey) {
   const normalized = String(providerKey || "").trim().toLowerCase();
   const provider = PROVIDER_CONFIG[normalized];
@@ -64,6 +121,7 @@ export function createOneConnectProviderDriver(providerKey) {
     actions: PROVIDER_ACTION_ALIASES[normalized],
     createAdapter({ instanceId = `${normalized}-demo`, configuration = {} } = {}) {
       const enabled = configuration.enabled !== false;
+      const mode = String(configuration.mode || "DEMO").trim().toUpperCase();
       const storeId = String(configuration.storeId || "demo-store").trim();
       const tillId = String(configuration.tillId || "demo-till").trim();
       const terminalId = String(configuration.terminalId || `${normalized}-terminal-${instanceId}`).trim();
@@ -90,6 +148,10 @@ export function createOneConnectProviderDriver(providerKey) {
           if (!enabled) {
             throw new Error(`${provider.providerName} connector is disabled`);
           }
+          if (normalized === "square" && mode !== "DEMO") {
+            const result = await testSquareConnection(configuration);
+            return { ...result, provider: provider.providerName };
+          }
           return {
             healthy: true,
             code: "DEMO_MODE",
@@ -99,6 +161,10 @@ export function createOneConnectProviderDriver(providerKey) {
           };
         },
         async healthCheck() {
+          if (normalized === "square" && mode !== "DEMO") {
+            const result = await testSquareConnection(configuration);
+            return { ...result, provider: provider.providerName };
+          }
           return {
             healthy: true,
             code: "DEMO_MODE",
@@ -108,6 +174,10 @@ export function createOneConnectProviderDriver(providerKey) {
           };
         },
         async test() {
+          if (normalized === "square" && mode !== "DEMO") {
+            const result = await testSquareConnection(configuration);
+            return { ...result, provider: provider.providerName };
+          }
           return {
             success: true,
             status: "DEMO_MODE",
