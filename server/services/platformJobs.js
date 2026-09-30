@@ -1,4 +1,4 @@
-import { assertTrustedJobKind } from "./trustedRuntime.js";
+import { assertTrustedJobKind } from "./platformJobRegistry.js";
 import { createGovernorBudget, DEFAULT_PLATFORM_GOVERNOR_LIMITS } from "./platformGovernor.js";
 
 const MAX_ATTEMPTS = 5;
