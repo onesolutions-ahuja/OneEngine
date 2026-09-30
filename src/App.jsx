@@ -551,6 +551,11 @@ const SETTINGS_VISUALS = {
   'assignment-rules': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['assignment rules', 'routing', 'owner', 'assign'] },
   'sharing-rules': { icon: ShieldCheck, tone: 'cyan', searchTerms: ['sharing rules', 'record access', 'sharing', 'permissions'] },
   platform: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['workflow', 'approval flow', 'page builder', 'dashboard builder', 'report builder', 'canvas', 'components'] },
+  'workflow-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['workflow builder', 'automation', 'flow'] },
+  'approval-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['approval flow builder', 'approval'] },
+  'page-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['page builder', 'canvas', 'page'] },
+  'dashboard-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['dashboard builder', 'dashboard'] },
+  'report-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['report builder', 'report'] },
   'workflow-runs': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['workflow', 'runs', 'automation', 'history'] },
   'work-items': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['work items', 'workflow', 'approval', 'tasks'] },
   'platform-apps': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['platform apps', 'apps', 'metadata'] },
@@ -589,6 +594,11 @@ const DEVELOPER_SETTINGS_KEYS = new Set([
   'assignment-rules',
   'sharing-rules',
   'platform',
+  'workflow-builder',
+  'approval-builder',
+  'page-builder',
+  'dashboard-builder',
+  'report-builder',
   'workflow-runs',
   'work-items',
   'platform-apps',
@@ -688,7 +698,7 @@ function readRoute() {
   const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
   if (parts[0] === 'settings') {
     const section = parts[1] || 'general'
-    if (DEVELOPER_SETTINGS_KEYS.has(section)) return { app: 'developer', section }
+    if (DEVELOPER_SETTINGS_KEYS.has(section)) return { app: 'developer', section: section === 'platform' ? 'workflow-builder' : section }
     return { app: 'settings', section }
   }
   if (parts[0] === 'developer') return { app: 'developer', section: parts[1] || 'objects' }
