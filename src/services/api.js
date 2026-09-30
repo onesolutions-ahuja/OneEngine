@@ -205,6 +205,10 @@ export async function login(username, password) {
   sessionStorage.setItem('onepos_token', data.token)
 
   let resolvedUser = data.user || {}
+  const boundCompanyId = resolvedUser?.companyId || resolvedUser?.company_id || ''
+  if (boundCompanyId && !resolvedUser?.companyId) {
+    resolvedUser = { ...resolvedUser, companyId: boundCompanyId }
+  }
   if (resolvedUser?.isPlatformDeveloper === true) {
     /*
      * The login endpoint validates and resolves the optional acting company in
@@ -215,8 +219,9 @@ export async function login(username, password) {
     setActingCompanyId(companyId)
     if (companyId) resolvedUser = { ...resolvedUser, companyId }
   } else {
-    // Tenant logins must never inherit a previous developer company context.
-    setActingCompanyId('')
+    // Tenant logins must never inherit a previous developer company context,
+    // but their own company binding must become the active API context.
+    setActingCompanyId(boundCompanyId ? String(boundCompanyId) : '')
   }
 
   sessionStorage.setItem('onepos_user', JSON.stringify(resolvedUser))
@@ -316,11 +321,16 @@ export async function ensureActingCompanyContext() {
   }
 
   // Any authenticated company binding is authoritative for this session.
-  // Only global developer profiles with no company binding need acting-company
-  // discovery. This keeps normal tenant developer pages on the login company.
-  if (user?.companyId) {
-    setActingCompanyId(String(user.companyId))
-    return user.companyId
+  // Accept both camelCase and database-style snake_case payloads so a refresh,
+  // password login and OAuth login all restore the same tenant context.
+  const boundCompanyId = user?.companyId || user?.company_id || ''
+  if (boundCompanyId) {
+    setActingCompanyId(String(boundCompanyId))
+    if (!user?.companyId) {
+      user = { ...user, companyId: boundCompanyId }
+      sessionStorage.setItem('onepos_user', JSON.stringify(user))
+    }
+    return boundCompanyId
   }
 
   const rememberedCompanyId = getActingCompanyId()
