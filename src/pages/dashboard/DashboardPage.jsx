@@ -5,11 +5,11 @@ import { apiRequest } from '../../services/api'
 const DATE_RANGES = [
   ['today', 'Today'],
   ['yesterday', 'Yesterday'],
-  ['this_week', 'WTD'],
+  ['this_week', 'This week'],
   ['last_7_days', 'Last 7 days'],
   ['this_month', 'MTD'],
-  ['this_quarter', 'QTD'],
-  ['fiscal_year', 'YTD'],
+  ['this_quarter', 'This quarter'],
+  ['fiscal_year', 'Fiscal year'],
 ]
 
 function displayValue(value) {
