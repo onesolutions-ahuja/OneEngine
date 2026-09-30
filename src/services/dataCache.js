@@ -62,8 +62,8 @@ async function encrypt(value) {
   const bytes = new TextEncoder().encode(JSON.stringify(value))
   const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes)
   return {
-    iv: Array.from(iv),
-    data: Array.from(new Uint8Array(encrypted)),
+    iv,
+    data: encrypted,
     bytes: bytes.byteLength,
   }
 }
@@ -73,9 +73,9 @@ async function decrypt(record) {
   if (!key || !record?.iv || !record?.data) return null
   try {
     const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: new Uint8Array(record.iv) },
+      { name: 'AES-GCM', iv: record.iv instanceof Uint8Array ? record.iv : new Uint8Array(record.iv) },
       key,
-      new Uint8Array(record.data),
+      record.data instanceof ArrayBuffer ? record.data : new Uint8Array(record.data),
     )
     return JSON.parse(new TextDecoder().decode(decrypted))
   } catch {
@@ -148,7 +148,6 @@ function scheduleCleanup() {
 }
 
 export async function cleanupLazyCache() {
-  const scope = currentScope()
   try {
     const db = await openDb()
     if (!db) return
@@ -158,20 +157,22 @@ export async function cleanupLazyCache() {
       request.onerror = () => reject(request.error)
     })
     const now = Date.now()
-    const activeScope = scope ? `${scope.userId}:${scope.companyId}` : ''
-    const scoped = rows
-      .filter((row) => row.scope === activeScope)
-      .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+    const ordered = rows.sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
 
     let bytes = 0
+    let kept = 0
     const remove = new Set()
-    scoped.forEach((row, index) => {
+    ordered.forEach((row) => {
       const expired = now - Number(row.savedAt || 0) > LAZY_CACHE_MAX_STALE_MS
-      const overCount = index >= LAZY_CACHE_MAX_ENTRIES
       const nextBytes = bytes + Number(row.bytes || 0)
+      const overCount = kept >= LAZY_CACHE_MAX_ENTRIES
       const overBytes = nextBytes > LAZY_CACHE_MAX_BYTES
-      if (expired || overCount || overBytes) remove.add(row.key)
-      else bytes = nextBytes
+      if (expired || overCount || overBytes) {
+        remove.add(row.key)
+      } else {
+        kept += 1
+        bytes = nextBytes
+      }
     })
 
     if (!remove.size) return
