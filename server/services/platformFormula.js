@@ -228,6 +228,45 @@ export function buildFormulaDependencyGraph(fields) {
   };
 }
 
+export function evaluateFormulaExpression(fields, expression, record, resultType = "text") {
+  const byName = new Map(fields.filter((field) => field.active !== false).map((field) => [field.api_name, field]));
+  const ast = parseFormula(expression);
+  const inferred = infer(ast, name => {
+    const rootName = name.split(".")[0];
+    const dependency = byName.get(rootName);
+    if (!dependency || dependency.readable === false) fail(`Formula references an unavailable field: ${name}`);
+    if (name.includes(".")) {
+      if (dependency.field_type !== "lookup") fail(`Cross-object formula path must start with a lookup field: ${name}`);
+      const path = name.split(".").slice(1).join(".");
+      const configuredType = dependency.config?.relatedFieldTypes?.[path]
+        || dependency.config?.related_field_types?.[path]
+        || "text";
+      if (!TYPES.has(configuredType)) fail(`Unsupported cross-object dependency type: ${name}`);
+      return formulaType(configuredType);
+    }
+    const type = effectiveFieldType(dependency);
+    if (!TYPES.has(type)) fail(`Unsupported formula dependency type: ${name}`);
+    return formulaType(type);
+  });
+  const expected = formulaType(resultType);
+  if (inferred !== "null" && inferred !== expected) fail(`Formula result must match ${resultType}`);
+  const value = evaluate(ast, key => {
+    if (key.includes(".")) {
+      const parts = key.split(".");
+      let current = record;
+      for (const part of parts) current = current == null ? null : current[part];
+      const root = byName.get(parts[0]);
+      const path = parts.slice(1).join(".");
+      const type = root?.config?.relatedFieldTypes?.[path]
+        || root?.config?.related_field_types?.[path]
+        || "text";
+      return valueFor(current, type);
+    }
+    return valueFor(record?.[key], effectiveFieldType(byName.get(key)));
+  });
+  return typeof value === "number" && !Number.isFinite(value) ? null : value;
+}
+
 export function compileFormulas(fields) {
   const byName = new Map(fields.filter(f => f.active !== false).map(f => [f.api_name, f]));
   const compiled = new Map(), visiting = new Set(), dependencyDepths = new Map();
