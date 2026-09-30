@@ -383,6 +383,7 @@ export function createClientWebShopRouter({
     try {
       const shop = await resolveShop(req.params.slug);
       if (!shop) return res.status(404).json({ success: false, message: "Shop not found" });
+      await req.ensureBusinessCommandRun?.({ companyId: shop.company_id, userId: null, storeId: shop.store_id });
       const fulfilmentType = String(req.body?.fulfilmentType || "").toUpperCase();
       if (fulfilmentType === "DELIVERY" && shop.client_web_shop_delivery_enabled !== true) {
         return res.status(400).json({ success: false, message: "Delivery is not available" });
