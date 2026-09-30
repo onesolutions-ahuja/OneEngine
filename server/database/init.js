@@ -309,6 +309,20 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         `);
       },
     },
+    {
+      key: "0018_platform_object_tenant_overrides",
+      version: "18",
+      name: "Tenant-safe Platform object metadata overrides",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE platform_objects DROP CONSTRAINT IF EXISTS platform_objects_object_key_key;
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_objects_global_key
+            ON platform_objects(object_key) WHERE company_id IS NULL;
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_objects_company_key
+            ON platform_objects(company_id, object_key) WHERE company_id IS NOT NULL;
+        `);
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
