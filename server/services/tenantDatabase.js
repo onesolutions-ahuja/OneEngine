@@ -243,6 +243,22 @@ export function getRequestPool(fallback = null) {
   return getRequestDatabaseContext()?.pool || fallback;
 }
 
+export function createRequestAwarePool(fallbackPool) {
+  if (!fallbackPool) return null;
+  return new Proxy(fallbackPool, {
+    get(target, property, receiver) {
+      if (property === "query") {
+        return (...args) => (getRequestPool(fallbackPool) || fallbackPool).query(...args);
+      }
+      if (property === "connect") {
+        return (...args) => (getRequestPool(fallbackPool) || fallbackPool).connect(...args);
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 export async function validateTenantSchema(pool) {
   try {
     const result = await pool.query(
