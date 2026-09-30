@@ -9000,6 +9000,7 @@ button.git-control-tile { cursor: pointer; }
 
 .workflow-runs-list {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid rgba(0,0,0,.08);
@@ -9134,7 +9135,11 @@ button.git-control-tile { cursor: pointer; }
 .workflow-runs-scroll {
   min-height: 0;
   flex: 1 1 auto;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,.28) transparent;
   background: #fff;
 }
 
@@ -9200,8 +9205,37 @@ button.git-control-tile { cursor: pointer; }
   min-width: 0;
   min-height: 0;
   padding: 14px 14px 22px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,.28) transparent;
   background: #fff;
+}
+
+.workflow-runs-scroll::-webkit-scrollbar,
+.workflow-run-detail::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.workflow-runs-scroll::-webkit-scrollbar-track,
+.workflow-run-detail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workflow-runs-scroll::-webkit-scrollbar-thumb,
+.workflow-run-detail::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(0,0,0,.28);
+  background-clip: padding-box;
+}
+
+.workflow-runs-scroll::-webkit-scrollbar-thumb:hover,
+.workflow-run-detail::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,.40);
+  background-clip: padding-box;
 }
 
 .workflow-run-detail-header {
