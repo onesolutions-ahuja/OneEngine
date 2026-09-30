@@ -1,7 +1,10 @@
 export const DEFAULT_PLATFORM_GOVERNOR_LIMITS = Object.freeze({
   maxRuntimeMs: 30000,
   maxWorkflowSteps: 100,
+  maxQueries: 200,
+  maxExternalActions: 25,
   maxSubflowDepth: 8,
+  maxSubflowInvocations: 25,
   maxQueuedJobs: 100,
   maxPayloadBytes: 1024 * 1024,
   maxBulkItems: 1000,
@@ -32,6 +35,9 @@ export function createGovernorBudget({ limits = {}, startedAt = Date.now(), coun
     startedAt,
     counters: {
       workflowSteps: Number(counters.workflowSteps || 0),
+      queries: Number(counters.queries || 0),
+      externalActions: Number(counters.externalActions || 0),
+      subflowInvocations: Number(counters.subflowInvocations || 0),
       queuedJobs: Number(counters.queuedJobs || 0),
       bulkItems: Number(counters.bulkItems || 0),
     },
@@ -56,6 +62,30 @@ export function createGovernorBudget({ limits = {}, startedAt = Date.now(), coun
         fail("workflowSteps", effective.maxWorkflowSteps, state.counters.workflowSteps, "GOVERNOR_WORKFLOW_STEP_LIMIT");
       }
       return state.counters.workflowSteps;
+    },
+    consumeQuery(count = 1) {
+      this.checkRuntime();
+      state.counters.queries += Number(count || 0);
+      if (state.counters.queries > effective.maxQueries) {
+        fail("queries", effective.maxQueries, state.counters.queries, "GOVERNOR_QUERY_LIMIT");
+      }
+      return state.counters.queries;
+    },
+    consumeExternalAction(count = 1) {
+      this.checkRuntime();
+      state.counters.externalActions += Number(count || 0);
+      if (state.counters.externalActions > effective.maxExternalActions) {
+        fail("externalActions", effective.maxExternalActions, state.counters.externalActions, "GOVERNOR_EXTERNAL_ACTION_LIMIT");
+      }
+      return state.counters.externalActions;
+    },
+    consumeSubflow(count = 1) {
+      this.checkRuntime();
+      state.counters.subflowInvocations += Number(count || 0);
+      if (state.counters.subflowInvocations > effective.maxSubflowInvocations) {
+        fail("subflowInvocations", effective.maxSubflowInvocations, state.counters.subflowInvocations, "GOVERNOR_SUBFLOW_INVOCATION_LIMIT");
+      }
+      return state.counters.subflowInvocations;
     },
     checkSubflowDepth(depth) {
       this.checkRuntime();
