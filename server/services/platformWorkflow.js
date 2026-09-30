@@ -13,7 +13,7 @@ import { transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createInventoryMovement } from "./inventory.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
 import { publishPlatformEvent, publishRecordChangeEvent } from "./platformEvents.js";
-import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
+import { resolveOneConnection, rotateOneConnectionOAuthTokens } from "./oneConnection.js";
 import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
 import { syncQuickBooksVendor, exportQuickBooksPurchase, exportQuickBooksSupplierPayment, exportQuickBooksSupplierCredit } from "./quickbooksSync.js";
 import { createShopifyAdapter } from "./shopifyAdapter.js";
@@ -86,72 +86,90 @@ function errorDetails(error) {
 }
 
 async function loadProviderConnection(context, providerKey, requestedConnectionId = null) {
-  const requestCompanyId = context.req?.user?.companyId || null;
-  const companyId = context.companyId || requestCompanyId;
-  if (!context.db || typeof context.db !== "function" || !companyId) {
-    throw new Error(`${providerKey} action requires a company-scoped database context`);
-  }
-  if (requestCompanyId && String(requestCompanyId) !== String(companyId)) {
-    throw new Error(`${providerKey} action company context is invalid`);
-  }
-  const storeId = context.storeId || context.req?.user?.storeId || null;
-  const connectionPredicate = requestedConnectionId ? "AND id=$4" : "";
-  const values = [companyId, providerKey, storeId];
-  if (requestedConnectionId) values.push(requestedConnectionId);
+  const companyId = context.companyId || context.req?.user?.companyId;
+  if (!context.db || !companyId) return null;
+
+  const connectionPredicate = requestedConnectionId ? "AND id=$3" : "";
+  const params = [companyId, providerKey];
+  if (requestedConnectionId) params.push(requestedConnectionId);
   const result = await context.db(
-    `SELECT id, company_id, store_id, base_url, credentials_encrypted
+    `SELECT id
        FROM integration_connections
-      WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND enabled=true
-        AND (store_id IS NULL OR store_id=$3)
+      WHERE company_id=$1
+        AND enabled=TRUE
+        AND lower(COALESCE(provider_name,connector_package_key,integration_type,''))=lower($2)
         ${connectionPredicate}
-      ORDER BY (store_id IS NULL), updated_at DESC
+      ORDER BY CASE WHEN store_id=$4::uuid THEN 0 WHEN store_id IS NULL THEN 1 ELSE 2 END,
+               fallback_order,id
       LIMIT 1`,
-    values
+    requestedConnectionId
+      ? [companyId, providerKey, requestedConnectionId, context.storeId || context.req?.user?.storeId || null]
+      : [companyId, providerKey, context.storeId || context.req?.user?.storeId || null]
   );
-  const connection = result.rows?.[0];
-  if (!connection?.credentials_encrypted) return null;
-  let credentials = decryptCredentials(connection.credentials_encrypted) || {};
+  const connectionId = result.rows?.[0]?.id;
+  if (!connectionId) return null;
+
+  const loaded = await resolveOneConnection({
+    db: context.db,
+    companyId,
+    connectionId,
+    includeSecrets: true,
+    migrateLegacy: true,
+    actorUserId: context.userId || context.req?.user?.id || null,
+  });
+  if (!loaded) return null;
+
+  const credentials = loaded.secrets || {};
   const expiry = Date.parse(credentials.tokenExpiry || credentials.token_expiry || "");
-  if (Number.isFinite(expiry) && expiry <= Date.now() + 60_000) {
+  const expiring = Number.isFinite(expiry) && expiry <= Date.now() + 60_000;
+
+  if (expiring && (providerKey === "quickbooks" || providerKey === "shopify")) {
     const clientId = credentials.clientId || credentials.client_id;
     const clientSecret = credentials.clientSecret || credentials.client_secret;
-    let refreshed;
-    if (providerKey === "quickbooks") {
-      refreshed = await createQuickBooksAdapter().refreshAuthentication({
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
+    const refreshToken = credentials.refreshToken || credentials.refresh_token;
+    let refreshed = null;
+
+    if (providerKey === "quickbooks" && clientId && clientSecret && refreshToken) {
+      refreshed = await refreshQuickBooksToken({
         clientId,
         clientSecret,
+        refreshToken,
       });
-    } else if (providerKey === "shopify") {
-      const shopDomain = credentials.shopDomain || credentials.shop_domain || connection.base_url;
-      refreshed = await createShopifyAdapter().refreshAuthentication({
-        shopDomain: String(shopDomain || "").replace(/^https?:\/\//i, "").replace(/\/$/, ""),
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
+    } else if (providerKey === "shopify" && refreshToken) {
+      const shopDomain = credentials.shopDomain || credentials.shop_domain || loaded.connection.effective_base_url || loaded.connection.base_url;
+      refreshed = await refreshShopifyToken({
+        shopDomain,
+        refreshToken,
         clientId,
         clientSecret,
       });
     }
+
     if (!refreshed) throw new Error(`${providerKey} token refresh is unavailable`);
-    credentials = {
-      ...credentials,
+    const expiresAt = new Date(Date.now() + refreshed.expiresIn * 1000).toISOString();
+
+    await rotateOneConnectionOAuthTokens({
+      db: context.db,
+      companyId,
+      connectionId,
       accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000).toISOString(),
-      ...(refreshed.refreshTokenExpiresIn
-        ? { refreshTokenExpiry: new Date(Date.now() + refreshed.refreshTokenExpiresIn * 1000).toISOString() }
-        : {}),
-      ...(refreshed.scopes?.length ? { scopes: refreshed.scopes } : {}),
-    };
-    const saved = await context.db(
-      `UPDATE integration_connections
-          SET credentials_encrypted=$1, last_error=NULL, updated_at=NOW()
-        WHERE id=$2 AND company_id=$3 AND enabled=true
-        RETURNING id`,
-      [encryptCredentials(credentials), connection.id, companyId]
-    );
-    if (!saved.rows?.length) throw new Error(`${providerKey} connection changed during token refresh`);
+      refreshToken: refreshed.refreshToken ?? refreshToken,
+      expiresAt,
+      actorUserId: context.userId || context.req?.user?.id || null,
+    });
+
+    const reloaded = await resolveOneConnection({
+      db: context.db,
+      companyId,
+      connectionId,
+      includeSecrets: true,
+      migrateLegacy: false,
+      actorUserId: context.userId || context.req?.user?.id || null,
+    });
+    return { connection: reloaded.connection, credentials: reloaded.secrets || {} };
   }
-  return { connection, credentials };
+
+  return { connection: loaded.connection, credentials };
 }
 
 async function shopifyPackageAvailability(db, companyId) {
