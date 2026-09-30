@@ -1318,10 +1318,11 @@ export default function createConnectorsRouter({
       const nextCredentials = secretsChanged ? encryptCredentials({ ...existingSecrets, ...validation.secrets }) : current.credentials_encrypted;
       const assignmentChanged = String(tillId || "") !== String(current.till_id || "") || String(storeId || "") !== String(current.store_id || "");
       const resetTest = configurationChanged || secretsChanged || assignmentChanged;
-      const enabled = resetTest ? false : (req.body?.enabled === undefined ? current.enabled === true : req.body.enabled === true);
-      if (enabled && (!tillId || jsonValue(current.last_test_result, {})?.success !== true)) {
-        return res.status(409).json({ success: false, message: "Assign and successfully test this connector before enabling it" });
-      }
+      const requestedEnabled = req.body?.enabled === undefined ? null : req.body.enabled === true;
+      // Configuration/assignment changes invalidate the prior connection test.
+      // Explicit enable/disable requests are executed below through their
+      // canonical system workflows instead of mutating enabled directly here.
+      const persistedEnabled = resetTest ? false : current.enabled === true;
       const fallbackOrder = req.body?.fallbackOrder === undefined
         ? Number(current.fallback_order || 0)
         : Number(req.body.fallbackOrder);
@@ -1339,11 +1340,54 @@ export default function createConnectorsRouter({
          WHERE id=$9 AND company_id=$10
          RETURNING id,company_id,store_id,till_id,name,enabled,connection_status,connector_package_key,
                    connector_configuration,connector_capabilities,credentials_encrypted,fallback_order,last_test_result,created_at,updated_at`,
-        [storeId, tillId, JSON.stringify(validation.value), JSON.stringify(capabilities), nextCredentials, fallbackOrder, enabled, resetTest, req.params.id, req.user.companyId]
+        [storeId, tillId, JSON.stringify(validation.value), JSON.stringify(capabilities), nextCredentials, fallbackOrder, persistedEnabled, resetTest, req.params.id, req.user.companyId]
       );
-      const row = result.rows[0];
-      await writeAudit?.(req.user.companyId, req.user.id, "connector.instance.updated", "integration_connection", row.id, { storeId, tillId, enabled, fallbackOrder });
-      res.json({ success: true, data: publicConnectorInstance(row) });
+      let row = result.rows[0];
+
+      let workflowExecution = null;
+      if (!resetTest && requestedEnabled !== null && requestedEnabled !== (current.enabled === true)) {
+        workflowExecution = await executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: requestedEnabled ? "action:CONNECTOR_ENABLE" : "action:CONNECTOR_DISABLE",
+          req,
+          input: { connectorInstanceId: req.params.id },
+          connectorDrivers: drivers,
+          writeAudit,
+          source: {
+            type: "api",
+            method: req.method,
+            path: req.originalUrl || req.path,
+            capability: requestedEnabled ? "connector.enable" : "connector.disable",
+          },
+        });
+        const refreshed = await db(
+          `SELECT c.id,c.company_id,c.store_id,c.till_id,c.name,c.enabled,c.connection_status,
+                  c.connector_package_key,c.connector_configuration,c.connector_capabilities,
+                  c.credentials_encrypted,c.fallback_order,c.last_test_result,c.created_at,c.updated_at,
+                  s.name AS store_name,t.name AS till_name
+             FROM integration_connections c
+             LEFT JOIN stores s ON s.id=c.store_id
+             LEFT JOIN terminals t ON t.id=c.till_id
+            WHERE c.id=$1 AND c.company_id=$2`,
+          [req.params.id, req.user.companyId]
+        );
+        row = refreshed.rows[0] || row;
+      }
+
+      await writeAudit?.(req.user.companyId, req.user.id, "connector.instance.updated", "integration_connection", row.id, {
+        storeId,
+        tillId,
+        enabled: row.enabled === true,
+        fallbackOrder,
+      });
+      res.json({
+        success: true,
+        data: publicConnectorInstance(row),
+        workflowRunId: workflowExecution?.runId || null,
+        correlationId: workflowExecution?.correlationId || null,
+      });
     } catch (error) {
       console.error("Update connector instance error:", error);
       res.status(500).json({ success: false, message: "Unable to update connector instance" });
