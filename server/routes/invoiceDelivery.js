@@ -140,7 +140,7 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
     async (req, res) => {
       const channel = CHANNELS[req.params.channel];
       if (!channel) return res.status(404).json({ success: false, message: "Unknown delivery channel." });
-      const client = await (req.tenantPool || pool).connect();
+      const client = await pool.connect();
       try {
         const { enabled = false, apiKey, apiSecret, authToken, testToken, autoSendEnabled, ...plain } = req.body || {};
         const existing = await loadInvoiceChannelConfig(db, req.user.companyId, channel.provider);
@@ -258,7 +258,7 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
         // Success: persist the tested credential candidate + issue the
         // activation reference (fingerprint-bound, 24h window).
         const testToken = crypto.randomUUID();
-        const client = await (req.tenantPool || pool).connect();
+        const client = await pool.connect();
         try {
           await upsertRow(client, req.user.companyId, channel.provider, existing.enabled === true, {
             ...candidate,
