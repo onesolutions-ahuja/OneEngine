@@ -1894,6 +1894,10 @@ const MARKETPLACE_BRAND_MATCHES = [
   [/deliveroo/i, 'deliveroo'],
   [/just\s*eat/i, 'just-eat'],
   [/whatsapp/i, 'whatsapp'],
+  [/\bdojo\b/i, 'dojo'],
+  [/sum\s*up/i, 'sumup'],
+  [/\bsquare\b/i, 'square'],
+  [/\bmews\b/i, 'mews'],
 ]
 
 const MARKETPLACE_ICON_ALIASES = {
@@ -1912,6 +1916,14 @@ const MARKETPLACE_ICON_ALIASES = {
   sage: 'sage',
   whatsapp_connector: 'whatsapp',
   whatsapp: 'whatsapp',
+  one_connect_dojo: 'dojo',
+  dojo: 'dojo',
+  one_connect_sumup: 'sumup',
+  sumup: 'sumup',
+  one_connect_square: 'square',
+  square: 'square',
+  mews: 'mews',
+  mews_pms: 'mews',
 }
 
 function localAppIcon(assetKey) {
