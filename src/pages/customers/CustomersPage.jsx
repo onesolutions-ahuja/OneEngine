@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Download, Gift, Plus, RefreshCw, Search, Upload, Users, X } from 'lucide-react'
 import { apiFetch, apiRequest } from '../../services/api'
+import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
 import { SaleDetail } from '../sales/SalesPage'
 import { serializeMaximumAgeDays, validateCreditPaymentAmount } from './customerCreditForm'
@@ -30,12 +31,12 @@ export default function CustomersPage({onOpenGiftCards}){
   const [importOpen,setImportOpen]=useState(false)
   const [exportBusy,setExportBusy]=useState(false)
 
-  const load=async()=>{
+  const load=async(forceRefresh=false)=>{
     try{
       setLoading(true);setError('')
       const [c,s,p]=await Promise.all([
-        apiRequest('/api/customers'),
-        apiRequest('/api/settings').catch(()=>null),
+        cachedGet('/api/customers',{forceRefresh,onFresh:fresh=>fresh?.success&&setCustomers(Array.isArray(fresh.data)?fresh.data:[])}),
+        cachedGet('/api/settings',{cacheKey:'settings:company',forceRefresh,onFresh:fresh=>fresh?.data?.company?.currency&&setCurrency(fresh.data.company.currency)}).catch(()=>null),
         apiRequest('/api/auth/me/permissions').catch(()=>null),
       ])
       if(!c?.success)throw new Error(c?.message||'Unable to load customers')
@@ -66,7 +67,7 @@ export default function CustomersPage({onOpenGiftCards}){
       })
       if(!r?.success)throw new Error(r?.message||'Unable to update customer')
       setMessage(row.active?'Customer deactivated.':'Customer activated.')
-      await load()
+      await load(true)
     }catch(err){setError(err?.message||'Unable to update customer')}
   }
 
@@ -118,7 +119,7 @@ export default function CustomersPage({onOpenGiftCards}){
         {onOpenGiftCards?<button onClick={onOpenGiftCards}><Gift size={14}/> Gift Cards</button>:null}
         <button onClick={doExport} disabled={exportBusy}><Download size={14}/> {exportBusy?'Exporting…':'Export'}</button>
         <button onClick={()=>setImportOpen(true)}><Upload size={14}/> Import</button>
-        <button onClick={load}><RefreshCw size={14}/> Refresh</button>
+        <button onClick={()=>load(true)}><RefreshCw size={14}/> Refresh</button>
         <button className="module-primary-button" onClick={()=>setEditor({})}><Plus size={14}/> New Customer</button>
       </div>
     </header>
@@ -152,13 +153,13 @@ export default function CustomersPage({onOpenGiftCards}){
       />
     </section>
 
-    {editor?<CustomerEditor customer={editor} onClose={()=>setEditor(null)} onSaved={async msg=>{setEditor(null);setMessage(msg);await load()}}/>:null}
+    {editor?<CustomerEditor customer={editor} onClose={()=>setEditor(null)} onSaved={async msg=>{setEditor(null);setMessage(msg);await load(true)}}/>:null}
     {detail?<CustomerDetail customer={detail} currency={currency} loyaltyLicensed={loyaltyLicensed} onClose={()=>setDetail(null)} onEdit={()=>{setEditor(detail);setDetail(null)}} onLoyalty={()=>setLoyalty(detail)} onCredit={()=>setCredit(detail)} onSale={openSale}/>:null}
     {loyalty?<LoyaltyModal customer={loyalty} currency={currency} canAdjust={isAdmin||permissions.includes('loyalty.adjust')||permissions.includes('customer.edit')} onClose={()=>setLoyalty(null)}/>:null}
     {credit?<CustomerCredit customer={credit} currency={currency} canManage={canManageCredit} canTakePayment={canTakePayment} onClose={()=>setCredit(null)}/>:null}
     {historySale?<SaleDetail sale={historySale} currency={currency} onClose={()=>setHistorySale(null)}/>:null}
     {segmentsOpen?<CustomerSegments customers={customers} onClose={()=>setSegmentsOpen(false)}/>:null}
-    {importOpen?<CustomerImport onClose={()=>setImportOpen(false)} onImported={async()=>{setMessage('Customer import completed.');await load()}}/>:null}
+    {importOpen?<CustomerImport onClose={()=>setImportOpen(false)} onImported={async()=>{setMessage('Customer import completed.');await load(true)}}/>:null}
   </section>
 }
 
@@ -236,7 +237,7 @@ function LoyaltyModal({customer,currency,canAdjust,onClose}){
   useEffect(()=>{void load()},[customer.id])
   return <div className="module-modal-backdrop"><section className="module-modal customer-loyalty-modal"><header><div><strong>Loyalty History</strong><span>{customer.name}</span></div><div className="customer-detail-actions">{canAdjust?<button onClick={()=>setAdjust(true)}>Adjust points</button>:null}<button onClick={onClose}><X size={16}/></button></div></header><div className="module-modal-body">
     {loading?<div className="module-state">Loading loyalty…</div>:error?<div className="module-inline-error">{error}</div>:<><div className="customer-loyalty-balance"><span>Current Balance</span><strong>{money(data?.balance,currency)}</strong></div><div className="customer-loyalty-list">{(data?.transactions||[]).map(tx=><div key={tx.id}><div><strong>{tx.transaction_type==='EARN'?'Earned':tx.transaction_type==='REVERSE'?'Reversed':tx.transaction_type}</strong><span>{dt(tx.created_at)}{tx.full_name?` · ${tx.full_name}`:''}</span>{tx.description?<small>{tx.description}</small>:null}</div><div><b className={Number(tx.amount)>=0?'is-positive':'is-negative'}>{Number(tx.amount)>=0?'+':''}{money(tx.amount,currency)}</b><span>Balance {money(tx.balance_after,currency)}</span></div></div>)}</div>{!data?.transactions?.length?<div className="module-state compact">No loyalty transactions.</div>:null}</>}
-  </div>{adjust?<LoyaltyAdjust customer={customer} onClose={()=>setAdjust(false)} onDone={async()=>{setAdjust(false);await load()}}/>:null}</section></div>
+  </div>{adjust?<LoyaltyAdjust customer={customer} onClose={()=>setAdjust(false)} onDone={async()=>{setAdjust(false);await load(true)}}/>:null}</section></div>
 }
 function LoyaltyAdjust({customer,onClose,onDone}){
   const [points,setPoints]=useState(''),[reason,setReason]=useState(''),[error,setError]=useState(''),[saving,setSaving]=useState(false)
@@ -253,8 +254,8 @@ function CustomerCredit({customer,currency,canManage,canTakePayment,onClose}){
   const load=async()=>{try{setLoading(true);setError('');const r=await apiRequest(`/api/customers/${customer.id}/credit`);if(!r?.success)throw new Error(r?.message||'Unable to load credit');setData(r.data);setLedger(r.data.ledger||[]);setEnabled(!!r.data.credit?.enabled);setLimit(String(r.data.credit?.limit??''));setMaxAge(r.data.credit?.maximumAgeDays==null?'':String(r.data.credit.maximumAgeDays))}catch(err){setError(err?.message||'Unable to load credit')}finally{setLoading(false)}}
   useEffect(()=>{void load()},[customer.id])
   const loadLedger=async(page=1)=>{try{const q=new URLSearchParams({page:String(page),pageSize:'10'});Object.entries(filters).forEach(([k,v])=>v&&q.set(k,v));const r=await apiRequest(`/api/customers/${customer.id}/credit/ledger?${q}`);if(!r?.success)throw new Error(r?.message||'Unable to load ledger');setLedger(r.data||[]);setMeta({page:r.page||page,pages:r.pages||0,total:r.total||0})}catch(err){setError(err?.message||'Unable to load ledger')}}
-  const saveConfig=async()=>{const age=serializeMaximumAgeDays(maxAge);if(!age.valid)return setError(age.error);const n=limit.trim()===''?undefined:Number(limit);if(n!==undefined&&(!Number.isFinite(n)||n<0))return setError('Credit limit must be a non-negative amount');try{setBusy(true);setError('');const body={enabled,maximumAgeDays:age.value};if(n!==undefined)body.limit=n;const r=await apiRequest(`/api/customers/${customer.id}/credit`,{method:'PUT',body:JSON.stringify(body)});if(!r?.success)throw new Error(r?.message||'Unable to save credit');setMessage(r.message||'Credit settings saved');await load()}catch(err){setError(err?.message||'Unable to save credit')}finally{setBusy(false)}}
-  const recordPayment=async e=>{e.preventDefault();const check=validateCreditPaymentAmount(pay.amount,data?.credit?.balance);if(!check.valid)return setError(check.error);try{setBusy(true);setError('');const r=await apiRequest(`/api/customers/${customer.id}/credit/payments`,{method:'POST',body:JSON.stringify({amount:check.value,method:pay.method,notes:pay.notes.trim()||undefined,idempotencyKey:`admin-${crypto.randomUUID()}`})});if(!r?.success)throw new Error(r?.message||'Unable to record payment');setPay({amount:'',method:'cash',notes:''});setMessage('Payment recorded.');await load()}catch(err){setError(err?.message||'Unable to record payment')}finally{setBusy(false)}}
+  const saveConfig=async()=>{const age=serializeMaximumAgeDays(maxAge);if(!age.valid)return setError(age.error);const n=limit.trim()===''?undefined:Number(limit);if(n!==undefined&&(!Number.isFinite(n)||n<0))return setError('Credit limit must be a non-negative amount');try{setBusy(true);setError('');const body={enabled,maximumAgeDays:age.value};if(n!==undefined)body.limit=n;const r=await apiRequest(`/api/customers/${customer.id}/credit`,{method:'PUT',body:JSON.stringify(body)});if(!r?.success)throw new Error(r?.message||'Unable to save credit');setMessage(r.message||'Credit settings saved');await load(true)}catch(err){setError(err?.message||'Unable to save credit')}finally{setBusy(false)}}
+  const recordPayment=async e=>{e.preventDefault();const check=validateCreditPaymentAmount(pay.amount,data?.credit?.balance);if(!check.valid)return setError(check.error);try{setBusy(true);setError('');const r=await apiRequest(`/api/customers/${customer.id}/credit/payments`,{method:'POST',body:JSON.stringify({amount:check.value,method:pay.method,notes:pay.notes.trim()||undefined,idempotencyKey:`admin-${crypto.randomUUID()}`})});if(!r?.success)throw new Error(r?.message||'Unable to record payment');setPay({amount:'',method:'cash',notes:''});setMessage('Payment recorded.');await load(true)}catch(err){setError(err?.message||'Unable to record payment')}finally{setBusy(false)}}
   const saveAdjustment=async payload=>{try{setBusy(true);setError('');const r=await apiRequest(`/api/customers/${customer.id}/credit/adjustments`,{method:'POST',body:JSON.stringify({...payload,idempotencyKey:`admin-${crypto.randomUUID()}`})});if(!r?.success)throw new Error(r?.message||'Unable to record adjustment');setAdjust(null);setMessage(r.message||'Adjustment recorded');await Promise.all([load(),loadLedger(1)])}catch(err){setError(err?.message||'Unable to record adjustment')}finally{setBusy(false)}}
   const loadStatement=async()=>{try{const q=new URLSearchParams();if(statementDates.from)q.set('from',statementDates.from);if(statementDates.to)q.set('to',statementDates.to);const r=await apiRequest(`/api/customers/${customer.id}/credit/statement?${q}`);if(!r?.success)throw new Error(r?.message||'Unable to build statement');setStatement(r.data?.statement||null)}catch(err){setError(err?.message||'Unable to build statement')}}
   const c=data?.credit
@@ -282,10 +283,10 @@ function CustomerSegments({customers,onClose}){
   const load=async()=>{try{const r=await apiRequest('/api/customer-segments');if(!r?.success)throw new Error(r?.message||'Unable to load segments');setSegments(r.data||[])}catch(err){setError(err?.message||'Unable to load segments')}}
   useEffect(()=>{void load()},[])
   const membersFor=async seg=>{try{const r=await apiRequest(`/api/customer-segments/${seg.id}/members`);if(!r?.success)throw new Error(r?.message);setOpen(seg);setMembers(r.data?.members||[])}catch(err){setError(err?.message||'Unable to load members')}}
-  const save=async e=>{e.preventDefault();try{const r=await apiRequest(draft.id?`/api/customer-segments/${draft.id}`:'/api/customer-segments',{method:draft.id?'PUT':'POST',body:JSON.stringify({name:draft.name,description:draft.description||'',...(draft.id?{active:draft.active}: {})})});if(!r?.success)throw new Error(r?.message);setDraft(null);await load()}catch(err){setError(err?.message||'Unable to save segment')}}
-  const toggle=async seg=>{await apiRequest(`/api/customer-segments/${seg.id}`,{method:'PUT',body:JSON.stringify({active:!seg.active})});await load()}
-  const assign=async()=>{if(!open||!assignId)return;await apiRequest(`/api/customer-segments/${open.id}/members`,{method:'POST',body:JSON.stringify({customerId:assignId})});setAssignId('');await membersFor(open);await load()}
-  const remove=async id=>{await apiRequest(`/api/customer-segments/${open.id}/members/${id}`,{method:'DELETE'});await membersFor(open);await load()}
+  const save=async e=>{e.preventDefault();try{const r=await apiRequest(draft.id?`/api/customer-segments/${draft.id}`:'/api/customer-segments',{method:draft.id?'PUT':'POST',body:JSON.stringify({name:draft.name,description:draft.description||'',...(draft.id?{active:draft.active}: {})})});if(!r?.success)throw new Error(r?.message);setDraft(null);await load(true)}catch(err){setError(err?.message||'Unable to save segment')}}
+  const toggle=async seg=>{await apiRequest(`/api/customer-segments/${seg.id}`,{method:'PUT',body:JSON.stringify({active:!seg.active})});await load(true)}
+  const assign=async()=>{if(!open||!assignId)return;await apiRequest(`/api/customer-segments/${open.id}/members`,{method:'POST',body:JSON.stringify({customerId:assignId})});setAssignId('');await membersFor(open);await load(true)}
+  const remove=async id=>{await apiRequest(`/api/customer-segments/${open.id}/members/${id}`,{method:'DELETE'});await membersFor(open);await load(true)}
   return <div className="module-modal-backdrop"><section className="module-modal customer-segments-modal"><header><div><strong>Customer Segments</strong><span>Segments group customers for reporting; they do not change pricing.</span></div><button onClick={onClose}><X size={16}/></button></header><div className="module-modal-body customer-segment-body">{error?<div className="module-inline-error">{error}</div>:null}{draft?<form className="customer-segment-draft" onSubmit={save}><input value={draft.name} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} placeholder="Segment name"/><input value={draft.description||''} onChange={e=>setDraft(d=>({...d,description:e.target.value}))} placeholder="Description"/><button>Save</button><button type="button" onClick={()=>setDraft(null)}>Cancel</button></form>:null}<div className="module-table-wrap"><table><thead><tr><th>Segment</th><th>Customers</th><th>Status</th><th></th></tr></thead><tbody>{segments.map(seg=><tr key={seg.id}><td><strong>{seg.name}</strong><small>{seg.description||''}</small></td><td>{seg.member_count||0}</td><td>{seg.active?'Active':'Inactive'}</td><td><button onClick={()=>membersFor(seg)}>Members</button><button onClick={()=>setDraft({...seg})}>Edit</button><button onClick={()=>toggle(seg)}>{seg.active?'Deactivate':'Activate'}</button></td></tr>)}</tbody></table></div><button className="module-primary-button" onClick={()=>setDraft({name:'',description:'',active:true})}><Plus size={13}/> New segment</button>{open?<div className="customer-segment-members"><div><strong>{open.name}</strong><button onClick={()=>{setOpen(null);setMembers([])}}><X size={13}/></button></div><div className="customer-segment-assign"><select value={assignId} onChange={e=>setAssignId(e.target.value)}><option value="">Select customer…</option>{customers.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><button onClick={assign} disabled={!assignId}>Assign</button></div>{members.map(m=><div key={m.id}><span>{m.name}{m.active===false?' (inactive)':''}</span><button onClick={()=>remove(m.id)}>Remove</button></div>)}</div>:null}</div></section></div>
 }
 
