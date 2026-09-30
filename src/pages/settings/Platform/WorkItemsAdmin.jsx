@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 
 function formatDate(value) {
@@ -9,36 +9,25 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-function statusBadge(status) {
-  const normalized = String(status || "").toUpperCase();
-  const palette = {
-    PENDING: "bg-amber-100 text-amber-700",
-    APPROVED: "bg-emerald-100 text-emerald-700",
-    REJECTED: "bg-red-100 text-red-700",
-    CANCELLED: "bg-slate-200 text-slate-700",
-  };
-  return `inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${palette[normalized] || "bg-slate-200 text-slate-700"}`;
+function normalizedStatus(status) {
+  return String(status || "pending").toUpperCase();
 }
 
 export default function WorkItemsAdmin({ onMessage, onError }) {
   const [items, setItems] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [flowFilter, setFlowFilter] = useState("");
-  const [assigneeFilter, setAssigneeFilter] = useState("");
-  const [queueFilter, setQueueFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState("");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState("");
 
   const loadItems = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const query = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
-      const response = await apiRequest(`/api/platform/approval-requests${query}`);
-      const nextItems = Array.isArray(response?.data) ? response.data : [];
-      setItems(nextItems);
-      if (!selectedId && nextItems[0]?.id) setSelectedId(nextItems[0].id);
+      const response = await apiRequest("/api/platform/approval-requests");
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      setItems(rows);
+      setSelectedId((current) => rows.some((row) => String(row.id) === String(current)) ? current : (rows[0]?.id || ""));
     } catch (error) {
       onError?.(error?.message || "Unable to load work items");
     } finally {
@@ -46,36 +35,43 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
     }
   };
 
-  useEffect(() => {
-    loadItems();
-  }, [statusFilter]);
+  useEffect(() => { void loadItems(); }, []);
+
+  const statuses = useMemo(() => {
+    const values = [...new Set(items.map((item) => normalizedStatus(item.status)).filter(Boolean))];
+    return ["ALL", ...values];
+  }, [items]);
 
   const filteredItems = useMemo(() => {
-    const assigneeQuery = assigneeFilter.trim().toLowerCase();
-    const queueQuery = queueFilter.trim().toLowerCase();
-    const flowQuery = flowFilter.trim().toLowerCase();
-    const dateQuery = dateFilter.trim();
-
+    const q = query.trim().toLowerCase();
     return items.filter((item) => {
-      const assignee = String(item.assignee_name || item.assigned_to || "").toLowerCase();
-      const queue = String(item.queue_name || item.queue || "").toLowerCase();
-      const flow = String(item.process_name || item.flow_name || "").toLowerCase();
-      const created = item.submitted_at || item.created_at || "";
-      const passesAssignee = !assigneeQuery || assignee.includes(assigneeQuery);
-      const passesQueue = !queueQuery || queue.includes(queueQuery);
-      const passesFlow = !flowQuery || flow.includes(flowQuery);
-      const passesDate = !dateQuery || (created && created.startsWith(dateQuery));
-      return passesAssignee && passesQueue && passesFlow && passesDate;
+      if (statusFilter !== "ALL" && normalizedStatus(item.status) !== statusFilter) return false;
+      if (!q) return true;
+      return [
+        item.process_name,
+        item.flow_name,
+        item.assignee_name,
+        item.assigned_to,
+        item.queue_name,
+        item.queue,
+        item.record_id,
+        item.object_key,
+        item.step_label,
+        item.id,
+        item.status,
+      ].filter(Boolean).join(" ").toLowerCase().includes(q);
     });
-  }, [items, assigneeFilter, queueFilter, flowFilter, dateFilter]);
+  }, [items, query, statusFilter]);
 
-  const selected = useMemo(() => filteredItems.find((item) => item.id === selectedId) || filteredItems[0] || null, [filteredItems, selectedId]);
+  const selected = useMemo(
+    () => filteredItems.find((item) => String(item.id) === String(selectedId)) || filteredItems[0] || null,
+    [filteredItems, selectedId],
+  );
 
   useEffect(() => {
-    if (selected && !filteredItems.some((item) => item.id === selected.id)) {
-      setSelectedId(filteredItems[0]?.id || null);
-    }
-  }, [filteredItems, selected]);
+    if (selected && String(selected.id) !== String(selectedId)) setSelectedId(selected.id);
+    if (!selected && selectedId) setSelectedId("");
+  }, [selected, selectedId]);
 
   const updateItem = async (requestId, decision) => {
     try {
@@ -93,108 +89,125 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
     }
   };
 
+  const terminal = selected ? ["APPROVED","REJECTED","CANCELLED"].includes(normalizedStatus(selected.status)) : false;
+
   return (
-    <div className="work-items-shell">
-      <div className="work-items-toolbar">
-        <div className="work-items-heading">
-          <strong>Work Items</strong>
-          <span>{loading ? "Loading…" : `${filteredItems.length} shown`}</span>
-        </div>
-        <button type="button" className="work-items-icon-button" onClick={loadItems} disabled={loading} title="Refresh work items" aria-label="Refresh work items">
-          <RefreshCw size={14} className={loading ? "is-spinning" : ""} />
-        </button>
-      </div>
-
-      <div className="work-items-filters">
-        <label>
-          <span>Status</span>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </label>
-        <input value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} placeholder="Assignee" />
-        <input value={queueFilter} onChange={(event) => setQueueFilter(event.target.value)} placeholder="Queue or group" />
-        <input value={flowFilter} onChange={(event) => setFlowFilter(event.target.value)} placeholder="Flow" />
-        <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} />
-      </div>
-
-      {loading ? (
-        <div className="work-items-empty">Loading work items…</div>
-      ) : filteredItems.length === 0 ? (
-        <div className="work-items-empty">
-          <strong>No work items found</strong>
-          <span>Change the filters or refresh to check again.</span>
-        </div>
-      ) : (
-        <div className="work-items-layout">
-          <div className="work-items-list" role="list">
-            {filteredItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`work-items-list-row ${selected?.id === item.id ? "is-selected" : ""}`}
-                onClick={() => setSelectedId(item.id)}
-              >
-                <div className="work-items-list-main">
-                  <strong>{item.process_name || item.flow_name || "Workflow item"}</strong>
-                  <span>{item.assignee_name || item.assigned_to || "Unassigned"} · {item.queue_name || item.queue || "No queue"}</span>
-                  <small>{formatDate(item.submitted_at || item.created_at)}</small>
-                </div>
-                <span className={statusBadge(item.status)}>{String(item.status || "pending")}</span>
-              </button>
-            ))}
+    <div className="developer-record-shell work-items-record-shell">
+      <aside className="developer-record-list">
+        <div className="developer-record-list-head">
+          <div><strong>Work Items</strong><span>{loading ? "Loading…" : `${filteredItems.length} of ${items.length}`}</span></div>
+          <div className="developer-record-head-actions">
+            <button type="button" onClick={loadItems} disabled={loading} title="Refresh" aria-label="Refresh">
+              <RefreshCw size={14} className={loading ? "is-spinning" : ""}/>
+            </button>
           </div>
+        </div>
 
-          {selected ? (
-            <section className="work-items-detail">
-              <div className="work-items-detail-header">
-                <div>
-                  <span>Work Item</span>
-                  <strong>{selected.process_name || selected.flow_name || "Workflow item"}</strong>
-                </div>
-                <span className={statusBadge(selected.status)}>{String(selected.status || "pending")}</span>
+        <label className="developer-record-search">
+          <Search size={14}/>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search work items" />
+        </label>
+
+        <div className="developer-record-filters">
+          {statuses.map((status) => (
+            <button key={status} type="button" className={statusFilter === status ? "is-active" : ""} onClick={() => setStatusFilter(status)}>
+              {status === "ALL" ? "All" : status[0] + status.slice(1).toLowerCase()}
+            </button>
+          ))}
+        </div>
+
+        <div className="developer-record-list-body">
+          {loading ? <div className="developer-record-empty">Loading work items…</div> : null}
+          {!loading && filteredItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`developer-record-row ${String(selected?.id) === String(item.id) ? "is-selected" : ""}`}
+              onClick={() => setSelectedId(item.id)}
+            >
+              <span className="developer-record-row-copy">
+                <strong>{item.process_name || item.flow_name || item.step_label || "Work item"}</strong>
+                <small>{item.assignee_name || item.assigned_to || "Unassigned"} · {item.record_id || item.object_key || "No record"}</small>
+                <small>{formatDate(item.submitted_at || item.created_at)}</small>
+              </span>
+              <span className={`developer-record-status status-${normalizedStatus(item.status).toLowerCase()}`}>
+                {normalizedStatus(item.status)}
+              </span>
+            </button>
+          ))}
+          {!loading && !filteredItems.length ? (
+            <div className="developer-record-empty"><strong>No work items found</strong><span>Change the search or status filter.</span></div>
+          ) : null}
+        </div>
+      </aside>
+
+      <section className="developer-record-detail">
+        {selected ? (
+          <>
+            <div className="developer-record-detail-head">
+              <div>
+                <span>Work Item</span>
+                <strong>{selected.process_name || selected.flow_name || selected.step_label || "Work item"}</strong>
+                <small>#{String(selected.id || "").slice(0, 12)}</small>
               </div>
+              <span className={`developer-record-status status-${normalizedStatus(selected.status).toLowerCase()}`}>{normalizedStatus(selected.status)}</span>
+            </div>
 
-              <div className="work-items-detail-grid">
+            <div className="developer-record-section">
+              <div className="developer-record-section-title">Assignment</div>
+              <div className="developer-record-fields">
                 <div><span>Assignee</span><strong>{selected.assignee_name || selected.assigned_to || "Unassigned"}</strong></div>
-                <div><span>Queue</span><strong>{selected.queue_name || selected.queue || "No queue"}</strong></div>
-                <div><span>Related record</span><strong>{selected.record_id || "—"}</strong></div>
-                <div><span>Due</span><strong>{formatDate(selected.due_at || selected.due_date)}</strong></div>
+                <div><span>Queue / Group</span><strong>{selected.queue_name || selected.queue || "—"}</strong></div>
+                <div><span>Step</span><strong>{selected.step_label || "—"}</strong></div>
+                <div><span>Status</span><strong>{normalizedStatus(selected.status)}</strong></div>
+              </div>
+            </div>
+
+            <div className="developer-record-section">
+              <div className="developer-record-section-title">Source & Related Record</div>
+              <div className="developer-record-fields">
+                <div><span>Process</span><strong>{selected.process_name || selected.flow_name || "—"}</strong></div>
+                <div><span>Object</span><strong>{selected.object_key || selected.object_name || "—"}</strong></div>
+                <div><span>Record</span><strong>{selected.record_id || "—"}</strong></div>
+                <div><span>Request ID</span><strong>{selected.id || "—"}</strong></div>
+              </div>
+            </div>
+
+            <div className="developer-record-section">
+              <div className="developer-record-section-title">Timing</div>
+              <div className="developer-record-fields">
                 <div><span>Created</span><strong>{formatDate(selected.submitted_at || selected.created_at)}</strong></div>
+                <div><span>Due</span><strong>{formatDate(selected.due_at || selected.due_date)}</strong></div>
                 <div><span>Completed</span><strong>{formatDate(selected.resolved_at || selected.completed_at)}</strong></div>
+                <div><span>Decision</span><strong>{selected.result || selected.decision || "—"}</strong></div>
               </div>
+            </div>
 
-              <div className="work-items-outcome">
-                <span>Outcome</span>
-                <strong>{selected.result || selected.decision || "No outcome yet"}</strong>
-              </div>
-
-              <div className="work-items-actions">
+            {!terminal ? (
+              <div className="developer-record-actions">
                 <button
                   type="button"
-                  className="work-items-primary"
-                  disabled={working === selected.id || ["approved","rejected","cancelled"].includes(String(selected.status || "").toLowerCase())}
+                  className="is-primary"
+                  disabled={working === selected.id}
                   onClick={() => updateItem(selected.id, "approve")}
                 >
-                  {working === selected.id ? "Completing…" : "Complete / Approve"}
+                  {working === selected.id ? "Working…" : "Approve"}
                 </button>
                 <button
                   type="button"
-                  className="work-items-danger"
-                  disabled={working === selected.id || ["approved","rejected","cancelled"].includes(String(selected.status || "").toLowerCase())}
+                  className="is-danger"
+                  disabled={working === selected.id}
                   onClick={() => updateItem(selected.id, "reject")}
                 >
                   Reject
                 </button>
               </div>
-            </section>
-          ) : null}
-        </div>
-      )}
+            ) : null}
+          </>
+        ) : (
+          <div className="developer-record-empty"><strong>Select a work item</strong><span>Choose a record from the list to see details.</span></div>
+        )}
+      </section>
     </div>
   );
 }
