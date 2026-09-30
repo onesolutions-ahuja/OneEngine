@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Copy, Eye, GripVertical, Monitor, Pencil, Plus, Redo2, Search, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, GripVertical, Monitor, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 import {
   componentByKey,
@@ -109,8 +109,6 @@ export default function CustomPageBuilder({ onMessage, onError }) {
   const [pages, setPages] = useState([]);
   const [pageId, setPageId] = useState("");
   const [page, setPage] = useState(null);
-  const [mode, setMode] = useState("list");
-  const [listQuery, setListQuery] = useState("");
   const [draft, setDraft] = useState(() => newPageDraft());
   const registry = useComponentRegistry();
   const [objects, setObjects] = useState([]);
@@ -167,7 +165,6 @@ export default function CustomPageBuilder({ onMessage, onError }) {
   }, []);
 
   const loadPage = (row) => {
-    setMode("builder");
     setPageId(row?.id || "");
     setPage(row || null);
     const tree = normalizeCustomPageTree(row?.definition || {});
@@ -176,7 +173,6 @@ export default function CustomPageBuilder({ onMessage, onError }) {
   };
 
   const openNewPage = () => {
-    setMode("builder");
     setPage(null); setPageId("");
     const fresh = newPageDraft();
     setDraft(fresh);
@@ -661,57 +657,12 @@ const updateNode = (nodeId, changes) => {
     );
   };
 
-  const filteredPages = useMemo(() => {
-    const query = listQuery.trim().toLowerCase();
-    if (!query) return pages;
-    return pages.filter((row) => `${row.label || ""} ${row.page_key || ""} ${row.id || ""}`.toLowerCase().includes(query));
-  }, [pages, listQuery]);
-
-  if (mode === "list") {
-    return (
-      <section className="onebuilder-list-view">
-        <header className="onebuilder-list-header">
-          <div>
-            <strong>Page Builder</strong>
-            <span>{filteredPages.length} of {pages.length} pages</span>
-          </div>
-          <div className="onebuilder-list-actions">
-            <select className="onebuilder-list-app-select" value={appId} onChange={(event) => { setAppId(event.target.value); setPageId(""); setPage(null); }}>
-              <option value="">Select app…</option>
-              {apps.map((app) => <option key={app.id} value={app.id}>{app.label}</option>)}
-            </select>
-            <button type="button" className="onebuilder-list-add" onClick={openNewPage} title="New Page" aria-label="New Page" disabled={!appId}><Plus size={15}/></button>
-          </div>
-        </header>
-        <label className="onebuilder-list-search">
-          <Search size={14}/>
-          <input value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Search pages" />
-        </label>
-        <div className="onebuilder-list-body">
-          {!appId ? (
-            <div className="onebuilder-list-empty"><strong>Select an app</strong><span>Choose the app whose pages you want to manage.</span></div>
-          ) : filteredPages.length ? filteredPages.map((row) => (
-            <button key={row.id} type="button" className="onebuilder-list-row" onClick={() => loadPage(row)}>
-              <span className="onebuilder-list-row-icon"><Monitor size={15}/></span>
-              <span className="onebuilder-list-row-copy"><strong>{row.label || "Untitled page"}</strong><small>{row.page_key || "page"}</small></span>
-              <span className="onebuilder-list-row-state">{row.active === false ? "Inactive" : ""}</span>
-              <span className="onebuilder-list-row-edit" title="Open canvas"><Pencil size={13}/></span>
-            </button>
-          )) : (
-            <div className="onebuilder-list-empty"><strong>No pages configured</strong><span>Use + to create the first page.</span></div>
-          )}
-        </div>
-      </section>
-    );
-  }
-
   return (
     <div className="space-y-3">
       <style>{BUILDER_CSS}</style>
 
       {/* Toolbar — page name, device modes, preview, undo/redo, save. */}
       <div className="cpb-toolbar">
-        <button type="button" className="cpb-device-btn" onClick={() => { setMode("list"); setPreview(false); }}><ArrowLeft size={13}/> Pages</button>
         <select className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" value={appId} onChange={(event) => { setAppId(event.target.value); setPageId(""); setPage(null); }} aria-label="App">
           <option value="">New page…</option>
           {apps.map((app) => <option key={app.id} value={app.id}>{app.label}</option>)}
