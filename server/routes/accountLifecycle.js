@@ -51,7 +51,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     res.json({success:true});
   });
 
-  router.post("/account/invite/:userId", authenticate, authorize("admin.users"), async(req,res)=>{
+  router.post("/account/invite/:userId", authenticate, authorize("user.manage"), async(req,res)=>{
     const r=await db(`SELECT u.id,u.email,u.company_id,c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.registration_link_expiry_minutes
       FROM users u JOIN companies c ON c.id=u.company_id JOIN company_settings cs ON cs.company_id=c.id WHERE u.id=$1 AND u.company_id=$2`,[req.params.userId,req.user.companyId]);
     const u=r.rows[0]; if(!u)return res.status(404).json({success:false,message:"User not found"});
@@ -117,10 +117,10 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     res.json({success:true,data:{next:"POLICY_ONBOARDING"}});
   });
 
-  router.get("/user-licences", authenticate, authorize("admin.users"), async(req,res)=>{
+  router.get("/user-licences", authenticate, authorize("user.manage"), async(req,res)=>{
     const r=await db(`SELECT u.id,u.full_name,u.email,a.licence_id,l.name licence_name FROM users u LEFT JOIN user_licence_assignments a ON a.user_id=u.id LEFT JOIN licences l ON l.id=a.licence_id WHERE u.company_id=$1 ORDER BY u.full_name`,[req.user.companyId]); res.json({success:true,data:r.rows});
   });
-  router.put("/user-licences/:userId", authenticate, authorize("admin.users"), async(req,res)=>{
+  router.put("/user-licences/:userId", authenticate, authorize("user.manage"), async(req,res)=>{
     const licenceId=req.body?.licenceId; if(!licenceId){await db("DELETE FROM user_licence_assignments WHERE user_id=$1 AND company_id=$2",[req.params.userId,req.user.companyId]);return res.json({success:true});}
     const a=await db("SELECT seats FROM company_licence_allocations WHERE company_id=$1 AND licence_id=$2",[req.user.companyId,licenceId]); if(!a.rows.length)return res.status(403).json({success:false,message:"Licence is not allocated to this company"});
     const used=await db("SELECT COUNT(*)::int used FROM user_licence_assignments WHERE company_id=$1 AND licence_id=$2 AND user_id<>$3",[req.user.companyId,licenceId,req.params.userId]);
