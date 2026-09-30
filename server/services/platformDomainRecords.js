@@ -54,14 +54,12 @@ export async function withDomainSave({ pool, db, savePlatformRecord, key, req, i
           state.result.rows[0].platform = platform;
           return { ...state, platform };
         },
-        afterCommit: async (state) => {
-          tx.afterCommit(async () => ({
-            recordId: state.result?.rows?.[0]?.id || null,
-            objectKey: key,
-            operation: previous ? "update" : "create",
-          }));
-          return state;
-        },
+        afterCommit: async (state) => ({
+          recordId: state.result?.rows?.[0]?.id || null,
+          objectKey: key,
+          operation: previous ? "update" : "create",
+        }),
+        transaction: tx,
       });
 
       lifecycle.result.rows[0].platformLifecycle = lifecycle.lifecycleTrace;
