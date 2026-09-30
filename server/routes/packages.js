@@ -1353,252 +1353,114 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
       if (prior) return res.json(prior);
 
-      const packageResult = await db("SELECT id FROM package_registry WHERE package_key=$1 AND active=true", [packageKey]);
-
-      if (!packageResult.rows.length) return res.status(404).json({ success: false, message: "Package not found" });
-
-      // Uninstall is destructive: callers must explicitly disable a package
-
-      // first, so an accidental uninstall cannot remove an active capability.
-
-      const installation = await db(
-
-        `SELECT status FROM company_package_installations
-
-         WHERE package_id=$1 AND company_id=$2`,
-
-        [packageResult.rows[0].id, req.user.companyId]
-
+      const packageResult = await db(
+        "SELECT id,module_id FROM package_registry WHERE package_key=$1 AND active=true",
+        [packageKey]
       );
 
-      if (!installation.rows.length) return res.status(404).json({ success: false, message: "Package is not installed for this company" });
+      if (!packageResult.rows.length) {
+        return res.status(404).json({ success: false, message: "Package not found" });
+      }
 
-      if (installation.rows[0].status === "active") {
+      const packageRow = packageResult.rows[0];
 
-        return res.status(409).json({ success: false, code: "PACKAGE_ACTIVE", message: "Package must be deactivated before uninstalling" });
+      const installation = await db(
+        `SELECT i.* FROM company_package_installations i
+          WHERE i.package_id=$1 AND i.company_id=$2`,
+        [packageRow.id, req.user.companyId]
+      );
 
+      if (!installation.rows.length) {
+        return res.status(404).json({ success: false, message: "Package is not installed for this company" });
       }
 
       const dependents = await db(
-
-        `SELECT p.package_key FROM company_package_installations i
-
-         JOIN package_dependencies d ON d.package_id=i.package_id
-
-         JOIN package_registry p ON p.id=i.package_id
-
-         WHERE d.dependency_id=$1 AND i.company_id=$2 AND i.status='active'`,
-
-        [packageResult.rows[0].id, req.user.companyId]
-
+        `SELECT DISTINCT p.package_key
+           FROM company_package_installations i
+           JOIN package_dependencies d ON d.package_id=i.package_id
+           JOIN package_registry p ON p.id=i.package_id
+          WHERE d.dependency_id=$1
+            AND i.company_id=$2
+            AND i.status='active'
+            AND d.optional=false`,
+        [packageRow.id, req.user.companyId]
       );
 
-      if (dependents.rows.length) return res.status(409).json({ success: false, message: "Package is required by an installed package", dependents: dependents.rows.map((row) => row.package_key) });
-
-      // Data safety comes before metadata cleanup. A package may only be
-
-      // uninstalled when every package-owned object is empty for this tenant.
-
-      // This keeps AppExchange-style uninstall from orphaning business records.
-
-      const packageObjects = await db(
-
-        `SELECT object_key, source_table FROM platform_objects
-
-         WHERE package_id=$1 AND (company_id IS NULL OR company_id=$2)`,
-
-        [packageResult.rows[0].id, req.user.companyId]
-
-      );
-
-      const nonEmptyObjects = [];
-
-      for (const object of packageObjects.rows) {
-
-        const table = String(object.source_table || "").trim();
-
-        if (!/^[a-z\_][a-z0-9\_]*$/i.test(table)) continue;
-
-        const columns = await db(
-
-          `SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1`,
-
-          [table]
-
-        );
-
-        const names = new Set(columns.rows.map((row) => row.column_name));
-
-        const scoped = names.has("company_id");
-
-        const countResult = await db(
-
-          `SELECT COUNT(*)::int AS count FROM "${table}"${scoped ? " WHERE company_id=$1" : ""}`,
-
-          scoped ? [req.user.companyId] : []
-
-        );
-
-        const count = Number(countResult.rows[0]?.count || 0);
-
-        if (count > 0) nonEmptyObjects.push({ objectKey: object.object_key, table, count });
-
-      }
-
-      if (nonEmptyObjects.length) {
-
+      if (dependents.rows.length) {
         return res.status(409).json({
-
           success: false,
-
-          code: "PACKAGE_RECORDS_EXIST",
-
-          message: "Package cannot be uninstalled while package-owned records exist. Deactivate it instead or remove/archive the records first.",
-
-          objects: nonEmptyObjects,
-
+          code: "PACKAGE_REQUIRED",
+          message: "Package is required by an installed package",
+          dependents: dependents.rows.map((row) => row.package_key),
         });
-
       }
 
-      const crossPackageReferences = await db(
-
-        `SELECT DISTINCT sourcePackage.package_key AS source_package_key
-
-         FROM platform_relationships r
-
-         JOIN platform_objects source ON source.id=r.parent_object_id
-
-         JOIN platform_objects target ON target.id=r.child_object_id
-
-         JOIN package_registry sourcePackage ON sourcePackage.id=source.package_id
-
-         WHERE target.package_id=$1
-
-           AND source.package_id IS NOT NULL
-
-           AND source.package_id<>$1
-
-           AND r.active=true
-
-           AND (source.company_id IS NULL OR source.company_id=$2)
-
-           AND (target.company_id IS NULL OR target.company_id=$2)`,
-
-        [packageResult.rows[0].id, req.user.companyId]
-
-      );
-
-      if (crossPackageReferences.rows.length) {
-
-        return res.status(409).json({
-
-          success: false,
-
-          code: "PACKAGE_REFERENCED",
-
-          message: "Package metadata is referenced by another installed package",
-
-          dependents: crossPackageReferences.rows.map((row) => row.source_package_key),
-
-        });
-
-      }
-
-      const enabledAccess = await db(
-
-        `SELECT COUNT(*)::int AS count
-
-         FROM platform_module_access a
-
-         JOIN package_registry p ON p.module_id=a.module_id
-
-         WHERE p.id=$1 AND a.company_id=$2 AND a.enabled=true`,
-
-        [packageResult.rows[0].id, req.user.companyId]
-
-      );
-
-      if (Number(enabledAccess.rows[0]?.count || 0) > 0) {
-
-        return res.status(409).json({
-
-          success: false,
-
-          code: "PACKAGE_ACCESS_REMAINS",
-
-          message: "Package module access must be disabled before uninstalling",
-
-        });
-
-      }
-
+      /*
+       * Uninstall is intentionally non-destructive.
+       * Package-owned business data, connector configuration and tenant metadata
+       * remain in place so a later reinstall can reuse the previous state.
+       * The package is removed only from the active application surface/runtime.
+       */
       const result = await db(
-
         `UPDATE company_package_installations i
-
-            SET status='inactive',deactivated_by_user=true,suspended_by_entitlement=false,updated_at=NOW()
-
-           FROM package_registry p
-
-          WHERE i.package_id=p.id AND p.package_key=$1 AND i.company_id=$2
-
+            SET status='inactive',
+                deactivated_by_user=true,
+                suspended_by_entitlement=false,
+                updated_at=NOW()
+          WHERE i.package_id=$1 AND i.company_id=$2
           RETURNING i.*`,
-
-        [packageKey, req.user.companyId]
-
+        [packageRow.id, req.user.companyId]
       );
 
-      if (!result.rows.length) return res.status(404).json({ success: false, message: "Package is not installed for this company" });
-
-      await removePackageMetadata(db, {
-
-        companyId: req.user.companyId,
-
-        packageId: result.rows[0].package_id,
-
-      });
+      if (packageRow.module_id) {
+        await db(
+          `UPDATE platform_module_access
+              SET enabled=false,updated_at=NOW()
+            WHERE module_id=$1 AND company_id=$2`,
+          [packageRow.module_id, req.user.companyId]
+        );
+      }
 
       await db(
-
-        `DELETE FROM company_package_entitlement_sources
-
-          WHERE company_id=$1 AND package_id=$2 AND source_type='DIRECT_INSTALL'`,
-
-        [req.user.companyId, result.rows[0].package_id]
-
+        `UPDATE company_package_entitlement_sources
+            SET active=false,updated_at=NOW()
+          WHERE company_id=$1
+            AND package_id=$2
+            AND source_type='DIRECT_INSTALL'`,
+        [req.user.companyId, packageRow.id]
       );
 
       await reconcileCompanyPackageEntitlements(db, req.user.companyId);
 
-      await db(
-
-        `UPDATE platform_module_access a SET enabled=false,updated_at=NOW()
-
-         FROM package_registry p
-
-         WHERE p.package_key=$1 AND a.module_id=p.module_id AND a.company_id=$2 AND a.store_id IS NULL`,
-
-        [packageKey, req.user.companyId]
-
-      );
-
-      const response = { success: true, data: result.rows[0] };
+      const response = {
+        success: true,
+        data: {
+          ...result.rows[0],
+          dataPreserved: true,
+          reinstallSupported: true,
+        },
+      };
 
       await recordOperation(req, "uninstall", packageKey, response);
+      await writeAudit?.(
+        req.user.companyId,
+        req.user.id,
+        "package.uninstalled",
+        "package",
+        packageRow.id,
+        { packageKey, dataPreserved: true }
+      );
 
       res.json(response);
 
     } catch (error) {
 
       console.error("Package uninstall error:", error);
-
       res.status(400).json({ success: false, message: error.message });
 
     }
 
   });
-
 
 
   return router;
