@@ -1087,15 +1087,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["appointments.manage"],
-    executor: async ({ action, db, companyId, req }) => {
+    executor: async ({ action, db, companyId, req, record, object, workflowVariables }) => {
       const tenantId=companyId||req?.user?.companyId;
+      const rootObjectKey=object?.object_key||object?.objectKey||null;
+      const resolved=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
       const link=await issueAppointmentPublicLink(db,{
         companyId:tenantId,
-        bookingCaseId:action.bookingCaseId,
-        purpose:action.purpose||"BOOK_SLOT",
-        ttlMinutes:action.ttlMinutes||30,
-        publicBaseUrl:action.publicBaseUrl||process.env.PUBLIC_APP_URL||process.env.FRONTEND_URL||"",
-        metadata:action.metadata||{},
+        bookingCaseId:resolved.bookingCaseId,
+        purpose:resolved.purpose||"BOOK_SLOT",
+        ttlMinutes:resolved.ttlMinutes||30,
+        publicBaseUrl:resolved.publicBaseUrl||process.env.PUBLIC_APP_URL||process.env.FRONTEND_URL||"",
+        metadata:resolved.metadata||{},
       });
       return {status:"completed",link};
     },
@@ -1110,26 +1112,28 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["workflow.execute"],
     executor: async (context) => {
-      const {action,db,companyId,req}=context;
+      const {action,db,companyId,req,record,object,workflowVariables}=context;
       const tenantId=companyId||req?.user?.companyId;
+      const rootObjectKey=object?.object_key||object?.objectKey||null;
+      const bound=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
       const resolved=await resolveAssistantSubflow(db,{
         companyId:tenantId,
-        capability:action.capability,
-        channel:action.channel||null,
-        providerPackageKey:action.providerPackageKey||null,
+        capability:bound.capability,
+        channel:bound.channel||null,
+        providerPackageKey:bound.providerPackageKey||null,
       });
       if(!resolved){
-        if(action.required===true) throw new Error(`No active installed subflow is available for ${action.capability}`);
-        return {status:"skipped",reason:"No compatible installed subflow",capability:action.capability};
+        if(bound.required===true) throw new Error(`No active installed subflow is available for ${bound.capability}`);
+        return {status:"skipped",reason:"No compatible installed subflow",capability:bound.capability};
       }
       const runner=WORKFLOW_ACTION_REGISTRY.find((item)=>item.key==="RUN_SUBFLOW");
       if(!runner?.executor) throw new Error("RUN_SUBFLOW is unavailable");
       const result=await runner.executor({
         ...context,
         action:{
-          ...action,
+          ...bound,
           workflowId:resolved.id,
-          inputs:action.inputs||{},
+          inputs:bound.inputs||{},
         },
       });
       return {...result,resolvedWorkflowId:resolved.id,resolvedWorkflowName:resolved.name};
@@ -1239,15 +1243,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["appointments.payment","appointments.manage"],
-    executor: async ({ action, client, db, companyId, req }) => {
+    executor: async ({ action, client, db, companyId, req, record, object, workflowVariables }) => {
       const tenantId=companyId||req?.user?.companyId;
+      const rootObjectKey=object?.object_key||object?.objectKey||null;
+      const resolved=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
       const queryClient=client||{query:db};
       const result=await completeAppointmentPayment(queryClient,{
         companyId:tenantId,
-        paymentRequestId:action.paymentRequestId,
-        providerReference:action.providerReference||null,
-        paymentUrl:action.paymentUrl||null,
-        amountPaid:action.amountPaid,
+        paymentRequestId:resolved.paymentRequestId,
+        providerReference:resolved.providerReference||null,
+        paymentUrl:resolved.paymentUrl||null,
+        amountPaid:resolved.amountPaid,
       });
       return {status:"completed",...result};
     },
