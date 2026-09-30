@@ -3737,7 +3737,7 @@ async function resolveWorkflowWritableFields({ db, object, fields = [], entries,
   return secured.map((field) => ({ ...field, source_column: field.source_column || field.api_name }));
 }
 
-function alignWorkflowWritableValues(mappedFields = [], entries = []) {
+export function alignWorkflowWritableValues(mappedFields = [], entries = []) {
   const requested = new Map(entries.map(([name, value]) => [String(name), value]));
   return mappedFields.map((field) => {
     const apiName = String(field.api_name || "");
