@@ -4,10 +4,8 @@ import {
   ChevronRight,
   LayoutGrid,
   ListChecks,
-  Network,
   Rocket,
   Search,
-  ShieldCheck,
   Workflow,
 } from 'lucide-react'
 import { getStoredUser } from '../../services/api'
@@ -22,8 +20,6 @@ import ValueSetList from '../settings/Platform/ValueSetList'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
-  { key: 'assignment-rules', label: 'Assignment Rules', icon: Network },
-  { key: 'sharing-rules', label: 'Sharing Rules', icon: ShieldCheck },
   { key: 'platform', label: 'Builders', icon: LayoutGrid },
   { key: 'workflow-runs', label: 'Workflow Runs', icon: Workflow },
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
@@ -104,10 +100,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
           {error ? <div className="settings-error">{error}</div> : null}
           {current.key === 'objects' ? (
             <ObjectsSettingsPane />
-          ) : current.key === 'assignment-rules' ? (
-            <ObjectsSettingsPane initialTab="assignment" />
-          ) : current.key === 'sharing-rules' ? (
-            <ObjectsSettingsPane initialTab="sharing" />
           ) : current.key === 'platform' ? (
             <OneBuilder />
           ) : current.key === 'workflow-runs' ? (
