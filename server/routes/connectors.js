@@ -308,6 +308,22 @@ export default function createConnectorsRouter({
   if (typeof db !== "function") throw new Error("db query function is required");
   const router = express.Router();
 
+  async function hydrateConnectorPermissions(user) {
+    if (!user?.id) return user;
+    const permissionResult = await db(
+      `SELECT p.code
+         FROM users u
+         JOIN role_permissions rp ON rp.role_id=u.role_id
+         JOIN permissions p ON p.id=rp.permission_id
+        WHERE u.id=$1 AND u.active=TRUE`,
+      [user.id]
+    );
+    return {
+      ...user,
+      permissionCodes: permissionResult.rows.map((row) => row.code),
+    };
+  }
+
   async function requireSuperadmin(req, res) {
     const userId = req.user?.id;
     if (!userId) {
@@ -1362,6 +1378,7 @@ export default function createConnectorsRouter({
 
       let workflowExecution = null;
       if (!resetTest && requestedEnabled !== null && requestedEnabled !== (current.enabled === true)) {
+        req.user = await hydrateConnectorPermissions(req.user);
         workflowExecution = await executeSystemWorkflow({
           db,
           companyId: req.user.companyId,
@@ -1422,18 +1439,7 @@ export default function createConnectorsRouter({
       if (!instance) {
         return res.status(404).json({ success: false, message: "Connector instance not found" });
       }
-      const permissionResult = await db(
-        `SELECT p.code
-           FROM users u
-           JOIN role_permissions rp ON rp.role_id=u.role_id
-           JOIN permissions p ON p.id=rp.permission_id
-          WHERE u.id=$1 AND u.active=TRUE`,
-        [req.user.id]
-      );
-      req.user = {
-        ...req.user,
-        permissionCodes: permissionResult.rows.map((row) => row.code),
-      };
+      req.user = await hydrateConnectorPermissions(req.user);
 
       const execution = await executeSystemWorkflow({
         db,
