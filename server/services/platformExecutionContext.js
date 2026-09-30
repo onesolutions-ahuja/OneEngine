@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 
 function safeObject(value) {
-  if (!value || typeof value !== "object") return {};
+  if (!value || typeof value !== "object") return null;
   return Object.fromEntries(Object.entries(value).filter(([key]) => !SECRET_KEY.test(key)));
 }
 
@@ -85,12 +85,14 @@ export async function createPlatformExecutionContext({
   }
 
   const actor = safeObject({
-    ...safeObject(inherited.$User),
-    ...safeObject(reqUser),
+    ...(safeObject(inherited.$User) || {}),
+    ...(safeObject(reqUser) || {}),
     id: userId || reqUser.id || inherited.$User?.id || null,
     companyId: authoritativeCompanyId,
-  });
-  const permissions = await loadPermissions(db, actor);
+  }) || {};
+  const permissions = actor.roleId
+    ? await loadPermissions(db, actor)
+    : Object.freeze({ ...(inherited.$Permission || {}) });
 
   const startedAt = executionTimestamp(inherited.$Flow?.startedAt);
   const correlationId = request?.correlationId
@@ -128,10 +130,10 @@ export async function createPlatformExecutionContext({
       timestamp: request?.timestamp || startedAt,
       source: requestSource(req, source),
     },
-    $Device: safeObject(device || inherited.$Device || req?.device || null) || null,
-    $Channel: safeObject(channel || inherited.$Channel || req?.channel || null) || null,
-    $App: safeObject(app || inherited.$App || null) || null,
-    $Package: safeObject(packageInfo || inherited.$Package || null) || null,
+    $Device: safeObject(device || inherited.$Device || req?.device || null),
+    $Channel: safeObject(channel || inherited.$Channel || req?.channel || null),
+    $App: safeObject(app || inherited.$App || null),
+    $Package: safeObject(packageInfo || inherited.$Package || null),
     $System: {
       now: inherited.$System?.now || startedAt,
       correlationId,
