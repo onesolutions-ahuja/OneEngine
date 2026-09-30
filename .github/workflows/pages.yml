@@ -32,6 +32,9 @@ jobs:
       - name: Static runtime checks
         run: npx --yes eslint@9.36.0 src services --config eslint.config.js --no-inline-config
 
+      - name: Audit app search, icons, routes and catalogue
+        run: npm run audit:apps
+
       - name: Build
         run: npm run build
 
