@@ -112,6 +112,70 @@ async function hydrateLookupPath({ db, fields, record, path, req, cache, depth =
   }
 }
 
+
+async function resolveRelatedPathType({ db, field, path, req, depth = 0 }) {
+  if (depth > 4 || !field || field.field_type !== "lookup") return null;
+  const targetKey = field.config?.relatedObjectKey || field.config?.related_object_key || field.config?.objectKey;
+  if (!targetKey) return null;
+  const targetObject = await loadObjectByKey(db, targetKey, req.user.companyId);
+  if (!targetObject) return null;
+  const targetFields = await loadObjectFields(db, targetObject.id, req.user.companyId);
+  const [segment, ...rest] = path.split(".");
+  const targetField = targetFields.find((candidate) => candidate.api_name === segment && candidate.active !== false);
+  if (!targetField) return null;
+  if (!rest.length) {
+    if (targetField.field_type === "formula" || targetField.field_type === "rollup") {
+      return targetField.config?.resultType || targetField.config?.result_type || "text";
+    }
+    return targetField.field_type;
+  }
+  return resolveRelatedPathType({ db, field: targetField, path: rest.join("."), req, depth: depth + 1 });
+}
+
+export async function prepareFormulaFields({ db, fields, req }) {
+  const prepared = activeFields(fields).map((field) => ({
+    ...field,
+    config: field.config && typeof field.config === "object" ? { ...field.config } : {},
+  }));
+
+  for (const formula of prepared.filter((field) => field.field_type === "formula")) {
+    for (const dependency of formulaDependencies(formula.config?.expression || "")) {
+      if (!dependency.includes(".")) continue;
+      const [root, ...rest] = dependency.split(".");
+      const lookup = prepared.find((field) => field.api_name === root);
+      if (!lookup || lookup.field_type !== "lookup") continue;
+      const type = await resolveRelatedPathType({ db, field: lookup, path: rest.join("."), req });
+      if (!type) continue;
+      lookup.config.relatedFieldTypes = {
+        ...(lookup.config.relatedFieldTypes || lookup.config.related_field_types || {}),
+        [rest.join(".")]: type,
+      };
+    }
+  }
+  return prepared;
+}
+
+export function buildDerivedDependencyGraph(fields) {
+  const nodes = {};
+  for (const field of activeFields(fields)) {
+    if (field.field_type === "formula") {
+      nodes[field.api_name] = {
+        kind: "formula",
+        dependencies: formulaDependencies(field.config?.expression || ""),
+      };
+    } else if (field.field_type === "rollup") {
+      const config = normalizeRollupConfig(field);
+      nodes[field.api_name] = {
+        kind: "rollup",
+        relationshipKey: config?.relationshipKey || null,
+        sourceField: config?.sourceField || null,
+        dependencies: config?.sourceField ? [`${config.relationshipKey}.${config.sourceField}`] : [config?.relationshipKey].filter(Boolean),
+      };
+    }
+  }
+  return nodes;
+}
+
 export async function hydrateFormulaLookups({ db, fields, record, req }) {
   const result = { ...(record || {}) };
   const cache = new Map();
@@ -213,8 +277,9 @@ export async function evaluateRollupsForRecord({ db, object, fields, record, req
 }
 
 export async function recalculateDerivedRecord({ db, object, fields, record, req }) {
-  let result = await evaluateRollupsForRecord({ db, object, fields, record, req });
-  result = await hydrateFormulaLookups({ db, fields, record: result, req });
-  result = compileFormulas(fields)(result);
+  const preparedFields = await prepareFormulaFields({ db, fields, req });
+  let result = await evaluateRollupsForRecord({ db, object, fields: preparedFields, record, req });
+  result = await hydrateFormulaLookups({ db, fields: preparedFields, record: result, req });
+  result = compileFormulas(preparedFields)(result);
   return result;
 }
