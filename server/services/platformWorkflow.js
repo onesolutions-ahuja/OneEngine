@@ -9,6 +9,7 @@ import { getPlatformService } from "./onlineOrders/index.js";
 import { loadPlatformConfig } from "./onlineOrders/platformConfig.js";
 import { resolveUberMenuProducts, UberMenuMappingError } from "./onlineOrders/uberMenuMapping.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
+import { effectiveManifest } from "./connectorRuntime.js";
 import { transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createInventoryMovement } from "./inventory.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
