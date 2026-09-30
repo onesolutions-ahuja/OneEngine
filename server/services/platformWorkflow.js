@@ -3432,8 +3432,15 @@ export async function executeWorkflowActions({ actions, ...context }) {
     }
     throw error;
   }
+  const governedDb = typeof context.db === "function"
+    ? async (...args) => {
+        governor.consumeQuery(1);
+        return context.db(...args);
+      }
+    : context.db;
   const runtimeContext = applyExecutionContext({
     ...context,
+    db: governedDb,
     executionGuard,
     governor,
     workflowDepth: executionGuard.chain.length,
@@ -3451,6 +3458,11 @@ export async function executeWorkflowActions({ actions, ...context }) {
   for (const item of actions) {
     if (!item || typeof item !== "object") continue;
     governor.consumeWorkflowStep(1);
+    const actionType = resolveWorkflowActionType(item);
+    if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","CALL_WEBHOOK","HTTP_REQUEST","CALL_FUNCTION"].includes(actionType)) {
+      governor.consumeExternalAction(1);
+    }
+    if (actionType === "RUN_SUBFLOW") governor.consumeSubflow(1);
     const index = results.length;
     let stepRun = null;
     if (runtimeContext.db && runtimeContext.runId) {
