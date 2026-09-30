@@ -5570,6 +5570,27 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         afterCommitResults: txResult.afterCommit,
       });
     } catch (error) {
+      if (error instanceof PlatformTransactionError) {
+        const cause = error.cause || error;
+        if (cause instanceof RecordLifecycleError) {
+          const lifecycleCause = cause.cause || cause;
+          return res.status(lifecycleCause.status || error.status || 422).json({
+            success: false,
+            code: lifecycleCause.code || cause.code || error.code,
+            message: lifecycleCause.message || cause.message || error.message,
+            lifecycleStage: cause.stage,
+            transactionId: error.transactionId || null,
+            transactionPhase: error.phase || null,
+          });
+        }
+        return res.status(cause.status || error.status || 422).json({
+          success: false,
+          code: cause.code || error.code,
+          message: cause.message || error.message,
+          transactionId: error.transactionId || null,
+          transactionPhase: error.phase || null,
+        });
+      }
       if (error instanceof RecordLifecycleError) {
         const cause = error.cause || error;
         return res.status(cause.status || 422).json({
