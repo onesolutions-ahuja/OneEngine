@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { executeWorkflowAction } from "../services/platformWorkflow.js";
+import { executeWorkflowAction, alignWorkflowWritableValues } from "../services/platformWorkflow.js";
 
 test("workflow action USER mode fails closed without current permission", async () => {
   const db = async (sql) => {
@@ -60,5 +60,22 @@ test("untrusted SYSTEM workflow action is rejected", async () => {
       action: { type: "IN_APP_NOTIFICATION", message: "bad" },
     }),
     (error) => error.code === "UNTRUSTED_SYSTEM_EXECUTION",
+  );
+});
+
+
+test("workflow write alignment follows metadata order rather than action object order", () => {
+  const fields = [
+    { api_name: "name", source_column: "name" },
+    { api_name: "price", source_column: "unit_price" },
+  ];
+  const entries = [
+    ["unit_price", 12.5],
+    ["name", "Example"],
+  ];
+  const aligned = alignWorkflowWritableValues(fields, entries);
+  assert.deepEqual(
+    aligned.map(({ field, value }) => [field.source_column, value]),
+    [["name", "Example"], ["unit_price", 12.5]],
   );
 });
