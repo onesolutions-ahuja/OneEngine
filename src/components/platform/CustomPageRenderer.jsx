@@ -188,7 +188,7 @@ function MultiContainerView({ node, sectionWidth, device, builderMode, onRecordC
  * MultiContainer (same hook, same endpoint, same permissions). Row On Click
  * goes through the same interaction dispatch as record cards.
  */
-function TableView({ node, builderMode, onRecordClick, data }) {
+export function TableView({ node, builderMode, onRecordClick, data }) {
   const collection = node.collection || {};
   const { records, fields, placeholder, loading, error } = data?.placeholder
     ? { records: [], fields: collection.fields || [], placeholder: true, loading: false, error: "" }
@@ -262,7 +262,7 @@ function advancedCollection(node) {
   return { ...collection, objectKey: collection.objectKey || config.objectKey || "", fields: [...fields] };
 }
 
-function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
+export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   const config = node.config || {};
   const collection = advancedCollection(node);
   const state = data?.[node.id] || {};
