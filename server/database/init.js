@@ -323,6 +323,39 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         `);
       },
     },
+    {
+      key: "0019_rbac_permission_catalog_followup",
+      version: "19",
+      name: "Seed active appointment, gift-card, invoice and approval permissions",
+      up: async client => {
+        const permissionRows = [
+          ["appointments.view", "View Appointments"],
+          ["appointments.configure", "Configure Appointments"],
+          ["appointments.manage", "Manage Appointments"],
+          ["appointments.payment", "Manage Appointment Payments"],
+          ["gift_cards.use", "Use Gift Cards"],
+          ["gift_cards.issue", "Issue Gift Cards"],
+          ["gift_cards.topup", "Top Up Gift Cards"],
+          ["gift_cards.redeem", "Redeem Gift Cards"],
+          ["invoice.send", "Send Invoices"],
+          ["approvals.submit", "Submit Approval Requests"],
+          ["approvals.decide", "Decide Approval Requests"],
+        ];
+        for (const [code, name] of permissionRows) {
+          await client.query(
+            `INSERT INTO permissions (code,name) VALUES ($1,$2)
+             ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name`,
+            [code, name]
+          );
+        }
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT r.id,p.id FROM roles r CROSS JOIN permissions p
+           WHERE r.company_id IS NULL AND r.api_key='platform_superadmin'
+           ON CONFLICT (role_id,permission_id) DO NOTHING`
+        );
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
@@ -2600,6 +2633,17 @@ async function initializeLegacyDatabase(pool) {
     ["integration.manage", "Manage Integrations"],
     ["settings.manage", "Manage Settings"],
     ["platform.manage", "Manage Platform Metadata"],
+    ["appointments.view", "View Appointments"],
+    ["appointments.configure", "Configure Appointments"],
+    ["appointments.manage", "Manage Appointments"],
+    ["appointments.payment", "Manage Appointment Payments"],
+    ["gift_cards.use", "Use Gift Cards"],
+    ["gift_cards.issue", "Issue Gift Cards"],
+    ["gift_cards.topup", "Top Up Gift Cards"],
+    ["gift_cards.redeem", "Redeem Gift Cards"],
+    ["invoice.send", "Send Invoices"],
+    ["approvals.submit", "Submit Approval Requests"],
+    ["approvals.decide", "Decide Approval Requests"],
     /* T10V - accounting integration export (push sales through the T9A connections). */
     ["accounting.export", "Export to Accounting"],
     ["online_orders.view", "View Online Orders"],
