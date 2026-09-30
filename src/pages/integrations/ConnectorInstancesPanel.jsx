@@ -28,12 +28,12 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     setLoading(true);
     setError("");
     try {
-      const [catalogue, installed, storeResult] = await Promise.all([
-        apiRequest("/api/packages/marketplace"),
+      const [connectorApps, installed, storeResult] = await Promise.all([
+        apiRequest("/api/connector-apps"),
         apiRequest("/api/connector-instances"),
         apiRequest("/api/admin/stores"),
       ]);
-      const allApps = Array.isArray(catalogue?.data) ? catalogue.data : [];
+      const allApps = Array.isArray(connectorApps?.data) ? connectorApps.data : [];
       const installedApps = allApps.filter((app) =>
         app.company_installation?.status === "active" && app.manifest?.connectorApp
           && (!requestedPackageKey || app.package_key === requestedPackageKey)
