@@ -21,6 +21,9 @@ function extractKeys(text, pattern) {
 
 function routeBlocks(file, text, globalGatewayEnabled = false) {
   const routerLevelAuth = /\brouter\.use\s*\(\s*authenticate\b/.test(text);
+  const authAliases = [...text.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*\[([\s\S]*?)\]/g)]
+    .filter((match) => /\bauthenticate\b/.test(match[2]))
+    .map((match) => match[1]);
   const matches = [...text.matchAll(/\b(?:router|app)\.(post|put|patch|delete)\s*\(\s*(["'`])([^"'`]+)\2/g)];
   return matches.map((match, index) => {
     const start = match.index;
@@ -33,7 +36,9 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
     const executesSystemWorkflow = /\bexecuteSystemWorkflow\s*\(/.test(body);
     const executesRegisteredAction = /\bexecuteRegisteredAction\s*\(/.test(body);
     const invokesFunctionRegistry = /\b(?:getRegisteredFunction|executePlatformFunction|CALL_FUNCTION)\b/.test(body);
-    const authenticated = routerLevelAuth || /\bauthenticate\b/.test(body);
+    const authenticated = routerLevelAuth
+      || /\bauthenticate\b/.test(body)
+      || authAliases.some((alias) => new RegExp("\\.\\.\\." + alias + "\\b|\\b" + alias + "\\b").test(body));
     return {
       file: rel(file),
       method,
