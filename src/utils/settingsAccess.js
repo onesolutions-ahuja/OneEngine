@@ -1,6 +1,5 @@
 export function settingSectionAccess({
   permissions = [],
-  loyalty = false,
 } = {}) {
   const codes = new Set(Array.isArray(permissions) ? permissions : [])
   const settingsManage = codes.has('settings.manage')
@@ -8,7 +7,9 @@ export function settingSectionAccess({
 
   return {
     'Client Web Shop': settingsManage,
-    'Customer Loyalty': loyalty === true,
+    // Licence state must not hide an installed app's Settings. RBAC controls
+    // configuration visibility; licence is enforced when licensed logic runs.
+    'Customer Loyalty': true,
     'Server / API Configuration': platformManage,
     Platform: platformManage,
     'Message Templates': settingsManage,
