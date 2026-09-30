@@ -10,6 +10,7 @@ import { bootstrapInitialSuperadmin, ensureGlobalSystemProfile, initializeDataba
 import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs } from "./services/platformJobs.js";
+import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
 import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
 import { executeRegisteredAction } from "./services/platformActions.js";
 import { claimDueScheduledWorkflows, completeScheduledWorkflow, failScheduledWorkflow } from "./services/platformSchedules.js";
@@ -139,6 +140,7 @@ app.use(express.json({ limit: "10mb" }));
  * self-checkout mode token is refused for privileged operations
  * server-side (never merely hidden in the UI). */
 app.use(createSelfCheckoutModeGate());
+app.use(createTrustedRuntimeGate());
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 /*
@@ -2102,6 +2104,8 @@ app.use((req, res) => {
 
 async function startServer() {
   try {
+    const trustedRuntime = validateTrustedRuntime();
+    console.log(`OneEngine Trusted Runtime ${trustedRuntime.version.slice(0, 12)} (${trustedRuntime.count} capabilities)`);
     if (!pool) throw new Error("DATABASE_URL is not configured");
     console.log("onePOS: checking database connection...");
     await db("SELECT NOW()");
@@ -2171,6 +2175,7 @@ async function startServer() {
             }
           },
           handler: async (job) => {
+            assertTrustedJobKind(job.kind);
             if (job.kind === "WAIT") return;
             const payload = job.payload || {};
             if (job.kind === "APP_RELEASE_UPGRADE") {
