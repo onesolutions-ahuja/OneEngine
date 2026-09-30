@@ -134,3 +134,21 @@ test("correlation trace aggregates workflow runs, events and record history", as
   assert.equal(trace.events[0].id, "evt1");
   assert.equal(trace.recordHistory[0].id, "hist1");
 });
+
+
+test("conformance duplicate-object audit scopes duplicates by ownership so tenant overrides remain valid", async () => {
+  const db = async (sql) => {
+    if (sql.includes("GROUP BY object_key,company_id")) {
+      assert.match(sql, /GROUP BY object_key,company_id/);
+      return { rows: [] };
+    }
+    if (sql.includes("FROM company_package_installations")) return { rows: [] };
+    return { rows: [] };
+  };
+
+  const report = await auditPlatformConformance({
+    db,
+    companyId: "11111111-1111-1111-1111-111111111111",
+  });
+  assert.equal(report.issues.duplicateObjects.length, 0);
+});
