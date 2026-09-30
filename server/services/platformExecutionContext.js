@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { loadEffectivePermissionSets } from "./platformPermissionSets.js";
 
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 
@@ -39,16 +40,25 @@ function permissionTree(codes = []) {
   return root;
 }
 
-async function loadPermissions(db, user) {
-  if (!db || typeof db !== "function" || !user?.roleId) return Object.freeze({});
-  const result = await db(
-    `SELECT p.code
-       FROM role_permissions rp
-       JOIN permissions p ON p.id=rp.permission_id
-      WHERE rp.role_id=$1`,
-    [user.roleId]
-  );
-  return deepFreeze(permissionTree((result.rows || []).map((row) => row.code)));
+async function loadPermissions(db, user, req = null) {
+  if (!db || typeof db !== "function" || !user?.companyId) return Object.freeze({});
+  const roleResult = user.roleId
+    ? await db(
+        `SELECT p.code
+           FROM role_permissions rp
+           JOIN permissions p ON p.id=rp.permission_id
+          WHERE rp.role_id=$1`,
+        [user.roleId]
+      )
+    : { rows: [] };
+  const permissionSets = user.id
+    ? await loadEffectivePermissionSets(db, user, req)
+    : [];
+  const codes = new Set((roleResult.rows || []).map((row) => row.code));
+  for (const set of permissionSets) {
+    for (const code of Array.isArray(set.system_permissions) ? set.system_permissions : []) codes.add(code);
+  }
+  return deepFreeze(permissionTree([...codes]));
 }
 
 function executionTimestamp(existing = null) {
@@ -80,20 +90,45 @@ export async function createPlatformExecutionContext({
   system = null,
   request = null,
   executionContext = null,
+  executionMode = null,
+  trustedSystem = false,
 } = {}) {
   const reqUser = req?.user || {};
   const inherited = executionContext?.globals || executionContext || {};
   const inheritedCompany = inherited.$Company?.id || inherited.companyId || null;
+  const inheritedUserId = inherited.$User?.id || null;
+  if (reqUser.companyId && inheritedCompany && String(reqUser.companyId) !== String(inheritedCompany)) {
+    const error = new Error("Request company does not match inherited execution context");
+    error.code = "EXECUTION_CONTEXT_COMPANY_MISMATCH";
+    error.status = 403;
+    throw error;
+  }
+  if (reqUser.id && inheritedUserId && String(reqUser.id) !== String(inheritedUserId)) {
+    const error = new Error("Request actor does not match inherited execution context");
+    error.code = "EXECUTION_CONTEXT_USER_MISMATCH";
+    error.status = 403;
+    throw error;
+  }
   const authoritativeCompanyId = reqUser.companyId || inheritedCompany || companyId || null;
+  const inheritedMode = inherited.$System?.executionMode || null;
+  const requestedMode = String(executionMode || req?.executionMode || inheritedMode || "USER").toUpperCase();
+  const mode = requestedMode === "SYSTEM" ? "SYSTEM" : "USER";
+  const isTrustedSystem = trustedSystem === true || req?.trustedSystemExecution === true || inherited.$System?.trusted === true;
+  if (mode === "SYSTEM" && !isTrustedSystem) {
+    const error = new Error("SYSTEM execution requires a trusted runtime entry point");
+    error.code = "UNTRUSTED_SYSTEM_EXECUTION";
+    error.status = 403;
+    throw error;
+  }
 
   let persistedUser = null;
-  const actorId = userId || reqUser.id || inherited.$User?.id || null;
-  if (db && typeof db === "function" && actorId && authoritativeCompanyId && !reqUser.roleId && !inherited.$User?.roleId) {
+  const actorId = reqUser.id || inheritedUserId || (mode === "SYSTEM" ? userId : null);
+  if (db && typeof db === "function" && actorId && authoritativeCompanyId) {
     try {
       const result = await db(
         `SELECT id,company_id,store_id,role_id,is_superadmin
            FROM users
-          WHERE id=$1 AND company_id=$2
+          WHERE id=$1 AND company_id=$2 AND active=true
           LIMIT 1`,
         [actorId, authoritativeCompanyId]
       );
@@ -112,6 +147,25 @@ export async function createPlatformExecutionContext({
     }
   }
 
+  if (reqUser.id && userId && String(reqUser.id) !== String(userId)) {
+    const error = new Error("Authenticated execution cannot impersonate another user");
+    error.code = "EXECUTION_CONTEXT_USER_MISMATCH";
+    error.status = 403;
+    throw error;
+  }
+  if (mode === "USER" && !actorId) {
+    const error = new Error("USER execution requires an authenticated actor");
+    error.code = "EXECUTION_CONTEXT_ACTOR_REQUIRED";
+    error.status = 403;
+    throw error;
+  }
+  if (mode === "USER" && db && typeof db === "function" && actorId && !persistedUser) {
+    const error = new Error("Runtime actor is unavailable or inactive");
+    error.code = "RUNTIME_ACTOR_UNAVAILABLE";
+    error.status = 403;
+    throw error;
+  }
+
   if (reqUser.companyId && companyId && String(reqUser.companyId) !== String(companyId)) {
     const error = new Error("Cross-company execution context is not allowed");
     error.code = "EXECUTION_CONTEXT_COMPANY_MISMATCH";
@@ -127,13 +181,13 @@ export async function createPlatformExecutionContext({
 
   const actor = safeObject({
     ...(safeObject(inherited.$User) || {}),
-    ...(safeObject(persistedUser) || {}),
     ...(safeObject(reqUser) || {}),
+    ...(safeObject(persistedUser) || {}),
     id: actorId,
     companyId: authoritativeCompanyId,
   }) || {};
-  const permissions = actor.roleId
-    ? await loadPermissions(db, actor)
+  const permissions = actor.id && authoritativeCompanyId
+    ? await loadPermissions(db, actor, req)
     : Object.freeze({ ...(inherited.$Permission || {}) });
 
   const startedAt = executionTimestamp(inherited.$Flow?.startedAt);
@@ -181,6 +235,8 @@ export async function createPlatformExecutionContext({
       correlationId,
       environment: system?.environment || process.env.NODE_ENV || inherited.$System?.environment || null,
       runtime: "OneEngine",
+      executionMode: mode,
+      trusted: isTrustedSystem,
     },
   };
 
@@ -202,11 +258,31 @@ export async function createPlatformExecutionContext({
 
 export function applyExecutionContext(context = {}, executionContext) {
   const globals = executionContext?.globals || {};
+  const canonicalUser = globals.$User || null;
+  const runtimeReq = context.req
+    ? {
+        ...context.req,
+        executionMode: globals.$System?.executionMode || context.req.executionMode || "USER",
+        trustedSystemExecution: globals.$System?.trusted === true || context.req.trustedSystemExecution === true,
+        user: canonicalUser
+          ? {
+              ...(context.req.user || {}),
+              ...canonicalUser,
+              id: canonicalUser.id || null,
+              companyId: executionContext?.companyId ?? canonicalUser.companyId ?? context.req.user?.companyId ?? null,
+              storeId: executionContext?.storeId ?? canonicalUser.storeId ?? context.req.user?.storeId ?? null,
+            }
+          : (context.req.user || {}),
+      }
+    : context.req;
   return {
     ...context,
+    req: runtimeReq,
     executionContext,
     globals,
     ...globals,
+    executionMode: globals.$System?.executionMode || context.executionMode || "USER",
+    trustedSystem: globals.$System?.trusted === true || context.trustedSystem === true,
     companyId: executionContext?.companyId ?? context.companyId ?? null,
     storeId: executionContext?.storeId ?? context.storeId ?? null,
     tillId: executionContext?.tillId ?? context.tillId ?? null,

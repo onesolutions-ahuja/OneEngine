@@ -64,6 +64,22 @@ export async function executeSystemWorkflow({
     throw error;
   }
 
+  const executionMode = userId || req?.user?.id ? "USER" : "SYSTEM";
+  if (executionMode === "SYSTEM") {
+    req = {
+      ...(req || {}),
+      executionMode: "SYSTEM",
+      trustedSystemExecution: true,
+      user: { ...(req?.user || {}), companyId },
+    };
+  } else {
+    req = {
+      ...(req || {}),
+      executionMode: "USER",
+      user: { ...(req?.user || {}), companyId, id: req?.user?.id || userId },
+    };
+  }
+
   const correlationId = String(
     req?.businessCommandCorrelationId
       || req?.headers?.["x-request-id"]
@@ -124,6 +140,8 @@ export async function executeSystemWorkflow({
       workflowVersion: workflow.version || workflow.action?.version || null,
       parentRunId: parentRunId || null,
       source: sourceInfo,
+      executionMode,
+      trustedSystem: executionMode === "SYSTEM",
       ...extraContext,
     });
     await db(
