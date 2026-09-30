@@ -282,6 +282,33 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         `);
       },
     },
+    {
+      key: "0017_runtime_conformance",
+      version: "17",
+      name: "Runtime conformance tracing and history metadata",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255);
+          ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS transaction_id UUID;
+          ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS workflow_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL;
+          ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS event_id UUID REFERENCES platform_events(id) ON DELETE SET NULL;
+          ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS source VARCHAR(80);
+          ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(20);
+          ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS runtime_contract_version VARCHAR(40);
+
+          ALTER TABLE platform_workflow_runs ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255);
+          ALTER TABLE platform_workflow_runs ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(20);
+          ALTER TABLE platform_workflow_runs ADD COLUMN IF NOT EXISTS runtime_contract_version VARCHAR(40);
+
+          ALTER TABLE platform_workflow_step_runs ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255);
+
+          CREATE INDEX IF NOT EXISTS idx_platform_record_history_correlation
+            ON platform_record_history(company_id, correlation_id, created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_platform_workflow_runs_correlation
+            ON platform_workflow_runs(company_id, correlation_id, created_at DESC);
+        `);
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
