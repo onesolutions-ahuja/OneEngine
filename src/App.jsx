@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, apiUrl, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, startGoogleLogin, verifyPin } from './services/api'
+import { apiRequest, apiUrl, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredSessionPermissions, getStoredUser, hasSession, loadSessionPermissions, login, logout, startGoogleLogin, verifyPin } from './services/api'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, readSettingsContextCache, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb, { ORB_STATES } from './components/jarvis/JarvisOrb'
@@ -2271,7 +2271,10 @@ function Desktop({ onLock, onSignOut }) {
   const [storeFocusPackageKey, setStoreFocusPackageKey] = useState('')
   const [storeAppsLoaded, setStoreAppsLoaded] = useState(false)
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
-  const [desktopPermissions, setDesktopPermissions] = useState([])
+  const [desktopPermissions, setDesktopPermissions] = useState(() => {
+    const cached = getStoredSessionPermissions()
+    return Array.isArray(cached?.permissions) ? cached.permissions : []
+  })
   const canManagePlatform = desktopPermissions.includes('platform.manage')
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
@@ -2332,11 +2335,11 @@ function Desktop({ onLock, onSignOut }) {
 
   useEffect(() => {
     let live = true
-    apiRequest('/api/auth/me/permissions')
-      .then((response) => {
-        if (live) setDesktopPermissions(Array.isArray(response?.data?.permissions) ? response.data.permissions : [])
+    loadSessionPermissions({ includeEntitlements: false })
+      .then((permissions) => {
+        if (live) setDesktopPermissions(Array.isArray(permissions?.permissions) ? permissions.permissions : [])
       })
-      .catch(() => { if (live) setDesktopPermissions([]) })
+      .catch(() => { if (live && !getStoredSessionPermissions()) setDesktopPermissions([]) })
     return () => { live = false }
   }, [])
 
