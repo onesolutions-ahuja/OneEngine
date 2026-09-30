@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { enqueuePlatformJob } from "./platformJobs.js";
 import { isAllowedConnectorTarget } from "./connectorFramework.js";
 import { deliverPlatformNotifications } from "./platformNotifications.js";
@@ -6,12 +6,60 @@ import { deliverPlatformNotifications } from "./platformNotifications.js";
 function envelope(row) {
   return {
     id: row.id,
+    replayId: row.replay_id == null ? null : Number(row.replay_id),
     companyId: row.company_id,
     type: row.event_type,
     payload: row.payload,
     actorUserId: row.actor_user_id,
+    origin: {
+      type: row.origin_type || null,
+      id: row.origin_id || null,
+    },
+    correlationId: row.correlation_id || null,
+    causationEventId: row.causation_event_id || null,
+    rootEventId: row.root_event_id || row.id || null,
+    hopCount: Number(row.hop_count || 0),
+    objectId: row.object_id || null,
+    recordId: row.record_id || null,
+    operation: row.operation || null,
+    changedFields: Array.isArray(row.changed_fields) ? row.changed_fields : [],
+    signature: row.event_signature || null,
     createdAt: row.created_at,
   };
+}
+
+function stableJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+}
+
+function eventSignature(value) {
+  return createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
+export function changedFieldNames(previousRecord = null, record = null, operation = null) {
+  const op = String(operation || "").toUpperCase();
+  if (op === "CREATE") return Object.keys(record || {}).sort();
+  if (op === "DELETE") return Object.keys(previousRecord || record || {}).sort();
+  const keys = new Set([
+    ...Object.keys(previousRecord || {}),
+    ...Object.keys(record || {}),
+  ]);
+  return [...keys]
+    .filter((key) => JSON.stringify(previousRecord?.[key] ?? null) !== JSON.stringify(record?.[key] ?? null))
+    .sort();
+}
+
+function resolveEventLineage({ req = null, causationEventId = null, rootEventId = null, hopCount = null } = {}) {
+  const inherited = req?.platformEvent || req?.eventContext || null;
+  const parentId = causationEventId || inherited?.eventId || inherited?.id || null;
+  const rootId = rootEventId || inherited?.rootEventId || inherited?.root_event_id || parentId || null;
+  const inheritedHop = Number(inherited?.hopCount ?? inherited?.hop_count ?? -1);
+  const resolvedHop = hopCount == null
+    ? (parentId ? inheritedHop + 1 : 0)
+    : Number(hopCount || 0);
+  return { causationEventId: parentId, rootEventId: rootId, hopCount: resolvedHop };
 }
 
 async function safeTargetUrl(value) {
@@ -70,15 +118,87 @@ export async function registerPlatformEventType({ db, eventType, description = n
   return result.rows[0];
 }
 
-export async function publishPlatformEvent({ db, companyId = null, eventType, payload = {}, actorUserId = null, idempotencyKey = null }) {
+export async function publishPlatformEvent({
+  db,
+  companyId = null,
+  eventType,
+  payload = {},
+  actorUserId = null,
+  idempotencyKey = null,
+  originType = null,
+  originId = null,
+  correlationId = null,
+  causationEventId = null,
+  rootEventId = null,
+  hopCount = null,
+  objectId = null,
+  recordId = null,
+  operation = null,
+  changedFields = [],
+  signature = null,
+  req = null,
+}) {
   const type = String(eventType || "").trim();
   if (!type || type.length > 200) throw new Error("eventType must contain 1 to 200 characters");
   if (!payload || typeof payload !== "object") throw new Error("Event payload must be an object or array");
+  const lineage = resolveEventLineage({ req, causationEventId, rootEventId, hopCount });
+  if (lineage.hopCount > 16) {
+    return { event: null, inserted: false, skipped: true, reason: "EVENT_HOP_LIMIT", notifications: { delivered: 0, skipped: 0 } };
+  }
+  const normalizedChangedFields = Array.isArray(changedFields) ? [...new Set(changedFields.map(String))].sort() : [];
+  const derivedSignature = signature || eventSignature({
+    type,
+    objectId,
+    recordId,
+    operation,
+    changedFields: normalizedChangedFields,
+    payload,
+  });
+
+  if (lineage.rootEventId && derivedSignature) {
+    const loop = await db(
+      `SELECT id,replay_id FROM platform_events
+        WHERE root_event_id=$1 AND event_signature=$2
+        LIMIT 1`,
+      [lineage.rootEventId, derivedSignature]
+    );
+    if (loop.rows?.length) {
+      return {
+        event: eventFromRow(loop.rows[0]),
+        inserted: false,
+        skipped: true,
+        reason: "EVENT_LOOP_PREVENTED",
+        notifications: { delivered: 0, skipped: 0 },
+      };
+    }
+  }
+
   const result = await db(
-    `INSERT INTO platform_events(company_id,event_type,payload,actor_user_id,idempotency_key)
-     VALUES($1,$2,$3::jsonb,$4,$5)
+    `INSERT INTO platform_events(
+       company_id,event_type,payload,actor_user_id,idempotency_key,
+       origin_type,origin_id,correlation_id,causation_event_id,root_event_id,hop_count,
+       object_id,record_id,operation,changed_fields,event_signature
+     )
+     VALUES($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16)
      ON CONFLICT(company_id,idempotency_key) DO NOTHING RETURNING *`,
-    [companyId, type, JSON.stringify(payload), actorUserId, idempotencyKey]
+    [
+      companyId,
+      type,
+      JSON.stringify(payload),
+      actorUserId,
+      idempotencyKey,
+      originType,
+      originId,
+      correlationId,
+      lineage.causationEventId,
+      lineage.rootEventId,
+      lineage.hopCount,
+      objectId,
+      recordId,
+      operation,
+      JSON.stringify(normalizedChangedFields),
+      derivedSignature,
+    ]
   );
   let row = result.rows[0];
   const inserted = Boolean(row);
@@ -87,6 +207,13 @@ export async function publishPlatformEvent({ db, companyId = null, eventType, pa
     row = existing.rows[0];
   }
   if (!row) throw new Error("Unable to persist platform event");
+  if (!row.root_event_id) {
+    const rooted = await db(
+      "UPDATE platform_events SET root_event_id=id WHERE id=$1 AND root_event_id IS NULL RETURNING *",
+      [row.id]
+    );
+    row = rooted.rows?.[0] || row;
+  }
   let notifications = { delivered: 0, skipped: 0 };
   if (inserted && row.company_id) {
     const deliveries = await db(
@@ -140,6 +267,14 @@ export async function publishPlatformEvent({ db, companyId = null, eventType, pa
             recordId: payload?.recordId || payload?.id || null,
             record: payload?.record || payload || null,
             actorUserId: row.actor_user_id || null,
+            replayId: row.replay_id || null,
+            originType: row.origin_type || null,
+            originId: row.origin_id || null,
+            correlationId: row.correlation_id || null,
+            causationEventId: row.causation_event_id || null,
+            rootEventId: row.root_event_id || row.id,
+            hopCount: Number(row.hop_count || 0),
+            eventSignature: row.event_signature || null,
           },
           idempotencyKey: `event-workflow:${workflow.id}:${row.id}`,
         });
@@ -462,3 +597,64 @@ export async function acceptInboundWebhook({
 }
 
 export { safeTargetUrl };
+
+
+export async function publishRecordChangeEvent({
+  db,
+  companyId,
+  object,
+  record,
+  previousRecord = null,
+  operation,
+  actorUserId = null,
+  req = null,
+  originType = null,
+  originId = null,
+  correlationId = null,
+  idempotencyKey = null,
+  archived = false,
+}) {
+  const op = String(operation || "").toUpperCase();
+  if (!["CREATE", "UPDATE", "DELETE"].includes(op)) throw new Error("Record change operation must be CREATE, UPDATE or DELETE");
+  const objectId = object?.id || null;
+  const objectKey = object?.object_key || object?.objectKey || null;
+  const recordId = record?.id || previousRecord?.id || null;
+  const changedFields = changedFieldNames(previousRecord, record, op);
+  const eventType = `platform.object.record.${op === "CREATE" ? "created" : op === "UPDATE" ? "updated" : "deleted"}`;
+  const correlation = correlationId
+    || req?.executionContext?.globals?.$Request?.correlationId
+    || req?.headers?.["x-request-id"]
+    || req?.headers?.["x-correlation-id"]
+    || null;
+  const origin = originType
+    || req?.executionContext?.globals?.$Trigger?.source
+    || req?.executionSource
+    || req?.platformEvent?.originType
+    || (req?.method === "JOB" ? "JOB" : "API");
+
+  return publishPlatformEvent({
+    db,
+    companyId,
+    eventType,
+    payload: {
+      objectId,
+      objectKey,
+      recordId,
+      operation: op,
+      changedFields,
+      previousRecord: previousRecord || null,
+      record: record || null,
+      archived: archived === true,
+    },
+    actorUserId,
+    idempotencyKey,
+    originType: String(origin || "SYSTEM").toUpperCase(),
+    originId: originId || req?.platformEvent?.eventId || req?.platformEvent?.id || null,
+    correlationId: correlation,
+    objectId,
+    recordId,
+    operation: op,
+    changedFields,
+    req,
+  });
+}
