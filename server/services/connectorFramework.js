@@ -7,7 +7,7 @@ import {
 } from "./integrationCredentials.js";
 
 const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
-const AUTH_TYPES = new Set(["none", "api_key", "bearer", "basic"]);
+const AUTH_TYPES = new Set(["none", "api_key", "bearer", "basic", "oauth2"]);
 const MAX_TIMEOUT_MS = 120000;
 const MAX_ATTEMPTS = 5;
 
@@ -384,20 +384,16 @@ export function createConnectorActionExecutor({ db, fetchImpl = fetch, sleep = d
     if (!companyId || !connectionId || !operationKey) {
       throw new Error("companyId, connectionId, and operation are required");
     }
-    const connectionResult = await db(
-      `SELECT c.id, c.company_id, c.connector_definition_id, c.credential_id,
-              c.timeout_ms AS connection_timeout_ms, c.retry_policy AS connection_retry_policy,
-              d.connector_key, d.auth_type, d.base_url, d.operations,
-              d.timeout_ms AS definition_timeout_ms, d.retry_policy AS definition_retry_policy,
-              d.status AS definition_status
-       FROM integration_connections c
-       JOIN platform_connector_definitions d ON d.id = c.connector_definition_id
-       WHERE c.id = $1 AND c.company_id = $2 AND c.enabled = TRUE
-       LIMIT 1`,
-      [connectionId, companyId]
-    );
-    const connection = connectionResult.rows[0];
-    if (!connection || connection.definition_status !== "ACTIVE") {
+    const loaded = await resolveOneConnection({
+      db,
+      companyId,
+      connectionId,
+      includeSecrets: true,
+      migrateLegacy: true,
+      actorUserId,
+    });
+    const connection = loaded?.connection || null;
+    if (!connection || connection.enabled === false) {
       throw new Error("Connector connection is unavailable");
     }
 
@@ -408,10 +404,10 @@ export function createConnectorActionExecutor({ db, fetchImpl = fetch, sleep = d
     if (!definition) throw new Error("Connector operation is not defined");
     const method = String(definition.method || "GET").toUpperCase();
     if (!HTTP_METHODS.has(method)) throw new Error("Unsupported connector HTTP method");
-    const authType = String(connection.auth_type || "none").toLowerCase();
+    const authType = String(connection.effective_auth_type || connection.auth_type || "none").toLowerCase();
     if (!AUTH_TYPES.has(authType)) throw new Error("Unsupported connector auth type");
 
-    const baseUrl = new URL(connection.base_url);
+    const baseUrl = new URL(connection.effective_base_url || connection.base_url);
     if (!(await isAllowedConnectorTarget(baseUrl.href))) {
       throw new Error("Connector base URL target is not allowed");
     }
@@ -424,17 +420,8 @@ export function createConnectorActionExecutor({ db, fetchImpl = fetch, sleep = d
       throw new Error("Connector operation target is not allowed");
     }
 
-    const credentials = connection.credential_id
-      ? await resolveConnectorCredential({
-          db,
-          credentialId: connection.credential_id,
-          companyId,
-          connectorId: connection.connector_definition_id,
-          platformCredentialAccess,
-          actorUserId,
-        })
-      : {};
-    if (connection.credential_id && !credentials) {
+    const credentials = loaded?.secrets || {};
+    if ((connection.credential_id || connection.credentials_encrypted) && !loaded) {
       throw new Error("Connector credential is unavailable");
     }
     const context = { input, credentials, response: undefined };
