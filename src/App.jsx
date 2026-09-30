@@ -1131,14 +1131,50 @@ function SettingsPage({ onOpenProfile }) {
 
   const settings = context?.settings
   const user = context?.user
+
+  const applyLocalSettingsPatch = (baseContext, patch) => {
+    if (!baseContext?.settings) return baseContext
+    const nextSettings = { ...baseContext.settings }
+    const cloneSection = (key) => { nextSettings[key] = { ...(nextSettings[key] || {}) }; return nextSettings[key] }
+
+    for (const [field, value] of Object.entries(patch || {})) {
+      if (field === 'dateFormat') cloneSection('general').dateFormat = value
+      else if (field === 'vatEnabled') cloneSection('tax').vatEnabled = value
+      else if (field === 'defaultVatRate') cloneSection('tax').defaultVatRate = Number(value)
+      else if (field === 'loyaltyEnabled') cloneSection('loyalty').enabled = value
+      else if (field === 'loyaltyEarningRate') cloneSection('loyalty').earningRate = value == null ? null : Number(value)
+      else if (field === 'loyaltyMinSaleTotal') cloneSection('loyalty').minSaleTotal = value == null ? null : Number(value)
+      else if (field === 'loyaltyRedeemValuePerPoint') cloneSection('loyalty').redeemValuePerPoint = value == null ? null : Number(value)
+      else if (field === 'loyaltyMinPointsRedeem') cloneSection('loyalty').minPointsRedeem = value == null ? null : Number(value)
+      else if (field === 'allowNegativeInventoryBilling') cloneSection('inventory').allowNegativeInventoryBilling = value
+      else if (field === 'scanGoEnabled') cloneSection('scanGo').enabled = value
+      else if (field === 'exchangeMode') cloneSection('exchange').mode = value
+      else if (field === 'batchInventoryMode') cloneSection('inventory').batchInventoryMode = value
+      else if (field === 'batchDefaultMfgRule') cloneSection('inventory').batchDefaultMfgRule = value
+      else if (field === 'batchDefaultExpiryRule') cloneSection('inventory').batchDefaultExpiryRule = value
+      else if (field === 'batchDefaultExpiryDays') cloneSection('inventory').batchDefaultExpiryDays = Number(value)
+      else if (field === 'productView') cloneSection('till').productView = value
+      else if (field === 'dockQuickAccess') cloneSection('dock').quickAccess = Array.isArray(value) ? [...value] : []
+      else if (field === 'customerDisplayEnabled') cloneSection('customerDisplay').enabled = value
+      else if (field === 'onlineOrderingEnabled') cloneSection('onlineOrdering').enabled = value
+      else if (field === 'onlinePaymentMethods') cloneSection('onlineOrdering').paymentMethods = Array.isArray(value) ? [...value] : []
+      else if (field === 'tillInvoicePrefix') cloneSection('invoicePrefixes').till = value
+      else if (field === 'deliveryInvoicePrefix') cloneSection('invoicePrefixes').delivery = value
+      else if (field === 'selfCheckoutInvoicePrefix') cloneSection('invoicePrefixes').selfCheckout = value
+    }
+
+    return { ...baseContext, settings: nextSettings }
+  }
   const update = async (field, value) => {
     if (!canManage) return
+    const previousContext = context
     try {
       setSaving(field)
       setError('')
+      setContext((current) => applyLocalSettingsPatch(current, { [field]: value }))
       await patchSettings({ [field]: value })
-      await load()
     } catch (err) {
+      setContext(previousContext)
       setError(err?.message || 'Unable to save setting')
     } finally {
       setSaving('')
@@ -1149,12 +1185,33 @@ function SettingsPage({ onOpenProfile }) {
     if (!canManage) return
     const next = String(value ?? '').trim()
     if (next === String(settings?.company?.[field] ?? '').trim()) return
+    const previousContext = context
     try {
       setSaving(`company.${field}`)
       setError('')
-      await patchCompanySettings({ [field]: next || null })
-      await load()
+      setContext((current) => current?.settings
+        ? {
+            ...current,
+            settings: {
+              ...current.settings,
+              company: { ...(current.settings.company || {}), [field]: next || null },
+            },
+          }
+        : current)
+      const response = await patchCompanySettings({ [field]: next || null })
+      if (response?.data) {
+        setContext((current) => current?.settings
+          ? {
+              ...current,
+              settings: {
+                ...current.settings,
+                company: { ...(current.settings.company || {}), ...response.data },
+              },
+            }
+          : current)
+      }
     } catch (err) {
+      setContext(previousContext)
       setError(err?.message || 'Unable to save company setting')
     } finally {
       setSaving('')
@@ -1175,12 +1232,14 @@ function SettingsPage({ onOpenProfile }) {
       next.batchDefaultMfgRule = 'none'
       next.batchDefaultExpiryRule = 'none'
     }
+    const previousContext = context
     try {
       setSaving('batchPolicy')
       setError('')
+      setContext((current) => applyLocalSettingsPatch(current, next))
       await patchSettings(next)
-      await load()
     } catch (err) {
+      setContext(previousContext)
       setError(err?.message || 'Unable to save batch inventory policy')
     } finally {
       setSaving('')
