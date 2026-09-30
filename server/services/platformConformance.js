@@ -181,3 +181,47 @@ export async function auditPlatformConformance({ db, companyId = null } = {}) {
     issues,
   };
 }
+
+
+export async function loadPlatformTrace({ db, companyId, correlationId } = {}) {
+  if (!db || typeof db !== "function") throw new Error("Database context is required");
+  if (!companyId || !correlationId) throw new Error("Company and correlationId are required");
+
+  const [runs, events, history] = await Promise.all([
+    db(
+      `SELECT r.*,
+              COALESCE((
+                SELECT jsonb_agg(s ORDER BY s.step_order,s.created_at)
+                  FROM platform_workflow_step_runs s
+                 WHERE s.run_id=r.id
+              ), '[]'::jsonb) AS steps
+         FROM platform_workflow_runs r
+        WHERE r.company_id=$1
+          AND (r.correlation_id=$2 OR r.metadata->>'correlationId'=$2)
+        ORDER BY r.started_at,r.created_at`,
+      [companyId, correlationId]
+    ),
+    db(
+      `SELECT *
+         FROM platform_events
+        WHERE company_id=$1 AND correlation_id=$2
+        ORDER BY replay_id,created_at`,
+      [companyId, correlationId]
+    ),
+    db(
+      `SELECT *
+         FROM platform_record_history
+        WHERE company_id=$1 AND correlation_id=$2
+        ORDER BY created_at,id`,
+      [companyId, correlationId]
+    ),
+  ]);
+
+  return {
+    ...platformRuntimeContract(),
+    correlationId,
+    workflowRuns: runs.rows || [],
+    events: events.rows || [],
+    recordHistory: history.rows || [],
+  };
+}
