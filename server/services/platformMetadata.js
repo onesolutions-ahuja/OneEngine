@@ -95,7 +95,7 @@ export const platformSchema = `
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     module_id UUID REFERENCES platform_modules(id) ON DELETE SET NULL,
     package_id UUID REFERENCES package_registry(id) ON DELETE SET NULL,
-    object_key VARCHAR(100) NOT NULL UNIQUE,
+    object_key VARCHAR(100) NOT NULL,
     api_name VARCHAR(100),
     label VARCHAR(200) NOT NULL,
     plural_label VARCHAR(200),
@@ -112,6 +112,11 @@ export const platformSchema = `
   );
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS api_name VARCHAR(100);
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::jsonb;
+  ALTER TABLE platform_objects DROP CONSTRAINT IF EXISTS platform_objects_object_key_key;
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_objects_global_key
+    ON platform_objects(object_key) WHERE company_id IS NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_objects_company_key
+    ON platform_objects(company_id, object_key) WHERE company_id IS NOT NULL;
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS source_package_version VARCHAR(40);
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS managed BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS package_required BOOLEAN NOT NULL DEFAULT FALSE;
@@ -1167,7 +1172,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     const objectResult = await pool.query(
       `INSERT INTO platform_objects (module_id, package_id, object_key, label, plural_label, source_table, store_scoped, config)
        VALUES ($1,(SELECT id FROM package_registry WHERE module_id=$1),$2,$3,$4,$5,$6,$7::jsonb)
-       ON CONFLICT (object_key) DO UPDATE SET label=EXCLUDED.label, plural_label=EXCLUDED.plural_label, source_table=EXCLUDED.source_table, store_scoped=EXCLUDED.store_scoped, config=COALESCE(platform_objects.config,'{}'::jsonb) || EXCLUDED.config, active=TRUE
+       ON CONFLICT (object_key) WHERE company_id IS NULL DO UPDATE SET label=EXCLUDED.label, plural_label=EXCLUDED.plural_label, source_table=EXCLUDED.source_table, store_scoped=EXCLUDED.store_scoped, config=COALESCE(platform_objects.config,'{}'::jsonb) || EXCLUDED.config, active=TRUE
        WHERE platform_objects.company_id IS NULL AND platform_objects.module_id=EXCLUDED.module_id
        RETURNING id`,
       [objectModuleId, object.key, object.label, object.plural, object.table, object.storeScoped === true, JSON.stringify(object.config || {})]
@@ -1287,7 +1292,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       const result = await pool.query(
         `INSERT INTO platform_objects (module_id,object_key,label,plural_label,source_table)
          VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (object_key) DO UPDATE SET label=EXCLUDED.label,plural_label=EXCLUDED.plural_label,source_table=EXCLUDED.source_table,active=true
+         ON CONFLICT (object_key) WHERE company_id IS NULL DO UPDATE SET label=EXCLUDED.label,plural_label=EXCLUDED.plural_label,source_table=EXCLUDED.source_table,active=true
          WHERE platform_objects.company_id IS NULL AND platform_objects.module_id=EXCLUDED.module_id
          RETURNING id`,
         [moduleId, object.key, object.label, object.plural, object.table]
