@@ -12,6 +12,7 @@ const BRAND_ICON_MATCHES=[
   [/quickbooks/i,'quickbooks'],[/shopify/i,'shopify'],[/xero/i,'xero-accounting'],[/sage/i,'sage-business-cloud-accounting'],
   [/prestashop/i,'prestashop'],[/woocommerce|woo commerce/i,'woocommerce'],[/wix/i,'wix'],[/uber\s*eats/i,'uber-eats'],
   [/deliveroo/i,'deliveroo'],[/just\s*eat/i,'just-eat'],[/whatsapp/i,'whatsapp'],
+  [/\bdojo\b/i,'dojo'],[/sum\s*up/i,'sumup'],[/\bsquare\b/i,'square'],[/\bmews\b/i,'mews'],
 ]
 
 const STATUS_LABELS={
