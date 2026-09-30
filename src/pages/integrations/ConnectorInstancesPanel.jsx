@@ -198,7 +198,15 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                     <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-2">
                         <button type="button" onClick={() => testInstance(instance)} disabled={workingId === instance.id} title="Test connection" className="h-8 w-8 grid place-items-center border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50"><PlugZap size={14} /></button>
-                        <button type="button" onClick={() => toggleInstance(instance)} disabled={workingId === instance.id || (!instance.enabled && instance.health?.success !== true)} className="h-8 px-2 border border-slate-300 rounded text-xs hover:bg-slate-50 disabled:opacity-50">{instance.enabled ? "Disable" : "Enable"}</button>
+                        <button
+                          type="button"
+                          onClick={() => toggleInstance(instance)}
+                          disabled={workingId === instance.id || (!instance.enabled && instance.canEnable !== true)}
+                          title={!instance.enabled && instance.canEnable !== true ? "Run a successful connection test before enabling" : undefined}
+                          className="h-8 px-2 border border-slate-300 rounded text-xs hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          {instance.enabled ? "Disable" : "Enable"}
+                        </button>
                       </div>
                     </td>
                   </tr>
