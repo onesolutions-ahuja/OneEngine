@@ -1,9 +1,10 @@
 import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, apiUrl, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredSessionPermissions, getStoredUser, hasSession, loadSessionPermissions, login, logout, startGoogleLogin, verifyPin } from './services/api'
+import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredSessionPermissions, getStoredUser, hasSession, loadSessionPermissions, login, logout, startGoogleLogin, verifyPin } from './services/api'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, readSettingsContextCache, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
+import { appIconUrl, applyDefaultAppIcon, localAppIcon, marketplaceSearchText, readMarketplaceCache, resolveAppOpenRoute, writeMarketplaceCache } from './utils/appMarketplace'
 import JarvisOrb, { ORB_STATES } from './components/jarvis/JarvisOrb'
 import JarvisPanel from './components/jarvis/JarvisPanel'
 const CHUNK_RELOAD_KEY = 'onepos:lazy-chunk-reload'
@@ -1903,137 +1904,23 @@ function SettingsPage({ onOpenProfile }) {
 }
 
 
-const MARKETPLACE_BRAND_MATCHES = [
-  [/quickbooks/i, 'quickbooks'],
-  [/shopify/i, 'shopify'],
-  [/xero/i, 'xero-accounting'],
-  [/sage/i, 'sage-business-cloud-accounting'],
-  [/prestashop/i, 'prestashop'],
-  [/woocommerce|woo commerce/i, 'woocommerce'],
-  [/wix/i, 'wix'],
-  [/uber\s*eats/i, 'uber-eats'],
-  [/deliveroo/i, 'deliveroo'],
-  [/just\s*eat/i, 'just-eat'],
-  [/whatsapp/i, 'whatsapp'],
-  [/\bdojo\b/i, 'dojo'],
-  [/sum\s*up/i, 'sumup'],
-  [/\bsquare\b/i, 'square'],
-  [/\bmews\b/i, 'mews'],
-  [/\bfourth\b/i, 'fourth'],[/\bdeputy\b/i, 'deputy'],[/caterbook/i, 'caterbook'],[/go[-\s]?upc/i, 'go-upc'],
-  [/adobe\s*commerce|magento/i, 'adobe-commerce'],[/\bbopp\b/i, 'one-connect-bopp'],[/wonderful/i, 'one-connect-wonderful'],
-  [/\bvyne\b/i, 'one-connect-vyne'],[/\bstripe\b/i, 'one-connect-stripe'],
-]
-
-const MARKETPLACE_ICON_ALIASES = {
-  uber_eats: 'uber-eats',
-  'uber-eats': 'uber-eats',
-  deliveroo: 'deliveroo',
-  just_eat: 'just-eat',
-  'just-eat': 'just-eat',
-  quickbooks_online: 'quickbooks',
-  quickbooks: 'quickbooks',
-  shopify: 'shopify',
-  xero_accounting: 'xero-accounting',
-  xero: 'xero',
-  sage_business_cloud_accounting: 'sage-business-cloud-accounting',
-  sage_accounting: 'sage-business-cloud-accounting',
-  sage: 'sage',
-  whatsapp_connector: 'whatsapp',
-  whatsapp: 'whatsapp',
-  one_connect_dojo: 'dojo',
-  dojo: 'dojo',
-  one_connect_sumup: 'sumup',
-  sumup: 'sumup',
-  one_connect_square: 'square',
-  square: 'square',
-  mews: 'mews',
-  mews_pms: 'mews',
-  fourth: 'fourth', deputy: 'deputy', caterbook: 'caterbook', go_upc: 'go-upc',
-  adobe_commerce: 'adobe-commerce', magento: 'adobe-commerce',
-  one_connect_bopp: 'one-connect-bopp', bopp: 'one-connect-bopp',
-  one_connect_wonderful: 'one-connect-wonderful', wonderful: 'one-connect-wonderful',
-  one_connect_vyne: 'one-connect-vyne', vyne: 'one-connect-vyne',
-  one_connect_stripe: 'one-connect-stripe', stripe: 'one-connect-stripe',
-}
-
-function localAppIcon(assetKey) {
-  const clean = String(assetKey || '').trim().toLowerCase().replaceAll('_', '-')
-  if (!clean || !/^[a-z0-9-]+$/.test(clean)) return ''
-  const base = import.meta.env.BASE_URL || '/'
-  return `${base}icons/apps/${clean}.svg`
-}
-
-const STORE_APPS_CACHE_KEY = 'onepos.marketplace.catalog.v1'
-function readStoreAppsCache() {
-  try {
-    const parsed = JSON.parse(sessionStorage.getItem(STORE_APPS_CACHE_KEY) || '[]')
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-function writeStoreAppsCache(items) {
-  try {
-    if (Array.isArray(items) && items.length) sessionStorage.setItem(STORE_APPS_CACHE_KEY, JSON.stringify(items))
-  } catch {}
-}
-
-function marketplaceIcon(item) {
-  const manifest = item?.manifest || {}
-  const provider = manifest.providerConnector || manifest.provider_connector || {}
-  const brandText = [item?.name, item?.publisher, item?.package_key, provider?.providerKey, provider?.provider_key]
-    .filter(Boolean)
-    .join(' ')
-  const brandMatch = MARKETPLACE_BRAND_MATCHES.find(([pattern]) => pattern.test(brandText))
-  if (brandMatch) return localAppIcon(brandMatch[1])
-
-  const explicit = item?.icon_url || item?.logo_url || item?.icon
-    || manifest.iconUrl || manifest.icon_url || manifest.logoUrl || manifest.logo_url || manifest.icon
-    || provider.iconUrl || provider.logoUrl
-
-  if (typeof explicit === 'string' && explicit.trim()) {
-    const value = explicit.trim()
-    if (/^https?:\/\//i.test(value)) return value
-    if (value.startsWith('/icons/apps/')) return `${import.meta.env.BASE_URL || '/'}${value.replace(/^\//, '')}`
-    return apiUrl(value.startsWith('/') ? value : `/${value}`)
-  }
-
-  const keys = [
-    item?.icon_asset_key,
-    item?.iconAssetKey,
-    manifest.iconAssetKey,
-    manifest.icon_asset_key,
-    provider.providerKey,
-    provider.provider_key,
-    item?.package_key,
-  ].filter(Boolean)
-
-  for (const key of keys) {
-    const normalized = String(key).trim().toLowerCase().replace(/[\s-]+/g, '_')
-    const alias = MARKETPLACE_ICON_ALIASES[normalized] || String(key).trim().toLowerCase().replaceAll('_', '-')
-    if (/^[a-z0-9-]+$/.test(alias)) return localAppIcon(alias)
-  }
-
-  return localAppIcon('default-app')
-}
-
 function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, onRetry, loading = false, error = '', mode = 'launcher' }) {
   const q = String(query || '').trim().toLowerCase()
   const visible = apps.filter((item) => item?.visible !== false && item?.system_only !== true)
-    .filter((item) => !q || `${item.name || ''} ${item.package_key || ''} ${item.category || ''}`.toLowerCase().includes(q))
+    .filter((item) => !q || marketplaceSearchText(item).includes(q))
   const installed = visible.filter((item) => Boolean(item.company_installation))
   const available = visible.filter((item) => !item.company_installation)
   const showInstalled = mode !== 'store'
   const renderRows = (rows, start = 0) => rows.slice(0, 12).map((item, index) => {
-    const icon = marketplaceIcon(item)
+    const icon = appIconUrl(item)
     return (
       <motion.button
         key={item.package_key || item.id}
         type="button"
         className="topbar-app-row"
         onClick={() => {
-          const route = item?.route || item?.manifest?.route || item?.company_installation?.manifest?.route || ''
-          if (mode !== 'store' && item?.company_installation && route) {
+          const route = resolveAppOpenRoute(item)
+          if (mode !== 'store' && item?.company_installation) {
             onOpenRoute?.(route)
             onClose?.()
             return
@@ -2051,7 +1938,7 @@ function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, onRetr
         whileTap={{ scale: 0.97 }}
       >
         <span className="topbar-app-icon">
-          {icon ? <img src={icon} alt="" draggable="false" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = localAppIcon('default-app') }} /> : <ShoppingBag size={20} />}
+          {icon ? <img src={icon} alt="" draggable="false" onError={applyDefaultAppIcon} /> : <ShoppingBag size={20} />}
         </span>
         <span><strong>{item.name || item.package_key}</strong><small>{item.category || 'App'}</small></span>
       </motion.button>
@@ -2080,7 +1967,7 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
   const q = String(query || '').trim().toLowerCase()
   const visible = apps
     .filter((item) => item?.visible !== false && item?.system_only !== true)
-    .filter((item) => !q || `${item.name || ''} ${item.package_key || ''} ${item.category || ''}`.toLowerCase().includes(q))
+    .filter((item) => !q || marketplaceSearchText(item).includes(q))
 
   return (
     <motion.div
@@ -2107,8 +1994,8 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
 
         <div className="launcher-app-grid" role="list" aria-label="oneStore apps">
           {visible.map((item, index) => {
-            const icon = marketplaceIcon(item)
-            const route = item?.route || item?.manifest?.route || item?.company_installation?.manifest?.route || ''
+            const icon = appIconUrl(item)
+            const route = resolveAppOpenRoute(item)
             const installed = Boolean(item.company_installation)
             return (
               <motion.button
@@ -2138,10 +2025,7 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
                       src={icon}
                       alt=""
                       draggable="false"
-                      onError={(event) => {
-                        event.currentTarget.onerror = null
-                        event.currentTarget.src = localAppIcon('default-app')
-                      }}
+                      onError={applyDefaultAppIcon}
                     />
                   ) : (
                     <ShoppingBag size={38} strokeWidth={1.6} />
@@ -2299,9 +2183,9 @@ function Desktop({ onLock, onSignOut }) {
   const [topPanel, setTopPanel] = useState('')
   const [launcherOpen, setLauncherOpen] = useState(false)
   const [appSearch, setAppSearch] = useState('')
-  const [storeApps, setStoreApps] = useState(() => readStoreAppsCache())
+  const [storeApps, setStoreApps] = useState(() => readMarketplaceCache())
   const [storeFocusPackageKey, setStoreFocusPackageKey] = useState('')
-  const [storeAppsLoaded, setStoreAppsLoaded] = useState(() => readStoreAppsCache().length > 0)
+  const [storeAppsLoaded, setStoreAppsLoaded] = useState(() => readMarketplaceCache().length > 0)
   const [storeAppsLoading, setStoreAppsLoading] = useState(false)
   const [storeAppsError, setStoreAppsError] = useState('')
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
@@ -2399,11 +2283,11 @@ function Desktop({ onLock, onSignOut }) {
       const packages = await apiRequest('/api/packages/marketplace')
       const rows = Array.isArray(packages?.data) ? packages.data : []
       setStoreApps(rows)
-      writeStoreAppsCache(rows)
+      writeMarketplaceCache(rows)
       setStoreAppsLoaded(true)
       return rows
     } catch (error) {
-      const cached = readStoreAppsCache()
+      const cached = readMarketplaceCache()
       if (cached.length) {
         setStoreApps(cached)
         setStoreAppsLoaded(true)
