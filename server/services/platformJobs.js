@@ -1,9 +1,13 @@
 import { assertTrustedJobKind } from "./trustedRuntime.js";
+import { createGovernorBudget, assertTenantJobCapacity, DEFAULT_PLATFORM_GOVERNOR_LIMITS } from "./platformGovernor.js";
 
 const MAX_ATTEMPTS = 5;
 
-export async function enqueuePlatformJob({ db, companyId, kind, payload, runAt = new Date(), idempotencyKey }) {
+export async function enqueuePlatformJob({ db, companyId, kind, payload, runAt = new Date(), idempotencyKey, governor = null }) {
   assertTrustedJobKind(kind);
+  const budget = governor || createGovernorBudget();
+  budget.checkPayload(payload || {});
+  budget.consumeQueuedJob(1);
   if (!companyId || !kind || !idempotencyKey) throw new Error("A company, job kind and idempotency key are required");
   const result = await db(
     `INSERT INTO platform_action_jobs (company_id,kind,payload,status,attempts,next_attempt_at,idempotency_key)
@@ -56,6 +60,11 @@ export async function drainDuePlatformJobs({ db, handler, limit = 20, onFailed =
   const results = [];
   for (const job of jobs) {
     try {
+      await assertTenantJobCapacity({
+        db,
+        companyId: job.company_id,
+        limit: DEFAULT_PLATFORM_GOVERNOR_LIMITS.maxTenantConcurrentJobs,
+      });
       const outcome = await handler(job);
       if (outcome?.deferred === true) {
         results.push({ id: job.id, status: "PENDING", outcome });
