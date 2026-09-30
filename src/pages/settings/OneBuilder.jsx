@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   AppWindow, BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
-  Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
+  Pencil, Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
@@ -142,8 +142,9 @@ function GenericProperties({ item, fields = [], actionRegistry = [], roles = [],
   return <div className="onebuilder-properties-form"><label>Title<input value={item.label || ''} onChange={(e) => onChange({ ...item, label: e.target.value })}/></label><label>Configuration<textarea rows="10" value={JSON.stringify(item.config || {}, null, 2)} onChange={(e) => { try { onChange({ ...item, config: JSON.parse(e.target.value) }) } catch {} }}/></label></div>
 }
 
-export default function OneBuilder() {
-  const [tab, setTab] = useState('workflow')
+export default function OneBuilder({ initialTab = 'workflow', singleBuilder = false }) {
+  const [tab, setTab] = useState(initialTab)
+  const [listQuery, setListQuery] = useState('')
   const [componentRegistry, setComponentRegistry] = useState([])
   const [actionRegistry, setActionRegistry] = useState([])
   const [reportRegistry, setReportRegistry] = useState([])
@@ -231,6 +232,15 @@ export default function OneBuilder() {
   }
 
   useEffect(() => { void loadBase() }, [])
+  useEffect(() => {
+    if (!initialTab || initialTab === tab) return
+    setTab(initialTab)
+    setMode('list')
+    setSelectedSavedId('')
+    setSelectedNodeId('')
+    setListQuery('')
+    void loadSavedDefinitions(initialTab)
+  }, [initialTab])
 
   const activeMeta = meta[tab]
   const selectedObject = objects.find((object) => String(object.id) === String(activeMeta?.objectId)) || null
@@ -426,6 +436,11 @@ export default function OneBuilder() {
   const activeTab = TABS.find((item) => item.key === tab)
   const ActiveTabIcon = activeTab?.icon || LayoutDashboard
   const listRows = saved[tab] || []
+  const visibleListRows = useMemo(() => {
+    const query = listQuery.trim().toLowerCase()
+    if (!query) return listRows
+    return listRows.filter((item) => `${rowTitle(item)} ${rowSubtitle(item)} ${item?.id || ''}`.toLowerCase().includes(query))
+  }, [listRows, listQuery, tab])
 
   const rowTitle = (item) => item?.name || item?.label || item?.report_key || item?.api_key || 'Untitled'
   const rowSubtitle = (item) => {
@@ -437,6 +452,7 @@ export default function OneBuilder() {
 
   return (
     <div className="onebuilder">
+      {!singleBuilder ? (
       <div className="onebuilder-tabs onebuilder-tabs--compact" role="tablist" aria-label="OneBuilder tools">
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
@@ -462,6 +478,7 @@ export default function OneBuilder() {
           </button>
         ))}
       </div>
+      ) : null}
 
       {error ? <div className="onebuilder-error">{error}</div> : null}
 
@@ -484,9 +501,13 @@ export default function OneBuilder() {
             </div>
           </header>
 
+          <label className="onebuilder-list-search">
+            <Search size={14}/>
+            <input value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder={`Search ${activeTab?.label || 'definitions'}`} />
+          </label>
           <div className="onebuilder-list-body">
             {(loading || listLoading) ? <div className="onebuilder-list-empty">Loading existing definitions…</div> : null}
-            {!loading && !listLoading && listRows.length ? listRows.map((item) => (
+            {!loading && !listLoading && visibleListRows.length ? visibleListRows.map((item) => (
               <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
                 <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
                 <span className="onebuilder-list-row-copy">
@@ -494,10 +515,10 @@ export default function OneBuilder() {
                   <small>{rowSubtitle(item)}</small>
                 </span>
                 <span className="onebuilder-list-row-state">{item.active === false ? 'Inactive' : ''}</span>
-                <span className="onebuilder-list-row-chevron">›</span>
+                <span className="onebuilder-list-row-edit" title="Open editor" aria-label="Open editor"><Pencil size={13}/></span>
               </button>
             )) : null}
-            {!loading && !listLoading && !listRows.length ? (
+            {!loading && !listLoading && !visibleListRows.length ? (
               <div className="onebuilder-list-empty">
                 <ActiveTabIcon size={28}/>
                 <strong>No {activeTab?.label?.toLowerCase()} configured</strong>
