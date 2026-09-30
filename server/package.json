@@ -8,7 +8,8 @@
     "build": "node ../scripts/audit-trusted-runtime.mjs && node --test test/trustedPackages.test.mjs && node scripts/check-runtime-imports.mjs",
     "platform:metadata:export": "node scripts/export-platform-package-metadata.mjs",
     "audit:trusted": "node ../scripts/audit-trusted-runtime.mjs",
-    "test:trusted": "node --test test/trustedPackages.test.mjs"
+    "test:trusted": "node --test test/trustedPackages.test.mjs",
+    "audit:workflow-coverage": "node ../scripts/audit-workflow-coverage.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
