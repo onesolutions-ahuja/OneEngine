@@ -7,70 +7,10 @@ import {
   packageDependencies,
   storefrontStatus,
 } from './oneStoreModel'
-
-const BRAND_ICON_MATCHES=[
-  [/quickbooks/i,'quickbooks'],[/shopify/i,'shopify'],[/xero/i,'xero-accounting'],[/sage/i,'sage-business-cloud-accounting'],
-  [/prestashop/i,'prestashop'],[/woocommerce|woo commerce/i,'woocommerce'],[/wix/i,'wix'],[/uber\s*eats/i,'uber-eats'],
-  [/deliveroo/i,'deliveroo'],[/just\s*eat/i,'just-eat'],[/whatsapp/i,'whatsapp'],
-  [/\bdojo\b/i,'dojo'],[/sum\s*up/i,'sumup'],[/\bsquare\b/i,'square'],[/\bmews\b/i,'mews'],
-  [/\bfourth\b/i,'fourth'],[/\bdeputy\b/i,'deputy'],[/caterbook/i,'caterbook'],[/go[-\s]?upc/i,'go-upc'],
-  [/adobe\s*commerce|magento/i,'adobe-commerce'],[/\bbopp\b/i,'one-connect-bopp'],[/wonderful/i,'one-connect-wonderful'],
-  [/\bvyne\b/i,'one-connect-vyne'],[/\bstripe\b/i,'one-connect-stripe'],
-]
-
-const STATUS_LABELS={
-  AVAILABLE:'Available',INSTALLED:'Installed',INACTIVE:'Inactive',UPDATE_AVAILABLE:'Update available',
-  LICENCE_REQUIRED:'Requires licence',NOT_INSTALLABLE:'Not installable',NOT_AVAILABLE:'Not available',
-}
-
-function appIcon(item){
-  const manifest=item?.manifest||{}
-  const provider=manifest.providerConnector||manifest.provider_connector||{}
-  const brandText=[item?.name,item?.publisher,item?.package_key,provider?.providerKey,provider?.provider_key].filter(Boolean).join(' ')
-  const brandMatch=BRAND_ICON_MATCHES.find(([pattern])=>pattern.test(brandText))
-  if(brandMatch)return `${import.meta.env.BASE_URL||'/'}icons/apps/${brandMatch[1]}.svg`
-  const explicit=item?.icon_url||item?.logo_url||item?.icon||manifest.iconUrl||manifest.icon_url||manifest.logoUrl||manifest.logo_url||manifest.icon||provider.iconUrl||provider.logoUrl
-  if(typeof explicit==='string'&&explicit.trim())return explicit.trim()
-  const key=item?.icon_asset_key||item?.iconAssetKey||manifest.iconAssetKey||manifest.icon_asset_key||provider.providerKey||provider.provider_key||item?.package_key
-  if(!key)return ''
-  return `${import.meta.env.BASE_URL||'/'}icons/apps/${String(key).trim().toLowerCase().replaceAll('_','-')}.svg`
-}
-
-const DEDICATED_OPEN_ROUTES={
-  platform:'/app/developer',
-  one_connect_google:'/app/google-connect',
-  client_web_shop:'/app/settings/client-web-shop',
-  own_delivery:'/app/own-delivery',
-  email_connector:'/app/settings/email-delivery',
-  sms_connector:'/app/settings/sms-delivery',
-  whatsapp_assistant:'/app/settings/whatsapp-assistant',
-  mobile_scanner_connector:'/app/settings/hardware',
-}
-
-function resolvedOpenRoute(item){
-  const key=String(item?.package_key||item?.manifest?.packageKey||'')
-  if(DEDICATED_OPEN_ROUTES[key])return DEDICATED_OPEN_ROUTES[key]
-  const declared=String(item?.route||item?.manifest?.route||item?.company_installation?.manifest?.route||'').trim()
-  if(declared==='/app/custom/client-web-shop')return '/app/settings/client-web-shop'
-  if(declared==='/app/custom/own-delivery')return '/app/own-delivery'
-  if(declared==='/app/settings/platform')return '/app/developer'
-  if(declared && !declared.startsWith('/app/custom/'))return declared
-
-  const manifest=item?.manifest||{}
-  const category=String(item?.category||manifest?.category||'').toLowerCase()
-  if(
-    manifest?.providerConnector ||
-    manifest?.provider_connector ||
-    manifest?.connectorApp ||
-    manifest?.connector_app ||
-    /connector|integration|payment|commerce|finance|hotel|pms|workforce|delivery/.test(category)
-  )return '/app/integrations'
-
-  return '/app/integrations'
-}
+import { appIconUrl, applyDefaultAppIcon, readMarketplaceCache, resolveAppOpenRoute, writeMarketplaceCache } from '../../utils/appMarketplace'
 
 export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],initialSelectedPackageKey='',onPackagesChange,canManagePackages=false}){
-  const [packages,setPackages]=useState(()=>Array.isArray(initialPackages)?initialPackages:[])
+  const [packages,setPackages]=useState(()=>Array.isArray(initialPackages)&&initialPackages.length?initialPackages:readMarketplaceCache())
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
   const [notice,setNotice]=useState('')
@@ -88,12 +28,21 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
       if(!catalogue?.success)throw new Error(catalogue?.message||'Unable to load oneStore')
       const nextPackages=Array.isArray(catalogue.data)?catalogue.data:[]
       setPackages(nextPackages)
+      writeMarketplaceCache(nextPackages)
       onPackagesChange?.(nextPackages)
-    }catch(err){setError(err?.message||'Unable to load oneStore')}
-    finally{setLoading(false)}
+      return nextPackages
+    }catch(err){
+      const cached=readMarketplaceCache()
+      if(cached.length){
+        setPackages(cached)
+        onPackagesChange?.(cached)
+      }
+      setError(err?.message||'Unable to load oneStore')
+      return cached
+    }finally{setLoading(false)}
   }
   useEffect(()=>{void load()},[])
-  useEffect(()=>{if(Array.isArray(initialPackages)&&initialPackages.length)setPackages(initialPackages)},[initialPackages])
+  useEffect(()=>{if(Array.isArray(initialPackages)&&initialPackages.length){setPackages(initialPackages);writeMarketplaceCache(initialPackages)}},[initialPackages])
   useEffect(()=>{setSelectedKey(String(initialSelectedPackageKey||''))},[initialSelectedPackageKey])
 
   const hasPending=packages.some(item=>['QUEUED','UPDATING'].includes(String(item.company_installation?.update_status||'').toUpperCase()))
@@ -155,7 +104,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   const selectedAction=selected?actionFor(selected):null
   const openInstalled=()=>{
     if(!selected?.company_installation)return
-    const route=resolvedOpenRoute(selected)
+    const route=resolveAppOpenRoute(selected)
     onOpenRoute?.(route)
     onClose?.()
   }
@@ -166,7 +115,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
       <button type="button" aria-label="Close oneStore" onClick={onClose}><X size={15}/></button>
     </header>
     <label className="onestore-search"><Search size={13}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search apps"/></label>
-    {error?<div className="onestore-message is-error"><CircleAlert size={13}/>{error}</div>:null}
+    {error?<div className="onestore-message is-error"><CircleAlert size={13}/><span>{error}</span><button type="button" onClick={()=>load({refreshCatalogue:true})}>Retry</button></div>:null}
     {notice?<div className="onestore-message is-success"><Check size={13}/>{notice}</div>:null}
 
     <div className="onestore-filters">
@@ -177,9 +126,9 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
     <div className="onestore-layout">
       <section className="onestore-list">
         {loading?<div className="module-state compact">Loading apps…</div>:!shown.length?<div className="module-state compact">No apps match.</div>:shown.map(item=>{
-          const icon=appIcon(item),status=storefrontStatus(item)
+          const icon=appIconUrl(item),status=storefrontStatus(item)
           return <button key={item.package_key} className={selected?.package_key===item.package_key?'is-selected':''} onClick={()=>setSelectedKey(item.package_key)}>
-            <span className="onestore-app-icon">{icon?<img src={icon} alt="" onError={e=>{e.currentTarget.style.display='none'}}/>:<ShoppingBag size={17}/>}</span>
+            <span className="onestore-app-icon">{icon?<img src={icon} alt="" onError={applyDefaultAppIcon}/>:<ShoppingBag size={17}/>}</span>
             <span><strong>{item.name}</strong><small>{item.category||'App'} · {STATUS_LABELS[status]}</small></span>
             <ChevronRight size={13}/>
           </button>
@@ -189,7 +138,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
       <aside className="onestore-detail">
         {!selected?<div className="module-state compact">Select an app.</div>:<>
           <div className="onestore-detail-title">
-            <span className="onestore-app-icon large">{appIcon(selected)?<img src={appIcon(selected)} alt=""/>:<Store size={20}/>}</span>
+            <span className="onestore-app-icon large">{appIconUrl(selected)?<img src={appIconUrl(selected)} alt="" onError={applyDefaultAppIcon}/>:<Store size={20}/>}</span>
             <div><strong>{selected.name}</strong><span>{selected.publisher||'onePOS'}</span></div>
           </div>
           <p>{selected.description||'No description available.'}</p>
