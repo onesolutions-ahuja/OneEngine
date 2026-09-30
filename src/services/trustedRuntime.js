@@ -48,7 +48,10 @@ export function resolveTrustedCapability(path, method = 'GET') {
   const verb = String(method || 'GET').toUpperCase()
   return TRUSTED_CAPABILITIES.find(
     (definition) => definition.methods.includes(verb)
-      && definition.prefixes.some((prefix) => pathname === prefix || pathname === prefix.replace(/\\\/$/, '') || pathname.startsWith(prefix))
+      && definition.prefixes.some((prefix) => {
+        const collection = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
+        return pathname === prefix || pathname === collection || pathname.startsWith(prefix)
+      })
   ) || null
 }
 
