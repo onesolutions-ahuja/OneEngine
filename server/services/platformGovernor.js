@@ -61,16 +61,6 @@ export function createGovernorBudget({ limits = {}, startedAt = Date.now(), coun
   const fail = (metric, limit, actual, code) => {
     throw new PlatformGovernorError(`${metric} limit exceeded`, { metric, limit, actual, code });
   };
-  const consume = (metric, count, limitKey, code) => {
-    this?.checkRuntime?.();
-    const delta = nonNegative(count);
-    state.counters[metric] += delta;
-    if (state.counters[metric] > effective[limitKey]) {
-      fail(metric, effective[limitKey], state.counters[metric], code);
-    }
-    return state.counters[metric];
-  };
-
   return {
     limits: effective,
     state,
