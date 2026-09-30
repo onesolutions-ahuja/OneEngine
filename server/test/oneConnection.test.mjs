@@ -37,6 +37,12 @@ test("saving a connection credential writes encrypted vault data and links conne
   const calls = [];
   const db = async (sql, params = []) => {
     calls.push({ sql, params });
+    if (sql.includes("FROM integration_connections") && sql.includes("connector_definition_id")) {
+      return { rows: [{ id: "conn1", company_id: "co1", connector_definition_id: null }] };
+    }
+    if (sql.includes("FROM integration_connections") && sql.includes("connector_definition_id") && !sql.includes("LEFT JOIN platform_connector_definitions")) {
+      return { rows: [{ id: "conn1", company_id: "co1", connector_definition_id: null }] };
+    }
     if (sql.includes("SELECT id FROM platform_credentials")) return { rows: [] };
     if (sql.includes("INSERT INTO platform_credentials")) {
       return {
@@ -190,6 +196,9 @@ test("OAuth token rotation preserves refresh token and moves connection to conne
         }],
       };
     }
+    if (sql.includes("FROM integration_connections") && sql.includes("connector_definition_id") && !sql.includes("LEFT JOIN platform_connector_definitions")) {
+      return { rows: [{ id: "conn1", company_id: "co1", connector_definition_id: null }] };
+    }
     if (sql.includes("SELECT id FROM platform_credentials")) {
       return { rows: [{ id: "cred1" }] };
     }
@@ -235,4 +244,79 @@ test("basic and api-key auth headers use canonical secret aliases", () => {
     buildOneConnectionAuthHeaders("basic", { username: "user", password: "pass" }),
     { Authorization: `Basic ${Buffer.from("user:pass").toString("base64")}` },
   );
+});
+
+
+test("credential save rejects a connection outside the company", async () => {
+  const db = async (sql) => {
+    if (sql.includes("FROM integration_connections") && sql.includes("connector_definition_id")) {
+      return { rows: [] };
+    }
+    throw new Error(`Unexpected SQL: ${sql}`);
+  };
+
+  await assert.rejects(
+    () => saveOneConnectionCredential({
+      db,
+      companyId: "co1",
+      connectionId: "other-company-connection",
+      secrets: { token: "secret" },
+    }),
+    (error) => error.code === "ONECONNECTION_CONNECTION_NOT_FOUND" && error.status === 404,
+  );
+});
+
+test("credential save rejects connector mismatch", async () => {
+  const db = async (sql) => {
+    if (sql.includes("FROM integration_connections") && sql.includes("connector_definition_id")) {
+      return { rows: [{ id: "conn1", company_id: "co1", connector_definition_id: "def-a" }] };
+    }
+    throw new Error(`Unexpected SQL: ${sql}`);
+  };
+
+  await assert.rejects(
+    () => saveOneConnectionCredential({
+      db,
+      companyId: "co1",
+      connectionId: "conn1",
+      connectorId: "def-b",
+      secrets: { token: "secret" },
+    }),
+    (error) => error.code === "ONECONNECTION_CONNECTOR_MISMATCH" && error.status === 409,
+  );
+});
+
+test("credential resolution scopes linked credentials to the connection connector", async () => {
+  let credentialParams = null;
+  const db = async (sql, params = []) => {
+    if (sql.includes("FROM integration_connections c")) {
+      return {
+        rows: [{
+          id: "conn1",
+          company_id: "co1",
+          connector_definition_id: "def-a",
+          definition_status: "ACTIVE",
+          auth_type: "bearer",
+          credential_id: "cred1",
+          enabled: true,
+        }],
+      };
+    }
+    if (sql.includes("SELECT * FROM platform_credentials") && sql.includes("id=$1")) {
+      credentialParams = params;
+      return { rows: [] };
+    }
+    throw new Error(`Unexpected SQL: ${sql}`);
+  };
+
+  const loaded = await resolveOneConnection({
+    db,
+    companyId: "co1",
+    connectionId: "conn1",
+    includeSecrets: true,
+  });
+
+  assert.equal(loaded.credential, null);
+  assert.deepEqual(loaded.secrets, {});
+  assert.equal(credentialParams[4], "def-a");
 });
