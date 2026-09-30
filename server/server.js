@@ -262,6 +262,7 @@ connectorDrivers.register(createPaypalQrDriver());
 for (const providerKey of ONE_CONNECT_PROVIDER_DRIVER_KEYS) {
   connectorDrivers.register(createOneConnectProviderDriver(providerKey));
 }
+app.locals.connectorDrivers = connectorDrivers;
 
 async function testPaymentTerminal(terminal) {
   if (!terminal || !terminal.active || !terminal.provider || !terminal.connection_url) {
@@ -283,6 +284,7 @@ async function testPaymentTerminal(terminal) {
  * failures are logged and swallowed so a committed business action stands).
  */
 const writeAudit = createAuditWriter({ db });
+app.locals.writeAudit = writeAudit;
 const globalProductLookupService = createGlobalProductLookupService();
 
 /*
