@@ -689,7 +689,7 @@ const CATALOG = [
     permissions: ["integration.manage", "communications.send", "connector.test", "connector.view", "connector.manage"],
     storeScoped: false,
     category: "Communication",
-    version: "1.1.0",
+    version: "1.2.0",
     packageType: "APPLICATION",
     billable: false,
     licenceRequired: false,
@@ -722,6 +722,20 @@ const CATALOG = [
         { key: "sms.send", requiredPermissions: ["communications.send"] },
         { key: "sms.devices.list", requiredPermissions: ["integration.manage"] },
         { key: "connector.test", requiredPermissions: ["integration.manage"] }
+      ],
+      testActions: [
+        {
+          key: "sms.send",
+          label: "Send test SMS",
+          description: "Verify the full onePOS to SMSGate to Android phone delivery path.",
+          endpoint: "/api/connector-instances/{instanceId}/send-test-sms",
+          permission: "communications.send",
+          requiresEnabled: true,
+          fields: [
+            { key: "recipient", type: "tel", required: true, label: "Mobile number", placeholder: "+44..." },
+            { key: "message", type: "string", required: true, maxLength: 500, default: "onePOS SMSGate test message", label: "Message" }
+          ]
+        }
       ],
       configurationSchema: [
         { key: "enabled", type: "boolean", default: true, label: "Enabled" },
