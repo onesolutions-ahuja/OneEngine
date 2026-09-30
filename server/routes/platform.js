@@ -36,7 +36,7 @@ import { buildPlatformSharingScope } from "../services/platformSharing.js";
 import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, resolveDuplicateAction } from "../services/platformDuplicateMatching.js";
 import { publishPlatformEvent } from "../services/platformEvents.js";
 import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
-import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";
+import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";\nimport { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
@@ -2928,6 +2928,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   }
 
   router.get("/platform/rules", ...manage, async (req, res) => {
+    await ensureSystemWorkflowCatalog({ db, companyId: req.user.companyId, userId: req.user.id || null });
     const result = await db("SELECT * FROM platform_rules WHERE (company_id IS NULL OR company_id=$1) ORDER BY name", [req.user.companyId]);
     const rows = result.rows || [];
     const fieldIds = [...new Set(rows.flatMap((rule) => [
