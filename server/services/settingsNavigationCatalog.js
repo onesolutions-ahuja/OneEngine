@@ -33,13 +33,13 @@ export const SETTINGS_SECTIONS = [
   { key: "customer-loyalty", label: "Customer Loyalty", groupKey: "sales-tax", order: 40, iconKey: "sparkles", description: "Configure the customer loyalty programme.", gate: "settings-manage", action: { type: "tab", tab: "Customer Loyalty" } },
 
   { key: "hardware", label: "Hardware", groupKey: "hardware", order: 10, iconKey: "hard-drive", description: "Barcode scanners, cash drawers and receipt printers.", action: { type: "tab", tab: "Hardware" } },
+  { key: "connections", label: "Connection Health", groupKey: "hardware", order: 20, iconKey: "cable", description: "Device and integration health at a glance.", action: { type: "tab", tab: "Connections" } },
 
   { key: "users", label: "Users", groupKey: "users", order: 10, iconKey: "shield", description: "People who can sign in and what they can access.", action: { type: "tab", tab: "Users" } },
   { key: "roles-permissions", label: "Roles & Permissions", groupKey: "users", order: 20, iconKey: "shield", description: "Roles and the permissions each role holds.", action: { type: "tab", tab: "Roles & Permissions" } },
 
   { key: "ai-assistant", label: "AI assistant", groupKey: "ai-assistant", order: 10, iconKey: "sparkles", description: "JARVES licence allowance and availability.", action: { type: "tab", tab: "AI assistant" } },
 
-  { key: "connections", label: "Connections", groupKey: "integrations", order: 10, iconKey: "cable", description: "Device and integration health at a glance.", action: { type: "tab", tab: "Connections" } },
   { key: "uber-eats", label: "Uber Eats", groupKey: "integrations", order: 20, iconKey: "cable", description: "Uber Eats ordering integration for this company.", action: { type: "tab", tab: "Uber Eats" } },
   { key: "deliveroo", label: "Deliveroo", groupKey: "integrations", order: 30, iconKey: "cable", description: "Deliveroo ordering integration for this company.", action: { type: "tab", tab: "Deliveroo" } },
   { key: "whatsapp-assistant", label: "WhatsApp Assistant", groupKey: "integrations", order: 40, iconKey: "cable", description: "Workflow-driven WhatsApp Business assistant for this company.", gate: "settings-manage", action: { type: "tab", tab: "WhatsApp Assistant" } },
