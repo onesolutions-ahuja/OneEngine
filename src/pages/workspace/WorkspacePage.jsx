@@ -106,13 +106,30 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   useEffect(() => {
     let live = true
     setLoadingObjects(true)
-    cachedGet('/api/platform/objects',{cacheKey:'workspace:objects',onFresh:(response)=>{ const data=response?.data?.objects||response?.data||[]; const list=Array.isArray(data)?data.filter((item)=>item?.active!==false&&item?.source_table):[]; setObjects(list) }})
-      .then((response) => {
+    Promise.all([
+      cachedGet('/api/platform/runtime/navigation-targets', { cacheKey: 'workspace:navigation-targets' }),
+      cachedGet('/api/platform/objects', { cacheKey: 'workspace:object-metadata' }),
+    ])
+      .then(([navigationResponse, objectResponse]) => {
         if (!live) return
-        const data = response?.data?.objects || response?.data || []
-        const list = Array.isArray(data) ? data.filter((item) => item?.active !== false && item?.source_table) : []
+        const navigation = navigationResponse?.data?.objectPages || []
+        const visibleKeys = new Set(
+          (Array.isArray(navigation) ? navigation : [])
+            .map((item) => item?.objectKey)
+            .filter(Boolean),
+        )
+        const data = objectResponse?.data?.objects || objectResponse?.data || []
+        const list = (Array.isArray(data) ? data : [])
+          .filter((item) => item?.active !== false && item?.source_table)
+          .filter((item) => visibleKeys.has(objectKey(item)))
         setObjects(list)
-        if (!selectedKey && !initialObjectKey && list.length) setSelectedKey(objectKey(list[0]))
+
+        const requested = initialObjectKey && list.some((item) => objectKey(item) === initialObjectKey)
+          ? initialObjectKey
+          : ''
+        const currentVisible = selectedKey && list.some((item) => objectKey(item) === selectedKey)
+        if (requested) setSelectedKey(requested)
+        else if (!currentVisible) setSelectedKey(list.length ? objectKey(list[0]) : '')
       })
       .catch((err) => live && setError(err?.message || 'Unable to load Workspace objects'))
       .finally(() => live && setLoadingObjects(false))
@@ -120,8 +137,11 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   }, [])
 
   useEffect(() => {
-    if (initialObjectKey && initialObjectKey !== selectedKey) setSelectedKey(initialObjectKey)
-  }, [initialObjectKey])
+    if (!initialObjectKey || loadingObjects) return
+    if (objects.some((item) => objectKey(item) === initialObjectKey) && initialObjectKey !== selectedKey) {
+      setSelectedKey(initialObjectKey)
+    }
+  }, [initialObjectKey, loadingObjects, objects, selectedKey])
 
   useEffect(() => {
     if (initialRecordId && initialRecordId !== selectedId) setSelectedId(initialRecordId)
