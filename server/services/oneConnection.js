@@ -56,6 +56,29 @@ export async function saveOneConnectionCredential({
 }) {
   if (!db || !companyId || !connectionId) throw new Error("db, companyId and connectionId are required");
   if (!secrets || typeof secrets !== "object" || Array.isArray(secrets)) throw new Error("secrets must be an object");
+
+  const connectionResult = await db(
+    `SELECT id,company_id,connector_definition_id
+       FROM integration_connections
+      WHERE id=$1 AND company_id=$2
+      LIMIT 1`,
+    [connectionId, companyId]
+  );
+  const connection = connectionResult.rows?.[0] || null;
+  if (!connection) {
+    const error = new Error("Connection not found for company");
+    error.code = "ONECONNECTION_CONNECTION_NOT_FOUND";
+    error.status = 404;
+    throw error;
+  }
+  if (connectorId && connection.connector_definition_id && String(connectorId) !== String(connection.connector_definition_id)) {
+    const error = new Error("Credential connector does not match connection connector");
+    error.code = "ONECONNECTION_CONNECTOR_MISMATCH";
+    error.status = 409;
+    throw error;
+  }
+  const effectiveConnectorId = connection.connector_definition_id || connectorId || null;
+
   const ciphertext = encryptCredentials(secrets);
   const safeMetadata = credentialMetadata(secrets, metadata);
   const existing = await db(
@@ -71,14 +94,14 @@ export async function saveOneConnectionCredential({
                 rotated_at=NOW(),updated_at=NOW()
           WHERE id=$5 AND company_id=$6
           RETURNING *`,
-        [connectorId, name, ciphertext, JSON.stringify(safeMetadata), existing.rows[0].id, companyId]
+        [effectiveConnectorId, name, ciphertext, JSON.stringify(safeMetadata), existing.rows[0].id, companyId]
       )
     : await db(
         `INSERT INTO platform_credentials
           (company_id,connector_id,connection_id,credential_key,name,ciphertext,metadata,created_by)
          VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
          RETURNING *`,
-        [companyId, connectorId, connectionId, credentialKey, name, ciphertext, JSON.stringify(safeMetadata), userId]
+        [companyId, effectiveConnectorId, connectionId, credentialKey, name, ciphertext, JSON.stringify(safeMetadata), userId]
       );
   const credential = result.rows?.[0] || null;
   if (credential?.id) {
@@ -139,8 +162,12 @@ export async function resolveOneConnection({
         WHERE id=$1 AND active=TRUE
           AND (company_id=$2 OR (company_id IS NULL AND $4=TRUE))
           AND (connection_id=$3 OR connection_id IS NULL)
+          AND (
+            connector_id IS NULL
+            OR connector_id IS NOT DISTINCT FROM $5
+          )
         LIMIT 1`,
-      [row.credential_id, companyId, connectionId, allowPlatformCredential]
+      [row.credential_id, companyId, connectionId, allowPlatformCredential, row.connector_definition_id || null]
     );
     credentialRow = credential.rows?.[0] || null;
     if (credentialRow) secrets = decryptCredentials(credentialRow.ciphertext);
