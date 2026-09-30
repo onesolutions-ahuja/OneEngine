@@ -49,7 +49,7 @@ export default function createOneAssistantRouter({ pool, authenticate, authorize
   });
 
   router.post("/public/assistant/book/:token/select", async (req,res)=>{
-    const client=await (req.tenantPool || pool).connect();
+    const client=await pool.connect();
     try{
       await client.query("BEGIN");
       const link=await resolveAppointmentPublicLink(client.query.bind(client),req.params.token,{purpose:"BOOK_SLOT"});
@@ -96,7 +96,7 @@ export default function createOneAssistantRouter({ pool, authenticate, authorize
   router.post("/appointments/resources", authenticate, authorize("appointments.configure"), async (req,res)=>{
     const {name,storeId=null,userId=null,resourceType="STAFF",timezone=null,serviceIds=[],availability=null}=req.body||{};
     if(!String(name||"").trim()) return res.status(400).json({success:false,message:"Resource name is required"});
-    const client=await (req.tenantPool || pool).connect();
+    const client=await pool.connect();
     try{
       await client.query("BEGIN");
       const result=await client.query(
@@ -141,7 +141,7 @@ export default function createOneAssistantRouter({ pool, authenticate, authorize
 
   router.put("/appointments/resources/:id/availability", authenticate, authorize("appointments.configure"), async (req,res)=>{
     const {weekdays=[],startTime="09:00",endTime="17:00",slotIntervalMinutes=15}=req.body||{};
-    const client=await (req.tenantPool || pool).connect();
+    const client=await pool.connect();
     try{
       await client.query("BEGIN");
       const owned=await client.query("SELECT id FROM appointment_resources WHERE id=$1 AND company_id=$2 LIMIT 1",[req.params.id,req.user.companyId]);
@@ -188,7 +188,7 @@ export default function createOneAssistantRouter({ pool, authenticate, authorize
   });
 
   router.post("/appointments/holds", authenticate, authorize("appointments.manage"), async (req,res)=>{
-    const client=await (req.tenantPool || pool).connect();
+    const client=await pool.connect();
     try{
       await client.query("BEGIN");
       const hold=await holdAppointmentSlot(client,{companyId:req.user.companyId,...req.body});
@@ -205,7 +205,7 @@ export default function createOneAssistantRouter({ pool, authenticate, authorize
   });
 
   router.post("/appointments/holds/:id/confirm", authenticate, authorize("appointments.manage"), async (req,res)=>{
-    const client=await (req.tenantPool || pool).connect();
+    const client=await pool.connect();
     try{
       await client.query("BEGIN");
       const appointment=await confirmAppointmentFromHold(client,{companyId:req.user.companyId,holdId:req.params.id,createdBy:req.user.id,...req.body});
