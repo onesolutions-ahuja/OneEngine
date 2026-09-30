@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Download, RefreshCw } from 'lucide-react'
-import { apiRequest } from '../../services/api'
+import { apiRequest, loadSessionPermissions } from '../../services/api'
 import {
   getCustomers,getInventoryMovements,getInventoryOverview,getPayments,getProducts,getSales,getSalesOverview,
   getSummary,getTill,getTillSession,getVat,
@@ -115,9 +115,11 @@ function SimpleEndpointReport({title,load,columns,currency,refreshKey}){
 function SalesReports({from,to,currency,refreshKey}){
   const [by,setBy]=useState('day'),[storeId,setStoreId]=useState(''),[stores,setStores]=useState([]),[admin,setAdmin]=useState(false)
   useEffect(()=>{
-    apiRequest('/api/auth/me/permissions').then(r=>{
-      const yes=r?.data?.isAdmin===true;setAdmin(yes)
-      if(yes)apiRequest('/api/admin/stores').then(s=>setStores((s?.data||[]).filter(x=>x.active!==false))).catch(()=>{})
+    loadSessionPermissions().then(r=>{
+      const codes=Array.isArray(r?.permissions)?r.permissions:[]
+      const canViewAll=codes.includes('store.view')||codes.includes('reports.view_all_stores')
+      setAdmin(canViewAll)
+      if(canViewAll)apiRequest('/api/admin/stores').then(s=>setStores((s?.data||[]).filter(x=>x.active!==false))).catch(()=>{})
     }).catch(()=>{})
   },[])
   const state=useLoad(()=>getSalesOverview({by,from,to,storeId}),refreshKey,[by,from,to,storeId])
