@@ -3158,7 +3158,7 @@ export function createWorkflowRun({ db, companyId, workflowId, workflowName, obj
 export function createWorkflowStepRun({ db, runId, stepIdentifier, stepOrder = 0, actionType, status = "PENDING", metadata = {}, jobId = null, childRunId = null }) {
   if (!db || typeof db !== "function") return null;
   return db(
-    `INSERT INTO platform_workflow_step_runs (run_id, step_identifier, step_order, action_type, status, metadata, job_id, child_run_id)
+    `INSERT INTO platform_workflow_step_runs (run_id, step_identifier, step_order, action_type, status, metadata, durable_job_id, child_run_id)
      VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8) RETURNING *`,
     [runId, stepIdentifier || null, stepOrder, actionType || null, status, JSON.stringify(metadata || {}), jobId || null, childRunId || null]
   ).then((result) => result.rows[0] || null);
