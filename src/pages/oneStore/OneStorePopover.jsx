@@ -46,7 +46,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
       return cached
     }finally{setLoading(false)}
   }
-  useEffect(()=>{void load({refreshCatalogue:true})},[])
+  useEffect(()=>{void load()},[])
   useEffect(()=>{if(Array.isArray(initialPackages)&&initialPackages.length){setPackages(initialPackages);writeMarketplaceCache(initialPackages)}},[initialPackages])
   useEffect(()=>{setSelectedKey(String(initialSelectedPackageKey||''))},[initialSelectedPackageKey])
 

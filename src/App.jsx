@@ -2342,6 +2342,7 @@ function Desktop({ onLock, onSignOut }) {
   const [storeAppsLoaded, setStoreAppsLoaded] = useState(() => readMarketplaceCache().length > 0)
   const [storeAppsLoading, setStoreAppsLoading] = useState(false)
   const [storeAppsError, setStoreAppsError] = useState('')
+  const storeRefreshInFlightRef = useRef(null)
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
   const [desktopPermissions, setDesktopPermissions] = useState(() => {
     const cached = getStoredSessionPermissions()
@@ -2436,35 +2437,34 @@ function Desktop({ onLock, onSignOut }) {
   }, [])
 
   const refreshStoreApps = async ({ silent = false } = {}) => {
-    if (!silent) setStoreAppsLoading(true)
-    setStoreAppsError('')
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 12000)
-    try {
-      const packages = await apiRequest('/api/packages/marketplace', { signal: controller.signal })
-      const rows = Array.isArray(packages?.data) ? packages.data : []
-      setStoreApps(rows)
-      writeMarketplaceCache(rows)
-      setStoreAppsLoaded(true)
-      return rows
-    } catch (error) {
-      const cached = readMarketplaceCache()
-      if (cached.length) {
-        setStoreApps(cached)
+    if (storeRefreshInFlightRef.current) return storeRefreshInFlightRef.current
+    const request = (async () => {
+      if (!silent) setStoreAppsLoading(true)
+      setStoreAppsError('')
+      try {
+        const packages = await apiRequest('/api/packages/marketplace', { timeoutMs: 12000, retryGet: true })
+        const rows = Array.isArray(packages?.data) ? packages.data : []
+        setStoreApps(rows)
+        writeMarketplaceCache(rows)
         setStoreAppsLoaded(true)
-      } else {
-        setStoreAppsLoaded(false)
+        return rows
+      } catch (error) {
+        const cached = readMarketplaceCache()
+        if (cached.length) {
+          setStoreApps(cached)
+          setStoreAppsLoaded(true)
+        } else {
+          setStoreAppsLoaded(false)
+        }
+        setStoreAppsError(error?.message || 'Unable to load apps. Please retry.')
+        return cached
+      } finally {
+        if (!silent) setStoreAppsLoading(false)
+        storeRefreshInFlightRef.current = null
       }
-      setStoreAppsError(
-        error?.name === 'AbortError'
-          ? 'oneStore took too long to respond. Please retry.'
-          : (error?.message || 'Unable to load apps. Please retry.')
-      )
-      return cached
-    } finally {
-      window.clearTimeout(timeout)
-      if (!silent) setStoreAppsLoading(false)
-    }
+    })()
+    storeRefreshInFlightRef.current = request
+    return request
   }
 
   useEffect(() => {

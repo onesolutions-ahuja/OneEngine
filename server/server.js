@@ -1,6 +1,7 @@
 import { createChangePasswordHandler } from "./services/changePassword.js";
 import "dotenv/config";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
 import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
@@ -2140,6 +2141,36 @@ app.use((req, res) => {
 |--------------------------------------------------------------------------
 */
 
+function platformBootstrapFingerprint() {
+  const hash = createHash("sha256");
+  for (const relativePath of [
+    "./services/platformMetadata.js",
+    "./services/internalAppCatalog.js",
+    "./services/packageRegistry.js",
+  ]) {
+    hash.update(relativePath);
+    hash.update(readFileSync(new URL(relativePath, import.meta.url)));
+  }
+  return hash.digest("hex");
+}
+
+async function platformBootstrapIsCurrent() {
+  const fingerprint = platformBootstrapFingerprint();
+  const result = await db(
+    "SELECT state_value FROM onepos_runtime_state WHERE state_key='platform_bootstrap_fingerprint' LIMIT 1"
+  );
+  return { fingerprint, current: result.rows[0]?.state_value === fingerprint };
+}
+
+async function markPlatformBootstrapCurrent(fingerprint) {
+  await db(
+    `INSERT INTO onepos_runtime_state (state_key,state_value,updated_at)
+     VALUES ('platform_bootstrap_fingerprint',$1,NOW())
+     ON CONFLICT (state_key) DO UPDATE SET state_value=EXCLUDED.state_value,updated_at=NOW()`,
+    [fingerprint]
+  );
+}
+
 async function startServer() {
   try {
     const trustedRuntime = validateTrustedRuntime();
@@ -2169,11 +2200,22 @@ async function startServer() {
     });
     console.log(`onePOS running on port ${PORT}`);
 
-    // Complete the heavier idempotent platform bootstrap after the service is
-    // already accepting requests. This preserves the existing startup work
-    // while removing the long pre-listen delay seen on hosted cold starts.
-    await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-    await initializeStandardObjectEcosystem(pool);
+    // The metadata bootstrap is expensive and used to run on every Render restart,
+    // including frontend-only commits. Persist a fingerprint of the source files
+    // that actually define platform/package metadata and skip the heavy pass when
+    // nothing relevant changed. The marker is written only after a successful run.
+    const bootstrapState = await platformBootstrapIsCurrent();
+    if (!bootstrapState.current) {
+      console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
+      await initializePlatformMetadata(pool, { includeOperationalObjects: true });
+      await initializeStandardObjectEcosystem(pool);
+      await markPlatformBootstrapCurrent(bootstrapState.fingerprint);
+    } else {
+      console.log("onePOS: platform bootstrap metadata unchanged; skipping heavy bootstrap");
+    }
+
+    // Identity/profile synchronization remains cheap and intentionally runs on
+    // every start so environment-driven bootstrap credentials can still change.
     await bootstrapInitialSuperadmin(pool);
     const developerRoleId = await ensureGlobalSystemProfile(pool, {
       name: "Developer",

@@ -266,23 +266,6 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
 
 
-  async function ensurePackageTrialsTable(query = db) {
-    await query(`
-      CREATE TABLE IF NOT EXISTS company_package_trials (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-        package_id UUID NOT NULL REFERENCES package_registry(id) ON DELETE CASCADE,
-        activated_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        expires_at TIMESTAMPTZ NOT NULL,
-        UNIQUE(company_id, package_id)
-      )
-    `);
-    await query(`
-      CREATE INDEX IF NOT EXISTS idx_company_package_trials_company
-        ON company_package_trials(company_id, expires_at)
-    `);
-  }
 
   async function withTransaction(work) {
 
@@ -338,7 +321,6 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
   router.get("/packages/marketplace", authenticate, async (req, res) => {
     try {
-      await ensurePackageTrialsTable();
 
       const result = await db(
         `SELECT p.*, m.module_key
@@ -412,7 +394,6 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
   router.post("/packages/:packageKey/activate-trial", ...manage, async (req, res) => {
     const packageKey = req.params.packageKey;
     try {
-      await ensurePackageTrialsTable();
       const packageResult = await db(
         `SELECT id,package_key,name,licence_mode,installable,visible,system_only,publication_state,active
            FROM package_registry

@@ -3407,6 +3407,11 @@ ON secure_invoice_links(company_id, created_at DESC);
     );
     CREATE INDEX IF NOT EXISTS idx_company_package_trials_company
       ON company_package_trials(company_id, expires_at);
+    CREATE TABLE IF NOT EXISTS onepos_runtime_state (
+      state_key VARCHAR(120) PRIMARY KEY,
+      state_value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     ALTER TABLE user_licence_assignments ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
     ALTER TABLE user_licence_assignments ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ;
     ALTER TABLE user_licence_assignments ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
