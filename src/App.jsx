@@ -865,7 +865,7 @@ function compressCompanyLogo(file) {
 }
 
 function SettingsPage({ onOpenProfile }) {
-  const [active, setActive] = useState(() => readRoute().section || 'general')
+  const [active, setActive] = useState(() => readRoute().section || 'company')
   const [query, setQuery] = useState('')
   const [context, setContext] = useState(() => readSettingsContextCache())
   const [loading, setLoading] = useState(() => !readSettingsContextCache())
@@ -887,7 +887,7 @@ function SettingsPage({ onOpenProfile }) {
   const [settingsCatalog, setSettingsCatalog] = useState(() => readSettingsNavCache())
   const [settingsCatalogLoaded, setSettingsCatalogLoaded] = useState(false)
   const [settingsCatalogError, setSettingsCatalogError] = useState('')
-  const [mobileSettingsDetail, setMobileSettingsDetail] = useState(() => Boolean(readRoute().section && readRoute().section !== 'general'))
+  const [mobileSettingsDetail, setMobileSettingsDetail] = useState(() => Boolean(readRoute().section && readRoute().section !== 'company'))
   const settingsOpenStartedAt = useRef(typeof performance !== 'undefined' ? performance.now() : Date.now())
   const settingsVisibleLogged = useRef(false)
   const settingsStartedWithCache = useRef(Boolean(readSettingsContextCache()))
@@ -1394,7 +1394,7 @@ function SettingsPage({ onOpenProfile }) {
           ) : !companyIndependentSection && !settings ? (
             <div className="settings-card settings-state-card">{companySettingsError || 'No settings data available.'}</div>
           ) : (
-            <div className="settings-card">
+            <div className={`settings-card ${current?.key === 'company' ? 'settings-card--company-grid' : ''}`}>
               {current?.key === 'general' ? (
                 <>
                   <div className="settings-row">
@@ -2507,7 +2507,7 @@ function Desktop({ onLock, onSignOut }) {
     }
     const settingsIndex = parts.indexOf('settings')
     if (settingsIndex >= 0) {
-      const section = parts[settingsIndex + 1] || 'general'
+      const section = parts[settingsIndex + 1] || 'company'
       if (DEVELOPER_SETTINGS_KEYS.has(section)) {
         setRoute('developer', section)
         setRouteState({ app: 'developer', section })
@@ -2719,7 +2719,7 @@ function Desktop({ onLock, onSignOut }) {
       return
     }
     if (id === 'settings') {
-      setRoute('settings', readRoute().section || 'general')
+      setRoute('settings', readRoute().section || 'company')
       setActiveApp('settings')
       return
     }
@@ -2855,7 +2855,7 @@ function Desktop({ onLock, onSignOut }) {
             className="status-button"
             aria-label="Open Settings"
             title="Settings"
-            onClick={() => { setTopPanel(''); setRoute('settings', 'general'); setActiveApp('settings') }}
+            onClick={() => { setTopPanel(''); setRoute('settings', 'company'); setActiveApp('settings') }}
           >
             <GearIcon size={17} strokeWidth={2.1} />
           </button>
@@ -2989,9 +2989,9 @@ function Desktop({ onLock, onSignOut }) {
           canManagePlatform ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : <div className="module-state">Platform Management permission required.</div>
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
-            const next = { app: 'settings', section: 'general' }
+            const next = { app: 'settings', section: 'company' }
             setRouteState(next)
-            setRoute('settings', 'general')
+            setRoute('settings', 'company')
             setActiveApp('settings')
           }} />
         ) : activeApp === 'workspace' ? (
