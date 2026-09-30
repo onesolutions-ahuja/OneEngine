@@ -621,7 +621,7 @@ const CATALOG = [
     permissions: ["integration.manage", "message.send"],
     storeScoped: false,
     category: "Communication",
-    version: "1.0.0",
+    version: "1.1.0",
     packageType: "APPLICATION",
     billable: true,
     licenceRequired: true,
@@ -700,7 +700,7 @@ const CATALOG = [
     visibility: "PUBLIC",
     entitlementKey: "communications.sms",
     dependencies: ["communication_core", "sms_connector"],
-    capabilities: ["sms_outbound", "provider_status", "device_discovery"],
+    capabilities: ["sms_outbound", "sms_inbound", "provider_status", "device_discovery", "appointment_booking"],
     providerConnector: {
       providerKey: "smsgate",
       channel: "SMS",
@@ -710,8 +710,9 @@ const CATALOG = [
         defaultMode: "USERNAME_PASSWORD",
         credentialStorage: "integration_connections.credentials_encrypted"
       },
-      settings: ["apiUrl", "authenticationMethod", "username", "password", "apiToken", "deviceId", "simNumber"],
+      settings: ["apiUrl", "authenticationMethod", "username", "password", "apiToken", "deviceId", "simNumber", "bookingBaseUrl", "webhookSigningKey"],
       mappings: ["recipient_phone", "message", "provider_message_id"],
+      events: ["communication.message_received"],
       actions: ["SEND_SMS", "TEST_CONNECTION", "LIST_DEVICES"],
     },
     connectorApp: {
@@ -732,7 +733,9 @@ const CATALOG = [
         { key: "password", type: "secret", label: "Password" },
         { key: "apiToken", type: "secret", label: "API token" },
         { key: "deviceId", type: "string", label: "Device ID" },
-        { key: "simNumber", type: "number", label: "SIM number" }
+        { key: "simNumber", type: "number", label: "SIM number" },
+        { key: "bookingBaseUrl", type: "string", default: "https://onesolutions-ahuja.github.io/OneEngine", label: "Public booking URL" },
+        { key: "webhookSigningKey", type: "secret", label: "Webhook signing key" }
       ],
     },
   },

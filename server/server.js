@@ -50,6 +50,7 @@ import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
 import createWhatsAppSettingsRouter from "./routes/whatsapp.js";
 import createOneAssistantRouter from "./routes/oneAssistant.js";
+import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
 import createAdminRouter from "./routes/admin.js";
 import createAttendanceRouter from "./routes/attendance.js"; // Staff clock in/out — routes/attendance.js
@@ -138,6 +139,7 @@ app.use("/api/online/uber/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
+app.use("/api/smsgate/webhook", express.raw({ type: "*/*", limit: "64kb" }));
 app.use("/api/shopify/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use(express.json({ limit: "10mb" }));
@@ -1416,6 +1418,7 @@ app.use("/api", createSettingsRouter({
 app.use("/api", createCustomerAuthRouter); /* routes/customerAuth.js exports a router instance (self-contained) */
 app.use("/api", createWhatsAppSettingsRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createOneAssistantRouter({ pool, authenticate, authorize }));
+app.use("/api", createSmsGateWebhookRouter({ pool }));
 app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool, writeAudit }));
 
 /*
