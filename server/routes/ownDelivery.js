@@ -122,7 +122,7 @@ export default function createOwnDeliveryRouter({
   router.put("/own-delivery/orders/:orderId/assignment", authenticate, authorize("online_orders.manage"), async (req, res) => {
     const driverId = String(req.body?.driverId || "").trim();
     if (!driverId) return res.status(400).json({ success: false, message: "Select a delivery partner" });
-    const client = await (req.tenantPool || pool).connect();
+    const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const found = await client.query(
@@ -205,7 +205,7 @@ export default function createOwnDeliveryRouter({
     if (!ids.length || ids.length > 100 || new Set(ids).size !== ids.length) {
       return res.status(400).json({ success: false, message: "Provide a valid ordered list of assigned deliveries" });
     }
-    const client = await (req.tenantPool || pool).connect();
+    const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const owned = await client.query(
