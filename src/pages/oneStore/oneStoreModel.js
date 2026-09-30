@@ -12,6 +12,14 @@ const PROVIDER_BRANDS = new Map([
   ["sage_accounting", "sage-business-cloud-accounting"],
   ["sage", "sage"],
   ["whatsapp", "whatsapp"],
+  ["one_connect_dojo", "dojo"],
+  ["dojo", "dojo"],
+  ["one_connect_sumup", "sumup"],
+  ["sumup", "sumup"],
+  ["one_connect_square", "square"],
+  ["square", "square"],
+  ["mews", "mews"],
+  ["mews_pms", "mews"],
 ]);
 
 export function isStorefrontPackage(item) {
