@@ -156,6 +156,12 @@ export function resolveAppOpenRoute(item) {
   const key = String(item?.package_key || item?.manifest?.packageKey || '')
   if (DEDICATED_OPEN_ROUTES[key]) return DEDICATED_OPEN_ROUTES[key]
 
+  // Connector packages own their setup lifecycle. Opening an installed
+  // connector must land on its schema-driven settings, never the generic
+  // Integrations list.
+  const connectorApp = item?.manifest?.connectorApp || item?.company_installation?.manifest?.connectorApp
+  if (connectorApp && !connectorApp.template) return `/app/connector-settings/${encodeURIComponent(key)}`
+
   const declared = String(item?.route || item?.manifest?.route || item?.company_installation?.manifest?.route || '').trim()
   if (declared === '/app/custom/client-web-shop') return '/app/settings/client-web-shop'
   if (declared === '/app/custom/own-delivery') return '/app/own-delivery'
