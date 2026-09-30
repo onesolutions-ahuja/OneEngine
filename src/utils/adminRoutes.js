@@ -27,6 +27,7 @@ export const PAGE_SLUGS = Object.freeze({
   Licensing: "licensing",
   "App Releases": "app-releases",
   Settings: "settings",
+  OneDeveloper: "developer",
 });
 
 function withBase(path="") {
