@@ -246,6 +246,7 @@ export function consumeGoogleOAuthCallback() {
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
   sessionStorage.removeItem('onepos.settings.context.v2')
+  sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
   void clearLazyCache()
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
@@ -290,9 +291,9 @@ export async function ensureActingCompanyContext() {
 
   const rememberedCompanyId = getActingCompanyId() || (user?.isPlatformDeveloper === true ? String(user?.companyId || '') : '')
   try {
-    const permissionResponse = await apiRequest('/api/auth/me/permissions')
-    const permissionCodes = Array.isArray(permissionResponse?.data?.permissions)
-      ? permissionResponse.data.permissions
+    const permissionState = await loadSessionPermissions({ includeEntitlements: false })
+    const permissionCodes = Array.isArray(permissionState?.permissions)
+      ? permissionState.permissions
       : []
     const canActForCompany = permissionCodes.includes('platform.manage') || user?.isPlatformDeveloper === true
 
@@ -328,6 +329,7 @@ export function logout() {
   sessionStorage.removeItem('onepos_user')
   sessionStorage.removeItem('onepos.settings.context.v2')
   sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
+  void clearLazyCache()
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
   setActingCompanyId('')
