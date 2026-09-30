@@ -842,7 +842,7 @@ export default function createOnlineRouter({
       });
     }
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     let transactionStarted = false;
 
     try {
@@ -1227,7 +1227,7 @@ export default function createOnlineRouter({
       return res.status(400).json({ success: false, message: "At least one order item is required" });
     }
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     let transactionStarted = false;
 
     try {
@@ -1529,7 +1529,7 @@ export default function createOnlineRouter({
       onTransition = null,
     } = options;
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     let transactionStarted = false;
     const tStart = Date.now();
     const deferredLogs = [];
@@ -2133,7 +2133,7 @@ export default function createOnlineRouter({
       return { created: false, reason: "database_not_configured", orderId: null, unmappedCount: 0 };
     }
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     let transactionStarted = false;
 
     try {
@@ -2430,7 +2430,7 @@ export default function createOnlineRouter({
       return { created: false, reason: "database_not_configured", orderId: null, unmappedCount: 0 };
     }
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     let transactionStarted = false;
 
     try {
