@@ -1,0 +1,59 @@
+name: Consolidate onePOS into OneEngine
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/consolidate-oneengine.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical frontend repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clone current onePOS backend
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/onepos-source
+          git clone --depth 1 https://github.com/onesolutions-ahuja/onePOS.git /tmp/onepos-source
+
+      - name: Build OneEngine monorepo
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="$(git -C /tmp/onepos-source rev-parse HEAD)"
+          rm -rf server
+          mkdir -p server
+          rsync -a --delete             --exclude '.git/'             --exclude 'MIGRATION_LOCK.md'             /tmp/onepos-source/ server/
+          printf '%s\n' "$SOURCE_SHA" > server/.onepos-source-commit
+          cat > ONEENGINE.md <<EOF
+          # OneEngine
+
+          This repository is the canonical onePOS codebase.
+
+          - Frontend / OneTheme: repository root
+          - Backend / API / database / packages: `server/`
+          - Source onePOS commit imported: `$SOURCE_SHA`
+
+          Do not develop against the legacy onePOS repository after consolidation.
+          EOF
+
+      - name: Commit consolidated backend
+        run: |
+          set -euo pipefail
+          git config user.name "OneEngine Consolidation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A server ONEENGINE.md
+          if git diff --cached --quiet; then
+            echo "Nothing to consolidate."
+            exit 0
+          fi
+          git commit -m "Consolidate onePOS backend into OneEngine monorepo"
+          git push origin HEAD:main
