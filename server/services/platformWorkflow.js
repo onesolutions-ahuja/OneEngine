@@ -39,6 +39,13 @@ import {
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
 import { createPlatformExecutionContext, applyExecutionContext } from "./platformExecutionContext.js";
 import { createExecutionGuard, claimPersistentExecution, completePersistentExecution, executionFingerprint } from "./platformExecutionGuard.js";
+import {
+  EXECUTION_MODES,
+  resolveExecutionMode,
+  authoritativeRuntimeCompanyId,
+  assertRuntimeObjectPermission,
+  assertRuntimeFieldWriteAccess,
+} from "./platformRuntimeSecurity.js";
 import { createGovernorBudget } from "./platformGovernor.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
@@ -1852,10 +1859,18 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["records.create"],
     executor: async ({ db, action, req, object, companyId, fields }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const executionMode = resolveExecutionMode(arguments[0] || {});
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "create", executionMode,
+        trustedSystem: req?.trustedSystemExecution === true,
+      });
       const table = targetObject.source_table;
       const entries = Object.entries(action.fieldValues || {});
       if (!entries.length) return { status: "completed", created: null };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, fields, entries });
+      const mappedFields = await resolveWorkflowWritableFields({
+        db, object: targetObject, fields, entries, req, executionMode,
+        trustedSystem: req?.trustedSystemExecution === true,
+      });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
       const columns = mappedFields.map((field) => `"${field.source_column}"`);
       const params = entries.map(([, value]) => value);
@@ -1909,12 +1924,21 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, companyId, fields }) => {
+    executor: async (context) => {
+      const { db, action, object, req, companyId, fields } = context;
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       const table = targetObject.source_table;
       const entries = Object.entries(action.fieldValues || {});
       if (!entries.length) return { status: "completed", updated: null };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, fields, entries });
+      const mappedFields = await resolveWorkflowWritableFields({
+        db, object: targetObject, fields, entries, req, executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: action.recordId });
       const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
       const params = [...entries.map(([, value]) => value), action.recordId];
@@ -2094,8 +2118,14 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.delete"],
-    executor: async ({ db, action, object, req, companyId }) => {
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "delete", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       const table = targetObject.source_table;
       const scopeParams = [action.recordId];
       const scopeClauses = ["id=$1"];
@@ -3399,28 +3429,26 @@ async function resolveWorkflowTargetObject({ db, action = {}, object = null, com
   return target;
 }
 
-async function resolveWorkflowWritableFields({ db, object, fields = [], entries }) {
-  const requested = new Map(entries.map(([name]) => [String(name), true]));
+async function resolveWorkflowWritableFields({ db, object, fields = [], entries, req, executionMode, trustedSystem }) {
   const metadata = Array.isArray(fields) && fields.length
     ? fields
     : (await db(
-      `SELECT api_name, source_column, writable, active
-         FROM platform_fields
-        WHERE object_id=$1 AND active=true AND writable=true`,
-      [object.id]
+      `SELECT * FROM platform_fields
+        WHERE object_id=$1 AND active=true
+          AND (company_id IS NULL OR company_id=$2)
+        ORDER BY display_order`,
+      [object.id, authoritativeRuntimeCompanyId({ req, companyId: object.company_id })]
     )).rows;
-  const resolved = [];
-  for (const [name] of requested) {
-    const field = metadata.find((candidate) =>
-      String(candidate.api_name || "") === name || String(candidate.source_column || "") === name
-    );
-    if (!field || field.active === false || field.writable === false || !isSafeIdentifier(field.source_column || field.api_name)) {
-      throw new Error(`Workflow field "${name}" is not writable for the target object`);
-    }
-    resolved.push({ source_column: field.source_column || field.api_name });
-  }
-  return resolved;
-}
+  const secured = await assertRuntimeFieldWriteAccess({
+    db,
+    req,
+    object,
+    fields: metadata,
+    fieldNames: entries.map(([name]) => String(name)),
+    executionMode,
+    trustedSystem,
+  });
+  return secured.map((field) => ({ ...field, source_column: field.source_column || field.api_name }));
 
 async function checkWorkflowDuplicateRules({ db, object, entries, companyId, req, excludeRecordId = null }) {
   const metadata = await db(
@@ -3624,11 +3652,14 @@ export async function executeWorkflowActions({ actions, ...context }) {
     };
     governedDb.__platformGoverned = true;
   }
+  const executionMode = resolveExecutionMode(context);
   const runtimeContext = applyExecutionContext({
     ...context,
     db: governedDb,
     executionGuard,
     governor,
+    executionMode,
+    trustedSystem: context.trustedSystem === true || context.req?.trustedSystemExecution === true,
     workflowDepth: executionGuard.chain.length,
     workflowStack: [...executionGuard.chain],
   }, executionContext);
