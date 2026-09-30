@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Eye, Plus, RefreshCw, Search, X } from 'lucide-react'
-import { apiRequest } from '../../services/api'
+import { apiRequest, loadSessionPermissions } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
 
@@ -16,7 +16,6 @@ export default function SuppliersPage(){
   const [products,setProducts]=useState([])
   const [currency,setCurrency]=useState('GBP')
   const [permissions,setPermissions]=useState([])
-  const [isAdmin,setIsAdmin]=useState(false)
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
   const [message,setMessage]=useState('')
@@ -31,14 +30,13 @@ export default function SuppliersPage(){
         cachedGet('/api/suppliers',{forceRefresh,onFresh:fresh=>fresh?.success&&setSuppliers(Array.isArray(fresh.data)?fresh.data:[])}),
         cachedGet('/api/products',{forceRefresh,onFresh:fresh=>fresh?.success&&setProducts(Array.isArray(fresh.data)?fresh.data:[])}).catch(()=>null),
         cachedGet('/api/settings',{cacheKey:'settings:company',forceRefresh,onFresh:fresh=>fresh?.data?.company?.currency&&setCurrency(fresh.data.company.currency)}).catch(()=>null),
-        apiRequest('/api/auth/me/permissions').catch(()=>null),
+        loadSessionPermissions().catch(()=>null),
       ])
       if(!s?.success)throw new Error(s?.message||'Unable to load suppliers')
       setSuppliers(Array.isArray(s.data)?s.data:[])
       setProducts(Array.isArray(p?.data)?p.data:[])
       setCurrency(settings?.data?.company?.currency||'GBP')
-      setPermissions(perms?.data?.permissions||[])
-      setIsAdmin(perms?.data?.isAdmin===true)
+      setPermissions(perms?.permissions||[])
     }catch(err){setError(err?.message||'Unable to load suppliers')}
     finally{setLoading(false)}
   }
@@ -76,8 +74,8 @@ export default function SuppliersPage(){
     {key:'active',label:'Status',render:r=>r.active===false?'Inactive':'Active'},
   ],[currency])
 
-  const canManageAccounts=isAdmin||permissions.includes('purchase.edit')||permissions.includes('inventory.adjust')
-  const canManagePayments=isAdmin||permissions.includes('payment.manage')||permissions.includes('purchase.edit')||permissions.includes('inventory.adjust')
+  const canManageAccounts=permissions.includes('purchase.edit')||permissions.includes('inventory.adjust')
+  const canManagePayments=permissions.includes('payment.manage')||permissions.includes('purchase.edit')||permissions.includes('inventory.adjust')
 
   return <section className="module-page suppliers-page">
     <header className="module-page-header">
