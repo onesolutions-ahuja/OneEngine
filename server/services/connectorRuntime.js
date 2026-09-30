@@ -1,3 +1,5 @@
+import { decryptCredentials } from "./integrationCredentials.js";
+
 export const CONNECTOR_STATUSES = Object.freeze([
   "CONNECTED",
   "DISCONNECTED",
@@ -297,7 +299,7 @@ async function loadPersistedCandidates({ db, companyId, storeId, tillId }) {
   const result = await db(
     `SELECT c.id, c.company_id, c.store_id, c.till_id, c.connector_package_key,
             c.connector_configuration, c.connector_capabilities, c.enabled,
-            c.connection_status, c.fallback_order, c.created_at, p.manifest
+            c.connection_status, c.fallback_order, c.created_at, c.credentials_encrypted, p.manifest
        FROM integration_connections c
        JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
        JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=c.company_id
@@ -368,7 +370,10 @@ export async function resolvePersistedConnectorCapability({
         capabilities,
         adapter: driver.createAdapter({
           instanceId: instance.id,
-          configuration: jsonValue(instance.connector_configuration, {}),
+          configuration: {
+            ...jsonValue(instance.connector_configuration, {}),
+            ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
+          },
           companyId,
           storeId,
           tillId,
