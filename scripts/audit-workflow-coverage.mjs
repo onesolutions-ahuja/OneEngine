@@ -144,6 +144,12 @@ const md = [
 fs.writeFileSync(path.join(OUT, 'workflow-coverage-audit.md'), md + '\n')
 
 console.log(JSON.stringify(report.summary, null, 2))
+if (directRuntimeCalls.length) console.log("DIRECT_RUNTIME_CALLS=" + JSON.stringify(directRuntimeCalls))
+const bypassByFile = Object.entries(bypassRoutes.reduce((acc, route) => {
+  acc[route.file] = (acc[route.file] || 0) + 1
+  return acc
+}, {})).sort((a, b) => b[1] - a[1]).slice(0, 25)
+if (bypassByFile.length) console.log("TOP_BYPASS_FILES=" + JSON.stringify(bypassByFile))
 if (ENFORCE && findings.length) {
   console.error(`Workflow coverage enforcement failed with ${findings.length} gap(s).`)
   process.exit(1)
