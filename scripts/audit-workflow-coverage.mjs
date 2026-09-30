@@ -50,6 +50,7 @@ const functionRegistry = read('server/services/platformFunctionRegistry.js')
 const workflowRuntime = read('server/services/platformWorkflow.js')
 const trustedRuntime = read('server/services/trustedRuntime.js')
 const actionRegistry = read('server/services/platformActionRegistry.js')
+const systemWorkflowCatalog = read('server/services/systemWorkflowCatalog.js')
 
 const functions = extractKeys(functionRegistry, /\bkey:\s*"([^"]+)"/g)
 const workflowActions = extractKeys(workflowRuntime, /\bkey:\s*"([A-Z0-9_]+)"/g)
@@ -80,10 +81,17 @@ for (const file of walk(SERVER)) {
   }
 }
 
+const catalogueCoverage = {
+  functions: /PLATFORM_FUNCTIONS\.map\s*\(/.test(systemWorkflowCatalog),
+  actions: /PLATFORM_ACTION_REGISTRY[\s\S]*\.map\s*\(/.test(systemWorkflowCatalog),
+  jobs: /TRUSTED_JOB_KINDS\.map\s*\(/.test(systemWorkflowCatalog),
+}
+
 const findings = [
-  ...functions.map((key) => ({ severity: 'GAP', type: 'FUNCTION_REQUIRES_SYSTEM_WORKFLOW', key })),
-  ...actions.map((key) => ({ severity: 'GAP', type: 'ACTION_REQUIRES_SYSTEM_WORKFLOW', key })),
-  ...jobs.map((key) => ({ severity: 'GAP', type: 'JOB_TRIGGER_REQUIRES_WORKFLOW', key })),
+  ...(!catalogueCoverage.functions ? functions.map((key) => ({ severity: 'GAP', type: 'FUNCTION_REQUIRES_SYSTEM_WORKFLOW', key })) : []),
+  ...(!catalogueCoverage.actions ? actions.map((key) => ({ severity: 'GAP', type: 'ACTION_REQUIRES_SYSTEM_WORKFLOW', key })) : []),
+  ...(!catalogueCoverage.jobs ? jobs.map((key) => ({ severity: 'GAP', type: 'JOB_TRIGGER_REQUIRES_WORKFLOW', key })) : []),
+  ...directRuntimeCalls.map((call) => ({ severity: 'GAP', type: 'DIRECT_RUNTIME_CALL_BYPASS', ...call })),
   ...bypassRoutes.map((route) => ({ severity: 'GAP', type: 'MUTATION_ROUTE_NOT_WORKFLOW_MEDIATED', ...route })),
 ]
 
@@ -99,6 +107,9 @@ const report = {
     workflowMediatedMutationRoutes: mediatedRoutes.length,
     bypassMutationRoutes: bypassRoutes.length,
     directRuntimeCallSites: directRuntimeCalls.length,
+    catalogueFunctionsCovered: catalogueCoverage.functions,
+    catalogueActionsCovered: catalogueCoverage.actions,
+    catalogueJobsCovered: catalogueCoverage.jobs,
     totalGaps: findings.length,
   },
   registeredFunctions: functions,
