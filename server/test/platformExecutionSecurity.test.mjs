@@ -97,3 +97,40 @@ test("SYSTEM execution requires trust and records mode in globals", async () => 
   assert.equal(ctx.globals.$System.trusted, true);
   assert.equal(ctx.globals.$User.id ?? null, null);
 });
+
+
+test("inherited execution context cannot switch company through request context", async () => {
+  await assert.rejects(
+    () => createPlatformExecutionContext({
+      db: async () => ({ rows: [] }),
+      req: { user: { id: "u2", companyId: "c2" } },
+      executionContext: {
+        globals: {
+          $Company: { id: "c1" },
+          $User: { id: "u1", companyId: "c1" },
+          $System: { executionMode: "USER", trusted: false },
+        },
+      },
+      executionMode: "USER",
+    }),
+    (error) => error.code === "EXECUTION_CONTEXT_COMPANY_MISMATCH" && error.status === 403,
+  );
+});
+
+test("inherited execution context cannot switch actor through request context", async () => {
+  await assert.rejects(
+    () => createPlatformExecutionContext({
+      db: async () => ({ rows: [] }),
+      req: { user: { id: "u2", companyId: "c1" } },
+      executionContext: {
+        globals: {
+          $Company: { id: "c1" },
+          $User: { id: "u1", companyId: "c1" },
+          $System: { executionMode: "USER", trusted: false },
+        },
+      },
+      executionMode: "USER",
+    }),
+    (error) => error.code === "EXECUTION_CONTEXT_USER_MISMATCH" && error.status === 403,
+  );
+});
