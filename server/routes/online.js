@@ -46,7 +46,7 @@ export default function createOnlineRouter({
 }) {
   const router = express.Router();
 
-  async function executeWorkflowAction(context = {}) {
+  async function executeOnlineSystemAction(context = {}) {
     const action = context.action || {};
     const actionKey = String(action.type || action.key || "").toUpperCase();
     if (!actionKey) throw new Error("Workflow action key is required");
@@ -1030,7 +1030,7 @@ export default function createOnlineRouter({
    */
   router.post("/online/uber/sync-menu", authenticate, authorize("online_orders.configure"), async (req, res) => {
     try {
-      const syncResult = await executeWorkflowAction({
+      const syncResult = await executeOnlineSystemAction({
         db,
         req,
         companyId: req.user.companyId,
@@ -1104,7 +1104,7 @@ export default function createOnlineRouter({
    */
   router.get("/online/uber/stores", authenticate, authorize("online_orders.configure"), async (req, res) => {
     try {
-      const result = await executeWorkflowAction({
+      const result = await executeOnlineSystemAction({
         db,
         req,
         companyId: req.user.companyId,
@@ -1150,7 +1150,7 @@ export default function createOnlineRouter({
    */
   router.get("/online/uber/test-connection", authenticate, authorize("online_orders.configure"), async (req, res) => {
     try {
-      const connectionResult = await executeWorkflowAction({
+      const connectionResult = await executeOnlineSystemAction({
         db,
         req,
         companyId: req.user.companyId,
@@ -1395,7 +1395,7 @@ export default function createOnlineRouter({
       if (runtime.order_acceptance === "auto") {
         const service = getPlatformService(platform);
         const acceptResponse = platform === "uber"
-          ? await executeWorkflowAction({
+          ? await executeOnlineSystemAction({
               db,
               client,
               req,
@@ -1846,7 +1846,7 @@ export default function createOnlineRouter({
        * existing timestampColumn below; accepted_at is written explicitly). */
       timestampColumn: "preparing_at",
       callPlatform: (service, order, runtime, client) => order.platform === "uber"
-        ? executeWorkflowAction({
+        ? executeOnlineSystemAction({
             db,
             client,
             req,
@@ -1886,7 +1886,7 @@ export default function createOnlineRouter({
       reason,
       timestampColumn: "cancelled_at",
       callPlatform: (service, order, runtime, client) => order.platform === "uber"
-        ? executeWorkflowAction({
+        ? executeOnlineSystemAction({
             db,
             client,
             req,
@@ -3530,7 +3530,7 @@ export default function createOnlineRouter({
     const updatedOrder = await getGenericOrder(db, req.user.companyId, req.params.id);
     let shopifyFulfilment = null;
     if (order.platform === "shopify") {
-      shopifyFulfilment = await executeWorkflowAction({
+      shopifyFulfilment = await executeOnlineSystemAction({
         db,
         pool,
         req,
