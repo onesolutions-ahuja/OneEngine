@@ -19,7 +19,8 @@ function extractKeys(text, pattern) {
   return uniq([...text.matchAll(pattern)].map((match) => match[1]).filter(Boolean));
 }
 
-function routeBlocks(file, text) {
+function routeBlocks(file, text, globalGatewayEnabled = false) {
+  const routerLevelAuth = /\brouter\.use\s*\(\s*authenticate\b/.test(text);
   const matches = [...text.matchAll(/\b(?:router|app)\.(post|put|patch|delete)\s*\(\s*(["'`])([^"'`]+)\2/g)];
   return matches.map((match, index) => {
     const start = match.index;
@@ -32,16 +33,19 @@ function routeBlocks(file, text) {
     const executesSystemWorkflow = /\bexecuteSystemWorkflow\s*\(/.test(body);
     const executesRegisteredAction = /\bexecuteRegisteredAction\s*\(/.test(body);
     const invokesFunctionRegistry = /\b(?:getRegisteredFunction|executePlatformFunction|CALL_FUNCTION)\b/.test(body);
+    const authenticated = routerLevelAuth || /\bauthenticate\b/.test(body);
     return {
       file: rel(file),
       method,
       route,
-      workflowMediated: executesSystemWorkflow || (createsRun && executesWorkflow),
+      workflowMediated: executesSystemWorkflow || (createsRun && executesWorkflow) || (globalGatewayEnabled && authenticated),
       createsRun,
       executesWorkflow,
       executesSystemWorkflow,
       executesRegisteredAction,
       invokesFunctionRegistry,
+      authenticated,
+      globalGatewayCovered: globalGatewayEnabled && authenticated,
     };
   });
 }
@@ -59,9 +63,11 @@ const actions = uniq([...coreActions, ...workflowActions]);
 const jobsSection = trustedRuntime.match(/TRUSTED_JOB_KINDS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/)?.[1] || "";
 const jobs = extractKeys(jobsSection, /"([A-Z0-9_]+)"/g);
 
+const serverSource = read("server/server.js");
+const globalGatewayEnabled = /app\.use\("\/api",\s*createBusinessCommandGateway\(\{\s*db\s*\}\)\)/.test(serverSource);
 const mutationRoutes = [];
 for (const file of [path.join(SERVER, "server.js"), ...walk(path.join(SERVER, "routes"))]) {
-  mutationRoutes.push(...routeBlocks(file, fs.readFileSync(file, "utf8")));
+  mutationRoutes.push(...routeBlocks(file, fs.readFileSync(file, "utf8"), globalGatewayEnabled));
 }
 const bypassRoutes = mutationRoutes.filter((route) => !route.workflowMediated);
 const mediatedRoutes = mutationRoutes.filter((route) => route.workflowMediated);
@@ -118,6 +124,7 @@ const report = {
     catalogueFunctionsCovered: catalogueCoverage.functions,
     catalogueActionsCovered: catalogueCoverage.actions,
     catalogueJobsCovered: catalogueCoverage.jobs,
+    globalBusinessCommandGateway: globalGatewayEnabled,
     totalGaps: findings.length,
   },
   catalogueCoverage,
