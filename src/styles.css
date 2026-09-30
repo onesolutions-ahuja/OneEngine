@@ -11831,3 +11831,24 @@ button.git-control-tile { cursor: pointer; }
     grid-template-columns: 1fr !important;
   }
 }
+
+
+/* Shared connector-app sizing: every connector settings app gets the same
+   compact, scrollable desktop composition. */
+.connector-settings-panel .connector-test-actions {
+  grid-column: 2;
+  margin: 16px;
+  display: grid;
+  gap: 12px;
+  align-self: start;
+}
+
+.connector-settings-panel .connector-test-actions .connector-sms-test-card {
+  margin: 0 !important;
+}
+
+@media (max-width: 980px) {
+  .connector-settings-panel .connector-test-actions {
+    grid-column: 1;
+  }
+}
