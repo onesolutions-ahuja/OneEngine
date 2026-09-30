@@ -56,3 +56,69 @@ export function normalizeTraceEnvelope({
     runtimeContractVersion,
   };
 }
+
+
+export async function auditPlatformConformance({ db, companyId = null } = {}) {
+  if (!db || typeof db !== "function") throw new Error("Database context is required");
+
+  const [objectIssues, fieldIssues, packageRows] = await Promise.all([
+    db(
+      `SELECT id,object_key,api_name,source_table
+         FROM platform_objects
+        WHERE active=true
+          AND ($1::uuid IS NULL OR company_id IS NULL OR company_id=$1)
+          AND (
+            object_key IS NULL OR object_key=''
+            OR api_name IS NULL OR api_name=''
+            OR (source_table IS NOT NULL AND source_table !~ '^[a-z_][a-z0-9_]*$')
+          )`,
+      [companyId]
+    ),
+    db(
+      `SELECT id,object_id,api_name,source_column,field_type
+         FROM platform_fields
+        WHERE active=true
+          AND ($1::uuid IS NULL OR company_id IS NULL OR company_id=$1)
+          AND (api_name IS NULL OR api_name='')`,
+      [companyId]
+    ),
+    companyId
+      ? db(
+          `SELECT p.package_key,p.version,p.required_platform_version,i.installed_version,i.version AS installation_version
+             FROM company_package_installations i
+             JOIN package_registry p ON p.id=i.package_id
+            WHERE i.company_id=$1 AND i.status='active' AND p.active=true`,
+          [companyId]
+        )
+      : Promise.resolve({ rows: [] }),
+  ]);
+
+  const incompatiblePackages = [];
+  for (const row of packageRows.rows || []) {
+    const required = row.required_platform_version || null;
+    const compatibility = validatePlatformCompatibility(required);
+    if (!compatibility.compatible) {
+      incompatiblePackages.push({
+        packageKey: row.package_key,
+        installedVersion: row.installed_version || row.installation_version || row.version || null,
+        requiredPlatformVersion: required,
+        currentPlatformVersion: compatibility.currentVersion,
+      });
+    }
+  }
+
+  const issues = {
+    objects: objectIssues.rows || [],
+    fields: fieldIssues.rows || [],
+    incompatiblePackages,
+  };
+
+  return {
+    ...platformRuntimeContract(),
+    compliant:
+      issues.objects.length === 0
+      && issues.fields.length === 0
+      && issues.incompatiblePackages.length === 0,
+    issues,
+  };
+}
