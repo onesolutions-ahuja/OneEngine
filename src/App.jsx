@@ -870,6 +870,8 @@ function SettingsPage({ onOpenProfile }) {
   const settingsOpenStartedAt = useRef(typeof performance !== 'undefined' ? performance.now() : Date.now())
   const settingsVisibleLogged = useRef(false)
   const settingsStartedWithCache = useRef(Boolean(readSettingsContextCache()))
+  const settings = context?.settings
+  const user = context?.user
 
   const load = async () => {
     const cached = readSettingsContextCache()
@@ -1170,9 +1172,6 @@ function SettingsPage({ onOpenProfile }) {
       setRecordSaving(false)
     }
   }
-
-  const settings = context?.settings
-  const user = context?.user
 
   const applyLocalSettingsPatch = (baseContext, patch) => {
     if (!baseContext?.settings) return baseContext
