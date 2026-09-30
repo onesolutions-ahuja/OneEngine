@@ -231,7 +231,7 @@ export default function createPurchasesRouter({
       }
 
       const total = purchaseItems.reduce((sum, item) => sum + item.lineTotal, 0);
-      const client = await pool.connect();
+      const client = await (req.tenantPool || pool).connect();
 
       try {
         await client.query("BEGIN");
@@ -409,7 +409,7 @@ export default function createPurchasesRouter({
           .json({ success: false, message: "DATABASE_URL is not configured" });
       }
 
-      const client = await pool.connect();
+      const client = await (req.tenantPool || pool).connect();
 
       try {
         await client.query("BEGIN");
