@@ -186,6 +186,25 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         await client.query(oneAssistantSchema);
       },
     },
+    {
+      key: "0014_package_entitlement_source_types",
+      version: "14",
+      name: "Expand package entitlement source types",
+      up: async client => {
+        await client.query(
+          `ALTER TABLE company_package_entitlement_sources
+             DROP CONSTRAINT IF EXISTS company_package_entitlement_sources_source_type_check`
+        );
+        await client.query(
+          `ALTER TABLE company_package_entitlement_sources
+             ADD CONSTRAINT company_package_entitlement_sources_source_type_check
+             CHECK (source_type IN (
+               'DIRECT_LICENCE','DIRECT_INSTALL','BUNDLE','TIER','REQUIRED_DEPENDENCY',
+               'OPTIONAL_DEPENDENCY','PLATFORM_DEFAULT','SUPERADMIN_ASSIGNMENT'
+             ))`
+        );
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
