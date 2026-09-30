@@ -39,7 +39,7 @@ function requiredLookupPaths(fields) {
 
 async function loadObjectByKey(db, objectKey, companyId) {
   const result = await db(
-    "SELECT * FROM platform_objects WHERE object_key=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY company_id NULLS FIRST LIMIT 1",
+    "SELECT * FROM platform_objects WHERE object_key=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY CASE WHEN company_id=$2 THEN 0 ELSE 1 END, id LIMIT 1",
     [objectKey, companyId]
   );
   return result.rows?.[0] || null;
