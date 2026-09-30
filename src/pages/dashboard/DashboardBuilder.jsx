@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from "react";
-import { apiRequest } from "../../services/api.js";
+import { apiRequest, loadSessionPermissions } from "../../services/api.js";
 import DashboardLayoutCanvas from "../../components/dashboard/DashboardLayoutCanvas.jsx";
 import DashboardComponentProperties from "../../components/dashboard/DashboardComponentProperties.jsx";
 // DashboardComponentProperties (the shared <DashboardGrid> editor surface)
@@ -89,9 +89,9 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
 
   const loadPrincipals = async () => {
     const [response, permissionResponse] = await Promise.all([
-      apiRequest("/api/dashboards/principals"), apiRequest("/api/auth/me/permissions"),
+      apiRequest("/api/dashboards/principals"), loadSessionPermissions(),
     ]);
-    setPermissions({ codes: permissionResponse.data?.permissions || [] });
+    setPermissions({ codes: permissionResponse?.permissions || [] });
     if (response.success) setPrincipals(response.data);
     else setPrincipals(null);
   };
