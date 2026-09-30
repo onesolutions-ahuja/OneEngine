@@ -75,3 +75,23 @@ test("snapshot exposes counters and limits for observability", () => {
   assert.equal(snapshot.limits.maxQueries, 5);
   assert.equal(typeof snapshot.elapsedMs, "number");
 });
+
+
+test("governor rejects non-positive configured limits", () => {
+  assert.throws(
+    () => createGovernorBudget({ limits: { maxQueries: 0 } }),
+    (error) => error instanceof PlatformGovernorError
+      && error.code === "GOVERNOR_LIMIT_CONFIGURATION_INVALID"
+      && error.status === 500
+      && error.metric === "maxQueries",
+  );
+});
+
+test("negative consumption cannot reduce previously consumed budget", () => {
+  const budget = createGovernorBudget({ limits: { maxQueries: 2 } });
+  budget.consumeQuery();
+  budget.consumeQuery(-100);
+  assert.equal(budget.snapshot().counters.queries, 1);
+  budget.consumeQuery();
+  expectGovernor("GOVERNOR_QUERY_LIMIT", () => budget.consumeQuery());
+});
