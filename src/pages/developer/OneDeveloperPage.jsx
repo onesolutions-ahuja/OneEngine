@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   ChevronRight,
@@ -43,6 +43,10 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
   const [active, setActive] = useState(() => normalizeSection(initialSection))
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    setActive(normalizeSection(initialSection))
+  }, [initialSection])
   const user = getStoredUser() || {}
   const profileName = user?.name || user?.full_name || user?.username || 'User'
   const profileRole = user?.isSuperadmin || user?.is_superadmin ? 'Superadmin' : (user?.role || 'Developer')
