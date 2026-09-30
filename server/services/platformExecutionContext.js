@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { loadEffectivePermissionSets } from "./platformPermissionSets.js";
 
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 
@@ -39,16 +40,25 @@ function permissionTree(codes = []) {
   return root;
 }
 
-async function loadPermissions(db, user) {
-  if (!db || typeof db !== "function" || !user?.roleId) return Object.freeze({});
-  const result = await db(
-    `SELECT p.code
-       FROM role_permissions rp
-       JOIN permissions p ON p.id=rp.permission_id
-      WHERE rp.role_id=$1`,
-    [user.roleId]
-  );
-  return deepFreeze(permissionTree((result.rows || []).map((row) => row.code)));
+async function loadPermissions(db, user, req = null) {
+  if (!db || typeof db !== "function" || !user?.companyId) return Object.freeze({});
+  const roleResult = user.roleId
+    ? await db(
+        `SELECT p.code
+           FROM role_permissions rp
+           JOIN permissions p ON p.id=rp.permission_id
+          WHERE rp.role_id=$1`,
+        [user.roleId]
+      )
+    : { rows: [] };
+  const permissionSets = user.id
+    ? await loadEffectivePermissionSets(db, user, req)
+    : [];
+  const codes = new Set((roleResult.rows || []).map((row) => row.code));
+  for (const set of permissionSets) {
+    for (const code of Array.isArray(set.system_permissions) ? set.system_permissions : []) codes.add(code);
+  }
+  return deepFreeze(permissionTree([...codes]));
 }
 
 function executionTimestamp(existing = null) {
@@ -100,12 +110,12 @@ export async function createPlatformExecutionContext({
 
   let persistedUser = null;
   const actorId = reqUser.id || inherited.$User?.id || (mode === "SYSTEM" ? userId : null);
-  if (db && typeof db === "function" && actorId && authoritativeCompanyId && !reqUser.roleId && !inherited.$User?.roleId) {
+  if (db && typeof db === "function" && actorId && authoritativeCompanyId) {
     try {
       const result = await db(
         `SELECT id,company_id,store_id,role_id,is_superadmin
            FROM users
-          WHERE id=$1 AND company_id=$2
+          WHERE id=$1 AND company_id=$2 AND active=true
           LIMIT 1`,
         [actorId, authoritativeCompanyId]
       );
@@ -136,6 +146,12 @@ export async function createPlatformExecutionContext({
     error.status = 403;
     throw error;
   }
+  if (mode === "USER" && db && typeof db === "function" && actorId && !persistedUser) {
+    const error = new Error("Runtime actor is unavailable or inactive");
+    error.code = "RUNTIME_ACTOR_UNAVAILABLE";
+    error.status = 403;
+    throw error;
+  }
 
   if (reqUser.companyId && companyId && String(reqUser.companyId) !== String(companyId)) {
     const error = new Error("Cross-company execution context is not allowed");
@@ -152,13 +168,13 @@ export async function createPlatformExecutionContext({
 
   const actor = safeObject({
     ...(safeObject(inherited.$User) || {}),
-    ...(safeObject(persistedUser) || {}),
     ...(safeObject(reqUser) || {}),
+    ...(safeObject(persistedUser) || {}),
     id: actorId,
     companyId: authoritativeCompanyId,
   }) || {};
-  const permissions = actor.roleId
-    ? await loadPermissions(db, actor)
+  const permissions = actor.id && authoritativeCompanyId
+    ? await loadPermissions(db, actor, req)
     : Object.freeze({ ...(inherited.$Permission || {}) });
 
   const startedAt = executionTimestamp(inherited.$Flow?.startedAt);
