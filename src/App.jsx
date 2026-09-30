@@ -2469,14 +2469,13 @@ function Desktop({ onLock, onSignOut }) {
 
   useEffect(() => {
     if (!launcherOpen && topPanel !== 'apps' && topPanel !== 'store') return undefined
-    if (storeAppsLoaded && storeApps.length) return undefined
     let live = true
     ;(async () => {
       if (!live) return
       await refreshStoreApps()
     })()
     return () => { live = false }
-  }, [launcherOpen, topPanel, storeAppsLoaded, storeApps.length])
+  }, [launcherOpen, topPanel])
 
   const dateTime = useMemo(
     () =>
@@ -2697,7 +2696,6 @@ function Desktop({ onLock, onSignOut }) {
       setAppSearch('')
       setTopPanel('')
       setLauncherOpen(true)
-      if (!storeApps.length || storeAppsError) void refreshStoreApps()
       return
     }
     if (id === 'store') {
@@ -2705,7 +2703,6 @@ function Desktop({ onLock, onSignOut }) {
       setLauncherOpen(false)
       setStoreFocusPackageKey('')
       setTopPanel('store')
-      if (!storeApps.length || storeAppsError) void refreshStoreApps()
       return
     }
     if (id === 'builder') {
