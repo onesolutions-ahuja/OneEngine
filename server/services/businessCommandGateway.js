@@ -58,7 +58,10 @@ export function createBusinessCommandGateway({ db }) {
 
     res.setHeader("X-OnePOS-Correlation-Id", correlationId);
 
-    res.once("finish", () => {
+    let finalized = false;
+    const finalize = ({ aborted = false } = {}) => {
+      if (finalized) return;
+      finalized = true;
       Promise.resolve()
         .then(async () => {
           if (!req.businessCommandRunId && req.user?.companyId) {
@@ -71,7 +74,7 @@ export function createBusinessCommandGateway({ db }) {
           if (!req.businessCommandRunId) return;
 
           const statusCode = Number(res.statusCode || 500);
-          const status = statusCode < 400 ? "COMPLETED" : "FAILED";
+          const status = !aborted && statusCode < 400 ? "COMPLETED" : "FAILED";
           await db(
             `UPDATE platform_workflow_runs
                 SET status=$1::varchar,
@@ -82,18 +85,24 @@ export function createBusinessCommandGateway({ db }) {
               WHERE id=$4`,
             [
               status,
-              status === "FAILED" ? `HTTP ${statusCode}` : null,
+              status === "FAILED" ? (aborted ? "HTTP connection closed before response completed" : `HTTP ${statusCode}`) : null,
               JSON.stringify({
                 httpStatus: statusCode,
                 durationMs: Date.now() - startedAt,
                 actorUserId: req.user?.id || null,
                 storeId: req.user?.storeId || null,
+                connectionAborted: aborted === true,
               }),
               req.businessCommandRunId,
             ]
           );
         })
         .catch((error) => console.error("Business command trace finalize error:", error?.message || error));
+    };
+
+    res.once("finish", () => finalize({ aborted: false }));
+    res.once("close", () => {
+      if (!res.writableFinished) finalize({ aborted: true });
     });
 
     next();

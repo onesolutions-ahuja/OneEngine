@@ -2182,6 +2182,22 @@ async function startServer() {
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
 
+    const recoveredCommands = await db(
+      `UPDATE platform_workflow_runs
+          SET status='FAILED',
+              completed_at=NOW(),
+              error_text=COALESCE(error_text,'Interrupted before HTTP response completed'),
+              metadata=COALESCE(metadata,'{}'::jsonb) || '{"recoveredAtStartup":true}'::jsonb,
+              updated_at=NOW()
+        WHERE trigger_key='business_command'
+          AND status='RUNNING'
+          AND created_at < NOW() - INTERVAL '5 minutes'
+        RETURNING id`
+    );
+    if (recoveredCommands.rowCount) {
+      console.log(`onePOS: recovered ${recoveredCommands.rowCount} stale business command trace(s)`);
+    }
+
     // Bind the HTTP listener as soon as the core schema is ready. Platform
     // metadata/bootstrap can take significantly longer on a cold Render start
     // and must not keep /api/auth/login unreachable during that work.

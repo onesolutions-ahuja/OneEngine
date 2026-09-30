@@ -85,26 +85,35 @@ async function insertDependencySources(db, companyId) {
                AND oi.deactivated_by_user=false
           ))
      )
+     , candidates AS (
+       SELECT tree.dependency_id AS package_id,
+              CASE WHEN tree.optional THEN 'OPTIONAL_DEPENDENCY' ELSE 'REQUIRED_DEPENDENCY' END AS source_type,
+              left(
+                tree.root_source_type || ':' || tree.root_source_key || ':root:' ||
+                tree.root_package_id::text || ':dependency:' || tree.dependency_id::text ||
+                ':parent:' || tree.parent_package_id::text,
+                155
+              ) || ':' || md5(
+                tree.root_source_type || ':' || tree.root_source_key || ':root:' ||
+                tree.root_package_id::text || ':dependency:' || tree.dependency_id::text ||
+                ':parent:' || tree.parent_package_id::text
+              ) AS source_key,
+              tree.parent_package_id,tree.starts_at,tree.expires_at,
+              jsonb_build_object('rootPackageId',tree.root_package_id,
+                'rootSourceType',tree.root_source_type,'rootSourceKey',tree.root_source_key,
+                'optional',tree.optional,'versionRange',tree.version_range,
+                'minVersion',tree.min_version,'maxVersion',tree.max_version) AS metadata
+         FROM dependency_tree tree
+     ), deduped AS (
+       SELECT DISTINCT ON (package_id,source_type,source_key)
+              package_id,source_type,source_key,parent_package_id,starts_at,expires_at,metadata
+         FROM candidates
+        ORDER BY package_id,source_type,source_key,parent_package_id
+     )
      INSERT INTO company_package_entitlement_sources
        (company_id,package_id,source_type,source_key,parent_package_id,active,starts_at,expires_at,metadata)
-     SELECT $1,tree.dependency_id,
-            CASE WHEN tree.optional THEN 'OPTIONAL_DEPENDENCY' ELSE 'REQUIRED_DEPENDENCY' END,
-            left(
-              tree.root_source_type || ':' || tree.root_source_key || ':root:' ||
-              tree.root_package_id::text || ':dependency:' || tree.dependency_id::text ||
-              ':parent:' || tree.parent_package_id::text,
-              155
-            ) || ':' || md5(
-              tree.root_source_type || ':' || tree.root_source_key || ':root:' ||
-              tree.root_package_id::text || ':dependency:' || tree.dependency_id::text ||
-              ':parent:' || tree.parent_package_id::text
-            ),
-            tree.parent_package_id,true,tree.starts_at,tree.expires_at,
-            jsonb_build_object('rootPackageId',tree.root_package_id,
-              'rootSourceType',tree.root_source_type,'rootSourceKey',tree.root_source_key,
-              'optional',tree.optional,'versionRange',tree.version_range,
-              'minVersion',tree.min_version,'maxVersion',tree.max_version)
-       FROM dependency_tree tree
+     SELECT $1,package_id,source_type,source_key,parent_package_id,true,starts_at,expires_at,metadata
+       FROM deduped
       ON CONFLICT(company_id,package_id,source_type,source_key)
       DO UPDATE SET active=EXCLUDED.active,starts_at=EXCLUDED.starts_at,
         expires_at=EXCLUDED.expires_at,parent_package_id=EXCLUDED.parent_package_id,
