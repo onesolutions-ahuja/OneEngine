@@ -1,1 +1,22 @@
-<svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>PrestaShop</title><path fill="#25B9D7" d="M11.558 1.034C5.174 1.034 0 6.21 0 12.592c0 1.258.201 2.47.574 3.597l.002-.007a12.415 12.415 0 01.53-1.787l.011-.03c.085-.222.179-.442.277-.66l.084-.181c.08-.171.165-.34.253-.507.036-.068.07-.136.108-.203.02-.038.044-.073.064-.11.094-.166.19-.332.29-.493l.075-.114c.125-.195.256-.386.393-.573l.035-.05c.144-.193.295-.38.451-.563l.1-.118c.155-.177.315-.35.481-.517l.099-.097a10.321 10.321 0 01.546-.503c.74-2.48 3.005-4.285 5.686-4.285 1.079 0 2.152.31 3.071.873a6.017 6.017 0 012.211 2.407l.007.015.04.074v.003l.004.002a9.925 9.925 0 011.567 1.198c.04.037.081.071.12.109.002 0 .006.005.007.006l-.002-.006-.001-.004v-.003l.042-.084c.377-2.384 1.43-4.102 2.67-4.102.934 0 1.762.975 2.276 2.476l.005.016.001.002c.145.158.287.331.424.521l.007.01.021.067-.02-.078c-1.542-4.569-5.863-7.857-10.952-7.857zM9.927 5.477C7.586 5.52 5.34 7.132 4.574 9.365l-.012.034a10.14 10.14 0 011.315-.895c2.806-1.656 6.479-1.646 9.278.016-.895-1.653-2.631-2.819-4.5-3.004a5.14 5.14 0 00-.728-.039zm9.834.5a1.36 1.36 0 00-.39.067c-1.265.562-1.719 2.073-2.031 3.303l-.016.072c.365-.62.808-1.215 1.396-1.642.835-.687 2.105-.655 2.916.053.308.326.141.008.031-.22-.342-.75-1.025-1.653-1.906-1.634zM12.35 8.315l-1.07 3.27-.002.005-.006.002-4.498 1.112h-.009l4.456 1.087c.105.11.227.205.36.28h.002c.042.024.085.045.129.065l.01.005c.041.018.083.033.126.047l.021.008c.04.013.08.023.12.032l.033.008a1.677 1.677 0 00.318.033 1.546 1.546 0 001.43-.948c.08-.186.123-.39.123-.604v-.011l-.001-.012c-.001-.054-.004-.107-.01-.16l-.001-.002a1.506 1.506 0 00-.026-.153l-.001-.004a1.511 1.511 0 00-.096-.288v-.003a1.521 1.521 0 00-.348-.49v-.003z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PrestaShop connector">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#eef2f7"/></linearGradient>
+ <linearGradient id="one" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#19d8ff"/><stop offset=".48" stop-color="#0874ff"/><stop offset="1" stop-color="#071ca8"/></linearGradient>
+ <filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-opacity=".18"/></filter>
+ <filter id="ps" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-opacity=".25"/></filter>
+</defs>
+<rect x="28" y="28" width="456" height="456" rx="96" fill="url(#bg)" stroke="#dce3eb" stroke-width="3" filter="url(#s)"/>
+<path d="M120 356C82 319 76 169 138 115c53-46 240-44 291 12 43 47 40 155 4 212" fill="none" stroke="#4c5157" stroke-width="18" stroke-linecap="round" filter="url(#ps)"/>
+<g transform="translate(145 146)" filter="url(#ps)"><circle cx="111" cy="76" r="67" fill="#9ce6f3"/><path d="M66 63c11-46 77-59 101-15 14 25 5 65-25 79-42 20-90-17-76-64Z" fill="#383a3d"/><ellipse cx="95" cy="79" rx="35" ry="30" fill="#fff"/><path d="M121 73 166 82l-31 27Z" fill="#e6007e"/><circle cx="99" cy="75" r="7" fill="#111"/><text x="5" y="176" font-family="Arial,Helvetica,sans-serif" font-size="39" font-weight="700" fill="#25115d">Presta<tspan fill="#e6007e">Shop</tspan></text></g>
+<g filter="url(#ps)" transform="translate(166 350) rotate(-8)">
+ <rect x="0" y="0" width="84" height="76" rx="20" fill="#666c72"/>
+ <rect x="-18" y="22" width="28" height="34" rx="8" fill="#5a6066"/>
+ <rect x="74" y="15" width="54" height="12" rx="6" fill="#aeb5bc"/>
+ <rect x="74" y="47" width="54" height="12" rx="6" fill="#aeb5bc"/>
+</g>
+<path d="M274 484C365 436 413 355 484 295V484Z" fill="#fff" stroke="#e6ebf0" stroke-width="2"/>
+<g transform="translate(372 365)" filter="url(#ps)">
+ <path d="M50 0 98 28v56L50 112 0 84V28Z" fill="url(#one)"/>
+ <path d="M45 24 28 42h13v42h18V24Z" fill="#fff"/>
+</g>
+</svg>
