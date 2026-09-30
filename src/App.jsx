@@ -2732,6 +2732,9 @@ export default function App() {
   const [transitioning, setTransitioning] = useState(false)
 
   useEffect(() => {
+    // Existing sessions (browser refresh / OAuth callback) need one bootstrap
+    // before Desktop renders. Fresh password login already receives the resolved
+    // company context from /api/auth/login, so do not repeat those requests.
     if (!hasSession()) {
       setSessionContextReady(true)
       return
@@ -2742,15 +2745,12 @@ export default function App() {
       .catch(() => '')
       .finally(() => { if (live) setSessionContextReady(true) })
     return () => { live = false }
-  }, [locked])
+  }, [])
 
   const unlock = () => {
     if (transitioning || pendingUnlock) return
-    setSessionContextReady(false)
+    setSessionContextReady(true)
     setPendingUnlock(true)
-    ensureActingCompanyContext()
-      .catch(() => '')
-      .finally(() => setSessionContextReady(true))
   }
 
   useEffect(() => {
@@ -2784,6 +2784,8 @@ export default function App() {
         pendingUnlock && !sessionContextReady
           ? <CompanyContextLoading />
           : <LockScreen onUnlock={unlock} onSignOut={signOut} preparing={pendingUnlock && !sessionContextReady} />
+      ) : !sessionContextReady ? (
+        <CompanyContextLoading />
       ) : (
         <Desktop onLock={lock} onSignOut={signOut} />
       )}
