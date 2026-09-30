@@ -10,6 +10,12 @@ function cacheKeyFor(path, cacheKey) {
   return cacheKey || String(path || '')
 }
 
+function persistWhenIdle(key, value) {
+  const run = () => void writeLazyCache(key, value)
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 })
+  else setTimeout(run, 0)
+}
+
 export async function cachedGet(path, {
   cacheKey = '',
   ttlMs = LAZY_CACHE_DEFAULT_TTL_MS,
@@ -25,9 +31,9 @@ export async function cachedGet(path, {
 
   const refresh = async () => {
     const fresh = await apiRequest(path)
-    // Cache persistence is intentionally detached from the response path:
-    // IndexedDB/encryption work must never make the live request feel slower.
-    void writeLazyCache(key, fresh)
+    // Cache persistence is deliberately deferred until the browser is idle.
+    // JSON serialization/encryption must never compete with rendering.
+    persistWhenIdle(key, fresh)
     if (typeof onFresh === 'function') {
       try { onFresh(fresh) } catch {}
     }
