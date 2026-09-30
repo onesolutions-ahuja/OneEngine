@@ -458,7 +458,7 @@ export async function acceptInboundWebhook({
       idempotencyKey: externalEventId ? `inbound:${endpoint.id}:${externalEventId}` : `inbound:${inbound.id}`,
     });
   }
-  return { accepted: true, duplicate, inboundEventId: inbound.id, status: duplicate ? 200 : 202 };
+  return { accepted: true, duplicate, inboundEventId: inbound.id, companyId: endpoint.company_id, status: duplicate ? 200 : 202 };
 }
 
 export { safeTargetUrl };
