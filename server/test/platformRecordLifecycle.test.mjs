@@ -84,3 +84,30 @@ test("missing optional handlers are explicit skipped stages", async () => {
   assert.equal(result.lifecycleTrace.find((item) => item.stage === "WRITE").status, "COMPLETED");
   assert.equal(result.lifecycleTrace.find((item) => item.stage === "VALIDATION").status, "SKIPPED");
 });
+
+
+test("after-commit lifecycle handler is deferred when transaction context is supplied", async () => {
+  const callbacks = [];
+  const transaction = {
+    afterCommit(callback) { callbacks.push(callback); },
+  };
+  let afterCommitRan = false;
+
+  const result = await runRecordSaveLifecycle({
+    operation: "create",
+    initialState: { id: "r1" },
+    write: async (state) => ({ ...state, saved: true }),
+    afterCommit: async (state) => {
+      afterCommitRan = true;
+      return { ...state, delivered: true };
+    },
+    transaction,
+  });
+
+  assert.equal(afterCommitRan, false);
+  assert.equal(callbacks.length, 1);
+  assert.equal(result.lifecycleTrace.at(-1).status, "REGISTERED");
+  await callbacks[0]();
+  assert.equal(afterCommitRan, true);
+  assert.equal(result.lifecycleTrace.at(-1).status, "COMPLETED");
+});
