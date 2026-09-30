@@ -585,6 +585,29 @@ export async function selectPublicAppointmentSlot(client, {
   if (!publicLink) throw new Error("Booking link is required");
   const companyId = publicLink.company_id;
   const bookingCaseId = publicLink.booking_case_id;
+  if (!["NEW","LINK_SENT"].includes(String(publicLink.case_status || ""))) {
+    const error = new Error("This booking request has already progressed");
+    error.code = "BOOKING_ALREADY_USED";
+    throw error;
+  }
+  const allowedSlots = await findAvailableAppointmentSlots(client.query.bind(client), {
+    companyId,
+    serviceId,
+    resourceId,
+    from: startsAt,
+    to: endsAt,
+    limit: 20,
+  });
+  const selectedAllowed = allowedSlots.some((slot) =>
+    String(slot.resourceId) === String(resourceId)
+      && new Date(slot.startsAt).toISOString() === new Date(startsAt).toISOString()
+      && new Date(slot.endsAt).toISOString() === new Date(endsAt).toISOString()
+  );
+  if (!selectedAllowed) {
+    const error = new Error("Selected time is not available for this service/resource");
+    error.code = "SLOT_UNAVAILABLE";
+    throw error;
+  }
   const hold = await holdAppointmentSlot(client, {
     companyId,
     serviceId,
@@ -645,6 +668,10 @@ export async function selectPublicAppointmentSlot(client, {
       [bookingCaseId,companyId,appointment.id]
     );
   }
+  await client.query(
+    "UPDATE appointment_public_links SET consumed_at=NOW() WHERE id=$1 AND company_id=$2 AND consumed_at IS NULL",
+    [publicLink.id,companyId]
+  );
   await publishPlatformEvent({
     db: client.query.bind(client),
     companyId,
