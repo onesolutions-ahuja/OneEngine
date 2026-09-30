@@ -11573,3 +11573,89 @@ button.git-control-tile { cursor: pointer; }
     grid-column: auto;
   }
 }
+
+
+/* Settings Company + General combined layout */
+.settings-company-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, .85fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.settings-subcard {
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.settings-subcard-title {
+  min-height: 48px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  background: #fbfbfc;
+}
+
+.settings-subcard-title > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-subcard-title strong {
+  font-size: 12px;
+}
+
+.settings-subcard-title span {
+  color: rgba(31,42,58,.5);
+  font-size: 9px;
+}
+
+.settings-company-general-card .settings-row {
+  grid-template-columns: minmax(0,1fr) minmax(135px, 190px);
+}
+
+.settings-company-general-card .settings-row > input,
+.settings-company-general-card .settings-row > select {
+  width: 100%;
+}
+
+@media (max-width: 980px) {
+  .settings-company-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Object Manager compact object list */
+.objects-settings-shell {
+  grid-template-columns: 245px minmax(0,1fr);
+}
+
+.objects-list-item {
+  min-height: 38px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.objects-list-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.objects-list-copy strong {
+  font-size: 10.5px;
+}
+
+.objects-list-copy small {
+  font-size: 8.5px;
+}
+
+@media (max-width: 1040px) {
+  .objects-settings-shell {
+    grid-template-columns: 220px minmax(0,1fr);
+  }
+}
