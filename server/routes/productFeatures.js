@@ -32,7 +32,7 @@ export default function createProductFeaturesRouter({ authenticate, authorize, d
     const attributes = normaliseVariantAttributes(req.body?.attributes);
     if (!Object.keys(attributes).length) return res.status(400).json({ success: false, message: "Variant attributes are required" });
     const name = String(req.body?.name || `${parent.rows[0].name} (${Object.values(attributes).join(" / ")})`).trim();
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       const duplicate = await client.query(
@@ -123,7 +123,7 @@ export default function createProductFeaturesRouter({ authenticate, authorize, d
     )) {
       return res.status(400).json({ success: false, message: "Modifier options require a name and non-negative price" });
     }
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       const group = await client.query(
@@ -179,7 +179,7 @@ export default function createProductFeaturesRouter({ authenticate, authorize, d
       [ids, req.params.id]
     );
     if (cycle.rows.length) return res.status(400).json({ success: false, message: "Circular bundle definitions are not allowed" });
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       await client.query("UPDATE products SET product_kind='bundle' WHERE id=$1 AND company_id=$2", [req.params.id, req.user.companyId]);
