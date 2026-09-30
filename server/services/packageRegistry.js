@@ -390,6 +390,133 @@ export function packageDefinition(entry) {
           { objectKey: "communication_event", viewKey: "recent_communication_events", label: "Recent Communication Events", columns: ["channel","event_type","direction","provider","recipient","created_at"], sort: { field: "created_at", direction: "desc" }, pageSize: 50, isDefault: true }
         ],
       } : {}),
+      ...(entry.key === "one_assistant" ? {
+        objects: [
+          {
+            objectKey: "appointment_booking_case",
+            metadataScope: "global",
+            label: "Appointment Booking Case",
+            pluralLabel: "Appointment Booking Cases",
+            description: "Channel-neutral booking case created from Email, SMS, WhatsApp or web booking.",
+            sourceTable: "appointment_booking_cases",
+            fields: [
+              { apiName: "channel", label: "Channel", fieldType: "picklist", sourceColumn: "channel", writable: false, options: ["EMAIL","SMS","WHATSAPP","WEB"] },
+              { apiName: "sender", label: "Sender", fieldType: "text", sourceColumn: "sender", writable: false },
+              { apiName: "recipient", label: "Recipient", fieldType: "text", sourceColumn: "recipient", writable: false },
+              { apiName: "subject", label: "Subject", fieldType: "text", sourceColumn: "subject", writable: false },
+              { apiName: "body", label: "Message", fieldType: "text", sourceColumn: "body", writable: false },
+              { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: false, options: ["NEW","LINK_SENT","SLOT_SELECTED","AWAITING_PAYMENT","CONFIRMED","CANCELLED","EXPIRED"] },
+              { apiName: "service_id", label: "Service", fieldType: "lookup", sourceColumn: "service_id", writable: false },
+              { apiName: "appointment_id", label: "Appointment", fieldType: "lookup", sourceColumn: "appointment_id", writable: false },
+              { apiName: "payment_request_id", label: "Payment Request", fieldType: "lookup", sourceColumn: "payment_request_id", writable: false },
+              { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+            ],
+          },
+        ],
+        listViews: [
+          { objectKey: "appointment_booking_case", viewKey: "recent", label: "Recent Booking Cases", columns: ["channel","sender","status","service_id","appointment_id","created_at"], sort: { field: "created_at", direction: "desc" }, pageSize: 50, isDefault: true }
+        ],
+        workflows: [
+          {
+            objectKey: "communication_event",
+            name: "OneAssistant - Booking Channel Router",
+            triggerKey: "communication_message_received",
+            conditions: [],
+            action: {
+              type: "workflow",
+              scope: "one_assistant",
+              subflowCapability: "assistant.booking.router",
+              actions: []
+            },
+            active: false,
+          },
+          {
+            objectKey: "communication_event",
+            name: "OneAssistant - Email Booking",
+            triggerKey: "communication_message_received",
+            conditions: [{ field: "channel", operator: "equals", value: "EMAIL" }],
+            action: {
+              type: "workflow",
+              scope: "one_assistant",
+              channel: "EMAIL",
+              subflowCapability: "assistant.communication.EMAIL",
+              requiredPackageKey: "email_connector",
+              priority: 10,
+              actions: []
+            },
+            active: false,
+          },
+          {
+            objectKey: "communication_event",
+            name: "OneAssistant - SMS Booking",
+            triggerKey: "communication_message_received",
+            conditions: [{ field: "channel", operator: "equals", value: "SMS" }],
+            action: {
+              type: "workflow",
+              scope: "one_assistant",
+              channel: "SMS",
+              subflowCapability: "assistant.communication.SMS",
+              requiredPackageKey: "sms_connector",
+              priority: 10,
+              actions: []
+            },
+            active: false,
+          },
+          {
+            objectKey: "communication_event",
+            name: "OneAssistant - WhatsApp Booking",
+            triggerKey: "communication_message_received",
+            conditions: [{ field: "channel", operator: "equals", value: "WHATSAPP" }],
+            action: {
+              type: "workflow",
+              scope: "one_assistant",
+              channel: "WHATSAPP",
+              subflowCapability: "assistant.communication.WHATSAPP",
+              requiredPackageKey: "whatsapp_connector",
+              priority: 10,
+              actions: []
+            },
+            active: false,
+          },
+          {
+            objectKey: "appointment_booking_case",
+            name: "OneAssistant - Payment Router",
+            triggerKey: "appointment_payment_required",
+            conditions: [],
+            action: {
+              type: "workflow",
+              scope: "one_assistant",
+              subflowCapability: "assistant.payment.router",
+              actions: []
+            },
+            active: false,
+          },
+          {
+            objectKey: "appointment_booking_case",
+            name: "OneAssistant - Confirmation Router",
+            triggerKey: "appointment_confirmed",
+            conditions: [],
+            action: {
+              type: "workflow",
+              scope: "one_assistant",
+              subflowCapability: "assistant.confirmation",
+              actions: []
+            },
+            active: false,
+          }
+        ],
+        templates: [
+          { apiKey: "assistant_email_booking_link", name: "OneAssistant Email - Booking Link", channel: "EMAIL", subject: "Choose your appointment time", body: "We received your appointment request. Choose an available time here: {{bookingUrl}}", required: false },
+          { apiKey: "assistant_email_payment", name: "OneAssistant Email - Payment", channel: "EMAIL", subject: "Complete your appointment payment", body: "Your appointment slot is reserved temporarily. Complete payment here: {{paymentUrl}}", required: false },
+          { apiKey: "assistant_email_confirmation", name: "OneAssistant Email - Confirmation", channel: "EMAIL", subject: "Your appointment is confirmed", body: "Your appointment is confirmed for {{appointmentStartsAt}}. {{invoiceUrl}}", required: false },
+          { apiKey: "assistant_sms_booking_link", name: "OneAssistant SMS - Booking Link", channel: "SMS", body: "Choose your appointment time: {{bookingUrl}}", required: false },
+          { apiKey: "assistant_sms_payment", name: "OneAssistant SMS - Payment", channel: "SMS", body: "Complete payment to confirm your appointment: {{paymentUrl}}", required: false },
+          { apiKey: "assistant_sms_confirmation", name: "OneAssistant SMS - Confirmation", channel: "SMS", body: "Your appointment is confirmed for {{appointmentStartsAt}}.", required: false },
+          { apiKey: "assistant_whatsapp_booking_link", name: "OneAssistant WhatsApp - Booking Link", channel: "WHATSAPP", body: "Choose your appointment time: {{bookingUrl}}", required: false },
+          { apiKey: "assistant_whatsapp_payment", name: "OneAssistant WhatsApp - Payment", channel: "WHATSAPP", body: "Complete payment to confirm your appointment: {{paymentUrl}}", required: false },
+          { apiKey: "assistant_whatsapp_confirmation", name: "OneAssistant WhatsApp - Confirmation", channel: "WHATSAPP", body: "Your appointment is confirmed for {{appointmentStartsAt}}.", required: false }
+        ],
+      } : {}),
       ...(entry.key === "whatsapp_assistant" ? {
         workflows: [
           {
