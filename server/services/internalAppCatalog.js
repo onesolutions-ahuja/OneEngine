@@ -948,6 +948,40 @@ const CATALOG = [
     visibility: "PUBLIC",
   },
   {
+    key: "one_assistant",
+    packageKey: "one_assistant",
+    name: "OneAssistant",
+    description: "Workflow-first appointment booking, calendar and conversational booking automation with optional communication and payment connectors.",
+    route: "/app/assistant",
+    permissions: ["appointments.view", "appointments.manage", "appointments.configure", "appointments.payment"],
+    storeScoped: false,
+    category: "Business",
+    version: "1.0.0",
+    packageType: "APPLICATION",
+    billable: true,
+    licenceRequired: true,
+    licenceMode: "COMMERCIAL",
+    installable: true,
+    visibility: "PUBLIC",
+    entitlementKey: "one_assistant",
+    dependencies: ["customers", "platform"],
+    optionalDependencies: ["whatsapp_connector", "communication_core", "connector_core"],
+    capabilities: ["appointments","appointment_calendar","appointment_availability","appointment_slot_holds","appointment_payments","conversation_sessions","workflow_automation","human_handoff"],
+    events: [
+      { eventType: "appointment.slot_held", description: "A temporary appointment slot hold was created." },
+      { eventType: "appointment.payment_required", description: "A booking requires an advance payment before confirmation." },
+      { eventType: "appointment.confirmed", description: "An appointment was confirmed." },
+      { eventType: "appointment.cancelled", description: "An appointment was cancelled." }
+    ],
+    workflowTemplates: [{
+      key: "one_assistant_booking",
+      label: "OneAssistant - Book appointment",
+      triggerKey: "communication_message_received",
+      activeByDefault: false,
+      description: "Customer chooses a service, receives available slots, optionally pays an advance, then receives booking confirmation."
+    }]
+  },
+  {
     key: "platform",
     name: "OneDeveloper",
     description: "Developer workspace for configurable objects, metadata, apps and workflow administration.",
