@@ -109,7 +109,7 @@ const directRuntimeCalls = [];
 for (const file of walk(SERVER)) {
   const fileRel = rel(file);
   const text = fs.readFileSync(file, "utf8");
-  if (fileRel === "server/services/platformWorkflow.js") continue;
+  if (fileRel === "server/services/platformWorkflow.js" || fileRel.startsWith("server/test/")) continue;
   for (const [label, re] of [
     ["executeWorkflowAction", /\bexecuteWorkflowAction\s*\(/g],
     ["executeRegisteredAction", /\bexecuteRegisteredAction\s*\(/g],
