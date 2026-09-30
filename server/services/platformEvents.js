@@ -356,7 +356,9 @@ export async function listWebhookDeliveries({ db, companyId, limit = 100 }) {
 export async function getWebhookDelivery({ db, companyId, deliveryId }) {
   const result = await db(
     `SELECT d.*,s.target_url,s.headers,s.payload_template,s.signing_secret_ciphertext,s.retry_policy,
-       e.event_type,e.payload,e.actor_user_id,e.created_at AS event_created_at
+       e.replay_id,e.event_type,e.payload,e.actor_user_id,e.origin_type,e.origin_id,e.correlation_id,
+       e.causation_event_id,e.root_event_id,e.hop_count,e.object_id,e.record_id,e.operation,
+       e.changed_fields,e.event_signature,e.created_at AS event_created_at
      FROM platform_webhook_deliveries d
      JOIN platform_webhook_subscriptions s ON s.id=d.subscription_id AND s.company_id=d.company_id
      JOIN platform_events e ON e.id=d.event_id
@@ -403,15 +405,32 @@ export async function deliverPlatformWebhook({ db, deliveryId, companyId, decryp
   if (!delivery) return { status: "SKIPPED" };
   const event = {
     id: delivery.event_id,
+    replayId: delivery.replay_id == null ? null : Number(delivery.replay_id),
     companyId: delivery.company_id,
     type: delivery.event_type,
     payload: delivery.payload,
     actorUserId: delivery.actor_user_id,
+    origin: { type: delivery.origin_type || null, id: delivery.origin_id || null },
+    correlationId: delivery.correlation_id || null,
+    causationEventId: delivery.causation_event_id || null,
+    rootEventId: delivery.root_event_id || delivery.event_id,
+    hopCount: Number(delivery.hop_count || 0),
+    objectId: delivery.object_id || null,
+    recordId: delivery.record_id || null,
+    operation: delivery.operation || null,
+    changedFields: Array.isArray(delivery.changed_fields) ? delivery.changed_fields : [],
+    signature: delivery.event_signature || null,
     createdAt: delivery.event_created_at,
   };
   const template = delivery.payload_template && Object.keys(delivery.payload_template).length ? delivery.payload_template : event;
   const body = JSON.stringify(renderTemplate(template, { event, ...event }));
-  const headers = { ...safeHeaders(delivery.headers), "content-type": "application/json", "x-onepos-event": delivery.event_type, "x-onepos-delivery-id": delivery.id };
+  const headers = {
+    ...safeHeaders(delivery.headers),
+    "content-type": "application/json",
+    "x-onepos-event": delivery.event_type,
+    "x-onepos-delivery-id": delivery.id,
+    "x-onepos-replay-id": event.replayId == null ? "" : String(event.replayId),
+  };
   let responseStatus = null;
   let responseExcerpt = null;
   let failure = null;
