@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { runMigrations } from "./migrations.js";
 import { ensureReleaseTablesSql } from "../services/appReleaseManager.js";
 import { backfillLegacyRuleFieldReferences } from "../services/platformRuleReferences.js";
+import { oneAssistantSchema } from "../services/oneAssistant.js";
 
 export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env = process.env } = {}) {
   if (!pool) throw new Error("A PostgreSQL connection is required to initialize onePOS");
@@ -169,7 +170,15 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
       },
     },
-  ]);
+      {
+      key: "0012_oneassistant_foundation",
+      version: "12",
+      name: "OneAssistant appointment and conversation foundation",
+      up: async client => {
+        await client.query(oneAssistantSchema);
+      },
+    },
+]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
   console.log("onePOS: database ready");
