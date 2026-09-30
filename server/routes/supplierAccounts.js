@@ -367,7 +367,7 @@ export default function createSupplierAccountsRouter({ authenticate, authorize, 
       return res.status(400).json({ success: false, message: "Supplier, invoice number and valid totals are required" });
     }
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
-    const client = await (req.tenantPool || pool).connect();
+    const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const result = await client.query(
@@ -402,7 +402,7 @@ export default function createSupplierAccountsRouter({ authenticate, authorize, 
 
   router.post("/supplier-payments", authenticate, authorize("payment.manage", ...manage), async (req, res) => {
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
-    const client = await (req.tenantPool || pool).connect();
+    const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const execution = await executeSystemWorkflow({
