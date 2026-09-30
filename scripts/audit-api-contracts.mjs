@@ -14,7 +14,7 @@ function walk(dir){
 function rel(file){return path.relative(ROOT,file).replaceAll(path.sep,"/");}
 function lineNo(text,index){return text.slice(0,index).split("\n").length;}
 function normalise(value){
-  let p=String(value||"").split("?")[0].replace(/\$\{[^}]+\}/g,"*").replace(/:[A-Za-z0-9_]+/g,"*");
+  let p=String(value||"").replace(/\$\{[^}]+\}/g,"*").split("?")[0].replace(/:[A-Za-z0-9_]+/g,"*");
   p=p.replace(/\/+/g,"/");
   if(p.length>1&&p.endsWith("/")) p=p.slice(0,-1);
   return p;
@@ -29,11 +29,31 @@ function matches(pattern,value){
 const backend=new Set();
 const serverEntry=fs.readFileSync(path.join(ROOT,"server","server.js"),"utf8");
 for(const m of serverEntry.matchAll(/\bapp\.(?:get|post|put|patch|delete)\s*\(\s*(["'])(\/api\/[^"']+)\1/g)) backend.add(normalise(m[2]));
+
+const routerMounts=new Map();
+for(const m of serverEntry.matchAll(/import\s+([A-Za-z_$][\w$]*)\s+from\s+["']\.\/routes\/([^"']+)["']/g)){
+  routerMounts.set(m[1],{file:"server/routes/"+m[2],prefix:"/api"});
+}
+for(const m of serverEntry.matchAll(/app\.use\(\s*(["'])(\/api[^"']*)\1\s*,\s*([A-Za-z_$][\w$]*)\s*\(/g)){
+  const info=routerMounts.get(m[3]);
+  if(info) info.prefix=m[2];
+}
+for(const m of serverEntry.matchAll(/app\.use\(\s*(["'])(\/api[^"']*)\1\s*,\s*([A-Za-z_$][\w$]*)\s*\)/g)){
+  const info=routerMounts.get(m[3]);
+  if(info) info.prefix=m[2];
+}
+
 for(const file of walk(path.join(ROOT,"server","routes")).filter((f)=>f.endsWith(".js"))){
   const text=fs.readFileSync(file,"utf8");
-  for(const m of text.matchAll(/\brouter\.(?:get|post|put|patch|delete)\s*\(\s*(["'])([^"']+)\1/g)){
-    const route=m[2].startsWith("/api/")?m[2]:"/api"+m[2];
-    backend.add(normalise(route));
+  const routeRel=rel(file);
+  const mount=[...routerMounts.values()].find((x)=>x.file===routeRel)?.prefix || "/api";
+  const addRoute=(route)=>{
+    const full=route.startsWith("/api/")?route:(mount.replace(/\/$/,"")+route);
+    backend.add(normalise(full));
+  };
+  for(const m of text.matchAll(/\brouter\.(?:get|post|put|patch|delete)\s*\(\s*(["'])([^"']+)\1/g)) addRoute(m[2]);
+  for(const m of text.matchAll(/\brouter\.(?:get|post|put|patch|delete)\s*\(\s*\[([^\]]+)\]/g)){
+    for(const q of m[1].matchAll(/["']([^"']+)["']/g)) addRoute(q[1]);
   }
 }
 
@@ -44,7 +64,9 @@ for(const file of walk(path.join(ROOT,"src")).filter((f)=>/\.(?:js|jsx)$/.test(f
   for(const m of text.matchAll(re)){
     const raw=m[2];
     if(!raw.startsWith("/api/")) continue;
-    const call=normalise(raw);
+    let call=normalise(raw);
+    const after=text.slice(m.index+m[0].length,m.index+m[0].length+120);
+    if(raw.endsWith("/") && /^\s*\+/.test(after)) call=normalise(raw+"*");
     calls.push({file:rel(file),line:lineNo(text,m.index),raw,call});
   }
 }
