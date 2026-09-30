@@ -229,11 +229,31 @@ export async function createPlatformExecutionContext({
 
 export function applyExecutionContext(context = {}, executionContext) {
   const globals = executionContext?.globals || {};
+  const canonicalUser = globals.$User || null;
+  const runtimeReq = context.req
+    ? {
+        ...context.req,
+        executionMode: globals.$System?.executionMode || context.req.executionMode || "USER",
+        trustedSystemExecution: globals.$System?.trusted === true || context.req.trustedSystemExecution === true,
+        user: canonicalUser
+          ? {
+              ...(context.req.user || {}),
+              ...canonicalUser,
+              id: canonicalUser.id || null,
+              companyId: executionContext?.companyId ?? canonicalUser.companyId ?? context.req.user?.companyId ?? null,
+              storeId: executionContext?.storeId ?? canonicalUser.storeId ?? context.req.user?.storeId ?? null,
+            }
+          : (context.req.user || {}),
+      }
+    : context.req;
   return {
     ...context,
+    req: runtimeReq,
     executionContext,
     globals,
     ...globals,
+    executionMode: globals.$System?.executionMode || context.executionMode || "USER",
+    trustedSystem: globals.$System?.trusted === true || context.trustedSystem === true,
     companyId: executionContext?.companyId ?? context.companyId ?? null,
     storeId: executionContext?.storeId ?? context.storeId ?? null,
     tillId: executionContext?.tillId ?? context.tillId ?? null,
