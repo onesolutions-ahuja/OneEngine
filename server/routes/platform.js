@@ -44,6 +44,8 @@ import { runRecordSaveLifecycle, runRecordDeleteLifecycle, RecordLifecycleError 
 import { withPlatformTransaction, PlatformTransactionError } from "../services/platformTransaction.js";
 import { executeBulk } from "../services/platformBulkExecution.js";
 import { executionFingerprint } from "../services/platformExecutionGuard.js";
+import { auditPlatformConformance, platformRuntimeContract } from "../services/platformConformance.js";
+import { writePlatformRecordHistory, readableHistoryRows } from "../services/platformRecordHistory.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
@@ -1220,6 +1222,15 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         source,
       },
     });
+  });
+
+  router.get("/platform/runtime/conformance", ...manage, async (req, res, next) => {
+    try {
+      const report = await auditPlatformConformance({ db, companyId: req.user.companyId });
+      res.json({ success: true, data: report });
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.get("/platform/permission-catalog", ...manage, async (req, res) => {
@@ -4496,30 +4507,35 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   }
 
-  async function writeRecordHistory(object, recordId, fields, oldRecord, newRecord, action, req, historyDb = db) {
-    const changes = fields.filter((field) => field.api_name && (
-      action !== "update" ||
-      JSON.stringify(oldRecord?.[field.api_name] ?? null) !== JSON.stringify(newRecord?.[field.api_name] ?? null)
-    ));
+  async function writeRecordHistory(object, recordId, fields, oldRecord, newRecord, action, req, historyDb = db, trace = {}) {
     try {
-      for (const field of changes) {
-        await historyDb(
-          "INSERT INTO platform_record_history (company_id,object_id,object_key,record_id,field_api_name,old_value,new_value,action,actor_user_id) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)",
-          [
-            req.user.companyId,
-            object.id,
-            object.object_key,
-            recordId,
-            field.api_name,
-            JSON.stringify(action === "create" ? null : oldRecord?.[field.api_name] ?? null),
-            JSON.stringify(action === "delete" ? null : newRecord?.[field.api_name] ?? null),
-            action,
-            req.user.id || null,
-          ]
-        );
-      }
+      return await writePlatformRecordHistory({
+        db: historyDb,
+        companyId: req.user.companyId,
+        object,
+        recordId,
+        fields,
+        previousRecord: oldRecord,
+        record: newRecord,
+        action,
+        actorUserId: req.user.id || null,
+        correlationId:
+          trace.correlationId
+          || req.executionContext?.globals?.$System?.correlationId
+          || req.businessCommandCorrelationId
+          || req.headers?.["x-correlation-id"]
+          || req.headers?.["x-request-id"]
+          || trace.transactionId
+          || null,
+        transactionId: trace.transactionId || null,
+        workflowRunId: trace.workflowRunId || req.businessCommandRunId || null,
+        eventId: trace.eventId || req.platformEvent?.eventId || null,
+        source: trace.source || req.executionSource || req.method || "API",
+        executionMode: trace.executionMode || req.executionMode || "USER",
+      });
     } catch (error) {
       console.error("Platform record history write error:", error);
+      return [];
     }
   }
 
@@ -5061,7 +5077,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             const result = await runtimeDb(`UPDATE "${object.source_table}" SET ${assignments.join(",")} WHERE ${clauses.join(" AND ")} RETURNING ${returning.join(",")}`, params);
             if (!result.rows.length) lifecycleFailure(state.ruleCheck.version !== undefined ? 409 : 404, "RECORD_NOT_AVAILABLE", "Record not found or changed while validating");
             saved = result.rows[0];
-            await writeRecordHistory(object, saved.id, fields, state.ruleCheck.current, saved, "update", req, runtimeDb);
+            await writeRecordHistory(object, saved.id, fields, state.ruleCheck.current, saved, "update", req, runtimeDb, {
+              transactionId: transaction?.id || null,
+              source: req.executionSource || "API",
+              executionMode: req.executionMode || "USER",
+            });
           } else {
             const columns = state.validation.values.map(({ column }) => `"${column}"`);
             const params = state.validation.values.map(({ value }) => value);
@@ -5071,7 +5091,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             const returning = recordReturning(fields, state.validation.values);
             const result = await runtimeDb(`INSERT INTO "${object.source_table}" (${columns.join(",")}) VALUES (${placeholders.join(",")}) RETURNING ${returning.join(",")}`, params);
             saved = result.rows[0];
-            await writeRecordHistory(object, saved.id, fields, null, saved, "create", req, runtimeDb);
+            await writeRecordHistory(object, saved.id, fields, null, saved, "create", req, runtimeDb, {
+              transactionId: transaction?.id || null,
+              source: req.executionSource || "API",
+              executionMode: req.executionMode || "USER",
+            });
           }
           return { ...state, saved };
         },
@@ -5433,7 +5457,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
                   null,
                   "delete",
                   req,
-                  runtimeDb
+                  runtimeDb,
+                  {
+                    transactionId: transaction?.id || null,
+                    source: req.executionSource || "API",
+                    executionMode: req.executionMode || "USER",
+                  }
                 );
                 state.pendingAudit ||= [];
                 state.pendingAudit.push({
@@ -5460,7 +5489,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             archived ? result.rows[0] : null,
             "delete",
             req,
-            runtimeDb
+            runtimeDb,
+            {
+              transactionId: transaction?.id || null,
+              source: req.executionSource || "API",
+              executionMode: req.executionMode || "USER",
+            }
           );
 
           return { ...state, result, archived };
@@ -6140,11 +6174,22 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       }
       storeClause = ` AND record_id IN (SELECT id FROM "${object.source_table}" WHERE id=$2 AND store_id=$4)`;
     }
-    const result = await db(
-      `SELECT * FROM platform_record_history WHERE ${scope}${storeClause} ORDER BY created_at DESC`,
-      params
-    );
-    res.json({ success: true, data: result.rows });
+    const [result, fieldResult] = await Promise.all([
+      db(
+        `SELECT * FROM platform_record_history WHERE ${scope}${storeClause} ORDER BY created_at DESC`,
+        params
+      ),
+      db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+        [object.id, req.user.companyId]
+      ),
+    ]);
+    const securedFields = await applyFieldSecurity(db, safeSystemFields(object, fieldResult.rows), req);
+    res.json({
+      success: true,
+      data: readableHistoryRows(result.rows, securedFields),
+      runtime: platformRuntimeContract(),
+    });
   });
 
   return router;
