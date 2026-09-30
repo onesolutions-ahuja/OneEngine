@@ -354,7 +354,35 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
            WHERE r.company_id IS NULL AND r.api_key='platform_superadmin'
            ON CONFLICT (role_id,permission_id) DO NOTHING`
         );
+      },,
+    {
+      key: "0020_communication_permission_alignment",
+      version: "20",
+      name: "Align legacy message send permission with Communication Core",
+      up: async client => {
+        await client.query(
+          `INSERT INTO permissions (code,name,description)
+           VALUES ('communications.send','Send Communications','Send messages through Communication Core')
+           ON CONFLICT (code) DO UPDATE
+             SET name=EXCLUDED.name,
+                 description=COALESCE(NULLIF(permissions.description,''),EXCLUDED.description)`
+        );
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT rp.role_id,p_new.id
+             FROM role_permissions rp
+             JOIN permissions p_old ON p_old.id=rp.permission_id AND p_old.code='message.send'
+             JOIN permissions p_new ON p_new.code='communications.send'
+           ON CONFLICT (role_id,permission_id) DO NOTHING`
+        );
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT r.id,p.id FROM roles r CROSS JOIN permissions p
+           WHERE r.company_id IS NULL AND r.api_key='platform_superadmin'
+           ON CONFLICT (role_id,permission_id) DO NOTHING`
+        );
       },
+    }
     },
   ]);
 
