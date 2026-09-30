@@ -5,7 +5,8 @@ import {
   toPublicCredential,
 } from "../services/connectorFramework.js";
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
-import { internalAppCatalog } from "../services/internalAppCatalog.js";\nimport { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { internalAppCatalog } from "../services/internalAppCatalog.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 function jsonValue(value, fallback) {
   if (typeof value !== "string") return value ?? fallback;
