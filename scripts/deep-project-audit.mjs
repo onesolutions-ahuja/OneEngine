@@ -37,6 +37,38 @@ for (const file of jsFiles) {
   }
 }
 
+const seedSources=[
+  path.join(SERVER,"database","init.js"),
+  path.join(SERVER,"database","schema.sql"),
+  path.join(SERVER,"database","baseFoundation.sql"),
+].filter(fs.existsSync).map((file)=>fs.readFileSync(file,"utf8")).join("\n");
+const seededPermissionCodes=new Set([...seedSources.matchAll(/["\']([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)["\']/gi)].map((m)=>m[1]));
+const referencedPermissions=new Map();
+function rememberPermission(code,fileName,index,source){
+  if(!/^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/i.test(code)) return;
+  if(!referencedPermissions.has(code)) referencedPermissions.set(code,[]);
+  referencedPermissions.get(code).push({file:fileName,line:source.slice(0,index).split("\n").length});
+}
+for(const file of [...routeFiles,...serviceFiles]){
+  const source=fs.readFileSync(file,"utf8");
+  const fileName=rel(file);
+  const contexts=[
+    /\bauthorize\s*\(([^)]*)\)/g,
+    /\brequiredPermissions\s*:\s*\[([^\]]*)\]/g,
+    /\bpermissions\s*:\s*\[([^\]]*)\]/g,
+  ];
+  for(const re of contexts){
+    for(const match of source.matchAll(re)){
+      for(const literal of match[1].matchAll(/["\']([^"\']+)["\']/g)) rememberPermission(literal[1],fileName,match.index,source);
+    }
+  }
+}
+for(const [code,locations] of referencedPermissions){
+  if(seededPermissionCodes.has(code)) continue;
+  const first=locations[0];
+  staticFindings.push({type:"STATIC",code:"UNSEEDED_PERMISSION_REFERENCE",file:first.file,line:first.line,excerpt:code,locations});
+}
+
 const serverEntry=fs.readFileSync(path.join(SERVER,"server.js"),"utf8");
 if (!serverEntry.includes("const requestAwarePool = createRequestAwarePool(pool);")) {
   staticFindings.push({type:"STATIC",code:"REQUEST_AWARE_POOL_MISSING",file:"server/server.js",line:1,excerpt:"request-aware pool proxy is not configured"});
