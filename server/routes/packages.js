@@ -288,7 +288,7 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
     if (!pool?.connect) return work(db);
 
-    const client = await (req.tenantPool || pool).connect();
+    const client = await pool.connect();
 
     const txDb = (query, params = []) => client.query(query, params);
 
