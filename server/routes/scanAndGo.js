@@ -102,6 +102,11 @@ export default function createScanGoRouter({ authenticate, db, pool, writeAudit 
       }
 
       req.scanGoSession = row;
+      await req.ensureBusinessCommandRun?.({
+        companyId: row.company_id,
+        userId: null,
+        storeId: row.store_id,
+      });
       return next();
     } catch (error) {
       console.error("Scan & Go session resolution error:", error);
