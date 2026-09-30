@@ -8989,7 +8989,8 @@ button.git-control-tile { cursor: pointer; }
   min-height: 520px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(360px, 39%) minmax(0,1fr);
+  /* List view is the primary workspace; record detail stays a compact inspector. */
+  grid-template-columns: minmax(0, 68%) minmax(320px, 32%);
   overflow: hidden;
   border: 1px solid rgba(0,0,0,.08);
   border-radius: 12px;
@@ -9198,7 +9199,7 @@ button.git-control-tile { cursor: pointer; }
 .workflow-run-detail {
   min-width: 0;
   min-height: 0;
-  padding: 16px 18px 24px;
+  padding: 14px 14px 22px;
   overflow: auto;
   background: #fff;
 }
@@ -9239,16 +9240,16 @@ button.git-control-tile { cursor: pointer; }
 
 .workflow-run-record-grid {
   display: grid;
-  grid-template-columns: repeat(2,minmax(0,1fr));
-  column-gap: 24px;
+  grid-template-columns: 1fr;
+  column-gap: 0;
 }
 
 .workflow-run-record-grid > div {
   min-width: 0;
-  min-height: 44px;
+  min-height: 40px;
   padding: 7px 0;
   display: grid;
-  grid-template-columns: 105px minmax(0,1fr);
+  grid-template-columns: 92px minmax(0,1fr);
   align-items: baseline;
   gap: 10px;
   border-bottom: 1px solid rgba(0,0,0,.035);
