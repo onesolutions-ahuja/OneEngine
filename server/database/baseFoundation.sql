@@ -207,8 +207,10 @@ CREATE TABLE IF NOT EXISTS platform_credentials (
   CHECK(company_id IS NOT NULL OR connector_id IS NOT NULL OR connection_id IS NOT NULL)
 );
 ALTER TABLE platform_credentials ADD COLUMN IF NOT EXISTS connection_id UUID REFERENCES integration_connections(id) ON DELETE CASCADE;
+DROP INDEX IF EXISTS uq_platform_credentials_company_key;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_credentials_company_key
-  ON platform_credentials(company_id, connector_id, credential_key) WHERE company_id IS NOT NULL;
+  ON platform_credentials(company_id, connector_id, credential_key)
+  WHERE company_id IS NOT NULL AND connection_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_credentials_platform_key
   ON platform_credentials(connector_id, credential_key) WHERE company_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_credentials_connection_key
