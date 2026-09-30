@@ -31,6 +31,7 @@ export async function executeSystemWorkflow({
   input = {},
   object = null,
   record = null,
+  previousRecord = null,
   recordId = null,
   storeId = null,
   tillId = null,
@@ -110,6 +111,7 @@ export async function executeSystemWorkflow({
       companyId,
       object,
       record,
+      previousRecord,
       recordId: recordId || record?.id || null,
       storeId: storeId || req?.user?.storeId || null,
       tillId: tillId || req?.user?.tillId || null,
@@ -118,6 +120,10 @@ export async function executeSystemWorkflow({
       actorUserId: userId || req?.user?.id || null,
       runId: run?.id || null,
       trigger: workflow.trigger_key || "system",
+      workflowId: workflow.id,
+      workflowVersion: workflow.version || workflow.action?.version || null,
+      parentRunId: parentRunId || null,
+      source: sourceInfo,
       ...extraContext,
     });
     await db(
