@@ -61,6 +61,15 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
         return res.status(404).json({ success: false, message: "SMSGate connection unavailable" });
       }
 
+      // Public provider webhooks are still mutation entry points. Once the
+      // signed connector instance resolves the tenant, attach the request to
+      // the shared business-command workflow trace before writing anything.
+      await req.ensureBusinessCommandRun?.({
+        companyId: connection.company_id,
+        userId: null,
+        storeId: null,
+      });
+
       const configuration = jsonValue(connection.connector_configuration, {});
       let secrets = {};
       try { secrets = decryptCredentials(connection.credentials_encrypted) || {}; } catch { secrets = {}; }
