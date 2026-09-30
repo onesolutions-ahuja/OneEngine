@@ -2156,6 +2156,13 @@ function platformBootstrapFingerprint() {
 
 async function platformBootstrapIsCurrent() {
   const fingerprint = platformBootstrapFingerprint();
+  await db(
+    `CREATE TABLE IF NOT EXISTS onepos_runtime_state (
+       state_key VARCHAR(120) PRIMARY KEY,
+       state_value TEXT NOT NULL,
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`
+  );
   const result = await db(
     "SELECT state_value FROM onepos_runtime_state WHERE state_key='platform_bootstrap_fingerprint' LIMIT 1"
   );
