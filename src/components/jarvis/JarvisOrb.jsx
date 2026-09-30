@@ -20,7 +20,6 @@
  * when an answer lands, then a smooth return to idle).
  */
 import JarvisStyles from "./JarvisStyles.jsx";
-import JarvisRibbonOrb from "./JarvisRibbonOrb.jsx";
 
 export const ORB_STATES = Object.freeze({
   IDLE: "idle",
@@ -49,7 +48,7 @@ function JarvisVideo() {
       preload="auto"
     >
       <source src="https://onepos.onrender.com/assets/jarvis/jarves-transparent.webm" type="video/webm" />
-      <source src="https://raw.githubusercontent.com/onesolutions-ahuja/onePOS/main/public/assets/jarvis/jarves-transparent.webm" type="video/webm" />
+      <source src="https://raw.githubusercontent.com/onesolutions-ahuja/OneEngine/main/server/public/assets/jarvis/jarves-transparent.webm" type="video/webm" />
     </video>
   );
 }
@@ -86,7 +85,7 @@ export default function JarvisOrb({ state = ORB_STATES.IDLE, open = false, onCli
         >
           <span className="jarvis-orb-halo" aria-hidden="true" />
           <span className="jarvis-orb-ring" aria-hidden="true" />
-          <JarvisRibbonOrb />
+          <JarvisVideo />
         </button>
       </div>
       {STATE_COPY[state] && !open && (
