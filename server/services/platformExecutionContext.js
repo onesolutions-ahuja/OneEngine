@@ -127,7 +127,7 @@ export async function createPlatformExecutionContext({
   if (db && typeof db === "function" && actorId && authoritativeCompanyId) {
     try {
       const result = await db(
-        `SELECT id,company_id,store_id,role_id,is_superadmin
+        `SELECT id,company_id,store_id,role_id
            FROM users
           WHERE id=$1 AND company_id=$2 AND active=true
           LIMIT 1`,
@@ -140,7 +140,6 @@ export async function createPlatformExecutionContext({
           companyId: row.company_id,
           storeId: row.store_id,
           roleId: row.role_id,
-          isSuperadmin: row.is_superadmin === true,
         };
       }
     } catch {
