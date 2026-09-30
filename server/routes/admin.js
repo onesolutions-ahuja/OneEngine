@@ -179,7 +179,7 @@ export default function createAdminRouter({
       return res.status(403).json({ success: false, message: "Cannot modify your own store access" });
     }
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       
@@ -271,7 +271,7 @@ export default function createAdminRouter({
     if (!Array.isArray(req.body?.permissions)) return res.status(400).json({ success: false, message: "permissions must be an array" });
     const roleAccess = await requirePlatformForProtectedRole(req, req.params.roleId);
     if (!roleAccess.ok) return res.status(roleAccess.status).json({ success: false, message: roleAccess.message });
-    const client = pool ? await pool.connect() : null;
+    const client = pool ? await (req.tenantPool || pool).connect() : null;
     if (!client) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     try {
       await client.query("BEGIN");
@@ -320,7 +320,7 @@ export default function createAdminRouter({
   router.put("/admin/roles/:roleId/permissions", authenticate, authorize("role.manage"), async (req, res) => {
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     if (!Array.isArray(req.body.permissions)) return res.status(400).json({ success: false, message: "permissions must be an array" });
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       const roleCheck = await client.query("SELECT id,managed_by_platform FROM roles WHERE id=$1 AND company_id=$2", [req.params.roleId, req.user.companyId]);
@@ -417,7 +417,7 @@ export default function createAdminRouter({
    * company.scope.all is protected to prevent tenant lock-out.
    */
   router.put("/admin/roles/:roleId/active", authenticate, authorize("role.manage"), async (req, res) => {
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       const check = await client.query("SELECT id, name, is_system_role, managed_by_platform FROM roles WHERE id=$1 AND company_id=$2 FOR UPDATE", [req.params.roleId, req.user.companyId]);
