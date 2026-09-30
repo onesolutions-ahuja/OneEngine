@@ -29,15 +29,17 @@ function routeBlocks(file, text) {
     const route = match[3]
     const createsRun = /\bcreateWorkflowRun\s*\(/.test(body)
     const executesWorkflow = /\bexecuteWorkflowActions?\s*\(/.test(body)
+    const executesSystemWorkflow = /\bexecuteSystemWorkflow\s*\(/.test(body)
     const executesRegisteredAction = /\bexecuteRegisteredAction\s*\(/.test(body)
     const invokesFunctionRegistry = /\b(?:getRegisteredFunction|executePlatformFunction|CALL_FUNCTION)\b/.test(body)
     return {
       file: rel(file),
       method,
       route,
-      workflowMediated: createsRun && executesWorkflow,
+      workflowMediated: executesSystemWorkflow || (createsRun && executesWorkflow),
       createsRun,
       executesWorkflow,
+      executesSystemWorkflow,
       executesRegisteredAction,
       invokesFunctionRegistry,
     }
