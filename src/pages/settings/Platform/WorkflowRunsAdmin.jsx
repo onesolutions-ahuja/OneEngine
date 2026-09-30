@@ -89,7 +89,11 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
             >
               <div className="workflow-run-row-main">
                 <strong>{currentRun.workflow_name || "Workflow"}</strong>
-                <span>{currentRun.trigger_key || "trigger"} · {currentRun.record_id ? "record" : "object"}</span>
+                <span>
+                  {currentRun.trigger_key === "business_command"
+                    ? `${currentRun.metadata?.method || "MUTATION"} · ${currentRun.metadata?.path || "API"}`
+                    : `${currentRun.trigger_key || "trigger"} · ${currentRun.record_id ? "record" : "object"}`}
+                </span>
                 <small>{formatDate(currentRun.started_at)}</small>
               </div>
               <span className={statusBadge(currentRun.status)}>{String(currentRun.status || "pending")}</span>
@@ -115,6 +119,8 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
               <div><span>Started</span><strong>{formatDate(run.started_at)}</strong></div>
               <div><span>Completed</span><strong>{formatDate(run.completed_at)}</strong></div>
               <div><span>Trigger</span><strong>{run.trigger_key || "—"}</strong></div>
+              <div><span>Source</span><strong>{run.metadata?.method ? `${run.metadata.method} ${run.metadata.path || ""}` : run.metadata?.source?.type || run.metadata?.source || "—"}</strong></div>
+              <div><span>Duration</span><strong>{run.metadata?.durationMs != null ? `${run.metadata.durationMs} ms` : "—"}</strong></div>
               <div><span>Retry count</span><strong>{run.metadata?.retryCount ?? run.retry_count ?? 0}</strong></div>
               <div><span>Record</span><strong>{run.record_id || run.object_id || "—"}</strong></div>
             </div>
@@ -128,6 +134,29 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
                 <summary>Trace summary</summary>
                 <pre>{JSON.stringify(redact(run.metadata), null, 2)}</pre>
               </details>
+            ) : null}
+
+            {(details?.children || []).length > 0 ? (
+              <div className="workflow-run-steps">
+                <div className="workflow-run-section-title">Triggered workflows</div>
+                {(details.children || []).map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    className="workflow-run-step"
+                    onClick={() => setSelectedRunId(child.id)}
+                  >
+                    <div className="workflow-run-step-head">
+                      <strong>{child.workflow_name || child.metadata?.capabilityKey || "Workflow"}</strong>
+                      <span className={statusBadge(child.status)}>{String(child.status || "pending")}</span>
+                    </div>
+                    <div className="workflow-run-step-meta">
+                      <span>{child.metadata?.capabilityType || child.trigger_key || "workflow"}</span>
+                      <span>{formatDate(child.started_at)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             ) : null}
 
             <div className="workflow-run-steps">
