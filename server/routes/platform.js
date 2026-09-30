@@ -3,7 +3,8 @@ import express from "express";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
 import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
-import { compileFormulas, FormulaError, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS } from "../services/platformFormula.js";
+import { compileFormulas, FormulaError, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, evaluateFormulaExpression } from "../services/platformFormula.js";
+import { applyDerivedDefaults, recalculateDerivedRecord, prepareFormulaFields, buildDerivedDependencyGraph } from "../services/platformDerivedData.js";
 import { ConditionError, evaluateCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
 import { executePlatformAutomations } from "../services/platformAutomation.js";
 import { hasConfiguredCommunicationProvider } from "../services/platformWorkflow.js";
@@ -425,77 +426,6 @@ function normalizeReportConfig(value) {
 
   return { fields, filters, sort, groupBy, metrics: normalizedMetrics.length ? normalizedMetrics : [{ type: "count" }] };
 }
-
-async function evaluateRollupValue(db, object, field, record, req) {
-  const config = normalizeRollupConfig(field);
-  if (!config || !config.relationshipKey || !object || !record || !record.id) return record?.[field.api_name] ?? null;
-  const relationshipResult = await db(
-    "SELECT r.*, p.object_key AS parent_object_key, c.object_key AS child_object_key, c.source_table AS child_source_table, c.company_scoped AS child_company_scoped, c.store_scoped AS child_store_scoped FROM platform_relationships r JOIN platform_objects p ON p.id=r.parent_object_id JOIN platform_objects c ON c.id=r.child_object_id WHERE r.parent_object_id=$1 AND r.relationship_key=$2 AND r.active=true",
-    [object.id, config.relationshipKey]
-  );
-  const relationship = relationshipResult.rows[0];
-  if (!relationship) return null;
-  const childObject = { ...relationship, ...{ source_table: relationship.child_source_table, company_scoped: relationship.child_company_scoped, store_scoped: relationship.child_store_scoped } };
-  const joinField = relationship.child_field_id ? await db("SELECT * FROM platform_fields WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [relationship.child_field_id, req.user.companyId]) : { rows: [] };
-  const joinFieldInfo = joinField.rows[0];
-  /* Only a child-owned link column can be aggregated from the child table. A
-     parent-owned lookup (the FK lives on the parent) has no child join column,
-     so no child aggregate can be computed for it. */
-  if (joinFieldInfo && String(joinFieldInfo.object_id) !== String(relationship.child_object_id)) return null;
-  if (!childObject.source_table || !isSafeIdentifier(childObject.source_table) || !joinFieldInfo || !joinFieldInfo.source_column || !isSafeIdentifier(joinFieldInfo.source_column)) {
-    return null;
-  }
-  const operation = config.operation;
-  const clauseParams = [record.id];
-  const clauses = [`"${joinFieldInfo.source_column}"=$${clauseParams.length}`];
-  const childFieldsResult = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order", [relationship.child_object_id, req.user.companyId]);
-  const childFields = childFieldsResult.rows;
-  const childFieldByApiName = new Map(childFields.map((candidate) => [candidate.api_name, candidate]));
-  const sourceField = config.sourceField ? childFieldByApiName.get(config.sourceField) : childFields.find((candidate) => candidate.api_name === config.sourceField || candidate.source_column === config.sourceField) || null;
-  const sourceColumn = sourceField && sourceField.source_column && isSafeIdentifier(sourceField.source_column) ? sourceField.source_column : null;
-  if (operation !== "COUNT" && !sourceColumn) return null;
-  if (childObject.company_scoped) { clauseParams.push(req.user.companyId); clauses.push(`company_id=$${clauseParams.length}`); }
-  if (childObject.store_scoped) {
-    if (!req.user.storeId) return null;
-    clauseParams.push(req.user.storeId); clauses.push(`store_id=$${clauseParams.length}`);
-  }
-  const filterCondition = normalizeRollupConfig(field)?.condition ?? null;
-  const filterRecords = await db(`SELECT * FROM "${childObject.source_table}" WHERE ${clauses.join(" AND ")}`, clauseParams);
-  let rows = filterRecords.rows || [];
-  if (filterCondition && rows.length) {
-    rows = rows.filter((row) => evaluateCondition(filterCondition, childFields, row));
-  }
-  if (operation === "COUNT") return rows.length;
-  const values = rows.map((row) => row[sourceColumn]).filter((value) => value !== null && value !== undefined && value !== "");
-  if (!values.length) return null;
-  switch (operation) {
-    case "SUM": return values.reduce((total, value) => total + Number(value), 0);
-    case "AVG": return values.reduce((total, value) => total + Number(value), 0) / values.length;
-    case "MIN": return values.reduce((min, value) => (Number(value) < Number(min) ? Number(value) : Number(min)), Number(values[0]));
-    case "MAX": return values.reduce((max, value) => (Number(value) > Number(max) ? Number(value) : Number(max)), Number(values[0]));
-    default: return null;
-  }
-}
-
-async function populateRollups(db, object, fields, records, req) {
-  const rollups = fields.filter((field) => field.active !== false && field.field_type === "rollup");
-  if (!rollups.length || !Array.isArray(records)) return records;
-  const next = [];
-  for (const record of records) {
-    const enriched = { ...record };
-    for (const field of rollups) {
-      enriched[field.api_name] = await evaluateRollupValue(db, object, field, enriched, req);
-    }
-    next.push(enriched);
-  }
-  return next;
-}
-
-
-
-
-
-
 
 async function validatePicklistDefinition(db, field, req) {
   if (!["select", "picklist"].includes(field.field_type)) return;
@@ -1830,8 +1760,24 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         if (!["number", "decimal", "currency", "boolean", "text"].includes(storedType)) throw new FormulaError("Rollup result type is unsupported");
       }
     }
-    if (candidate.field_type === "formula" && candidate.active !== false) compileFormulas([{ ...candidate, active: true }, ...fields.filter(field => field !== candidate)]);
-    compileFormulas(fields);
+    const preparedFields = await prepareFormulaFields({ db, fields, req });
+    if (candidate.field_type === "formula" && candidate.active !== false) {
+      compileFormulas(preparedFields);
+    }
+
+    const defaultExpression = candidate.config?.defaultExpression || candidate.config?.default_expression;
+    if (defaultExpression !== undefined) {
+      if (candidate.field_type === "formula" || candidate.field_type === "rollup" || candidate.writable === false) {
+        throw new FormulaError("Default expressions are only available on writable stored fields");
+      }
+      if (typeof defaultExpression !== "string" || !defaultExpression.trim()) {
+        throw new FormulaError("Default expression must be a non-empty formula");
+      }
+      evaluateFormulaExpression(preparedFields, defaultExpression, {}, candidate.field_type);
+    }
+
+    buildDerivedDependencyGraph(preparedFields);
+    compileFormulas(preparedFields);
   }
 
   function hasReferencedFieldInFormula(expression, field) {
@@ -2291,7 +2237,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         [...params, limit, offset]
       );
       const count = await db(`SELECT COUNT(*)::int AS total FROM "${object.source_table}"${where}`, params);
-      const records = await populateRollups(db, object, fields, result.rows, req);
+      const records = [];
+      for (const record of result.rows) {
+        records.push(await recalculateDerivedRecord({ db, object, fields, record, req }));
+      }
       res.json({ success: true, data: records, records, objectKey: object.object_key, limit, offset, total: count.rows[0]?.total || 0 });
     } catch (error) {
       if (error.status) return res.status(error.status).json({ success: false, message: error.message });
@@ -4948,9 +4897,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
     const candidate = { ...current, ...Object.fromEntries(values.map(({ field, value }) => [field.api_name, value])) };
     try {
-      const calculated = compileFormulas(fields)(candidate);
-      const withRollups = await populateRollups(db, object, fields, [calculated], req);
-      const resolved = Array.isArray(withRollups) && withRollups.length ? withRollups[0] : calculated;
+      const resolved = await recalculateDerivedRecord({ db, object, fields, record: candidate, req });
       const conditionalError = validateConditionalRequired(fields, resolved);
       if (conditionalError) return { status: 422, code: "CONDITIONAL_REQUIRED", message: conditionalError };
       if (!result.rows.length) return { version: current.__validation_version, current };
@@ -5148,15 +5095,28 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         },
 
         afterSave: async (state) => {
-          const calculate = compileFormulas(metadataFields);
+          const derivedBeforeAutomation = await recalculateDerivedRecord({
+            db: runtimeDb,
+            object,
+            fields: metadataFields,
+            record: state.saved,
+            req,
+          });
           const automation = await executePlatformAutomations({
             db: runtimeDb,
             object,
             fields: metadataFields,
-            record: calculate(state.saved),
+            record: derivedBeforeAutomation,
             recordId: state.saved.id,
             trigger: action === "update" ? "after_update" : "after_create",
             previousRecord: action === "update" ? state.ruleCheck.current : null,
+            req,
+          });
+          const derivedAfterAutomation = await recalculateDerivedRecord({
+            db: runtimeDb,
+            object,
+            fields: metadataFields,
+            record: automation.record,
             req,
           });
           const approval = await submitPlatformApproval({
@@ -5164,16 +5124,15 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             object,
             fields: metadataFields,
             recordId: state.saved.id,
-            record: calculate(automation.record),
+            record: derivedAfterAutomation,
             req,
           });
-          const hydrated = await populateRollups(runtimeDb, object, metadataFields, [calculate(automation.record)], req);
           return {
             ...state,
             automation,
             approval,
-            hydrated,
-            record: hydrated[0] || automation.record || state.saved,
+            hydrated: [derivedAfterAutomation],
+            record: derivedAfterAutomation,
             recordPrior: action === "update" ? state.ruleCheck.current : null,
           };
         },
@@ -5265,9 +5224,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const recordTypeId = req.body?.recordTypeId ?? input?.recordTypeId;
       const recordType = await resolveRecordType(object, recordTypeId, req);
       if (recordTypeId && !recordType) return res.status(400).json({ success: false, message: "Record type is not available for this object" });
-      const recordValues = { ...input };
+      let recordValues = { ...input };
       delete recordValues.recordTypeId;
-      if (recordType) Object.assign(recordValues, { ...(recordType.default_values || {}), ...recordValues });
+      if (recordType) recordValues = { ...(recordType.default_values || {}), ...recordValues };
+      recordValues = applyDerivedDefaults(metadataFields, recordValues);
       const typeError = await validateRecordTypeValues(object, fields, recordType, recordValues, req);
       if (typeError) return res.status(400).json({ success: false, message: typeError });
       const saved = await executeCanonicalRecordWrite({ req, object, metadataFields, fields, input: recordValues, action: "create" });
@@ -5865,9 +5825,11 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       `SELECT id${columns.length ? `, ${columns.join(", ")}` : ""} FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}${order} LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`,
       dataParams
     );
-    const calculate = compileFormulas(childMetadata.fields);
     const hydrated = await hydrateExtensions(db, child, fields, result.rows, req);
-    const calculated = await populateRollups(db, child, childMetadata.fields, hydrated.map((record) => calculate(record)), req);
+    const calculated = [];
+    for (const record of hydrated) {
+      calculated.push(await recalculateDerivedRecord({ db, object: child, fields: childMetadata.fields, record, req }));
+    }
     const records = calculated.map((record) => publicFormulaRecord(fields, record));
     const total = count.rows[0]?.total || 0;
     res.json({ success: true, data: records, records, relationship, pageSize: limit, offset, total });
@@ -5890,7 +5852,6 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       if (systemObject(object)) object.company_scoped = true;
       const safeFields = safeSystemFields(object, metadataFields.rows);
       const fields = await applyFieldSecurity(db, safeFields, req);
-      const calculate = compileFormulas(safeFields);
       const readableFields = fields.filter((field) => field.readable !== false && field.field_type !== "formula" && field.field_type !== "rollup" && isSafeIdentifier(field.api_name) && Boolean(platformFieldSql(field, object)));
       const listView = req.query.listViewId ? (await db("SELECT * FROM platform_list_views WHERE id=$1 AND object_id=$2 AND company_id=$3 AND active=true", [req.query.listViewId, object.id, req.user.companyId])).rows[0] || null : null;
       const configuredColumns = listView && Array.isArray(listView.columns) ? listView.columns : null;
@@ -5961,7 +5922,10 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const associations = await loadRecordTypeAssociations(object, result.rows.map((record) => record.id), req);
       const typeByRecord = new Map(associations.rows.map((row) => [String(row.record_id), row.record_type_id]));
       const extended = await hydrateExtensions(db, object, fields, result.rows, req);
-      const hydrated = await populateRollups(db, object, fields, extended.map((record) => calculate(record)), req);
+      const hydrated = [];
+      for (const record of extended) {
+        hydrated.push(await recalculateDerivedRecord({ db, object, fields: safeFields, record, req }));
+      }
       result.rows = hydrated.map((record) => ({ ...publicFormulaRecord(fields, record), recordTypeId: typeByRecord.get(String(record.id)) ?? null }));
       res.json({ success: true, data: result.rows, records: result.rows, page, pageSize, total, pages });
     } catch (error) {
