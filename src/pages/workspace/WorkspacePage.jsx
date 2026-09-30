@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Box, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
 
 function objectKey(object) {
@@ -105,7 +106,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   useEffect(() => {
     let live = true
     setLoadingObjects(true)
-    apiRequest('/api/platform/objects')
+    cachedGet('/api/platform/objects',{cacheKey:'workspace:objects',onFresh:(response)=>{ const data=response?.data?.objects||response?.data||[]; const list=Array.isArray(data)?data.filter((item)=>item?.active!==false&&item?.source_table):[]; setObjects(list) }})
       .then((response) => {
         if (!live) return
         const data = response?.data?.objects || response?.data || []
@@ -140,12 +141,19 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     setError('')
     try {
       const [workspaceRes, permissionRes] = await Promise.all([
-        apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(key)}/workspace`),
+        cachedGet(`/api/platform/runtime/objects/${encodeURIComponent(key)}/workspace`, { cacheKey: `workspace:meta:${key}` }),
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`),
       ])
       const meta = workspaceRes?.data || {}
       const listViewId = meta?.defaultListView?.id || ''
-      const recordRes = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`)
+      const recordPath = `/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
+      const recordRes = await cachedGet(recordPath, {
+        cacheKey: `workspace:records:${key}:${listViewId || 'default'}`,
+        onFresh: (fresh) => {
+          const nextRows = Array.isArray(fresh?.records) ? fresh.records : Array.isArray(fresh?.data) ? fresh.data : []
+          setRows(nextRows)
+        },
+      })
       const nextFields = Array.isArray(meta.fields) ? meta.fields : []
       const nextRows = Array.isArray(recordRes?.records)
         ? recordRes.records
