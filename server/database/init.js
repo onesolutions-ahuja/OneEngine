@@ -185,8 +185,8 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       up: async client => {
         await client.query(oneAssistantSchema);
       },
-
-]);
+    },
+  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
   console.log("onePOS: database ready");
