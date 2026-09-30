@@ -1901,6 +1901,9 @@ const MARKETPLACE_BRAND_MATCHES = [
   [/sum\s*up/i, 'sumup'],
   [/\bsquare\b/i, 'square'],
   [/\bmews\b/i, 'mews'],
+  [/\bfourth\b/i, 'fourth'],[/\bdeputy\b/i, 'deputy'],[/caterbook/i, 'caterbook'],[/go[-\s]?upc/i, 'go-upc'],
+  [/adobe\s*commerce|magento/i, 'adobe-commerce'],[/\bbopp\b/i, 'one-connect-bopp'],[/wonderful/i, 'one-connect-wonderful'],
+  [/\bvyne\b/i, 'one-connect-vyne'],[/\bstripe\b/i, 'one-connect-stripe'],
 ]
 
 const MARKETPLACE_ICON_ALIASES = {
@@ -1927,6 +1930,12 @@ const MARKETPLACE_ICON_ALIASES = {
   square: 'square',
   mews: 'mews',
   mews_pms: 'mews',
+  fourth: 'fourth', deputy: 'deputy', caterbook: 'caterbook', go_upc: 'go-upc',
+  adobe_commerce: 'adobe-commerce', magento: 'adobe-commerce',
+  one_connect_bopp: 'one-connect-bopp', bopp: 'one-connect-bopp',
+  one_connect_wonderful: 'one-connect-wonderful', wonderful: 'one-connect-wonderful',
+  one_connect_vyne: 'one-connect-vyne', vyne: 'one-connect-vyne',
+  one_connect_stripe: 'one-connect-stripe', stripe: 'one-connect-stripe',
 }
 
 function localAppIcon(assetKey) {
