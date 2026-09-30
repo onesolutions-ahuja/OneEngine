@@ -22,6 +22,7 @@ import { processShopifyWebhookEvent } from "./onlineOrders/shopifyWebhookProcess
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
+import { writePlatformRecordHistory } from "./platformRecordHistory.js";
 import { createGlobalProductLookupService, testGlobalProductProvider } from "./globalProductLookup.js";
 import {
   findAvailableAppointmentSlots,
@@ -1184,6 +1185,17 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
   return { status: "PENDING", duplicate: false, request };
 }
 
+function workflowHistoryTrace(context = {}) {
+  return {
+    actorUserId: context.userId || context.req?.user?.id || null,
+    correlationId: context.correlationId || context.$System?.correlationId || context.executionContext?.globals?.$System?.correlationId || null,
+    workflowRunId: context.runId || context.$Flow?.runId || context.executionContext?.globals?.$Flow?.runId || null,
+    eventId: context.req?.platformEvent?.eventId || null,
+    source: "WORKFLOW",
+    executionMode: context.executionMode || context.$System?.executionMode || context.executionContext?.globals?.$System?.executionMode || "USER",
+  };
+}
+
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,
   {
@@ -1899,6 +1911,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
       const result = await db(query, params);
       const created = result.rows[0] || null;
+      if (created?.id) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: created.id,
+          fields: mappedFields,
+          previousRecord: null,
+          record: created,
+          action: "create",
+          ...workflowHistoryTrace(context),
+        });
+      }
       try {
         if (created?.id) await publishRecordChangeEvent({
           db,
@@ -1976,6 +2001,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const query = `UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`;
       const result = await db(query, params);
       const updated = result.rows[0] || null;
+      if (updated?.id) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: updated.id,
+          fields: mappedFields,
+          previousRecord: previous,
+          record: updated,
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
       try {
         if (updated?.id) await publishRecordChangeEvent({
           db,
@@ -2049,6 +2087,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
       const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
       const updated = result.rows[0] || null;
+      if (updated?.id) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: updated.id,
+          fields: mappedFields,
+          previousRecord: previous,
+          record: updated,
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
       try {
         if (updated?.id) await publishRecordChangeEvent({
           db,
@@ -2133,6 +2184,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
       const result = await db(query, params);
       const created = result.rows[0] || null;
+      if (created?.id) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: created.id,
+          fields: mappedFields,
+          previousRecord: null,
+          record: created,
+          action: "create",
+          ...workflowHistoryTrace(context),
+        });
+      }
       try {
         if (created?.id) await publishRecordChangeEvent({
           db,
@@ -2166,6 +2230,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
       });
       const table = targetObject.source_table;
+      const historyFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+        [targetObject.id, companyId || req?.user?.companyId]
+      )).rows;
       const scopeParams = [action.recordId];
       const scopeClauses = ["id=$1"];
       if (targetObject.company_scoped) {
@@ -2177,6 +2245,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const result = hasActive.rows.length
         ? await db(`UPDATE "${table}" SET active=false WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId])
         : await db(`DELETE FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId]);
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: action.recordId,
+          fields: historyFields,
+          previousRecord: previous || result.rows[0],
+          record: hasActive.rows.length ? result.rows[0] : null,
+          action: "delete",
+          ...workflowHistoryTrace(context),
+        });
+      }
       try {
         if (result.rows[0]) await publishRecordChangeEvent({
           db,
@@ -2225,7 +2306,24 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const params = [assignee, action.recordId];
       const scope = targetObject.company_scoped ? " AND company_id=$3" : "";
       if (targetObject.company_scoped) params.push(req?.user?.companyId || companyId);
+      const previous = (await db(
+        `SELECT * FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} LIMIT 1`,
+        targetObject.company_scoped ? [action.recordId, companyId || req?.user?.companyId] : [action.recordId]
+      )).rows[0] || null;
       const result = await db(`UPDATE "${table}" SET assigned_to=$1 WHERE id=$2${scope} RETURNING *`, params);
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: action.recordId,
+          fields: assignmentFields,
+          previousRecord: previous,
+          record: result.rows[0],
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
       return { status: result.rows.length ? "completed" : "skipped", updated: result.rows[0] || null };
     },
   },
@@ -2282,10 +2380,27 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         params.push(req.user.storeId);
         clauses.push(`store_id=$${params.length}`);
       }
+      const previous = (await db(
+        `SELECT * FROM "${resolved.relationship.child_source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`,
+        params.slice(1)
+      )).rows[0] || null;
       const result = await db(
         `UPDATE "${resolved.relationship.child_source_table}" SET "${column}"=$1 WHERE ${clauses.join(" AND ")} RETURNING *`,
         params
       );
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: relatedRecordId,
+          fields: relationFields,
+          previousRecord: previous,
+          record: result.rows[0],
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
       return { status: result.rows.length ? "completed" : "skipped", relationshipKey, relatedRecordId, linkField: column, linked: result.rows[0] || null };
     },
   },
@@ -2341,10 +2456,27 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         params.push(req.user.storeId);
         clauses.push(`store_id=$${params.length}`);
       }
+      const previous = (await db(
+        `SELECT * FROM "${resolved.relationship.child_source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`,
+        params
+      )).rows[0] || null;
       const result = await db(
         `UPDATE "${resolved.relationship.child_source_table}" SET "${column}"=NULL WHERE ${clauses.join(" AND ")} RETURNING *`,
         params
       );
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: relatedRecordId,
+          fields: relationFields,
+          previousRecord: previous,
+          record: result.rows[0],
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
       return { status: result.rows.length ? "completed" : "skipped", relationshipKey, relatedRecordId, linkField: column, unlinked: result.rows[0] || null };
     },
   },
