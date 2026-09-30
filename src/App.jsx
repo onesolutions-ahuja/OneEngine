@@ -53,16 +53,8 @@ class LazyLoadBoundary extends Component {
 const RecordListView = lazyWithRecovery(() => import('./components/RecordListView'))
 const MetadataRecordFormModal = lazyWithRecovery(() => import('./components/MetadataRecordFormModal'))
 const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
-const OneBuilder = lazyWithRecovery(() => import('./pages/settings/OneBuilder'))
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
-const WorkflowRunsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/WorkflowRunsAdmin'))
-const WorkItemsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/WorkItemsAdmin'))
-const PlatformAppsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/PlatformAppsAdmin'))
-const DeploymentAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/DeploymentAdmin'))
-const NotificationSubscriptionsAdmin = lazyWithRecovery(() => import('./pages/settings/Platform/NotificationSubscriptionsAdmin'))
-const ValueSetList = lazyWithRecovery(() => import('./pages/settings/Platform/ValueSetList'))
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
-const ObjectsSettingsPane = lazyWithRecovery(() => import('./pages/settings/ObjectsSettingsPane'))
 const ClientWebShopSettings = lazyWithRecovery(() => import('./pages/settings/ClientWebShopSettings'))
 const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/PaymentTerminalSettings'))
 const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
@@ -1772,26 +1764,6 @@ function SettingsPage({ onOpenProfile }) {
                     { key: 'is_system_role', label: 'Type', render: (row) => row.is_system_role ? 'System' : 'Custom' },
                   ]}
                 />
-              ) : current?.key === 'objects' ? (
-                <ObjectsSettingsPane />
-              ) : current?.key === 'assignment-rules' ? (
-                <ObjectsSettingsPane initialTab="assignment" />
-              ) : current?.key === 'sharing-rules' ? (
-                <ObjectsSettingsPane initialTab="sharing" />
-              ) : current?.key === 'platform' ? (
-                <OneBuilder />
-              ) : current?.key === 'workflow-runs' ? (
-                <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-              ) : current?.key === 'work-items' ? (
-                <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-              ) : current?.key === 'platform-apps' ? (
-                <PlatformAppsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-              ) : current?.key === 'deployments' ? (
-                <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-              ) : current?.key === 'notifications' ? (
-                <NotificationSubscriptionsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-              ) : current?.key === 'value-sets' ? (
-                <ValueSetList onMessage={() => {}} onError={(value) => setError(value || '')} />
               ) : (
                 <div className="settings-row">
                   <div>
@@ -2404,12 +2376,26 @@ function Desktop({ onLock, onSignOut }) {
     setLauncherOpen(false)
     setAppSearch('')
     const parts = value.split('/').filter(Boolean)
+    const developerIndex = parts.indexOf('developer')
+    if (developerIndex >= 0) {
+      const section = parts[developerIndex + 1] || 'objects'
+      setRoute('developer', section)
+      setRouteState({ app: 'developer', section })
+      setActiveApp('developer')
+      return
+    }
     const settingsIndex = parts.indexOf('settings')
     if (settingsIndex >= 0) {
       const section = parts[settingsIndex + 1] || 'general'
-      setRoute('settings', section)
-      setRouteState({ app: 'settings', section })
-      setActiveApp('settings')
+      if (DEVELOPER_SETTINGS_KEYS.has(section)) {
+        setRoute('developer', section)
+        setRouteState({ app: 'developer', section })
+        setActiveApp('developer')
+      } else {
+        setRoute('settings', section)
+        setRouteState({ app: 'settings', section })
+        setActiveApp('settings')
+      }
       return
     }
     const appIndex = parts.indexOf('app')
@@ -2418,6 +2404,12 @@ function Desktop({ onLock, onSignOut }) {
   }
 
   const openItem = (id) => {
+    if (id === 'developer' || id === 'platform') {
+      setRoute('developer', 'objects')
+      setRouteState({ app: 'developer', section: 'objects' })
+      setActiveApp('developer')
+      return
+    }
     if (id === 'integrations') {
       setRoute('integrations')
       setActiveApp('integrations')
