@@ -67,6 +67,9 @@ export function resolveRecordPathValue(record, path, rootObjectKey = null) {
 function resolveContextPathValue(path, { record, rootObjectKey, variables } = {}) {
   const normalized = normalizeRecordPath(path);
   if (!normalized) return undefined;
+  if (normalized.startsWith("$")) {
+    return resolveRecordPathValue(variables || {}, normalized, null);
+  }
   if (normalized === "steps" || normalized.startsWith("steps.")) {
     return resolveRecordPathValue(variables || {}, normalized, null);
   }
