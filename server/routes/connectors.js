@@ -164,6 +164,16 @@ function validateAppConfiguration(manifest, supplied, { existingSecrets = {} } =
 function publicConnectorInstance(row) {
   const rawConfiguration = jsonValue(row.connector_configuration, {});
   const configuration = Object.fromEntries(Object.entries(rawConfiguration).filter(([key]) => !/(secret|password|token|credential|api[_-]?key|card|pan)/i.test(key)));
+  const credentialFields = (() => {
+    try {
+      const secrets = decryptCredentials(row.credentials_encrypted) || {};
+      return secrets && typeof secrets === "object" && !Array.isArray(secrets)
+        ? Object.keys(secrets)
+        : [];
+    } catch {
+      return [];
+    }
+  })();
   return {
     id: row.id,
     packageKey: row.connector_package_key,
@@ -178,6 +188,7 @@ function publicConnectorInstance(row) {
     health: jsonValue(row.last_test_result, {}),
     configuration,
     hasCredentials: Boolean(row.credentials_encrypted),
+    credentialFields,
     capabilities: jsonValue(row.connector_capabilities, []),
     fallbackOrder: Number(row.fallback_order || 0),
     createdAt: row.created_at,
