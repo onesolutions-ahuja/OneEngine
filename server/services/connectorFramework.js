@@ -392,6 +392,7 @@ export function createConnectorActionExecutor({ db, fetchImpl = fetch, sleep = d
       includeSecrets: true,
       migrateLegacy: true,
       actorUserId,
+      platformCredentialAccess,
     });
     const connection = loaded?.connection || null;
     if (!connection || connection.enabled === false) {
