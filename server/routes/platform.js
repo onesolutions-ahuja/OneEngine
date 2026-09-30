@@ -39,7 +39,7 @@ import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
 import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";
 import { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
-import { runRecordSaveLifecycle, RecordLifecycleError } from "../services/platformRecordLifecycle.js";
+import { runRecordSaveLifecycle, runRecordDeleteLifecycle, RecordLifecycleError } from "../services/platformRecordLifecycle.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
