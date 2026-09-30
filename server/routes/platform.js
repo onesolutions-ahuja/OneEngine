@@ -612,12 +612,11 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   const router = express.Router();
   async function resolveActingCompany(req, res, next) {
     try {
-      const platformManage = await hasPlatformManageAccess(req.user?.id);
       const legacyDeveloper = req.user?.isPlatformDeveloper === true || req.user?.is_platform_developer === true;
 
-      // Normal tenant accounts are already company-bound by authentication.
-      // platform.manage grants developer capability inside that tenant; it does
-      // not turn the user into a cross-company/global developer.
+      // Fast path: authenticated tenant users already carry the authoritative
+      // company in the verified session. Do not query RBAC just to rediscover
+      // company context on every Platform request.
       if (req.user?.companyId) {
         const requestedOverride = req.headers["x-acting-company-id"] || req.body?.actingCompanyId || req.query?.actingCompanyId;
         if (requestedOverride && String(requestedOverride) !== String(req.user.companyId) && !legacyDeveloper) {
@@ -629,6 +628,8 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         }
       }
 
+      // Only global/cross-company profiles reach the permission lookup.
+      const platformManage = await hasPlatformManageAccess(req.user?.id);
       if (!platformManage && !legacyDeveloper) {
         req.platformCompanyId = req.user.companyId;
         return next();
