@@ -439,17 +439,12 @@ async function associateCustomerWithStore(client, customerId, storeId, companyId
   return result.rows[0];
 }
 
-async function canViewCompanyCustomers(user) {
+async function canViewCompanyCustomers(user, request = null) {
   if (!user?.roleId) return false;
-  const result = await db(
-    `SELECT 1
-       FROM role_permissions rp
-       JOIN permissions p ON p.id=rp.permission_id
-      WHERE rp.role_id=$1 AND p.code='company.scope.all'
-      LIMIT 1`,
-    [user.roleId]
-  );
-  return result.rows.length > 0;
+  // Reuse the request-scoped RBAC lookup when a request is available instead
+  // of issuing a second company.scope.all query.
+  const codes = await getRolePermissionCodes(user.roleId, request);
+  return codes.includes("company.scope.all");
 }
 
 async function canAccessStore(user, storeId) {
@@ -1108,7 +1103,7 @@ app.get("/api/auth/me", authenticate, async (req, res) => {
 
 app.get("/api/auth/me/permissions", authenticate, async (req, res) => {
   try {
-    const isAdmin = await canViewCompanyCustomers(req.user);
+    const isAdmin = await canViewCompanyCustomers(req.user, req);
 
     let permissions = req.user.roleId ? await getRolePermissionCodes(req.user.roleId, req) : [];
     const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
