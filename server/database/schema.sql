@@ -3630,6 +3630,18 @@ CREATE TABLE IF NOT EXISTS company_tier_assignments (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY(company_id, tier_id)
 );
+CREATE TABLE IF NOT EXISTS company_package_trials (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    package_id UUID NOT NULL REFERENCES package_registry(id) ON DELETE CASCADE,
+    activated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    UNIQUE(company_id, package_id)
+);
+CREATE INDEX IF NOT EXISTS idx_company_package_trials_company
+    ON company_package_trials(company_id, expires_at);
+
 CREATE TABLE IF NOT EXISTS company_package_entitlement_sources (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
