@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Archive, Edit3, MapPin, Phone, Plus, RefreshCw, RotateCcw, Store } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import { cachedGet } from '../../services/cachedApi'
 import MetadataRecordFormModal from '../../components/MetadataRecordFormModal'
 
 function money(value,currency='GBP'){
@@ -20,13 +21,13 @@ export default function StoresPage(){
   const [showArchived,setShowArchived]=useState(false)
   const [editor,setEditor]=useState(null)
 
-  const load=async()=>{
+  const load=async(forceRefresh=false)=>{
     try{
       setLoading(true);setError('')
       const [s,p,settings]=await Promise.all([
-        apiRequest('/api/admin/stores'),
+        cachedGet('/api/admin/stores',{forceRefresh,onFresh:fresh=>fresh?.success&&setStores(Array.isArray(fresh.data)?fresh.data:[])}),
         apiRequest('/api/auth/me/permissions').catch(()=>null),
-        apiRequest('/api/settings').catch(()=>null),
+        cachedGet('/api/settings',{cacheKey:'settings:company',forceRefresh,onFresh:fresh=>fresh?.data?.company?.currency&&setCurrency(fresh.data.company.currency)}).catch(()=>null),
       ])
       if(!s?.success)throw new Error(s?.message||'Unable to load stores')
       const rows=Array.isArray(s.data)?s.data:[]
@@ -60,7 +61,7 @@ export default function StoresPage(){
         body:JSON.stringify({data:{active:next}})
       })
       if(r?.success===false)throw new Error(r?.message||'Unable to update store')
-      await load()
+      await load(true)
     }catch(err){setError(err?.message||'Unable to update store')}
   }
 
@@ -69,7 +70,7 @@ export default function StoresPage(){
       <div><span>Locations</span><h1>Stores</h1><p>{stores.length} configured · {active.length} active</p></div>
       <div className="module-header-actions">
         {archived.length?<button onClick={()=>setShowArchived(v=>!v)}><Archive size={14}/>{showArchived?'Hide archived':`Show archived (${archived.length})`}</button>:null}
-        <button onClick={load}><RefreshCw size={14}/> Refresh</button>
+        <button onClick={()=>load(true)}><RefreshCw size={14}/> Refresh</button>
         {canCreate?<button className="module-primary-button" onClick={()=>setEditor({mode:'create',record:null})}><Plus size={14}/> Add Store</button>:null}
       </div>
     </header>
@@ -104,7 +105,7 @@ export default function StoresPage(){
       mode={editor.mode}
       title={editor.mode==='create'?'Add Store':'Edit Store'}
       onClose={()=>setEditor(null)}
-      onSaved={async()=>{setEditor(null);await load()}}
+      onSaved={async()=>{setEditor(null);await load(true)}}
     />:null}
   </section>
 }
