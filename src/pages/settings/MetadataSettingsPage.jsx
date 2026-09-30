@@ -375,7 +375,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   const [error, setError] = useState('')
 
   const sectionedObjects = objects.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
-  const superadmin = user?.isSuperadmin === true || user?.is_superadmin === true
+  const superadmin = false
 
   const loadSectionedRows = async (object) => {
     if (!object?.id) return
@@ -480,7 +480,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   }, [visibleEntries])
 
   const profileName = user?.name || user?.full_name || user?.username || 'User'
-  const profileRole = superadmin ? 'Superadmin' : (user?.role || 'User')
+  const profileRole = user?.role || 'User'
   const initial = profileName.trim().charAt(0).toUpperCase() || 'U'
 
   return (
