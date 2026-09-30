@@ -49,6 +49,49 @@ supportedRoutes.add('settings')
 supportedRoutes.add('developer')
 supportedRoutes.add('integrations')
 
+
+const packageKeys = new Set(internalAppCatalog.map((entry) => entry.packageKey || entry.key))
+for (const entry of internalAppCatalog) {
+  const key = entry.packageKey || entry.key
+  const dependencies = Array.isArray(entry.dependencies) ? entry.dependencies : []
+  for (const dependency of dependencies) {
+    const dependencyKey = typeof dependency === 'string' ? dependency : dependency?.packageKey || dependency?.package_key
+    assert(!dependencyKey || packageKeys.has(dependencyKey), `${key}: missing package dependency ${dependencyKey}`)
+    assert(dependencyKey !== key, `${key}: package cannot depend on itself`)
+  }
+}
+
+const dependencyMap = new Map(internalAppCatalog.map((entry) => [
+  entry.packageKey || entry.key,
+  (Array.isArray(entry.dependencies) ? entry.dependencies : [])
+    .map((dependency) => typeof dependency === 'string' ? dependency : dependency?.packageKey || dependency?.package_key)
+    .filter(Boolean),
+]))
+function dependencyCycleFrom(start) {
+  const stack = []
+  const visiting = new Set()
+  function visit(key) {
+    if (visiting.has(key)) return [...stack, key]
+    visiting.add(key); stack.push(key)
+    for (const next of dependencyMap.get(key) || []) {
+      const cycle = visit(next)
+      if (cycle) return cycle
+    }
+    stack.pop(); visiting.delete(key)
+    return null
+  }
+  return visit(start)
+}
+for (const key of dependencyMap.keys()) {
+  const cycle = dependencyCycleFrom(key)
+  assert(!cycle, `${key}: package dependency cycle ${cycle?.join(' -> ')}`)
+}
+
+for (const entry of internalAppCatalog) {
+  if (entry.key === 'email_connector') assert(entry.route === '/app/settings/email-delivery', 'email_connector: dedicated route drifted from Email Delivery settings')
+  if (entry.key === 'sms_connector') assert(entry.route === '/app/settings/sms-delivery', 'sms_connector: dedicated route drifted from SMS Delivery settings')
+}
+
 const publicApps = internalAppCatalog.filter((entry) =>
   entry.visibility !== 'HIDDEN' &&
   entry.systemOnly !== true &&
