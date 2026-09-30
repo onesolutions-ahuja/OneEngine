@@ -67,7 +67,7 @@ export default function createLayawaysRouter({
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     const { items = [], customerId = null, deposit = 0, paymentMethod = null, dueDate = null, notes = null } = req.body || {};
     if (!Array.isArray(items) || !items.length) return res.status(400).json({ success: false, message: "At least one item is required" });
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       if (customerId) {
@@ -140,7 +140,7 @@ export default function createLayawaysRouter({
     const amount = money(req.body?.amount);
     const paymentMethod = normalizePaymentMethod(req.body?.paymentMethod);
     if (!(amount > 0) || !paymentMethod) return res.status(400).json({ success: false, message: `A positive amount and paymentMethod are required; method must be one of ${LAYAWAY_PAYMENT_METHODS.join(", ")}` });
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       const found = await client.query(
@@ -195,7 +195,7 @@ export default function createLayawaysRouter({
 
   router.post("/layaways/:id/complete", authenticate, authorize("layaway.complete"), async (req, res) => {
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       const found = await client.query("SELECT * FROM layaways WHERE id=$1 AND company_id=$2 AND store_id=$3 FOR UPDATE", [req.params.id, req.user.companyId, req.user.storeId]);
