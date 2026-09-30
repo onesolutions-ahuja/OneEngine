@@ -5,6 +5,7 @@ import {
   encryptCredentials,
   redactValue,
 } from "./integrationCredentials.js";
+import { resolveOneConnection, buildOneConnectionAuthHeaders } from "./oneConnection.js";
 
 const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 const AUTH_TYPES = new Set(["none", "api_key", "bearer", "basic", "oauth2"]);
@@ -398,9 +399,33 @@ export function createConnectorActionExecutor({ db, fetchImpl = fetch, sleep = d
     }
 
     const operations = parseJson(connection.operations, []);
-    const definition = Array.isArray(operations)
+    let definition = Array.isArray(operations)
       ? operations.find((item) => item?.key === operationKey || item?.name === operationKey)
       : operations?.[operationKey];
+
+    if (!definition) {
+      const endpoint = await db(
+        `SELECT id,name,method,path
+           FROM integration_endpoints
+          WHERE integration_id=$1 AND enabled=TRUE
+            AND (id::text=$2 OR lower(name)=lower($2))
+          LIMIT 1`,
+        [connectionId, operationKey]
+      );
+      if (endpoint.rows?.[0]) {
+        const row = endpoint.rows[0];
+        definition = {
+          key: row.id,
+          name: row.name,
+          method: row.method,
+          path: row.path,
+          requestMapping: {
+            body: { source: "input" },
+          },
+        };
+      }
+    }
+
     if (!definition) throw new Error("Connector operation is not defined");
     const method = String(definition.method || "GET").toUpperCase();
     if (!HTTP_METHODS.has(method)) throw new Error("Unsupported connector HTTP method");
