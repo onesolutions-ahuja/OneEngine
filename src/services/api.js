@@ -1,5 +1,5 @@
 import { clearLazyCache } from './dataCache'
-import { isPrivilegedMutation, resolveTrustedCapability, validateTrustedRuntime } from './trustedRuntime'
+import { isPrivilegedMutation, resolveTrustedCapability, trustedRuntimeHeaders, validateTrustedRuntime } from './trustedRuntime'
 export const TRUSTED_RUNTIME_STATE = validateTrustedRuntime()
 
 const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://onepos.onrender.com').replace(/\/$/, '')
@@ -133,10 +133,7 @@ export async function apiRequest(path, options = {}) {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(getActingCompanyId() ? { 'X-Acting-Company-Id': getActingCompanyId() } : {}),
-      ...(capability ? {
-        'X-OneEngine-Capability': capability.id,
-        'X-OneEngine-Runtime': TRUSTED_RUNTIME_STATE.version,
-      } : {}),
+      ...trustedRuntimeHeaders(capability),
       ...(options.headers || {}),
     },
   })
