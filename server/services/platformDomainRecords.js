@@ -5,6 +5,7 @@ import { validateConditionalRequired } from "./platformConditions.js";
 import { evaluateValidationRules } from "./platformValidation.js";
 import { executePlatformAutomations } from "./platformAutomation.js";
 import { submitPlatformApproval } from "./platformApprovals.js";
+import { runRecordSaveLifecycle } from "./platformRecordLifecycle.js";
 
 export class PlatformRecordError extends Error {
   constructor(message, status = 422) { super(message); this.status = status; this.code = "PLATFORM_RECORD_INVALID"; }
