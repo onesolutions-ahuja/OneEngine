@@ -1,3 +1,4 @@
+import { clearLazyCache } from './dataCache'
 const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://onepos.onrender.com').replace(/\/$/, '')
 export const SERVER_ADDRESS_STORAGE_KEY = 'onepos_server_address'
 export const ACTING_COMPANY_STORAGE_KEY = 'onepos_acting_company_id'
@@ -106,6 +107,7 @@ export async function login(username, password) {
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
   sessionStorage.removeItem('onepos.settings.context.v2')
+  void clearLazyCache()
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
 
@@ -205,6 +207,7 @@ export function consumeGoogleOAuthCallback() {
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
   sessionStorage.removeItem('onepos.settings.context.v2')
+  void clearLazyCache()
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
   setActingCompanyId('')
