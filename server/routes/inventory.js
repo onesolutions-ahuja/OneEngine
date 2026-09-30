@@ -1,4 +1,5 @@
 import express from "express";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { lowStockRow, resolveStockStore, allocateBatchConsumption, upsertBatchRow, rebuildInventoryBalances, reconcileInventoryBalances } from "../services/inventory.js";
 import { resolveBatchEntry, normaliseBatchPolicy } from "../services/batchPolicy.js";
 import { resolveAdjustmentReason } from "../services/adjustmentReasons.js";
@@ -279,7 +280,19 @@ export default function createInventoryRouter({
             batchId: req.body.batchId || null,
           });
         }
-        const result = await createInventoryMovement(client, {
+        const result = await executeSystemWorkflow({
+            db,
+            companyId: req.user.companyId,
+            userId: req.user.id || null,
+            systemKey: "function:inventory.movement.create",
+            req,
+            storeId: req.user.storeId || null,
+            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "inventory.movement.create" },
+            extraContext: {
+              client,
+              businessDb: (query, params = []) => client.query(query, params),
+            },
+            input: {
           companyId: req.user.companyId,
           productId,
           storeId: adjustStoreId,
@@ -288,7 +301,8 @@ export default function createInventoryRouter({
           reason: storedReason,
           notes: storedNotes,
           createdBy: req.user.id,
-        });
+        },
+          });
         if (quantity > 0 && batch.batchNumber) {
           await upsertBatchRow(client, {
             companyId: req.user.companyId,
@@ -680,7 +694,19 @@ export default function createInventoryRouter({
           );
           const batchTracked = btCheck.rows[0] ? btCheck.rows[0].batch_tracking : false;
           /* Source side: guarded like every non-SALE movement. */
-          const out = await createInventoryMovement(client, {
+          const out = await executeSystemWorkflow({
+            db,
+            companyId: req.user.companyId,
+            userId: req.user.id || null,
+            systemKey: "function:inventory.movement.create",
+            req,
+            storeId: req.user.storeId || null,
+            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "inventory.movement.create" },
+            extraContext: {
+              client,
+              businessDb: (query, params = []) => client.query(query, params),
+            },
+            input: {
             companyId: req.user.companyId,
             productId: line.productId,
             storeId: fromStoreId,
@@ -690,6 +716,7 @@ export default function createInventoryRouter({
             referenceId: transferId,
             reason: notes || null,
             createdBy: req.user.id,
+          },
           });
           /* Batch bookkeeping (source): debit this store's batch rows FEFO
            * in step with the TRANSFER_OUT movement — the movement is the
@@ -707,7 +734,19 @@ export default function createInventoryRouter({
           }
           /* Destination side. If THIS fails, the whole transaction (including
            * the source deduction) rolls back — atomicity. */
-          const inn = await createInventoryMovement(client, {
+          const inn = await executeSystemWorkflow({
+            db,
+            companyId: req.user.companyId,
+            userId: req.user.id || null,
+            systemKey: "function:inventory.movement.create",
+            req,
+            storeId: req.user.storeId || null,
+            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "inventory.movement.create" },
+            extraContext: {
+              client,
+              businessDb: (query, params = []) => client.query(query, params),
+            },
+            input: {
             companyId: req.user.companyId,
             productId: line.productId,
             storeId: toStoreId,
@@ -717,6 +756,7 @@ export default function createInventoryRouter({
             referenceId: transferId,
             reason: notes || null,
             createdBy: req.user.id,
+          },
           });
           /* Batch bookkeeping (destination): goods arrive with their batch
            * numbers — mirror the source allocation into the destination
