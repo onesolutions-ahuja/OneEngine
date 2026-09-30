@@ -36,7 +36,7 @@ import { buildPlatformSharingScope } from "../services/platformSharing.js";
 import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, resolveDuplicateAction } from "../services/platformDuplicateMatching.js";
 import { publishPlatformEvent } from "../services/platformEvents.js";
 import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
-import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";\nimport { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";
+import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";\nimport { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";\nimport { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
@@ -2428,11 +2428,23 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         try {
           definition.validation?.({ type: core.key });
         } catch { /* argument-shape validation happens inside the executor. */ }
-        const result = await executeWorkflowAction({
-          db, pool, req, object, record, recordId: record?.id || null, companyId: req.user.companyId,
-          action: { type: core.key, ...(interaction.config || {}) },
+        const execution = await executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: `action:${core.key}`,
+          req,
+          input: { ...(interaction.config || {}) },
+          object,
+          record,
+          recordId: record?.id || null,
+          storeId: req.user.storeId || null,
+          connectorDrivers: req.app?.locals?.connectorDrivers || null,
+          writeAudit: req.app?.locals?.writeAudit || null,
+          source: { type: "page_interaction", method: req.method, path: req.originalUrl || req.path, capability: core.key },
+          extraContext: { pool },
         });
-        return res.json({ success: true, data: result });
+        return res.json({ success: true, data: execution.result, workflowRunId: execution.runId, correlationId: execution.correlationId });
       }
 
       return res.status(400).json({ success: false, message: "Unsupported page interaction type" });
@@ -4113,16 +4125,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
 
-      const result = await executeWorkflowAction({
+      const execution = await executeSystemWorkflow({
         db,
-        pool,
-        req,
-        object,
-        record: virtualRecord,
-        recordId: null,
         companyId: req.user.companyId,
-        action: {
-          type: handlerKey,
+        userId: req.user.id || null,
+        systemKey: `action:${handlerKey}`,
+        req,
+        input: {
           ...(target.action?.config || {}),
           inputs: {
             ...(button.input_mappings || {}),
@@ -4130,8 +4139,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             till: virtualRecord,
           },
         },
+        object,
+        record: virtualRecord,
+        recordId: null,
+        storeId: req.user.storeId || null,
+        connectorDrivers: req.app?.locals?.connectorDrivers || null,
+        writeAudit: req.app?.locals?.writeAudit || null,
+        source: { type: "button", method: req.method, path: req.originalUrl || req.path, capability: handlerKey },
+        extraContext: { pool },
       });
-      return res.json({ success: true, data: result });
+      return res.json({ success: true, data: execution.result, workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
       next(error);
     }
@@ -4189,11 +4206,26 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       for (const permission of definition.requiredPermissions || []) {
         if (!(await hasExecutionPermission(req, permission))) return res.status(403).json({ success: false, message: `You do not have permission to execute ${handlerKey}` });
       }
-      const result = await executeWorkflowAction({
-        db, pool, req, object, record, recordId: req.params.recordId, companyId: req.user.companyId,
-        action: { type: handlerKey, ...(target.action?.config || {}), inputs: { ...(button.input_mappings || {}), ...(req.body?.inputs || {}) } },
+      const execution = await executeSystemWorkflow({
+        db,
+        companyId: req.user.companyId,
+        userId: req.user.id || null,
+        systemKey: `action:${handlerKey}`,
+        req,
+        input: {
+          ...(target.action?.config || {}),
+          inputs: { ...(button.input_mappings || {}), ...(req.body?.inputs || {}) },
+        },
+        object,
+        record,
+        recordId: req.params.recordId,
+        storeId: req.user.storeId || null,
+        connectorDrivers: req.app?.locals?.connectorDrivers || null,
+        writeAudit: req.app?.locals?.writeAudit || null,
+        source: { type: "button", method: req.method, path: req.originalUrl || req.path, capability: handlerKey },
+        extraContext: { pool },
       });
-      return res.json({ success: true, data: result });
+      return res.json({ success: true, data: execution.result, workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) { next(error); }
   });
 
@@ -4251,16 +4283,20 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const functionKey = component.functionKey || component.function_key;
         const definition = getRegisteredFunction(functionKey);
         if (!definition) return res.status(422).json({ success: false, message: "Configured registered function is unavailable" });
-        const result = await executeWorkflowAction({
+        const execution = await executeSystemWorkflow({
           db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: `function:${functionKey}`,
           req,
+          input: component.inputs || {},
           object,
           record,
           recordId: req.params.recordId,
-          companyId: req.user.companyId,
-          action: { type: "CALL_FUNCTION", functionKey, inputs: component.inputs || {} },
+          storeId: req.user.storeId || null,
+          source: { type: "record_component", method: req.method, path: req.originalUrl || req.path, capability: functionKey },
         });
-        return res.json({ success: true, data: result });
+        return res.json({ success: true, data: execution.result, workflowRunId: execution.runId, correlationId: execution.correlationId });
       }
 
       const workflowId = component.workflowId || component.workflow_id || component.ruleId || component.rule_id;
