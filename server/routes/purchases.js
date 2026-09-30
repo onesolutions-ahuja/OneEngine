@@ -1,6 +1,5 @@
 import express from "express";
-import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
-import { receivePurchase as receivePurchaseService } from "../services/purchaseReceiving.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 export default function createPurchasesRouter({
   authenticate,
@@ -65,8 +64,22 @@ export default function createPurchasesRouter({
     }
   }
 
-  async function receivePurchase(client, purchaseId, companyId, userId, storeId, requestedItems = null, receiptMeta = {}) {
-    return receivePurchaseService({ client, purchaseId, companyId, userId, storeId, requestedItems, receiptMeta, createInventoryMovement });
+  async function receivePurchase(req, client, purchaseId, companyId, userId, storeId, requestedItems = null, receiptMeta = {}) {
+    const execution = await executeSystemWorkflow({
+      db,
+      companyId,
+      userId,
+      systemKey: "function:purchase.receive",
+      req,
+      input: { purchaseId, storeId, requestedItems, receiptMeta },
+      storeId,
+      source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "purchase.receive" },
+      extraContext: {
+        client,
+        businessDb: (query, params = []) => client.query(query, params),
+      },
+    });
+    return execution.result;
   }
 
   /*
@@ -317,7 +330,8 @@ export default function createPurchasesRouter({
 
         if (receiveNow) {
           await receivePurchase(
-            client,
+          req,
+          client,
             purchaseId,
             req.user.companyId,
             req.user.id,
@@ -333,18 +347,26 @@ export default function createPurchasesRouter({
          * T9G: fire-and-forget integration dispatch (never blocks/throws).
          * A create-and-receive fires both events, matching the lifecycle.
          */
-        dispatchIntegrationEvent({
-          event: "PURCHASE_CREATED",
-          deps: { db },
-          context: { companyId: req.user.companyId, storeId: storeId || req.user.storeId },
-          entityId: purchaseId,
+        executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "function:integration.event.dispatch",
+          req,
+          input: { event: "PURCHASE_CREATED", entityId: purchaseId, storeId: storeId || req.user.storeId },
+          storeId: storeId || req.user.storeId,
+          source: { type: "domain_event", method: req.method, path: req.originalUrl || req.path, capability: "integration.event.dispatch" },
         }).catch(() => {});
         if (receiveNow) {
-          dispatchIntegrationEvent({
-            event: "PURCHASE_RECEIVED",
-            deps: { db },
-            context: { companyId: req.user.companyId, storeId: storeId || req.user.storeId },
-            entityId: purchaseId,
+          executeSystemWorkflow({
+            db,
+            companyId: req.user.companyId,
+            userId: req.user.id || null,
+            systemKey: "function:integration.event.dispatch",
+            req,
+            input: { event: "PURCHASE_RECEIVED", entityId: purchaseId, storeId: storeId || req.user.storeId },
+            storeId: storeId || req.user.storeId,
+            source: { type: "domain_event", method: req.method, path: req.originalUrl || req.path, capability: "integration.event.dispatch" },
           }).catch(() => {});
         }
 
@@ -392,6 +414,7 @@ export default function createPurchasesRouter({
       try {
         await client.query("BEGIN");
         await receivePurchase(
+          req,
           client,
           req.params.id,
           req.user.companyId,
@@ -403,11 +426,15 @@ export default function createPurchasesRouter({
         await client.query("COMMIT");
 
         /* T9G: fire-and-forget integration dispatch (never blocks/throws). */
-        dispatchIntegrationEvent({
-          event: "PURCHASE_RECEIVED",
-          deps: { db },
-          context: { companyId: req.user.companyId, storeId: req.user.storeId },
-          entityId: req.params.id,
+        executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "function:integration.event.dispatch",
+          req,
+          input: { event: "PURCHASE_RECEIVED", entityId: req.params.id, storeId: req.user.storeId },
+          storeId: req.user.storeId,
+          source: { type: "domain_event", method: req.method, path: req.originalUrl || req.path, capability: "integration.event.dispatch" },
         }).catch(() => {});
 
         res.json({
