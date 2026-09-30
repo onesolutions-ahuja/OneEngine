@@ -19,7 +19,8 @@
  * States: idle | listening | thinking | response (a short energetic flare
  * when an answer lands, then a smooth return to idle).
  */
-import JarvisStyles from "./JarvisStyles.jsx";\nimport JarvisRibbonOrb from "./JarvisRibbonOrb.jsx";
+import JarvisStyles from "./JarvisStyles.jsx";
+import JarvisRibbonOrb from "./JarvisRibbonOrb.jsx";
 
 export const ORB_STATES = Object.freeze({
   IDLE: "idle",
