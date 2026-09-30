@@ -21,6 +21,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
 
   const selectedApp = apps.find((app) => app.package_key === packageKey);
   const schema = selectedApp?.manifest?.connectorApp?.configurationSchema || [];
+  const dedicatedName = selectedApp?.name || (requestedPackageKey === "one_connect_square" ? "One Connect - Square" : requestedPackageKey.replaceAll("_", " "));
   const selectedStore = stores.find((store) => store.id === storeId);
   const tills = Array.isArray(selectedStore?.tills) ? selectedStore.tills : [];
 
@@ -28,14 +29,23 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     setLoading(true);
     setError("");
     try {
-      const [connectorApps, installed, storeResult] = await Promise.all([
-        apiRequest("/api/connector-apps"),
+      const [connectorAppsResult, marketplaceResult, installed, storeResult] = await Promise.all([
+        apiRequest("/api/connector-apps").catch(() => ({ success: false, data: [] })),
+        apiRequest("/api/packages/marketplace"),
         apiRequest("/api/connector-instances"),
         apiRequest("/api/admin/stores"),
       ]);
-      const allApps = Array.isArray(connectorApps?.data) ? connectorApps.data : [];
-      const installedApps = allApps.filter((app) =>
-        app.company_installation?.status === "active" && app.manifest?.connectorApp
+      const connectorApps = Array.isArray(connectorAppsResult?.data) ? connectorAppsResult.data : [];
+      const marketplaceApps = Array.isArray(marketplaceResult?.data) ? marketplaceResult.data : [];
+      const candidates = requestedPackageKey
+        ? [...connectorApps, ...marketplaceApps].filter((app, index, all) =>
+            app?.package_key === requestedPackageKey
+            && all.findIndex((candidate) => candidate?.package_key === app?.package_key) === index
+          )
+        : connectorApps;
+      const installedApps = candidates.filter((app) =>
+        app.company_installation?.status === "active"
+          && app.manifest?.connectorApp
           && (!requestedPackageKey || app.package_key === requestedPackageKey)
       );
       setApps(installedApps);
@@ -118,8 +128,8 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     <section className="mb-6 border border-slate-200 rounded-lg bg-white">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">{settingsMode && selectedApp ? `${selectedApp.name} Settings` : "Hardware & Payment Connectors"}</h2>
-          <p className="text-xs text-slate-500">{settingsMode ? "Configure credentials, store/till assignment and connection health." : "Installed connector apps and till assignments"}</p>
+          <h2 className="text-base font-semibold text-slate-900">{settingsMode ? `${dedicatedName} Settings` : "Hardware & Payment Connectors"}</h2>
+          <p className="text-xs text-slate-500">{settingsMode ? "Configure this app, assign it to a store/till, and test its connection." : "Installed connector apps and till assignments"}</p>
         </div>
         <button type="button" onClick={load} disabled={loading} title="Refresh connectors" className="h-9 w-9 grid place-items-center border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50">
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
@@ -203,7 +213,11 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
               ))}
             </form>
           ) : (
-            <div className="px-4 py-5 text-sm text-slate-600">No connector apps are installed. <button type="button" className="font-medium text-blue-700 hover:underline" onClick={() => window.dispatchEvent(new CustomEvent("onepos:open-store"))}>Open oneStore</button> to install an app.</div>
+            <div className="px-4 py-5 text-sm text-slate-600">
+              {settingsMode
+                ? `${dedicatedName} is not currently available as an active installed app for this company.`
+                : <>No connector apps are installed. <button type="button" className="font-medium text-blue-700 hover:underline" onClick={() => window.dispatchEvent(new CustomEvent("onepos:open-store"))}>Open oneStore</button> to install an app.</>}
+            </div>
           )}
         </>
       )}
