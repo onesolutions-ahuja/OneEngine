@@ -3238,6 +3238,7 @@ CREATE TABLE IF NOT EXISTS platform_execution_claims (
     idempotency_key VARCHAR(255) NOT NULL,
     fingerprint VARCHAR(64) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'CLAIMED' CHECK (status IN ('CLAIMED','COMPLETED','FAILED')),
+    locked_until TIMESTAMPTZ,
     result JSONB,
     error JSONB,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -3245,6 +3246,7 @@ CREATE TABLE IF NOT EXISTS platform_execution_claims (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(company_id, scope_key, idempotency_key)
 );
+ALTER TABLE platform_execution_claims ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_platform_execution_claims_company_scope
 ON platform_execution_claims(company_id, scope_key, created_at DESC);
 
