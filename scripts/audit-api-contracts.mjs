@@ -27,8 +27,18 @@ function matches(pattern,value){
 }
 
 const backend=new Set();
+const backendOccurrences=new Map();
+function registerBackend(method, route, source) {
+  const normalized = normalise(route)
+  backend.add(normalized)
+  const key = String(method || 'ANY').toUpperCase() + ' ' + normalized
+  if (!backendOccurrences.has(key)) backendOccurrences.set(key, [])
+  backendOccurrences.get(key).push(source)
+}
 const serverEntry=fs.readFileSync(path.join(ROOT,"server","server.js"),"utf8");
-for(const m of serverEntry.matchAll(/\bapp\.(?:get|post|put|patch|delete)\s*\(\s*(["'])(\/api\/[^"']+)\1/g)) backend.add(normalise(m[2]));
+for(const m of serverEntry.matchAll(/\bapp\.(get|post|put|patch|delete)\s*\(\s*(["'])(\/api\/[^"']+)\2/g)) {
+  registerBackend(m[1], m[3], 'server/server.js')
+}
 
 const routerMounts=new Map();
 for(const m of serverEntry.matchAll(/import\s+([A-Za-z_$][\w$]*)\s+from\s+["']\.\/routes\/([^"']+)["']/g)){
@@ -47,13 +57,13 @@ for(const file of walk(path.join(ROOT,"server","routes")).filter((f)=>f.endsWith
   const text=fs.readFileSync(file,"utf8");
   const routeRel=rel(file);
   const mount=[...routerMounts.values()].find((x)=>x.file===routeRel)?.prefix || "/api";
-  const addRoute=(route)=>{
+  const addRoute=(method,route)=>{
     const full=route.startsWith("/api/")?route:(mount.replace(/\/$/,"")+route);
-    backend.add(normalise(full));
+    registerBackend(method, full, routeRel)
   };
-  for(const m of text.matchAll(/\brouter\.(?:get|post|put|patch|delete)\s*\(\s*(["'])([^"']+)\1/g)) addRoute(m[2]);
-  for(const m of text.matchAll(/\brouter\.(?:get|post|put|patch|delete)\s*\(\s*\[([^\]]+)\]/g)){
-    for(const q of m[1].matchAll(/["']([^"']+)["']/g)) addRoute(q[1]);
+  for(const m of text.matchAll(/\brouter\.(get|post|put|patch|delete)\s*\(\s*(["'])([^"']+)\2/g)) addRoute(m[1],m[3]);
+  for(const m of text.matchAll(/\brouter\.(get|post|put|patch|delete)\s*\(\s*\[([^\]]+)\]/g)){
+    for(const q of m[2].matchAll(/["']([^"']+)["']/g)) addRoute(m[1],q[1]);
   }
 }
 
@@ -77,14 +87,21 @@ for(const call of calls){
   }
 }
 
+const backendDuplicates=[...backendOccurrences.entries()]
+  .filter(([,sources])=>sources.length>1)
+  .map(([route,sources])=>({route,sources}))
+
 const report={
   generatedAt:new Date().toISOString(),
   backendRoutes:backend.size,
+  backendDuplicateRoutes:backendDuplicates.length,
+  backendDuplicates,
   frontendLiteralCalls:calls.length,
   unmatched:findings.length,
   findings
 };
 fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
 fs.writeFileSync(path.join(ROOT,"artifacts","api-contract-audit.json"),JSON.stringify(report,null,2)+"\n");
-console.log(JSON.stringify({backendRoutes:report.backendRoutes,frontendLiteralCalls:report.frontendLiteralCalls,unmatched:report.unmatched},null,2));
+console.log(JSON.stringify({backendRoutes:report.backendRoutes,backendDuplicateRoutes:report.backendDuplicateRoutes,frontendLiteralCalls:report.frontendLiteralCalls,unmatched:report.unmatched},null,2));
+for(const duplicate of backendDuplicates) console.log("DUPLICATE_BACKEND_ROUTE "+duplicate.route+" :: "+duplicate.sources.join(", "));
 for(const f of findings) console.log("UNMATCHED "+f.file+":"+f.line+" "+f.raw);
