@@ -14,6 +14,27 @@ const jsFiles=walk(SERVER).filter(p=>/\.(js|mjs)$/.test(p));
 const routeFiles=jsFiles.filter(p=>rel(p).startsWith("server/routes/"));
 const serviceFiles=jsFiles.filter(p=>rel(p).startsWith("server/services/"));
 const failures=[];
+const staticFindings=[];
+
+for (const file of jsFiles) {
+  const source=fs.readFileSync(file,"utf8");
+  const fileName=rel(file);
+  const suspiciousSqlPatterns=[
+    { code:"SQL_PARAM_PLACEHOLDER_MISSING_DOLLAR", re:/(?:company_id|store_id|record_id|user_id|role_id|object_id)=\$\{(?:[A-Za-z_$][\w$]*Params|params)\.length\}/g },
+    { code:"SQL_SET_PLACEHOLDER_MISSING_DOLLAR", re:/source_column[^\n]{0,160}="\$\{[^\n]+\}"=\$\{index\s*\+\s*1\}/g },
+  ];
+  for (const {code,re} of suspiciousSqlPatterns) {
+    for (const match of source.matchAll(re)) {
+      staticFindings.push({
+        type:"STATIC",
+        code,
+        file:fileName,
+        line:source.slice(0,match.index).split("\n").length,
+        excerpt:match[0].slice(0,500),
+      });
+    }
+  }
+}
 
 for(const file of jsFiles){
   const r=spawnSync(process.execPath,["--check",file],{encoding:"utf8"});
@@ -41,16 +62,18 @@ const report={
   serviceFiles:serviceFiles.length,
   importCandidates:importCandidates.length,
   failures,
+  staticFindings,
   summary:{
     syntaxFailures:failures.filter(x=>x.type==="SYNTAX").length,
     importFailures:failures.filter(x=>x.type==="IMPORT").length,
-    totalFailures:failures.length
+    staticFindings:staticFindings.length,
+    totalFailures:failures.length + staticFindings.length
   }
 };
 fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
 fs.writeFileSync(path.join(ROOT,"artifacts","deep-project-audit.json"),JSON.stringify(report,null,2)+"\n");
 console.log(JSON.stringify(report.summary,null,2));
-if(failures.length){
-  console.error(JSON.stringify(failures,null,2));
+if(failures.length || staticFindings.length){
+  console.error(JSON.stringify([...failures,...staticFindings],null,2));
   process.exit(1);
 }
