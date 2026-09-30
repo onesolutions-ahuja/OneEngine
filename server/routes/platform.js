@@ -4982,6 +4982,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           duplicateAction: null,
           validation: null,
           ruleCheck: null,
+          record: null,
+          recordPrior: null,
           saved: null,
           automation: { record: null, messages: [], executions: [] },
           approval: null,
@@ -5004,13 +5006,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             lifecycleFailure(409, "EXISTING_RECORD_DUPLICATE", "Record matches an active duplicate rule", { duplicateAction });
           }
 
-          return { ...state, validation, ruleCheck, duplicateAction };
+          const recordPrior = action === "update" ? state.ruleCheck.current : null;
+          const record = action === "update"
+            ? { ...(recordPrior || {}), ...Object.fromEntries(validation.values.map(({ field, value }) => [field.api_name, value])) }
+            : Object.fromEntries(validation.values.map(({ field, value }) => [field.api_name, value]));
+          return { ...state, validation, ruleCheck, duplicateAction, record, recordPrior };
         },
 
         beforeSave: async (state) => {
-          const baseRecord = action === "update"
+          const baseRecord = state.record || (action === "update"
             ? { ...(state.ruleCheck.current || {}), ...Object.fromEntries(state.validation.values.map(({ field, value }) => [field.api_name, value])) }
-            : Object.fromEntries(state.validation.values.map(({ field, value }) => [field.api_name, value]));
+            : Object.fromEntries(state.validation.values.map(({ field, value }) => [field.api_name, value])));
 
           const beforeAutomation = await executePlatformAutomations({
             db,
@@ -5042,12 +5048,19 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           const ruleCheck = await recordRuleCheck(req, object, fields, validation.values, trigger, action === "update" ? recordId : null);
           if (ruleCheck.status) lifecycleFailure(ruleCheck.status, ruleCheck.code, ruleCheck.message, { errors: ruleCheck.errors });
 
+          const recordPrior = action === "update" ? ruleCheck.current : null;
+          const record = action === "update"
+            ? { ...(recordPrior || {}), ...Object.fromEntries(validation.values.map(({ field, value }) => [field.api_name, value])) }
+            : Object.fromEntries(validation.values.map(({ field, value }) => [field.api_name, value]));
+
           return {
             ...state,
             input: nextInput,
             validation,
             ruleCheck,
             beforeAutomation,
+            record,
+            recordPrior,
           };
         },
 
@@ -5079,7 +5092,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             saved = result.rows[0];
             await writeRecordHistory(object, saved.id, fields, null, saved, "create", req);
           }
-          return { ...state, saved };
+          return {
+            ...state,
+            saved,
+            record: saved,
+            recordPrior: action === "update" ? state.ruleCheck.current : null,
+          };
         },
 
         afterSave: async (state) => {
@@ -5103,7 +5121,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             req,
           });
           const hydrated = await populateRollups(db, object, metadataFields, [calculate(automation.record)], req);
-          return { ...state, automation, approval, hydrated };
+          return {
+            ...state,
+            automation,
+            approval,
+            hydrated,
+            record: hydrated[0] || automation.record || state.saved,
+            recordPrior: action === "update" ? state.ruleCheck.current : null,
+          };
         },
 
         afterCommit: async (state) => {
@@ -5259,7 +5284,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         beforeValidation: async (state) => {
           const existing = await db(`SELECT * FROM "${object.source_table}" WHERE ${where}`, params);
           if (!existing.rows.length) lifecycleFailure(404, "RECORD_NOT_FOUND", "Record not found");
-          return { ...state, existing: existing.rows[0] };
+          return {
+            ...state,
+            existing: existing.rows[0],
+            record: existing.rows[0],
+            recordPrior: existing.rows[0],
+          };
         },
 
         validate: async (state) => {
