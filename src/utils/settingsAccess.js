@@ -9,7 +9,7 @@ export function settingSectionAccess({
     'Client Web Shop': settingsManage,
     // Licence state must not hide an installed app's Settings. RBAC controls
     // configuration visibility; licence is enforced when licensed logic runs.
-    'Customer Loyalty': true,
+    'Customer Loyalty': settingsManage,
     'Server / API Configuration': platformManage,
     Platform: platformManage,
     'Message Templates': settingsManage,
