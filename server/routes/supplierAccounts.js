@@ -1,5 +1,5 @@
 import express from "express";
-import { executeSupplierPayment } from "../services/supplierPaymentExecution.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const LEDGER_ENTRY_TYPES = new Set(["INVOICE", "PAYMENT", "RETURN_CREDIT", "OPENING"]);
 const LEDGER_ENTRY_ALIASES = {
@@ -405,9 +405,23 @@ export default function createSupplierAccountsRouter({ authenticate, authorize, 
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const payment = await executeSupplierPayment({ client, companyId: req.user.companyId, userId: req.user.id, defaultStoreId: req.user.storeId, input: req.body || {} });
+      const execution = await executeSystemWorkflow({
+        db,
+        companyId: req.user.companyId,
+        userId: req.user.id || null,
+        systemKey: "function:supplier.payment.execute",
+        req,
+        input: req.body || {},
+        storeId: req.user.storeId || null,
+        source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "supplier.payment.execute" },
+        extraContext: {
+          client,
+          businessDb: (query, params = []) => client.query(query, params),
+        },
+      });
+      const payment = execution.result;
       await client.query("COMMIT");
-      res.status(201).json({ success: true, data: payment });
+      res.status(201).json({ success: true, data: payment, workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
       await client.query("ROLLBACK").catch(() => {});
       console.error("Create supplier payment error:", error);
