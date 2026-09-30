@@ -19,7 +19,7 @@
  * States: idle | listening | thinking | response (a short energetic flare
  * when an answer lands, then a smooth return to idle).
  */
-import JarvisStyles from "./JarvisStyles.jsx";
+import JarvisStyles from "./JarvisStyles.jsx";\nimport JarvisRibbonOrb from "./JarvisRibbonOrb.jsx";
 
 export const ORB_STATES = Object.freeze({
   IDLE: "idle",
@@ -85,7 +85,7 @@ export default function JarvisOrb({ state = ORB_STATES.IDLE, open = false, onCli
         >
           <span className="jarvis-orb-halo" aria-hidden="true" />
           <span className="jarvis-orb-ring" aria-hidden="true" />
-          <JarvisVideo />
+          <JarvisRibbonOrb />
         </button>
       </div>
       {STATE_COPY[state] && !open && (
