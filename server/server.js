@@ -652,7 +652,7 @@ app.get("/api/auth/google/start", async (req, res) => {
 app.get("/api/auth/google/callback", async (req, res) => {
   const secret = process.env.JWT_SECRET || "development-secret-change-this";
 
-  let returnTo = "https://onesolutions-ahuja.github.io/smart-theme/";
+  let returnTo = "https://onesolutions-ahuja.github.io/OneEngine/";
   try {
     if (!pool) return res.redirect(googleOAuthErrorRedirect(returnTo, "sso_not_connected"));
 
