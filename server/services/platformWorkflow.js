@@ -2384,11 +2384,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const previousClauses = ["id=$1"];
       if (resolved.relationship.child_company_scoped && req?.user?.companyId) {
         previousParams.push(req.user.companyId);
-        previousClauses.push(`company_id=${previousParams.length}`);
+        previousClauses.push(`company_id=$${previousParams.length}`);
       }
       if (resolved.relationship.child_store_scoped && req?.user?.storeId) {
         previousParams.push(req.user.storeId);
-        previousClauses.push(`store_id=${previousParams.length}`);
+        previousClauses.push(`store_id=$${previousParams.length}`);
       }
       const previous = (await db(
         `SELECT * FROM "${resolved.relationship.child_source_table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`,
