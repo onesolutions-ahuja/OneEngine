@@ -20,7 +20,7 @@ function ruleMatches(rule, fields, record, previousRecord) {
   }, fields, record, previousRecord);
 }
 
-export async function executePlatformAutomations({ db, object, fields, record, previousRecord = null, recordId, trigger, req, writeExtension }) {
+export async function executePlatformAutomations({ db, object, fields, record, previousRecord = null, recordId, trigger, req, writeExtension, mutateField }) {
   if (!req || req._platformAutomationDepth > 0) return { record, messages: [], executions: [] };
   const allowedTriggers = new Set(["after_create", "after_update", "after_save", "before_save", "before_create", "before_update", "field_changed", "before_delete", "after_delete"]);
   if (!allowedTriggers.has(trigger)) return { record, messages: [], executions: [] };
@@ -33,6 +33,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
         WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)
           AND (
             trigger_key=$3
+            OR ($3 IN ('before_create','before_update') AND trigger_key='before_save')
             OR ($3 IN ('after_create','after_update') AND trigger_key='after_save')
             OR ($3='after_update' AND trigger_key='field_changed')
           )
@@ -85,6 +86,11 @@ export async function executePlatformAutomations({ db, object, fields, record, p
         continue;
       }
       const field = fields.find((candidate) => candidate.api_name === action.field && candidate.active !== false);
+      if (field && field.writable !== false && typeof mutateField === "function") {
+        nextRecord = await mutateField(field, action.value, nextRecord);
+        executions.push({ ruleId: rule.id, action: action.type, field: action.field, status: "completed", mode: "in_memory" });
+        continue;
+      }
       if (field && isExtensionField(field) && field.writable !== false && writeExtension) {
         nextRecord = await writeExtension(field, action.value, nextRecord);
         executions.push({ ruleId: rule.id, action: action.type, field: action.field, status: "completed" });
