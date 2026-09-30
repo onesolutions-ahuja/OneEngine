@@ -3402,13 +3402,26 @@ export async function executeWorkflowActions({ actions, ...context }) {
     }
   }
 
-  const executionContext = await createPlatformExecutionContext({
-    ...context,
-    workflowId: context.workflowId || context.executionContext?.globals?.$Flow?.id || null,
-    workflowVersion: context.workflowVersion || context.executionContext?.globals?.$Flow?.version || null,
-    parentRunId: context.parentRunId || context.executionContext?.globals?.$Flow?.runId || null,
-    executionContext: context.executionContext || null,
-  });
+  let executionContext;
+  try {
+    executionContext = await createPlatformExecutionContext({
+      ...context,
+      workflowId: context.workflowId || context.executionContext?.globals?.$Flow?.id || null,
+      workflowVersion: context.workflowVersion || context.executionContext?.globals?.$Flow?.version || null,
+      parentRunId: context.parentRunId || context.executionContext?.globals?.$Flow?.runId || null,
+      executionContext: context.executionContext || null,
+    });
+  } catch (error) {
+    if (persistentClaim?.row?.id && context.db) {
+      await completePersistentExecution({
+        db: context.db,
+        claimId: persistentClaim.row.id,
+        status: "FAILED",
+        error: errorDetails(error),
+      });
+    }
+    throw error;
+  }
   const runtimeContext = applyExecutionContext({
     ...context,
     executionGuard,
