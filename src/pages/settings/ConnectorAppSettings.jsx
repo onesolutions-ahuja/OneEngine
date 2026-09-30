@@ -12,8 +12,8 @@ function connectorTitle(packageKey) {
 export default function ConnectorAppSettings({ packageKey, onBack }) {
   const title = connectorTitle(packageKey);
   return (
-    <div className="integration-theme">
-      <div className="flex items-center gap-3 mb-4">
+    <div className="integration-theme connector-settings-screen">
+      <div className="connector-settings-page-head">
         <button type="button" onClick={onBack} className="h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm flex items-center gap-2 hover:bg-slate-50">
           <ArrowLeft size={15} /> oneStore
         </button>
