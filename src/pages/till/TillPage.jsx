@@ -809,7 +809,18 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     if (action === 'receipt_qr') return generateReceiptQr()
     if (action === 'open_drawer') return openDrawer()
     if (action === 'pay_cash') return completeSale('cash')
-    if (action === 'pay_card') return completeSale('card')
+    if (action === 'pay_card') {
+      if (!online) return setError('Card payments require an online connection.')
+      void (async () => {
+        const capability = await refreshPaymentCapability()
+        if (!capability.available) {
+          setError(capability.message || 'No healthy payment connector is assigned to this till.')
+          return
+        }
+        await completeSale('card')
+      })()
+      return
+    }
     if (action === 'pay_more') {
       void refreshPaymentCapability().finally(() => setModal('payment'))
       return
@@ -911,7 +922,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
               <div className="is-total"><span>Total</span><strong>{money(total, currency)}</strong></div>
               <label className="till-cash-input"><Banknote size={15}/><input value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Cash received"/></label>
               <div className="till-pay-grid">
-                {paymentButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={dispatchTillAction} disabled={busy || (!basket.length && !miscLines.length) || (button.config?.uiAction === 'pay_card' && (!online || !paymentCapability))} className={button.config?.uiAction === 'pay_cash' ? 'till-pay-cash' : 'till-pay-card'}/>)}
+                {paymentButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={dispatchTillAction} disabled={busy || (!basket.length && !miscLines.length) || (button.config?.uiAction === 'pay_card' && !online)} className={button.config?.uiAction === 'pay_cash' ? 'till-pay-cash' : 'till-pay-card'}/>)}
               </div>
             </div>
           </aside>
