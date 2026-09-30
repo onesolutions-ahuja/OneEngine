@@ -948,6 +948,98 @@ const CATALOG = [
     visibility: "PUBLIC",
   },
   {
+    key: "one_assistant",
+    packageKey: "one_assistant",
+    name: "OneAssistant",
+    description: "Workflow-first appointment booking, calendar and conversational booking automation with optional communication and payment connectors.",
+    route: "/app/assistant",
+    permissions: ["appointments.view", "appointments.manage", "appointments.configure", "appointments.payment"],
+    storeScoped: false,
+    category: "Business",
+    version: "1.0.0",
+    packageType: "APPLICATION",
+    billable: true,
+    licenceRequired: true,
+    licenceMode: "COMMERCIAL",
+    installable: true,
+    visibility: "PUBLIC",
+    entitlementKey: "one_assistant",
+    dependencies: ["customers", "platform"],
+    optionalDependencies: ["whatsapp_connector", "communication_core", "connector_core"],
+    capabilities: ["appointments","appointment_calendar","appointment_availability","appointment_slot_holds","appointment_payments","conversation_sessions","workflow_automation","human_handoff"],
+    events: [
+      { eventType: "appointment.slot_held", description: "A temporary appointment slot hold was created." },
+      { eventType: "appointment.payment_required", description: "A booking requires an advance payment before confirmation." },
+      { eventType: "appointment.confirmed", description: "An appointment was confirmed." },
+      { eventType: "appointment.cancelled", description: "An appointment was cancelled." }
+    ],
+    workflowTemplates: [{
+      key: "one_assistant_booking",
+      label: "OneAssistant - Book appointment",
+      triggerKey: "communication_message_received",
+      activeByDefault: false,
+      description: "Customer chooses a service, receives available slots, optionally pays an advance, then receives booking confirmation."
+    }]
+  },
+  {
+    key: "platform",
+    name: "OneDeveloper",
+    description: "Developer workspace for configurable objects, metadata, apps and workflow administration.",
+    route: "/app/developer",
+    permissions: ["settings.manage"],
+    storeScoped: false,
+    category: "Administration",
+  },
+];
+
+export const internalAppCatalog = Object.freeze(
+  CATALOG.map((entry) => Object.freeze({
+    ...entry,
+    route: entry.route || "/app/integrations",
+    permissions: Object.freeze([...entry.permissions]),
+  }))
+);
+
+export const internalAppCatalogSchema = `
+  ALTER TABLE platform_modules ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+  CREATE TABLE IF NOT EXISTS platform_module_access (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module_id UUID NOT NULL REFERENCES platform_modules(id) ON DELETE CASCADE,
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    store_id UUID REFERENCES stores(id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_module_access_scope
+    ON platform_module_access(module_id, company_id, COALESCE(store_id, '00000000-0000-0000-0000-000000000000'::uuid));
+  CREATE INDEX IF NOT EXISTS idx_platform_module_access_company
+    ON platform_module_access(company_id, store_id, enabled);
+`;
+
+export function catalogEntry(moduleKey) {
+  return internalAppCatalog.find((entry) => entry.key === moduleKey) || null;
+}
+
+export function hasCatalogPermission(entry, permissions = [], isAdmin = false) {
+  if (isAdmin === true) return true;
+  return entry.permissions.some((permission) => permissions.includes(permission));
+}
+
+export async function seedInternalAppCatalog(pool) {
+  for (const entry of internalAppCatalog) {
+    await pool.query(
+      `INSERT INTO platform_modules (module_key, name, version, description, installed, metadata)
+       VALUES ($1, $2, '1.0.0', $3, TRUE, $4::jsonb)
+       ON CONFLICT (module_key) DO UPDATE SET
+         name=EXCLUDED.name,
+         description=EXCLUDED.description,
+         metadata=EXCLUDED.metadata,
+         updated_at=NOW()`,
+      [entry.key, entry.name, entry.description, JSON.stringify(entry)]
+    );
+  }
+}  {
     key: "platform",
     name: "OneDeveloper",
     description: "Developer workspace for configurable objects, metadata, apps and workflow administration.",
