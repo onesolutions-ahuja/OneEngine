@@ -558,21 +558,25 @@ export function createConnectorActionExecutor({ db, fetchImpl = fetch, sleep = d
           error.retryable = retryStatuses.includes(response.status);
           throw error;
         }
-        const mapping = definition.responseMapping || definition.response || {};
-        const output =
-          mapping && typeof mapping === "object" && !Array.isArray(mapping)
-            ? Object.fromEntries(
-                Object.entries(mapping).map(([key, path]) => [
-                  key,
-                  resolveValue(
-                    typeof path === "string" && path.startsWith("response.")
-                      ? { source: path }
-                      : path,
-                    { input, credentials: undefined, response: payload }
-                  ),
-                ])
-              )
-            : payload;
+        const mapping = definition.responseMapping || definition.response || null;
+        const hasResponseMapping =
+          mapping
+          && typeof mapping === "object"
+          && !Array.isArray(mapping)
+          && Object.keys(mapping).length > 0;
+        const output = hasResponseMapping
+          ? Object.fromEntries(
+              Object.entries(mapping).map(([key, path]) => [
+                key,
+                resolveValue(
+                  typeof path === "string" && path.startsWith("response.")
+                    ? { source: path }
+                    : path,
+                  { input, credentials: undefined, response: payload }
+                ),
+              ])
+            )
+          : payload;
         return {
           success: true,
           connectorKey: connection.connector_key,
