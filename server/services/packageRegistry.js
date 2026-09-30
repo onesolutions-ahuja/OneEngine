@@ -442,7 +442,11 @@ export function packageDefinition(entry) {
               subflowCapability: "assistant.communication.EMAIL",
               requiredPackageKey: "email_connector",
               priority: 10,
-              actions: []
+              actions: [
+                { id: "create_case", key: "CREATE_APPOINTMENT_BOOKING_CASE", channel: "EMAIL" },
+                { id: "issue_link", key: "ISSUE_APPOINTMENT_BOOKING_LINK", bookingCaseId: { path: "steps.create_case.bookingCase.id" }, ttlMinutes: 30 },
+                { id: "send_link", key: "SEND_EMAIL", recipient: { path: "sender" }, templateKey: "assistant_email_booking_link", templateContext: { bookingUrl: { path: "steps.issue_link.link.url" } } }
+              ]
             },
             active: false,
           },
@@ -458,7 +462,11 @@ export function packageDefinition(entry) {
               subflowCapability: "assistant.communication.SMS",
               requiredPackageKey: "sms_connector",
               priority: 10,
-              actions: []
+              actions: [
+                { id: "create_case", key: "CREATE_APPOINTMENT_BOOKING_CASE", channel: "SMS" },
+                { id: "issue_link", key: "ISSUE_APPOINTMENT_BOOKING_LINK", bookingCaseId: { path: "steps.create_case.bookingCase.id" }, ttlMinutes: 30 },
+                { id: "send_link", key: "SEND_SMS", recipient: { path: "sender" }, templateKey: "assistant_sms_booking_link", templateContext: { bookingUrl: { path: "steps.issue_link.link.url" } } }
+              ]
             },
             active: false,
           },
@@ -474,7 +482,11 @@ export function packageDefinition(entry) {
               subflowCapability: "assistant.communication.WHATSAPP",
               requiredPackageKey: "whatsapp_connector",
               priority: 10,
-              actions: []
+              actions: [
+                { id: "create_case", key: "CREATE_APPOINTMENT_BOOKING_CASE", channel: "WHATSAPP" },
+                { id: "issue_link", key: "ISSUE_APPOINTMENT_BOOKING_LINK", bookingCaseId: { path: "steps.create_case.bookingCase.id" }, ttlMinutes: 30 },
+                { id: "send_link", key: "SEND_WHATSAPP", recipient: { path: "sender" }, templateKey: "assistant_whatsapp_booking_link", templateContext: { bookingUrl: { path: "steps.issue_link.link.url" } } }
+              ]
             },
             active: false,
           },
@@ -487,7 +499,9 @@ export function packageDefinition(entry) {
               type: "workflow",
               scope: "one_assistant",
               subflowCapability: "assistant.payment.router",
-              actions: []
+              actions: [
+                { id: "payment_provider", key: "RUN_ASSISTANT_SUBFLOW", capability: "assistant.payment", required: false }
+              ]
             },
             active: false,
           },
@@ -500,7 +514,9 @@ export function packageDefinition(entry) {
               type: "workflow",
               scope: "one_assistant",
               subflowCapability: "assistant.confirmation",
-              actions: []
+              actions: [
+                { id: "confirmation_channel", key: "RUN_ASSISTANT_SUBFLOW", capability: "assistant.confirmation", channel: { path: "channel" }, required: false }
+              ]
             },
             active: false,
           }
