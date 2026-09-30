@@ -326,10 +326,20 @@ const jarvesAccess = createJarvesAccessChecker({ db });
 | full access, matching the existing behaviour for those accounts.
 */
 
-async function getRolePermissionCodes(roleId) {
+const rolePermissionRequestCache = new WeakMap();
+
+async function getRolePermissionCodes(roleId, request = null) {
   if (!roleId) return [];
 
-  const result = await db(
+  // Multiple authorization helpers can run during one HTTP request. Reuse the
+  // same DB result within that request only; never persist permissions across
+  // requests, so role changes still take effect immediately.
+  if (request) {
+    const cached = rolePermissionRequestCache.get(request);
+    if (cached?.roleId === roleId) return cached.promise;
+  }
+
+  const loading = db(
     `
     SELECT p.code
     FROM role_permissions rp
@@ -338,9 +348,10 @@ async function getRolePermissionCodes(roleId) {
     WHERE rp.role_id = $1
     `,
     [roleId]
-  );
+  ).then((result) => result.rows.map((row) => row.code));
 
-  return result.rows.map((row) => row.code);
+  if (request) rolePermissionRequestCache.set(request, { roleId, promise: loading });
+  return loading;
 }
 
 /*
@@ -363,7 +374,7 @@ function authorize(...permissionCodes) {
     }
 
     try {
-      const codes = await getRolePermissionCodes(req.user.roleId);
+      const codes = await getRolePermissionCodes(req.user.roleId, req);
       const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
       for (const code of permissionCodes) {
         if (permissionSetAllowsSystemPermission(permissionSets, code) && !codes.includes(code)) {
@@ -391,7 +402,7 @@ function authorize(...permissionCodes) {
 }
 
 async function hasPermission(req, code) {
-  const codes = await getRolePermissionCodes(req.user?.roleId);
+  const codes = await getRolePermissionCodes(req.user?.roleId, req);
   const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
   return codes.includes(code) || permissionSetAllowsSystemPermission(permissionSets, code);
 }
@@ -1099,7 +1110,7 @@ app.get("/api/auth/me/permissions", authenticate, async (req, res) => {
   try {
     const isAdmin = await canViewCompanyCustomers(req.user);
 
-    let permissions = req.user.roleId ? await getRolePermissionCodes(req.user.roleId) : [];
+    let permissions = req.user.roleId ? await getRolePermissionCodes(req.user.roleId, req) : [];
     const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
     permissions = [...new Set([...permissions, ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : [])])];
 
