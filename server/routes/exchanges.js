@@ -257,7 +257,7 @@ export function registerExchangeRoutes({
     if (!pool) {
       return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     }
-    const client = await (req.tenantPool || pool).connect();
+    const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const fail = async (status, message) => {
