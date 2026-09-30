@@ -854,14 +854,14 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
                 <button
                   key={product.id}
                   type="button"
-                  className={`till-product-card ${product.trackStock && product.stock < 0 ? 'has-negative-stock' : ''}`}
+                  className={`till-product-card ${product.trackStock && product.stock < 0 ? 'has-negative-stock is-negative-stock' : ''}`}
                   title={product.name}
                   onClick={() => selectProduct(product)}
                 >
                   {productView !== 'compact' ? <div className="till-product-image"><ProductImage src={product.imageUrl}/></div> : null}
                   <strong>{product.name}</strong>
                   <span>{money(product.price, currency)}</span>
-                  {product.trackStock ? <small title={product.stock < 0 ? 'Recorded stock is below zero' : undefined}>{product.stock < 0 ? '⚠ ' : ''}{product.stock} in stock</small> : <small>Non-stock</small>}
+                  {product.trackStock ? <small title={product.stock < 0 ? 'Recorded stock is below zero' : undefined}>{product.stock} in stock{product.stock < 0 ? ' (negative)' : ''}</small> : <small>Non-stock</small>}
                 </button>
               ))}
               {!loading && !filtered.length ? <div className="till-empty">No products found.</div> : null}
