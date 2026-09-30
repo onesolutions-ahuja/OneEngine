@@ -1900,17 +1900,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const writePairs = alignWorkflowWritableValues(mappedFields, entries);
       const columns = writePairs.map(({ field }) => `"${field.source_column}"`);
       const params = writePairs.map(({ value }) => value);
-      const values = writePairs.map((_, index) => `${index + 1}`);
+      const values = writePairs.map((_, index) => "$" + (index + 1));
       if (targetObject.company_scoped) {
         if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
         columns.push('"company_id"');
-        values.push(`${params.length + 1}`);
+        values.push("$" + (params.length + 1));
         params.push(runtimeCompanyId);
       }
       if (targetObject.store_scoped) {
         if (!runtimeStoreId) throw new Error("Workflow store scope is required");
         columns.push('"store_id"');
-        values.push(`${params.length + 1}`);
+        values.push("$" + (params.length + 1));
         params.push(runtimeStoreId);
       }
       const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
@@ -1984,7 +1984,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const runtimeStoreId = req?.user?.storeId || context.storeId || null;
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req, excludeRecordId: action.recordId });
       const writePairs = alignWorkflowWritableValues(mappedFields, entries);
-      const sets = writePairs.map(({ field }, index) => `"${field.source_column}"=${index + 1}`).join(", ");
+      const sets = writePairs.map(({ field }, index) => '"' + field.source_column + '"=
       const params = [...writePairs.map(({ value }) => value), action.recordId];
       const clauses = ["id=$" + params.length];
       if (targetObject.company_scoped) {
@@ -2090,22 +2090,22 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (targetObject.company_scoped) {
         if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
         params.push(runtimeCompanyId);
-        clauses.push(`company_id=${params.length}`);
+        clauses.push("company_id=$" + params.length);
       }
       if (targetObject.store_scoped) {
         if (!runtimeStoreId) throw new Error("Workflow store scope is required");
         params.push(runtimeStoreId);
-        clauses.push(`store_id=${params.length}`);
+        clauses.push("store_id=$" + params.length);
       }
       const previousParams = [action.recordId];
       const previousClauses = ["id=$1"];
       if (targetObject.company_scoped) {
         previousParams.push(runtimeCompanyId);
-        previousClauses.push(`company_id=${previousParams.length}`);
+        previousClauses.push("company_id=$" + previousParams.length);
       }
       if (targetObject.store_scoped) {
         previousParams.push(runtimeStoreId);
-        previousClauses.push(`store_id=${previousParams.length}`);
+        previousClauses.push("store_id=$" + previousParams.length);
       }
       const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
       const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
@@ -2195,18 +2195,4136 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req });
       const writePairs = alignWorkflowWritableValues(mappedFields, entries);
       const columns = writePairs.map(({ field }) => `"${field.source_column}"`);
-      const values = writePairs.map((_, index) => `${index + 1}`);
+      const values = writePairs.map((_, index) => "$" + (index + 1));
       const params = writePairs.map(({ value }) => value);
       if (targetObject?.company_scoped || action.companyScoped || action.company_scoped || object?.company_scoped) {
         if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
         columns.push('"company_id"');
-        values.push(`${params.length + 1}`);
+        values.push("$" + (params.length + 1));
         params.push(runtimeCompanyId);
       }
       if (targetObject?.store_scoped || action.storeScoped || action.store_scoped || object?.store_scoped) {
         if (!runtimeStoreId) throw new Error("Workflow store scope is required");
         columns.push('"store_id"');
-        values.push(`${params.length + 1}`);
+        values.push("$" + (params.length + 1));
+        params.push(runtimeStoreId);
+      }
+      const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
+      const result = await db(query, params);
+      const created = result.rows[0] || null;
+      if (created?.id) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: created.id,
+          fields: mappedFields,
+          previousRecord: null,
+          record: created,
+          action: "create",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      try {
+        if (created?.id) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: created,
+          operation: "CREATE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+        });
+      } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      return { status: "completed", created, relationshipKey: relationshipKey || action.relationshipKey || null, duplicateWarning: duplicateAction === "WARN" };
+    },
+  },
+  {
+    key: "DELETE_RECORD",
+    displayName: "Delete Record",
+    description: "Delete or soft delete a record using the object's existing semantics.",
+    validation: (action) => {
+      if (!action?.recordId) throw new Error("Delete Record requires a recordId");
+    },
+    async: false,
+    requiredPermissions: ["records.delete"],
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
+      const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "delete", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const table = targetObject.source_table;
+      const historyFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+        [targetObject.id, companyId || req?.user?.companyId]
+      )).rows;
+      const scopeParams = [action.recordId];
+      const scopeClauses = ["id=$1"];
+      if (targetObject.company_scoped) {
+        scopeParams.push(req?.user?.companyId || companyId);
+        scopeClauses.push(`company_id=$${scopeParams.length}`);
+      }
+      const previous = (await db(`SELECT * FROM "${table}" WHERE ${scopeClauses.join(" AND ")} LIMIT 1`, scopeParams)).rows[0] || null;
+      const hasActive = await db(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'`, [table]);
+      const result = hasActive.rows.length
+        ? await db(`UPDATE "${table}" SET active=false WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId])
+        : await db(`DELETE FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId]);
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: action.recordId,
+          fields: historyFields,
+          previousRecord: previous || result.rows[0],
+          record: hasActive.rows.length ? result.rows[0] : null,
+          action: "delete",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      try {
+        if (result.rows[0]) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: hasActive.rows.length ? result.rows[0] : null,
+          previousRecord: previous || result.rows[0],
+          operation: "DELETE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+          archived: hasActive.rows.length > 0,
+        });
+      } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      return { status: result.rows.length ? "completed" : "skipped", deleted: result.rows[0] || null };
+    },
+  },
+  {
+    key: "ASSIGN_RECORD",
+    displayName: "Assign Record",
+    description: "Assign a record to a user, team or queue.",
+    validation: (action) => {
+      if (!action?.recordId) throw new Error("Assign Record requires a recordId");
+      if (!action.assignee && !action.assignedTo) throw new Error("Assign Record requires assignee information");
+    },
+    async: false,
+    requiredPermissions: ["records.update"],
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
+      const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const assignmentFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      await assertRuntimeFieldWriteAccess({
+        db, req, object: targetObject, fields: assignmentFields, fieldNames: ["assigned_to"],
+        executionMode, trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const table = targetObject.source_table;
+      const assignee = action.assignee ?? action.assignedTo;
+      const params = [assignee, action.recordId];
+      const scope = targetObject.company_scoped ? " AND company_id=$3" : "";
+      if (targetObject.company_scoped) params.push(req?.user?.companyId || companyId);
+      const previous = (await db(
+        `SELECT * FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} LIMIT 1`,
+        targetObject.company_scoped ? [action.recordId, companyId || req?.user?.companyId] : [action.recordId]
+      )).rows[0] || null;
+      const result = await db(`UPDATE "${table}" SET assigned_to=$1 WHERE id=$2${scope} RETURNING *`, params);
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: action.recordId,
+          fields: assignmentFields,
+          previousRecord: previous,
+          record: result.rows[0],
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      return { status: result.rows.length ? "completed" : "skipped", updated: result.rows[0] || null };
+    },
+  },
+  {
+    key: "ADD_RELATIONSHIP",
+    displayName: "Add Relationship",
+    description: "Associate a record with a related record.",
+    validation: (action) => {
+      if (!action?.relationshipKey) throw new Error("Add Relationship requires a relationshipKey");
+      if (!action.relatedRecordId && !action.recordId) throw new Error("Add Relationship requires a target record");
+    },
+    async: false,
+    requiredPermissions: ["records.update"],
+    executor: async (context) => {
+      const { db, action, object, req, recordId, companyId } = context;
+      const relationshipKey = action.relationshipKey;
+      const relatedRecordId = action.relatedRecordId || action.recordId;
+      const parentRecordId = action.parentRecordId || recordId || action.recordId || null;
+      if (!db || typeof db !== "function") return { status: "completed", relationshipKey, relatedRecordId };
+      const resolved = await loadRecordRelationship({ db, action, object });
+      if (!resolved?.relationship) {
+        return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" is not registered for this object` };
+      }
+      const column = resolved.field?.source_column || resolved.field?.api_name || null;
+      const targetObject = await resolveTargetObjectMetadata({
+        db,
+        objectId: resolved.relationship.child_object_id,
+        companyId: req?.user?.companyId || companyId,
+      });
+      if (!targetObject) throw new Error("Related target object is unavailable");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const relationFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      await assertRuntimeFieldWriteAccess({
+        db, req, object: targetObject, fields: relationFields, fieldNames: [column],
+        executionMode, trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      if (!isSafeIdentifier(resolved.relationship.child_source_table) || !isSafeIdentifier(column)) {
+        return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" has no writable child link field` };
+      }
+      const params = [parentRecordId, relatedRecordId];
+      const clauses = ["id=$2"];
+      if (resolved.relationship.child_company_scoped && req?.user?.companyId) {
+        params.push(req.user.companyId);
+        clauses.push(`company_id=$${params.length}`);
+      }
+      if (resolved.relationship.child_store_scoped && req?.user?.storeId) {
+        params.push(req.user.storeId);
+        clauses.push(`store_id=$${params.length}`);
+      }
+      const previousParams = [relatedRecordId];
+      const previousClauses = ["id=$1"];
+      if (resolved.relationship.child_company_scoped && req?.user?.companyId) {
+        previousParams.push(req.user.companyId);
+        previousClauses.push(`company_id=$${previousParams.length}`);
+      }
+      if (resolved.relationship.child_store_scoped && req?.user?.storeId) {
+        previousParams.push(req.user.storeId);
+        previousClauses.push(`store_id=$${previousParams.length}`);
+      }
+      const previous = (await db(
+        `SELECT * FROM "${resolved.relationship.child_source_table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`,
+        previousParams
+      )).rows[0] || null;
+      const result = await db(
+        `UPDATE "${resolved.relationship.child_source_table}" SET "${column}"=$1 WHERE ${clauses.join(" AND ")} RETURNING *`,
+        params
+      );
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: relatedRecordId,
+          fields: relationFields,
+          previousRecord: previous,
+          record: result.rows[0],
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      return { status: result.rows.length ? "completed" : "skipped", relationshipKey, relatedRecordId, linkField: column, linked: result.rows[0] || null };
+    },
+  },
+  {
+    key: "REMOVE_RELATIONSHIP",
+    displayName: "Remove Relationship",
+    description: "Remove a relationship between records.",
+    validation: (action) => {
+      if (!action?.relationshipKey) throw new Error("Remove Relationship requires a relationshipKey");
+      if (!action.relatedRecordId && !action.recordId) throw new Error("Remove Relationship requires a target record");
+    },
+    async: false,
+    requiredPermissions: ["records.update"],
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
+      const relationshipKey = action.relationshipKey;
+      const relatedRecordId = action.relatedRecordId || action.recordId;
+      if (!db || typeof db !== "function") return { status: "completed", relationshipKey, relatedRecordId };
+      const resolved = await loadRecordRelationship({ db, action, object });
+      if (!resolved?.relationship) {
+        return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" is not registered for this object` };
+      }
+      const column = resolved.field?.source_column || resolved.field?.api_name || null;
+      const targetObject = await resolveTargetObjectMetadata({
+        db,
+        objectId: resolved.relationship.child_object_id,
+        companyId: req?.user?.companyId || companyId,
+      });
+      if (!targetObject) throw new Error("Related target object is unavailable");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const relationFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      await assertRuntimeFieldWriteAccess({
+        db, req, object: targetObject, fields: relationFields, fieldNames: [column],
+        executionMode, trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      if (!isSafeIdentifier(resolved.relationship.child_source_table) || !isSafeIdentifier(column)) {
+        return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" has no writable child link field` };
+      }
+      const params = [relatedRecordId];
+      const clauses = ["id=$1"];
+      if (resolved.relationship.child_company_scoped && req?.user?.companyId) {
+        params.push(req.user.companyId);
+        clauses.push(`company_id=$${params.length}`);
+      }
+      if (resolved.relationship.child_store_scoped && req?.user?.storeId) {
+        params.push(req.user.storeId);
+        clauses.push(`store_id=$${params.length}`);
+      }
+      const previous = (await db(
+        `SELECT * FROM "${resolved.relationship.child_source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`,
+        params
+      )).rows[0] || null;
+      const result = await db(
+        `UPDATE "${resolved.relationship.child_source_table}" SET "${column}"=NULL WHERE ${clauses.join(" AND ")} RETURNING *`,
+        params
+      );
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: relatedRecordId,
+          fields: relationFields,
+          previousRecord: previous,
+          record: result.rows[0],
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      return { status: result.rows.length ? "completed" : "skipped", relationshipKey, relatedRecordId, linkField: column, unlinked: result.rows[0] || null };
+    },
+  },
+  {
+    key: "IN_APP_NOTIFICATION",
+    displayName: "In-App Notification",
+    description: "Create a persistent internal notification for a user or team.",
+    validation: (action) => {
+      if (!action?.message && !action?.templateKey) throw new Error("In-App Notification requires a message or template");
+    },
+    async: false,
+    requiredPermissions: ["notifications.write"],
+    executor: async ({ db, action, req }) => {
+      if (typeof db !== "function") return { status: "completed", notice: action.message || action.templateKey };
+      try {
+        await db(
+          "INSERT INTO platform_notifications (company_id, user_id, message, status, created_at) VALUES ($1,$2,$3,'UNREAD',NOW())",
+          [req?.user?.companyId || null, req?.user?.id || null, action.message || action.templateKey || ""]
+        );
+      } catch (error) {
+        return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: false, note: error.message };
+      }
+      return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: true };
+    },
+  },
+  {
+    key: "SEND_EMAIL",
+    displayName: "Send Email",
+    description: "Queue an email using the configured email provider.",
+    validation: (action) => {
+      if (!action?.recipient && !action?.to) throw new Error("Send Email requires a recipient");
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    requiredEntitlement: "communications.email",
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
+      const company = companyId || req?.user?.companyId;
+      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
+      if (!provider.configured) {
+        return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
+      }
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
+      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: {
+        ...resolvedAction,
+        actorUserId: req?.user?.id || null,
+        _roleId: req?.user?.roleId || null,
+        _executionMode: resolveExecutionMode({ req }),
+        _stepRunId: stepRunId,
+      }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
+      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
+    },
+  },
+  {
+    key: "SEND_SMS",
+    displayName: "Send SMS",
+    description: "Queue an SMS using the configured SMS provider.",
+    validation: (action) => {
+      if (!action?.recipient && !action?.to) throw new Error("Send SMS requires a recipient");
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    requiredEntitlement: "communications.sms",
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
+      const company = companyId || req?.user?.companyId;
+      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "SMS", stepRunId });
+      if (!provider.configured) {
+        return { status: "failed", provider: "SMS", error: provider.error, jobId: null };
+      }
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
+      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_SMS", payload: {
+        ...resolvedAction,
+        actorUserId: req?.user?.id || null,
+        _roleId: req?.user?.roleId || null,
+        _executionMode: resolveExecutionMode({ req }),
+        _stepRunId: stepRunId,
+      }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
+      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
+    },
+  },
+  {
+    key: "SEND_WHATSAPP",
+    displayName: "Send WhatsApp",
+    description: "Queue a WhatsApp message using the configured provider.",
+    validation: (action) => {
+      if (!action?.recipient && !action?.to) throw new Error("Send WhatsApp requires a recipient");
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    requiredEntitlement: "communications.whatsapp",
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
+      const company = companyId || req?.user?.companyId;
+      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "WHATSAPP", stepRunId });
+      if (!provider.configured) {
+        return { status: "failed", provider: "WHATSAPP", error: provider.error, jobId: null };
+      }
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
+      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: {
+        ...resolvedAction,
+        actorUserId: req?.user?.id || null,
+        _roleId: req?.user?.roleId || null,
+        _executionMode: resolveExecutionMode({ req }),
+        _stepRunId: stepRunId,
+      }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
+      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
+    },
+  },
+  {
+    key: "PUBLISH_TO_WEB_SHOP",
+    displayName: "Publish to Web Shop",
+    description: "Set a canonical product as published for the active client web shop.",
+    validation: (action) => {
+      if (!action?.productId) throw new Error("Publish to Web Shop requires a productId");
+    },
+    async: true,
+    requiredPermissions: ["product.manage"],
+    executor: async ({ db, action, companyId, req }) => {
+      const targetCompanyId = companyId || req?.user?.companyId;
+      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
+      const now = new Date();
+      await db(
+        `UPDATE products SET web_shop_published=true, updated_at=NOW(), web_shop_publish_start=COALESCE(web_shop_publish_start, $2::timestamptz), web_shop_publish_end=COALESCE(web_shop_publish_end, NULL), web_shop_sort_order=COALESCE(web_shop_sort_order, 0) WHERE id=$1 AND company_id=$3`,
+        [action.productId, now.toISOString(), targetCompanyId]
+      );
+      await publishPlatformEvent({ db, companyId: targetCompanyId, eventType: "webshop.product_published", payload: { productId: action.productId }, actorUserId: req?.user?.id || null, objectType: "product", objectId: action.productId, idempotencyKey: `webshop.publish:${action.productId}` });
+      return { status: "completed", productId: action.productId };
+    },
+  },
+  {
+    key: "UNPUBLISH_FROM_WEB_SHOP",
+    displayName: "Unpublish from Web Shop",
+    description: "Hide a canonical product from the public storefront.",
+    validation: (action) => {
+      if (!action?.productId) throw new Error("Unpublish from Web Shop requires a productId");
+    },
+    async: true,
+    requiredPermissions: ["product.manage"],
+    executor: async ({ db, action, companyId, req }) => {
+      const targetCompanyId = companyId || req?.user?.companyId;
+      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
+      await db(
+        `UPDATE products SET web_shop_published=false, updated_at=NOW() WHERE id=$1 AND company_id=$2`,
+        [action.productId, targetCompanyId]
+      );
+      await publishPlatformEvent({ db, companyId: targetCompanyId, eventType: "webshop.product_unpublished", payload: { productId: action.productId }, actorUserId: req?.user?.id || null, objectType: "product", objectId: action.productId, idempotencyKey: `webshop.unpublish:${action.productId}` });
+      return { status: "completed", productId: action.productId };
+    },
+  },
+  {
+    key: "UPDATE_WEB_LISTING",
+    displayName: "Update Web Listing",
+    description: "Apply canonical product listing metadata for the Web Shop storefront.",
+    validation: (action) => {
+      if (!action?.productId) throw new Error("Update Web Listing requires a productId");
+    },
+    async: true,
+    requiredPermissions: ["product.manage"],
+    executor: async ({ db, action, companyId, req }) => {
+      const targetCompanyId = companyId || req?.user?.companyId;
+      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
+      const fields = [];
+      const values = [action.productId, targetCompanyId];
+      const assign = (column, value) => { if (value !== undefined) { fields.push(`${column}=$${values.length + 1}`); values.push(value); } };
+      assign("web_shop_title_override", action.webShopTitleOverride);
+      assign("web_shop_description_override", action.webShopDescriptionOverride);
+      assign("web_shop_image_override", action.webShopImageOverride);
+      assign("web_shop_category_override", action.webShopCategoryOverride);
+      assign("web_shop_sort_order", action.webShopSortOrder);
+      assign("web_shop_delivery_eligible", action.webShopDeliveryEligible);
+      assign("web_shop_pickup_eligible", action.webShopPickupEligible);
+      assign("web_shop_featured", action.webShopFeatured);
+      assign("web_shop_price_override", action.webShopPriceOverride);
+      if (!fields.length) return { status: "completed", productId: action.productId, updated: false };
+      fields.push("updated_at=NOW()");
+      await db(`UPDATE products SET ${fields.join(", ")} WHERE id=$1 AND company_id=$2`, values);
+      await publishPlatformEvent({ db, companyId: targetCompanyId, eventType: "webshop.listing_updated", payload: { productId: action.productId, changes: fields }, actorUserId: req?.user?.id || null, objectType: "product", objectId: action.productId, idempotencyKey: `webshop.listing:${action.productId}` });
+      return { status: "completed", productId: action.productId, updated: true };
+    },
+  },
+  {
+    key: "SET_WEB_FEATURED",
+    displayName: "Set Web Featured",
+    description: "Toggle the product featured status in Web Shop listings.",
+    validation: (action) => {
+      if (!action?.productId) throw new Error("Set Web Featured requires a productId");
+    },
+    async: true,
+    requiredPermissions: ["product.manage"],
+    executor: async ({ db, action, companyId, req }) => {
+      const targetCompanyId = companyId || req?.user?.companyId;
+      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
+      await db(
+        `UPDATE products SET web_shop_featured=$3, updated_at=NOW() WHERE id=$1 AND company_id=$2`,
+        [action.productId, targetCompanyId, action.webShopFeatured === true]
+      );
+      return { status: "completed", productId: action.productId, featured: action.webShopFeatured === true };
+    },
+  },
+  {
+    key: "CALL_FUNCTION",
+    displayName: "Call Function",
+    description: "Invoke a registered, approved onePOS function.",
+    validation: (action) => {
+      if (!action?.functionKey && !action?.key) throw new Error("Call Function requires a functionKey");
+    },
+    async: false,
+    requiredPermissions: ["functions.execute"],
+    executor: async (context) => {
+      const { action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields, workflowVariables } = context;
+      const functionKey = action.functionKey || action.key;
+      const functionDefinition = getRegisteredFunction(functionKey);
+      if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
+      if (typeof functionDefinition.handler !== "function") {
+        throw new Error(`Function "${functionKey}" has no handler`);
+      }
+      const inputs = resolveBindingTree(action.inputs || {}, {
+        record,
+        rootObjectKey: object?.object_key || object?.objectKey || null,
+        variables: workflowVariables || context.globals || {},
+      });
+      return functionDefinition.handler({
+        ...context,
+        action,
+        inputs,
+        db: businessDb || db,
+        pool,
+        client,
+        req,
+        companyId,
+        userId,
+        record,
+        previousRecord,
+        object,
+        fields,
+      });
+    },
+  },
+  {
+    key: "RUN_SUBFLOW",
+    displayName: "Run Subflow",
+    description: "Run another approved workflow as a child workflow.",
+    validation: (action) => {
+      if (!action?.workflowId && !action?.subflowId && !(action?.workflow && Array.isArray(action.workflow.actions))) throw new Error("Run Subflow requires a workflowId");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, db, companyId, req, record, previousRecord, object, fields, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
+      const workflowKey = action.workflowId || action.subflowId || action.workflow?.id || action.workflow?.key || "inline-subflow";
+      const stack = Array.isArray(workflowStack) ? workflowStack.slice() : [];
+      const parentGuard = context.executionGuard || createExecutionGuard({ maxDepth: 8, chain: stack });
+      const childGuard = parentGuard.enter(workflowKey);
+      const nextDepth = childGuard.chain.length;
+      context.governor?.checkSubflowDepth(nextDepth);
+      const subflowDefinition = action.workflow && Array.isArray(action.workflow.actions)
+        ? action.workflow
+        : (() => {
+            if (!db || typeof db !== "function") return null;
+            const id = action.workflowId || action.subflowId;
+            if (!id) return null;
+            return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
+          })();
+      const definition = await Promise.resolve(subflowDefinition);
+      if (!definition) {
+        throw new Error(`Subflow "${workflowKey}" was not found or is not active`);
+      }
+      const targetCompanyId = action.companyId || definition.company_id || companyId || req?.user?.companyId;
+      const runtimeCompanyId = companyId || req?.user?.companyId;
+      if (targetCompanyId && runtimeCompanyId && targetCompanyId !== runtimeCompanyId) {
+        throw new Error("Cross-company subflow execution is not allowed");
+      }
+      const childActions = Array.isArray(definition.actions) ? definition.actions : Array.isArray(definition.action?.actions) ? definition.action.actions : [];
+      if (!childActions.length) {
+        return { status: "skipped", workflowId: workflowKey, reason: "Subflow contains no actions" };
+      }
+      const mappedInputs = {};
+      const mappings = action.inputs || action.inputMap || action.mappings || {};
+      for (const [sourceKey, targetKey] of Object.entries(mappings)) {
+        const sourceValue = sourceKey in (context || {}) ? context[sourceKey] : (record && Object.prototype.hasOwnProperty.call(record, sourceKey) ? record[sourceKey] : undefined);
+        if (sourceValue !== undefined) {
+          mappedInputs[targetKey] = sourceValue;
+        }
+      }
+      const mergedRecord = { ...(record || {}), ...mappedInputs };
+      const childRun = db && typeof db === "function"
+        ? await createWorkflowRun({
+            db,
+            companyId: targetCompanyId || runtimeCompanyId,
+            workflowId: workflowKey,
+            workflowName: definition.name || action.workflowName || "Subflow",
+            objectId: object?.id || action.objectId || null,
+            recordId: record?.id || action.recordId || null,
+            triggerKey: "subflow",
+            parentRunId: runId || null,
+            status: "RUNNING",
+            metadata: { parentWorkflow: workflowKey, inputMappings: mappings },
+          })
+        : null;
+      const childStep = childRun && db && typeof db === "function"
+        ? await createWorkflowStepRun({
+            db,
+            runId: childRun.id,
+            stepIdentifier: `subflow:${workflowKey}`,
+            stepOrder: 0,
+            actionType: "RUN_SUBFLOW",
+            status: "RUNNING",
+            metadata: { parentRunId: runId || null },
+          })
+        : null;
+      const childResult = await executeWorkflowActions({
+        actions: childActions,
+        db,
+        object,
+        fields,
+        record: mergedRecord,
+        previousRecord,
+        req,
+        companyId: targetCompanyId || runtimeCompanyId,
+        workflowDepth: nextDepth,
+        workflowStack: [...childGuard.chain],
+        executionGuard: childGuard,
+        governor: context.governor || null,
+        workflowId: workflowKey,
+        parentRunId: runId || null,
+        runId: childRun?.id || runId || null,
+        stepRunId: childStep?.id || stepRunId || null,
+        executionContext: context.executionContext || null,
+        source: { type: "SUBFLOW" },
+      });
+      if (childRun && db && typeof db === "function") {
+        await db(
+          `UPDATE platform_workflow_runs SET status=$1, completed_at=NOW(), metadata=COALESCE(metadata,'{}'::jsonb) || $2::jsonb, updated_at=NOW() WHERE id=$3`,
+          [childResult.some((item) => item.result?.status === "failed") ? "FAILED" : "COMPLETED", JSON.stringify({ childResults: childResult }), childRun.id]
+        );
+      }
+      if (stepRunId) {
+        await updateWorkflowStepRunStatus({
+          db,
+          stepRunId,
+          status: childResult.some((item) => item.result?.status === "failed") ? "FAILED" : "COMPLETED",
+          errorText: childResult.find((item) => item.result?.error)?.result?.error || null,
+          metadata: { childRunId: childRun?.id || null, childResults: childResult },
+        });
+      }
+      return {
+        status: childResult.some((item) => item.result?.status === "failed") ? "failed" : "completed",
+        workflowId: workflowKey,
+        runId: childRun?.id || null,
+        results: childResult,
+      };
+    },
+  },
+  {
+    key: "CALL_WEBHOOK",
+    displayName: "Call Webhook",
+    description: "Send a webhook through OneConnection; legacy direct endpoints remain metadata-compatible.",
+    validation: (action) => {
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("Call Webhook requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("Call Webhook requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a OneConnection or legacy endpoint");
+    },
+    async: true,
+    requiredPermissions: ["integrations.execute"],
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
+  },
+  {
+    key: "HTTP_REQUEST",
+    displayName: "HTTP Request",
+    description: "Send an HTTP request through OneConnection; legacy direct endpoints remain metadata-compatible.",
+    validation: (action) => {
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("HTTP Request requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("HTTP Request requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a OneConnection or legacy endpoint");
+    },
+    async: true,
+    requiredPermissions: ["integrations.execute"],
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
+  },
+  {
+    key: "WEBHOOK",
+    displayName: "Webhook",
+    description: "Send a webhook through OneConnection; legacy direct endpoints remain metadata-compatible.",
+    validation: (action) => {
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("Webhook requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("Webhook requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("Webhook requires a OneConnection or legacy endpoint");
+    },
+    async: true,
+    requiredPermissions: ["integrations.execute"],
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
+  },
+  {
+    key: "CONDITION",
+    displayName: "Condition",
+    description: "Evaluate a branch condition and select flow path.",
+    validation: (action) => {
+      if (!action?.condition) throw new Error("Condition requires a condition");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, fields, record, previousRecord }) => {
+      const condition = action.condition;
+      const result = evaluateCondition(condition, fields || [], record || {}, previousRecord || null);
+      return { status: result ? "completed" : "skipped", matched: Boolean(result) };
+    },
+  },
+  {
+    key: "WAIT",
+    displayName: "Wait",
+    description: "Pause a workflow without blocking an HTTP request.",
+    validation: (action) => {
+      if (!action?.durationSeconds && !action?.waitSeconds && !action?.until) {
+        throw new Error("Wait requires a durationSeconds or until value");
+      }
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ db, action, companyId, req }) => {
+      const waitSeconds = Number(action.durationSeconds ?? action.waitSeconds ?? 0);
+      const runAt = new Date(Date.now() + Math.max(0, waitSeconds || 0) * 1000);
+      const job = await enqueuePlatformJob({
+        db,
+        companyId: companyId || req?.user?.companyId,
+        kind: "WAIT",
+        payload: { waitSeconds, action },
+        runAt,
+        idempotencyKey: `${companyId || req?.user?.companyId || "workflow"}:wait:${Date.now()}`,
+      });
+      return { status: job ? "waiting" : "skipped", jobId: job?.id || null, resumeAt: runAt.toISOString() };
+    },
+  },
+  {
+    key: "QUICKBOOKS_TEST_CONNECTION",
+    displayName: "Test QuickBooks Connection",
+    description: "Verify the enabled, company-scoped QuickBooks connection without returning credentials.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage"],
+    executor: async (context) => {
+      try {
+        const loaded = await loadProviderConnection(context, "quickbooks");
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", message: "QuickBooks connection is not configured" };
+        const { credentials } = loaded;
+        const result = await createQuickBooksAdapter().testConnection({
+          environment: credentials.environment,
+          realmId: credentials.realmId || credentials.realm_id,
+          accessToken: credentials.accessToken || credentials.access_token,
+        });
+        return { success: true, ...result };
+      } catch {
+        return { success: false, code: "CONNECTION_FAILED", message: "Unable to verify the QuickBooks connection. Review the settings and retry." };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_SYNC_VENDORS",
+    displayName: "Sync QuickBooks Vendors",
+    description: "Create or update mapped QuickBooks vendors from canonical onePOS suppliers.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const supplierIds = context.action?.supplierId
+          ? [context.action.supplierId]
+          : (await context.db("SELECT id FROM suppliers WHERE company_id=$1 AND active=true ORDER BY name", [companyId])).rows.map((row) => row.id);
+        const results = [];
+        for (const supplierId of supplierIds) results.push(await syncQuickBooksVendor({ db: context.db, companyId, ...loaded, supplierId }));
+        return { success: true, synced: results.length, results };
+      } catch (error) {
+        return { success: false, code: "VENDOR_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks vendor sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_SYNC_PURCHASES",
+    displayName: "Sync QuickBooks Purchases",
+    description: "Export canonical onePOS purchases and supplier invoices as QuickBooks Bills.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const action = context.action || {};
+        const ids = action.purchaseId || action.invoiceId
+          ? [{ purchaseId: action.purchaseId || null, invoiceId: action.invoiceId || null }]
+          : (await context.db("SELECT id FROM purchases WHERE company_id=$1 AND status <> 'CANCELLED' ORDER BY purchase_date", [companyId])).rows.map((row) => ({ purchaseId: row.id, invoiceId: null }));
+        const results = [];
+        for (const entity of ids) results.push(await exportQuickBooksPurchase({ db: context.db, companyId, ...loaded, ...entity }));
+        return { success: true, synced: results.length, results };
+      } catch (error) {
+        return { success: false, code: "PURCHASE_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks purchase sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",
+    displayName: "Sync QuickBooks Supplier Payments",
+    description: "Export canonical supplier payments and invoice allocations to QuickBooks.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const ids = context.action?.paymentId
+          ? [context.action.paymentId]
+          : (await context.db("SELECT id FROM supplier_payments WHERE company_id=$1 AND status='COMPLETED' ORDER BY payment_date", [companyId])).rows.map((row) => row.id);
+        const results = [];
+        for (const paymentId of ids) results.push(await exportQuickBooksSupplierPayment({ db: context.db, companyId, ...loaded, paymentId }));
+        return { success: true, synced: results.length, results };
+      } catch (error) {
+        return { success: false, code: "SUPPLIER_PAYMENT_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks supplier payment sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_SYNC_SUPPLIER_CREDITS",
+    displayName: "Sync QuickBooks Supplier Credits",
+    description: "Export canonical supplier returns as QuickBooks Vendor Credits.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export", "returns.create"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const ids = context.action?.returnId
+          ? [context.action.returnId]
+          : (await context.db("SELECT id FROM stock_returns WHERE company_id=$1 AND return_type='SUPPLIER' AND status='COMPLETED' ORDER BY created_at", [companyId])).rows.map((row) => row.id);
+        const results = [];
+        for (const returnId of ids) results.push(await exportQuickBooksSupplierCredit({ db: context.db, companyId, ...loaded, returnId }));
+        return { success: true, synced: results.length, results };
+      } catch (error) {
+        return { success: false, code: "SUPPLIER_CREDIT_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks supplier credit sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_RETRY_FAILED_SYNC",
+    displayName: "Retry Failed QuickBooks Sync",
+    description: "Retry a failed QuickBooks vendor, purchase, supplier payment, or supplier credit export idempotently.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export"],
+    executor: async (context) => {
+      const syncType = String(context.action?.syncType || "vendors").toLowerCase();
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const action = context.action || {};
+        const result = syncType === "vendors"
+          ? await syncQuickBooksVendor({ db: context.db, companyId, ...loaded, supplierId: action.supplierId })
+          : syncType === "purchases"
+            ? await exportQuickBooksPurchase({ db: context.db, companyId, ...loaded, purchaseId: action.purchaseId, invoiceId: action.invoiceId })
+            : syncType === "payments"
+              ? await exportQuickBooksSupplierPayment({ db: context.db, companyId, ...loaded, paymentId: action.paymentId })
+              : syncType === "credits"
+                ? await exportQuickBooksSupplierCredit({ db: context.db, companyId, ...loaded, returnId: action.returnId })
+                : null;
+        if (!result) return { success: false, code: "INVALID_SYNC_TYPE", retryable: false, message: "QuickBooks retry must target vendors, purchases, payments or credits" };
+        return { success: true, retried: syncType, ...result };
+      } catch (error) {
+        return { success: false, code: "SYNC_RETRY_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks sync retry failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_TEST_CONNECTION",
+    displayName: "Test Shopify Connection",
+    description: "Verify the enabled, company- and store-scoped Shopify connection without returning credentials.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage"],
+    executor: async (context) => {
+      try {
+        const companyId = context.companyId || context.req?.user?.companyId;
+        const requestCompanyId = context.req?.user?.companyId;
+        if (requestCompanyId && String(requestCompanyId) !== String(companyId)) {
+          return { success: false, code: "CONNECTION_FAILED", message: "Unable to verify the Shopify connection. Review the settings and retry." };
+        }
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", message: "Shopify connection is not configured" };
+        const { connection, credentials } = loaded;
+        const shopDomain = credentials.shopDomain || credentials.shop_domain || connection.base_url;
+        const domain = String(shopDomain || "").replace(/^https?:\/\//i, "").replace(/\/$/, "");
+        const result = await createShopifyAdapter().testConnection({
+          shopDomain: domain,
+          apiVersion: credentials.apiVersion || credentials.api_version,
+          accessToken: credentials.accessToken || credentials.access_token,
+        });
+        return { success: true, ...result };
+      } catch {
+        return { success: false, code: "CONNECTION_FAILED", message: "Unable to verify the Shopify connection. Review the settings and retry." };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_PROCESS_WEBHOOK",
+    displayName: "Process Shopify Webhook",
+    description: "Import Shopify orders into Online Orders and apply cancellation events through the canonical lifecycle.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.manage"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const connectionId = context.action?.connectionId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        const result = await processShopifyWebhookEvent({
+          db: context.db,
+          pool: context.pool,
+          companyId,
+          connection: loaded.connection,
+          credentials: loaded.credentials,
+          event: context.action,
+          createInventoryMovement: context.createInventoryMovement,
+        });
+        if (result?.syncRequired === true) {
+          const eventKey = context.action?.eventId || context.action?.deliveryId || `${result.inventoryItemId}:${result.locationId}:${result.externalQuantity}`;
+          await enqueuePlatformJob({
+            db: context.db,
+            companyId,
+            kind: "SHOPIFY_PROVIDER_SYNC",
+            idempotencyKey: `shopify:inventory-reconcile:${loaded.connection.id}:${eventKey}`.slice(0, 200),
+            payload: { type: "SHOPIFY_SYNC_INVENTORY", connectionId: loaded.connection.id, storeId: result.storeId },
+          });
+          result.reconciliationQueued = true;
+        }
+        if (result?.success === false) return { ...result, retryable: result.retryable === true };
+        return { success: true, ...result };
+      } catch (error) {
+        return {
+          success: false,
+          code: "PROCESSING_FAILED",
+          retryable: error?.retryable === true,
+          message: String(error?.message || "Shopify webhook processing failed").slice(0, 500),
+        };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_SYNC_PRODUCTS",
+    displayName: "Sync Shopify Products",
+    description: "Upsert canonical onePOS products and variants into the configured Shopify store.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "product.manage"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        const result = await syncShopifyProducts({ db: context.db, companyId, storeId, ...loaded });
+        await context.db("UPDATE integration_connections SET last_error=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [loaded.connection.id, companyId]);
+        return { success: true, ...result };
+      } catch (error) {
+        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify product sync failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
+        return { success: false, code: "SYNC_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify product sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_SYNC_INVENTORY",
+    displayName: "Sync Shopify Inventory",
+    description: "Set Shopify inventory levels from the canonical onePOS store stock balances.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "inventory.view"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        const result = await syncShopifyInventory({ db: context.db, companyId, storeId, ...loaded });
+        await context.db("UPDATE integration_connections SET last_error=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [loaded.connection.id, companyId]);
+        return { success: true, ...result };
+      } catch (error) {
+        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify inventory sync failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
+        return { success: false, code: "SYNC_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify inventory sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_RETRY_FAILED_SYNC",
+    displayName: "Retry Failed Shopify Sync",
+    description: "Retry the selected Shopify product or inventory synchronisation after a provider failure.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage"],
+    executor: async (context) => {
+      const syncType = String(context.action?.syncType || "products").toLowerCase();
+      if (!["products", "inventory", "fulfilment", "refund"].includes(syncType)) return { success: false, code: "INVALID_SYNC_TYPE", retryable: false, message: "Shopify retry must target products, inventory, fulfilment or refund" };
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        const result = syncType === "products"
+          ? await syncShopifyProducts({ db: context.db, companyId, storeId, ...loaded })
+          : syncType === "inventory"
+            ? await syncShopifyInventory({ db: context.db, companyId, storeId, ...loaded })
+            : syncType === "fulfilment"
+              ? await exportShopifyFulfillment({ db: context.db, pool: context.pool, companyId, storeId, orderId: context.action?.orderId, ...loaded })
+              : await exportShopifyRefund({ db: context.db, pool: context.pool, companyId, storeId, returnId: context.action?.returnId, ...loaded });
+        await context.db("UPDATE integration_connections SET last_error=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [loaded.connection.id, companyId]);
+        return { success: true, retried: syncType, ...result };
+      } catch (error) {
+        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify sync retry failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
+        return { success: false, code: "SYNC_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify sync retry failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_EXPORT_FULFILMENT",
+    displayName: "Export Shopify Fulfilment",
+    description: "Create the Shopify fulfilment for a completed canonical onePOS order.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "online_orders.manage"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        return {
+          success: true,
+          ...(await exportShopifyFulfillment({
+            db: context.db, pool: context.pool, companyId, storeId, orderId: context.action?.orderId, ...loaded,
+            notifyCustomer: context.action?.notifyCustomer !== false,
+          })),
+        };
+      } catch (error) {
+        return { success: false, code: "FULFILMENT_EXPORT_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify fulfilment export failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_EXPORT_REFUND",
+    displayName: "Export Shopify Refund",
+    description: "Export a canonical onePOS customer return refund for a Shopify order.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "returns.create"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        return {
+          success: true,
+          ...(await exportShopifyRefund({ db: context.db, pool: context.pool, companyId, storeId, returnId: context.action?.returnId, ...loaded })),
+        };
+      } catch (error) {
+        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify refund export failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
+        return { success: false, code: "REFUND_EXPORT_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify refund export failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "UBER_GET_STORES",
+    displayName: "Get Uber Eats Stores",
+    description: "List Uber Eats stores available to the configured company connector.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: async (context) => {
+      const { runtime, service } = await loadUberWorkflowContext(context);
+      if (runtime.enabled !== true) {
+        return {
+          success: false,
+          code: "PLATFORM_DISABLED",
+          message: "Uber Eats integration is disabled in Settings - Online Platforms",
+          httpStatus: null,
+          data: null,
+        };
+      }
+      return service.getStores(runtime);
+    },
+  },
+  {
+    key: "UBER_TEST_CONNECTION",
+    displayName: "Test Uber Eats Connection",
+    description: "Test the configured Uber Eats connector and discover its accessible stores.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: async (context) => {
+      const { runtime, service } = await loadUberWorkflowContext(context);
+      return runUberStoreConnectionTest(runtime, service);
+    },
+  },
+  {
+    key: "UBER_UPLOAD_MENU",
+    displayName: "Upload Uber Eats Menu",
+    description: "Publish the tenant's Uber-enabled Product Master items to its configured Uber Eats store.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: async (context) => {
+      const { db, runtime, service } = await loadUberWorkflowContext(context);
+      if (runtime.enabled !== true) {
+        return {
+          success: false,
+          code: "PLATFORM_DISABLED",
+          message: "Uber Eats integration is disabled in Settings - Online Platforms",
+          productCount: 0,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      const productsResult = await db(
+        `SELECT p.id, p.name, p.description, p.price, p.vat_rate, p.active,
+                p.uber_item_id, p.available_on_uber, p.category_id,
+                c.name AS category_name
+           FROM products p
+           LEFT JOIN categories c ON c.id = p.category_id
+          WHERE p.company_id = $1
+            AND (p.available_on_uber = true OR p.uber_item_id IS NOT NULL)
+          ORDER BY c.display_order, c.name, p.name`,
+        [context.companyId || context.req?.user?.companyId]
+      );
+      const products = productsResult.rows;
+      if (!products.length) {
+        return {
+          success: false,
+          code: "NOTHING_TO_SYNC",
+          message: "No products are marked 'Available on Uber Eats' in the Product Master",
+          productCount: 0,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      if (runtime.configured !== true) {
+        return { ...await service.syncMenu(products, runtime), productCount: products.length };
+      }
+      const requestedStoreId = String(context.action?.storeId || "").trim();
+      const storeId = String(context.action?.storeId || runtime.store_id || runtime.store_location_id || "").trim();
+      const storeMenuMappings = runtime.store_menu_mappings || [];
+      const configuredStoreIds = new Set([
+        runtime.store_id,
+        ...runtime.store_mappings.map((entry) => entry.uber_store_id),
+        ...storeMenuMappings.map((entry) => entry.uber_store_id),
+      ].filter(Boolean).map(String));
+      if (requestedStoreId && !configuredStoreIds.has(requestedStoreId)) {
+        return {
+          success: false,
+          code: "UBER_STORE_NOT_CONFIGURED",
+          message: `Uber store ${requestedStoreId} is not configured for this company`,
+          productCount: products.length,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      const selectedStoreMenuMapping = storeMenuMappings.find(
+        (entry) => entry.uber_store_id === storeId
+      );
+      if (!storeId) {
+        return {
+          success: false,
+          code: "STORE_NOT_MAPPED",
+          message: "Select an Uber store before syncing its menu",
+          productCount: products.length,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      if (
+        (storeMenuMappings.length > 0 && !selectedStoreMenuMapping) ||
+        (storeMenuMappings.length === 0 && runtime.store_mappings.length > 1)
+      ) {
+        return {
+          success: false,
+          code: "STORE_MENU_CONFIGURATION_REQUIRED",
+          message: `Configure a menu mapping for Uber store ${storeId} before syncing`,
+          productCount: products.length,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      const menuRuntime = {
+        ...runtime,
+        store_id: storeId,
+        store_location_id: storeId,
+        menu_mapping: selectedStoreMenuMapping?.menu_mapping || runtime.menu_mapping || null,
+      };
+      let mappingProducts = products;
+      let customFields;
+      if (menuRuntime.menu_mapping) {
+        const customFieldResult = await db(
+          `SELECT f.api_name
+             FROM platform_fields f
+             JOIN platform_objects o ON o.id = f.object_id
+            WHERE o.object_key = 'product'
+              AND o.active = true
+              AND f.active = true
+              AND f.config->>'storage' = 'extension'
+              AND (o.company_id IS NULL OR o.company_id = $1)
+              AND (f.company_id IS NULL OR f.company_id = $1)`,
+          [context.companyId || context.req?.user?.companyId]
+        );
+        customFields = customFieldResult.rows.map((field) => field.api_name);
+        const overridesResult = await db(
+          `SELECT a.record_id, a.custom_values
+             FROM platform_record_associations a
+             JOIN platform_objects o ON o.id = a.object_id
+            WHERE o.object_key = 'product'
+              AND o.active = true
+              AND (o.company_id IS NULL OR o.company_id = $1)
+              AND a.company_id = $1
+              AND a.record_id = ANY($2::uuid[])`,
+          [context.companyId || context.req?.user?.companyId, products.map((product) => product.id)]
+        );
+        const overridesById = new Map(
+          overridesResult.rows.map((row) => [String(row.record_id), row.custom_values || {}])
+        );
+        mappingProducts = products.map((product) => ({
+          ...product,
+          custom_values: overridesById.get(String(product.id)) || {},
+        }));
+      }
+
+      try {
+        const { products: mappedProducts } = resolveUberMenuProducts(mappingProducts, menuRuntime.menu_mapping, { customFields });
+        return { ...await service.syncMenu(mappedProducts, menuRuntime), productCount: products.length };
+      } catch (error) {
+        if (!(error instanceof UberMenuMappingError)) throw error;
+        return {
+          success: false,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          productCount: products.length,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+    },
+  },
+  {
+    key: "UBER_ACCEPT_ORDER",
+    displayName: "Accept Uber Eats Order",
+    description: "Acknowledge a received Uber Eats order using its company-scoped onePOS order record.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.manage"],
+    executor: (context) => executeUberOrderAction(context, "accept"),
+  },
+  {
+    key: "UBER_DENY_ORDER",
+    displayName: "Deny Uber Eats Order",
+    description: "Deny a received or accepted Uber Eats order using its company-scoped onePOS order record.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.manage"],
+    executor: (context) => executeUberOrderAction(context, "deny"),
+  },
+  {
+    key: "UBER_UPDATE_ITEM_PRICE",
+    displayName: "Update Uber Eats Item Price",
+    description: "Update one company-scoped Uber Eats item price.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: (context) => executeUberItemAction(context, "price"),
+  },
+  {
+    key: "UBER_SET_ITEM_UNAVAILABLE",
+    displayName: "Set Uber Eats Item Unavailable",
+    description: "Suspend one company-scoped Uber Eats item until a future time.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: (context) => executeUberItemAction(context, "unavailable"),
+  },
+  {
+    key: "UBER_SET_ITEM_AVAILABLE",
+    displayName: "Set Uber Eats Item Available",
+    description: "Remove the suspension from one company-scoped Uber Eats item.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: (context) => executeUberItemAction(context, "available"),
+  },
+  {
+    key: "STOP",
+    displayName: "Stop",
+    description: "Stop workflow execution cleanly and record the reason.",
+    validation: () => undefined,
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action }) => ({ status: "stopped", reason: action?.reason || "Workflow stopped by action" }),
+  },
+]);
+
+export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definition) => [String(definition.key || "").toUpperCase(), definition]));
+
+export const REGISTERED_FUNCTIONS = PLATFORM_FUNCTIONS;
+
+export const REGISTERED_FUNCTIONS_MAP = PLATFORM_FUNCTION_MAP;
+
+export function getWorkflowActionRegistry() {
+  return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
+}
+
+export function getWorkflowActionDefinition(key) {
+  const normalized = String(key || "").toUpperCase();
+  return (WORKFLOW_ACTION_MAP.get(normalized) || DYNAMIC_CONNECTOR_ACTIONS.find((entry) => String(entry.key || "").toUpperCase() === normalized) || null);
+}
+
+export function validateWorkflowAction(action) {
+  if (!action || typeof action !== "object") {
+    throw new Error("Workflow action must be an object");
+  }
+  const type = String(action.type || action.key || "").toUpperCase();
+  const definition = getWorkflowActionDefinition(type) || getWorkflowActionDefinition(action.type || action.key);
+  if (!definition) {
+    throw new Error(`Unsupported workflow action: ${action.type || action.key}`);
+  }
+  if (typeof definition.validation === "function") {
+    definition.validation(action);
+  }
+  return definition;
+}
+
+export function getRegisteredFunction(functionKey) {
+  return REGISTERED_FUNCTIONS_MAP.get(String(functionKey || "")) || null;
+}
+
+export function getRegisteredFunctionsRegistry() {
+  return REGISTERED_FUNCTIONS.slice();
+}
+
+async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId }) {
+  if (!db || typeof db !== "function" || !companyId) return null;
+  const where = objectId ? "id=$1" : "object_key=$1";
+  const value = objectId || objectKey;
+  if (!value) return null;
+  const result = await db(
+    `SELECT * FROM platform_objects
+      WHERE ${where}
+        AND active=true
+        AND source_table IS NOT NULL
+        AND (company_id=$2 OR company_id IS NULL)
+      ORDER BY CASE WHEN company_id=$2 THEN 0 ELSE 1 END, id
+      LIMIT 1`,
+    [value, companyId]
+  );
+  return result.rows[0] || null;
+}
+
+async function resolveWorkflowTargetObject({ db, action = {}, object = null, companyId, req }) {
+  const runtimeCompanyId = companyId || req?.user?.companyId || null;
+  if (!runtimeCompanyId || (req?.user?.companyId && String(req.user.companyId) !== String(runtimeCompanyId))) {
+    throw new Error("Workflow target company context is invalid");
+  }
+  if (action.sourceTable || action.targetTable || action.relatedTable) {
+    throw new Error("Workflow target tables must be resolved from tenant-scoped Platform metadata");
+  }
+  const requestedObjectId = action.objectId || action.object_id || null;
+  const requestedObjectKey = action.objectKey || action.object_key || null;
+  const objectId = requestedObjectId || (!requestedObjectKey ? object?.id || null : null);
+  const objectKey = requestedObjectKey || (!objectId ? object?.object_key || object?.api_name || null : null);
+  const target = await resolveTargetObjectMetadata({ db, objectId, objectKey, companyId: runtimeCompanyId });
+  if (!target) throw new Error("Workflow target object is not available for this company");
+  const tenantOwned = target.company_id != null && String(target.company_id) === String(runtimeCompanyId);
+  const globalTenantScoped = target.company_id == null && target.company_scoped === true;
+  if (!isSafeIdentifier(target.source_table) || (!tenantOwned && !globalTenantScoped)) {
+    throw new Error("Workflow target object is not permitted");
+  }
+  return target;
+}
+
+async function resolveWorkflowWritableFields({ db, object, fields = [], entries, req, executionMode, trustedSystem }) {
+  const metadata = Array.isArray(fields) && fields.length
+    ? fields
+    : (await db(
+      `SELECT * FROM platform_fields
+        WHERE object_id=$1 AND active=true
+          AND (company_id IS NULL OR company_id=$2)
+        ORDER BY display_order`,
+      [object.id, authoritativeRuntimeCompanyId({ req, companyId: object.company_id })]
+    )).rows;
+  const secured = await assertRuntimeFieldWriteAccess({
+    db,
+    req,
+    object,
+    fields: metadata,
+    fieldNames: entries.map(([name]) => String(name)),
+    executionMode,
+    trustedSystem,
+  });
+  return secured.map((field) => ({ ...field, source_column: field.source_column || field.api_name }));
+}
+
+function alignWorkflowWritableValues(mappedFields = [], entries = []) {
+  const requested = new Map(entries.map(([name, value]) => [String(name), value]));
+  return mappedFields.map((field) => {
+    const apiName = String(field.api_name || "");
+    const sourceColumn = String(field.source_column || apiName);
+    if (requested.has(apiName)) return { field, value: requested.get(apiName) };
+    if (requested.has(sourceColumn)) return { field, value: requested.get(sourceColumn) };
+    throw new Error(`Workflow field value is missing for writable field: ${apiName || sourceColumn}`);
+  });
+}
+
+async function checkWorkflowDuplicateRules({ db, object, entries, companyId, req, excludeRecordId = null }) {
+  const metadata = await db(
+    `SELECT * FROM platform_fields
+      WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)`,
+    [object.id, companyId]
+  );
+  const fields = metadata.rows || [];
+  const input = {};
+  for (const [name, value] of entries) {
+    const field = fields.find((candidate) => candidate.api_name === name || candidate.source_column === name);
+    if (field?.api_name) input[field.api_name] = value;
+  }
+  const matches = await findConfiguredDuplicateMatches({
+    db,
+    object,
+    fields,
+    input,
+    companyId,
+    storeId: req?.user?.storeId || null,
+    excludeRecordId,
+  });
+  const action = resolveDuplicateAction(matches);
+  if (action === "BLOCK") {
+    throw Object.assign(new Error("Workflow record matches an active duplicate rule"), { status: 409, code: "EXISTING_RECORD_DUPLICATE" });
+  }
+  return action;
+}
+
+export function createWorkflowRun({ db, companyId, workflowId, workflowName, objectId, recordId, triggerKey, parentRunId = null, startedAt = new Date(), status = "PENDING", metadata = {} }) {
+  if (!db || typeof db !== "function") return null;
+  const payload = { workflowId, workflowName, objectId, recordId, triggerKey, parentRunId, status, metadata: metadata || {} };
+  return db(
+    `INSERT INTO platform_workflow_runs (company_id, workflow_id, workflow_name, object_id, record_id, trigger_key, parent_run_id, status, started_at, metadata)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) RETURNING *`,
+    [companyId, workflowId || null, workflowName || null, objectId || null, recordId || null, triggerKey || null, parentRunId || null, status, startedAt, JSON.stringify(payload.metadata || {})]
+  ).then((result) => result.rows[0] || null);
+}
+
+export function createWorkflowStepRun({ db, runId, stepIdentifier, stepOrder = 0, actionType, status = "PENDING", metadata = {}, jobId = null, childRunId = null, correlationId = null }) {
+  if (!db || typeof db !== "function") return null;
+  return db(
+    `INSERT INTO platform_workflow_step_runs (run_id, step_identifier, step_order, action_type, status, metadata, durable_job_id, child_run_id, correlation_id)
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9) RETURNING *`,
+    [runId, stepIdentifier || null, stepOrder, actionType || null, status, JSON.stringify(metadata || {}), jobId || null, childRunId || null, correlationId || null]
+  ).then((result) => result.rows[0] || null);
+}
+
+export function resolveWorkflowActionType(action) {
+  const normalized = action && (action.type || action.key || action.actionType || "");
+  return String(normalized || "").toUpperCase();
+}
+
+async function assertWorkflowActionPermission(context, definition) {
+  const mode = resolveExecutionMode(context);
+  if (mode === EXECUTION_MODES.SYSTEM) {
+    if (!(context.trustedSystem === true || context.req?.trustedSystemExecution === true || context.executionContext?.globals?.$System?.trusted === true)) {
+      throw Object.assign(new Error("SYSTEM workflow execution is not trusted"), { status: 403, code: "UNTRUSTED_SYSTEM_EXECUTION" });
+    }
+    return;
+  }
+
+  const req = context?.req;
+  if (!req?.user?.id || !req.user.roleId || !req.user.companyId) {
+    throw Object.assign(new Error("Workflow action requires an authenticated USER execution context"), { status: 403, code: "RUNTIME_ACTOR_REQUIRED" });
+  }
+  if (!context?.db || typeof context.db !== "function") {
+    throw new Error("Workflow action authorization context is unavailable");
+  }
+  const required = Array.isArray(definition.requiredPermissions) ? definition.requiredPermissions : [];
+  if (!required.length) return;
+  const [roleResult, permissionSets] = await Promise.all([
+    context.db(
+      `SELECT 1
+       FROM role_permissions rp
+       JOIN permissions p ON p.id=rp.permission_id
+       WHERE rp.role_id=$1 AND p.code = ANY($2::text[])
+       LIMIT 1`,
+      [req.user.roleId, required]
+    ),
+    loadEffectivePermissionSets(context.db, req.user, req),
+  ]);
+  const setAllowed = required.some((permission) => permissionSetAllowsSystemPermission(permissionSets, permission));
+  if (!roleResult.rows.length && !setAllowed) {
+    throw Object.assign(new Error("You do not have permission to execute this workflow action"), { status: 403, code: "WORKFLOW_ACTION_PERMISSION_REQUIRED" });
+  }
+}
+
+export async function executeWorkflowAction(context) {
+  const action = context?.action;
+  const definition = validateWorkflowAction(action);
+  await assertWorkflowActionPermission(context, definition);
+  if (typeof definition.executor !== "function") {
+    return { status: "skipped", reason: "No executor configured" };
+  }
+  return definition.executor(context);
+}
+
+async function recordCompensationFailure({ db, runId, stepRunId, action, error, context }) {
+  const details = errorDetails(error);
+  if (!db || !runId) return details;
+  await db(
+    `INSERT INTO platform_workflow_compensation_runs
+       (run_id, step_run_id, company_id, action_type, status, error_text, metadata)
+     VALUES ($1,$2,$3,$4,'FAILED',$5,$6::jsonb)`,
+    [runId, stepRunId || null, context.companyId || context.req?.user?.companyId || null, resolveWorkflowActionType(action), details.message, JSON.stringify({ error: details })]
+  );
+  return details;
+}
+
+async function getOrCreateWorkflowStepRun({ db, runId, stepIdentifier, stepOrder, actionType, correlationId = null }) {
+  const existing = await db(
+    "SELECT * FROM platform_workflow_step_runs WHERE run_id=$1 AND step_identifier=$2 ORDER BY created_at DESC LIMIT 1",
+    [runId, stepIdentifier]
+  );
+  if (existing.rows?.[0]) return existing.rows[0];
+  return createWorkflowStepRun({
+    db,
+    runId,
+    stepIdentifier,
+    stepOrder,
+    actionType,
+    status: "RUNNING",
+    correlationId,
+    metadata: { irreversible: IRREVERSIBLE_ACTIONS.has(actionType) },
+  });
+}
+
+async function compensateCompletedSteps(completed, context, originalError) {
+  const failures = [];
+  for (const item of completed.reverse()) {
+    const compensation = item.action?.compensation;
+    if (!compensation || !context.db || !context.runId) continue;
+    try {
+      const existing = await context.db(
+        "SELECT id,status FROM platform_workflow_compensation_runs WHERE run_id=$1 AND step_run_id=$2 AND company_id=$3 LIMIT 1",
+        [context.runId, item.stepRunId || null, context.companyId || context.req?.user?.companyId || null]
+      );
+      if (existing.rows?.length) continue;
+      const result = await executeWorkflowAction({ ...context, action: compensation, stepRunId: item.stepRunId || null, compensationFor: item.stepRunId || item.index });
+      if (result?.status === "failed") throw new Error(result.error || "Compensation failed");
+    } catch (error) {
+      failures.push(await recordCompensationFailure({ db: context.db, runId: context.runId, companyId: context.companyId, req: context.req, context, stepRunId: item.stepRunId, action: compensation, error }));
+    }
+  }
+  return failures;
+}
+
+export async function executeWorkflowActions({ actions, ...context }) {
+  if (!Array.isArray(actions)) return [];
+
+  const workflowIdentity = context.workflowId || context.executionContext?.globals?.$Flow?.id || (context.runId ? `run:${context.runId}` : null);
+  const governor = context.governor || createGovernorBudget({ limits: context.governorLimits || {} });
+  governor.checkRuntime();
+  governor.checkPayload({
+    record: context.record || null,
+    previousRecord: context.previousRecord || null,
+    workflowVariables: context.workflowVariables || null,
+  });
+  const executionGuard = context.executionGuard
+    || (workflowIdentity
+      ? createExecutionGuard({
+          maxDepth: 8,
+          chain: Array.isArray(context.workflowStack) ? context.workflowStack : [],
+        }).enter(workflowIdentity)
+      : createExecutionGuard({ maxDepth: 8, chain: Array.isArray(context.workflowStack) ? context.workflowStack : [] }));
+
+  let persistentClaim = null;
+  if (context.db && context.idempotencyKey && (context.companyId || context.req?.user?.companyId)) {
+    persistentClaim = await claimPersistentExecution({
+      db: context.db,
+      companyId: context.companyId || context.req?.user?.companyId,
+      scope: `workflow:${workflowIdentity || "anonymous"}`,
+      idempotencyKey: context.idempotencyKey,
+      fingerprint: executionFingerprint({
+        workflowIdentity,
+        recordId: context.recordId || context.record?.id || null,
+        previousRecordId: context.previousRecord?.id || null,
+        actionCount: actions.length,
+      }),
+      metadata: { runId: context.runId || null, workflowIdentity },
+    });
+    if (!persistentClaim.claimed) {
+      if (persistentClaim.row?.status === "COMPLETED") {
+        return Array.isArray(persistentClaim.row?.result) ? persistentClaim.row.result : [];
+      }
+      return [{ action: "WORKFLOW", result: { status: "skipped", duplicate: true, idempotencyKey: context.idempotencyKey } }];
+    }
+  }
+
+  const executionMode = resolveExecutionMode(context);
+  let executionContext;
+  try {
+    executionContext = await createPlatformExecutionContext({
+      ...context,
+      executionMode,
+      trustedSystem: context.trustedSystem === true || context.req?.trustedSystemExecution === true,
+      workflowId: context.workflowId || context.executionContext?.globals?.$Flow?.id || null,
+      workflowVersion: context.workflowVersion || context.executionContext?.globals?.$Flow?.version || null,
+      parentRunId: context.parentRunId || context.executionContext?.globals?.$Flow?.runId || null,
+      executionContext: context.executionContext || null,
+    });
+  } catch (error) {
+    if (persistentClaim?.row?.id && context.db) {
+      await completePersistentExecution({
+        db: context.db,
+        claimId: persistentClaim.row.id,
+        status: "FAILED",
+        error: errorDetails(error),
+      });
+    }
+    throw error;
+  }
+  let governedDb = context.db;
+  if (typeof context.db === "function" && context.db.__platformGoverned !== true) {
+    governedDb = async (...args) => {
+      governor.consumeQuery(1);
+      return context.db(...args);
+    };
+    governedDb.__platformGoverned = true;
+  }
+  const runtimeContext = applyExecutionContext({
+    ...context,
+    db: governedDb,
+    executionGuard,
+    governor,
+    executionMode,
+    trustedSystem: context.trustedSystem === true || context.req?.trustedSystemExecution === true,
+    workflowDepth: executionGuard.chain.length,
+    workflowStack: [...executionGuard.chain],
+  }, executionContext);
+
+  if (runtimeContext.db && runtimeContext.runId) {
+    await runtimeContext.db(
+      `UPDATE platform_workflow_runs
+          SET correlation_id=COALESCE(correlation_id,$1),
+              execution_mode=COALESCE(execution_mode,$2),
+              runtime_contract_version=COALESCE(runtime_contract_version,$3),
+              metadata=COALESCE(metadata,'{}'::jsonb) || $4::jsonb,
+              updated_at=NOW()
+        WHERE id=$5 AND company_id=$6`,
+      [
+        runtimeContext.correlationId || runtimeContext.$System?.correlationId || null,
+        runtimeContext.executionMode || runtimeContext.$System?.executionMode || null,
+        runtimeContext.$System?.runtimeContractVersion || null,
+        JSON.stringify({
+          correlationId: runtimeContext.correlationId || runtimeContext.$System?.correlationId || null,
+          executionMode: runtimeContext.executionMode || runtimeContext.$System?.executionMode || null,
+          runtimeContractVersion: runtimeContext.$System?.runtimeContractVersion || null,
+        }),
+        runtimeContext.runId,
+        runtimeContext.companyId || runtimeContext.req?.user?.companyId,
+      ]
+    );
+  }
+
+  const results = [];
+  const completed = [];
+  const workflowVariables = {
+    ...executionContext.globals,
+    ...(runtimeContext.workflowVariables || {}),
+    steps: { ...(runtimeContext.workflowVariables?.steps || {}) },
+  };
+
+  for (const item of actions) {
+    if (!item || typeof item !== "object") continue;
+    governor.consumeWorkflowStep(1);
+    const actionType = resolveWorkflowActionType(item);
+    const externalActionTypes = new Set([
+      "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","SEND_PASSWORD_RESET_EMAIL","SEND_USER_INVITATION",
+      "CALL_WEBHOOK","WEBHOOK","HTTP_REQUEST","CALL_FUNCTION","CALL_CONNECTOR",
+      "CONNECTOR_HEALTH_CHECK","CONNECTOR_TEST_CONNECTION",
+      "PAYMENT_START","PAYMENT_CANCEL","PAYMENT_REFUND","CREATE_APPOINTMENT_PAYMENT_REQUEST",
+      "GLOBAL_PRODUCT_LOOKUP_BARCODE","GO_UPC_LOOKUP_PRODUCT","GO_UPC_TEST_CONNECTION",
+      "OPEN_FOOD_FACTS_LOOKUP_PRODUCT","OPEN_FOOD_FACTS_TEST_CONNECTION",
+      "QUICKBOOKS_RETRY_FAILED_SYNC","QUICKBOOKS_SYNC_PURCHASES","QUICKBOOKS_SYNC_SUPPLIER_CREDITS",
+      "QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS","QUICKBOOKS_SYNC_VENDORS","QUICKBOOKS_TEST_CONNECTION",
+      "SHOPIFY_EXPORT_FULFILMENT","SHOPIFY_EXPORT_REFUND","SHOPIFY_PROCESS_WEBHOOK",
+      "SHOPIFY_RETRY_FAILED_SYNC","SHOPIFY_SYNC_INVENTORY","SHOPIFY_SYNC_PRODUCTS","SHOPIFY_TEST_CONNECTION",
+      "UBER_ACCEPT_ORDER","UBER_DENY_ORDER","UBER_GET_STORES","UBER_SET_ITEM_AVAILABLE",
+      "UBER_SET_ITEM_UNAVAILABLE","UBER_TEST_CONNECTION","UBER_UPDATE_ITEM_PRICE","UBER_UPLOAD_MENU",
+      "JARVES_INTERACTION"
+    ]);
+    if (externalActionTypes.has(actionType)) {
+      governor.consumeExternalAction(1);
+    }
+    if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","SEND_PASSWORD_RESET_EMAIL","SEND_USER_INVITATION","WAIT"].includes(actionType)) {
+      governor.consumeQueuedJob(1);
+    }
+    if (actionType === "RUN_SUBFLOW") governor.consumeSubflow(1);
+    const index = results.length;
+    let stepRun = null;
+    if (runtimeContext.db && runtimeContext.runId) {
+      stepRun = await getOrCreateWorkflowStepRun({
+        db: runtimeContext.db,
+        runId: runtimeContext.runId,
+        stepIdentifier: item.id || `step-${index + 1}`,
+        stepOrder: index + 1,
+        actionType: resolveWorkflowActionType(item),
+        correlationId: runtimeContext.correlationId || runtimeContext.$System?.correlationId || null,
+      });
+    }
+    if (stepRun?.status === "COMPLETED" || stepRun?.status === "WAITING") {
+      const priorResult = stepRun.metadata?.result || { status: stepRun.status === "WAITING" ? "waiting" : "completed", idempotentReplay: true };
+      results.push({ action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
+      workflowVariables.steps[item.id || `step-${index + 1}`] = priorResult;
+      completed.push({ action: item, stepRunId: stepRun.id, index });
+      continue;
+    }
+    try {
+      const result = await executeWorkflowAction({ ...runtimeContext, workflowVariables, action: item, stepRunId: stepRun?.id || null });
+      const entry = { action: item.type || item.key, result, stepRunId: stepRun?.id || null };
+      workflowVariables.steps[item.id || `step-${index + 1}`] = result;
+      results.push(entry);
+      if (result?.status === "failed") throw new WorkflowExecutionError(errorDetails(result.error || result), []);
+      if (result?.status === "completed" || result?.status === "queued" || result?.status === "waiting") {
+        completed.push({ action: item, stepRunId: stepRun?.id || null, index });
+      }
+      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: runtimeContext.db, stepRunId: stepRun.id, status: result?.status === "stopped" ? "STOPPED" : result?.status === "waiting" ? "WAITING" : result?.status === "queued" ? "WAITING" : "COMPLETED", metadata: { result: redact(result), irreversible: IRREVERSIBLE_ACTIONS.has(resolveWorkflowActionType(item)) } });
+      if (result?.status === "stopped") break;
+    } catch (error) {
+      const details = errorDetails(error);
+      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: runtimeContext.db, stepRunId: stepRun.id, status: "FAILED", errorText: details.message, metadata: { error: details } });
+      const compensationFailures = await compensateCompletedSteps(completed, runtimeContext, error);
+      if (runtimeContext.runId && runtimeContext.db) {
+        await runtimeContext.db(
+          "UPDATE platform_workflow_runs SET status='FAILED', completed_at=NOW(), error_text=$1, metadata=COALESCE(metadata,'{}'::jsonb) || $2::jsonb, updated_at=NOW() WHERE id=$3 AND company_id=$4",
+          [details.message, JSON.stringify({ rootError: details, compensationFailures }), runtimeContext.runId, runtimeContext.companyId || runtimeContext.req?.user?.companyId]
+        );
+      }
+      if (persistentClaim?.row?.id) {
+        await completePersistentExecution({
+          db: runtimeContext.db,
+          claimId: persistentClaim.row.id,
+          status: "FAILED",
+          error: details,
+        });
+      }
+      throw new WorkflowExecutionError(details, compensationFailures);
+    }
+  }
+  if (persistentClaim?.row?.id) {
+    await completePersistentExecution({ db: runtimeContext.db, claimId: persistentClaim.row.id, status: "COMPLETED", result: results });
+  }
+  return results;
+}
+ + (index + 1)).join(", ");
+      const params = [...writePairs.map(({ value }) => value), action.recordId];
+      const clauses = ["id=$" + params.length];
+      if (targetObject.company_scoped) {
+        if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
+        params.push(runtimeCompanyId);
+        clauses.push(`company_id=$${params.length}`);
+      }
+      if (targetObject.store_scoped) {
+        if (!runtimeStoreId) throw new Error("Workflow store scope is required");
+        params.push(runtimeStoreId);
+        clauses.push(`store_id=$${params.length}`);
+      }
+      const previousParams = [action.recordId];
+      const previousClauses = ["id=$1"];
+      if (targetObject.company_scoped) {
+        previousParams.push(runtimeCompanyId);
+        previousClauses.push(`company_id=$${previousParams.length}`);
+      }
+      if (targetObject.store_scoped) {
+        previousParams.push(runtimeStoreId);
+        previousClauses.push(`store_id=$${previousParams.length}`);
+      }
+      const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
+      const query = `UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`;
+      const result = await db(query, params);
+      const updated = result.rows[0] || null;
+      if (updated?.id) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: updated.id,
+          fields: mappedFields,
+          previousRecord: previous,
+          record: updated,
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      try {
+        if (updated?.id) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: updated,
+          previousRecord: previous,
+          operation: "UPDATE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+        });
+      } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      return { status: result.rows.length ? "completed" : "skipped", updated, duplicateWarning: duplicateAction === "WARN" };
+    },
+  },
+  {
+    key: "UPDATE_RELATED_RECORD",
+    displayName: "Update Related Record",
+    description: "Update a child or related record via a relationship.",
+    validation: (action) => {
+      if (!action?.relationshipKey) throw new Error("Update Related Record requires a relationshipKey");
+      if (!action.recordId) throw new Error("Update Related Record requires a recordId");
+    },
+    async: false,
+    requiredPermissions: ["records.update"],
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
+      if (!action.recordId) throw new Error("Update Related Record requires a recordId");
+      const parentObject = await resolveWorkflowTargetObject({ db, action: { objectId: action.parentObjectId }, object, companyId, req });
+      let table = null;
+      let targetObject = null;
+      if (db && typeof db === "function") {
+        const relationshipResult = await db("SELECT * FROM platform_relationships WHERE relationship_key=$1 AND parent_object_id=$2 AND active=true LIMIT 1", [action.relationshipKey, parentObject.id]);
+        const relationship = relationshipResult.rows[0];
+        if (relationship) {
+          targetObject = await resolveTargetObjectMetadata({ db, objectId: relationship.child_object_id, companyId: companyId || req?.user?.companyId });
+          table = targetObject?.source_table || null;
+        }
+      }
+      if (!table) throw new Error("Update Related Record requires a target table");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const entries = Object.entries(action.fieldValues || {});
+      if (!entries.length) return { status: "completed", recordId: action.recordId, updated: null };
+      const relatedFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      const mappedFields = await resolveWorkflowWritableFields({
+        db, object: targetObject, fields: relatedFields, entries, req, executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || context.storeId || null;
+      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req, excludeRecordId: action.recordId });
+      const writePairs = alignWorkflowWritableValues(mappedFields, entries);
+      const sets = writePairs.map(({ field }, index) => '"' + field.source_column + '"=
+      const params = [...writePairs.map(({ value }) => value), action.recordId];
+      const clauses = ["id=$" + params.length];
+      if (targetObject.company_scoped) {
+        if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
+        params.push(runtimeCompanyId);
+        clauses.push("company_id=$" + params.length);
+      }
+      if (targetObject.store_scoped) {
+        if (!runtimeStoreId) throw new Error("Workflow store scope is required");
+        params.push(runtimeStoreId);
+        clauses.push("store_id=$" + params.length);
+      }
+      const previousParams = [action.recordId];
+      const previousClauses = ["id=$1"];
+      if (targetObject.company_scoped) {
+        previousParams.push(runtimeCompanyId);
+        previousClauses.push("company_id=$" + previousParams.length);
+      }
+      if (targetObject.store_scoped) {
+        previousParams.push(runtimeStoreId);
+        previousClauses.push("store_id=$" + previousParams.length);
+      }
+      const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
+      const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
+      const updated = result.rows[0] || null;
+      if (updated?.id) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: updated.id,
+          fields: mappedFields,
+          previousRecord: previous,
+          record: updated,
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      try {
+        if (updated?.id) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: updated,
+          previousRecord: previous,
+          operation: "UPDATE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+        });
+      } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      return { status: result.rows.length ? "completed" : "skipped", recordId: action.recordId, updated, duplicateWarning: duplicateAction === "WARN" };
+    },
+  },
+  {
+    key: "CREATE_RELATED_RECORD",
+    displayName: "Create Related Record",
+    description: "Create a child record through a defined relationship.",
+    validation: (action) => {
+      if (!action?.relationshipKey) throw new Error("Create Related Record requires a relationshipKey");
+      if (!action.fieldValues || typeof action.fieldValues !== "object") throw new Error("Create Related Record requires fieldValues");
+    },
+    async: false,
+    requiredPermissions: ["records.create"],
+    executor: async (context) => {
+      const { db, action, req, object, recordId, companyId } = context;
+      let relationship = action.relationship || null;
+      const parentObject = await resolveWorkflowTargetObject({ db, action: { objectId: action.parentObjectId || action.parent_object_id }, object, companyId, req });
+      let table = null;
+      let targetObject = null;
+      const parentRecordId = action.recordId || action.parentRecordId || recordId || null;
+      const relationshipKey = action.relationshipKey || action.relationship_key || null;
+      if (relationshipKey && db && typeof db === "function") {
+        const relationshipResult = await db("SELECT * FROM platform_relationships WHERE relationship_key=$1 AND parent_object_id=$2 AND active=true LIMIT 1", [relationshipKey, parentObject.id]);
+        relationship = relationshipResult.rows[0] || relationship;
+      }
+      if (relationship?.child_object_id && db && typeof db === "function") {
+        targetObject = await resolveTargetObjectMetadata({ db, objectId: relationship.child_object_id, companyId: companyId || req?.user?.companyId });
+        table = targetObject?.source_table || table;
+      }
+      if (!table) throw new Error("Create Related Record requires a target table");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "create", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const fieldValues = { ...(action.fieldValues || {}) };
+      let relationField = action.relationshipField || action.relatedField || action.foreignKey || action.foreign_key || null;
+      if (!relationField && relationship?.child_field_id && db && typeof db === "function") {
+        const fieldResult = await db("SELECT * FROM platform_fields WHERE id=$1 AND active=true LIMIT 1", [relationship.child_field_id]);
+        relationField = fieldResult.rows[0]?.source_column || fieldResult.rows[0]?.api_name || null;
+      }
+      if (parentRecordId && relationField && !(Object.prototype.hasOwnProperty.call(fieldValues, relationField))) {
+        fieldValues[relationField] = parentRecordId;
+      }
+      const entries = Object.entries(fieldValues);
+      if (!entries.length) return { status: "completed", created: null };
+      const relatedFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      const mappedFields = await resolveWorkflowWritableFields({
+        db, object: targetObject, fields: relatedFields, entries, req, executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || context.storeId || null;
+      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req });
+      const writePairs = alignWorkflowWritableValues(mappedFields, entries);
+      const columns = writePairs.map(({ field }) => `"${field.source_column}"`);
+      const values = writePairs.map((_, index) => "$" + (index + 1));
+      const params = writePairs.map(({ value }) => value);
+      if (targetObject?.company_scoped || action.companyScoped || action.company_scoped || object?.company_scoped) {
+        if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
+        columns.push('"company_id"');
+        values.push("$" + (params.length + 1));
+        params.push(runtimeCompanyId);
+      }
+      if (targetObject?.store_scoped || action.storeScoped || action.store_scoped || object?.store_scoped) {
+        if (!runtimeStoreId) throw new Error("Workflow store scope is required");
+        columns.push('"store_id"');
+        values.push("$" + (params.length + 1));
+        params.push(runtimeStoreId);
+      }
+      const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
+      const result = await db(query, params);
+      const created = result.rows[0] || null;
+      if (created?.id) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: created.id,
+          fields: mappedFields,
+          previousRecord: null,
+          record: created,
+          action: "create",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      try {
+        if (created?.id) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: created,
+          operation: "CREATE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+        });
+      } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      return { status: "completed", created, relationshipKey: relationshipKey || action.relationshipKey || null, duplicateWarning: duplicateAction === "WARN" };
+    },
+  },
+  {
+    key: "DELETE_RECORD",
+    displayName: "Delete Record",
+    description: "Delete or soft delete a record using the object's existing semantics.",
+    validation: (action) => {
+      if (!action?.recordId) throw new Error("Delete Record requires a recordId");
+    },
+    async: false,
+    requiredPermissions: ["records.delete"],
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
+      const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "delete", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const table = targetObject.source_table;
+      const historyFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+        [targetObject.id, companyId || req?.user?.companyId]
+      )).rows;
+      const scopeParams = [action.recordId];
+      const scopeClauses = ["id=$1"];
+      if (targetObject.company_scoped) {
+        scopeParams.push(req?.user?.companyId || companyId);
+        scopeClauses.push(`company_id=$${scopeParams.length}`);
+      }
+      const previous = (await db(`SELECT * FROM "${table}" WHERE ${scopeClauses.join(" AND ")} LIMIT 1`, scopeParams)).rows[0] || null;
+      const hasActive = await db(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'`, [table]);
+      const result = hasActive.rows.length
+        ? await db(`UPDATE "${table}" SET active=false WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId])
+        : await db(`DELETE FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId]);
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: action.recordId,
+          fields: historyFields,
+          previousRecord: previous || result.rows[0],
+          record: hasActive.rows.length ? result.rows[0] : null,
+          action: "delete",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      try {
+        if (result.rows[0]) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: hasActive.rows.length ? result.rows[0] : null,
+          previousRecord: previous || result.rows[0],
+          operation: "DELETE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+          archived: hasActive.rows.length > 0,
+        });
+      } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      return { status: result.rows.length ? "completed" : "skipped", deleted: result.rows[0] || null };
+    },
+  },
+  {
+    key: "ASSIGN_RECORD",
+    displayName: "Assign Record",
+    description: "Assign a record to a user, team or queue.",
+    validation: (action) => {
+      if (!action?.recordId) throw new Error("Assign Record requires a recordId");
+      if (!action.assignee && !action.assignedTo) throw new Error("Assign Record requires assignee information");
+    },
+    async: false,
+    requiredPermissions: ["records.update"],
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
+      const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const assignmentFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      await assertRuntimeFieldWriteAccess({
+        db, req, object: targetObject, fields: assignmentFields, fieldNames: ["assigned_to"],
+        executionMode, trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const table = targetObject.source_table;
+      const assignee = action.assignee ?? action.assignedTo;
+      const params = [assignee, action.recordId];
+      const scope = targetObject.company_scoped ? " AND company_id=$3" : "";
+      if (targetObject.company_scoped) params.push(req?.user?.companyId || companyId);
+      const previous = (await db(
+        `SELECT * FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} LIMIT 1`,
+        targetObject.company_scoped ? [action.recordId, companyId || req?.user?.companyId] : [action.recordId]
+      )).rows[0] || null;
+      const result = await db(`UPDATE "${table}" SET assigned_to=$1 WHERE id=$2${scope} RETURNING *`, params);
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: action.recordId,
+          fields: assignmentFields,
+          previousRecord: previous,
+          record: result.rows[0],
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      return { status: result.rows.length ? "completed" : "skipped", updated: result.rows[0] || null };
+    },
+  },
+  {
+    key: "ADD_RELATIONSHIP",
+    displayName: "Add Relationship",
+    description: "Associate a record with a related record.",
+    validation: (action) => {
+      if (!action?.relationshipKey) throw new Error("Add Relationship requires a relationshipKey");
+      if (!action.relatedRecordId && !action.recordId) throw new Error("Add Relationship requires a target record");
+    },
+    async: false,
+    requiredPermissions: ["records.update"],
+    executor: async (context) => {
+      const { db, action, object, req, recordId, companyId } = context;
+      const relationshipKey = action.relationshipKey;
+      const relatedRecordId = action.relatedRecordId || action.recordId;
+      const parentRecordId = action.parentRecordId || recordId || action.recordId || null;
+      if (!db || typeof db !== "function") return { status: "completed", relationshipKey, relatedRecordId };
+      const resolved = await loadRecordRelationship({ db, action, object });
+      if (!resolved?.relationship) {
+        return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" is not registered for this object` };
+      }
+      const column = resolved.field?.source_column || resolved.field?.api_name || null;
+      const targetObject = await resolveTargetObjectMetadata({
+        db,
+        objectId: resolved.relationship.child_object_id,
+        companyId: req?.user?.companyId || companyId,
+      });
+      if (!targetObject) throw new Error("Related target object is unavailable");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const relationFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      await assertRuntimeFieldWriteAccess({
+        db, req, object: targetObject, fields: relationFields, fieldNames: [column],
+        executionMode, trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      if (!isSafeIdentifier(resolved.relationship.child_source_table) || !isSafeIdentifier(column)) {
+        return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" has no writable child link field` };
+      }
+      const params = [parentRecordId, relatedRecordId];
+      const clauses = ["id=$2"];
+      if (resolved.relationship.child_company_scoped && req?.user?.companyId) {
+        params.push(req.user.companyId);
+        clauses.push(`company_id=$${params.length}`);
+      }
+      if (resolved.relationship.child_store_scoped && req?.user?.storeId) {
+        params.push(req.user.storeId);
+        clauses.push(`store_id=$${params.length}`);
+      }
+      const previousParams = [relatedRecordId];
+      const previousClauses = ["id=$1"];
+      if (resolved.relationship.child_company_scoped && req?.user?.companyId) {
+        previousParams.push(req.user.companyId);
+        previousClauses.push(`company_id=$${previousParams.length}`);
+      }
+      if (resolved.relationship.child_store_scoped && req?.user?.storeId) {
+        previousParams.push(req.user.storeId);
+        previousClauses.push(`store_id=$${previousParams.length}`);
+      }
+      const previous = (await db(
+        `SELECT * FROM "${resolved.relationship.child_source_table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`,
+        previousParams
+      )).rows[0] || null;
+      const result = await db(
+        `UPDATE "${resolved.relationship.child_source_table}" SET "${column}"=$1 WHERE ${clauses.join(" AND ")} RETURNING *`,
+        params
+      );
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: relatedRecordId,
+          fields: relationFields,
+          previousRecord: previous,
+          record: result.rows[0],
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      return { status: result.rows.length ? "completed" : "skipped", relationshipKey, relatedRecordId, linkField: column, linked: result.rows[0] || null };
+    },
+  },
+  {
+    key: "REMOVE_RELATIONSHIP",
+    displayName: "Remove Relationship",
+    description: "Remove a relationship between records.",
+    validation: (action) => {
+      if (!action?.relationshipKey) throw new Error("Remove Relationship requires a relationshipKey");
+      if (!action.relatedRecordId && !action.recordId) throw new Error("Remove Relationship requires a target record");
+    },
+    async: false,
+    requiredPermissions: ["records.update"],
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
+      const relationshipKey = action.relationshipKey;
+      const relatedRecordId = action.relatedRecordId || action.recordId;
+      if (!db || typeof db !== "function") return { status: "completed", relationshipKey, relatedRecordId };
+      const resolved = await loadRecordRelationship({ db, action, object });
+      if (!resolved?.relationship) {
+        return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" is not registered for this object` };
+      }
+      const column = resolved.field?.source_column || resolved.field?.api_name || null;
+      const targetObject = await resolveTargetObjectMetadata({
+        db,
+        objectId: resolved.relationship.child_object_id,
+        companyId: req?.user?.companyId || companyId,
+      });
+      if (!targetObject) throw new Error("Related target object is unavailable");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const relationFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      await assertRuntimeFieldWriteAccess({
+        db, req, object: targetObject, fields: relationFields, fieldNames: [column],
+        executionMode, trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      if (!isSafeIdentifier(resolved.relationship.child_source_table) || !isSafeIdentifier(column)) {
+        return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" has no writable child link field` };
+      }
+      const params = [relatedRecordId];
+      const clauses = ["id=$1"];
+      if (resolved.relationship.child_company_scoped && req?.user?.companyId) {
+        params.push(req.user.companyId);
+        clauses.push(`company_id=$${params.length}`);
+      }
+      if (resolved.relationship.child_store_scoped && req?.user?.storeId) {
+        params.push(req.user.storeId);
+        clauses.push(`store_id=$${params.length}`);
+      }
+      const previous = (await db(
+        `SELECT * FROM "${resolved.relationship.child_source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`,
+        params
+      )).rows[0] || null;
+      const result = await db(
+        `UPDATE "${resolved.relationship.child_source_table}" SET "${column}"=NULL WHERE ${clauses.join(" AND ")} RETURNING *`,
+        params
+      );
+      if (result.rows[0]) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: relatedRecordId,
+          fields: relationFields,
+          previousRecord: previous,
+          record: result.rows[0],
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      return { status: result.rows.length ? "completed" : "skipped", relationshipKey, relatedRecordId, linkField: column, unlinked: result.rows[0] || null };
+    },
+  },
+  {
+    key: "IN_APP_NOTIFICATION",
+    displayName: "In-App Notification",
+    description: "Create a persistent internal notification for a user or team.",
+    validation: (action) => {
+      if (!action?.message && !action?.templateKey) throw new Error("In-App Notification requires a message or template");
+    },
+    async: false,
+    requiredPermissions: ["notifications.write"],
+    executor: async ({ db, action, req }) => {
+      if (typeof db !== "function") return { status: "completed", notice: action.message || action.templateKey };
+      try {
+        await db(
+          "INSERT INTO platform_notifications (company_id, user_id, message, status, created_at) VALUES ($1,$2,$3,'UNREAD',NOW())",
+          [req?.user?.companyId || null, req?.user?.id || null, action.message || action.templateKey || ""]
+        );
+      } catch (error) {
+        return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: false, note: error.message };
+      }
+      return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: true };
+    },
+  },
+  {
+    key: "SEND_EMAIL",
+    displayName: "Send Email",
+    description: "Queue an email using the configured email provider.",
+    validation: (action) => {
+      if (!action?.recipient && !action?.to) throw new Error("Send Email requires a recipient");
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    requiredEntitlement: "communications.email",
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
+      const company = companyId || req?.user?.companyId;
+      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
+      if (!provider.configured) {
+        return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
+      }
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
+      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: {
+        ...resolvedAction,
+        actorUserId: req?.user?.id || null,
+        _roleId: req?.user?.roleId || null,
+        _executionMode: resolveExecutionMode({ req }),
+        _stepRunId: stepRunId,
+      }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
+      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
+    },
+  },
+  {
+    key: "SEND_SMS",
+    displayName: "Send SMS",
+    description: "Queue an SMS using the configured SMS provider.",
+    validation: (action) => {
+      if (!action?.recipient && !action?.to) throw new Error("Send SMS requires a recipient");
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    requiredEntitlement: "communications.sms",
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
+      const company = companyId || req?.user?.companyId;
+      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "SMS", stepRunId });
+      if (!provider.configured) {
+        return { status: "failed", provider: "SMS", error: provider.error, jobId: null };
+      }
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
+      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_SMS", payload: {
+        ...resolvedAction,
+        actorUserId: req?.user?.id || null,
+        _roleId: req?.user?.roleId || null,
+        _executionMode: resolveExecutionMode({ req }),
+        _stepRunId: stepRunId,
+      }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
+      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
+    },
+  },
+  {
+    key: "SEND_WHATSAPP",
+    displayName: "Send WhatsApp",
+    description: "Queue a WhatsApp message using the configured provider.",
+    validation: (action) => {
+      if (!action?.recipient && !action?.to) throw new Error("Send WhatsApp requires a recipient");
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    requiredEntitlement: "communications.whatsapp",
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
+      const company = companyId || req?.user?.companyId;
+      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "WHATSAPP", stepRunId });
+      if (!provider.configured) {
+        return { status: "failed", provider: "WHATSAPP", error: provider.error, jobId: null };
+      }
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
+      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: {
+        ...resolvedAction,
+        actorUserId: req?.user?.id || null,
+        _roleId: req?.user?.roleId || null,
+        _executionMode: resolveExecutionMode({ req }),
+        _stepRunId: stepRunId,
+      }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
+      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
+    },
+  },
+  {
+    key: "PUBLISH_TO_WEB_SHOP",
+    displayName: "Publish to Web Shop",
+    description: "Set a canonical product as published for the active client web shop.",
+    validation: (action) => {
+      if (!action?.productId) throw new Error("Publish to Web Shop requires a productId");
+    },
+    async: true,
+    requiredPermissions: ["product.manage"],
+    executor: async ({ db, action, companyId, req }) => {
+      const targetCompanyId = companyId || req?.user?.companyId;
+      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
+      const now = new Date();
+      await db(
+        `UPDATE products SET web_shop_published=true, updated_at=NOW(), web_shop_publish_start=COALESCE(web_shop_publish_start, $2::timestamptz), web_shop_publish_end=COALESCE(web_shop_publish_end, NULL), web_shop_sort_order=COALESCE(web_shop_sort_order, 0) WHERE id=$1 AND company_id=$3`,
+        [action.productId, now.toISOString(), targetCompanyId]
+      );
+      await publishPlatformEvent({ db, companyId: targetCompanyId, eventType: "webshop.product_published", payload: { productId: action.productId }, actorUserId: req?.user?.id || null, objectType: "product", objectId: action.productId, idempotencyKey: `webshop.publish:${action.productId}` });
+      return { status: "completed", productId: action.productId };
+    },
+  },
+  {
+    key: "UNPUBLISH_FROM_WEB_SHOP",
+    displayName: "Unpublish from Web Shop",
+    description: "Hide a canonical product from the public storefront.",
+    validation: (action) => {
+      if (!action?.productId) throw new Error("Unpublish from Web Shop requires a productId");
+    },
+    async: true,
+    requiredPermissions: ["product.manage"],
+    executor: async ({ db, action, companyId, req }) => {
+      const targetCompanyId = companyId || req?.user?.companyId;
+      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
+      await db(
+        `UPDATE products SET web_shop_published=false, updated_at=NOW() WHERE id=$1 AND company_id=$2`,
+        [action.productId, targetCompanyId]
+      );
+      await publishPlatformEvent({ db, companyId: targetCompanyId, eventType: "webshop.product_unpublished", payload: { productId: action.productId }, actorUserId: req?.user?.id || null, objectType: "product", objectId: action.productId, idempotencyKey: `webshop.unpublish:${action.productId}` });
+      return { status: "completed", productId: action.productId };
+    },
+  },
+  {
+    key: "UPDATE_WEB_LISTING",
+    displayName: "Update Web Listing",
+    description: "Apply canonical product listing metadata for the Web Shop storefront.",
+    validation: (action) => {
+      if (!action?.productId) throw new Error("Update Web Listing requires a productId");
+    },
+    async: true,
+    requiredPermissions: ["product.manage"],
+    executor: async ({ db, action, companyId, req }) => {
+      const targetCompanyId = companyId || req?.user?.companyId;
+      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
+      const fields = [];
+      const values = [action.productId, targetCompanyId];
+      const assign = (column, value) => { if (value !== undefined) { fields.push(`${column}=$${values.length + 1}`); values.push(value); } };
+      assign("web_shop_title_override", action.webShopTitleOverride);
+      assign("web_shop_description_override", action.webShopDescriptionOverride);
+      assign("web_shop_image_override", action.webShopImageOverride);
+      assign("web_shop_category_override", action.webShopCategoryOverride);
+      assign("web_shop_sort_order", action.webShopSortOrder);
+      assign("web_shop_delivery_eligible", action.webShopDeliveryEligible);
+      assign("web_shop_pickup_eligible", action.webShopPickupEligible);
+      assign("web_shop_featured", action.webShopFeatured);
+      assign("web_shop_price_override", action.webShopPriceOverride);
+      if (!fields.length) return { status: "completed", productId: action.productId, updated: false };
+      fields.push("updated_at=NOW()");
+      await db(`UPDATE products SET ${fields.join(", ")} WHERE id=$1 AND company_id=$2`, values);
+      await publishPlatformEvent({ db, companyId: targetCompanyId, eventType: "webshop.listing_updated", payload: { productId: action.productId, changes: fields }, actorUserId: req?.user?.id || null, objectType: "product", objectId: action.productId, idempotencyKey: `webshop.listing:${action.productId}` });
+      return { status: "completed", productId: action.productId, updated: true };
+    },
+  },
+  {
+    key: "SET_WEB_FEATURED",
+    displayName: "Set Web Featured",
+    description: "Toggle the product featured status in Web Shop listings.",
+    validation: (action) => {
+      if (!action?.productId) throw new Error("Set Web Featured requires a productId");
+    },
+    async: true,
+    requiredPermissions: ["product.manage"],
+    executor: async ({ db, action, companyId, req }) => {
+      const targetCompanyId = companyId || req?.user?.companyId;
+      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
+      await db(
+        `UPDATE products SET web_shop_featured=$3, updated_at=NOW() WHERE id=$1 AND company_id=$2`,
+        [action.productId, targetCompanyId, action.webShopFeatured === true]
+      );
+      return { status: "completed", productId: action.productId, featured: action.webShopFeatured === true };
+    },
+  },
+  {
+    key: "CALL_FUNCTION",
+    displayName: "Call Function",
+    description: "Invoke a registered, approved onePOS function.",
+    validation: (action) => {
+      if (!action?.functionKey && !action?.key) throw new Error("Call Function requires a functionKey");
+    },
+    async: false,
+    requiredPermissions: ["functions.execute"],
+    executor: async (context) => {
+      const { action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields, workflowVariables } = context;
+      const functionKey = action.functionKey || action.key;
+      const functionDefinition = getRegisteredFunction(functionKey);
+      if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
+      if (typeof functionDefinition.handler !== "function") {
+        throw new Error(`Function "${functionKey}" has no handler`);
+      }
+      const inputs = resolveBindingTree(action.inputs || {}, {
+        record,
+        rootObjectKey: object?.object_key || object?.objectKey || null,
+        variables: workflowVariables || context.globals || {},
+      });
+      return functionDefinition.handler({
+        ...context,
+        action,
+        inputs,
+        db: businessDb || db,
+        pool,
+        client,
+        req,
+        companyId,
+        userId,
+        record,
+        previousRecord,
+        object,
+        fields,
+      });
+    },
+  },
+  {
+    key: "RUN_SUBFLOW",
+    displayName: "Run Subflow",
+    description: "Run another approved workflow as a child workflow.",
+    validation: (action) => {
+      if (!action?.workflowId && !action?.subflowId && !(action?.workflow && Array.isArray(action.workflow.actions))) throw new Error("Run Subflow requires a workflowId");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, db, companyId, req, record, previousRecord, object, fields, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
+      const workflowKey = action.workflowId || action.subflowId || action.workflow?.id || action.workflow?.key || "inline-subflow";
+      const stack = Array.isArray(workflowStack) ? workflowStack.slice() : [];
+      const parentGuard = context.executionGuard || createExecutionGuard({ maxDepth: 8, chain: stack });
+      const childGuard = parentGuard.enter(workflowKey);
+      const nextDepth = childGuard.chain.length;
+      context.governor?.checkSubflowDepth(nextDepth);
+      const subflowDefinition = action.workflow && Array.isArray(action.workflow.actions)
+        ? action.workflow
+        : (() => {
+            if (!db || typeof db !== "function") return null;
+            const id = action.workflowId || action.subflowId;
+            if (!id) return null;
+            return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
+          })();
+      const definition = await Promise.resolve(subflowDefinition);
+      if (!definition) {
+        throw new Error(`Subflow "${workflowKey}" was not found or is not active`);
+      }
+      const targetCompanyId = action.companyId || definition.company_id || companyId || req?.user?.companyId;
+      const runtimeCompanyId = companyId || req?.user?.companyId;
+      if (targetCompanyId && runtimeCompanyId && targetCompanyId !== runtimeCompanyId) {
+        throw new Error("Cross-company subflow execution is not allowed");
+      }
+      const childActions = Array.isArray(definition.actions) ? definition.actions : Array.isArray(definition.action?.actions) ? definition.action.actions : [];
+      if (!childActions.length) {
+        return { status: "skipped", workflowId: workflowKey, reason: "Subflow contains no actions" };
+      }
+      const mappedInputs = {};
+      const mappings = action.inputs || action.inputMap || action.mappings || {};
+      for (const [sourceKey, targetKey] of Object.entries(mappings)) {
+        const sourceValue = sourceKey in (context || {}) ? context[sourceKey] : (record && Object.prototype.hasOwnProperty.call(record, sourceKey) ? record[sourceKey] : undefined);
+        if (sourceValue !== undefined) {
+          mappedInputs[targetKey] = sourceValue;
+        }
+      }
+      const mergedRecord = { ...(record || {}), ...mappedInputs };
+      const childRun = db && typeof db === "function"
+        ? await createWorkflowRun({
+            db,
+            companyId: targetCompanyId || runtimeCompanyId,
+            workflowId: workflowKey,
+            workflowName: definition.name || action.workflowName || "Subflow",
+            objectId: object?.id || action.objectId || null,
+            recordId: record?.id || action.recordId || null,
+            triggerKey: "subflow",
+            parentRunId: runId || null,
+            status: "RUNNING",
+            metadata: { parentWorkflow: workflowKey, inputMappings: mappings },
+          })
+        : null;
+      const childStep = childRun && db && typeof db === "function"
+        ? await createWorkflowStepRun({
+            db,
+            runId: childRun.id,
+            stepIdentifier: `subflow:${workflowKey}`,
+            stepOrder: 0,
+            actionType: "RUN_SUBFLOW",
+            status: "RUNNING",
+            metadata: { parentRunId: runId || null },
+          })
+        : null;
+      const childResult = await executeWorkflowActions({
+        actions: childActions,
+        db,
+        object,
+        fields,
+        record: mergedRecord,
+        previousRecord,
+        req,
+        companyId: targetCompanyId || runtimeCompanyId,
+        workflowDepth: nextDepth,
+        workflowStack: [...childGuard.chain],
+        executionGuard: childGuard,
+        governor: context.governor || null,
+        workflowId: workflowKey,
+        parentRunId: runId || null,
+        runId: childRun?.id || runId || null,
+        stepRunId: childStep?.id || stepRunId || null,
+        executionContext: context.executionContext || null,
+        source: { type: "SUBFLOW" },
+      });
+      if (childRun && db && typeof db === "function") {
+        await db(
+          `UPDATE platform_workflow_runs SET status=$1, completed_at=NOW(), metadata=COALESCE(metadata,'{}'::jsonb) || $2::jsonb, updated_at=NOW() WHERE id=$3`,
+          [childResult.some((item) => item.result?.status === "failed") ? "FAILED" : "COMPLETED", JSON.stringify({ childResults: childResult }), childRun.id]
+        );
+      }
+      if (stepRunId) {
+        await updateWorkflowStepRunStatus({
+          db,
+          stepRunId,
+          status: childResult.some((item) => item.result?.status === "failed") ? "FAILED" : "COMPLETED",
+          errorText: childResult.find((item) => item.result?.error)?.result?.error || null,
+          metadata: { childRunId: childRun?.id || null, childResults: childResult },
+        });
+      }
+      return {
+        status: childResult.some((item) => item.result?.status === "failed") ? "failed" : "completed",
+        workflowId: workflowKey,
+        runId: childRun?.id || null,
+        results: childResult,
+      };
+    },
+  },
+  {
+    key: "CALL_WEBHOOK",
+    displayName: "Call Webhook",
+    description: "Send a webhook through OneConnection; legacy direct endpoints remain metadata-compatible.",
+    validation: (action) => {
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("Call Webhook requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("Call Webhook requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a OneConnection or legacy endpoint");
+    },
+    async: true,
+    requiredPermissions: ["integrations.execute"],
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
+  },
+  {
+    key: "HTTP_REQUEST",
+    displayName: "HTTP Request",
+    description: "Send an HTTP request through OneConnection; legacy direct endpoints remain metadata-compatible.",
+    validation: (action) => {
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("HTTP Request requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("HTTP Request requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a OneConnection or legacy endpoint");
+    },
+    async: true,
+    requiredPermissions: ["integrations.execute"],
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
+  },
+  {
+    key: "WEBHOOK",
+    displayName: "Webhook",
+    description: "Send a webhook through OneConnection; legacy direct endpoints remain metadata-compatible.",
+    validation: (action) => {
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("Webhook requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("Webhook requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("Webhook requires a OneConnection or legacy endpoint");
+    },
+    async: true,
+    requiredPermissions: ["integrations.execute"],
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
+  },
+  {
+    key: "CONDITION",
+    displayName: "Condition",
+    description: "Evaluate a branch condition and select flow path.",
+    validation: (action) => {
+      if (!action?.condition) throw new Error("Condition requires a condition");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, fields, record, previousRecord }) => {
+      const condition = action.condition;
+      const result = evaluateCondition(condition, fields || [], record || {}, previousRecord || null);
+      return { status: result ? "completed" : "skipped", matched: Boolean(result) };
+    },
+  },
+  {
+    key: "WAIT",
+    displayName: "Wait",
+    description: "Pause a workflow without blocking an HTTP request.",
+    validation: (action) => {
+      if (!action?.durationSeconds && !action?.waitSeconds && !action?.until) {
+        throw new Error("Wait requires a durationSeconds or until value");
+      }
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ db, action, companyId, req }) => {
+      const waitSeconds = Number(action.durationSeconds ?? action.waitSeconds ?? 0);
+      const runAt = new Date(Date.now() + Math.max(0, waitSeconds || 0) * 1000);
+      const job = await enqueuePlatformJob({
+        db,
+        companyId: companyId || req?.user?.companyId,
+        kind: "WAIT",
+        payload: { waitSeconds, action },
+        runAt,
+        idempotencyKey: `${companyId || req?.user?.companyId || "workflow"}:wait:${Date.now()}`,
+      });
+      return { status: job ? "waiting" : "skipped", jobId: job?.id || null, resumeAt: runAt.toISOString() };
+    },
+  },
+  {
+    key: "QUICKBOOKS_TEST_CONNECTION",
+    displayName: "Test QuickBooks Connection",
+    description: "Verify the enabled, company-scoped QuickBooks connection without returning credentials.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage"],
+    executor: async (context) => {
+      try {
+        const loaded = await loadProviderConnection(context, "quickbooks");
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", message: "QuickBooks connection is not configured" };
+        const { credentials } = loaded;
+        const result = await createQuickBooksAdapter().testConnection({
+          environment: credentials.environment,
+          realmId: credentials.realmId || credentials.realm_id,
+          accessToken: credentials.accessToken || credentials.access_token,
+        });
+        return { success: true, ...result };
+      } catch {
+        return { success: false, code: "CONNECTION_FAILED", message: "Unable to verify the QuickBooks connection. Review the settings and retry." };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_SYNC_VENDORS",
+    displayName: "Sync QuickBooks Vendors",
+    description: "Create or update mapped QuickBooks vendors from canonical onePOS suppliers.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const supplierIds = context.action?.supplierId
+          ? [context.action.supplierId]
+          : (await context.db("SELECT id FROM suppliers WHERE company_id=$1 AND active=true ORDER BY name", [companyId])).rows.map((row) => row.id);
+        const results = [];
+        for (const supplierId of supplierIds) results.push(await syncQuickBooksVendor({ db: context.db, companyId, ...loaded, supplierId }));
+        return { success: true, synced: results.length, results };
+      } catch (error) {
+        return { success: false, code: "VENDOR_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks vendor sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_SYNC_PURCHASES",
+    displayName: "Sync QuickBooks Purchases",
+    description: "Export canonical onePOS purchases and supplier invoices as QuickBooks Bills.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const action = context.action || {};
+        const ids = action.purchaseId || action.invoiceId
+          ? [{ purchaseId: action.purchaseId || null, invoiceId: action.invoiceId || null }]
+          : (await context.db("SELECT id FROM purchases WHERE company_id=$1 AND status <> 'CANCELLED' ORDER BY purchase_date", [companyId])).rows.map((row) => ({ purchaseId: row.id, invoiceId: null }));
+        const results = [];
+        for (const entity of ids) results.push(await exportQuickBooksPurchase({ db: context.db, companyId, ...loaded, ...entity }));
+        return { success: true, synced: results.length, results };
+      } catch (error) {
+        return { success: false, code: "PURCHASE_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks purchase sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",
+    displayName: "Sync QuickBooks Supplier Payments",
+    description: "Export canonical supplier payments and invoice allocations to QuickBooks.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const ids = context.action?.paymentId
+          ? [context.action.paymentId]
+          : (await context.db("SELECT id FROM supplier_payments WHERE company_id=$1 AND status='COMPLETED' ORDER BY payment_date", [companyId])).rows.map((row) => row.id);
+        const results = [];
+        for (const paymentId of ids) results.push(await exportQuickBooksSupplierPayment({ db: context.db, companyId, ...loaded, paymentId }));
+        return { success: true, synced: results.length, results };
+      } catch (error) {
+        return { success: false, code: "SUPPLIER_PAYMENT_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks supplier payment sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_SYNC_SUPPLIER_CREDITS",
+    displayName: "Sync QuickBooks Supplier Credits",
+    description: "Export canonical supplier returns as QuickBooks Vendor Credits.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export", "returns.create"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const ids = context.action?.returnId
+          ? [context.action.returnId]
+          : (await context.db("SELECT id FROM stock_returns WHERE company_id=$1 AND return_type='SUPPLIER' AND status='COMPLETED' ORDER BY created_at", [companyId])).rows.map((row) => row.id);
+        const results = [];
+        for (const returnId of ids) results.push(await exportQuickBooksSupplierCredit({ db: context.db, companyId, ...loaded, returnId }));
+        return { success: true, synced: results.length, results };
+      } catch (error) {
+        return { success: false, code: "SUPPLIER_CREDIT_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks supplier credit sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "QUICKBOOKS_RETRY_FAILED_SYNC",
+    displayName: "Retry Failed QuickBooks Sync",
+    description: "Retry a failed QuickBooks vendor, purchase, supplier payment, or supplier credit export idempotently.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "accounting.export"],
+    executor: async (context) => {
+      const syncType = String(context.action?.syncType || "vendors").toLowerCase();
+      const companyId = context.companyId || context.req?.user?.companyId;
+      try {
+        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
+        const action = context.action || {};
+        const result = syncType === "vendors"
+          ? await syncQuickBooksVendor({ db: context.db, companyId, ...loaded, supplierId: action.supplierId })
+          : syncType === "purchases"
+            ? await exportQuickBooksPurchase({ db: context.db, companyId, ...loaded, purchaseId: action.purchaseId, invoiceId: action.invoiceId })
+            : syncType === "payments"
+              ? await exportQuickBooksSupplierPayment({ db: context.db, companyId, ...loaded, paymentId: action.paymentId })
+              : syncType === "credits"
+                ? await exportQuickBooksSupplierCredit({ db: context.db, companyId, ...loaded, returnId: action.returnId })
+                : null;
+        if (!result) return { success: false, code: "INVALID_SYNC_TYPE", retryable: false, message: "QuickBooks retry must target vendors, purchases, payments or credits" };
+        return { success: true, retried: syncType, ...result };
+      } catch (error) {
+        return { success: false, code: "SYNC_RETRY_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks sync retry failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_TEST_CONNECTION",
+    displayName: "Test Shopify Connection",
+    description: "Verify the enabled, company- and store-scoped Shopify connection without returning credentials.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage"],
+    executor: async (context) => {
+      try {
+        const companyId = context.companyId || context.req?.user?.companyId;
+        const requestCompanyId = context.req?.user?.companyId;
+        if (requestCompanyId && String(requestCompanyId) !== String(companyId)) {
+          return { success: false, code: "CONNECTION_FAILED", message: "Unable to verify the Shopify connection. Review the settings and retry." };
+        }
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", message: "Shopify connection is not configured" };
+        const { connection, credentials } = loaded;
+        const shopDomain = credentials.shopDomain || credentials.shop_domain || connection.base_url;
+        const domain = String(shopDomain || "").replace(/^https?:\/\//i, "").replace(/\/$/, "");
+        const result = await createShopifyAdapter().testConnection({
+          shopDomain: domain,
+          apiVersion: credentials.apiVersion || credentials.api_version,
+          accessToken: credentials.accessToken || credentials.access_token,
+        });
+        return { success: true, ...result };
+      } catch {
+        return { success: false, code: "CONNECTION_FAILED", message: "Unable to verify the Shopify connection. Review the settings and retry." };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_PROCESS_WEBHOOK",
+    displayName: "Process Shopify Webhook",
+    description: "Import Shopify orders into Online Orders and apply cancellation events through the canonical lifecycle.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.manage"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const connectionId = context.action?.connectionId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        const result = await processShopifyWebhookEvent({
+          db: context.db,
+          pool: context.pool,
+          companyId,
+          connection: loaded.connection,
+          credentials: loaded.credentials,
+          event: context.action,
+          createInventoryMovement: context.createInventoryMovement,
+        });
+        if (result?.syncRequired === true) {
+          const eventKey = context.action?.eventId || context.action?.deliveryId || `${result.inventoryItemId}:${result.locationId}:${result.externalQuantity}`;
+          await enqueuePlatformJob({
+            db: context.db,
+            companyId,
+            kind: "SHOPIFY_PROVIDER_SYNC",
+            idempotencyKey: `shopify:inventory-reconcile:${loaded.connection.id}:${eventKey}`.slice(0, 200),
+            payload: { type: "SHOPIFY_SYNC_INVENTORY", connectionId: loaded.connection.id, storeId: result.storeId },
+          });
+          result.reconciliationQueued = true;
+        }
+        if (result?.success === false) return { ...result, retryable: result.retryable === true };
+        return { success: true, ...result };
+      } catch (error) {
+        return {
+          success: false,
+          code: "PROCESSING_FAILED",
+          retryable: error?.retryable === true,
+          message: String(error?.message || "Shopify webhook processing failed").slice(0, 500),
+        };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_SYNC_PRODUCTS",
+    displayName: "Sync Shopify Products",
+    description: "Upsert canonical onePOS products and variants into the configured Shopify store.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "product.manage"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        const result = await syncShopifyProducts({ db: context.db, companyId, storeId, ...loaded });
+        await context.db("UPDATE integration_connections SET last_error=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [loaded.connection.id, companyId]);
+        return { success: true, ...result };
+      } catch (error) {
+        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify product sync failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
+        return { success: false, code: "SYNC_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify product sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_SYNC_INVENTORY",
+    displayName: "Sync Shopify Inventory",
+    description: "Set Shopify inventory levels from the canonical onePOS store stock balances.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "inventory.view"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        const result = await syncShopifyInventory({ db: context.db, companyId, storeId, ...loaded });
+        await context.db("UPDATE integration_connections SET last_error=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [loaded.connection.id, companyId]);
+        return { success: true, ...result };
+      } catch (error) {
+        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify inventory sync failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
+        return { success: false, code: "SYNC_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify inventory sync failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_RETRY_FAILED_SYNC",
+    displayName: "Retry Failed Shopify Sync",
+    description: "Retry the selected Shopify product or inventory synchronisation after a provider failure.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage"],
+    executor: async (context) => {
+      const syncType = String(context.action?.syncType || "products").toLowerCase();
+      if (!["products", "inventory", "fulfilment", "refund"].includes(syncType)) return { success: false, code: "INVALID_SYNC_TYPE", retryable: false, message: "Shopify retry must target products, inventory, fulfilment or refund" };
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        const result = syncType === "products"
+          ? await syncShopifyProducts({ db: context.db, companyId, storeId, ...loaded })
+          : syncType === "inventory"
+            ? await syncShopifyInventory({ db: context.db, companyId, storeId, ...loaded })
+            : syncType === "fulfilment"
+              ? await exportShopifyFulfillment({ db: context.db, pool: context.pool, companyId, storeId, orderId: context.action?.orderId, ...loaded })
+              : await exportShopifyRefund({ db: context.db, pool: context.pool, companyId, storeId, returnId: context.action?.returnId, ...loaded });
+        await context.db("UPDATE integration_connections SET last_error=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [loaded.connection.id, companyId]);
+        return { success: true, retried: syncType, ...result };
+      } catch (error) {
+        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify sync retry failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
+        return { success: false, code: "SYNC_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify sync retry failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_EXPORT_FULFILMENT",
+    displayName: "Export Shopify Fulfilment",
+    description: "Create the Shopify fulfilment for a completed canonical onePOS order.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "online_orders.manage"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        return {
+          success: true,
+          ...(await exportShopifyFulfillment({
+            db: context.db, pool: context.pool, companyId, storeId, orderId: context.action?.orderId, ...loaded,
+            notifyCustomer: context.action?.notifyCustomer !== false,
+          })),
+        };
+      } catch (error) {
+        return { success: false, code: "FULFILMENT_EXPORT_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify fulfilment export failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "SHOPIFY_EXPORT_REFUND",
+    displayName: "Export Shopify Refund",
+    description: "Export a canonical onePOS customer return refund for a Shopify order.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["integration.manage", "returns.create"],
+    executor: async (context) => {
+      const companyId = context.companyId || context.req?.user?.companyId;
+      const storeId = context.storeId || context.req?.user?.storeId;
+      try {
+        const unavailable = await shopifyPackageAvailability(context.db, companyId);
+        if (unavailable) return unavailable;
+        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
+        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
+        return {
+          success: true,
+          ...(await exportShopifyRefund({ db: context.db, pool: context.pool, companyId, storeId, returnId: context.action?.returnId, ...loaded })),
+        };
+      } catch (error) {
+        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify refund export failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
+        return { success: false, code: "REFUND_EXPORT_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify refund export failed").slice(0, 500) };
+      }
+    },
+  },
+  {
+    key: "UBER_GET_STORES",
+    displayName: "Get Uber Eats Stores",
+    description: "List Uber Eats stores available to the configured company connector.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: async (context) => {
+      const { runtime, service } = await loadUberWorkflowContext(context);
+      if (runtime.enabled !== true) {
+        return {
+          success: false,
+          code: "PLATFORM_DISABLED",
+          message: "Uber Eats integration is disabled in Settings - Online Platforms",
+          httpStatus: null,
+          data: null,
+        };
+      }
+      return service.getStores(runtime);
+    },
+  },
+  {
+    key: "UBER_TEST_CONNECTION",
+    displayName: "Test Uber Eats Connection",
+    description: "Test the configured Uber Eats connector and discover its accessible stores.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: async (context) => {
+      const { runtime, service } = await loadUberWorkflowContext(context);
+      return runUberStoreConnectionTest(runtime, service);
+    },
+  },
+  {
+    key: "UBER_UPLOAD_MENU",
+    displayName: "Upload Uber Eats Menu",
+    description: "Publish the tenant's Uber-enabled Product Master items to its configured Uber Eats store.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: async (context) => {
+      const { db, runtime, service } = await loadUberWorkflowContext(context);
+      if (runtime.enabled !== true) {
+        return {
+          success: false,
+          code: "PLATFORM_DISABLED",
+          message: "Uber Eats integration is disabled in Settings - Online Platforms",
+          productCount: 0,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      const productsResult = await db(
+        `SELECT p.id, p.name, p.description, p.price, p.vat_rate, p.active,
+                p.uber_item_id, p.available_on_uber, p.category_id,
+                c.name AS category_name
+           FROM products p
+           LEFT JOIN categories c ON c.id = p.category_id
+          WHERE p.company_id = $1
+            AND (p.available_on_uber = true OR p.uber_item_id IS NOT NULL)
+          ORDER BY c.display_order, c.name, p.name`,
+        [context.companyId || context.req?.user?.companyId]
+      );
+      const products = productsResult.rows;
+      if (!products.length) {
+        return {
+          success: false,
+          code: "NOTHING_TO_SYNC",
+          message: "No products are marked 'Available on Uber Eats' in the Product Master",
+          productCount: 0,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      if (runtime.configured !== true) {
+        return { ...await service.syncMenu(products, runtime), productCount: products.length };
+      }
+      const requestedStoreId = String(context.action?.storeId || "").trim();
+      const storeId = String(context.action?.storeId || runtime.store_id || runtime.store_location_id || "").trim();
+      const storeMenuMappings = runtime.store_menu_mappings || [];
+      const configuredStoreIds = new Set([
+        runtime.store_id,
+        ...runtime.store_mappings.map((entry) => entry.uber_store_id),
+        ...storeMenuMappings.map((entry) => entry.uber_store_id),
+      ].filter(Boolean).map(String));
+      if (requestedStoreId && !configuredStoreIds.has(requestedStoreId)) {
+        return {
+          success: false,
+          code: "UBER_STORE_NOT_CONFIGURED",
+          message: `Uber store ${requestedStoreId} is not configured for this company`,
+          productCount: products.length,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      const selectedStoreMenuMapping = storeMenuMappings.find(
+        (entry) => entry.uber_store_id === storeId
+      );
+      if (!storeId) {
+        return {
+          success: false,
+          code: "STORE_NOT_MAPPED",
+          message: "Select an Uber store before syncing its menu",
+          productCount: products.length,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      if (
+        (storeMenuMappings.length > 0 && !selectedStoreMenuMapping) ||
+        (storeMenuMappings.length === 0 && runtime.store_mappings.length > 1)
+      ) {
+        return {
+          success: false,
+          code: "STORE_MENU_CONFIGURATION_REQUIRED",
+          message: `Configure a menu mapping for Uber store ${storeId} before syncing`,
+          productCount: products.length,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+      const menuRuntime = {
+        ...runtime,
+        store_id: storeId,
+        store_location_id: storeId,
+        menu_mapping: selectedStoreMenuMapping?.menu_mapping || runtime.menu_mapping || null,
+      };
+      let mappingProducts = products;
+      let customFields;
+      if (menuRuntime.menu_mapping) {
+        const customFieldResult = await db(
+          `SELECT f.api_name
+             FROM platform_fields f
+             JOIN platform_objects o ON o.id = f.object_id
+            WHERE o.object_key = 'product'
+              AND o.active = true
+              AND f.active = true
+              AND f.config->>'storage' = 'extension'
+              AND (o.company_id IS NULL OR o.company_id = $1)
+              AND (f.company_id IS NULL OR f.company_id = $1)`,
+          [context.companyId || context.req?.user?.companyId]
+        );
+        customFields = customFieldResult.rows.map((field) => field.api_name);
+        const overridesResult = await db(
+          `SELECT a.record_id, a.custom_values
+             FROM platform_record_associations a
+             JOIN platform_objects o ON o.id = a.object_id
+            WHERE o.object_key = 'product'
+              AND o.active = true
+              AND (o.company_id IS NULL OR o.company_id = $1)
+              AND a.company_id = $1
+              AND a.record_id = ANY($2::uuid[])`,
+          [context.companyId || context.req?.user?.companyId, products.map((product) => product.id)]
+        );
+        const overridesById = new Map(
+          overridesResult.rows.map((row) => [String(row.record_id), row.custom_values || {}])
+        );
+        mappingProducts = products.map((product) => ({
+          ...product,
+          custom_values: overridesById.get(String(product.id)) || {},
+        }));
+      }
+
+      try {
+        const { products: mappedProducts } = resolveUberMenuProducts(mappingProducts, menuRuntime.menu_mapping, { customFields });
+        return { ...await service.syncMenu(mappedProducts, menuRuntime), productCount: products.length };
+      } catch (error) {
+        if (!(error instanceof UberMenuMappingError)) throw error;
+        return {
+          success: false,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          productCount: products.length,
+          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
+          httpStatus: null,
+          data: null,
+        };
+      }
+    },
+  },
+  {
+    key: "UBER_ACCEPT_ORDER",
+    displayName: "Accept Uber Eats Order",
+    description: "Acknowledge a received Uber Eats order using its company-scoped onePOS order record.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.manage"],
+    executor: (context) => executeUberOrderAction(context, "accept"),
+  },
+  {
+    key: "UBER_DENY_ORDER",
+    displayName: "Deny Uber Eats Order",
+    description: "Deny a received or accepted Uber Eats order using its company-scoped onePOS order record.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.manage"],
+    executor: (context) => executeUberOrderAction(context, "deny"),
+  },
+  {
+    key: "UBER_UPDATE_ITEM_PRICE",
+    displayName: "Update Uber Eats Item Price",
+    description: "Update one company-scoped Uber Eats item price.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: (context) => executeUberItemAction(context, "price"),
+  },
+  {
+    key: "UBER_SET_ITEM_UNAVAILABLE",
+    displayName: "Set Uber Eats Item Unavailable",
+    description: "Suspend one company-scoped Uber Eats item until a future time.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: (context) => executeUberItemAction(context, "unavailable"),
+  },
+  {
+    key: "UBER_SET_ITEM_AVAILABLE",
+    displayName: "Set Uber Eats Item Available",
+    description: "Remove the suspension from one company-scoped Uber Eats item.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["online_orders.configure"],
+    executor: (context) => executeUberItemAction(context, "available"),
+  },
+  {
+    key: "STOP",
+    displayName: "Stop",
+    description: "Stop workflow execution cleanly and record the reason.",
+    validation: () => undefined,
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action }) => ({ status: "stopped", reason: action?.reason || "Workflow stopped by action" }),
+  },
+]);
+
+export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definition) => [String(definition.key || "").toUpperCase(), definition]));
+
+export const REGISTERED_FUNCTIONS = PLATFORM_FUNCTIONS;
+
+export const REGISTERED_FUNCTIONS_MAP = PLATFORM_FUNCTION_MAP;
+
+export function getWorkflowActionRegistry() {
+  return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
+}
+
+export function getWorkflowActionDefinition(key) {
+  const normalized = String(key || "").toUpperCase();
+  return (WORKFLOW_ACTION_MAP.get(normalized) || DYNAMIC_CONNECTOR_ACTIONS.find((entry) => String(entry.key || "").toUpperCase() === normalized) || null);
+}
+
+export function validateWorkflowAction(action) {
+  if (!action || typeof action !== "object") {
+    throw new Error("Workflow action must be an object");
+  }
+  const type = String(action.type || action.key || "").toUpperCase();
+  const definition = getWorkflowActionDefinition(type) || getWorkflowActionDefinition(action.type || action.key);
+  if (!definition) {
+    throw new Error(`Unsupported workflow action: ${action.type || action.key}`);
+  }
+  if (typeof definition.validation === "function") {
+    definition.validation(action);
+  }
+  return definition;
+}
+
+export function getRegisteredFunction(functionKey) {
+  return REGISTERED_FUNCTIONS_MAP.get(String(functionKey || "")) || null;
+}
+
+export function getRegisteredFunctionsRegistry() {
+  return REGISTERED_FUNCTIONS.slice();
+}
+
+async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId }) {
+  if (!db || typeof db !== "function" || !companyId) return null;
+  const where = objectId ? "id=$1" : "object_key=$1";
+  const value = objectId || objectKey;
+  if (!value) return null;
+  const result = await db(
+    `SELECT * FROM platform_objects
+      WHERE ${where}
+        AND active=true
+        AND source_table IS NOT NULL
+        AND (company_id=$2 OR company_id IS NULL)
+      ORDER BY CASE WHEN company_id=$2 THEN 0 ELSE 1 END, id
+      LIMIT 1`,
+    [value, companyId]
+  );
+  return result.rows[0] || null;
+}
+
+async function resolveWorkflowTargetObject({ db, action = {}, object = null, companyId, req }) {
+  const runtimeCompanyId = companyId || req?.user?.companyId || null;
+  if (!runtimeCompanyId || (req?.user?.companyId && String(req.user.companyId) !== String(runtimeCompanyId))) {
+    throw new Error("Workflow target company context is invalid");
+  }
+  if (action.sourceTable || action.targetTable || action.relatedTable) {
+    throw new Error("Workflow target tables must be resolved from tenant-scoped Platform metadata");
+  }
+  const requestedObjectId = action.objectId || action.object_id || null;
+  const requestedObjectKey = action.objectKey || action.object_key || null;
+  const objectId = requestedObjectId || (!requestedObjectKey ? object?.id || null : null);
+  const objectKey = requestedObjectKey || (!objectId ? object?.object_key || object?.api_name || null : null);
+  const target = await resolveTargetObjectMetadata({ db, objectId, objectKey, companyId: runtimeCompanyId });
+  if (!target) throw new Error("Workflow target object is not available for this company");
+  const tenantOwned = target.company_id != null && String(target.company_id) === String(runtimeCompanyId);
+  const globalTenantScoped = target.company_id == null && target.company_scoped === true;
+  if (!isSafeIdentifier(target.source_table) || (!tenantOwned && !globalTenantScoped)) {
+    throw new Error("Workflow target object is not permitted");
+  }
+  return target;
+}
+
+async function resolveWorkflowWritableFields({ db, object, fields = [], entries, req, executionMode, trustedSystem }) {
+  const metadata = Array.isArray(fields) && fields.length
+    ? fields
+    : (await db(
+      `SELECT * FROM platform_fields
+        WHERE object_id=$1 AND active=true
+          AND (company_id IS NULL OR company_id=$2)
+        ORDER BY display_order`,
+      [object.id, authoritativeRuntimeCompanyId({ req, companyId: object.company_id })]
+    )).rows;
+  const secured = await assertRuntimeFieldWriteAccess({
+    db,
+    req,
+    object,
+    fields: metadata,
+    fieldNames: entries.map(([name]) => String(name)),
+    executionMode,
+    trustedSystem,
+  });
+  return secured.map((field) => ({ ...field, source_column: field.source_column || field.api_name }));
+}
+
+function alignWorkflowWritableValues(mappedFields = [], entries = []) {
+  const requested = new Map(entries.map(([name, value]) => [String(name), value]));
+  return mappedFields.map((field) => {
+    const apiName = String(field.api_name || "");
+    const sourceColumn = String(field.source_column || apiName);
+    if (requested.has(apiName)) return { field, value: requested.get(apiName) };
+    if (requested.has(sourceColumn)) return { field, value: requested.get(sourceColumn) };
+    throw new Error(`Workflow field value is missing for writable field: ${apiName || sourceColumn}`);
+  });
+}
+
+async function checkWorkflowDuplicateRules({ db, object, entries, companyId, req, excludeRecordId = null }) {
+  const metadata = await db(
+    `SELECT * FROM platform_fields
+      WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)`,
+    [object.id, companyId]
+  );
+  const fields = metadata.rows || [];
+  const input = {};
+  for (const [name, value] of entries) {
+    const field = fields.find((candidate) => candidate.api_name === name || candidate.source_column === name);
+    if (field?.api_name) input[field.api_name] = value;
+  }
+  const matches = await findConfiguredDuplicateMatches({
+    db,
+    object,
+    fields,
+    input,
+    companyId,
+    storeId: req?.user?.storeId || null,
+    excludeRecordId,
+  });
+  const action = resolveDuplicateAction(matches);
+  if (action === "BLOCK") {
+    throw Object.assign(new Error("Workflow record matches an active duplicate rule"), { status: 409, code: "EXISTING_RECORD_DUPLICATE" });
+  }
+  return action;
+}
+
+export function createWorkflowRun({ db, companyId, workflowId, workflowName, objectId, recordId, triggerKey, parentRunId = null, startedAt = new Date(), status = "PENDING", metadata = {} }) {
+  if (!db || typeof db !== "function") return null;
+  const payload = { workflowId, workflowName, objectId, recordId, triggerKey, parentRunId, status, metadata: metadata || {} };
+  return db(
+    `INSERT INTO platform_workflow_runs (company_id, workflow_id, workflow_name, object_id, record_id, trigger_key, parent_run_id, status, started_at, metadata)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) RETURNING *`,
+    [companyId, workflowId || null, workflowName || null, objectId || null, recordId || null, triggerKey || null, parentRunId || null, status, startedAt, JSON.stringify(payload.metadata || {})]
+  ).then((result) => result.rows[0] || null);
+}
+
+export function createWorkflowStepRun({ db, runId, stepIdentifier, stepOrder = 0, actionType, status = "PENDING", metadata = {}, jobId = null, childRunId = null, correlationId = null }) {
+  if (!db || typeof db !== "function") return null;
+  return db(
+    `INSERT INTO platform_workflow_step_runs (run_id, step_identifier, step_order, action_type, status, metadata, durable_job_id, child_run_id, correlation_id)
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9) RETURNING *`,
+    [runId, stepIdentifier || null, stepOrder, actionType || null, status, JSON.stringify(metadata || {}), jobId || null, childRunId || null, correlationId || null]
+  ).then((result) => result.rows[0] || null);
+}
+
+export function resolveWorkflowActionType(action) {
+  const normalized = action && (action.type || action.key || action.actionType || "");
+  return String(normalized || "").toUpperCase();
+}
+
+async function assertWorkflowActionPermission(context, definition) {
+  const mode = resolveExecutionMode(context);
+  if (mode === EXECUTION_MODES.SYSTEM) {
+    if (!(context.trustedSystem === true || context.req?.trustedSystemExecution === true || context.executionContext?.globals?.$System?.trusted === true)) {
+      throw Object.assign(new Error("SYSTEM workflow execution is not trusted"), { status: 403, code: "UNTRUSTED_SYSTEM_EXECUTION" });
+    }
+    return;
+  }
+
+  const req = context?.req;
+  if (!req?.user?.id || !req.user.roleId || !req.user.companyId) {
+    throw Object.assign(new Error("Workflow action requires an authenticated USER execution context"), { status: 403, code: "RUNTIME_ACTOR_REQUIRED" });
+  }
+  if (!context?.db || typeof context.db !== "function") {
+    throw new Error("Workflow action authorization context is unavailable");
+  }
+  const required = Array.isArray(definition.requiredPermissions) ? definition.requiredPermissions : [];
+  if (!required.length) return;
+  const [roleResult, permissionSets] = await Promise.all([
+    context.db(
+      `SELECT 1
+       FROM role_permissions rp
+       JOIN permissions p ON p.id=rp.permission_id
+       WHERE rp.role_id=$1 AND p.code = ANY($2::text[])
+       LIMIT 1`,
+      [req.user.roleId, required]
+    ),
+    loadEffectivePermissionSets(context.db, req.user, req),
+  ]);
+  const setAllowed = required.some((permission) => permissionSetAllowsSystemPermission(permissionSets, permission));
+  if (!roleResult.rows.length && !setAllowed) {
+    throw Object.assign(new Error("You do not have permission to execute this workflow action"), { status: 403, code: "WORKFLOW_ACTION_PERMISSION_REQUIRED" });
+  }
+}
+
+export async function executeWorkflowAction(context) {
+  const action = context?.action;
+  const definition = validateWorkflowAction(action);
+  await assertWorkflowActionPermission(context, definition);
+  if (typeof definition.executor !== "function") {
+    return { status: "skipped", reason: "No executor configured" };
+  }
+  return definition.executor(context);
+}
+
+async function recordCompensationFailure({ db, runId, stepRunId, action, error, context }) {
+  const details = errorDetails(error);
+  if (!db || !runId) return details;
+  await db(
+    `INSERT INTO platform_workflow_compensation_runs
+       (run_id, step_run_id, company_id, action_type, status, error_text, metadata)
+     VALUES ($1,$2,$3,$4,'FAILED',$5,$6::jsonb)`,
+    [runId, stepRunId || null, context.companyId || context.req?.user?.companyId || null, resolveWorkflowActionType(action), details.message, JSON.stringify({ error: details })]
+  );
+  return details;
+}
+
+async function getOrCreateWorkflowStepRun({ db, runId, stepIdentifier, stepOrder, actionType, correlationId = null }) {
+  const existing = await db(
+    "SELECT * FROM platform_workflow_step_runs WHERE run_id=$1 AND step_identifier=$2 ORDER BY created_at DESC LIMIT 1",
+    [runId, stepIdentifier]
+  );
+  if (existing.rows?.[0]) return existing.rows[0];
+  return createWorkflowStepRun({
+    db,
+    runId,
+    stepIdentifier,
+    stepOrder,
+    actionType,
+    status: "RUNNING",
+    correlationId,
+    metadata: { irreversible: IRREVERSIBLE_ACTIONS.has(actionType) },
+  });
+}
+
+async function compensateCompletedSteps(completed, context, originalError) {
+  const failures = [];
+  for (const item of completed.reverse()) {
+    const compensation = item.action?.compensation;
+    if (!compensation || !context.db || !context.runId) continue;
+    try {
+      const existing = await context.db(
+        "SELECT id,status FROM platform_workflow_compensation_runs WHERE run_id=$1 AND step_run_id=$2 AND company_id=$3 LIMIT 1",
+        [context.runId, item.stepRunId || null, context.companyId || context.req?.user?.companyId || null]
+      );
+      if (existing.rows?.length) continue;
+      const result = await executeWorkflowAction({ ...context, action: compensation, stepRunId: item.stepRunId || null, compensationFor: item.stepRunId || item.index });
+      if (result?.status === "failed") throw new Error(result.error || "Compensation failed");
+    } catch (error) {
+      failures.push(await recordCompensationFailure({ db: context.db, runId: context.runId, companyId: context.companyId, req: context.req, context, stepRunId: item.stepRunId, action: compensation, error }));
+    }
+  }
+  return failures;
+}
+
+export async function executeWorkflowActions({ actions, ...context }) {
+  if (!Array.isArray(actions)) return [];
+
+  const workflowIdentity = context.workflowId || context.executionContext?.globals?.$Flow?.id || (context.runId ? `run:${context.runId}` : null);
+  const governor = context.governor || createGovernorBudget({ limits: context.governorLimits || {} });
+  governor.checkRuntime();
+  governor.checkPayload({
+    record: context.record || null,
+    previousRecord: context.previousRecord || null,
+    workflowVariables: context.workflowVariables || null,
+  });
+  const executionGuard = context.executionGuard
+    || (workflowIdentity
+      ? createExecutionGuard({
+          maxDepth: 8,
+          chain: Array.isArray(context.workflowStack) ? context.workflowStack : [],
+        }).enter(workflowIdentity)
+      : createExecutionGuard({ maxDepth: 8, chain: Array.isArray(context.workflowStack) ? context.workflowStack : [] }));
+
+  let persistentClaim = null;
+  if (context.db && context.idempotencyKey && (context.companyId || context.req?.user?.companyId)) {
+    persistentClaim = await claimPersistentExecution({
+      db: context.db,
+      companyId: context.companyId || context.req?.user?.companyId,
+      scope: `workflow:${workflowIdentity || "anonymous"}`,
+      idempotencyKey: context.idempotencyKey,
+      fingerprint: executionFingerprint({
+        workflowIdentity,
+        recordId: context.recordId || context.record?.id || null,
+        previousRecordId: context.previousRecord?.id || null,
+        actionCount: actions.length,
+      }),
+      metadata: { runId: context.runId || null, workflowIdentity },
+    });
+    if (!persistentClaim.claimed) {
+      if (persistentClaim.row?.status === "COMPLETED") {
+        return Array.isArray(persistentClaim.row?.result) ? persistentClaim.row.result : [];
+      }
+      return [{ action: "WORKFLOW", result: { status: "skipped", duplicate: true, idempotencyKey: context.idempotencyKey } }];
+    }
+  }
+
+  const executionMode = resolveExecutionMode(context);
+  let executionContext;
+  try {
+    executionContext = await createPlatformExecutionContext({
+      ...context,
+      executionMode,
+      trustedSystem: context.trustedSystem === true || context.req?.trustedSystemExecution === true,
+      workflowId: context.workflowId || context.executionContext?.globals?.$Flow?.id || null,
+      workflowVersion: context.workflowVersion || context.executionContext?.globals?.$Flow?.version || null,
+      parentRunId: context.parentRunId || context.executionContext?.globals?.$Flow?.runId || null,
+      executionContext: context.executionContext || null,
+    });
+  } catch (error) {
+    if (persistentClaim?.row?.id && context.db) {
+      await completePersistentExecution({
+        db: context.db,
+        claimId: persistentClaim.row.id,
+        status: "FAILED",
+        error: errorDetails(error),
+      });
+    }
+    throw error;
+  }
+  let governedDb = context.db;
+  if (typeof context.db === "function" && context.db.__platformGoverned !== true) {
+    governedDb = async (...args) => {
+      governor.consumeQuery(1);
+      return context.db(...args);
+    };
+    governedDb.__platformGoverned = true;
+  }
+  const runtimeContext = applyExecutionContext({
+    ...context,
+    db: governedDb,
+    executionGuard,
+    governor,
+    executionMode,
+    trustedSystem: context.trustedSystem === true || context.req?.trustedSystemExecution === true,
+    workflowDepth: executionGuard.chain.length,
+    workflowStack: [...executionGuard.chain],
+  }, executionContext);
+
+  if (runtimeContext.db && runtimeContext.runId) {
+    await runtimeContext.db(
+      `UPDATE platform_workflow_runs
+          SET correlation_id=COALESCE(correlation_id,$1),
+              execution_mode=COALESCE(execution_mode,$2),
+              runtime_contract_version=COALESCE(runtime_contract_version,$3),
+              metadata=COALESCE(metadata,'{}'::jsonb) || $4::jsonb,
+              updated_at=NOW()
+        WHERE id=$5 AND company_id=$6`,
+      [
+        runtimeContext.correlationId || runtimeContext.$System?.correlationId || null,
+        runtimeContext.executionMode || runtimeContext.$System?.executionMode || null,
+        runtimeContext.$System?.runtimeContractVersion || null,
+        JSON.stringify({
+          correlationId: runtimeContext.correlationId || runtimeContext.$System?.correlationId || null,
+          executionMode: runtimeContext.executionMode || runtimeContext.$System?.executionMode || null,
+          runtimeContractVersion: runtimeContext.$System?.runtimeContractVersion || null,
+        }),
+        runtimeContext.runId,
+        runtimeContext.companyId || runtimeContext.req?.user?.companyId,
+      ]
+    );
+  }
+
+  const results = [];
+  const completed = [];
+  const workflowVariables = {
+    ...executionContext.globals,
+    ...(runtimeContext.workflowVariables || {}),
+    steps: { ...(runtimeContext.workflowVariables?.steps || {}) },
+  };
+
+  for (const item of actions) {
+    if (!item || typeof item !== "object") continue;
+    governor.consumeWorkflowStep(1);
+    const actionType = resolveWorkflowActionType(item);
+    const externalActionTypes = new Set([
+      "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","SEND_PASSWORD_RESET_EMAIL","SEND_USER_INVITATION",
+      "CALL_WEBHOOK","WEBHOOK","HTTP_REQUEST","CALL_FUNCTION","CALL_CONNECTOR",
+      "CONNECTOR_HEALTH_CHECK","CONNECTOR_TEST_CONNECTION",
+      "PAYMENT_START","PAYMENT_CANCEL","PAYMENT_REFUND","CREATE_APPOINTMENT_PAYMENT_REQUEST",
+      "GLOBAL_PRODUCT_LOOKUP_BARCODE","GO_UPC_LOOKUP_PRODUCT","GO_UPC_TEST_CONNECTION",
+      "OPEN_FOOD_FACTS_LOOKUP_PRODUCT","OPEN_FOOD_FACTS_TEST_CONNECTION",
+      "QUICKBOOKS_RETRY_FAILED_SYNC","QUICKBOOKS_SYNC_PURCHASES","QUICKBOOKS_SYNC_SUPPLIER_CREDITS",
+      "QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS","QUICKBOOKS_SYNC_VENDORS","QUICKBOOKS_TEST_CONNECTION",
+      "SHOPIFY_EXPORT_FULFILMENT","SHOPIFY_EXPORT_REFUND","SHOPIFY_PROCESS_WEBHOOK",
+      "SHOPIFY_RETRY_FAILED_SYNC","SHOPIFY_SYNC_INVENTORY","SHOPIFY_SYNC_PRODUCTS","SHOPIFY_TEST_CONNECTION",
+      "UBER_ACCEPT_ORDER","UBER_DENY_ORDER","UBER_GET_STORES","UBER_SET_ITEM_AVAILABLE",
+      "UBER_SET_ITEM_UNAVAILABLE","UBER_TEST_CONNECTION","UBER_UPDATE_ITEM_PRICE","UBER_UPLOAD_MENU",
+      "JARVES_INTERACTION"
+    ]);
+    if (externalActionTypes.has(actionType)) {
+      governor.consumeExternalAction(1);
+    }
+    if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","SEND_PASSWORD_RESET_EMAIL","SEND_USER_INVITATION","WAIT"].includes(actionType)) {
+      governor.consumeQueuedJob(1);
+    }
+    if (actionType === "RUN_SUBFLOW") governor.consumeSubflow(1);
+    const index = results.length;
+    let stepRun = null;
+    if (runtimeContext.db && runtimeContext.runId) {
+      stepRun = await getOrCreateWorkflowStepRun({
+        db: runtimeContext.db,
+        runId: runtimeContext.runId,
+        stepIdentifier: item.id || `step-${index + 1}`,
+        stepOrder: index + 1,
+        actionType: resolveWorkflowActionType(item),
+        correlationId: runtimeContext.correlationId || runtimeContext.$System?.correlationId || null,
+      });
+    }
+    if (stepRun?.status === "COMPLETED" || stepRun?.status === "WAITING") {
+      const priorResult = stepRun.metadata?.result || { status: stepRun.status === "WAITING" ? "waiting" : "completed", idempotentReplay: true };
+      results.push({ action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
+      workflowVariables.steps[item.id || `step-${index + 1}`] = priorResult;
+      completed.push({ action: item, stepRunId: stepRun.id, index });
+      continue;
+    }
+    try {
+      const result = await executeWorkflowAction({ ...runtimeContext, workflowVariables, action: item, stepRunId: stepRun?.id || null });
+      const entry = { action: item.type || item.key, result, stepRunId: stepRun?.id || null };
+      workflowVariables.steps[item.id || `step-${index + 1}`] = result;
+      results.push(entry);
+      if (result?.status === "failed") throw new WorkflowExecutionError(errorDetails(result.error || result), []);
+      if (result?.status === "completed" || result?.status === "queued" || result?.status === "waiting") {
+        completed.push({ action: item, stepRunId: stepRun?.id || null, index });
+      }
+      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: runtimeContext.db, stepRunId: stepRun.id, status: result?.status === "stopped" ? "STOPPED" : result?.status === "waiting" ? "WAITING" : result?.status === "queued" ? "WAITING" : "COMPLETED", metadata: { result: redact(result), irreversible: IRREVERSIBLE_ACTIONS.has(resolveWorkflowActionType(item)) } });
+      if (result?.status === "stopped") break;
+    } catch (error) {
+      const details = errorDetails(error);
+      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: runtimeContext.db, stepRunId: stepRun.id, status: "FAILED", errorText: details.message, metadata: { error: details } });
+      const compensationFailures = await compensateCompletedSteps(completed, runtimeContext, error);
+      if (runtimeContext.runId && runtimeContext.db) {
+        await runtimeContext.db(
+          "UPDATE platform_workflow_runs SET status='FAILED', completed_at=NOW(), error_text=$1, metadata=COALESCE(metadata,'{}'::jsonb) || $2::jsonb, updated_at=NOW() WHERE id=$3 AND company_id=$4",
+          [details.message, JSON.stringify({ rootError: details, compensationFailures }), runtimeContext.runId, runtimeContext.companyId || runtimeContext.req?.user?.companyId]
+        );
+      }
+      if (persistentClaim?.row?.id) {
+        await completePersistentExecution({
+          db: runtimeContext.db,
+          claimId: persistentClaim.row.id,
+          status: "FAILED",
+          error: details,
+        });
+      }
+      throw new WorkflowExecutionError(details, compensationFailures);
+    }
+  }
+  if (persistentClaim?.row?.id) {
+    await completePersistentExecution({ db: runtimeContext.db, claimId: persistentClaim.row.id, status: "COMPLETED", result: results });
+  }
+  return results;
+}
+ + (index + 1)).join(", ");
+      const params = [...writePairs.map(({ value }) => value), action.recordId];
+      const clauses = ["id=$" + params.length];
+      if (targetObject.company_scoped) {
+        if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
+        params.push(runtimeCompanyId);
+        clauses.push("company_id=$" + params.length);
+      }
+      if (targetObject.store_scoped) {
+        if (!runtimeStoreId) throw new Error("Workflow store scope is required");
+        params.push(runtimeStoreId);
+        clauses.push("store_id=$" + params.length);
+      }
+      const previousParams = [action.recordId];
+      const previousClauses = ["id=$1"];
+      if (targetObject.company_scoped) {
+        previousParams.push(runtimeCompanyId);
+        previousClauses.push("company_id=$" + previousParams.length);
+      }
+      if (targetObject.store_scoped) {
+        previousParams.push(runtimeStoreId);
+        previousClauses.push("store_id=$" + previousParams.length);
+      }
+      const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
+      const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
+      const updated = result.rows[0] || null;
+      if (updated?.id) {
+        await writePlatformRecordHistory({
+          db,
+          companyId: companyId || req?.user?.companyId,
+          object: targetObject,
+          recordId: updated.id,
+          fields: mappedFields,
+          previousRecord: previous,
+          record: updated,
+          action: "update",
+          ...workflowHistoryTrace(context),
+        });
+      }
+      try {
+        if (updated?.id) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: updated,
+          previousRecord: previous,
+          operation: "UPDATE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+        });
+      } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      return { status: result.rows.length ? "completed" : "skipped", recordId: action.recordId, updated, duplicateWarning: duplicateAction === "WARN" };
+    },
+  },
+  {
+    key: "CREATE_RELATED_RECORD",
+    displayName: "Create Related Record",
+    description: "Create a child record through a defined relationship.",
+    validation: (action) => {
+      if (!action?.relationshipKey) throw new Error("Create Related Record requires a relationshipKey");
+      if (!action.fieldValues || typeof action.fieldValues !== "object") throw new Error("Create Related Record requires fieldValues");
+    },
+    async: false,
+    requiredPermissions: ["records.create"],
+    executor: async (context) => {
+      const { db, action, req, object, recordId, companyId } = context;
+      let relationship = action.relationship || null;
+      const parentObject = await resolveWorkflowTargetObject({ db, action: { objectId: action.parentObjectId || action.parent_object_id }, object, companyId, req });
+      let table = null;
+      let targetObject = null;
+      const parentRecordId = action.recordId || action.parentRecordId || recordId || null;
+      const relationshipKey = action.relationshipKey || action.relationship_key || null;
+      if (relationshipKey && db && typeof db === "function") {
+        const relationshipResult = await db("SELECT * FROM platform_relationships WHERE relationship_key=$1 AND parent_object_id=$2 AND active=true LIMIT 1", [relationshipKey, parentObject.id]);
+        relationship = relationshipResult.rows[0] || relationship;
+      }
+      if (relationship?.child_object_id && db && typeof db === "function") {
+        targetObject = await resolveTargetObjectMetadata({ db, objectId: relationship.child_object_id, companyId: companyId || req?.user?.companyId });
+        table = targetObject?.source_table || table;
+      }
+      if (!table) throw new Error("Create Related Record requires a target table");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "create", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const fieldValues = { ...(action.fieldValues || {}) };
+      let relationField = action.relationshipField || action.relatedField || action.foreignKey || action.foreign_key || null;
+      if (!relationField && relationship?.child_field_id && db && typeof db === "function") {
+        const fieldResult = await db("SELECT * FROM platform_fields WHERE id=$1 AND active=true LIMIT 1", [relationship.child_field_id]);
+        relationField = fieldResult.rows[0]?.source_column || fieldResult.rows[0]?.api_name || null;
+      }
+      if (parentRecordId && relationField && !(Object.prototype.hasOwnProperty.call(fieldValues, relationField))) {
+        fieldValues[relationField] = parentRecordId;
+      }
+      const entries = Object.entries(fieldValues);
+      if (!entries.length) return { status: "completed", created: null };
+      const relatedFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      const mappedFields = await resolveWorkflowWritableFields({
+        db, object: targetObject, fields: relatedFields, entries, req, executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || context.storeId || null;
+      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req });
+      const writePairs = alignWorkflowWritableValues(mappedFields, entries);
+      const columns = writePairs.map(({ field }) => `"${field.source_column}"`);
+      const values = writePairs.map((_, index) => "$" + (index + 1));
+      const params = writePairs.map(({ value }) => value);
+      if (targetObject?.company_scoped || action.companyScoped || action.company_scoped || object?.company_scoped) {
+        if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
+        columns.push('"company_id"');
+        values.push("$" + (params.length + 1));
+        params.push(runtimeCompanyId);
+      }
+      if (targetObject?.store_scoped || action.storeScoped || action.store_scoped || object?.store_scoped) {
+        if (!runtimeStoreId) throw new Error("Workflow store scope is required");
+        columns.push('"store_id"');
+        values.push("$" + (params.length + 1));
         params.push(runtimeStoreId);
       }
       const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
