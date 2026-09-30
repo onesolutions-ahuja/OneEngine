@@ -3953,7 +3953,7 @@ button:focus-visible {
      large transparent "freeze" gap before the visible orb. Let magnified icons
      travel 38px farther right: this places the freeze boundary about 1-2px
      outside the visible Jarves circle without moving Jarves itself. */
-  clip-path: inset(-120px -38px -120px -120px);
+  clip-path: inset(-120px -120px -120px -120px);
 }
 
 .dock-fixed-zone {
@@ -9401,4 +9401,283 @@ button.git-control-tile { cursor: pointer; }
 .dash-empty {
   font-size: max(14px, 0.875rem);
   color: #626871;
+}
+
+
+/* 2026-09-30 local UI audit sync */
+
+/* UI-001 — branded company-context loading state */
+.company-context-loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 28px;
+  color: rgba(255,255,255,.94);
+  background:
+    radial-gradient(circle at 50% 40%, rgba(55,89,160,.20), transparent 34%),
+    #070b14;
+  text-align: center;
+  animation: company-context-enter 240ms ease-out both;
+}
+
+.company-context-loading__brand {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 42px;
+  font-weight: 760;
+  letter-spacing: -.055em;
+}
+
+.company-context-loading__mark {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  margin-right: -2px;
+  border-radius: 14px;
+  color: #fff;
+  background:
+    conic-gradient(from 220deg, #6e7cff, #36c4ff, #45d483, #f5b63f, #f26887, #866df1, #6e7cff);
+  box-shadow: 0 14px 36px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.28);
+}
+
+.company-context-loading__word {
+  margin-left: 4px;
+}
+
+.company-context-loading__pulse {
+  width: 54px;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.16);
+  overflow: hidden;
+  position: relative;
+}
+
+.company-context-loading__pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 42%;
+  border-radius: inherit;
+  background: rgba(255,255,255,.82);
+  animation: company-context-pulse 1.05s ease-in-out infinite;
+}
+
+.company-context-loading > strong {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.company-context-loading > span:last-child {
+  color: rgba(255,255,255,.62);
+  font-size: 12px;
+}
+
+@keyframes company-context-enter {
+  from { opacity: 0; transform: scale(.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes company-context-pulse {
+  0% { transform: translateX(-135%); opacity: .45; }
+  50% { opacity: 1; }
+  100% { transform: translateX(330%); opacity: .45; }
+}
+
+/* UI-002 / UI-003 — keep dock hit areas and visual dock inside the real viewport */
+.dock-zone {
+  bottom: max(0px, env(safe-area-inset-bottom));
+}
+
+/* UI-004 / UI-022 — settings navigation interaction feedback */
+.settings-nav-item {
+  cursor: pointer;
+}
+
+.settings-nav-item:hover {
+  background: rgba(0,0,0,.075);
+}
+
+.settings-nav-item:active {
+  transform: translateY(1px);
+  background: rgba(0,0,0,.10);
+}
+
+.settings-nav-item:focus-visible {
+  outline: 2px solid rgba(10,132,255,.72);
+  outline-offset: 1px;
+}
+
+/* UI-005 / UI-006 — Till action bar labels remain readable */
+.till-action-bar button {
+  white-space: nowrap;
+}
+
+@media (max-width: 430px) {
+  .till-action-bar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .till-action-bar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* UI-007 / UI-008 — Dashboard tablet/mobile reflow */
+@media (max-width: 800px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-component,
+  .dashboard-component--sales-period {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .dashboard-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .dashboard-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dashboard-actions > select,
+  .dashboard-actions > label,
+  .dashboard-actions > button {
+    flex: 0 0 auto;
+  }
+}
+
+/* UI-009 — Workspace/record-list error with a real recovery action */
+.workspace-error-state {
+  min-height: 150px;
+  padding: 22px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  color: #7f1d1d;
+  background: #fff7f7;
+  border: 1px solid #f1caca;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.workspace-error-state strong {
+  font-size: 13px;
+}
+
+.workspace-error-state span {
+  max-width: 560px;
+  color: #9a4343;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.workspace-error-state button {
+  height: 30px;
+  margin-top: 4px;
+  padding: 0 11px;
+  border: 1px solid #d9a9a9;
+  border-radius: 7px;
+  background: #fff;
+  color: #8f2f2f;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* UI-010 — negative stock is visually unambiguous */
+.till-product-card.is-negative-stock,
+.till-product-card.has-negative-stock {
+  border-color: rgba(185,28,28,.30);
+  background: linear-gradient(180deg, #fff, #fff8f8);
+}
+
+.till-product-card.is-negative-stock small,
+.till-product-card.has-negative-stock small {
+  color: #b42318;
+  font-weight: 800;
+}
+
+/* UI-012 — payment controls never sit under the mobile dock */
+@media (max-width: 680px) {
+  .till-cart-summary {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}
+
+/* UI-015 / UI-025 — short-screen login balance and branded avatar */
+.login-avatar {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.08)),
+    conic-gradient(from 220deg, #6e7cff, #36c4ff, #45d483, #f5b63f, #f26887, #866df1, #6e7cff);
+}
+
+@media (max-height: 760px) {
+  .lock-content {
+    padding-top: max(28px, 5vh);
+  }
+
+  .lock-time {
+    font-size: clamp(58px, 11vh, 88px);
+  }
+
+  .login-glass-card {
+    margin-top: 24px;
+  }
+}
+
+@media (max-height: 620px) {
+  .lock-time {
+    font-size: clamp(48px, 9vh, 72px);
+  }
+}
+
+/* UI-017 — OR divider remains readable on the glass login surface */
+.login-divider {
+  color: rgba(255,255,255,.80);
+  font-weight: 700;
+}
+
+.login-divider::before,
+.login-divider::after {
+  background: rgba(255,255,255,.32);
+}
+
+/* UI-023 — cash input looks and behaves like an input */
+.till-cash-input {
+  border-color: rgba(64,74,88,.24);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.till-cash-input:focus-within {
+  border-color: rgba(10,132,255,.62);
+  box-shadow: 0 0 0 3px rgba(10,132,255,.12);
+}
+
+.till-cash-input input::placeholder {
+  color: rgba(46,55,68,.46);
+}
+
+/* UI-029 — Developer area is visibly separated from business settings */
+.settings-group--developer {
+  margin-top: 10px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(0,0,0,.08);
 }
