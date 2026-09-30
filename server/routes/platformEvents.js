@@ -40,12 +40,31 @@ export default function createPlatformEventsRouter({
   router.get("/platform/events", ...manage, async (req, res) => {
     try {
       const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+      const afterReplayId = req.query.afterReplayId == null ? null : Number(req.query.afterReplayId);
+      if (afterReplayId !== null && (!Number.isSafeInteger(afterReplayId) || afterReplayId < 0)) {
+        return res.status(400).json({ success: false, message: "afterReplayId must be a non-negative integer" });
+      }
+      const params = [req.user.companyId];
+      const clauses = ["company_id=$1"];
+      if (afterReplayId !== null) {
+        params.push(afterReplayId);
+        clauses.push(`replay_id>${params.length}`);
+      }
+      params.push(limit);
       const result = await db(
-        `SELECT id,company_id,event_type,payload,actor_user_id,idempotency_key,created_at
-         FROM platform_events WHERE company_id=$1 ORDER BY created_at DESC LIMIT $2`,
-        [req.user.companyId, limit]
+        `SELECT id,replay_id,company_id,event_type,payload,actor_user_id,idempotency_key,
+                origin_type,origin_id,correlation_id,causation_event_id,root_event_id,hop_count,
+                object_id,record_id,operation,changed_fields,event_signature,created_at
+           FROM platform_events
+          WHERE ${clauses.join(" AND ")}
+          ORDER BY replay_id ${afterReplayId === null ? "DESC" : "ASC"}
+          LIMIT ${params.length}`,
+        params
       );
-      res.json({ success: true, data: result.rows });
+      const nextReplayId = result.rows.length
+        ? Number(result.rows[result.rows.length - 1].replay_id)
+        : afterReplayId;
+      res.json({ success: true, data: result.rows, nextReplayId });
     } catch (error) {
       console.error("Platform event list error:", error);
       res.status(500).json({ success: false, message: "Unable to load events" });
@@ -62,6 +81,17 @@ export default function createPlatformEventsRouter({
         payload: body.payload || {},
         actorUserId: req.user.id || null,
         idempotencyKey: body.idempotencyKey || req.get("idempotency-key") || null,
+        originType: body.originType || "API",
+        originId: body.originId || null,
+        correlationId: body.correlationId || req.get("x-correlation-id") || req.get("x-request-id") || null,
+        causationEventId: body.causationEventId || null,
+        rootEventId: body.rootEventId || null,
+        hopCount: body.hopCount ?? null,
+        objectId: body.objectId || body.payload?.objectId || null,
+        recordId: body.recordId || body.payload?.recordId || null,
+        operation: body.operation || body.payload?.operation || null,
+        changedFields: body.changedFields || body.payload?.changedFields || [],
+        req,
       });
       res.status(result.inserted ? 201 : 200).json({ success: true, data: result.event, inserted: result.inserted });
     } catch (error) {

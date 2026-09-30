@@ -205,6 +205,57 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
       },
     },
+    {
+      key: "0015_runtime_guards_and_cdc",
+      version: "15",
+      name: "Runtime guards, job leases, and CDC replay metadata",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE platform_action_jobs ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+          ALTER TABLE platform_action_jobs ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
+          CREATE TABLE IF NOT EXISTS platform_execution_claims (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            scope_key VARCHAR(120) NOT NULL,
+            idempotency_key VARCHAR(255) NOT NULL,
+            fingerprint VARCHAR(64) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'CLAIMED' CHECK (status IN ('CLAIMED','COMPLETED','FAILED')),
+            locked_until TIMESTAMPTZ,
+            result JSONB,
+            error JSONB,
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(company_id, scope_key, idempotency_key)
+          );
+          CREATE INDEX IF NOT EXISTS idx_platform_execution_claims_company_scope
+            ON platform_execution_claims(company_id, scope_key, created_at DESC);
+
+          CREATE SEQUENCE IF NOT EXISTS platform_event_replay_seq;
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS replay_id BIGINT;
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS origin_type VARCHAR(60);
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS origin_id VARCHAR(255);
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255);
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS causation_event_id UUID REFERENCES platform_events(id) ON DELETE SET NULL;
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS root_event_id UUID REFERENCES platform_events(id) ON DELETE SET NULL;
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS hop_count INTEGER NOT NULL DEFAULT 0;
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL;
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS record_id UUID;
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS operation VARCHAR(20);
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS changed_fields JSONB NOT NULL DEFAULT '[]'::jsonb;
+          ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS event_signature VARCHAR(64);
+          ALTER TABLE platform_events ALTER COLUMN replay_id SET DEFAULT nextval('platform_event_replay_seq');
+          UPDATE platform_events SET replay_id=nextval('platform_event_replay_seq') WHERE replay_id IS NULL;
+          ALTER TABLE platform_events ALTER COLUMN replay_id SET NOT NULL;
+
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_events_replay_id ON platform_events(replay_id);
+          CREATE INDEX IF NOT EXISTS idx_platform_events_company_replay ON platform_events(company_id, replay_id);
+          CREATE INDEX IF NOT EXISTS idx_platform_events_lineage ON platform_events(root_event_id, hop_count);
+          CREATE INDEX IF NOT EXISTS idx_platform_events_record_change ON platform_events(company_id, object_id, record_id, replay_id);
+        `);
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);

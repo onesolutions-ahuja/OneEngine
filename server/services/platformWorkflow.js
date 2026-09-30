@@ -12,7 +12,7 @@ import { createConnectorActionExecutor } from "./connectorFramework.js";
 import { transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createInventoryMovement } from "./inventory.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
-import { publishPlatformEvent } from "./platformEvents.js";
+import { publishPlatformEvent, publishRecordChangeEvent } from "./platformEvents.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
 import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
 import { syncQuickBooksVendor, exportQuickBooksPurchase, exportQuickBooksSupplierPayment, exportQuickBooksSupplierCredit } from "./quickbooksSync.js";
@@ -1854,7 +1854,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const result = await db(query, params);
       const created = result.rows[0] || null;
       try {
-        if (created?.id) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.created", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: created.id, record: created }, actorUserId: req?.user?.id || null });
+        if (created?.id) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: created,
+          operation: "CREATE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+        });
       } catch (error) { console.error("Platform workflow record event publication error:", error); }
       return { status: "completed", created, duplicateWarning: duplicateAction === "WARN" };
     },
@@ -1898,11 +1907,32 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         params.push(req?.user?.storeId || null);
         clauses.push(`store_id=$${params.length}`);
       }
+      const previousParams = [action.recordId];
+      const previousClauses = ["id=$1"];
+      if (targetObject.company_scoped) {
+        previousParams.push(req?.user?.companyId || companyId || null);
+        previousClauses.push(`company_id=${previousParams.length}`);
+      }
+      if (targetObject.store_scoped) {
+        previousParams.push(req?.user?.storeId || null);
+        previousClauses.push(`store_id=${previousParams.length}`);
+      }
+      const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
       const query = `UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`;
       const result = await db(query, params);
       const updated = result.rows[0] || null;
       try {
-        if (updated?.id) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.updated", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated }, actorUserId: req?.user?.id || null });
+        if (updated?.id) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: updated,
+          previousRecord: previous,
+          operation: "UPDATE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+        });
       } catch (error) { console.error("Platform workflow record event publication error:", error); }
       return { status: result.rows.length ? "completed" : "skipped", updated, duplicateWarning: duplicateAction === "WARN" };
     },
@@ -1941,10 +1971,27 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         params.push(req.user.companyId);
         clauses.push(`company_id=$${params.length}`);
       }
+      const previousParams = [action.recordId];
+      const previousClauses = ["id=$1"];
+      if (req?.user?.companyId) {
+        previousParams.push(req.user.companyId);
+        previousClauses.push(`company_id=${previousParams.length}`);
+      }
+      const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
       const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
       const updated = result.rows[0] || null;
       try {
-        if (updated?.id) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.updated", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated }, actorUserId: req?.user?.id || null });
+        if (updated?.id) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: updated,
+          previousRecord: previous,
+          operation: "UPDATE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+        });
       } catch (error) { console.error("Platform workflow record event publication error:", error); }
       return { status: result.rows.length ? "completed" : "skipped", recordId: action.recordId, updated, duplicateWarning: duplicateAction === "WARN" };
     },
@@ -2004,7 +2051,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const result = await db(query, params);
       const created = result.rows[0] || null;
       try {
-        if (created?.id) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.created", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: created.id, record: created }, actorUserId: req?.user?.id || null });
+        if (created?.id) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: created,
+          operation: "CREATE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+        });
       } catch (error) { console.error("Platform workflow record event publication error:", error); }
       return { status: "completed", created, relationshipKey: relationshipKey || action.relationshipKey || null, duplicateWarning: duplicateAction === "WARN" };
     },
@@ -2021,12 +2077,30 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: async ({ db, action, object, req, companyId }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
+      const scopeParams = [action.recordId];
+      const scopeClauses = ["id=$1"];
+      if (targetObject.company_scoped) {
+        scopeParams.push(req?.user?.companyId || companyId);
+        scopeClauses.push(`company_id=${scopeParams.length}`);
+      }
+      const previous = (await db(`SELECT * FROM "${table}" WHERE ${scopeClauses.join(" AND ")} LIMIT 1`, scopeParams)).rows[0] || null;
       const hasActive = await db(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'`, [table]);
       const result = hasActive.rows.length
         ? await db(`UPDATE "${table}" SET active=false WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId])
         : await db(`DELETE FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId]);
       try {
-        if (result.rows[0]) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.deleted", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: action.recordId, record: result.rows[0], archived: hasActive.rows.length > 0 }, actorUserId: req?.user?.id || null });
+        if (result.rows[0]) await publishRecordChangeEvent({
+          db,
+          companyId: req?.user?.companyId || companyId,
+          object: targetObject,
+          record: hasActive.rows.length ? result.rows[0] : null,
+          previousRecord: previous || result.rows[0],
+          operation: "DELETE",
+          actorUserId: req?.user?.id || null,
+          req,
+          originType: "WORKFLOW",
+          archived: hasActive.rows.length > 0,
+        });
       } catch (error) { console.error("Platform workflow record event publication error:", error); }
       return { status: result.rows.length ? "completed" : "skipped", deleted: result.rows[0] || null };
     },
