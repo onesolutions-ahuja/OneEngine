@@ -1047,6 +1047,7 @@ export default function createHospitalityRouter({ authenticate, authorize, db, p
       const publicToken = req.params.token;
       const context = await getPublicQrContext(publicToken, req.user);
       if (!context || !context.session_id) return res.status(404).json({ success: false, message: "This table-order link is no longer active" });
+      await req.ensureBusinessCommandRun?.({ companyId: context.company_id, userId: null, storeId: context.store_id });
       if (hasConflictingPublicIds(req, context)) return res.status(403).json({ success: false, message: "The supplied hospitality identifiers do not match this QR session" });
       if (!context.bill || !context.bill.length) return res.status(409).json({ success: false, message: "No open bill is available for payment" });
       const billRows = context.bill;
@@ -1140,7 +1141,7 @@ export default function createHospitalityRouter({ authenticate, authorize, db, p
   });
 
   router.post("/hospitality/public/qr/:token/pay", async (req, res) => {
-    return router.handle({ method: "POST", url: `/hospitality/public/qr/${encodeURIComponent(req.params.token)}/payments`, headers: req.headers, query: req.query, body: req.body, user: req.user, get: req.get.bind(req), accepts: req.accepts.bind(req), params: req.params }, res);
+    return router.handle({ method: "POST", url: `/hospitality/public/qr/${encodeURIComponent(req.params.token)}/payments`, headers: req.headers, query: req.query, body: req.body, user: req.user, get: req.get.bind(req), accepts: req.accepts.bind(req), params: req.params, ensureBusinessCommandRun: req.ensureBusinessCommandRun, businessCommandCorrelationId: req.businessCommandCorrelationId, businessCommandRunId: req.businessCommandRunId }, res);
   });
 
   router.post("/hospitality/public/qr/:token/orders", async (req,res)=>{
@@ -1154,7 +1155,9 @@ export default function createHospitalityRouter({ authenticate, authorize, db, p
         JOIN hospitality_tables t ON t.id=COALESCE(parent.table_id,original_table.id)
         WHERE q.token_hash=$1 AND q.active=true AND (q.expires_at IS NULL OR q.expires_at>NOW())`,[hash]);
       if(!session.rows.length)return res.status(404).json({success:false,message:"This table-order link is no longer active"});
-      const ctx=session.rows[0], ids=requested.map(x=>x.productId);
+      const ctx=session.rows[0];
+      await req.ensureBusinessCommandRun?.({ companyId: ctx.company_id, userId: null, storeId: ctx.store_id });
+      const ids=requested.map(x=>x.productId);
       const products=await db("SELECT id,name,price,vat_rate,vat_applicable FROM products WHERE company_id=$1 AND active=true AND id=ANY($2::uuid[])",[ctx.company_id,ids]);
       const byId=new Map(products.rows.map(x=>[String(x.id),x]));
       if(byId.size!==new Set(ids).size)return res.status(400).json({success:false,message:"One or more menu items are unavailable"});
