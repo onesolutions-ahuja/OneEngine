@@ -941,6 +941,8 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
       const selectedFeatures = resolveFeaturePlan(root, requestedFeatures);
 
+      for (const item of plan) assertTrustedPackageManifest(item.packageKey, item.manifest, item.version);
+
       if (!(await ensureLicensed(req, plan))) {
 
         return res.status(403).json({ success: false, code: "FEATURE_NOT_LICENSED", message: "This package is not licensed for this company" });
