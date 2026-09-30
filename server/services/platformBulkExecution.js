@@ -1,14 +1,18 @@
+import { createGovernorBudget } from "./platformGovernor.js";
 export async function executeBulk({
   items = [],
   concurrency = 4,
   keyForItem = (_item, index) => String(index),
   handler,
   onDuplicate = null,
+  governor = null,
 }) {
   if (!Array.isArray(items)) throw new Error("Bulk items must be an array");
   if (typeof handler !== "function") throw new Error("Bulk handler is required");
 
-  const width = Math.min(Math.max(Number(concurrency) || 1, 1), 20);
+  const budget = governor || createGovernorBudget();
+  budget.checkBulk({ items, concurrency });
+  const width = Math.min(Math.max(Number(concurrency) || 1, 1), budget.limits.maxBulkConcurrency);
   const results = new Array(items.length);
   const claimed = new Set();
   let cursor = 0;
