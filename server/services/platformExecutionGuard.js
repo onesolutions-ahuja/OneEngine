@@ -110,12 +110,25 @@ export async function claimPersistentExecution({
       LIMIT 1`,
     [companyId, scope, idempotencyKey]
   );
-  const row = existing.rows?.[0] || null;
+  let row = existing.rows?.[0] || null;
   if (row && row.fingerprint && row.fingerprint !== derivedFingerprint) {
     throw new PlatformExecutionGuardError("Idempotency key was reused with different execution input", {
       code: "IDEMPOTENCY_KEY_REUSED",
       details: { scope, idempotencyKey },
     });
+  }
+  if (row?.status === "FAILED") {
+    const retry = await db(
+      `UPDATE platform_execution_claims
+          SET status='CLAIMED',result=NULL,error=NULL,updated_at=NOW()
+        WHERE id=$1 AND status='FAILED'
+        RETURNING *`,
+      [row.id]
+    );
+    if (retry.rows?.[0]) {
+      row = retry.rows[0];
+      return { claimed: true, duplicate: false, retried: true, row };
+    }
   }
   return { claimed: false, duplicate: true, row };
 }
