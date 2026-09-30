@@ -6,6 +6,10 @@ on:
       - phase10-runtime-conformance
   workflow_dispatch:
 
+concurrency:
+  group: phase-1-10-runtime-qa
+  cancel-in-progress: true
+
 jobs:
   runtime-qa:
     runs-on: ubuntu-latest
