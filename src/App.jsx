@@ -2389,6 +2389,16 @@ function Desktop({ onLock, onSignOut }) {
       }
       return
     }
+    const connectorSettingsIndex = parts.indexOf('connector-settings')
+    if (connectorSettingsIndex >= 0) {
+      const packageKey = decodeURIComponent(parts[connectorSettingsIndex + 1] || '')
+      if (packageKey) {
+        setRoute('connector-settings', null, { packageKey })
+        setRouteState({ app: 'connector-settings', section: null, packageKey })
+        setActiveApp('connector-settings')
+      }
+      return
+    }
     const appIndex = parts.indexOf('app')
     const slug = parts[appIndex >= 0 ? appIndex + 1 : parts.length - 1]
     if (slug) openItem(slug)
