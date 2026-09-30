@@ -117,6 +117,7 @@ import {
   Settings2,
   Settings as GearIcon,
   CircleUserRound,
+  CircleHelp,
   Accessibility,
   Shield,
   Monitor,
@@ -2145,6 +2146,36 @@ function DevicesMenu({ onOpenSettings }) {
     </motion.div>
   )
 }
+function HelpMenu({ onSelect }) {
+  const items = [
+    ['Getting started', 'Basic onePOS setup and first steps'],
+    ['Till guide', 'Sales, payments, returns and till workflows'],
+    ['Settings guide', 'Company, store, users and permissions'],
+    ['Troubleshooting', 'Common issues and recovery steps'],
+    ['Contact support', 'Support and service information'],
+  ]
+
+  return (
+    <motion.div className="mac-popover help-menu git-macos-panel" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
+      <div className="git-macos-card">
+        <div className="git-macos-row git-macos-row--top">
+          <span className="git-macos-icon git-macos-icon--blue"><CircleHelp size={16} /></span>
+          <div className="git-macos-copy"><strong>Help & Guides</strong><small>Quick links for onePOS help. These pages can be replaced later.</small></div>
+        </div>
+      </div>
+      <div className="git-macos-section-title">Help</div>
+      <div className="git-macos-card help-menu-list">
+        {items.map(([label, description]) => (
+          <button key={label} type="button" className="git-macos-row help-menu-row" onClick={() => onSelect?.(label)}>
+            <span className="git-macos-copy"><strong>{label}</strong><small>{description}</small></span>
+            <span className="git-macos-chevron">›</span>
+          </button>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
 
 function ControlCenterMenu({ onOpenWifi, onOpenBluetooth, onLock, onLogout }) {
   const [focusOn, setFocusOn] = useState(false)
@@ -2526,7 +2557,7 @@ function Desktop({ onLock, onSignOut }) {
     <main className="screen desktop-screen">
       <div className="wallpaper wallpaper--desktop" />
 
-      <header className="demo-menubar">
+      <header className="demo-menubar" ref={topbarPanelRef}>
         <div className="menubar-left">
           <button
             type="button"
@@ -2549,19 +2580,7 @@ function Desktop({ onLock, onSignOut }) {
             </svg>
           </button>
 
-          <button type="button" className="menu-text menu-text--strong">Finder</button>
-          <button type="button" className="menu-text">File</button>
-          <button type="button" className="menu-text">Edit</button>
-          <button type="button" className="menu-text">View</button>
-          <button type="button" className="menu-text">Go</button>
-          <button type="button" className="menu-text">Window</button>
-          <button type="button" className="menu-text">Help</button>
-        </div>
-
-        <div className="menubar-spacer" />
-
-        <div className="menubar-right" ref={topbarPanelRef}>
-          <div className="topbar-search-wrap">
+          <div className="topbar-search-wrap topbar-search-wrap--left">
             <motion.label
               className="topbar-search-pill"
               animate={{ width: topPanel === 'apps' ? 360 : 210 }}
@@ -2602,6 +2621,11 @@ function Desktop({ onLock, onSignOut }) {
               ) : null}
             </AnimatePresence>
           </div>
+        </div>
+
+        <div className="menubar-spacer" />
+
+        <div className="menubar-right">
           <div className="topbar-status-wrap">
             <button type="button" className={`status-button ${topPanel === 'wifi' ? 'is-active' : ''}`} aria-label="Connection health" aria-expanded={topPanel === 'wifi'} onClick={() => setTopPanel(topPanel === 'wifi' ? '' : 'wifi')}>
               <Wifi size={17} strokeWidth={2.1} />
@@ -2619,6 +2643,14 @@ function Desktop({ onLock, onSignOut }) {
             </button>
             <AnimatePresence>
               {topPanel === 'bluetooth' ? <DevicesMenu onOpenSettings={() => { setRoute('settings', 'hardware'); setActiveApp('settings'); setTopPanel('') }} /> : null}
+            </AnimatePresence>
+          </div>
+          <div className="topbar-status-wrap">
+            <button type="button" className={`status-button ${topPanel === 'help' ? 'is-active' : ''}`} aria-label="Help & Guides" aria-expanded={topPanel === 'help'} title="Help & Guides" onClick={() => setTopPanel(topPanel === 'help' ? '' : 'help')}>
+              <CircleHelp size={17} strokeWidth={2.1} />
+            </button>
+            <AnimatePresence>
+              {topPanel === 'help' ? <HelpMenu onSelect={(label) => { setMessage(`${label} — help page placeholder`); setTopPanel('') }} /> : null}
             </AnimatePresence>
           </div>
           <div className="topbar-status-wrap">
