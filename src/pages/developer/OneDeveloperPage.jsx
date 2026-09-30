@@ -49,7 +49,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
   }, [initialSection])
   const user = getStoredUser() || {}
   const profileName = user?.name || user?.full_name || user?.username || 'User'
-  const profileRole = user?.isSuperadmin || user?.is_superadmin ? 'Superadmin' : (user?.role || 'Developer')
+  const profileRole = user?.role || 'Developer'
   const initial = profileName.trim().charAt(0).toUpperCase() || 'U'
 
   const visibleItems = useMemo(() => {
