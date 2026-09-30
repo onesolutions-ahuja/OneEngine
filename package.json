@@ -8,7 +8,9 @@
     "build": "node scripts/audit-trusted-runtime.mjs && vite build",
     "preview": "vite preview",
     "audit:apps": "node scripts/audit-app-surfaces.mjs",
-    "audit:trusted": "node scripts/audit-trusted-runtime.mjs"
+    "audit:trusted": "node scripts/audit-trusted-runtime.mjs",
+    "audit:workflow-coverage": "node scripts/audit-workflow-coverage.mjs",
+    "audit:workflow-coverage:enforce": "node scripts/audit-workflow-coverage.mjs --enforce"
   },
   "dependencies": {
     "framer-motion": "^12.23.24",
