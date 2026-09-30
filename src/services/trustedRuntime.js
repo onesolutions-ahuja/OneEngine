@@ -97,3 +97,11 @@ export function isPrivilegedMutation(path, method = 'GET') {
     || pathname.startsWith('/api/returns')
     || pathname.startsWith('/api/exchanges')
 }
+
+export function trustedRuntimeHeaders(capability) {
+  if (!capability) return {}
+  return {
+    'X-OneEngine-Capability': capability.id,
+    'X-OneEngine-Runtime': TRUSTED_RUNTIME_VERSION,
+  }
+}
