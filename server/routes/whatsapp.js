@@ -239,7 +239,7 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
 
   /* ------------------------- PUT: save (activation gated server-side) ---------------------- */
   router.put("/whatsapp/settings", authenticate, authorize("settings.manage"), async (req, res) => {
-    const client = await (req.tenantPool || pool).connect();
+    const client = await pool.connect();
     try {
       const {
         enabled = false,
@@ -465,7 +465,7 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
         last_tested_at: new Date().toISOString(),
         last_test_result: true,
       };
-      const client = await (req.tenantPool || pool).connect();
+      const client = await pool.connect();
       try {
         await upsertRow(client, req.user.companyId, existing.enabled === true, merged, req.user.id);
       } finally {
