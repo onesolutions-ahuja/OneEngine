@@ -773,11 +773,11 @@ async function executeUberItemAction(context, operation) {
     : { ...response, code: response.code || "UBER_ITEM_UPDATE_FAILED", productId: resolved.product.id, itemId: resolved.itemId, storeId: resolved.storeId };
 }
 
-function resolveCommunicationWorkflowAction(action, record, object = null) {
+function resolveCommunicationWorkflowAction(action, record, object = null, workflowVariables = null) {
   const rootObjectKey = object?.object_key || object?.objectKey || null;
   const resolveRecipient = (value) => {
     if (value && typeof value === "object") {
-      const resolved = resolveBindingTree(value, { record, rootObjectKey });
+      const resolved = resolveBindingTree(value, { record, rootObjectKey, variables: workflowVariables });
       return resolved == null ? value : resolved;
     }
     if (typeof value === "string" && record) {
@@ -791,7 +791,7 @@ function resolveCommunicationWorkflowAction(action, record, object = null) {
     recipient: resolveRecipient(action?.recipient),
     to: resolveRecipient(action?.to),
     templateContext: action?.templateContext
-      ? resolveBindingTree(action.templateContext, { record, rootObjectKey })
+      ? resolveBindingTree(action.templateContext, { record, rootObjectKey, variables: workflowVariables })
       : (record || {}),
   };
 }
@@ -2052,13 +2052,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["communications.send"],
     requiredEntitlement: "communications.email",
-    executor: async ({ db, action, req, companyId, stepRunId, record, object }) => {
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
       const company = companyId || req?.user?.companyId;
       const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
       if (!provider.configured) {
         return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object);
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
@@ -2073,13 +2073,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["communications.send"],
     requiredEntitlement: "communications.sms",
-    executor: async ({ db, action, req, companyId, stepRunId, record, object }) => {
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
       const company = companyId || req?.user?.companyId;
       const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "SMS", stepRunId });
       if (!provider.configured) {
         return { status: "failed", provider: "SMS", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object);
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_SMS", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
@@ -2094,13 +2094,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["communications.send"],
     requiredEntitlement: "communications.whatsapp",
-    executor: async ({ db, action, req, companyId, stepRunId, record, object }) => {
+    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
       const company = companyId || req?.user?.companyId;
       const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "WHATSAPP", stepRunId });
       if (!provider.configured) {
         return { status: "failed", provider: "WHATSAPP", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object);
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
@@ -3241,6 +3241,10 @@ export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
   const results = [];
   const completed = [];
+  const workflowVariables = {
+    ...(context.workflowVariables || {}),
+    steps: { ...(context.workflowVariables?.steps || {}) },
+  };
   for (const item of actions) {
     if (!item || typeof item !== "object") continue;
     const index = results.length;
@@ -3257,12 +3261,14 @@ export async function executeWorkflowActions({ actions, ...context }) {
     if (stepRun?.status === "COMPLETED" || stepRun?.status === "WAITING") {
       const priorResult = stepRun.metadata?.result || { status: stepRun.status === "WAITING" ? "waiting" : "completed", idempotentReplay: true };
       results.push({ action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
+      workflowVariables.steps[item.id || `step-${index + 1}`] = priorResult;
       completed.push({ action: item, stepRunId: stepRun.id, index });
       continue;
     }
     try {
-      const result = await executeWorkflowAction({ ...context, action: item, stepRunId: stepRun?.id || null });
+      const result = await executeWorkflowAction({ ...context, workflowVariables, action: item, stepRunId: stepRun?.id || null });
       const entry = { action: item.type || item.key, result, stepRunId: stepRun?.id || null };
+      workflowVariables.steps[item.id || `step-${index + 1}`] = result;
       results.push(entry);
       if (result?.status === "failed") throw new WorkflowExecutionError(errorDetails(result.error || result), []);
       if (result?.status === "completed" || result?.status === "queued" || result?.status === "waiting") {
