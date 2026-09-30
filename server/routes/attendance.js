@@ -1,4 +1,5 @@
 import express from "express";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 /*
  * Staff attendance (clock in/out) — routes/attendance.js
@@ -69,68 +70,25 @@ export default function createAttendanceRouter({
    */
   router.post("/attendance/clock-in", authenticate, async (req, res) => {
     try {
-      /* The session's claims are the only source of identity/company/store. */
-      const userRow = await db(
-        `SELECT id, company_id, store_id, active FROM users WHERE id = $1 LIMIT 1`,
-        [req.user.id]
-      );
-      if (!userRow.rows.length) {
-        return res.status(401).json({ success: false, message: "Authentication required" });
+      const execution = await executeSystemWorkflow({
+        db,
+        companyId: req.user.companyId,
+        userId: req.user.id,
+        systemKey: "function:attendance.clock_in",
+        req,
+        input: {},
+        storeId: req.user.storeId || null,
+        source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "attendance.clock_in" },
+      });
+      const row = execution.result;
+      if (writeAudit && row?.id) {
+        await writeAudit(req.user.companyId, req.user.id, "attendance.clock_in", "attendance_record", row.id, { storeId: row.store_id || req.user.storeId || null });
       }
-      if (!userRow.rows[0].active) {
-        return res.status(403).json({ success: false, message: "User account is disabled" });
-      }
-      if (!userRow.rows[0].store_id) {
-        return res.status(400).json({
-          success: false,
-          message: "No store assigned to your account — attendance cannot be recorded",
-        });
-      }
-
-      const existing = await db(
-        `SELECT id, clock_in FROM attendance_records
-         WHERE user_id = $1 AND status = 'open'
-         LIMIT 1`,
-        [req.user.id]
-      );
-      if (existing.rows.length) {
-        return res.status(409).json({
-          success: false,
-          message: "You are already clocked in",
-          data: { attendanceId: existing.rows[0].id, clockIn: iso(existing.rows[0].clock_in) },
-        });
-      }
-
-      try {
-        const inserted = await db(
-          `INSERT INTO attendance_records (company_id, store_id, user_id, status, clock_in)
-           VALUES ($1, $2, $3, 'open', NOW())
-           RETURNING id, company_id, store_id, user_id, status, clock_in, clock_out, worked_minutes, note`,
-          [req.user.companyId, userRow.rows[0].store_id, req.user.id]
-        );
-        const row = inserted.rows[0];
-
-        if (writeAudit) {
-          writeAudit(req.user.companyId, req.user.id, "attendance.clock_in", "attendance_record", row.id, {
-            storeId: row.store_id,
-          });
-        }
-
-        res.status(201).json({
-          success: true,
-          message: "Clocked in",
-          data: serialize(row),
-        });
-      } catch (insertError) {
-        /* Concurrent clock-in hit uq_attendance_open_per_user (23505). */
-        if (insertError && insertError.code === "23505") {
-          return res.status(409).json({ success: false, message: "You are already clocked in" });
-        }
-        throw insertError;
-      }
+      res.status(201).json({ success: true, message: "Clocked in", data: serialize(row), workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
-      console.error("Clock-in error:", error);
-      res.status(500).json({ success: false, message: "Unable to record clock-in" });
+      const status = error?.code === "23505" || /already clocked in/i.test(error?.message || "") ? 409 : 400;
+      console.error("Clock-in workflow error:", error);
+      res.status(status).json({ success: false, message: error.message || "Unable to record clock-in", workflowRunId: error.workflowRunId || null });
     }
   });
 
@@ -181,49 +139,25 @@ export default function createAttendanceRouter({
    */
   router.post("/attendance/clock-out", authenticate, async (req, res) => {
     try {
-      const open = await db(
-        `SELECT id, clock_in FROM attendance_records
-         WHERE user_id = $1 AND status = 'open'
-         LIMIT 1`,
-        [req.user.id]
-      );
-      if (!open.rows.length) {
-        return res.status(409).json({ success: false, message: "You are not clocked in" });
-      }
-
-      /* Single UPDATE from clock_in to NOW(): the duration is derived from
-       * the persisted timestamps, never from anything the client sent. */
-      const updated = await db(
-        `UPDATE attendance_records
-            SET status = 'closed',
-                clock_out = NOW(),
-                worked_minutes = GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - clock_in)) / 60))::int,
-                updated_at = NOW()
-          WHERE id = $1 AND status = 'open'
-          RETURNING id, company_id, store_id, user_id, status, clock_in, clock_out, worked_minutes, note`,
-        [open.rows[0].id]
-      );
-      if (!updated.rows.length) {
-        /* Raced with a concurrent clock-out; the open row was already gone. */
-        return res.status(409).json({ success: false, message: "You are not clocked in" });
-      }
-      const row = updated.rows[0];
-
-      if (writeAudit) {
-        writeAudit(req.user.companyId, req.user.id, "attendance.clock_out", "attendance_record", row.id, {
-          storeId: row.store_id,
-          workedMinutes: row.worked_minutes,
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Clocked out",
-        data: serialize(row),
+      const execution = await executeSystemWorkflow({
+        db,
+        companyId: req.user.companyId,
+        userId: req.user.id,
+        systemKey: "function:attendance.clock_out",
+        req,
+        input: {},
+        storeId: req.user.storeId || null,
+        source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "attendance.clock_out" },
       });
+      const row = execution.result;
+      if (writeAudit && row?.id) {
+        await writeAudit(req.user.companyId, req.user.id, "attendance.clock_out", "attendance_record", row.id, { workedMinutes: row.worked_minutes ?? null });
+      }
+      res.json({ success: true, message: "Clocked out", data: serialize(row), workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
-      console.error("Clock-out error:", error);
-      res.status(500).json({ success: false, message: "Unable to record clock-out" });
+      const status = /not clocked in/i.test(error?.message || "") ? 409 : 400;
+      console.error("Clock-out workflow error:", error);
+      res.status(status).json({ success: false, message: error.message || "Unable to record clock-out", workflowRunId: error.workflowRunId || null });
     }
   });
 
