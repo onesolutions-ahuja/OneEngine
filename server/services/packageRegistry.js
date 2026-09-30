@@ -3385,9 +3385,23 @@ export function seedPackageRegistry(pool) {
          (package_key,name,version,description,module_id,manifest,package_type,publisher,category,visible,installable,billable,system_only,display_order,publication_state,licence_mode,available_tiers)
          VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
          ON CONFLICT (package_key) DO UPDATE SET
-           name=EXCLUDED.name, version=EXCLUDED.version, description=EXCLUDED.description,
-           module_id=EXCLUDED.module_id, manifest=EXCLUDED.manifest, package_type=EXCLUDED.package_type,
-           publisher=EXCLUDED.publisher,licence_mode=EXCLUDED.licence_mode,
+           name=EXCLUDED.name,
+           version=EXCLUDED.version,
+           description=EXCLUDED.description,
+           module_id=EXCLUDED.module_id,
+           manifest=EXCLUDED.manifest,
+           package_type=EXCLUDED.package_type,
+           publisher=EXCLUDED.publisher,
+           category=EXCLUDED.category,
+           visible=EXCLUDED.visible,
+           installable=EXCLUDED.installable,
+           billable=EXCLUDED.billable,
+           system_only=EXCLUDED.system_only,
+           display_order=EXCLUDED.display_order,
+           publication_state=EXCLUDED.publication_state,
+           licence_mode=EXCLUDED.licence_mode,
+           available_tiers=EXCLUDED.available_tiers,
+           active=TRUE,
            updated_at=NOW()`,
         [
           definition.packageKey, definition.name, definition.version, definition.description,
