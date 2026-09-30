@@ -2684,7 +2684,14 @@ function Desktop({ onLock, onSignOut }) {
                   initialPackages={storeApps}
                   initialSelectedPackageKey={storeFocusPackageKey}
                   onPackagesChange={setStoreApps}
-                  canManagePackages={desktopPermissions.includes('package.install')}
+                  canManagePackages={
+                    storedUser?.isSuperadmin === true ||
+                    storedUser?.is_superadmin === true ||
+                    desktopPermissions.includes('package.install') ||
+                    desktopPermissions.includes('package.manage') ||
+                    desktopPermissions.includes('settings.manage') ||
+                    desktopPermissions.includes('platform.manage')
+                  }
                   onClose={() => setTopPanel('')}
                   onOpenRoute={openRoutePath}
                 />
