@@ -205,3 +205,56 @@ test("rollup is evaluated before dependent formula", async () => {
   assert.equal(result.line_total_sum, 10);
   assert.equal(result.double_total, 20);
 });
+
+
+test("cross-object formula metadata prefers tenant object over global object with same key", async () => {
+  const fields = [
+    {
+      api_name: "customer",
+      field_type: "lookup",
+      source_column: "customer_id",
+      active: true,
+      config: { relatedObjectKey: "customer" },
+    },
+    {
+      api_name: "customer_name",
+      field_type: "formula",
+      active: true,
+      writable: false,
+      config: { expression: "customer.name", resultType: "text" },
+    },
+  ];
+
+  const db = async (sql, params = []) => {
+    if (sql.includes("FROM platform_objects")) {
+      assert.match(sql, /CASE WHEN company_id=\$2 THEN 0 ELSE 1 END/);
+      return {
+        rows: [{
+          id: "tenant-customer-object",
+          object_key: "customer",
+          source_table: "tenant_customers",
+          company_id: params[1],
+          company_scoped: true,
+          store_scoped: false,
+        }],
+      };
+    }
+    if (sql.includes("FROM platform_fields")) {
+      return { rows: [{ api_name: "name", field_type: "text", source_column: "name", active: true }] };
+    }
+    if (sql.includes('FROM "tenant_customers"')) {
+      return { rows: [{ id: "cust-1", name: "Tenant Customer" }] };
+    }
+    throw new Error(`Unexpected SQL: ${sql}`);
+  };
+
+  const result = await recalculateDerivedRecord({
+    db,
+    object: { id: "order-object", object_key: "order", source_table: "orders" },
+    fields,
+    record: { id: "order-1", customer: "cust-1" },
+    req: { user: { companyId: "company-1", storeId: null } },
+  });
+
+  assert.equal(result.customer_name, "Tenant Customer");
+});
