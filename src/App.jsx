@@ -714,6 +714,7 @@ function readRoute() {
   if (parts[0] === 'reports') return { app: 'reports', section: null }
   if (parts[0] === 'custom-reports') return { app: 'custom-reports', section: null }
   if (parts[0] === 'integrations') return { app: 'integrations', section: null }
+  if (parts[0] === 'google-connect') return { app: 'google-connect', section: null }
   if (parts[0] === 'accounting') return { app: 'accounting', section: null }
   if (parts[0] === 'online-orders') return { app: 'online-orders', section: null }
   if (parts[0] === 'order-prep') return { app: 'order-prep', section: null }
@@ -776,6 +777,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/custom-reports`
       : app === 'integrations'
         ? `${base}/integrations`
+      : app === 'google-connect'
+        ? `${base}/google-connect`
       : app === 'accounting'
         ? `${base}/accounting`
       : app === 'online-orders'
@@ -2441,6 +2444,12 @@ function Desktop({ onLock, onSignOut }) {
     if (id === 'integrations') {
       setRoute('integrations')
       setActiveApp('integrations')
+      return
+    }
+    if (id === 'google-connect' || id === 'one_connect_google') {
+      setRoute('google-connect')
+      setRouteState({ app: 'google-connect', section: null })
+      setActiveApp('google-connect')
       return
     }
     if (id === 'accounting') {
