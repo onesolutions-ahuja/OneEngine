@@ -5,11 +5,11 @@ import { apiRequest } from '../../services/api'
 const DATE_RANGES = [
   ['today', 'Today'],
   ['yesterday', 'Yesterday'],
-  ['this_week', 'This week'],
+  ['this_week', 'WTD'],
   ['last_7_days', 'Last 7 days'],
-  ['this_month', 'This month'],
-  ['this_quarter', 'This quarter'],
-  ['fiscal_year', 'Fiscal year'],
+  ['this_month', 'MTD'],
+  ['this_quarter', 'QTD'],
+  ['fiscal_year', 'YTD'],
 ]
 
 function displayValue(value) {
@@ -119,7 +119,7 @@ export default function DashboardPage({ onOpenBuilder }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [dateRange, setDateRange] = useState('')
+  const [dateRange, setDateRange] = useState('this_month')
   const [currency, setCurrency] = useState('GBP')
 
   useEffect(() => {
@@ -188,11 +188,11 @@ export default function DashboardPage({ onOpenBuilder }) {
     <header className="dashboard-header">
       <div><span>Dashboards</span><h1>{definition?.name || 'Dashboard'}</h1><p>{definition?.description || 'Overview of your business performance.'}</p></div>
       <div className="dashboard-actions">
-        <select value={activeId} onChange={(event) => setActiveId(event.target.value)}>
-          <option value="">Default dashboard</option>
+        <select value={activeId} onChange={(event) => setActiveId(event.target.value)} aria-label="Dashboard view">
+          <option value="">{definition?.name || 'Default dashboard'} (Default)</option>
           {available.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
-        <label><CalendarDays size={14}/><select value={dateRange} onChange={(event) => { setDateRange(event.target.value); void loadDashboard(activeId, event.target.value) }}><option value="">Dashboard default</option>{DATE_RANGES.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        <label><CalendarDays size={14}/><select value={dateRange} aria-label="Dashboard date range" onChange={(event) => { setDateRange(event.target.value); void loadDashboard(activeId, event.target.value) }}>{DATE_RANGES.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
         <button type="button" onClick={() => loadDashboard(activeId, dateRange)}><RefreshCw size={14}/></button>
         {onOpenBuilder ? <button type="button" onClick={onOpenBuilder}><Pencil size={14}/> Edit</button> : null}
       </div>
