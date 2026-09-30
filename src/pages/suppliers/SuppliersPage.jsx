@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Eye, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
 
 function money(value,currency='GBP'){
@@ -23,13 +24,13 @@ export default function SuppliersPage(){
   const [detail,setDetail]=useState(null)
   const [accounts,setAccounts]=useState(null)
 
-  const load=async()=>{
+  const load=async(forceRefresh=false)=>{
     try{
       setLoading(true);setError('')
       const [s,p,settings,perms]=await Promise.all([
-        apiRequest('/api/suppliers'),
-        apiRequest('/api/products').catch(()=>null),
-        apiRequest('/api/settings').catch(()=>null),
+        cachedGet('/api/suppliers',{forceRefresh,onFresh:fresh=>fresh?.success&&setSuppliers(Array.isArray(fresh.data)?fresh.data:[])}),
+        cachedGet('/api/products',{forceRefresh,onFresh:fresh=>fresh?.success&&setProducts(Array.isArray(fresh.data)?fresh.data:[])}).catch(()=>null),
+        cachedGet('/api/settings',{cacheKey:'settings:company',forceRefresh,onFresh:fresh=>fresh?.data?.company?.currency&&setCurrency(fresh.data.company.currency)}).catch(()=>null),
         apiRequest('/api/auth/me/permissions').catch(()=>null),
       ])
       if(!s?.success)throw new Error(s?.message||'Unable to load suppliers')
@@ -61,7 +62,7 @@ export default function SuppliersPage(){
       })
       if(!r?.success)throw new Error(r?.message||'Unable to update supplier status')
       setMessage(row.active?'Supplier deactivated.':'Supplier activated.')
-      await load()
+      await load(true)
     }catch(err){setError(err?.message||'Unable to update supplier status')}
   }
 
@@ -82,7 +83,7 @@ export default function SuppliersPage(){
     <header className="module-page-header">
       <div><span>Supply</span><h1>Suppliers</h1><p>Supplier master data, sourcing relationships and supplier accounts.</p></div>
       <div className="module-header-actions">
-        <button onClick={load}><RefreshCw size={14}/> Refresh</button>
+        <button onClick={()=>load(true)}><RefreshCw size={14}/> Refresh</button>
         <button className="module-primary-button" onClick={()=>setEditor({})}><Plus size={14}/> New Supplier</button>
       </div>
     </header>
@@ -108,7 +109,7 @@ export default function SuppliersPage(){
       />
     </section>
 
-    {editor?<SupplierEditor supplier={editor} onClose={()=>setEditor(null)} onSaved={async msg=>{setEditor(null);setMessage(msg);await load()}}/>:null}
+    {editor?<SupplierEditor supplier={editor} onClose={()=>setEditor(null)} onSaved={async msg=>{setEditor(null);setMessage(msg);await load(true)}}/>:null}
     {detail?<SupplierDetail supplier={detail} products={products} currency={currency} canAccounts={canManageAccounts||canManagePayments} onClose={()=>setDetail(null)} onEdit={()=>{setEditor(detail);setDetail(null)}} onOpenAccounts={()=>{setAccounts(detail);setDetail(null)}} onReload={()=>openDetail(detail)}/>:null}
     {accounts?<SupplierAccounts supplier={accounts} currency={currency} canManage={canManageAccounts} canManagePayments={canManagePayments} onClose={()=>setAccounts(null)}/>:null}
   </section>
