@@ -1,48 +1,82 @@
-import { apiRequest, getActingCompanyId, setActingCompanyId } from './api'
+import { apiRequest, getActingCompanyId, getStoredUser, setActingCompanyId } from './api'
+
+const SETTINGS_CONTEXT_CACHE_KEY = 'onepos.settings.context.v2'
+
+function currentScope(user = getStoredUser()) {
+  const companyId = user?.companyId || getActingCompanyId() || ''
+  return {
+    userId: String(user?.id || ''),
+    companyId: String(companyId || ''),
+  }
+}
+
+export function readSettingsContextCache() {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(SETTINGS_CONTEXT_CACHE_KEY) || 'null')
+    if (!cached?.context?.user?.id) return null
+    const scope = currentScope()
+    if (!scope.userId || String(cached.userId || '') !== scope.userId) return null
+    if (String(cached.companyId || '') !== scope.companyId) return null
+    return cached.context
+  } catch {
+    return null
+  }
+}
+
+function writeSettingsContextCache(context) {
+  try {
+    const scope = currentScope(context?.user)
+    sessionStorage.setItem(SETTINGS_CONTEXT_CACHE_KEY, JSON.stringify({
+      userId: scope.userId,
+      companyId: scope.companyId,
+      savedAt: Date.now(),
+      context,
+    }))
+  } catch {}
+}
+
+export function clearSettingsContextCache() {
+  try { sessionStorage.removeItem(SETTINGS_CONTEXT_CACHE_KEY) } catch {}
+}
 
 export async function loadSettingsContext() {
-  // Identity + RBAC are platform/session concerns and must not be discarded
-  // just because tenant/company settings are unavailable.
-  const [me, permissions] = await Promise.all([
-    apiRequest('/api/auth/me'),
-    apiRequest('/api/auth/me/permissions'),
-  ])
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
 
-  const user = me?.user || null
-  let settings = null
-  let settingsError = ''
+  /*
+   * Fast path: the authenticated user and selected company are already stored
+   * by login/session bootstrap. Settings must not rediscover them on every
+   * refresh. The server remains authoritative for every protected request.
+   */
+  let user = getStoredUser()
+  if (!user?.id) {
+    const me = await apiRequest('/api/auth/me')
+    user = me?.user || null
+    if (user?.id) {
+      try { sessionStorage.setItem('onepos_user', JSON.stringify(user)) } catch {}
+    }
+  }
 
-  // A company-scoped user carries companyId directly. Platform/operator
-  // identities may instead use the validated acting-company header supplied by
-  // apiRequest(). Treat either as an effective company context so every
-  // company-scoped Settings page follows the same rule.
   let actingCompanyId = getActingCompanyId()
   let authorisedCompanies = []
 
   /*
-   * Self-heal an existing Smart Theme session that was created before the
-   * acting-company bootstrap existed (or whose browser storage was cleared).
-   * If this Platform Developer has exactly one authorised company, select it
-   * automatically instead of leaving every company Settings page unusable.
+   * Platform Developer is the exceptional path only. If an acting company is
+   * already selected, use it immediately. Company discovery is only needed
+   * when there is no usable company context at all.
    */
-  const permissionCodes = Array.isArray(permissions?.data?.permissions) ? permissions.data.permissions : []
-  const canActForCompany = permissionCodes.includes('platform.manage') || user?.isPlatformDeveloper === true
-
-  if (!user?.companyId && canActForCompany) {
+  if (user?.isPlatformDeveloper === true && !user?.companyId && !actingCompanyId) {
     try {
       const companiesResponse = await apiRequest('/api/platform/developer/companies')
       authorisedCompanies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
-      const rememberedIsAuthorised = authorisedCompanies.some((company) => String(company.id) === String(actingCompanyId))
-      if (!rememberedIsAuthorised) actingCompanyId = ''
-      if (!actingCompanyId && authorisedCompanies.length >= 1) {
+      if (authorisedCompanies.length === 1) {
         actingCompanyId = String(authorisedCompanies[0].id || '')
-      }
-      if (actingCompanyId) {
-        await apiRequest('/api/platform/developer/acting-company', {
-          method: 'PUT',
-          body: JSON.stringify({ actingCompanyId }),
-        })
-        setActingCompanyId(actingCompanyId)
+        if (actingCompanyId) {
+          await apiRequest('/api/platform/developer/acting-company', {
+            method: 'PUT',
+            body: JSON.stringify({ actingCompanyId }),
+          })
+          setActingCompanyId(actingCompanyId)
+        }
       }
     } catch {
       actingCompanyId = ''
@@ -51,19 +85,31 @@ export async function loadSettingsContext() {
   }
 
   const hasCompanyContext = Boolean(user?.companyId || actingCompanyId)
+  let settings = null
+  let settingsError = ''
 
-  if (hasCompanyContext) {
-    try {
-      // The backend remains authoritative: apiRequest attaches
-      // X-Acting-Company-Id when present and the API validates that context.
-      const response = await apiRequest('/api/settings')
-      settings = response?.data || null
-    } catch (error) {
-      settingsError = error?.message || 'Unable to load company settings'
-    }
+  /*
+   * RBAC and company settings are independent reads. Fetch them concurrently.
+   * Licence checks are intentionally NOT part of Settings bootstrap; licensed
+   * actions enforce licence validity at execution time.
+   */
+  const permissionsPromise = apiRequest('/api/auth/me/permissions')
+  const settingsPromise = hasCompanyContext
+    ? apiRequest('/api/settings').catch((error) => ({ __settingsError: error }))
+    : Promise.resolve(null)
+
+  const [permissions, settingsResponse] = await Promise.all([
+    permissionsPromise,
+    settingsPromise,
+  ])
+
+  if (settingsResponse?.__settingsError) {
+    settingsError = settingsResponse.__settingsError?.message || 'Unable to load company settings'
+  } else {
+    settings = settingsResponse?.data || null
   }
 
-  return {
+  const context = {
     user,
     permissions: permissions?.data || {},
     settings,
@@ -72,6 +118,19 @@ export async function loadSettingsContext() {
     actingCompanyId: actingCompanyId || null,
     authorisedCompanies,
   }
+
+  writeSettingsContextCache(context)
+
+  const endedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
+  if (typeof console !== 'undefined' && console.info) {
+    console.info('[onePOS] Settings context loaded', {
+      ms: Math.round(endedAt - startedAt),
+      cachedIdentity: Boolean(getStoredUser()?.id),
+      companyContext: hasCompanyContext,
+    })
+  }
+
+  return context
 }
 
 export async function loadSettingsCatalog() {
@@ -83,25 +142,27 @@ export async function loadSettingsCatalog() {
 }
 
 export async function patchSettings(patch) {
-  return apiRequest('/api/settings', {
+  const result = await apiRequest('/api/settings', {
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
+  clearSettingsContextCache()
+  return result
 }
 
 export async function patchCompanySettings(patch) {
-  return apiRequest('/api/settings/company', {
+  const result = await apiRequest('/api/settings/company', {
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
+  clearSettingsContextCache()
+  return result
 }
-
 
 export async function loadUsers() {
   const payload = await apiRequest('/api/admin/users')
   return Array.isArray(payload?.data) ? payload.data : []
 }
-
 
 export async function loadRoles() {
   const payload = await apiRequest('/api/admin/roles')
@@ -152,7 +213,6 @@ export async function updateUser(userId, input) {
     body: JSON.stringify(input),
   })
 }
-
 
 export async function loadPlatformObjects() {
   const payload = await apiRequest('/api/platform/metadata')
