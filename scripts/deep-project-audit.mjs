@@ -19,17 +19,6 @@ const staticFindings=[];
 for (const file of jsFiles) {
   const source=fs.readFileSync(file,"utf8");
   const fileName=rel(file);
-  if (fileName.startsWith("server/routes/") && fileName !== "server/routes/superadmin.js") {
-    for (const match of source.matchAll(/\bpool\.connect\(\)/g)) {
-      staticFindings.push({
-        type:"STATIC",
-        code:"ROUTE_SHARED_POOL_BYPASS",
-        file:fileName,
-        line:source.slice(0,match.index).split("\n").length,
-        excerpt:"pool.connect()",
-      });
-    }
-  }
 
   const suspiciousSqlPatterns=[
     { code:"SQL_PARAM_PLACEHOLDER_MISSING_DOLLAR", re:/(?:company_id|store_id|record_id|user_id|role_id|object_id)=\$\{(?:[A-Za-z_$][\w$]*Params|params)\.length\}/g },
@@ -46,6 +35,21 @@ for (const file of jsFiles) {
       });
     }
   }
+}
+
+const serverEntry=fs.readFileSync(path.join(SERVER,"server.js"),"utf8");
+if (!serverEntry.includes("const requestAwarePool = createRequestAwarePool(pool);")) {
+  staticFindings.push({type:"STATIC",code:"REQUEST_AWARE_POOL_MISSING",file:"server/server.js",line:1,excerpt:"request-aware pool proxy is not configured"});
+}
+for (const match of serverEntry.matchAll(/create([A-Za-z0-9]+)Router\(\{[^\n}]*\bpool\b(?!\s*:)/g)) {
+  if (match[1] === "Superadmin") continue;
+  staticFindings.push({
+    type:"STATIC",
+    code:"RAW_POOL_ROUTER_INJECTION",
+    file:"server/server.js",
+    line:serverEntry.slice(0,match.index).split("\n").length,
+    excerpt:match[0].slice(0,500),
+  });
 }
 
 for(const file of jsFiles){
