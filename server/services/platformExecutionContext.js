@@ -24,6 +24,21 @@ function requestSource(req, explicit = null) {
   };
 }
 
+function permissionTree(codes = []) {
+  const root = {};
+  for (const code of codes) {
+    const parts = String(code || "").split(".").filter(Boolean);
+    if (!parts.length) continue;
+    let cursor = root;
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      cursor[parts[index]] ||= {};
+      cursor = cursor[parts[index]];
+    }
+    cursor[parts.at(-1)] = true;
+  }
+  return root;
+}
+
 async function loadPermissions(db, user) {
   if (!db || typeof db !== "function" || !user?.roleId) return Object.freeze({});
   const result = await db(
@@ -33,7 +48,7 @@ async function loadPermissions(db, user) {
       WHERE rp.role_id=$1`,
     [user.roleId]
   );
-  return Object.freeze(Object.fromEntries((result.rows || []).map((row) => [row.code, true])));
+  return deepFreeze(permissionTree((result.rows || []).map((row) => row.code)));
 }
 
 function executionTimestamp(existing = null) {
