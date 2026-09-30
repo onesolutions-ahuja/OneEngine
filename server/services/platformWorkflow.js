@@ -1045,7 +1045,13 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
       await executeWorkflowActions({ actions, db, pool, req, companyId: tenantId, userId: actorId, record, runId: run?.id || null, trigger: "licence_request_created", writeAudit });
       if (run?.id) await db("UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1", [run.id]);
     } catch (error) {
-      if (run?.id) await db("UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),updated_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb WHERE id=$2", [JSON.stringify({ error: String(error.message || error).slice(0, 500) }), run.id]);
+      if (run?.id) {
+        const failureMessage = String(error?.message || error || "Workflow execution failed").slice(0, 2000);
+        await db(
+          "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,updated_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb WHERE id=$3",
+          [failureMessage, JSON.stringify({ error: failureMessage, last_error: failureMessage }), run.id]
+        );
+      }
     }
   }
   return { status: "PENDING", duplicate: false, request };
