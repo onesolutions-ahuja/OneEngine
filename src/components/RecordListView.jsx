@@ -287,7 +287,11 @@ export default function RecordListView({
       {loading ? (
         <div className="record-list-state">Loading…</div>
       ) : error ? (
-        <div className="record-list-state record-list-state--error">{error}</div>
+        <div className="workspace-error-state" role="alert">
+          <strong>Unable to load records</strong>
+          <span>{error}</span>
+          {onDataChanged ? <button type="button" onClick={() => onDataChanged()}>Retry</button> : null}
+        </div>
       ) : (
         <div className="record-list-table-wrap" ref={filterAreaRef}>
           <table className="record-list-table">
