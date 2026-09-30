@@ -547,6 +547,16 @@ app.get("/api", (req, res) => {
 |--------------------------------------------------------------------------
 */
 
+function requireServerJwtSecret() {
+  const secret = String(process.env.JWT_SECRET || "").trim();
+  if (!secret) {
+    const error = new Error("JWT_SECRET is required");
+    error.code = "JWT_SECRET_NOT_CONFIGURED";
+    throw error;
+  }
+  return secret;
+}
+
 const GOOGLE_OAUTH_STATE_COOKIE = "onepos_google_oauth_state";
 
 function cookieValue(req, name) {
@@ -601,7 +611,7 @@ app.get("/api/auth/google/status", async (req, res) => {
 });
 
 app.get("/api/auth/google/start", async (req, res) => {
-  const secret = process.env.JWT_SECRET || "development-secret-change-this";
+  const secret = requireServerJwtSecret();
   const returnTo = safeGoogleReturnTo(req.query?.returnTo);
   try {
     const email = String(req.query?.email || "").trim().toLowerCase();
@@ -650,7 +660,7 @@ app.get("/api/auth/google/start", async (req, res) => {
 });
 
 app.get("/api/auth/google/callback", async (req, res) => {
-  const secret = process.env.JWT_SECRET || "development-secret-change-this";
+  const secret = requireServerJwtSecret();
 
   let returnTo = "https://onesolutions-ahuja.github.io/OneEngine/";
   try {
