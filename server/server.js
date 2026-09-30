@@ -2320,7 +2320,7 @@ async function startServer() {
               try {
                 const actor = payload.actorUserId
                   ? (await db(
-                      "SELECT id,company_id,store_id,role_id,is_superadmin FROM users WHERE id=$1 AND company_id=$2 AND active=true LIMIT 1",
+                      "SELECT id,company_id,store_id,role_id FROM users WHERE id=$1 AND company_id=$2 AND active=true LIMIT 1",
                       [payload.actorUserId, companyId]
                     )).rows[0] || null
                   : null;
@@ -2337,7 +2337,7 @@ async function startServer() {
                     executionMode,
                     trustedSystemExecution: executionMode === "SYSTEM",
                     user: actor
-                      ? { id: actor.id, companyId: actor.company_id, storeId: actor.store_id, roleId: actor.role_id, isSuperadmin: actor.is_superadmin === true }
+                      ? { id: actor.id, companyId: actor.company_id, storeId: actor.store_id, roleId: actor.role_id }
                       : { companyId },
                   },
                   companyId,
@@ -2429,7 +2429,7 @@ async function startServer() {
               try {
                 const actor = payload.actorUserId
                   ? (await db(
-                      "SELECT id,company_id,store_id,role_id,is_superadmin FROM users WHERE id=$1 AND company_id=$2 AND active=true LIMIT 1",
+                      "SELECT id,company_id,store_id,role_id FROM users WHERE id=$1 AND company_id=$2 AND active=true LIMIT 1",
                       [payload.actorUserId, job.company_id]
                     )).rows[0] || null
                   : null;
@@ -2447,7 +2447,7 @@ async function startServer() {
                     executionMode,
                     trustedSystemExecution: executionMode === "SYSTEM",
                     user: actor
-                      ? { id: actor.id, companyId: actor.company_id, storeId: actor.store_id, roleId: actor.role_id, isSuperadmin: actor.is_superadmin === true }
+                      ? { id: actor.id, companyId: actor.company_id, storeId: actor.store_id, roleId: actor.role_id }
                       : { companyId: job.company_id },
                     platformEvent: {
                       eventId: payload.eventId || null,
