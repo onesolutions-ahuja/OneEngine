@@ -428,7 +428,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
           {loadingObjects ? <div className="workspace-state">Loading…</div> : filteredObjects.map((object) => {
             const key = objectKey(object)
             return (
-              <button key={object.id || key} type="button" className={key === selectedKey ? 'is-active' : ''} onClick={() => { setSelectedKey(key); setSelectedId(''); setDetailTab('details') }}>
+              <button key={object.id || key} type="button" title={objectLabel(object)} className={key === selectedKey ? 'is-active' : ''} onClick={() => { setSelectedKey(key); setSelectedId(''); setDetailTab('details') }}>
                 <span className="workspace-object-icon"><Box size={14}/></span>
                 <span><strong>{objectLabel(object)}</strong><small>{key}</small></span>
                 <ChevronRight size={13}/>
