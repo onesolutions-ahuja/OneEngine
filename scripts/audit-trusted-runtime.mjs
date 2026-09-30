@@ -73,13 +73,13 @@ const packageRoutes = fs.readFileSync(PACKAGE_ROUTES, 'utf8')
 for (const required of ['createTrustedRuntimeGate()', 'validateTrustedRuntime()', 'assertTrustedJobKind(job.kind)']) {
   if (!serverEntry.includes(required)) findings.push({ severity: 'ERROR', rule: 'SERVER_GATE_MISSING', file: path.relative(ROOT, SERVER_ENTRY), detail: required })
 }
-for (const required of ['PLATFORM_FUNCTIONS', 'PLATFORM_ACTION_REGISTRY', 'TRUSTED_JOB_KINDS', 'UNREGISTERED_CAPABILITY']) {
+for (const required of ['PLATFORM_FUNCTIONS', 'PLATFORM_ACTION_REGISTRY', 'TRUSTED_JOB_KINDS', 'UNREGISTERED_CAPABILITY', 'prefixes: ["/api/platform/"]']) {
   if (!serverRuntime.includes(required)) findings.push({ severity: 'ERROR', rule: 'SERVER_RUNTIME_INVALID', file: path.relative(ROOT, SERVER_RUNTIME), detail: required })
 }
 if (!serverJobs.includes('assertTrustedJobKind(kind)')) {
   findings.push({ severity: 'ERROR', rule: 'JOB_ENQUEUE_GATE_MISSING', file: path.relative(ROOT, SERVER_JOBS) })
 }
-for (const required of ['internalAppCatalog', 'packageDefinition', 'hashPackageManifest', 'assertTrustedPackageManifest', 'validateTrustedPackageCatalogue']) {
+for (const required of ['internalAppCatalog', 'packageDefinition', 'hashPackageManifest', 'assertTrustedPackageManifest', 'validateTrustedPackageCatalogue', 'Object.freeze(Object.fromEntries']) {
   if (!serverPackages.includes(required)) findings.push({ severity: 'ERROR', rule: 'TRUSTED_PACKAGE_CATALOGUE_INVALID', file: path.relative(ROOT, SERVER_PACKAGES), detail: required })
 }
 const packageAssertions = (packageRoutes.match(/assertTrustedPackageManifest\(item\.packageKey, item\.manifest, item\.version\)/g) || []).length
@@ -98,7 +98,7 @@ for (const required of ['isPrivilegedMutation', 'resolveTrustedCapability', 'UNR
 }
 
 const runtimeText = fs.readFileSync(RUNTIME_FILE, 'utf8')
-for (const required of ['Object.freeze', 'TRUSTED_CAPABILITY_MAP', 'validateTrustedRuntime']) {
+for (const required of ['Object.freeze', 'TRUSTED_CAPABILITY_MAP', 'validateTrustedRuntime', "prefixes: ['/api/platform/']"]) {
   if (!runtimeText.includes(required)) {
     findings.push({ severity: 'ERROR', rule: 'RUNTIME_MANIFEST_INVALID', file: path.relative(ROOT, RUNTIME_FILE), detail: required })
   }
