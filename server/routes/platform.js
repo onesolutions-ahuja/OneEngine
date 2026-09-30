@@ -614,13 +614,29 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     try {
       const platformManage = await hasPlatformManageAccess(req.user?.id);
       const legacyDeveloper = req.user?.isPlatformDeveloper === true || req.user?.is_platform_developer === true;
+
+      // Normal tenant accounts are already company-bound by authentication.
+      // platform.manage grants developer capability inside that tenant; it does
+      // not turn the user into a cross-company/global developer.
+      if (req.user?.companyId) {
+        const requestedOverride = req.headers["x-acting-company-id"] || req.body?.actingCompanyId || req.query?.actingCompanyId;
+        if (requestedOverride && String(requestedOverride) !== String(req.user.companyId) && !legacyDeveloper) {
+          return res.status(403).json({ success: false, message: "Tenant users cannot switch company context" });
+        }
+        if (!legacyDeveloper || !requestedOverride || String(requestedOverride) === String(req.user.companyId)) {
+          req.platformCompanyId = req.user.companyId;
+          return next();
+        }
+      }
+
       if (!platformManage && !legacyDeveloper) {
-        if (req.headers["x-acting-company-id"]) return res.status(403).json({ success: false, message: "Tenant users cannot switch company context" });
         req.platformCompanyId = req.user.companyId;
         return next();
       }
 
-      const actingCompanyId = req.headers["x-acting-company-id"] || req.body?.actingCompanyId || req.query?.actingCompanyId || req.user?.companyId;
+      // Only a global developer profile with no authenticated company binding
+      // needs an acting-company selection.
+      const actingCompanyId = req.headers["x-acting-company-id"] || req.body?.actingCompanyId || req.query?.actingCompanyId;
       if (!actingCompanyId) return res.status(409).json({ success: false, code: "ACTING_COMPANY_REQUIRED", message: "Select a company before customising tenant metadata" });
 
       const access = await db(
