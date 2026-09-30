@@ -362,7 +362,7 @@ html[data-platform-theme="theme4"] .onepos-shell-header .jarvis-corner > [data-t
 
   position: relative;
 
-  background: transparent;
+  background: radial-gradient(circle at 35% 24%, #effdff 0%, #83efff 12%, #29c9f3 28%, #3478e8 48%, #9253e9 72%, #182765 100%);
 
   border: 0;
 
@@ -920,11 +920,11 @@ html[data-platform-theme="theme4"] .onepos-shell-header .jarvis-corner > [data-t
 
   clip-path: circle(50% at 50% 50%);
 
-  /* Restore the original black video field inside the centre circle while
-     keeping the supplied video, mask, glow and animation unchanged. */
-  background: #000;
+  /* Keep the supplied animation visible without letting an opaque black
+     WebM field hide the orb fallback on browsers/codecs that render it. */
+  background: transparent;
 
-  mix-blend-mode: normal;
+  mix-blend-mode: screen;
 
   filter:
 
