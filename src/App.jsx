@@ -697,7 +697,7 @@ function readRoute() {
     : window.location.pathname
   const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
   if (parts[0] === 'settings') {
-    const section = parts[1] || 'general'
+    const section = !parts[1] || parts[1] === 'general' ? 'company' : parts[1]
     if (DEVELOPER_SETTINGS_KEYS.has(section)) return { app: 'developer', section: section === 'platform' ? 'workflow-builder' : section }
     return { app: 'settings', section }
   }
@@ -982,6 +982,8 @@ function SettingsPage({ onOpenProfile }) {
 
   const metadataGroups = buildSettingsGroupsFromCatalog(settingsCatalog)
   const navigationGroups = metadataGroups
+    .map((group) => group.filter((item) => item.key !== 'general'))
+    .filter((group) => group.length)
 
   const visibleGroups = navigationGroups
     .map((group) =>
@@ -1504,80 +1506,193 @@ function SettingsPage({ onOpenProfile }) {
                   ) : null}
                 </>
               ) : current?.key === 'company' ? (
-                <>
-                  {[
-                    ['name', 'Company name', 'Company identity used across onePOS.'],
-                    ['legalName', 'Legal / business name', 'Legal trading name shown on business documents.'],
-                    ['email', 'Company email', 'Main company contact email.'],
-                    ['phone', 'Company phone', 'Main company contact number.'],
-                    ['currency', 'Currency', 'Default company currency.'],
-                    ['timezone', 'Timezone', 'Default company timezone.'],
-                  ].map(([field, label, help]) => (
-                    <div className="settings-row" key={field}>
-                      <div><strong>{label}</strong><p>{help}</p></div>
+                <div className="settings-company-grid">
+                  <section className="settings-subcard settings-company-main-card">
+                    <div className="settings-subcard-title">
+                      <div><strong>Company</strong><span>Identity, contact and company-level information.</span></div>
+                    </div>
+                    {[
+                      ['name', 'Company name', 'Company identity used across onePOS.'],
+                      ['legalName', 'Legal / business name', 'Legal trading name shown on business documents.'],
+                      ['email', 'Company email', 'Main company contact email.'],
+                      ['phone', 'Company phone', 'Main company contact number.'],
+                    ].map(([field, label, help]) => (
+                      <div className="settings-row" key={field}>
+                        <div><strong>{label}</strong><p>{help}</p></div>
+                        <input
+                          defaultValue={settings.company?.[field] || ''}
+                          disabled={!canManage || saving === `company.${field}`}
+                          onBlur={(event) => updateCompany(field, event.target.value)}
+                          aria-label={label}
+                        />
+                      </div>
+                    ))}
+                    <div className="settings-row">
+                      <div><strong>Company logo</strong><p>Used in company branding and supported business documents.</p></div>
+                      <div className="settings-inline-actions">
+                        {settings.company?.logoUrl ? (
+                          <img
+                            src={settings.company.logoUrl}
+                            alt="Company logo"
+                            style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8 }}
+                          />
+                        ) : <span className="settings-value">Not configured</span>}
+                        <label className="settings-file-button">
+                          <span>Choose file</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            hidden
+                            disabled={!canManage || saving === 'company.logoUrl'}
+                            onChange={async (event) => {
+                              const file = event.target.files?.[0]
+                              if (!file) return
+                              try {
+                                const dataUrl = await compressCompanyLogo(file)
+                                await updateCompany('logoUrl', dataUrl)
+                              } catch (err) {
+                                setError(err?.message || 'Unable to prepare company logo')
+                              } finally {
+                                event.target.value = ''
+                              }
+                            }}
+                          />
+                        </label>
+                        {settings.company?.logoUrl ? (
+                          <button
+                            type="button"
+                            className="settings-secondary-button"
+                            disabled={!canManage || saving === 'company.logoUrl'}
+                            onClick={() => updateCompany('logoUrl', '')}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="settings-row">
+                      <div>
+                        <strong>Licence</strong>
+                        <p>Read-only entitlement information for this company.</p>
+                      </div>
+                      <span className="settings-value">
+                        {Object.entries(entitlements).filter(([, enabled]) => enabled === true).length
+                          ? `${Object.entries(entitlements).filter(([, enabled]) => enabled === true).length} modules enabled`
+                          : 'Base licence active'}
+                      </span>
+                    </div>
+                  </section>
+
+                  <section className="settings-subcard settings-company-general-card">
+                    <div className="settings-subcard-title">
+                      <div><strong>General</strong><span>Regional and operational defaults.</span></div>
+                    </div>
+                    <div className="settings-row">
+                      <div><strong>Date format</strong><p>Regional display format used across onePOS.</p></div>
+                      <select
+                        value={settings.general?.dateFormat || 'DD/MM/YYYY'}
+                        disabled={!canManage || saving === 'dateFormat'}
+                        onChange={(event) => update('dateFormat', event.target.value)}
+                      >
+                        <option>DD/MM/YYYY</option>
+                        <option>MM/DD/YYYY</option>
+                        <option>YYYY-MM-DD</option>
+                      </select>
+                    </div>
+                    <div className="settings-row">
+                      <div><strong>Currency</strong><p>Default company currency.</p></div>
                       <input
-                        defaultValue={settings.company?.[field] || ''}
-                        disabled={!canManage || saving === `company.${field}`}
-                        onBlur={(event) => updateCompany(field, event.target.value)}
-                        aria-label={label}
+                        defaultValue={settings.company?.currency || ''}
+                        disabled={!canManage || saving === 'company.currency'}
+                        onBlur={(event) => updateCompany('currency', event.target.value)}
+                        aria-label="Currency"
                       />
                     </div>
-                  ))}
-                  <div className="settings-row">
-                    <div><strong>Company logo</strong><p>Used in company branding and supported business documents.</p></div>
-                    <div className="settings-inline-actions">
-                      {settings.company?.logoUrl ? (
-                        <img
-                          src={settings.company.logoUrl}
-                          alt="Company logo"
-                          style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8 }}
-                        />
-                      ) : <span className="settings-value">Not configured</span>}
-                      <label className="settings-file-button">
-                        <span>Choose file</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          hidden
-                          disabled={!canManage || saving === 'company.logoUrl'}
-                          onChange={async (event) => {
-                            const file = event.target.files?.[0]
-                            if (!file) return
-                            try {
-                              const dataUrl = await compressCompanyLogo(file)
-                              await updateCompany('logoUrl', dataUrl)
-                            } catch (err) {
-                              setError(err?.message || 'Unable to prepare company logo')
-                            } finally {
-                              event.target.value = ''
-                            }
-                          }}
-                        />
-                      </label>
-                      {settings.company?.logoUrl ? (
-                        <button
-                          type="button"
-                          className="settings-secondary-button"
-                          disabled={!canManage || saving === 'company.logoUrl'}
-                          onClick={() => updateCompany('logoUrl', '')}
-                        >
-                          Remove
-                        </button>
-                      ) : null}
+                    <div className="settings-row">
+                      <div><strong>Timezone</strong><p>Default company timezone.</p></div>
+                      <input
+                        defaultValue={settings.company?.timezone || ''}
+                        disabled={!canManage || saving === 'company.timezone'}
+                        onBlur={(event) => updateCompany('timezone', event.target.value)}
+                        aria-label="Timezone"
+                      />
                     </div>
-                  </div>
-                  <div className="settings-row">
-                    <div>
-                      <strong>Licence</strong>
-                      <p>Read-only entitlement information for this company.</p>
+                    <div className="settings-row">
+                      <div><strong>Scan &amp; Go</strong><p>Allow the Scan &amp; Go customer flow.</p></div>
+                      <button
+                        type="button"
+                        className={`mac-switch ${settings.scanGo?.enabled ? 'is-on' : ''}`}
+                        disabled={!canManage || saving === 'scanGoEnabled'}
+                        onClick={() => update('scanGoEnabled', !settings.scanGo?.enabled)}
+                        aria-label="Scan & Go"
+                      >
+                        <span />
+                      </button>
                     </div>
-                    <span className="settings-value">
-                      {Object.entries(entitlements).filter(([, enabled]) => enabled === true).length
-                        ? `${Object.entries(entitlements).filter(([, enabled]) => enabled === true).length} modules enabled`
-                        : 'Base licence active'}
-                    </span>
-                  </div>
-                </>
+                    <div className="settings-row">
+                      <div><strong>Exchange mode</strong><p>Controls which exchange workflow cashiers may use.</p></div>
+                      <select
+                        value={settings.exchange?.mode || 'both'}
+                        disabled={!canManage || saving === 'exchangeMode'}
+                        onChange={(event) => update('exchangeMode', event.target.value)}
+                      >
+                        <option value="receipt">Receipt / Invoice only</option>
+                        <option value="normal">Normal / No receipt only</option>
+                        <option value="both">Both — cashier chooses</option>
+                      </select>
+                    </div>
+                    <div className="settings-row">
+                      <div><strong>Batch inventory mode</strong><p>Controls batch and date requirements.</p></div>
+                      <select
+                        value={settings.inventory?.batchInventoryMode || 'none'}
+                        disabled={!canManage || saving === 'batchPolicy'}
+                        onChange={(event) => updateBatchPolicy({ batchInventoryMode: event.target.value })}
+                      >
+                        <option value="none">No Batch Inventory</option>
+                        <option value="optional_dates">Batch Inventory — Dates Optional</option>
+                        <option value="required_dates">Proper Batch Inventory</option>
+                      </select>
+                    </div>
+                    {(settings.inventory?.batchInventoryMode || 'none') === 'optional_dates' ? (
+                      <>
+                        <div className="settings-row">
+                          <div><strong>Manufacturing date default</strong><p>Used when a manufacturing date is not entered.</p></div>
+                          <select
+                            value={settings.inventory?.batchDefaultMfgRule || 'none'}
+                            disabled={!canManage || saving === 'batchPolicy'}
+                            onChange={(event) => updateBatchPolicy({ batchDefaultMfgRule: event.target.value })}
+                          >
+                            <option value="none">No default</option>
+                            <option value="today">Today</option>
+                          </select>
+                        </div>
+                        <div className="settings-row">
+                          <div><strong>Expiry date default</strong><p>Used when an expiry date is not entered.</p></div>
+                          <select
+                            value={settings.inventory?.batchDefaultExpiryRule || 'none'}
+                            disabled={!canManage || saving === 'batchPolicy'}
+                            onChange={(event) => updateBatchPolicy({ batchDefaultExpiryRule: event.target.value })}
+                          >
+                            <option value="none">No default</option>
+                            <option value="today_plus_days">Today + days</option>
+                          </select>
+                        </div>
+                        <div className="settings-row">
+                          <div><strong>Default expiry days</strong><p>Days added when Today + days is selected.</p></div>
+                          <input
+                            type="number"
+                            min="0"
+                            max="3650"
+                            value={Number(settings.inventory?.batchDefaultExpiryDays ?? 365)}
+                            disabled={!canManage || saving === 'batchPolicy'}
+                            onChange={(event) => updateBatchPolicy({ batchDefaultExpiryDays: Number(event.target.value) })}
+                            aria-label="Default expiry days"
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                  </section>
+                </div>
               ) : current?.key === 'store-till' ? (
                 <StoreTillSettingsPage settings={settings} onSettingsChanged={load} />
               ) : current?.key === 'client-web-shop' ? (
