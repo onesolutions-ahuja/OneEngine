@@ -2304,8 +2304,10 @@ function Desktop({ onLock, onSignOut }) {
   const refreshStoreApps = async ({ silent = false } = {}) => {
     if (!silent) setStoreAppsLoading(true)
     setStoreAppsError('')
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 12000)
     try {
-      const packages = await apiRequest('/api/packages/marketplace')
+      const packages = await apiRequest('/api/packages/marketplace', { signal: controller.signal })
       const rows = Array.isArray(packages?.data) ? packages.data : []
       setStoreApps(rows)
       writeMarketplaceCache(rows)
@@ -2319,9 +2321,14 @@ function Desktop({ onLock, onSignOut }) {
       } else {
         setStoreAppsLoaded(false)
       }
-      setStoreAppsError(error?.message || 'Unable to load apps. Please retry.')
+      setStoreAppsError(
+        error?.name === 'AbortError'
+          ? 'oneStore took too long to respond. Please retry.'
+          : (error?.message || 'Unable to load apps. Please retry.')
+      )
       return cached
     } finally {
+      window.clearTimeout(timeout)
       if (!silent) setStoreAppsLoading(false)
     }
   }
