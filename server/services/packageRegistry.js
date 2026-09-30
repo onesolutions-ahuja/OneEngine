@@ -434,7 +434,7 @@ export function packageDefinition(entry) {
             objectKey: "communication_event",
             name: "OneAssistant - Email Booking",
             triggerKey: "communication_message_received",
-            conditions: [{ field: "channel", operator: "equals", value: "EMAIL" }],
+            conditions: [{ field: "channel", operator: "equals", value: "EMAIL" }, { field: "body", operator: "contains", value: "appointment" }],
             action: {
               type: "workflow",
               scope: "one_assistant",
@@ -454,7 +454,7 @@ export function packageDefinition(entry) {
             objectKey: "communication_event",
             name: "OneAssistant - SMS Booking",
             triggerKey: "communication_message_received",
-            conditions: [{ field: "channel", operator: "equals", value: "SMS" }],
+            conditions: [{ field: "channel", operator: "equals", value: "SMS" }, { field: "body", operator: "contains", value: "appointment" }],
             action: {
               type: "workflow",
               scope: "one_assistant",
@@ -474,7 +474,7 @@ export function packageDefinition(entry) {
             objectKey: "communication_event",
             name: "OneAssistant - WhatsApp Booking",
             triggerKey: "communication_message_received",
-            conditions: [{ field: "channel", operator: "equals", value: "WHATSAPP" }],
+            conditions: [{ field: "channel", operator: "equals", value: "WHATSAPP" }, { field: "body", operator: "contains", value: "appointment" }],
             action: {
               type: "workflow",
               scope: "one_assistant",
