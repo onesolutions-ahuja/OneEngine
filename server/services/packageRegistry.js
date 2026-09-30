@@ -2361,8 +2361,8 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     const storeScoped = typeof definition.storeScoped === "boolean" ? definition.storeScoped : null;
     if (sourceTable && !safeMetadataKey(sourceTable)) throw new Error(`Invalid package source table: ${sourceTable}`);
     const existing = await db(
-      "SELECT id,package_id,module_id,company_id FROM platform_objects WHERE object_key=$1",
-      [objectKey]
+      "SELECT id,package_id,module_id,company_id FROM platform_objects WHERE object_key=$1 AND company_id IS NOT DISTINCT FROM $2 LIMIT 1",
+      [objectKey, objectCompanyId]
     );
     let object;
     if (existing.rows.length) {
@@ -2433,7 +2433,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
         throw new Error(`Invalid package field source column on ${objectKey}.${apiName}`);
       }
       const existingField = await db(
-        "SELECT id,company_id,source_package_id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id IS NULL OR company_id=$3) ORDER BY company_id NULLS FIRST LIMIT 1",
+        "SELECT id,company_id,source_package_id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND company_id IS NOT DISTINCT FROM $3 LIMIT 1",
         [object.id, apiName, fieldCompanyId]
       );
       if (existingField.rows.length) {
