@@ -666,7 +666,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   const recordAccess = [authenticate, resolveActingCompany];
 
   router.use("/platform", authenticate, async (req, res, next) => {
-    try { req.platformCompanyCustomers = await canViewCompanyCustomers(req.user); next(); }
+    try { req.platformCompanyCustomers = await canViewCompanyCustomers(req.user, req); next(); }
     catch (error) { next(error); }
   });
 
