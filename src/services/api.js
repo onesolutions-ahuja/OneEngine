@@ -207,10 +207,20 @@ export async function login(username, password) {
   return { ...data, user: resolvedUser }
 }
 
-export function startGoogleLogin(returnTo = typeof window !== 'undefined' ? window.location.href : '') {
+export async function startGoogleLogin(email, returnTo = typeof window !== 'undefined' ? window.location.href : '') {
   if (typeof window === 'undefined') return
+  const loginEmail = String(email || '').trim()
+  if (!loginEmail) throw new Error('Enter your email first to use Google SSO.')
+
+  const status = await apiRequest(`/api/auth/google/status?email=${encodeURIComponent(loginEmail)}`)
+  if (status?.data?.available !== true) {
+    throw new Error('SSO not connected. Please login with email/password.')
+  }
+
   const target = returnTo || window.location.href
-  window.location.assign(apiUrl(`/api/auth/google/start?returnTo=${encodeURIComponent(target.split('#')[0])}`))
+  window.location.assign(apiUrl(
+    `/api/auth/google/start?email=${encodeURIComponent(loginEmail)}&returnTo=${encodeURIComponent(target.split('#')[0])}`
+  ))
 }
 
 export function consumeGoogleOAuthCallback() {
@@ -237,7 +247,8 @@ export function consumeGoogleOAuthCallback() {
       missing_code: 'Google did not return a sign-in code. Please try again.',
       token_exchange_failed: 'Google sign-in could not be completed. Please try again.',
       profile_lookup_failed: 'Google account details could not be loaded.',
-      google_not_configured: 'Google Sign-In is not available right now.',
+      google_not_configured: 'SSO not connected. Please login with email/password.',
+      sso_not_connected: 'SSO not connected. Please login with email/password.',
       google_login_failed: 'Google Sign-In failed. Please try again.',
     }
     return { handled: true, error: messages[error] || 'Google Sign-In failed. Please try again.' }
