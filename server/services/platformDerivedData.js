@@ -76,7 +76,8 @@ async function hydrateLookupPath({ db, fields, record, path, req, cache, depth =
   if (!root || !rest.length) return;
   const rootField = fields.find((field) => field.api_name === root && field.active !== false);
   if (!rootField || rootField.field_type !== "lookup") return;
-  const lookupId = record?.[root];
+  const currentValue = record?.[root];
+  const lookupId = currentValue && typeof currentValue === "object" ? currentValue.id : currentValue;
   if (!lookupId) return;
 
   const targetKey = rootField.config?.relatedObjectKey || rootField.config?.related_object_key || rootField.config?.objectKey;
@@ -85,14 +86,20 @@ async function hydrateLookupPath({ db, fields, record, path, req, cache, depth =
   let related = cache.get(cacheKey);
   let targetObject;
   let targetFields;
-  if (!related) {
+  if (currentValue && typeof currentValue === "object" && currentValue.id) {
+    const targetKey = rootField.config?.relatedObjectKey || rootField.config?.related_object_key || rootField.config?.objectKey;
+    targetObject = await loadObjectByKey(db, targetKey, req.user.companyId);
+    if (!targetObject) return;
+    targetFields = await loadObjectFields(db, targetObject.id, req.user.companyId);
+    related = currentValue;
+  } else if (!related) {
     targetObject = await loadObjectByKey(db, targetKey, req.user.companyId);
     if (!targetObject) return;
     targetFields = await loadObjectFields(db, targetObject.id, req.user.companyId);
     related = await loadRelatedRecord({ db, object: targetObject, recordId: lookupId, req });
     if (!related) return;
     cache.set(cacheKey, { record: related, object: targetObject, fields: targetFields });
-  } else {
+  } else if (related?.record) {
     targetObject = related.object;
     targetFields = related.fields;
     related = related.record;
