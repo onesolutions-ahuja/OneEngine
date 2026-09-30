@@ -874,18 +874,6 @@ function SettingsPage({ onOpenProfile }) {
   }, [])
 
   useEffect(() => {
-    if (settingsVisibleLogged.current || loading || !current) return
-    if (!companyIndependentSection && (!hasCompanyContext || !settings)) return
-    settingsVisibleLogged.current = true
-    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
-    console.info('[onePOS] Settings visible', {
-      ms: Math.round(now - settingsOpenStartedAt.current),
-      source: settingsStartedWithCache.current ? 'session-cache' : 'network-first-load',
-      section: current.key,
-    })
-  }, [loading, current?.key, companyIndependentSection, hasCompanyContext, settings])
-
-  useEffect(() => {
     let live = true
     setSettingsCatalogError('')
 
@@ -974,6 +962,19 @@ function SettingsPage({ onOpenProfile }) {
     || (current?.key === 'server-api' && permissionCodes.includes('platform.manage'))
   const hasCompanyContext = context?.hasCompanyContext === true
   const companySettingsError = context?.settingsError || ''
+
+  useEffect(() => {
+    if (settingsVisibleLogged.current || loading || !current) return
+    if (!companyIndependentSection && (!hasCompanyContext || !settings)) return
+    settingsVisibleLogged.current = true
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    console.info('[onePOS] Settings visible', {
+      ms: Math.round(now - settingsOpenStartedAt.current),
+      source: settingsStartedWithCache.current ? 'session-cache' : 'network-first-load',
+      section: current.key,
+    })
+  }, [loading, current?.key, companyIndependentSection, hasCompanyContext, settings])
+
   useEffect(() => {
     if (current && current.key !== active) {
       setActive(current.key)
