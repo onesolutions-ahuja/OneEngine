@@ -134,7 +134,7 @@ const summary={
 const report={generatedAt:new Date().toISOString(),summary,findings};
 const outDir=path.join(ROOT,"artifacts");
 fs.mkdirSync(outDir,{recursive:true});
-fs.writeFileSync(path.join(outDir,"deep-project-audit.json"),JSON.stringify(report,null,2)+"\n");
+fs.writeFileSync(path.join(outDir,"project-consistency-audit.json"),JSON.stringify(report,null,2)+"\n");
 const md=["# OneEngine Deep Project Audit","",
   "Generated: "+report.generatedAt,"",
   "- Scanned files: "+summary.scannedFiles,
@@ -144,7 +144,7 @@ const md=["# OneEngine Deep Project Audit","",
   "- Info: "+summary.info,""
 ];
 for(const f of findings) md.push("- **"+f.severity+"** "+f.rule+" — "+f.file+(f.line?":"+f.line:"")+" — "+f.detail);
-fs.writeFileSync(path.join(outDir,"deep-project-audit.md"),md.join("\n")+"\n");
+fs.writeFileSync(path.join(outDir,"project-consistency-audit.md"),md.join("\n")+"\n");
 console.log(JSON.stringify(summary,null,2));
 for(const f of findings) console.log(f.severity+" "+f.rule+" "+f.file+(f.line?":"+f.line:"")+" :: "+f.detail);
 if(ENFORCE && summary.errors>0) process.exit(1);
