@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { evaluateCondition } from "./platformConditions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { executeWorkflowActions } from "./platformWorkflow.js";
@@ -87,7 +88,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
           || req.headers?.["x-request-id"]
           || req.executionContext?.globals?.$Request?.correlationId
           || req._platformAutomationExecutionId
-          || "request";
+          || randomUUID();
         req._platformAutomationExecutionId ||= requestExecutionKey;
         const idempotencyKey = `${requestExecutionKey}:${rule.id}:${recordId || "new"}:${executions.length}:${action.type}`;
         const jobAction = {
