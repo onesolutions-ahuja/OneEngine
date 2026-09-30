@@ -440,7 +440,7 @@ export default function createCustomersRouter({
         return res.status(400).json({ success: false, message: "referenceId must be a UUID" });
       }
 
-      const client = await pool.connect();
+      const client = await (req.tenantPool || pool).connect();
       try {
         await client.query("BEGIN");
 
@@ -538,7 +538,7 @@ export default function createCustomersRouter({
         .status(500)
         .json({ success: false, message: "DATABASE_URL is not configured" });
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       const identifiers = [phone, email].filter(
@@ -626,7 +626,7 @@ export default function createCustomersRouter({
       return res
         .status(500)
         .json({ success: false, message: "DATABASE_URL is not configured" });
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       const association = await associateCustomerWithStore(
@@ -676,7 +676,7 @@ export default function createCustomersRouter({
     try {
       let previous = null;
       if (savePlatformRecord) {
-        client = await pool.connect(); await client.query("BEGIN");
+        client = await (req.tenantPool || pool).connect(); await client.query("BEGIN");
         previous = (await db("SELECT * FROM customers WHERE id=$1 AND company_id=$2 FOR UPDATE", [req.params.id, req.user.companyId])).rows[0];
         if (!previous) return res.status(404).json({ success: false, message: "Customer not found" });
       }
@@ -1342,7 +1342,7 @@ export default function createCustomersRouter({
       const check = await db(`SELECT id FROM customers WHERE id = $1 AND company_id = $2`, [rows.find((row) => row.action === "update")?.matchCustomer?.id, req.user.companyId]);
       if (!check.rows.length) return res.status(400).json({ success: false, message: "Import customer does not belong to this company" });
     }
-    const client = pool?.connect ? await pool.connect() : null;
+    const client = pool?.connect ? await (req.tenantPool || pool).connect() : null;
     try {
       let created = 0;
       let updated = 0;
