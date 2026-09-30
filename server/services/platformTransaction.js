@@ -6,13 +6,15 @@ function normalizeName(name) {
 }
 
 export class PlatformTransactionError extends Error {
-  constructor(message, { code = "PLATFORM_TRANSACTION_FAILED", phase = null, cause = null, transactionId = null } = {}) {
+  constructor(message, { code = "PLATFORM_TRANSACTION_FAILED", phase = null, cause = null, transactionId = null, status = null, retryable = null } = {}) {
     super(message);
     this.name = "PlatformTransactionError";
     this.code = code;
     this.phase = phase;
     this.cause = cause;
     this.transactionId = transactionId;
+    this.status = status ?? cause?.status ?? null;
+    this.retryable = retryable ?? cause?.retryable ?? null;
   }
 }
 
@@ -116,6 +118,8 @@ export async function withPlatformTransaction({
       phase: committed ? "AFTER_COMMIT" : "TRANSACTION",
       cause: error,
       transactionId,
+      status: error?.status || null,
+      retryable: error?.retryable ?? null,
     });
   } finally {
     client.release();
