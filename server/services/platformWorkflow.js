@@ -30,6 +30,9 @@ import {
   listPaymentRequestProviders,
   createAppointmentPaymentRequest,
   calculateAppointmentPayment,
+  createAppointmentBookingCase,
+  issueAppointmentPublicLink,
+  resolveAssistantSubflow,
 } from "./oneAssistant.js";
 
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
@@ -1049,6 +1052,88 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
 
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,
+  {
+    key: "CREATE_APPOINTMENT_BOOKING_CASE",
+    displayName: "Appointments - Create Booking Case",
+    description: "Create an appointment booking case from an inbound Email, SMS or WhatsApp workflow.",
+    validation: (action) => {
+      if (!action?.channel) throw new Error("Create Appointment Booking Case requires channel");
+    },
+    async: false,
+    requiredPermissions: ["appointments.manage"],
+    executor: async ({ action, db, companyId, req, record }) => {
+      const tenantId=companyId||req?.user?.companyId;
+      const bookingCase=await createAppointmentBookingCase(db,{
+        companyId:tenantId,
+        channel:action.channel,
+        sourceMessageId:action.sourceMessageId||record?.providerMessageId||record?.provider_message_id||record?.id||null,
+        sender:action.sender||record?.sender||record?.from||null,
+        recipient:action.recipient||record?.recipient||record?.to||null,
+        subject:action.subject||record?.subject||null,
+        body:action.body||record?.body||record?.message||record?.text||null,
+        customerId:action.customerId||record?.customerId||record?.customer_id||null,
+        state:action.state||{},
+      });
+      return {status:"completed",bookingCase};
+    },
+  },
+  {
+    key: "ISSUE_APPOINTMENT_BOOKING_LINK",
+    displayName: "Appointments - Issue Booking Link",
+    description: "Create an expiring no-login booking URL for an appointment booking case.",
+    validation: (action) => {
+      if (!action?.bookingCaseId) throw new Error("Issue Appointment Booking Link requires bookingCaseId");
+    },
+    async: false,
+    requiredPermissions: ["appointments.manage"],
+    executor: async ({ action, db, companyId, req }) => {
+      const tenantId=companyId||req?.user?.companyId;
+      const link=await issueAppointmentPublicLink(db,{
+        companyId:tenantId,
+        bookingCaseId:action.bookingCaseId,
+        purpose:action.purpose||"BOOK_SLOT",
+        ttlMinutes:action.ttlMinutes||30,
+        publicBaseUrl:action.publicBaseUrl||process.env.PUBLIC_APP_URL||process.env.FRONTEND_URL||"",
+        metadata:action.metadata||{},
+      });
+      return {status:"completed",link};
+    },
+  },
+  {
+    key: "RUN_ASSISTANT_SUBFLOW",
+    displayName: "Appointments - Run Available Subflow",
+    description: "Resolve and run an active OneAssistant communication or payment subflow whose required package is installed.",
+    validation: (action) => {
+      if (!action?.capability) throw new Error("Run Available Subflow requires capability");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async (context) => {
+      const {action,db,companyId,req}=context;
+      const tenantId=companyId||req?.user?.companyId;
+      const resolved=await resolveAssistantSubflow(db,{
+        companyId:tenantId,
+        capability:action.capability,
+        channel:action.channel||null,
+        providerPackageKey:action.providerPackageKey||null,
+      });
+      if(!resolved){
+        if(action.required===true) throw new Error(`No active installed subflow is available for ${action.capability}`);
+        return {status:"skipped",reason:"No compatible installed subflow",capability:action.capability};
+      }
+      const runner=WORKFLOW_ACTION_REGISTRY.find((item)=>item.key==="RUN_SUBFLOW");
+      if(!runner?.executor) throw new Error("RUN_SUBFLOW is unavailable");
+      const result=await runner.executor({
+        ...context,
+        action:{
+          ...action,
+          workflowId:resolved.id,
+          inputs:action.inputs||{},
+        },
+      });
+      return {...result,resolvedWorkflowId:resolved.id,resolvedWorkflowName:resolved.name};
+    },
+  },
   {
     key: "FIND_APPOINTMENT_SLOTS",
     displayName: "Appointments - Find Available Slots",
