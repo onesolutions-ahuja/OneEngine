@@ -7,8 +7,10 @@ const EMPTY = {
   installed: false,
   configured: false,
   enabled: false,
-  clientId: "",
-  hasClientSecret: false,
+  credentialSource: "ENVIRONMENT",
+  clientIdConfigured: false,
+  clientSecretConfigured: false,
+  redirectUriConfigured: false,
   redirectUri: "",
   allowedDomain: "",
   allowPasswordLogin: true,
@@ -16,7 +18,6 @@ const EMPTY = {
 
 export default function GoogleConnectSettings() {
   const [form, setForm] = useState(EMPTY);
-  const [clientSecret, setClientSecret] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -46,15 +47,11 @@ export default function GoogleConnectSettings() {
         method: "PUT",
         body: JSON.stringify({
           enabled: form.enabled,
-          clientId: form.clientId,
-          ...(clientSecret ? { clientSecret } : {}),
-          redirectUri: form.redirectUri,
           allowedDomain: form.allowedDomain,
           allowPasswordLogin: form.allowPasswordLogin,
         }),
       });
       setForm({ ...EMPTY, ...(response?.data || {}) });
-      setClientSecret("");
       setMessage("Google Connect settings saved.");
     } catch (err) {
       setError(err?.message || "Unable to save Google Connect settings");
@@ -119,20 +116,17 @@ export default function GoogleConnectSettings() {
             <input type="checkbox" checked={form.enabled} onChange={(e) => setForm((v) => ({ ...v, enabled: e.target.checked }))} />
           </label>
 
-          <label className="settings-field">
-            <span>OAuth Client ID</span>
-            <input value={form.clientId} onChange={(e) => setForm((v) => ({ ...v, clientId: e.target.value }))} placeholder="Google OAuth Client ID" />
-          </label>
-
-          <label className="settings-field">
-            <span>OAuth Client Secret</span>
-            <input value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} type="password" placeholder={form.hasClientSecret ? "Saved — enter only to replace" : "Google OAuth Client Secret"} />
-          </label>
-
-          <label className="settings-field">
-            <span>Redirect URI</span>
-            <input value={form.redirectUri} onChange={(e) => setForm((v) => ({ ...v, redirectUri: e.target.value }))} placeholder="https://your-host/api/auth/google/callback" />
-          </label>
+          <div className="settings-field">
+            <span>OAuth credentials</span>
+            <div className="module-state">
+              Managed by environment variables:
+              {" "}GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI.
+              <br />
+              Client ID: {form.clientIdConfigured ? "Configured" : "Missing"} ·
+              {" "}Client Secret: {form.clientSecretConfigured ? "Configured" : "Missing"} ·
+              {" "}Redirect URI: {form.redirectUriConfigured ? form.redirectUri || "Configured" : "Missing"}
+            </div>
+          </div>
 
           <label className="settings-field">
             <span>Allowed Google domain (optional)</span>
