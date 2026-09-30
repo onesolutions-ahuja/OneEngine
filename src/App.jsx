@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from 
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, apiUrl, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredUser, hasSession, login, logout, startGoogleLogin, verifyPin } from './services/api'
-import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole } from './services/settings'
+import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, readSettingsContextCache, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import JarvisOrb, { ORB_STATES } from './components/jarvis/JarvisOrb'
 import JarvisPanel from './components/jarvis/JarvisPanel'
@@ -827,8 +827,8 @@ function compressCompanyLogo(file) {
 function SettingsPage({ onOpenProfile }) {
   const [active, setActive] = useState(() => readRoute().section || 'general')
   const [query, setQuery] = useState('')
-  const [context, setContext] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [context, setContext] = useState(() => readSettingsContextCache())
+  const [loading, setLoading] = useState(() => !readSettingsContextCache())
   const [error, setError] = useState('')
   const [saving, setSaving] = useState('')
   const [users, setUsers] = useState([])
@@ -850,13 +850,17 @@ function SettingsPage({ onOpenProfile }) {
   const [mobileSettingsDetail, setMobileSettingsDetail] = useState(() => Boolean(readRoute().section && readRoute().section !== 'general'))
 
   const load = async () => {
+    const cached = readSettingsContextCache()
     try {
-      setLoading(true)
+      // Stale-while-revalidate: cached Settings render immediately; the
+      // authoritative server context refreshes quietly in the background.
+      if (!cached) setLoading(true)
       setError('')
       const nextContext = await loadSettingsContext()
       setContext(nextContext)
     } catch (err) {
-      setError(err?.message || 'Unable to load settings')
+      // Keep a usable cached screen visible during a transient network issue.
+      if (!cached) setError(err?.message || 'Unable to load settings')
     } finally {
       setLoading(false)
     }
@@ -920,7 +924,6 @@ function SettingsPage({ onOpenProfile }) {
 
   const access = settingSectionAccess({
     permissions: permissionCodes,
-    loyalty: entitlements.loyalty === true,
   })
 
   const normalizedQuery = query.trim().toLowerCase()
