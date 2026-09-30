@@ -142,7 +142,19 @@ export default function createAdvancedPlatformRouter({ authenticate, authorize, 
       error_text: runResult.rows[0].error_text || null,
     };
 
-    res.json({ success: true, data: { run, steps } });
+    const childResult = await db(
+      `SELECT id,workflow_id,workflow_name,trigger_key,status,started_at,completed_at,error_text,metadata
+         FROM platform_workflow_runs
+        WHERE parent_run_id=$1 AND company_id=$2
+        ORDER BY created_at ASC`,
+      [run.id, req.user.companyId]
+    );
+    const children = (childResult.rows || []).map((child) => ({
+      ...child,
+      metadata: sanitizeTraceForDisplay(child.metadata || {}),
+    }));
+
+    res.json({ success: true, data: { run, steps, children } });
   });
 
   return router;
