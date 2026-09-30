@@ -289,6 +289,22 @@ function jsonValue(value, fallback) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
+function effectiveManifest(packageKey, storedManifest = {}) {
+  const stored = jsonValue(storedManifest, {});
+  if (stored?.connectorApp) return stored;
+  const catalogEntry = internalAppCatalog.find((entry) =>
+    String(entry.packageKey || entry.key || "") === String(packageKey || "")
+  );
+  if (!catalogEntry?.connectorApp) return stored;
+  return {
+    ...stored,
+    packageKey: stored.packageKey || catalogEntry.packageKey || catalogEntry.key,
+    name: stored.name || catalogEntry.name,
+    category: stored.category || catalogEntry.category,
+    connectorApp: catalogEntry.connectorApp,
+  };
+}
+
 function capabilityDefinition(manifest, capabilityKey) {
   return (manifest?.connectorApp?.capabilities || []).find((definition) =>
     (typeof definition === "string" ? definition : definition?.key) === capabilityKey
