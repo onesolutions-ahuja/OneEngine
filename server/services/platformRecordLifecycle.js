@@ -45,8 +45,6 @@ export function synchronizeRecordLifecycleSnapshots(state = {}) {
     ...(state.resources || {}),
     $Record: record,
     $RecordPrior: recordPrior,
-    // Lower-case aliases are retained for metadata authored before Phase 1
-    // standardised platform globals on Salesforce-style $Record/$RecordPrior.
     $record: record,
     $recordPrior: recordPrior,
   };
@@ -85,12 +83,42 @@ async function runStage(stage, handler, state, trace) {
   }
 }
 
+async function registerOrRunAfterCommit({ afterCommit, state, trace, transaction }) {
+  if (typeof afterCommit !== "function") {
+    trace.push({ stage: "AFTER_COMMIT", status: "SKIPPED" });
+    return synchronizeRecordLifecycleSnapshots(state);
+  }
+  if (transaction?.afterCommit) {
+    const snapshot = synchronizeRecordLifecycleSnapshots(state);
+    transaction.afterCommit(async () => {
+      const startedAt = new Date().toISOString();
+      try {
+        const result = await afterCommit(snapshot);
+        trace.push({ stage: "AFTER_COMMIT", status: "COMPLETED", startedAt, completedAt: new Date().toISOString() });
+        return result;
+      } catch (error) {
+        trace.push({
+          stage: "AFTER_COMMIT",
+          status: "FAILED",
+          startedAt,
+          completedAt: new Date().toISOString(),
+          code: error?.code || null,
+          message: String(error?.message || error || "Lifecycle stage failed").slice(0, 1000),
+        });
+        throw error;
+      }
+    });
+    trace.push({ stage: "AFTER_COMMIT", status: "REGISTERED", transactionId: transaction.id || null });
+    return snapshot;
+  }
+  return runStage("AFTER_COMMIT", afterCommit, state, trace);
+}
+
 export async function runRecordSaveLifecycle({
   operation,
   initialState = {},
   prepare,
   beforeValidate,
-  // Compatibility alias used by the first Phase 2 implementation.
   beforeValidation,
   validate,
   beforeSave,
@@ -98,6 +126,7 @@ export async function runRecordSaveLifecycle({
   afterSave,
   beforeCommit,
   afterCommit,
+  transaction = null,
 }) {
   if (!["create", "update"].includes(operation)) throw new Error("Record save lifecycle operation must be create or update");
   const trace = [];
@@ -109,7 +138,7 @@ export async function runRecordSaveLifecycle({
   state = await runStage("WRITE", write, state, trace);
   state = await runStage("AFTER_SAVE", afterSave, state, trace);
   state = await runStage("BEFORE_COMMIT", beforeCommit, state, trace);
-  state = await runStage("AFTER_COMMIT", afterCommit, state, trace);
+  state = await registerOrRunAfterCommit({ afterCommit, state, trace, transaction });
   return { ...state, lifecycleTrace: trace };
 }
 
@@ -124,6 +153,7 @@ export async function runRecordDeleteLifecycle({
   afterDelete,
   beforeCommit,
   afterCommit,
+  transaction = null,
 }) {
   const trace = [];
   let state = synchronizeRecordLifecycleSnapshots({ ...initialState, operation: "delete", lifecycleTrace: trace });
@@ -134,6 +164,6 @@ export async function runRecordDeleteLifecycle({
   state = await runStage("WRITE", write, state, trace);
   state = await runStage("AFTER_DELETE", afterDelete, state, trace);
   state = await runStage("BEFORE_COMMIT", beforeCommit, state, trace);
-  state = await runStage("AFTER_COMMIT", afterCommit, state, trace);
+  state = await registerOrRunAfterCommit({ afterCommit, state, trace, transaction });
   return { ...state, lifecycleTrace: trace };
 }

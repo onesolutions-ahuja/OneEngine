@@ -115,7 +115,7 @@ test("canonical snapshots expose $Record and $RecordPrior resources", async () =
   assert.equal(state.resources.$recordPrior, prior);
 });
 
-test("before-save mutation becomes the canonical record snapshot before write", async () => {
+test("before-save mutation becomes canonical record snapshot before write", async () => {
   const prior = { id: "r1", status: "OPEN" };
   const result = await runRecordSaveLifecycle({
     operation: "update",
@@ -134,8 +134,36 @@ test("before-save mutation becomes the canonical record snapshot before write", 
   assert.equal(result.recordPrior.status, "OPEN");
 });
 
-test("before-commit failure prevents after-commit execution", async () => {
+test("after-commit lifecycle handler is deferred when transaction context is supplied", async () => {
+  const callbacks = [];
+  const transaction = {
+    id: "tx-1",
+    afterCommit(callback) { callbacks.push(callback); },
+  };
   let afterCommitRan = false;
+
+  const result = await runRecordSaveLifecycle({
+    operation: "create",
+    initialState: { id: "r1" },
+    write: async (state) => ({ ...state, saved: true }),
+    afterCommit: async (state) => {
+      afterCommitRan = true;
+      return { ...state, delivered: true };
+    },
+    transaction,
+  });
+
+  assert.equal(afterCommitRan, false);
+  assert.equal(callbacks.length, 1);
+  assert.equal(result.lifecycleTrace.at(-1).status, "REGISTERED");
+  assert.equal(result.lifecycleTrace.at(-1).transactionId, "tx-1");
+  await callbacks[0]();
+  assert.equal(afterCommitRan, true);
+  assert.equal(result.lifecycleTrace.at(-1).status, "COMPLETED");
+});
+
+test("before-commit failure prevents after-commit registration", async () => {
+  const callbacks = [];
   await assert.rejects(
     () => runRecordSaveLifecycle({
       operation: "create",
@@ -143,12 +171,10 @@ test("before-commit failure prevents after-commit execution", async () => {
       beforeCommit: async () => {
         throw Object.assign(new Error("commit guard failed"), { code: "COMMIT_GUARD_FAILED" });
       },
-      afterCommit: async (state) => {
-        afterCommitRan = true;
-        return state;
-      },
+      afterCommit: async (state) => state,
+      transaction: { id: "tx-2", afterCommit(callback) { callbacks.push(callback); } },
     }),
     (error) => error instanceof RecordLifecycleError && error.stage === "BEFORE_COMMIT",
   );
-  assert.equal(afterCommitRan, false);
+  assert.equal(callbacks.length, 0);
 });

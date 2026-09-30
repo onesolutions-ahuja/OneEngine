@@ -6,6 +6,7 @@ import { evaluateValidationRules } from "./platformValidation.js";
 import { executePlatformAutomations } from "./platformAutomation.js";
 import { submitPlatformApproval } from "./platformApprovals.js";
 import { runRecordSaveLifecycle } from "./platformRecordLifecycle.js";
+import { withPlatformTransaction } from "./platformTransaction.js";
 
 export class PlatformRecordError extends Error {
   constructor(message, status = 422) { super(message); this.status = status; this.code = "PLATFORM_RECORD_INVALID"; }
@@ -17,49 +18,66 @@ export async function withDomainSave({ pool, db, savePlatformRecord, key, req, i
   if (!savePlatformRecord) return write(db);
   const definition = systemObject({ object_key: key });
   if (!definition) throw new PlatformRecordError("Unknown system object");
-  const client = await pool.connect();
-  const query = client.query.bind(client);
+
+  let transaction;
   try {
-    await query("BEGIN");
-    const previous = id ? (await query(`SELECT * FROM "${definition.table}" WHERE id=$1 AND company_id=$2 FOR UPDATE`, [id, req.user.companyId])).rows[0] : null;
-    if (id && !previous) throw new PlatformRecordError("Record not found", 404);
+    transaction = await withPlatformTransaction({
+      pool,
+      handler: async (tx) => {
+      const query = tx.query;
+      const previous = id
+        ? (await query(`SELECT * FROM "${definition.table}" WHERE id=$1 AND company_id=$2 FOR UPDATE`, [id, req.user.companyId])).rows[0]
+        : null;
+      if (id && !previous) throw new PlatformRecordError("Record not found", 404);
 
-    const lifecycle = await runRecordSaveLifecycle({
-      operation: previous ? "update" : "create",
-      initialState: { previous, result: null, platform: null },
-      beforeValidation: async (state) => state,
-      validate: async (state) => state,
-      beforeSave: async (state) => state,
-      write: async (state) => {
-        const result = await write(query);
-        if (!result.rows?.[0]) throw new PlatformRecordError("Record not found", 404);
-        return { ...state, result };
+      const lifecycle = await runRecordSaveLifecycle({
+        operation: previous ? "update" : "create",
+        initialState: { previous, result: null, platform: null, transactionId: tx.id },
+        beforeValidation: async (state) => state,
+        validate: async (state) => state,
+        beforeSave: async (state) => state,
+        write: async (state) => {
+          const result = await write(query);
+          if (!result.rows?.[0]) throw new PlatformRecordError("Record not found", 404);
+          return { ...state, result };
+        },
+        afterSave: async (state) => {
+          const record = { ...(state.previous || {}), ...state.result.rows[0] };
+          const platform = await savePlatformRecord({
+            db: query,
+            key,
+            req,
+            record,
+            previous: state.previous,
+            lifecycleOperation: previous ? "update" : "create",
+            transactionId: tx.id,
+            transaction: tx,
+          });
+          state.result.rows[0].platform = platform;
+          return { ...state, platform };
+        },
+        afterCommit: async (state) => ({
+          recordId: state.result?.rows?.[0]?.id || null,
+          objectKey: key,
+          operation: previous ? "update" : "create",
+        }),
+        transaction: tx,
+      });
+
+      lifecycle.result.rows[0].platformLifecycle = lifecycle.lifecycleTrace;
+      lifecycle.result.rows[0].platformTransactionId = tx.id;
+        return lifecycle.result;
       },
-      afterSave: async (state) => {
-        const record = { ...(state.previous || {}), ...state.result.rows[0] };
-        const platform = await savePlatformRecord({
-          db: query,
-          key,
-          req,
-          record,
-          previous: state.previous,
-          lifecycleOperation: previous ? "update" : "create",
-        });
-        state.result.rows[0].platform = platform;
-        return { ...state, platform };
-      },
-      // True transaction-aware AFTER_COMMIT callbacks are formalised in Phase 3.
-      afterCommit: undefined,
     });
-
-    await query("COMMIT");
-    lifecycle.result.rows[0].platformLifecycle = lifecycle.lifecycleTrace;
-    return lifecycle.result;
   } catch (error) {
-    await query("ROLLBACK"); throw error;
-  } finally { client.release(); }
-}
+    const cause = error?.cause || error;
+    if (cause && typeof cause === "object") cause.transactionId ||= error?.transactionId || null;
+    throw cause;
+  }
 
+  transaction.result.platformAfterCommit = transaction.afterCommit;
+  return transaction.result;
+}
 export async function domainMetadata(db, key, req) {
   if (!req.user?.companyId) throw new PlatformRecordError("A company session is required", 403);
   const result = await db("SELECT * FROM platform_objects WHERE object_key=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [key, req.user.companyId]);

@@ -24,6 +24,7 @@ import {
 } from "./services/platformWorkflow.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
+import { withPlatformTransaction } from "./services/platformTransaction.js";
 import createTillRouter from "./routes/till.js";
 import createHeldSalesRouter from "./routes/heldSales.js";
 import createCustomersRouter from "./routes/customers.js";
@@ -2224,37 +2225,39 @@ async function startServer() {
                 );
                 return { status: "PAUSED", deferred: true };
               }
-              const client = await pool.connect();
-              let outcome;
               try {
-                await client.query("BEGIN");
-                outcome = await executeTenantReleaseUpgrade({
-                  db: (query, params = []) => client.query(query, params),
-                  releaseId: payload.releaseId,
-                  companyId: payload.companyId || job.company_id,
-                  packageKey: payload.packageKey,
-                  userId: payload.userId || null,
+                const transaction = await withPlatformTransaction({
+                  pool,
+                  handler: async (tx) => {
+                    const outcome = await executeTenantReleaseUpgrade({
+                      db: tx.query,
+                      releaseId: payload.releaseId,
+                      companyId: payload.companyId || job.company_id,
+                      packageKey: payload.packageKey,
+                      userId: payload.userId || null,
+                    });
+                    if (outcome.status === "FAILED") {
+                      throw Object.assign(new Error("Package release upgrade failed"), {
+                        code: "RELEASE_UPGRADE_FAILED",
+                        retryable: true,
+                      });
+                    }
+                    return outcome;
+                  },
                 });
-                if (outcome.status === "FAILED") {
-                  await client.query("ROLLBACK");
-                  await db(
-                    `UPDATE company_package_installations SET update_status='FAILED',update_error='Package release upgrade failed',updated_at=NOW()
-                      WHERE company_id=$1 AND package_id=(SELECT id FROM package_registry WHERE package_key=$2)`,
-                    [payload.companyId || job.company_id, payload.packageKey]
-                  );
-                  await writeAudit(payload.companyId || job.company_id, null, "release.tenant.failed", "package_release", payload.releaseId, {
-                    packageKey: payload.packageKey,
-                    errorCode: "RELEASE_UPGRADE_FAILED",
-                  });
-                  throw Object.assign(new Error("Package release upgrade failed"), { retryable: true });
-                }
-                await client.query("COMMIT");
-                return outcome;
+                return transaction.result;
               } catch (error) {
-                await client.query("ROLLBACK").catch(() => {});
+                await db(
+                  `UPDATE company_package_installations SET update_status='FAILED',update_error='Package release upgrade failed',updated_at=NOW()
+                    WHERE company_id=$1 AND package_id=(SELECT id FROM package_registry WHERE package_key=$2)`,
+                  [payload.companyId || job.company_id, payload.packageKey]
+                );
+                await writeAudit(payload.companyId || job.company_id, null, "release.tenant.failed", "package_release", payload.releaseId, {
+                  packageKey: payload.packageKey,
+                  errorCode: error?.code || "RELEASE_UPGRADE_FAILED",
+                  transactionId: error?.transactionId || null,
+                });
                 throw error;
-              } finally {
-                client.release();
               }
             }
             if (job.kind === "PLATFORM_WEBHOOK_DELIVERY") {
