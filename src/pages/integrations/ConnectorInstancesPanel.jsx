@@ -188,14 +188,16 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                 </select>
               </label>
               <div className="flex items-end"><button type="submit" disabled={saving || !packageKey || !storeId || !tillId} className="h-9 px-3 inline-flex items-center gap-2 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"><Check size={15} />{saving ? "Assigning…" : "Assign connector"}</button></div>
-              {schema.map((field) => (
+              {schema.filter((field) => !["action","readonly","store lookup","till lookup"].includes(field.type)).map((field) => (
                 <label key={field.key} className="text-xs font-medium text-slate-600">{field.label || field.key}
                   {field.enum ? (
                     <select value={configuration[field.key] ?? field.default ?? ""} onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: event.target.value }))} className={`${inputClass} mt-1`}>
                       {field.enum.map((value) => <option key={value} value={value}>{value}</option>)}
                     </select>
+                  ) : field.type === "boolean" ? (
+                    <input type="checkbox" checked={Boolean(configuration[field.key] ?? field.default ?? false)} onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: event.target.checked }))} className="mt-3 h-4 w-4" />
                   ) : (
-                    <input type={field.type === "number" ? "number" : "text"} value={configuration[field.key] ?? field.default ?? ""} onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: field.type === "number" ? Number(event.target.value) : event.target.value }))} className={`${inputClass} mt-1`} />
+                    <input type={field.type === "number" ? "number" : field.type === "secret" ? "password" : "text"} autoComplete={field.type === "secret" ? "new-password" : undefined} value={configuration[field.key] ?? field.default ?? ""} onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: field.type === "number" ? Number(event.target.value) : event.target.value }))} className={`${inputClass} mt-1`} />
                   )}
                 </label>
               ))}
