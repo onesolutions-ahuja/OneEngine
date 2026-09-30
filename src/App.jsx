@@ -97,6 +97,7 @@ const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/Licensi
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
 const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/StoreTillSettingsPage'))
 const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
+const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 import {
@@ -717,6 +718,7 @@ function readRoute() {
   if (parts[0] === 'custom-reports') return { app: 'custom-reports', section: null }
   if (parts[0] === 'integrations') return { app: 'integrations', section: null }
   if (parts[0] === 'google-connect') return { app: 'google-connect', section: null }
+  if (parts[0] === 'connector-settings') return { app: 'connector-settings', section: null, packageKey: parts[1] ? decodeURIComponent(parts[1]) : '' }
   if (parts[0] === 'accounting') return { app: 'accounting', section: null }
   if (parts[0] === 'online-orders') return { app: 'online-orders', section: null }
   if (parts[0] === 'order-prep') return { app: 'order-prep', section: null }
@@ -781,6 +783,8 @@ function setRoute(app, section = null, options = {}) {
         ? `${base}/integrations`
       : app === 'google-connect'
         ? `${base}/google-connect`
+      : app === 'connector-settings'
+        ? `${base}/connector-settings/${encodeURIComponent(options?.packageKey || '')}`
       : app === 'accounting'
         ? `${base}/accounting`
       : app === 'online-orders'
@@ -2764,6 +2768,8 @@ function Desktop({ onLock, onSignOut }) {
           }} />
         ) : activeApp === 'google-connect' ? (
           <GoogleConnectSettings />
+        ) : activeApp === 'connector-settings' ? (
+          <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeApp === 'till' ? (
           <TillPage
             onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
