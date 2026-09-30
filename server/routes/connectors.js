@@ -6,7 +6,6 @@ import {
 } from "../services/connectorFramework.js";
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
-import { reconcileCompanyPackageEntitlements } from "../services/packageEntitlements.js";
 
 function jsonValue(value, fallback) {
   if (typeof value !== "string") return value ?? fallback;
@@ -1104,7 +1103,46 @@ export default function createConnectorsRouter({
 
   router.get("/connector-apps", authenticate, authorize("integration.manage"), async (req, res) => {
     try {
-      await reconcileCompanyPackageEntitlements(db, req.user.companyId);
+      // Keep this read path fast. Repair only the legacy free-app suspension
+      // state needed by connector settings; full entitlement reconciliation
+      // belongs to package/licence mutation flows, not every page refresh.
+      await db(
+        `INSERT INTO company_package_entitlement_sources
+           (company_id,package_id,source_type,source_key,active,metadata)
+         SELECT i.company_id,i.package_id,'DIRECT_INSTALL',
+                'free-direct-install:' || i.package_id::text,
+                i.deactivated_by_user=false,
+                jsonb_build_object('repairedFromInstallation',true)
+           FROM company_package_installations i
+           JOIN package_registry p ON p.id=i.package_id
+          WHERE i.company_id=$1
+            AND p.active=true
+            AND p.package_type='APPLICATION'
+            AND (
+              p.licence_mode='TECHNICAL'
+              OR p.billable=false
+              OR COALESCE((p.manifest->>'licenceRequired')::boolean,false)=false
+            )
+         ON CONFLICT(company_id,package_id,source_type,source_key)
+         DO UPDATE SET active=EXCLUDED.active,metadata=EXCLUDED.metadata`,
+        [req.user.companyId]
+      );
+      await db(
+        `UPDATE company_package_installations i
+            SET status='active',suspended_by_entitlement=false,updated_at=NOW()
+          WHERE i.company_id=$1
+            AND i.suspended_by_entitlement=true
+            AND i.deactivated_by_user=false
+            AND EXISTS (
+              SELECT 1
+                FROM company_package_entitlement_sources s
+               WHERE s.company_id=i.company_id
+                 AND s.package_id=i.package_id
+                 AND s.source_type='DIRECT_INSTALL'
+                 AND s.active=true
+            )`,
+        [req.user.companyId]
+      );
       const result = await db(
         `SELECT p.package_key,p.name,p.description,p.manifest,p.category,p.publisher,
                 i.status AS installation_status,i.version AS installed_version
