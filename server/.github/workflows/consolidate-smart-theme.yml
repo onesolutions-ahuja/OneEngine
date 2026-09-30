@@ -1,0 +1,105 @@
+name: Consolidate Smart Theme into onePOS
+# one-time migration trigger
+
+on:
+  push:
+    paths:
+      - '.github/workflows/consolidate-smart-theme.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout onePOS
+        uses: actions/checkout@v4
+        with:
+          path: onepos
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout Smart Theme
+        uses: actions/checkout@v4
+        with:
+          repository: onesolutions-ahuja/smart-theme
+          ref: main
+          path: smart-theme
+
+      - name: Replace frontend with Smart Theme
+        run: |
+          rm -rf onepos/frontend
+          mkdir -p onepos/frontend
+          rsync -a --exclude='.git' --exclude='.github' smart-theme/ onepos/frontend/
+
+      - name: Configure unified project
+        working-directory: onepos
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const root = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+          root.private = true
+          root.workspaces = ['frontend']
+          root.scripts = {
+            ...(root.scripts || {}),
+            build: 'npm run build --workspace=frontend',
+            start: 'node server.js'
+          }
+          fs.writeFileSync('package.json', JSON.stringify(root, null, 2) + '\n')
+
+          const vitePath = 'frontend/vite.config.js'
+          let vite = fs.readFileSync(vitePath, 'utf8')
+          vite = vite.replace("base: process.env.VITE_BASE_PATH || '/smart-theme/'", "base: process.env.VITE_BASE_PATH || '/'")
+          fs.writeFileSync(vitePath, vite)
+          NODE
+
+          node <<'NODE'
+          const fs = require('fs')
+          let s = fs.readFileSync('server.js', 'utf8')
+          const start = s.indexOf('/*\n|--------------------------------------------------------------------------\n| Frontend ownership')
+          const end = s.indexOf('/*\n|--------------------------------------------------------------------------\n| START', start)
+          if (start < 0 || end < 0) throw new Error('frontend ownership block not found')
+          const block = `/*
+|--------------------------------------------------------------------------
+| Unified Smart Theme frontend
+|--------------------------------------------------------------------------
+| Smart Theme is built from ./frontend and served by the same onePOS service.
+*/
+const distPath = path.join(process.cwd(), "frontend", "dist");
+const appShellPath = path.join(distPath, "index.html");
+
+app.use(express.static(distPath, { index: false }));
+
+app.use((req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ success: false, message: "API endpoint not found" });
+  }
+  if (!fs.existsSync(appShellPath)) {
+    return res.status(503).type("text").send("Frontend build is missing");
+  }
+  res.set("Cache-Control", "no-store");
+  return res.sendFile(appShellPath);
+});
+
+`
+          s = s.slice(0, start) + block + s.slice(end)
+          if (!s.includes('import path from "path";')) {
+            s = s.replace('import pg from "pg";\n', 'import pg from "pg";\nimport path from "path";\nimport fs from "fs";\n')
+          }
+          fs.writeFileSync('server.js', s)
+          NODE
+
+      - name: Validate frontend build
+        working-directory: onepos
+        run: |
+          npm install
+          npm run build
+
+      - name: Commit unified project
+        working-directory: onepos
+        run: |
+          git config user.name "onePOS migration"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "Consolidate Smart Theme frontend into onePOS" || exit 0
+          git push origin main

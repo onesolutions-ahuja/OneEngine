@@ -1,0 +1,240 @@
+import { resolveRecordPathValue } from "./platformRecordPaths.js";
+
+const OPERATORS = new Set([
+  "equals",
+  "not_equals",
+  "greater_than",
+  "greater_than_or_equal",
+  "less_than",
+  "less_than_or_equal",
+  "is_empty",
+  "is_not_empty",
+  "changed",
+  "changed_from",
+  "changed_to",
+  "changed_from_to",
+]);
+
+const NUMERIC_TYPES = new Set(["number", "decimal", "currency"]);
+const empty = (value) =>
+  value === null ||
+  value === undefined ||
+  value === "" ||
+  (Array.isArray(value) && value.length === 0);
+
+export class ConditionError extends Error {
+  constructor(message) {
+    super(message);
+    this.code = "INVALID_CONDITION";
+  }
+}
+
+function fail(message) {
+  throw new ConditionError(message);
+}
+
+const CONDITION_PATH = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+
+function fieldType(field) {
+  return field?.field_type === "formula" || field?.field_type === "rollup"
+    ? field?.config?.resultType || field?.config?.result_type || "text"
+    : field?.field_type;
+}
+
+function resolveConditionField(conditionField, fields = []) {
+  if (typeof conditionField !== "string") return null;
+  const trimmed = conditionField.trim();
+  if (!trimmed) return null;
+  const direct = fields.find((candidate) => candidate.active !== false && candidate.api_name === trimmed);
+  if (direct) return direct;
+  if (!trimmed.includes(".")) return null;
+  if (!CONDITION_PATH.test(trimmed)) return null;
+  const pathParts = trimmed.split(".");
+  const lastPart = pathParts[pathParts.length - 1];
+  const inferred = fields.find((candidate) => candidate.active !== false && candidate.api_name === lastPart);
+  if (inferred) return { ...inferred, api_name: trimmed };
+  return { api_name: trimmed, field_type: "text", active: true };
+}
+
+function normalize(value, field) {
+  if (empty(value)) return null;
+  const type = fieldType(field);
+  if (!type && typeof value === "number" && Number.isFinite(value)) return value;
+  if (!type && typeof value === "string" && value.trim() !== "" && /^-?(?:\d+\.?\d*|\.\d+)$/.test(value.trim())) return Number(value);
+  if (NUMERIC_TYPES.has(type)) {
+    if (!Number.isFinite(Number(value))) fail(`Condition value for ${field.api_name} must be numeric`);
+    return Number(value);
+  }
+  if (type === "boolean") {
+    if (![true, false, 0, 1, "true", "false", "0", "1"].includes(value)) {
+      fail(`Condition value for ${field.api_name} must be boolean`);
+    }
+    return [true, 1, "true", "1"].includes(value);
+  }
+  return String(value);
+}
+
+function validateCondition(condition, fields, context) {
+  if (!condition || typeof condition !== "object" || Array.isArray(condition)) {
+    fail(`${context} must be an object`);
+  }
+  const source = String(condition.source || "field").toLowerCase();
+  if (source !== "field") {
+    if (!CONTEXT_SOURCES.has(source)) fail(`${context} uses an unsupported source: ${source}`);
+    if (!OPERATORS.has(condition.operator)) fail(`${context} uses an unsupported operator`);
+    if (condition.operator !== "is_empty" && condition.operator !== "is_not_empty"
+      && (condition.value === undefined || Array.isArray(condition.value) || typeof condition.value === "object")) {
+      fail(`${context} must use a simple comparison value`);
+    }
+    if (!["equals", "not_equals", "is_empty", "is_not_empty"].includes(condition.operator)) {
+      fail(`${context} operator is not supported for ${source}`);
+    }
+    return { api_name: source, field_type: "text", active: true };
+  }
+  if (typeof condition.field !== "string" || !condition.field.trim()) {
+    fail(`${context} must specify a field`);
+  }
+  const field = resolveConditionField(condition.field, fields);
+  if (!field) fail(`${context} references an unavailable field: ${condition.field}`);
+  if ((field.field_type === "formula" || field.field_type === "rollup") && field.readable === false) {
+    fail(`${context} references an unreadable field: ${condition.field}`);
+  }
+  if (!OPERATORS.has(condition.operator)) {
+    fail(`${context} uses an unsupported operator`);
+  }
+  if (condition.operator === "changed") return field;
+  if (condition.operator === "changed_from_to") {
+    if (!condition.value || typeof condition.value !== "object" || Array.isArray(condition.value)) {
+      fail(`${context} changed_from_to requires from and to values`);
+    }
+    normalize(condition.value.from, field);
+    normalize(condition.value.to, field);
+    return field;
+  }
+  if (!["is_empty", "is_not_empty"].includes(condition.operator)) {
+    if (condition.value === undefined || Array.isArray(condition.value) || typeof condition.value === "object") {
+      fail(`${context} must use a simple comparison value`);
+    }
+    normalize(condition.value, field);
+  }
+  return field;
+}
+
+export function validateConditionConfig(config, fields, name) {
+  if (config === undefined || config === null) return;
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    fail(`${name} must be an object`);
+  }
+  const match = config.match || "all";
+  if (!["all", "any"].includes(match)) fail(`${name}.match must be all or any`);
+  if (!Array.isArray(config.conditions) || config.conditions.length < 1 || config.conditions.length > 20) {
+    fail(`${name}.conditions must contain between 1 and 20 conditions`);
+  }
+  config.conditions.forEach((condition) => validateCondition(condition, fields, name));
+}
+
+function matches(condition, fields, record, previousRecord) {
+  const field = resolveConditionField(condition.field, fields);
+  const actual = resolveRecordPathValue(record, condition.field);
+  const previous = resolveRecordPathValue(previousRecord, condition.field);
+  if (condition.operator === "changed") return actual !== previous;
+  if (condition.operator === "changed_from") return actual !== previous && normalize(previous, field) === normalize(condition.value, field);
+  if (condition.operator === "changed_to") return actual !== previous && normalize(actual, field) === normalize(condition.value, field);
+  if (condition.operator === "changed_from_to") {
+    return actual !== previous
+      && normalize(previous, field) === normalize(condition.value.from, field)
+      && normalize(actual, field) === normalize(condition.value.to, field);
+  }
+  if (condition.operator === "is_empty") return empty(actual);
+  if (condition.operator === "is_not_empty") return !empty(actual);
+  if (empty(actual)) return condition.operator === "not_equals";
+  const left = normalize(actual, field);
+  const right = normalize(condition.value, field);
+  switch (condition.operator) {
+    case "equals": return left === right;
+    case "not_equals": return left !== right;
+    case "greater_than": return left > right;
+    case "greater_than_or_equal": return left >= right;
+    case "less_than": return left < right;
+    case "less_than_or_equal": return left <= right;
+    default: throw new ConditionError("Unsupported condition operator");
+  }
+}
+
+export function evaluateCondition(config, fields, record, previousRecord = null) {
+  if (!config) return true;
+  validateConditionConfig(config, fields, "Condition");
+  const results = config.conditions.map((condition) => matches(condition, fields, record, previousRecord));
+  return (config.match || "all") === "any"
+    ? results.some(Boolean)
+    : results.every(Boolean);
+}
+
+export function evaluateFieldCondition(field, key, fields, record) {
+  return evaluateCondition(field?.config?.[key], fields, record);
+}
+
+const CONTEXT_SOURCES = new Set(["permission", "role", "device", "entitlement", "record_type", "object_state", "company"]);
+
+function contextValues(source, context, field = null) {
+  if (source === "permission") return context.permissions || context.user?.permissions || [];
+  if (source === "role") return context.roles || [context.user?.roleId, context.user?.roleKey].filter(Boolean);
+  if (source === "device") return context.device || context.formFactor || "desktop";
+  if (source === "entitlement") return context.entitlements || context.packages || [];
+  if (source === "record_type") return context.recordTypeId || context.record?.recordTypeId || "";
+  if (source === "object_state") return field ? resolveRecordPathValue(context.objectState || context.object || {}, field) : context.objectState || context.object || {};
+  if (source === "company") return context.companyId || context.user?.companyId || "";
+  return [];
+}
+
+function containsContextValue(values, expected) {
+  if (Array.isArray(values)) return values.some((value) => String(value) === String(expected));
+  if (values && typeof values === "object") return values[expected] === true || String(values[expected] ?? "") === String(expected);
+  return String(values ?? "") === String(expected);
+}
+
+function evaluateUiConditionNode(config, fields, context) {
+  if (!config) return true;
+  if (!config || typeof config !== "object" || Array.isArray(config)) fail("UI condition must be an object");
+  const groups = Array.isArray(config.groups) ? config.groups : null;
+  if (groups) {
+    if (!groups.length || groups.length > 20) fail("UI condition groups must contain between 1 and 20 groups");
+    if (!["all", "any"].includes(String(config.match || "all").toLowerCase())) fail("UI condition group match must be all or any");
+    const groupResults = groups.map((group) => evaluateUiConditionNode(group, fields, context));
+    return String(config.match || "all").toLowerCase() === "any" ? groupResults.some(Boolean) : groupResults.every(Boolean);
+  }
+  validateConditionConfig(config, fields, "UI condition");
+  const results = config.conditions.map((condition) => {
+    const source = String(condition.source || "field").toLowerCase();
+    if (source === "field") return matches(condition, fields, context.record || {}, context.previousRecord || null);
+    if (!CONTEXT_SOURCES.has(source)) fail(`UI condition uses an unsupported source: ${source}`);
+    const actual = contextValues(source, context, condition.field || null);
+    if (condition.operator === "is_empty") return empty(actual);
+    if (condition.operator === "is_not_empty") return !empty(actual);
+    if (condition.operator === "not_equals") return !containsContextValue(actual, condition.value);
+    if (condition.operator !== "equals") fail(`UI condition operator is not supported for ${source}`);
+    return containsContextValue(actual, condition.value);
+  });
+  return String(config.match || "all").toLowerCase() === "any" ? results.some(Boolean) : results.every(Boolean);
+}
+
+export function evaluatePlatformCondition(config, fields = [], context = {}) {
+  try {
+    return evaluateUiConditionNode(config, fields, context);
+  } catch (error) {
+    if (error instanceof ConditionError) throw error;
+    throw new ConditionError("UI condition metadata is invalid");
+  }
+}
+
+export function validateConditionalRequired(fields, record) {
+  for (const field of fields.filter((candidate) => candidate.active !== false && candidate.field_type !== "formula" && candidate.field_type !== "rollup")) {
+    const condition = field.config?.requiredCondition;
+    if (condition && evaluateCondition(condition, fields, record) && empty(record?.[field.api_name])) {
+      return `${field.label} is required`;
+    }
+  }
+  return null;
+}
+
+export { OPERATORS };

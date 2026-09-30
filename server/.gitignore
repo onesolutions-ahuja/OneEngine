@@ -1,0 +1,38 @@
+node_modules/
+.env
+dist/data/product-master/openfoodfacts_official_starter_raw.tsv
+
+# Local build / test scratch output (never shipped)
+*.out
+server_*.log
+npm-build.out
+
+# Android Studio per-machine project state
+android/.idea/ 
+
+.forge-permissions.json
+bash_events/
+conversations/
+dist/ bash_events/
+conversations/
+dist/ bash_events/
+conversations/
+dist/
+.tmp/
+data/product-master/openfoodfacts_official_starter_raw.tsv
+playwright/.auth/
+playwright-report/
+test-results/
+
+
+# Local test/build artifacts
+.tmp_*
+test_output*.txt
+err.txt
+out.txt
+
+# Local editor configuration
+.vscode/
+
+three/
+vite/
