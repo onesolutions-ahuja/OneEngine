@@ -1,4 +1,7 @@
 import { clearLazyCache } from './dataCache'
+import { isPrivilegedMutation, resolveTrustedCapability, validateTrustedRuntime } from './trustedRuntime'
+export const TRUSTED_RUNTIME_STATE = validateTrustedRuntime()
+
 const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://onepos.onrender.com').replace(/\/$/, '')
 export const SERVER_ADDRESS_STORAGE_KEY = 'onepos_server_address'
 export const ACTING_COMPANY_STORAGE_KEY = 'onepos_acting_company_id'
@@ -107,6 +110,14 @@ export async function apiFetch(path, options = {}) {
 }
 
 export async function apiRequest(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase()
+  const capability = resolveTrustedCapability(path, method)
+  if (isPrivilegedMutation(path, method) && !capability) {
+    throw Object.assign(new Error('This operation is not registered in OneEngine Trusted Runtime'), {
+      status: 403,
+      code: 'UNREGISTERED_CAPABILITY',
+    })
+  }
   const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   const response = await fetch(apiUrl(path), {
     ...options,
@@ -115,6 +126,10 @@ export async function apiRequest(path, options = {}) {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(getActingCompanyId() ? { 'X-Acting-Company-Id': getActingCompanyId() } : {}),
+      ...(capability ? {
+        'X-OneEngine-Capability': capability.id,
+        'X-OneEngine-Runtime': TRUSTED_RUNTIME_STATE.version,
+      } : {}),
       ...(options.headers || {}),
     },
   })
