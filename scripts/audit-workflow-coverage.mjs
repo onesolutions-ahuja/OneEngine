@@ -24,6 +24,9 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
   const authAliases = [...text.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*\[([\s\S]*?)\]/g)]
     .filter((match) => /\bauthenticate\b/.test(match[2]))
     .map((match) => match[1]);
+  const gatewayAliases = [...text.matchAll(/\b(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{([\s\S]{0,6000}?)\n\s*\}/g)]
+    .filter((match) => /ensureBusinessCommandRun/.test(match[2]))
+    .map((match) => match[1]);
   const matches = [...text.matchAll(/\b(?:router|app)\.(post|put|patch|delete)\s*\(\s*(["'`])([^"'`]+)\2/g)];
   return matches.map((match, index) => {
     const start = match.index;
@@ -40,16 +43,20 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
     const authenticated = routerLevelAuth
       || /\bauthenticate\b/.test(body)
       || authAliases.some((alias) => new RegExp("\\.\\.\\." + alias + "\\b|\\b" + alias + "\\b").test(body));
+    const gatewayMediated = ensuresBusinessCommand
+      || gatewayAliases.some((alias) => new RegExp("\\b" + alias + "\\b").test(body))
+      || (/router\.handle\s*\(/.test(body) && /ensureBusinessCommandRun/.test(body));
     return {
       file: rel(file),
       method,
       route,
-      workflowMediated: executesSystemWorkflow || ensuresBusinessCommand || (createsRun && executesWorkflow) || (globalGatewayEnabled && authenticated),
+      workflowMediated: executesSystemWorkflow || gatewayMediated || (createsRun && executesWorkflow) || (globalGatewayEnabled && authenticated),
       createsRun,
       executesWorkflow,
       executesSystemWorkflow,
       executesRegisteredAction,
       ensuresBusinessCommand,
+      gatewayMediated,
       invokesFunctionRegistry,
       authenticated,
       globalGatewayCovered: globalGatewayEnabled && authenticated,
