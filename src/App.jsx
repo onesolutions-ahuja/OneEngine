@@ -1963,7 +1963,7 @@ function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, onRetr
   )
 }
 
-function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onOpenStore }) {
+function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onOpenStore, loading = false, error = '', onRetry }) {
   const q = String(query || '').trim().toLowerCase()
   const visible = apps
     .filter((item) => item?.visible !== false && item?.system_only !== true)
@@ -2035,7 +2035,27 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
               </motion.button>
             )
           })}
-          {!visible.length ? <div className="launcher-empty">No apps match your search.</div> : null}
+          {!visible.length ? (
+            <div className="launcher-empty">
+              {loading ? (
+                <>Loading apps…</>
+              ) : error ? (
+                <>
+                  <strong>Unable to load apps</strong>
+                  <span>{error}</span>
+                  <button type="button" onClick={onRetry}>Retry</button>
+                </>
+              ) : q ? (
+                <>No apps match your search.</>
+              ) : (
+                <>
+                  <strong>No apps returned by oneStore</strong>
+                  <span>The catalogue loaded but returned zero visible apps.</span>
+                  <button type="button" onClick={onRetry}>Reload apps</button>
+                </>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
     </motion.div>
@@ -2274,6 +2294,11 @@ function Desktop({ onLock, onSignOut }) {
         })
       })
     return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    if (storeApps.length) return
+    void refreshStoreApps({ silent: true })
   }, [])
 
   const refreshStoreApps = async ({ silent = false } = {}) => {
@@ -2696,6 +2721,9 @@ function Desktop({ onLock, onSignOut }) {
             apps={storeApps}
             query={appSearch}
             onQueryChange={setAppSearch}
+            loading={storeAppsLoading}
+            error={storeAppsError}
+            onRetry={() => refreshStoreApps()}
             onClose={() => setLauncherOpen(false)}
             onOpenRoute={openRoutePath}
             onOpenStore={(packageKey) => {
