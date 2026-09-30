@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Search, Settings2, ShieldCheck } from 'lucide-react'
-import { apiRequest, setDeviceServerAddress } from '../../services/api'
+import { apiRequest, getStoredUser, setDeviceServerAddress } from '../../services/api'
 
 const SETTINGS_CATALOG_CACHE_KEY = 'onepos.settings.catalog.v1'
 
