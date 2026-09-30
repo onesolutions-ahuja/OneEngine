@@ -134,14 +134,14 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
   const selectedObject = objects.find((item) => objectKey(item) === selectedKey) || null
 
-  const loadObject = async (object = selectedObject) => {
+  const loadObject = async (object = selectedObject, forceRefresh = false) => {
     if (!object) return
     const key = objectKey(object)
     setLoadingRows(true)
     setError('')
     try {
       const [workspaceRes, permissionRes] = await Promise.all([
-        cachedGet(`/api/platform/runtime/objects/${encodeURIComponent(key)}/workspace`, { cacheKey: `workspace:meta:${key}` }),
+        cachedGet(`/api/platform/runtime/objects/${encodeURIComponent(key)}/workspace`, { cacheKey: `workspace:meta:${key}`, forceRefresh }),
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`),
       ])
       const meta = workspaceRes?.data || {}
@@ -149,6 +149,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       const recordPath = `/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
       const recordRes = await cachedGet(recordPath, {
         cacheKey: `workspace:records:${key}:${listViewId || 'default'}`,
+        forceRefresh,
         onFresh: (fresh) => {
           const nextRows = Array.isArray(fresh?.records) ? fresh.records : Array.isArray(fresh?.data) ? fresh.data : []
           setRows(nextRows)
@@ -303,7 +304,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       if (response?.success === false) throw new Error(response.message || 'Unable to save record')
       const relatedToRefresh = editor.relatedRelationship || null
       setEditor(null)
-      await loadObject(selectedObject)
+      await loadObject(selectedObject, true)
       const savedId = response?.data?.id
       if (savedId && key === objectKey(selectedObject)) setSelectedId(savedId)
       if (relatedToRefresh) await loadRelated(relatedToRefresh)
@@ -316,7 +317,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     if (!selectedObject || !selectedId || !canDelete || !window.confirm('Delete this record?')) return
     try {
       await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}`, { method: 'DELETE' })
-      await loadObject(selectedObject)
+      await loadObject(selectedObject, true)
     } catch (err) {
       setError(err?.message || 'Unable to delete record')
     }
@@ -340,7 +341,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         body: JSON.stringify({}),
       })
       if (response?.success === false) throw new Error(response.message || 'Action failed')
-      await loadObject(selectedObject)
+      await loadObject(selectedObject, true)
     } catch (err) {
       setError(err?.message || 'Unable to execute action')
     } finally {
@@ -373,7 +374,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         body: JSON.stringify({}),
       })
       if (response?.success === false) throw new Error(response.message || 'Action failed')
-      await loadObject(selectedObject)
+      await loadObject(selectedObject, true)
     } catch (err) {
       setError(err?.message || 'Unable to execute configured action')
     } finally {
@@ -462,7 +463,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             error={error}
             objectKey={objectKey(selectedObject)}
             objectLabel={objectLabel(selectedObject)}
-            onDataChanged={() => loadObject(selectedObject)}
+            onDataChanged={() => loadObject(selectedObject, true)}
             selectedRowId={selectedId}
             onRowSelect={(row) => { setSelectedId(row.id); setDetailTab('details') }}
           />
