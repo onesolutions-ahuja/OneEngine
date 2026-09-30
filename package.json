@@ -10,7 +10,10 @@
     "audit:apps": "node scripts/audit-app-surfaces.mjs",
     "audit:trusted": "node scripts/audit-trusted-runtime.mjs",
     "audit:workflow-coverage": "node scripts/audit-workflow-coverage.mjs",
-    "audit:workflow-coverage:enforce": "node scripts/audit-workflow-coverage.mjs --enforce"
+    "audit:workflow-coverage:enforce": "node scripts/audit-workflow-coverage.mjs --enforce",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "framer-motion": "^12.23.24",
@@ -20,6 +23,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "@playwright/test": "^1.55.0"
   }
 }
