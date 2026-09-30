@@ -13,6 +13,9 @@ const BRAND_ICON_MATCHES=[
   [/prestashop/i,'prestashop'],[/woocommerce|woo commerce/i,'woocommerce'],[/wix/i,'wix'],[/uber\s*eats/i,'uber-eats'],
   [/deliveroo/i,'deliveroo'],[/just\s*eat/i,'just-eat'],[/whatsapp/i,'whatsapp'],
   [/\bdojo\b/i,'dojo'],[/sum\s*up/i,'sumup'],[/\bsquare\b/i,'square'],[/\bmews\b/i,'mews'],
+  [/\bfourth\b/i,'fourth'],[/\bdeputy\b/i,'deputy'],[/caterbook/i,'caterbook'],[/go[-\s]?upc/i,'go-upc'],
+  [/adobe\s*commerce|magento/i,'adobe-commerce'],[/\bbopp\b/i,'one-connect-bopp'],[/wonderful/i,'one-connect-wonderful'],
+  [/\bvyne\b/i,'one-connect-vyne'],[/\bstripe\b/i,'one-connect-stripe'],
 ]
 
 const STATUS_LABELS={
