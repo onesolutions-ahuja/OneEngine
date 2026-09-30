@@ -339,12 +339,17 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
     );
 
-    const [packages, entitlements, requests] = await Promise.all([
+    const [packages, entitlements, requests, trials] = await Promise.all([
       packageState(result.rows, req.user.companyId),
       getCompanyEntitlements(db, req.user.companyId),
       db("SELECT package_key,status FROM platform_licence_requests WHERE company_id=$1 AND status='PENDING'", [req.user.companyId]),
+      db(`SELECT p.package_key,t.activated_at,t.expires_at
+            FROM company_package_trials t
+            JOIN package_registry p ON p.id=t.package_id
+           WHERE t.company_id=$1`, [req.user.companyId]),
     ]);
     const pendingRequests = new Set(requests.rows.map((row) => row.package_key));
+    const trialByPackage = new Map(trials.rows.map((row) => [row.package_key, row]));
     res.json({
       success: true,
       data: await Promise.all(packages.map(async (item) => {
@@ -362,6 +367,13 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
               : item.company_installation?.status === "active"
                 ? "INSTALLED"
                 : "AVAILABLE";
+        const priorTrial = trialByPackage.get(item.package_key) || null;
+        const trialAvailable =
+          item.licence_mode !== "TECHNICAL" &&
+          item.installable === true &&
+          item.active === true &&
+          licensed !== true &&
+          !priorTrial;
         return {
           ...item,
           licensed,
@@ -369,6 +381,10 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
           storefront_state: storefrontState,
           can_install: storefrontState === "AVAILABLE" ||
             (storefrontState === "INSTALLED" && item.company_installation?.deactivated_by_user === true),
+          trial_available: trialAvailable,
+          trial_days: 7,
+          trial_activated_at: priorTrial?.activated_at || null,
+          trial_expires_at: priorTrial?.expires_at || null,
         };
       })),
     });
@@ -376,6 +392,74 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
   });
 
 
+
+  router.post("/packages/:packageKey/activate-trial", ...manage, async (req, res) => {
+    const packageKey = req.params.packageKey;
+    try {
+      const packageResult = await db(
+        `SELECT id,package_key,name,licence_mode,installable,visible,system_only,publication_state,active
+           FROM package_registry
+          WHERE package_key=$1 AND active=true
+          LIMIT 1`,
+        [packageKey]
+      );
+      const pkg = packageResult.rows[0];
+      if (!pkg || pkg.visible !== true || pkg.system_only === true || pkg.publication_state !== "PUBLISHED") {
+        return res.status(404).json({ success: false, message: "Package is not available in oneStore" });
+      }
+      if (pkg.installable !== true || pkg.licence_mode === "TECHNICAL") {
+        return res.status(400).json({ success: false, message: "This package is not eligible for a free trial" });
+      }
+
+      const alreadyUsed = await db(
+        "SELECT activated_at,expires_at FROM company_package_trials WHERE company_id=$1 AND package_id=$2 LIMIT 1",
+        [req.user.companyId, pkg.id]
+      );
+      if (alreadyUsed.rows[0]) {
+        return res.status(409).json({
+          success: false,
+          code: "TRIAL_ALREADY_USED",
+          message: "The free trial for this app has already been used",
+          data: alreadyUsed.rows[0],
+        });
+      }
+
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const created = await withTransaction(async (txDb) => {
+        const trial = await txDb(
+          `INSERT INTO company_package_trials
+             (company_id,package_id,activated_by,activated_at,expires_at)
+           VALUES ($1,$2,$3,NOW(),$4)
+           RETURNING activated_at,expires_at`,
+          [req.user.companyId, pkg.id, req.user.id || null, expiresAt]
+        );
+        await txDb(
+          `INSERT INTO company_package_entitlement_sources
+             (company_id,package_id,source_type,source_key,active,starts_at,expires_at,metadata)
+           VALUES ($1,$2,'DIRECT_LICENCE',$3,true,NOW(),$4,$5::jsonb)
+           ON CONFLICT (company_id,package_id,source_type,source_key)
+           DO UPDATE SET active=true,starts_at=NOW(),expires_at=EXCLUDED.expires_at,metadata=EXCLUDED.metadata`,
+          [
+            req.user.companyId,
+            pkg.id,
+            `trial:${req.user.companyId}:${pkg.package_key}`,
+            expiresAt,
+            JSON.stringify({ trial: true, days: 7, activatedBy: req.user.id || null }),
+          ]
+        );
+        return trial.rows[0];
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "7-day free trial activated",
+        data: { packageKey: pkg.package_key, ...created },
+      });
+    } catch (error) {
+      console.error("Package trial activation error:", error);
+      res.status(400).json({ success: false, message: error.message || "Unable to activate free trial" });
+    }
+  });
 
   router.post("/packages/:packageKey/request-licence", authenticate, authorize("package.manage", "settings.manage"), async (req, res) => {
     try {
