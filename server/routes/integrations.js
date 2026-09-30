@@ -687,7 +687,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
         }
 
         // Atomic replace inside a transaction when a pool is available.
-        const client = pool ? await pool.connect() : null;
+        const client = pool ? await (req.tenantPool || pool).connect() : null;
         if (!client) {
           // Fallback: delete-then-insert without transaction (non-fatal ordering).
           await db(`DELETE FROM integration_field_mappings WHERE endpoint_id = $1`, [endpoint.id]);
