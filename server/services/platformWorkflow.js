@@ -1532,7 +1532,14 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (!provider.configured) throw new Error(provider.error || "Email provider is not configured");
       const job = await enqueuePlatformJob({
         db, companyId: company, kind: "SEND_EMAIL", runAt: new Date(),
-        payload: { recipient, to: recipient, templateKey: "PASSWORD_RESET", variables: { token, userId: user.id, expiresMinutes: user.password_reset_expiry_minutes || 60 }, _roleId: req?.user?.roleId, _stepRunId: stepRunId },
+        payload: {
+          recipient, to: recipient, templateKey: "PASSWORD_RESET",
+          variables: { token, userId: user.id, expiresMinutes: user.password_reset_expiry_minutes || 60 },
+          actorUserId: req?.user?.id || null,
+          _roleId: req?.user?.roleId || null,
+          _executionMode: resolveExecutionMode({ req }),
+          _stepRunId: stepRunId,
+        },
         idempotencyKey: `${company}:password-reset:${user.id}:${stepRunId || Date.now()}`,
       });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null, expiresMinutes: user.password_reset_expiry_minutes || 60 };
@@ -1583,7 +1590,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           to: recipient,
           templateKey: "USER_INVITATION",
           variables: { token, userId: user.id, expiresMinutes: user.registration_link_expiry_minutes || 1440 },
-          _roleId: req?.user?.roleId,
+          actorUserId: req?.user?.id || null,
+          _roleId: req?.user?.roleId || null,
+          _executionMode: resolveExecutionMode({ req }),
           _stepRunId: stepRunId,
         },
         idempotencyKey: `${company}:user-invite:${user.id}:${stepRunId || Date.now()}`,
@@ -2378,7 +2387,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
       }
       const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
-      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
+      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: {
+        ...resolvedAction,
+        actorUserId: req?.user?.id || null,
+        _roleId: req?.user?.roleId || null,
+        _executionMode: resolveExecutionMode({ req }),
+        _stepRunId: stepRunId,
+      }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
   },
@@ -2399,7 +2414,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "failed", provider: "SMS", error: provider.error, jobId: null };
       }
       const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
-      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_SMS", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
+      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_SMS", payload: {
+        ...resolvedAction,
+        actorUserId: req?.user?.id || null,
+        _roleId: req?.user?.roleId || null,
+        _executionMode: resolveExecutionMode({ req }),
+        _stepRunId: stepRunId,
+      }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
   },
@@ -2420,7 +2441,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "failed", provider: "WHATSAPP", error: provider.error, jobId: null };
       }
       const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
-      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
+      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: {
+        ...resolvedAction,
+        actorUserId: req?.user?.id || null,
+        _roleId: req?.user?.roleId || null,
+        _executionMode: resolveExecutionMode({ req }),
+        _stepRunId: stepRunId,
+      }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
   },
@@ -3722,10 +3749,13 @@ export async function executeWorkflowActions({ actions, ...context }) {
     }
   }
 
+  const executionMode = resolveExecutionMode(context);
   let executionContext;
   try {
     executionContext = await createPlatformExecutionContext({
       ...context,
+      executionMode,
+      trustedSystem: context.trustedSystem === true || context.req?.trustedSystemExecution === true,
       workflowId: context.workflowId || context.executionContext?.globals?.$Flow?.id || null,
       workflowVersion: context.workflowVersion || context.executionContext?.globals?.$Flow?.version || null,
       parentRunId: context.parentRunId || context.executionContext?.globals?.$Flow?.runId || null,
@@ -3750,7 +3780,6 @@ export async function executeWorkflowActions({ actions, ...context }) {
     };
     governedDb.__platformGoverned = true;
   }
-  const executionMode = resolveExecutionMode(context);
   const runtimeContext = applyExecutionContext({
     ...context,
     db: governedDb,
