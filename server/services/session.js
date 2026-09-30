@@ -12,7 +12,7 @@ import jwt from "jsonwebtoken";
 function requireJwtSecret() {
   const secret = String(process.env.JWT_SECRET || "").trim();
   if (!secret) {
-    const error = new Error("requireJwtSecret() is required");
+    const error = new Error("JWT_SECRET is required");
     error.code = "JWT_SECRET_NOT_CONFIGURED";
     throw error;
   }
@@ -68,7 +68,8 @@ export function createAuthenticate({ onAuthenticated = null } = {}) {
       req.__oneposAuthenticated = true;
       if (!onAuthenticated) return next();
       return Promise.resolve(onAuthenticated(req, res, next)).catch((error) => next(error));
-    } catch {
+    } catch (error) {
+      if (error?.code === "JWT_SECRET_NOT_CONFIGURED") return next(error);
       return res.status(401).json({
         success: false,
         message: "Invalid or expired token",
