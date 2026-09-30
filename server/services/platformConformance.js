@@ -83,11 +83,11 @@ export async function auditPlatformConformance({ db, companyId = null } = {}) {
       [companyId]
     ),
     db(
-      `SELECT object_key,COUNT(*)::int AS count
+      `SELECT object_key,company_id,COUNT(*)::int AS count
          FROM platform_objects
         WHERE active=true
           AND ($1::uuid IS NULL OR company_id IS NULL OR company_id=$1)
-        GROUP BY object_key
+        GROUP BY object_key,company_id
        HAVING COUNT(*)>1`,
       [companyId]
     ),
