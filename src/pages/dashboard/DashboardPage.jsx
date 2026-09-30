@@ -105,7 +105,8 @@ function ComponentCard({ component, result, loading, currency }) {
     body = <div className="dash-empty">No data</div>
   }
 
-  return <section className="dashboard-component" style={{ gridColumn: `span ${Math.max(1, Math.min(12, Number(component?.layout?.w) || 4))}` }}>
+  const isSalesByPeriod = /sales\s+by\s+period/i.test(String(component?.title || ''))
+  return <section className={`dashboard-component ${isSalesByPeriod ? 'dashboard-component--sales-period' : ''}`} style={{ gridColumn: `span ${Math.max(1, Math.min(12, Number(component?.layout?.w) || 4))}` }}>
     {component?.title ? <h3>{component.title}</h3> : null}
     <div className="dashboard-component-body">{body}</div>
   </section>
