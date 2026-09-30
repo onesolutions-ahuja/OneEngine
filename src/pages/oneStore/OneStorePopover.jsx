@@ -95,7 +95,11 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
     try{
       setWorkingKey(item.package_key);setError('');setNotice('')
       const key=encodeURIComponent(item.package_key)
-      if(action==='request-licence'){
+      if(action==='trial'){
+        const r=await apiRequest(`/api/packages/${key}/activate-trial`,{method:'POST'})
+        if(r?.success===false)throw new Error(r?.message||'Unable to activate free trial')
+        setNotice(`7-day free trial activated for ${item.name}. Install is now available.`)
+      }else if(action==='request-licence'){
         const r=await apiRequest(`/api/packages/${key}/request-licence`,{method:'POST'})
         if(r?.success===false)throw new Error(r?.message||'Unable to request licence')
         setNotice('Licence request sent.')
@@ -162,6 +166,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
           <div className="onestore-actions">
             {selectedAction?.secondary?<button disabled={!canManage||workingKey===selected.package_key} onClick={()=>run(selected,selectedAction.secondary)}>Deactivate</button>:null}
             {selected?.company_installation&&storefrontStatus(selected)==='INSTALLED'?<button onClick={openInstalled}>Open</button>:null}
+            {selected?.trial_available===true?<button className="module-primary-button" disabled={!canManage||workingKey===selected.package_key} onClick={()=>run(selected,'trial')}>{workingKey===selected.package_key?'Working…':`Free ${selected.trial_days||7}-day trial`}</button>:null}
             {selectedAction?.action?<button className="module-primary-button" disabled={selectedAction.disabled||!canManage||workingKey===selected.package_key} onClick={()=>run(selected,selectedAction.action)}>{workingKey===selected.package_key?'Working…':selectedAction.label}</button>:selectedAction?.label?<button disabled>{selectedAction.label}</button>:null}
           </div>
           {!canManage&&selectedAction?.action?<small className="onestore-no-permission">Package management permission is required.</small>:null}
