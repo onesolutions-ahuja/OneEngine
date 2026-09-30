@@ -123,7 +123,7 @@ export async function reconcileCompanyPackageEntitlements(db, companyId) {
        (company_id,package_id,source_type,source_key,active,metadata)
      SELECT i.company_id,i.package_id,'DIRECT_INSTALL',
             'free-direct-install:' || i.package_id::text,
-            i.status='active' AND i.deactivated_by_user=false,
+            i.deactivated_by_user=false,
             jsonb_build_object('repairedFromInstallation',true)
        FROM company_package_installations i
        JOIN package_registry p ON p.id=i.package_id
