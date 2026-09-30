@@ -599,6 +599,7 @@ export async function executeConnectorWorkflowAction({
     storeId: tenantStoreId,
     tillId: tenantTillId,
     capabilityKey: capability,
+    selfCheckout: action?.selfCheckout === true,
     payload: runtimePayload,
     writeAudit,
     actorUserId: actorUserId || req?.user?.id || null,
