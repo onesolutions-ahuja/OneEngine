@@ -23,11 +23,38 @@ export async function withDomainSave({ pool, db, savePlatformRecord, key, req, i
     await query("BEGIN");
     const previous = id ? (await query(`SELECT * FROM "${definition.table}" WHERE id=$1 AND company_id=$2 FOR UPDATE`, [id, req.user.companyId])).rows[0] : null;
     if (id && !previous) throw new PlatformRecordError("Record not found", 404);
-    const result = await write(query);
-    if (!result.rows?.[0]) throw new PlatformRecordError("Record not found", 404);
-    result.rows[0].platform = await savePlatformRecord({ db: query, key, req, record: { ...previous, ...result.rows[0] }, previous });
+
+    const lifecycle = await runRecordSaveLifecycle({
+      operation: previous ? "update" : "create",
+      initialState: { previous, result: null, platform: null },
+      beforeValidation: async (state) => state,
+      validate: async (state) => state,
+      beforeSave: async (state) => state,
+      write: async (state) => {
+        const result = await write(query);
+        if (!result.rows?.[0]) throw new PlatformRecordError("Record not found", 404);
+        return { ...state, result };
+      },
+      afterSave: async (state) => {
+        const record = { ...(state.previous || {}), ...state.result.rows[0] };
+        const platform = await savePlatformRecord({
+          db: query,
+          key,
+          req,
+          record,
+          previous: state.previous,
+          lifecycleOperation: previous ? "update" : "create",
+        });
+        state.result.rows[0].platform = platform;
+        return { ...state, platform };
+      },
+      // True transaction-aware AFTER_COMMIT callbacks are formalised in Phase 3.
+      afterCommit: undefined,
+    });
+
     await query("COMMIT");
-    return result;
+    lifecycle.result.rows[0].platformLifecycle = lifecycle.lifecycleTrace;
+    return lifecycle.result;
   } catch (error) {
     await query("ROLLBACK"); throw error;
   } finally { client.release(); }
