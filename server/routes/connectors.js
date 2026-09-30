@@ -1084,6 +1084,44 @@ export default function createConnectorsRouter({
     }
   );
 
+  router.get("/connector-apps", authenticate, authorize("integration.manage"), async (req, res) => {
+    try {
+      const result = await db(
+        `SELECT p.package_key,p.name,p.description,p.manifest,p.category,p.publisher,
+                i.status AS installation_status,i.version AS installed_version
+           FROM package_registry p
+           JOIN company_package_installations i
+             ON i.package_id=p.id
+            AND i.company_id=$1
+            AND i.status='active'
+            AND i.suspended_by_entitlement=FALSE
+          WHERE p.active=TRUE
+            AND p.package_type='APPLICATION'
+            AND p.manifest ? 'connectorApp'
+          ORDER BY p.name`,
+        [req.user.companyId]
+      );
+      res.json({
+        success: true,
+        data: result.rows.map((row) => ({
+          package_key: row.package_key,
+          name: row.name,
+          description: row.description,
+          category: row.category,
+          publisher: row.publisher,
+          manifest: jsonValue(row.manifest, {}),
+          company_installation: {
+            status: row.installation_status,
+            version: row.installed_version,
+          },
+        })),
+      });
+    } catch (error) {
+      console.error("List connector apps error:", error);
+      res.status(500).json({ success: false, message: "Unable to list installed connector apps" });
+    }
+  });
+
   router.get("/connector-instances", authenticate, authorize("integration.manage"), async (req, res) => {
     try {
       const result = await db(
