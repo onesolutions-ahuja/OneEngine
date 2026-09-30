@@ -19,9 +19,11 @@ export async function withDomainSave({ pool, db, savePlatformRecord, key, req, i
   const definition = systemObject({ object_key: key });
   if (!definition) throw new PlatformRecordError("Unknown system object");
 
-  const transaction = await withPlatformTransaction({
-    pool,
-    handler: async (tx) => {
+  let transaction;
+  try {
+    transaction = await withPlatformTransaction({
+      pool,
+      handler: async (tx) => {
       const query = tx.query;
       const previous = id
         ? (await query(`SELECT * FROM "${definition.table}" WHERE id=$1 AND company_id=$2 FOR UPDATE`, [id, req.user.companyId])).rows[0]
@@ -64,9 +66,14 @@ export async function withDomainSave({ pool, db, savePlatformRecord, key, req, i
 
       lifecycle.result.rows[0].platformLifecycle = lifecycle.lifecycleTrace;
       lifecycle.result.rows[0].platformTransactionId = tx.id;
-      return lifecycle.result;
-    },
-  });
+        return lifecycle.result;
+      },
+    });
+  } catch (error) {
+    const cause = error?.cause || error;
+    if (cause && typeof cause === "object") cause.transactionId ||= error?.transactionId || null;
+    throw cause;
+  }
 
   transaction.result.platformAfterCommit = transaction.afterCommit;
   return transaction.result;
