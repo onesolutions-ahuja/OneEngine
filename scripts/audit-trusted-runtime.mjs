@@ -9,6 +9,8 @@ const SERVER = path.join(ROOT, 'server')
 const SERVER_ENTRY = path.join(SERVER, 'server.js')
 const SERVER_RUNTIME = path.join(SERVER, 'services', 'trustedRuntime.js')
 const SERVER_JOBS = path.join(SERVER, 'services', 'platformJobs.js')
+const SERVER_PACKAGES = path.join(SERVER, 'services', 'trustedPackages.js')
+const PACKAGE_ROUTES = path.join(SERVER, 'routes', 'packages.js')
 const ALLOWED_FETCH_FILES = new Set([
   path.normalize(API_FILE),
   path.normalize(path.join(SRC, 'services', 'connectivity.js')),
@@ -66,6 +68,8 @@ for (const file of walk(SRC)) {
 const serverEntry = fs.readFileSync(SERVER_ENTRY, 'utf8')
 const serverRuntime = fs.readFileSync(SERVER_RUNTIME, 'utf8')
 const serverJobs = fs.readFileSync(SERVER_JOBS, 'utf8')
+const serverPackages = fs.readFileSync(SERVER_PACKAGES, 'utf8')
+const packageRoutes = fs.readFileSync(PACKAGE_ROUTES, 'utf8')
 for (const required of ['createTrustedRuntimeGate()', 'validateTrustedRuntime()', 'assertTrustedJobKind(job.kind)']) {
   if (!serverEntry.includes(required)) findings.push({ severity: 'ERROR', rule: 'SERVER_GATE_MISSING', file: path.relative(ROOT, SERVER_ENTRY), detail: required })
 }
@@ -74,6 +78,16 @@ for (const required of ['PLATFORM_FUNCTIONS', 'PLATFORM_ACTION_REGISTRY', 'TRUST
 }
 if (!serverJobs.includes('assertTrustedJobKind(kind)')) {
   findings.push({ severity: 'ERROR', rule: 'JOB_ENQUEUE_GATE_MISSING', file: path.relative(ROOT, SERVER_JOBS) })
+}
+for (const required of ['internalAppCatalog', 'packageDefinition', 'hashPackageManifest', 'assertTrustedPackageManifest', 'validateTrustedPackageCatalogue']) {
+  if (!serverPackages.includes(required)) findings.push({ severity: 'ERROR', rule: 'TRUSTED_PACKAGE_CATALOGUE_INVALID', file: path.relative(ROOT, SERVER_PACKAGES), detail: required })
+}
+const packageAssertions = (packageRoutes.match(/assertTrustedPackageManifest\(item\.packageKey, item\.manifest, item\.version\)/g) || []).length
+if (packageAssertions < 3) {
+  findings.push({ severity: 'ERROR', rule: 'PACKAGE_LIFECYCLE_GATE_MISSING', file: path.relative(ROOT, PACKAGE_ROUTES), detail: `expected plan/install/upgrade assertions; found ${packageAssertions}` })
+}
+if (!serverEntry.includes('validateTrustedPackageCatalogue()')) {
+  findings.push({ severity: 'ERROR', rule: 'PACKAGE_STARTUP_VALIDATION_MISSING', file: path.relative(ROOT, SERVER_ENTRY) })
 }
 
 const apiText = fs.readFileSync(API_FILE, 'utf8')
