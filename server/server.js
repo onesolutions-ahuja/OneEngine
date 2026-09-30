@@ -518,7 +518,7 @@ function cookieValue(req, name) {
 }
 
 function safeGoogleReturnTo(value) {
-  const fallback = "https://onesolutions-ahuja.github.io/smart-theme/";
+  const fallback = "https://onesolutions-ahuja.github.io/OneEngine/";
   try {
     const parsed = new URL(String(value || fallback));
     const allowed = new Set([
