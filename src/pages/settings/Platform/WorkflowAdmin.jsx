@@ -72,6 +72,9 @@ const TRIGGER_LABELS = {
   after_update: "When a record is updated",
   after_save: "When a record is created or updated",
   manual: "Manual trigger",
+  system_function: "System function",
+  system_action: "System action",
+  system_job: "System job trigger",
 };
 const getTriggerLabel = (value) => TRIGGER_LABELS[value] || value || "Manual trigger";
 
@@ -574,6 +577,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [registryOptions, setRegistryOptions] = useState(scopeKey ? [] : actionOptions);
   const [functionRegistry, setFunctionRegistry] = useState([]);
   const [messageTemplates, setMessageTemplates] = useState([]);
+  const [workflowListSearch, setWorkflowListSearch] = useState("");
+  const [workflowListFilter, setWorkflowListFilter] = useState("all");
+
 
   useEffect(() => {
     if (!embedded) return;
@@ -634,6 +640,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           trigger: rule.trigger_key,
           active: rule.active !== false,
           scope: rule.action.scope || null,
+          systemGenerated: rule.action.systemGenerated === true,
+          systemKey: rule.action.systemKey || null,
+          capabilityType: rule.action.capabilityType || null,
+          capabilityKey: rule.action.capabilityKey || null,
           steps: (rule.action.actions || []).map((action) => ({
             ...makeStep(action.type || action.key),
             type: action.type || action.key,
@@ -705,7 +715,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const enabledSteps = (workflow.steps || []).filter((step) => step.enabled !== false);
   const conditionSteps = enabledSteps.filter((step) => step.type === "CONDITION");
   const actionSteps = enabledSteps.filter((step) => step.type !== "CONDITION");
-  const triggerNeedsObject = !["manual","whatsapp_message_received"].includes(workflow.trigger);
+  const triggerNeedsObject = !["manual","whatsapp_message_received","system_function","system_action","system_job"].includes(workflow.trigger);
   const triggerIssue = !workflow.trigger
     ? "Choose a trigger."
     : triggerNeedsObject && !workflow.object
@@ -752,6 +762,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       action: {
         type: "workflow",
         ...(scopeKey ? { scope: scopeKey } : {}),
+        ...(workflow.systemGenerated ? {
+          systemGenerated: true,
+          systemKey: workflow.systemKey || null,
+          capabilityType: workflow.capabilityType || null,
+          capabilityKey: workflow.capabilityKey || null,
+          scope: workflow.scope || "system",
+        } : {}),
         match: workflow.match || "all",
         actions: workflow.steps.filter((step) => step.enabled !== false).map((step) => {
           const config = { ...(step.config || {}) };
@@ -776,6 +793,17 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       onMessage?.("Workflow saved.");
     }).catch((error) => onError?.(error.message || "Unable to save workflow."));
   };
+
+  const visibleSavedWorkflows = savedWorkflows.filter((item) => {
+    const system = item.systemGenerated === true || item.scope === "system";
+    if (workflowListFilter === "system" && !system) return false;
+    if (workflowListFilter === "user" && system) return false;
+    const query = workflowListSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [item.name, item.trigger, item.capabilityType, item.capabilityKey, item.object]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query));
+  });
 
   if (!showBuilder && !embedded) {
     return (
@@ -805,14 +833,35 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             </div>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className={inputClass}
+            style={{ maxWidth: 360 }}
+            value={workflowListSearch}
+            onChange={(event) => setWorkflowListSearch(event.target.value)}
+            placeholder="Search workflows..."
+          />
+          <select className={inputClass} style={{ maxWidth: 180 }} value={workflowListFilter} onChange={(event) => setWorkflowListFilter(event.target.value)}>
+            <option value="all">All workflows</option>
+            <option value="system">System workflows</option>
+            <option value="user">User workflows</option>
+          </select>
+          <span className="text-xs text-slate-500">{visibleSavedWorkflows.length} shown · {savedWorkflows.length} total</span>
+        </div>
         <div className="rounded-xl border border-slate-200 bg-white">
-          {savedWorkflows.length === 0 ? (
-            <div className="p-6 text-sm text-slate-500">No workflows configured.</div>
-          ) : savedWorkflows.map((item, index) => (
+          {visibleSavedWorkflows.length === 0 ? (
+            <div className="p-6 text-sm text-slate-500">No workflows match this view.</div>
+          ) : visibleSavedWorkflows.map((item, index) => (
             <div key={`${item.name || "workflow"}-${index}`} className="flex items-center justify-between gap-3 border-b border-slate-100 p-4 last:border-b-0">
               <div>
-                <strong className="text-sm text-slate-800">{item.name || "Unnamed workflow"}</strong>
-                <span className="block text-xs text-slate-500">{item.object || "No trigger object"} · {getTriggerLabel(item.trigger)}</span>
+                <div className="flex items-center gap-2">
+                  <strong className="text-sm text-slate-800">{item.name || "Unnamed workflow"}</strong>
+                  {item.systemGenerated || item.scope === "system" ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">SYSTEM</span> : null}
+                </div>
+                <span className="block text-xs text-slate-500">
+                  {item.object || "No trigger object"} · {getTriggerLabel(item.trigger)}
+                  {item.capabilityKey ? ` · ${item.capabilityType || "capability"}: ${item.capabilityKey}` : ""}
+                </span>
               </div>
               <div className="flex gap-3">
                 <button type="button" className="text-sm text-blue-700" onClick={() => { setWorkflowId(item.id || null); setWorkflow(item); setShowBuilder(true); }}>Edit</button>
@@ -823,7 +872,19 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                     triggerKey: item.trigger,
                     conditions: item.conditions || [],
                     active: nextActive,
-                    action: { type: "workflow", ...(scopeKey ? { scope: scopeKey } : {}), match: item.match || "all", actions: (item.steps || []).filter((step) => step.enabled !== false).map((step) => ({ type: step.type, ...(step.config || {}), fieldValues: step.config?.fieldValues || step.config?.fieldMappings })) },
+                    action: {
+                      type: "workflow",
+                      ...(scopeKey ? { scope: scopeKey } : {}),
+                      ...(item.systemGenerated ? {
+                        systemGenerated: true,
+                        systemKey: item.systemKey || null,
+                        capabilityType: item.capabilityType || null,
+                        capabilityKey: item.capabilityKey || null,
+                        scope: item.scope || "system",
+                      } : {}),
+                      match: item.match || "all",
+                      actions: (item.steps || []).filter((step) => step.enabled !== false).map((step) => ({ type: step.type, ...(step.config || {}), fieldValues: step.config?.fieldValues || step.config?.fieldMappings }))
+                    },
                   }) }).then(() => setSavedWorkflows((current) => current.map((entry) => entry.id === item.id ? { ...entry, active: nextActive } : entry))).catch((error) => onError?.(error.message));
                 }}>{item.active === false ? "Activate" : "Deactivate"}</button> : null}
               </div>
@@ -857,6 +918,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Trigger</label>
             <select className={inputClass} value={workflow.trigger || "after_update"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
               {scopeKey === "whatsapp_assistant" ? <option value="whatsapp_message_received">WhatsApp message received</option> : null}
+              {workflow.systemGenerated ? <option value="system_function">System function</option> : null}
+              {workflow.systemGenerated ? <option value="system_action">System action</option> : null}
+              {workflow.systemGenerated ? <option value="system_job">System job trigger</option> : null}
               <option value="after_create">Record created</option>
               <option value="after_update">Record updated</option>
               <option value="after_save">Created or updated</option>
