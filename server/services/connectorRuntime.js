@@ -289,7 +289,7 @@ function jsonValue(value, fallback) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
-function effectiveManifest(packageKey, storedManifest = {}) {
+export function effectiveManifest(packageKey, storedManifest = {}) {
   const stored = jsonValue(storedManifest, {});
   if (stored?.connectorApp) return stored;
   const catalogEntry = internalAppCatalog.find((entry) =>
