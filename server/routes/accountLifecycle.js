@@ -1,6 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
-import { consumeAccountToken, hashAccountToken, domainAllowed, issueAccountToken, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
+import { consumeAccountToken, hashAccountToken, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 export default function createAccountLifecycleRouter({ authenticate, authorize, db }) {
   const router = express.Router();
@@ -56,7 +57,16 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     const u=r.rows[0]; if(!u)return res.status(404).json({success:false,message:"User not found"});
     if(!u.email_registration_enabled)return res.status(409).json({success:false,message:"Email registration is disabled"});
     if(!domainAllowed(u.email,u.user_email_domain,u.domain_users_only))return res.status(400).json({success:false,message:"User email is outside the allowed company domain"});
-    const token=await issueAccountToken(db,{companyId:u.company_id,userId:u.id,purpose:"REGISTRATION",expiresMinutes:u.registration_link_expiry_minutes});
+    const tokenExecution=await executeSystemWorkflow({
+      db,
+      companyId:u.company_id,
+      userId:req.user.id||null,
+      systemKey:"function:account.registration.token.issue",
+      req,
+      input:{userId:u.id,expiresMinutes:u.registration_link_expiry_minutes},
+      source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"account.registration.token.issue"},
+    });
+    const token=tokenExecution.result;
     // Token is returned only to the workflow caller so the registered message action can merge it into the approved template.
     res.json({success:true,data:{workflowEvent:"USER_REGISTRATION_REQUESTED",userId:u.id,email:normalizeEmail(u.email),token}});
   });
@@ -67,7 +77,16 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     const r=await db(`SELECT u.id,u.company_id,cs.password_reset_email_enabled,cs.password_reset_expiry_minutes FROM users u
       JOIN company_settings cs ON cs.company_id=u.company_id WHERE LOWER(u.email)=LOWER($1) AND u.active=TRUE LIMIT 1`,[email]);
     const u=r.rows[0]; if(!u?.password_reset_email_enabled)return res.json(generic);
-    const token=await issueAccountToken(db,{companyId:u.company_id,userId:u.id,purpose:"PASSWORD_RESET",expiresMinutes:u.password_reset_expiry_minutes});
+    const tokenExecution=await executeSystemWorkflow({
+      db,
+      companyId:u.company_id,
+      userId:u.id,
+      systemKey:"function:account.password_reset.token.issue",
+      req,
+      input:{userId:u.id,expiresMinutes:u.password_reset_expiry_minutes},
+      source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"account.password_reset.token.issue"},
+    });
+    const token=tokenExecution.result;
     // Production workflow consumes this event/token and sends the configured message template; public response remains generic.
     req.app.emit?.("onepos:workflow-event",{type:"PASSWORD_RESET_REQUESTED",companyId:u.company_id,userId:u.id,email,token});
     res.json(generic);
