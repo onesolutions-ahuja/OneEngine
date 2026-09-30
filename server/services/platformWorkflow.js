@@ -1984,28 +1984,28 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const runtimeStoreId = req?.user?.storeId || context.storeId || null;
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req, excludeRecordId: action.recordId });
       const writePairs = alignWorkflowWritableValues(mappedFields, entries);
-      const sets = writePairs.map(({ field }, index) => `"${field.source_column}"=${index + 1}`).join(", ");
+      const sets = writePairs.map(({ field }, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
       const params = [...writePairs.map(({ value }) => value), action.recordId];
       const clauses = ["id=$" + params.length];
       if (targetObject.company_scoped) {
         if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
         params.push(runtimeCompanyId);
-        clauses.push(`company_id=${params.length}`);
+        clauses.push(`company_id=$${params.length}`);
       }
       if (targetObject.store_scoped) {
         if (!runtimeStoreId) throw new Error("Workflow store scope is required");
         params.push(runtimeStoreId);
-        clauses.push(`store_id=${params.length}`);
+        clauses.push(`store_id=$${params.length}`);
       }
       const previousParams = [action.recordId];
       const previousClauses = ["id=$1"];
       if (targetObject.company_scoped) {
         previousParams.push(runtimeCompanyId);
-        previousClauses.push(`company_id=${previousParams.length}`);
+        previousClauses.push(`company_id=$${previousParams.length}`);
       }
       if (targetObject.store_scoped) {
         previousParams.push(runtimeStoreId);
-        previousClauses.push(`store_id=${previousParams.length}`);
+        previousClauses.push(`store_id=$${previousParams.length}`);
       }
       const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
       const query = `UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`;
@@ -2084,28 +2084,28 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const runtimeStoreId = req?.user?.storeId || context.storeId || null;
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req, excludeRecordId: action.recordId });
       const writePairs = alignWorkflowWritableValues(mappedFields, entries);
-      const sets = writePairs.map(({ field }, index) => `"${field.source_column}"=${index + 1}`).join(", ");
+      const sets = writePairs.map(({ field }, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
       const params = [...writePairs.map(({ value }) => value), action.recordId];
       const clauses = ["id=$" + params.length];
       if (targetObject.company_scoped) {
         if (!runtimeCompanyId) throw new Error("Workflow company scope is required");
         params.push(runtimeCompanyId);
-        clauses.push(`company_id=${params.length}`);
+        clauses.push(`company_id=$${params.length}`);
       }
       if (targetObject.store_scoped) {
         if (!runtimeStoreId) throw new Error("Workflow store scope is required");
         params.push(runtimeStoreId);
-        clauses.push(`store_id=${params.length}`);
+        clauses.push(`store_id=$${params.length}`);
       }
       const previousParams = [action.recordId];
       const previousClauses = ["id=$1"];
       if (targetObject.company_scoped) {
         previousParams.push(runtimeCompanyId);
-        previousClauses.push(`company_id=${previousParams.length}`);
+        previousClauses.push(`company_id=$${previousParams.length}`);
       }
       if (targetObject.store_scoped) {
         previousParams.push(runtimeStoreId);
-        previousClauses.push(`store_id=${previousParams.length}`);
+        previousClauses.push(`store_id=$${previousParams.length}`);
       }
       const previous = (await db(`SELECT * FROM "${table}" WHERE ${previousClauses.join(" AND ")} LIMIT 1`, previousParams)).rows[0] || null;
       const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
