@@ -4,6 +4,187 @@ import PlatformFieldPicker from "./PlatformFieldPicker.jsx";
 import MetadataResourcePicker from "./MetadataResourcePicker.jsx";
 
 const inputClass = "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none";
+
+const WORKFLOW_VISUAL_CSS = `
+  .workflow-visual-shell {
+    display: grid;
+    grid-template-columns: 230px minmax(460px, 1fr) 360px;
+    gap: 12px;
+    min-height: 620px;
+    width: 100%;
+    min-width: 0;
+    align-items: stretch;
+  }
+  .workflow-node-palette,
+  .workflow-properties-panel {
+    min-width: 0;
+    border: 1px solid rgba(15,23,42,.10);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15,23,42,.06);
+    overflow: hidden;
+  }
+  .workflow-node-palette {
+    padding: 12px;
+  }
+  .workflow-palette-scroll {
+    max-height: 548px;
+    overflow: auto;
+    padding-right: 3px;
+  }
+  .workflow-palette-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    min-height: 36px;
+    margin-bottom: 5px;
+    padding: 7px 9px;
+    border: 1px solid rgba(15,23,42,.08);
+    border-radius: 9px;
+    background: #fff;
+    color: #334155;
+    font-size: 12px;
+    text-align: left;
+    cursor: grab;
+    transition: background .14s ease, border-color .14s ease, transform .14s ease;
+  }
+  .workflow-palette-item:hover {
+    background: #f7faff;
+    border-color: rgba(10,132,255,.32);
+    transform: translateY(-1px);
+  }
+  .workflow-canvas-surface {
+    position: relative;
+    min-width: 0;
+    min-height: 620px;
+    overflow: auto;
+    padding: 28px;
+    border: 1px solid rgba(15,23,42,.10);
+    border-radius: 14px;
+    background-color: #f8fafc;
+    background-image: radial-gradient(circle, rgba(100,116,139,.23) 1px, transparent 1px);
+    background-size: 18px 18px;
+    box-shadow: inset 0 1px 5px rgba(15,23,42,.05);
+  }
+  .workflow-canvas-lane {
+    width: min(100%, 580px);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .workflow-start-node {
+    border: 1px solid #a7f3d0;
+    border-radius: 999px;
+    background: #ecfdf5;
+    padding: 9px 18px;
+    color: #065f46;
+    font-size: 12px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(5,150,105,.08);
+  }
+  .workflow-node-connector {
+    width: 2px;
+    height: 28px;
+    background: #cbd5e1;
+  }
+  .workflow-node-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .workflow-node-card {
+    width: 100%;
+    min-height: 72px;
+    padding: 13px 15px;
+    border: 1px solid #dbe3ee;
+    border-radius: 14px;
+    background: rgba(255,255,255,.98);
+    color: #1e293b;
+    text-align: left;
+    box-shadow: 0 6px 18px rgba(15,23,42,.06);
+    cursor: pointer;
+    transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+  }
+  .workflow-node-card:hover {
+    transform: translateY(-1px);
+    border-color: #b8c8dc;
+    box-shadow: 0 9px 22px rgba(15,23,42,.09);
+  }
+  .workflow-node-card.is-selected {
+    border-color: #0a84ff;
+    box-shadow: 0 0 0 3px rgba(10,132,255,.12), 0 9px 22px rgba(15,23,42,.09);
+  }
+  .workflow-node-card.is-disabled { opacity: .5; }
+  .workflow-node-kind {
+    display: block;
+    margin-bottom: 3px;
+    color: #7c8aa0;
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: .055em;
+    text-transform: uppercase;
+  }
+  .workflow-node-title {
+    display: block;
+    color: #172033;
+    font-size: 13px;
+    font-weight: 720;
+  }
+  .workflow-node-note {
+    display: block;
+    margin-top: 6px;
+    color: #64748b;
+    font-size: 10px;
+  }
+  .workflow-properties-panel {
+    padding: 12px;
+    overflow: auto;
+    max-height: 680px;
+  }
+  .workflow-properties-title,
+  .workflow-palette-title {
+    margin-bottom: 4px;
+    color: #172033;
+    font-size: 12px;
+    font-weight: 750;
+  }
+  .workflow-palette-help {
+    margin: 0 0 10px;
+    color: #718096;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+  @media (max-width: 1250px) {
+    .workflow-visual-shell {
+      grid-template-columns: 200px minmax(400px, 1fr) 320px;
+    }
+  }
+  @media (max-width: 980px) {
+    .workflow-visual-shell {
+      grid-template-columns: 190px minmax(0, 1fr);
+    }
+    .workflow-properties-panel {
+      grid-column: 1 / -1;
+      max-height: none;
+    }
+  }
+  @media (max-width: 720px) {
+    .workflow-visual-shell {
+      grid-template-columns: 1fr;
+    }
+    .workflow-node-palette,
+    .workflow-properties-panel {
+      max-height: 300px;
+    }
+    .workflow-canvas-surface {
+      min-height: 520px;
+      padding: 18px;
+    }
+  }
+`;
+
 const actionOptions = [
   { value: "CREATE_RECORD", label: "Create Record" },
   { value: "UPDATE_RECORD", label: "Update Record" },
@@ -458,32 +639,32 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   };
   const palette = registryOptions.filter((option) => option.value !== "WHEN");
   return (
-    <div className="grid min-h-[620px] gap-4 xl:grid-cols-[230px_minmax(420px,1fr)_380px]">
-      <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="mb-1 text-sm font-semibold text-slate-800">Elements</div>
-        <p className="mb-3 text-xs text-slate-500">Drag an element onto the flow. Registered actions appear automatically.</p>
-        <div className="max-h-[540px] space-y-1 overflow-auto pr-1">
-          {palette.map((option) => <button key={option.value} type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)} onClick={() => addFromPalette(option.value)} className="block w-full rounded-xl border border-transparent px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-200 hover:bg-slate-50">{option.label}</button>)}
+    <div className="workflow-visual-shell">
+      <aside className="workflow-node-palette">
+        <div className="workflow-palette-title">Elements</div>
+        <p className="workflow-palette-help">Drag an element onto the flow. Registered actions appear automatically.</p>
+        <div className="workflow-palette-scroll">
+          {palette.map((option) => <button key={option.value} type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)} onClick={() => addFromPalette(option.value)} className="workflow-palette-item">{option.label}</button>)}
         </div>
       </aside>
-      <main className="relative overflow-auto rounded-2xl border border-slate-200 bg-slate-50/70 p-5 shadow-inner" onDragOver={(e) => e.preventDefault()} onDrop={(e) => dropAt(e, workflow.steps.length)}>
-        <div className="mx-auto flex max-w-xl flex-col items-center">
-          <div className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-800">Start · {getTriggerLabel(workflow.trigger)}</div>
-          <div className="h-8 w-px bg-slate-300" />
-          {workflow.steps.map((step, index) => <div key={step.id} className="flex w-full flex-col items-center" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
-            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`w-full rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition ${selectedId === step.id ? "border-blue-400 ring-2 ring-blue-100" : "border-slate-200 hover:border-slate-300"} ${step.enabled === false ? "opacity-50" : ""}`}>
-              <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-400">{getActionLabel(step.type)}</span>
-              <span className="mt-0.5 block font-semibold text-slate-800">{step.label || getActionLabel(step.type)}</span>
-              {step.type === "CONDITION" ? <span className="mt-2 block text-xs text-slate-500">Decision branches are evaluated from metadata conditions.</span> : null}
+      <main className="workflow-canvas-surface" onDragOver={(e) => e.preventDefault()} onDrop={(e) => dropAt(e, workflow.steps.length)}>
+        <div className="workflow-canvas-lane">
+          <div className="workflow-start-node">Start · {getTriggerLabel(workflow.trigger)}</div>
+          <div className="workflow-node-connector" />
+          {workflow.steps.map((step, index) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
+            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""}`}>
+              <span className="workflow-node-kind">{getActionLabel(step.type)}</span>
+              <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
+              {step.type === "CONDITION" ? <span className="workflow-node-note">Decision branches are evaluated from metadata conditions.</span> : null}
             </button>
-            {index < workflow.steps.length - 1 ? <div className="flex h-9 items-center"><span className="h-full w-px bg-slate-300" /></div> : null}
+            {index < workflow.steps.length - 1 ? <div className="workflow-node-connector" /> : null}
           </div>)}
           {!workflow.steps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => addFromPalette("CREATE_RECORD")}>+ Add first element</button> : null}
           <div className="mt-3 text-center text-xs text-slate-400">Drop elements here to append · drag nodes to reorder</div>
         </div>
       </main>
-      <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="mb-3 text-sm font-semibold text-slate-800">Properties</div>
+      <aside className="workflow-properties-panel">
+        <div className="workflow-properties-title">Properties</div>
         {selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={(index) => { deleteStep(index); setSelectedId(null); }} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} /> : <p className="text-sm text-slate-500">Select a flow element to configure it.</p>}
       </aside>
     </div>
@@ -897,6 +1078,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
 
   return (
     <div className="space-y-4">
+      <style>{WORKFLOW_VISUAL_CSS}</style>
       <FlowGuide steps={guideSteps} current={guideStep} onSelect={navigateGuide} />
       <div id="workflow-trigger-section" className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
