@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Dojo connector">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#eef2f7"/></linearGradient>
+ <linearGradient id="one" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#19d8ff"/><stop offset=".48" stop-color="#0874ff"/><stop offset="1" stop-color="#071ca8"/></linearGradient>
+ <filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-opacity=".18"/></filter>
+ <filter id="ps" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-opacity=".25"/></filter>
+</defs>
+<rect x="28" y="28" width="456" height="456" rx="96" fill="url(#bg)" stroke="#dce3eb" stroke-width="3" filter="url(#s)"/>
+<path d="M120 356C82 319 76 169 138 115c53-46 240-44 291 12 43 47 40 155 4 212" fill="none" stroke="#4c5157" stroke-width="18" stroke-linecap="round" filter="url(#ps)"/>
+<g transform="translate(148 164)" filter="url(#ps)"><rect width="216" height="145" rx="38" fill="#fff"/><text x="25" y="101" font-family="Arial,Helvetica,sans-serif" font-size="86" font-weight="800" fill="#111418">dojo</text></g>
+<g filter="url(#ps)" transform="translate(166 350) rotate(-8)">
+ <rect x="0" y="0" width="84" height="76" rx="20" fill="#666c72"/>
+ <rect x="-18" y="22" width="28" height="34" rx="8" fill="#5a6066"/>
+ <rect x="74" y="15" width="54" height="12" rx="6" fill="#aeb5bc"/>
+ <rect x="74" y="47" width="54" height="12" rx="6" fill="#aeb5bc"/>
+</g>
+<path d="M274 484C365 436 413 355 484 295V484Z" fill="#fff" stroke="#e6ebf0" stroke-width="2"/>
+<g transform="translate(372 365)" filter="url(#ps)">
+ <path d="M50 0 98 28v56L50 112 0 84V28Z" fill="url(#one)"/>
+ <path d="M45 24 28 42h13v42h18V24Z" fill="#fff"/>
+</g>
+</svg>
