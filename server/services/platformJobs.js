@@ -15,27 +15,38 @@ export async function enqueuePlatformJob({ db, companyId, kind, payload, runAt =
   return result.rows[0] || null;
 }
 
-export async function claimDuePlatformJobs({ db, limit = 20 }) {
+export async function claimDuePlatformJobs({ db, limit = 20, leaseSeconds = 300 }) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 1, 1), 100);
+  const safeLease = Math.min(Math.max(Number(leaseSeconds) || 300, 30), 3600);
   const result = await db(
     `WITH due AS (
       SELECT id FROM platform_action_jobs
-      WHERE status='PENDING' AND next_attempt_at <= NOW()
-      ORDER BY next_attempt_at, created_at
+      WHERE (
+        (status='PENDING' AND next_attempt_at <= NOW())
+        OR (status='RUNNING' AND locked_until IS NOT NULL AND locked_until <= NOW())
+      )
+      ORDER BY COALESCE(next_attempt_at, created_at), created_at
       FOR UPDATE SKIP LOCKED LIMIT $1
     )
-    UPDATE platform_action_jobs j SET status='RUNNING', updated_at=NOW()
-    FROM due WHERE j.id=due.id RETURNING j.*`,
-    [Math.min(Math.max(Number(limit) || 1, 1), 100)]
+    UPDATE platform_action_jobs j
+       SET status='RUNNING',
+           claimed_at=NOW(),
+           locked_until=NOW() + ($2 * INTERVAL '1 second'),
+           updated_at=NOW()
+      FROM due
+     WHERE j.id=due.id
+     RETURNING j.*`,
+    [safeLimit, safeLease]
   );
   return result.rows;
 }
 
 export async function completePlatformJob({ db, id }) {
-  await db("UPDATE platform_action_jobs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND status='RUNNING'", [id]);
+  await db("UPDATE platform_action_jobs SET status='COMPLETED',completed_at=NOW(),locked_until=NULL,updated_at=NOW() WHERE id=$1 AND status='RUNNING'", [id]);
 }
 
 export async function failPlatformJob({ db, id, error, retryable = true }) {
-  const result = await db("UPDATE platform_action_jobs SET attempts=attempts+1,last_error=$2,status=CASE WHEN $3=false OR attempts+1 >= $4 THEN 'FAILED' ELSE 'PENDING' END,next_attempt_at=CASE WHEN $3=false OR attempts+1 >= $4 THEN NULL ELSE NOW() + ((POWER(2, attempts + 1) || ' minutes')::interval) END,updated_at=NOW() WHERE id=$1 RETURNING *", [id, String(error?.message || error || "Job failed").slice(0, 2000), retryable, MAX_ATTEMPTS]);
+  const result = await db("UPDATE platform_action_jobs SET attempts=attempts+1,last_error=$2,status=CASE WHEN $3=false OR attempts+1 >= $4 THEN 'FAILED' ELSE 'PENDING' END,next_attempt_at=CASE WHEN $3=false OR attempts+1 >= $4 THEN NULL ELSE NOW() + ((POWER(2, attempts + 1) || ' minutes')::interval) END,locked_until=NULL,updated_at=NOW() WHERE id=$1 RETURNING *", [id, String(error?.message || error || "Job failed").slice(0, 2000), retryable, MAX_ATTEMPTS]);
   return result.rows[0] || null;
 }
 

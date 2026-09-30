@@ -38,6 +38,7 @@ import {
 
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
 import { createPlatformExecutionContext, applyExecutionContext } from "./platformExecutionContext.js";
+import { createExecutionGuard, claimPersistentExecution, completePersistentExecution, executionFingerprint } from "./platformExecutionGuard.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
@@ -2356,13 +2357,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: async ({ action, db, companyId, req, record, previousRecord, object, fields, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
       const workflowKey = action.workflowId || action.subflowId || action.workflow?.id || action.workflow?.key || "inline-subflow";
       const stack = Array.isArray(workflowStack) ? workflowStack.slice() : [];
-      if (stack.includes(workflowKey)) {
-        throw new Error(`Workflow recursion detected for subflow "${workflowKey}"`);
-      }
-      const nextDepth = Number(workflowDepth || 0) + 1;
-      if (nextDepth > 8) {
-        throw new Error(`Maximum workflow depth exceeded for subflow "${workflowKey}"`);
-      }
+      const parentGuard = context.executionGuard || createExecutionGuard({ maxDepth: 8, chain: stack });
+      const childGuard = parentGuard.enter(workflowKey);
+      const nextDepth = childGuard.chain.length;
       const subflowDefinition = action.workflow && Array.isArray(action.workflow.actions)
         ? action.workflow
         : (() => {
@@ -2428,7 +2425,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         req,
         companyId: targetCompanyId || runtimeCompanyId,
         workflowDepth: nextDepth,
-        workflowStack: [...stack, workflowKey],
+        workflowStack: [...childGuard.chain],
+        executionGuard: childGuard,
         workflowId: workflowKey,
         parentRunId: runId || null,
         runId: childRun?.id || runId || null,
@@ -3372,14 +3370,64 @@ async function compensateCompletedSteps(completed, context, originalError) {
 export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
 
-  const executionContext = await createPlatformExecutionContext({
+  const workflowIdentity = context.workflowId || context.executionContext?.globals?.$Flow?.id || (context.runId ? `run:${context.runId}` : null);
+  const executionGuard = context.executionGuard
+    || (workflowIdentity
+      ? createExecutionGuard({
+          maxDepth: 8,
+          chain: Array.isArray(context.workflowStack) ? context.workflowStack : [],
+        }).enter(workflowIdentity)
+      : createExecutionGuard({ maxDepth: 8, chain: Array.isArray(context.workflowStack) ? context.workflowStack : [] }));
+
+  let persistentClaim = null;
+  if (context.db && context.idempotencyKey && (context.companyId || context.req?.user?.companyId)) {
+    persistentClaim = await claimPersistentExecution({
+      db: context.db,
+      companyId: context.companyId || context.req?.user?.companyId,
+      scope: `workflow:${workflowIdentity || "anonymous"}`,
+      idempotencyKey: context.idempotencyKey,
+      fingerprint: executionFingerprint({
+        workflowIdentity,
+        recordId: context.recordId || context.record?.id || null,
+        previousRecordId: context.previousRecord?.id || null,
+        actionCount: actions.length,
+      }),
+      metadata: { runId: context.runId || null, workflowIdentity },
+    });
+    if (!persistentClaim.claimed) {
+      if (persistentClaim.row?.status === "COMPLETED") {
+        return Array.isArray(persistentClaim.row?.result) ? persistentClaim.row.result : [];
+      }
+      return [{ action: "WORKFLOW", result: { status: "skipped", duplicate: true, idempotencyKey: context.idempotencyKey } }];
+    }
+  }
+
+  let executionContext;
+  try {
+    executionContext = await createPlatformExecutionContext({
+      ...context,
+      workflowId: context.workflowId || context.executionContext?.globals?.$Flow?.id || null,
+      workflowVersion: context.workflowVersion || context.executionContext?.globals?.$Flow?.version || null,
+      parentRunId: context.parentRunId || context.executionContext?.globals?.$Flow?.runId || null,
+      executionContext: context.executionContext || null,
+    });
+  } catch (error) {
+    if (persistentClaim?.row?.id && context.db) {
+      await completePersistentExecution({
+        db: context.db,
+        claimId: persistentClaim.row.id,
+        status: "FAILED",
+        error: errorDetails(error),
+      });
+    }
+    throw error;
+  }
+  const runtimeContext = applyExecutionContext({
     ...context,
-    workflowId: context.workflowId || context.executionContext?.globals?.$Flow?.id || null,
-    workflowVersion: context.workflowVersion || context.executionContext?.globals?.$Flow?.version || null,
-    parentRunId: context.parentRunId || context.executionContext?.globals?.$Flow?.runId || null,
-    executionContext: context.executionContext || null,
-  });
-  const runtimeContext = applyExecutionContext(context, executionContext);
+    executionGuard,
+    workflowDepth: executionGuard.chain.length,
+    workflowStack: [...executionGuard.chain],
+  }, executionContext);
 
   const results = [];
   const completed = [];
@@ -3430,8 +3478,19 @@ export async function executeWorkflowActions({ actions, ...context }) {
           [details.message, JSON.stringify({ rootError: details, compensationFailures }), runtimeContext.runId, runtimeContext.companyId || runtimeContext.req?.user?.companyId]
         );
       }
+      if (persistentClaim?.row?.id) {
+        await completePersistentExecution({
+          db: runtimeContext.db,
+          claimId: persistentClaim.row.id,
+          status: "FAILED",
+          error: details,
+        });
+      }
       throw new WorkflowExecutionError(details, compensationFailures);
     }
+  }
+  if (persistentClaim?.row?.id) {
+    await completePersistentExecution({ db: runtimeContext.db, claimId: persistentClaim.row.id, status: "COMPLETED", result: results });
   }
   return results;
 }

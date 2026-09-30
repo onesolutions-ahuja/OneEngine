@@ -41,6 +41,8 @@ import { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.j
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { runRecordSaveLifecycle, runRecordDeleteLifecycle, RecordLifecycleError } from "../services/platformRecordLifecycle.js";
 import { withPlatformTransaction, PlatformTransactionError } from "../services/platformTransaction.js";
+import { executeBulk } from "../services/platformBulkExecution.js";
+import { executionFingerprint } from "../services/platformExecutionGuard.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
@@ -4996,6 +4998,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
     }
 
+    if (transaction) {
+      const mutationIdentity = action === "update" && recordId
+        ? `record:${recordId}`
+        : `create:${executionFingerprint(input || {})}`;
+      await runtimeDb(
+        "SELECT pg_advisory_xact_lock(hashtext($1))",
+        [`${req.user.companyId}:${object.id}:${mutationIdentity}`]
+      );
+    }
+
     const permissionAction = action === "update" ? "edit" : "create";
     if (!(await hasPlatformObjectPermission(db, req, object.id, permissionAction))) {
       return { status: 403, code: "IMPORT_PERMISSION_REQUIRED", message: `${permissionAction} permission is required` };
@@ -5327,6 +5339,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         pool,
         handler: async (transaction) => {
           const runtimeDb = transaction.query;
+          await runtimeDb(
+            "SELECT pg_advisory_xact_lock(hashtext($1))",
+            [`${req.user.companyId}:${object.id}:${req.params.recordId}`]
+          );
           const lifecycle = await runRecordDeleteLifecycle({
         initialState: {
           object,
@@ -6055,9 +6071,13 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const results = [];
       const errors = [];
       const csvSeen = new Map();
+      const writePlan = [];
       let created = 0;
       let updated = 0;
       let skipped = 0;
+
+      // Validation remains intentionally ordered so CSV duplicate detection,
+      // upsert target resolution, and warnings are deterministic.
       for (const { row, lineNumber } of rows) {
         const { input, existingId } = buildImportRowInput(row, fieldByApiName);
         const action = resolveImportAction(operation, existingId);
@@ -6071,22 +6091,78 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
           const finalAction = validation.action || action;
           const targetPlan = await resolveImportTarget(req, object, fields, input, { operation, existingId });
           const targetId = finalAction === "update" ? targetPlan.targetId : null;
-          const saved = await executeCanonicalRecordWrite({ req, object, metadataFields, fields, input, action: finalAction, recordId: targetId });
-          if (saved.status !== 200) {
-            errors.push({ row: lineNumber, status: "error", code: saved.code, message: saved.message, rowData: input, originalRow: row });
-            skipped += 1;
-            continue;
-          }
-          if (finalAction === "update") {
-            updated += 1;
-            results.push({ row: lineNumber, action: "update", id: saved.id, status: "updated", messages: saved.messages });
-          } else {
-            created += 1;
-            results.push({ row: lineNumber, action: "create", id: saved.id || null, status: "created", messages: saved.messages });
-          }
+          writePlan.push({ row, lineNumber, input, finalAction, targetId });
         } catch (error) {
-          errors.push({ row: lineNumber, status: "error", message: error.message || "Import failed", rowData: input, originalRow: row });
+          errors.push({ row: lineNumber, status: "error", message: error.message || "Import validation failed", rowData: input, originalRow: row });
           skipped += 1;
+        }
+      }
+
+      const requestedConcurrency = Math.min(Math.max(Number(req.body?.concurrency) || 4, 1), 8);
+      const writeResults = await executeBulk({
+        items: writePlan,
+        concurrency: requestedConcurrency,
+        keyForItem: (item, index) => item.finalAction === "update" && item.targetId
+          ? `update:${item.targetId}`
+          : `create:${item.lineNumber}:${index}`,
+        onDuplicate: async (item) => ({
+          status: "failed",
+          error: {
+            code: "DUPLICATE_BULK_TARGET",
+            message: "Multiple import rows resolved to the same target record",
+          },
+          item,
+        }),
+        handler: async (item, index) => {
+          const itemReq = Object.create(req);
+          itemReq._platformAutomationGuard = undefined;
+          itemReq._platformAutomationExecutionId = `${req.headers?.["x-idempotency-key"] || req.headers?.["x-request-id"] || "bulk"}:${item.lineNumber}:${index}`;
+          const saved = await executeCanonicalRecordWrite({
+            req: itemReq,
+            object,
+            metadataFields,
+            fields,
+            input: item.input,
+            action: item.finalAction,
+            recordId: item.targetId,
+          });
+          if (saved.status !== 200) {
+            return {
+              status: "failed",
+              error: { code: saved.code, message: saved.message },
+              item,
+            };
+          }
+          return {
+            status: "completed",
+            item,
+            saved,
+          };
+        },
+      });
+
+      for (const outcome of writeResults) {
+        if (!outcome) continue;
+        const item = outcome.item;
+        if (outcome.status !== "completed") {
+          errors.push({
+            row: item?.lineNumber || null,
+            status: "error",
+            code: outcome.error?.code || "IMPORT_WRITE_FAILED",
+            message: outcome.error?.message || "Import failed",
+            rowData: item?.input || null,
+            originalRow: item?.row || null,
+          });
+          skipped += 1;
+          continue;
+        }
+        const { saved } = outcome;
+        if (item.finalAction === "update") {
+          updated += 1;
+          results.push({ row: item.lineNumber, action: "update", id: saved.id, status: "updated", messages: saved.messages });
+        } else {
+          created += 1;
+          results.push({ row: item.lineNumber, action: "create", id: saved.id || null, status: "created", messages: saved.messages });
         }
       }
       const summary = { created, updated, skipped, failed: errors.length };

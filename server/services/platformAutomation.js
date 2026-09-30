@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { evaluateCondition } from "./platformConditions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { executeWorkflowActions } from "./platformWorkflow.js";
 import { systemObject, isExtensionField } from "./platformSystemObjects.js";
 import { createPlatformExecutionContext } from "./platformExecutionContext.js";
+import { createExecutionGuard } from "./platformExecutionGuard.js";
 
 function apiRecord(fields, record) {
   const result = { ...(record || {}) };
@@ -22,10 +24,22 @@ function ruleMatches(rule, fields, record, previousRecord) {
 }
 
 export async function executePlatformAutomations({ db, object, fields, record, previousRecord = null, recordId, trigger, req, writeExtension, mutateField }) {
-  if (!req || req._platformAutomationDepth > 0) return { record, messages: [], executions: [] };
+  if (!req) return { record, messages: [], executions: [] };
   const allowedTriggers = new Set(["after_create", "after_update", "after_save", "before_save", "before_create", "before_update", "field_changed", "before_delete", "after_delete"]);
   if (!allowedTriggers.has(trigger)) return { record, messages: [], executions: [] };
-  req._platformAutomationDepth = (req._platformAutomationDepth || 0) + 1;
+
+  const parentGuard = req._platformAutomationGuard || createExecutionGuard({ maxDepth: 8 });
+  const identity = `automation:${object?.id || object?.object_key || "object"}:${recordId || record?.id || "new"}:${trigger}`;
+  let guard;
+  try {
+    guard = parentGuard.enter(identity);
+  } catch (error) {
+    if (error?.code === "EXECUTION_RECURSION_DETECTED") {
+      return { record, messages: [], executions: [{ action: "AUTOMATION", status: "skipped", reason: "recursive_execution", identity }] };
+    }
+    throw error;
+  }
+  req._platformAutomationGuard = guard;
   try {
   let rules;
   try {
@@ -95,7 +109,13 @@ export async function executePlatformAutomations({ db, object, fields, record, p
         continue;
       }
       if (["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST"].includes(action.type)) {
-        const idempotencyKey = `${rule.id}:${recordId}:${executions.length}:${action.type}`;
+        const requestExecutionKey = req.headers?.["x-idempotency-key"]
+          || req.headers?.["x-request-id"]
+          || req.executionContext?.globals?.$Request?.correlationId
+          || req._platformAutomationExecutionId
+          || randomUUID();
+        req._platformAutomationExecutionId ||= requestExecutionKey;
+        const idempotencyKey = `${requestExecutionKey}:${rule.id}:${recordId || "new"}:${executions.length}:${action.type}`;
         const jobAction = {
           type: action.type,
           templateId: action.templateId || null,
@@ -159,6 +179,6 @@ export async function executePlatformAutomations({ db, object, fields, record, p
   }
   return { record: nextRecord, messages, executions };
   } finally {
-    req._platformAutomationDepth -= 1;
+    req._platformAutomationGuard = parentGuard;
   }
 }

@@ -2331,6 +2331,7 @@ async function startServer() {
                   workflowId: workflow.id,
                   trigger: { type: "scheduled", operation: "EXECUTE" },
                   source: { type: "JOB", capability: "PLATFORM_SCHEDULED_WORKFLOW" },
+                  idempotencyKey: job.idempotency_key || null,
                 });
                 await db(
                   "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
@@ -2421,6 +2422,7 @@ async function startServer() {
                   trigger: { type: payload.eventType || workflow.trigger_key, operation: "EVENT" },
                   source: { type: "JOB", capability: "PLATFORM_EVENT_WORKFLOW" },
                   channel: { type: "PLATFORM_EVENT", eventId: payload.eventId || null, eventType: payload.eventType || workflow.trigger_key },
+                  idempotencyKey: job.idempotency_key || null,
                   writeAudit,
                   createInventoryMovement,
                 });
