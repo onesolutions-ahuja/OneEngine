@@ -1,7 +1,7 @@
 import useOnlineOrderActions from "./useOnlineOrderActions.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { apiRequest } from "../../services/api.js";
+import { apiRequest, loadSessionPermissions } from "../../services/api.js";
 import OnlineOrderCard from "../../components/online/OnlineOrderCard.jsx";
 import CompleteOrderModal from "../../components/online/CompleteOrderModal.jsx";
 import { printOnlineOrder } from "../../utils/onlineOrderPrint.js";
@@ -39,26 +39,19 @@ export default function OnlineOrdersPrep({ permissions = null }) {
       return;
     }
     let live = true;
-    apiRequest("/api/auth/me/permissions")
+    loadSessionPermissions()
       .then((response) => {
         if (!live) return;
-        setResolvedPermissions({
-          isAdmin: response?.data?.isAdmin === true,
-          permissions: Array.isArray(response?.data?.permissions) ? response.data.permissions : [],
-        });
+        setResolvedPermissions({ permissions: Array.isArray(response?.permissions) ? response.permissions : [] });
       })
       .catch(() => {
-        if (live) setResolvedPermissions({ isAdmin: false, permissions: [] });
+        if (live) setResolvedPermissions({ permissions: [] });
       });
     return () => { live = false; };
   }, [permissions]);
 
-  const canView =
-    resolvedPermissions?.isAdmin ||
-    (resolvedPermissions?.permissions || []).includes("online_orders.view");
-  const canManage =
-    resolvedPermissions?.isAdmin ||
-    (resolvedPermissions?.permissions || []).includes("online_orders.manage");
+  const canView = (resolvedPermissions?.permissions || []).includes("online_orders.view");
+  const canManage = (resolvedPermissions?.permissions || []).includes("online_orders.manage");
 
   const [orders, setOrders] = useState([]);
   const [details, setDetails] = useState({});
