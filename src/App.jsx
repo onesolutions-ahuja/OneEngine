@@ -40,12 +40,29 @@ class LazyLoadBoundary extends Component {
     console.error('Lazy-loaded page failed', error)
   }
 
+  componentDidUpdate(prevProps) {
+    if (this.state.error && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ error: null })
+    }
+  }
+
+  retry = () => {
+    try {
+      window.sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+      const url = new URL(window.location.href)
+      url.searchParams.set('_refresh', Date.now().toString())
+      window.location.replace(url.toString())
+    } catch {
+      window.location.reload()
+    }
+  }
+
   render() {
     if (!this.state.error) return this.props.children
     return (
       <div className="route-loading" role="alert">
         <span>Unable to load this page.</span>
-        <button type="button" onClick={() => window.location.reload()}>Retry</button>
+        <button type="button" onClick={this.retry}>Retry</button>
       </div>
     )
   }
@@ -2889,7 +2906,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : null}
       </AnimatePresence>
 
-      <LazyLoadBoundary>
+      <LazyLoadBoundary resetKey={`${activeApp || ""}:${routeState?.section || ""}`}>
       <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>
         {activeApp === 'developer' ? (
           canManagePlatform ? (
