@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { apiRequest } from '../../services/api'
+import { apiRequest, loadSessionPermissions } from '../../services/api'
 
 export default function AiAssistantSettings() {
   const [state, setState] = useState(null)
   const [permissions, setPermissions] = useState([])
-  const [isAdmin, setIsAdmin] = useState(false)
   const [allowance, setAllowance] = useState('0')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -17,7 +16,7 @@ export default function AiAssistantSettings() {
       setError('')
       const [licence, permissionResponse] = await Promise.all([
         apiRequest('/api/settings/jarves').catch(() => null),
-        apiRequest('/api/auth/me/permissions').catch(() => null),
+        loadSessionPermissions().catch(() => null),
       ])
       if (licence?.success) {
         setState(licence.data || null)
@@ -25,10 +24,7 @@ export default function AiAssistantSettings() {
       } else {
         setState(null)
       }
-      if (permissionResponse?.success) {
-        setPermissions(permissionResponse.data?.permissions || [])
-        setIsAdmin(permissionResponse.data?.isAdmin === true)
-      }
+      setPermissions(permissionResponse?.permissions || [])
     } catch (err) {
       setError(err?.message || 'Unable to load JARVES licence state')
     } finally {
@@ -38,7 +34,7 @@ export default function AiAssistantSettings() {
 
   useEffect(() => { void load() }, [])
 
-  const canManage = isAdmin || permissions.includes('settings.manage')
+  const canManage = permissions.includes('settings.manage')
 
   const save = async () => {
     const next = Number.parseInt(allowance, 10)
