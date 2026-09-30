@@ -323,7 +323,7 @@ function DockItem({ item, mouseX, onActivate }) {
   )
 }
 
-function LockScreen({ onUnlock, onSignOut }) {
+function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const now = useClock()
   const [sessionMode] = useState(() => hasSession())
   const storedUser = getStoredUser()
@@ -466,10 +466,16 @@ function LockScreen({ onUnlock, onSignOut }) {
               <button
                 className="login-submit"
                 type="submit"
-                disabled={submitting || !username.trim() || !password}
+                disabled={submitting || preparing || !username.trim() || !password}
               >
-                {submitting ? 'Signing in…' : 'Sign In'}
+                {preparing ? 'Preparing company context…' : submitting ? 'Signing in…' : 'Sign In'}
               </button>
+              {preparing ? (
+                <div className="login-preparing" role="status" aria-live="polite">
+                  <span className="login-preparing-spinner" aria-hidden="true" />
+                  <span>Starting onePOS…</span>
+                </div>
+              ) : null}
 
               <div className="login-divider" aria-hidden="true"><span>or</span></div>
 
@@ -2725,8 +2731,12 @@ export default function App() {
   }, [locked])
 
   const unlock = () => {
-    if (transitioning) return
+    if (transitioning || pendingUnlock) return
+    setSessionContextReady(false)
     setPendingUnlock(true)
+    ensureActingCompanyContext()
+      .catch(() => '')
+      .finally(() => setSessionContextReady(true))
   }
 
   useEffect(() => {
@@ -2757,7 +2767,7 @@ export default function App() {
   return (
     <div className={`app-shell ${transitioning ? 'is-transitioning' : ''}`}>
       {locked ? (
-        <LockScreen onUnlock={unlock} onSignOut={signOut} />
+        <LockScreen onUnlock={unlock} onSignOut={signOut} preparing={pendingUnlock && !sessionContextReady} />
       ) : (
         <Desktop onLock={lock} onSignOut={signOut} />
       )}
