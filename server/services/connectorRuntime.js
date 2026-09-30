@@ -319,8 +319,8 @@ async function loadPersistedCandidates({ db, companyId, storeId, tillId }) {
 async function persistConnectorHealth(db, instance, state) {
   await db(
     `UPDATE integration_connections
-        SET connection_status=$1,last_error=$2,
-            last_connected_at=CASE WHEN $1='CONNECTED' THEN NOW() ELSE last_connected_at END,
+        SET connection_status=$1::varchar,last_error=$2,
+            last_connected_at=CASE WHEN $1::varchar='CONNECTED' THEN NOW() ELSE last_connected_at END,
             updated_at=NOW()
       WHERE id=$3 AND company_id=$4`,
     [state.state, state.lastError || null, instance.id, instance.company_id]
