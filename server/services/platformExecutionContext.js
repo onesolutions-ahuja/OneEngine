@@ -97,6 +97,19 @@ export async function createPlatformExecutionContext({
   const reqUser = req?.user || {};
   const inherited = executionContext?.globals || executionContext || {};
   const inheritedCompany = inherited.$Company?.id || inherited.companyId || null;
+  const inheritedUserId = inherited.$User?.id || null;
+  if (reqUser.companyId && inheritedCompany && String(reqUser.companyId) !== String(inheritedCompany)) {
+    const error = new Error("Request company does not match inherited execution context");
+    error.code = "EXECUTION_CONTEXT_COMPANY_MISMATCH";
+    error.status = 403;
+    throw error;
+  }
+  if (reqUser.id && inheritedUserId && String(reqUser.id) !== String(inheritedUserId)) {
+    const error = new Error("Request actor does not match inherited execution context");
+    error.code = "EXECUTION_CONTEXT_USER_MISMATCH";
+    error.status = 403;
+    throw error;
+  }
   const authoritativeCompanyId = reqUser.companyId || inheritedCompany || companyId || null;
   const inheritedMode = inherited.$System?.executionMode || null;
   const requestedMode = String(executionMode || req?.executionMode || inheritedMode || "USER").toUpperCase();
@@ -110,7 +123,7 @@ export async function createPlatformExecutionContext({
   }
 
   let persistedUser = null;
-  const actorId = reqUser.id || inherited.$User?.id || (mode === "SYSTEM" ? userId : null);
+  const actorId = reqUser.id || inheritedUserId || (mode === "SYSTEM" ? userId : null);
   if (db && typeof db === "function" && actorId && authoritativeCompanyId) {
     try {
       const result = await db(
