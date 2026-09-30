@@ -28,6 +28,7 @@ import {
   buildOneConnectionAuthHeaders,
   resolveOneConnection,
   saveOneConnectionCredential,
+  clearOneConnectionCredential,
 } from "../services/oneConnection.js";
 import { buildPayload } from "../services/integrationFieldResolver.js";
 import { getIntegrationDispatchStatus } from "../services/integrationDispatcher.js";
@@ -256,7 +257,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
         const result = await db(
           `INSERT INTO integration_connections
              (company_id, store_id, name, provider_name, integration_type, base_url, auth_type, credentials_encrypted, enabled, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NULL,$8,$9)
            RETURNING *`,
           [
             req.user.companyId,
@@ -266,12 +267,25 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
             integrationType ?? integration_type ?? "generic",
             url,
             auth,
-            encryptCredentials(credentials ?? null),
             enabled !== false,
             req.user.id,
           ]
         );
-        const row = result.rows[0];
+        let row = result.rows[0];
+        if (credentials && Object.keys(credentials).length) {
+          await saveOneConnectionCredential({
+            db,
+            companyId: req.user.companyId,
+            connectionId: row.id,
+            connectorId: row.connector_definition_id || null,
+            credentialKey: "default",
+            name: `${row.name} credential`,
+            secrets: credentials,
+            userId: req.user.id || null,
+            metadata: { authType: auth },
+          });
+          row = await loadIntegration(row.id, req.user.companyId);
+        }
         await writeAudit(req.user.companyId, req.user.id, "integration_created", "integration_connection", row.id, {
           name: row.name,
           authType: row.auth_type,
@@ -370,7 +384,6 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           if (credentials !== null && (typeof credentials !== "object" || Array.isArray(credentials))) {
             return res.status(400).json({ success: false, message: "credentials must be an object" });
           }
-          set("credentials_encrypted", encryptCredentials(credentials ?? null));
         }
         if (storeId !== undefined || store_id !== undefined) {
           const nextStoreId = storeId ?? store_id ?? null;
@@ -384,21 +397,48 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
         }
         if (enabled !== undefined) set("enabled", Boolean(enabled));
 
-        if (updates.length === 0) {
+        if (updates.length === 0 && credentials === undefined) {
           return res.json({ success: true, data: toPublicIntegration(existing) });
         }
 
-        updates.push(`updated_at = NOW()`);
-        params.push(existing.id);
-        const result = await db(
-          `UPDATE integration_connections SET ${updates.join(", ")} WHERE id = $${params.length} RETURNING *`,
-          params
-        );
+        let row = existing;
+        if (updates.length) {
+          updates.push(`updated_at = NOW()`);
+          params.push(existing.id);
+          const result = await db(
+            `UPDATE integration_connections SET ${updates.join(", ")} WHERE id = ${params.length} RETURNING *`,
+            params
+          );
+          row = result.rows[0];
+        }
+
+        if (credentials !== undefined) {
+          if (credentials === null || Object.keys(credentials).length === 0) {
+            await clearOneConnectionCredential({
+              db,
+              companyId: req.user.companyId,
+              connectionId: existing.id,
+            });
+          } else {
+            await saveOneConnectionCredential({
+              db,
+              companyId: req.user.companyId,
+              connectionId: existing.id,
+              connectorId: row.connector_definition_id || null,
+              credentialKey: "default",
+              name: `${row.name || existing.name} credential`,
+              secrets: credentials,
+              userId: req.user.id || null,
+              metadata: { authType: nextAuthType },
+            });
+          }
+          row = await loadIntegration(existing.id, req.user.companyId);
+        }
         await writeAudit(req.user.companyId, req.user.id, "integration_updated", "integration_connection", existing.id, {
           fields: updates.filter((u) => !u.startsWith("credentials")).map((u) => u.split(" ")[0]),
           credentialsReplaced: credentials !== undefined,
         });
-        res.json({ success: true, data: toPublicIntegration(result.rows[0]) });
+        res.json({ success: true, data: toPublicIntegration(row) });
       } catch (error) {
         console.error("Update integration error:", error);
         res.status(500).json({ success: false, message: "Unable to update integration" });
