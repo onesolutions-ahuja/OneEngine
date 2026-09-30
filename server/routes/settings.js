@@ -17,7 +17,7 @@ import {
 } from "../services/jarvis/licensing.js";
 import { destinationFor, isValidLandingPage, normalizeDeviceProfile } from "../services/runtimeAccess.js";
 import { listPaymentMethods, ensureDefaultPaymentMethods, ensureConnectorPaymentMethods } from "../services/paymentMethods.js";
-import { executeWorkflowAction } from "../services/platformWorkflow.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { normalizePlatformTheme } from "../src/utils/platformTheme.js";
 
 export default function createSettingsRouter({
@@ -1087,12 +1087,15 @@ export default function createSettingsRouter({
       let storesResult;
       try {
         [discovery, storesResult] = await Promise.all([
-          executeWorkflowAction({
+          executeSystemWorkflow({
             db,
-            req,
             companyId,
-            action: { type: "UBER_GET_STORES" },
-          }),
+            userId: req.user.id || null,
+            systemKey: "action:UBER_GET_STORES",
+            req,
+            input: {},
+            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "UBER_GET_STORES" },
+          }).then((execution) => execution.result),
           db("SELECT id FROM stores WHERE company_id=$1 AND active=true", [companyId]),
         ]);
       } catch (error) {
@@ -1217,12 +1220,16 @@ export default function createSettingsRouter({
         if (requestedEnvironment !== currentConfig.environment) {
           return res.status(400).json({ success: false, message: "Save the Uber environment, then retrieve and select a store for that environment" });
         }
-        const discovery = await executeWorkflowAction({
+        const discoveryExecution = await executeSystemWorkflow({
           db,
-          req,
           companyId: req.user.companyId,
-          action: { type: "UBER_GET_STORES" },
+          userId: req.user.id || null,
+          systemKey: "action:UBER_GET_STORES",
+          req,
+          input: {},
+          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "UBER_GET_STORES" },
         });
+        const discovery = discoveryExecution.result;
         const stores = Array.isArray(discovery?.data?.stores)
           ? discovery.data.stores
           : Array.isArray(discovery?.data)
