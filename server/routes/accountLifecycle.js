@@ -104,13 +104,15 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
       UPDATE users u SET password_hash=$2,must_change_password=FALSE,updated_at=NOW()
        FROM claimed c WHERE u.id=c.user_id AND u.company_id=c.company_id
        RETURNING u.id
-    ) SELECT id FROM changed`,[hashAccountToken(token),passwordHash]);
+    ) SELECT id,company_id,user_id FROM changed`,[hashAccountToken(token),passwordHash]);
     if(!completed.rows.length)return res.status(400).json({success:false,message:"Reset link is invalid or expired"});
+    await req.ensureBusinessCommandRun?.({ companyId: completed.rows[0].company_id, userId: completed.rows[0].user_id || null });
     res.json({success:true});
   });
   router.post("/auth/registration/complete", async(req,res)=>{
     const {token,password}=req.body||{}; if(!token||String(password||"").length<8)return res.status(400).json({success:false,message:"A valid token and password of at least 8 characters are required"});
     const t=await consumeAccountToken(db,{token,purpose:"REGISTRATION"}); if(!t)return res.status(400).json({success:false,message:"Registration link is invalid or expired"});
+    await req.ensureBusinessCommandRun?.({ companyId: t.company_id, userId: t.user_id || null });
     await db("UPDATE users SET password_hash=$1,active=TRUE,must_change_password=FALSE,updated_at=NOW() WHERE id=$2 AND company_id=$3",[await bcrypt.hash(password,12),t.user_id,t.company_id]);
     res.json({success:true,data:{next:"POLICY_ONBOARDING"}});
   });
