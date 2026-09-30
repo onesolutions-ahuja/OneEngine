@@ -674,6 +674,7 @@ function readRoute() {
     : window.location.pathname
   const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
   if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'general' }
+  if (parts[0] === 'dashboard') return { app: 'dashboard', section: null }
   if (parts[0] === 'till') return { app: 'till', section: null }
   if (parts[0] === 'customer-display') return { app: 'customer-display', section: null }
   if (parts[0] === 'profile') return { app: 'profile', section: null }
@@ -715,6 +716,8 @@ function setRoute(app, section = null, options = {}) {
   const base = APP_BASE || ''
   const next = app === 'settings'
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
+    : app === 'dashboard'
+      ? `${base}/dashboard`
     : app === 'till'
       ? `${base}/till`
       : app === 'profile'
