@@ -206,6 +206,48 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
   }
 
+  async function marketplaceEligibilitySnapshot(companyId) {
+    const [bundleResult, tierResult] = await Promise.all([
+      db(
+        `SELECT b.bundle_key
+           FROM company_bundle_assignments a
+           JOIN licence_bundles b ON b.id=a.bundle_id
+          WHERE a.company_id=$1 AND a.active=true AND b.active=true
+            AND (a.starts_at IS NULL OR a.starts_at<=NOW())
+            AND (a.expires_at IS NULL OR a.expires_at>NOW())`,
+        [companyId]
+      ),
+      db(
+        `SELECT t.tier_key
+           FROM company_tier_assignments a
+           JOIN licence_tiers t ON t.id=a.tier_id
+          WHERE a.company_id=$1 AND a.active=true AND t.active=true
+            AND (a.starts_at IS NULL OR a.starts_at<=NOW())
+            AND (a.expires_at IS NULL OR a.expires_at>NOW())`,
+        [companyId]
+      ),
+    ]);
+    return {
+      bundleKeys: new Set(bundleResult.rows.map((row) => row.bundle_key)),
+      tierKeys: new Set(tierResult.rows.map((row) => row.tier_key)),
+    };
+  }
+
+  function marketplaceEligibleFromSnapshot(companyId, entry, snapshot) {
+    const allowedCompanies = Array.isArray(entry.allowed_companies) ? entry.allowed_companies : [];
+    const allowedBundles = Array.isArray(entry.allowed_bundles) ? entry.allowed_bundles : [];
+    const availableTiers = Array.isArray(entry.available_tiers) ? entry.available_tiers : [];
+
+    if (allowedCompanies.length && !allowedCompanies.includes(companyId)) return false;
+    const bundleAllowed = !allowedBundles.length || allowedBundles.some((key) => snapshot.bundleKeys.has(key));
+    // Preserve the existing eligibility semantics: available_tiers may be
+    // satisfied by either a matching bundle key or an assigned tier key.
+    const tierAllowed = !availableTiers.length || availableTiers.some(
+      (key) => snapshot.bundleKeys.has(key) || snapshot.tierKeys.has(key)
+    );
+    return bundleAllowed && tierAllowed;
+  }
+
 
 
   function packagePlanCompanyAllowed(companyId, plan) {
@@ -333,7 +375,7 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
         [req.user.companyId]
       );
 
-      const [packages, entitlements, requests, trials] = await Promise.all([
+      const [packages, entitlements, requests, trials, eligibilitySnapshot] = await Promise.all([
         packageState(result.rows, req.user.companyId),
         getCompanyEntitlements(db, req.user.companyId),
         db("SELECT package_key,status FROM platform_licence_requests WHERE company_id=$1 AND status='PENDING'", [req.user.companyId]),
@@ -341,18 +383,19 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
               FROM company_package_trials t
               JOIN package_registry p ON p.id=t.package_id
              WHERE t.company_id=$1`, [req.user.companyId]),
+        marketplaceEligibilitySnapshot(req.user.companyId),
       ]);
 
       const pendingRequests = new Set(requests.rows.map((row) => row.package_key));
       const trialByPackage = new Map(trials.rows.map((row) => [row.package_key, row]));
       res.json({
         success: true,
-        data: await Promise.all(packages.map(async (item) => {
+        data: packages.map((item) => {
           const licensed = isPackageLicensed(entitlements, {
             ...item,
             licence_required: item.licence_mode !== "TECHNICAL" && item.manifest?.licenceRequired !== false,
           });
-          const marketplaceEligible = await isMarketplaceEligible(req.user.companyId, item);
+          const marketplaceEligible = marketplaceEligibleFromSnapshot(req.user.companyId, item, eligibilitySnapshot);
           const storefrontState = item.active !== true
             ? "UNAVAILABLE"
             : item.installable !== true
@@ -381,7 +424,7 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
             trial_activated_at: priorTrial?.activated_at || null,
             trial_expires_at: priorTrial?.expires_at || null,
           };
-        })),
+        }),
       });
     } catch (error) {
       console.error("Marketplace catalogue error:", error);
