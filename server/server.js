@@ -2318,12 +2318,32 @@ async function startServer() {
                   )
                 : { rows: [] };
               try {
+                const actor = payload.actorUserId
+                  ? (await db(
+                      "SELECT id,company_id,store_id,role_id,is_superadmin FROM users WHERE id=$1 AND company_id=$2 AND active=true LIMIT 1",
+                      [payload.actorUserId, companyId]
+                    )).rows[0] || null
+                  : null;
+                if (payload.actorUserId && !actor) {
+                  throw Object.assign(new Error("Scheduled workflow actor is no longer active"), { retryable: false, code: "RUNTIME_ACTOR_UNAVAILABLE" });
+                }
+                const executionMode = actor ? "USER" : "SYSTEM";
                 const results = await executeWorkflowActions({
                   actions,
                   db,
-                  req: { user: { companyId, id: payload.actorUserId || null } },
+                  req: {
+                    method: "JOB",
+                    path: "PLATFORM_SCHEDULED_WORKFLOW",
+                    executionMode,
+                    trustedSystemExecution: executionMode === "SYSTEM",
+                    user: actor
+                      ? { id: actor.id, companyId: actor.company_id, storeId: actor.store_id, roleId: actor.role_id, isSuperadmin: actor.is_superadmin === true }
+                      : { companyId },
+                  },
                   companyId,
-                  userId: payload.actorUserId || null,
+                  userId: actor?.id || null,
+                  executionMode,
+                  trustedSystem: executionMode === "SYSTEM",
                   object: objectResult.rows[0] || null,
                   record: null,
                   recordId: null,
@@ -2407,6 +2427,16 @@ async function startServer() {
                   )
                 : { rows: [] };
               try {
+                const actor = payload.actorUserId
+                  ? (await db(
+                      "SELECT id,company_id,store_id,role_id,is_superadmin FROM users WHERE id=$1 AND company_id=$2 AND active=true LIMIT 1",
+                      [payload.actorUserId, job.company_id]
+                    )).rows[0] || null
+                  : null;
+                if (payload.actorUserId && !actor) {
+                  throw Object.assign(new Error("Event workflow actor is no longer active"), { retryable: false, code: "RUNTIME_ACTOR_UNAVAILABLE" });
+                }
+                const executionMode = actor ? "USER" : "SYSTEM";
                 const results = await executeWorkflowActions({
                   actions,
                   db,
@@ -2414,7 +2444,11 @@ async function startServer() {
                   req: {
                     method: "JOB",
                     path: "PLATFORM_EVENT_WORKFLOW",
-                    user: { companyId: job.company_id, id: payload.actorUserId || null },
+                    executionMode,
+                    trustedSystemExecution: executionMode === "SYSTEM",
+                    user: actor
+                      ? { id: actor.id, companyId: actor.company_id, storeId: actor.store_id, roleId: actor.role_id, isSuperadmin: actor.is_superadmin === true }
+                      : { companyId: job.company_id },
                     platformEvent: {
                       eventId: payload.eventId || null,
                       replayId: payload.replayId || null,
@@ -2429,7 +2463,9 @@ async function startServer() {
                     },
                   },
                   companyId: job.company_id,
-                  userId: payload.actorUserId || null,
+                  userId: actor?.id || null,
+                  executionMode,
+                  trustedSystem: executionMode === "SYSTEM",
                   object: objectResult.rows[0] || null,
                   record: payload.record || null,
                   recordId: payload.recordId || null,
