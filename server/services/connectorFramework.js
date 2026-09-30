@@ -432,21 +432,35 @@ export function createConnectorActionExecutor({ db, fetchImpl = fetch, sleep = d
     const authType = String(connection.effective_auth_type || connection.auth_type || "none").toLowerCase();
     if (!AUTH_TYPES.has(authType)) throw new Error("Unsupported connector auth type");
 
-    const baseUrl = new URL(connection.effective_base_url || connection.base_url);
-    if (!(await isAllowedConnectorTarget(baseUrl.href))) {
-      throw new Error("Connector base URL target is not allowed");
+    const configuredBaseUrl = connection.effective_base_url || connection.base_url || null;
+    const operationPath = String(definition.path || "");
+    const absoluteOperation = /^[a-z][a-z\d+.-]*:/i.test(operationPath);
+
+    let baseUrl = null;
+    if (configuredBaseUrl) {
+      baseUrl = new URL(configuredBaseUrl);
+      if (!(await isAllowedConnectorTarget(baseUrl.href))) {
+        throw new Error("Connector base URL target is not allowed");
+      }
     }
-    const relativePath = String(definition.path || "");
-    if (/^[a-z][a-z\d+.-]*:/i.test(relativePath) || relativePath.startsWith("//")) {
-      throw new Error("Connector operation path must be relative");
+
+    let url;
+    if (absoluteOperation) {
+      url = new URL(operationPath);
+      if (baseUrl && url.origin !== baseUrl.origin) {
+        throw new Error("Connector operation target must match the configured base URL origin");
+      }
+    } else {
+      if (!baseUrl) throw new Error("Connector base URL is required for relative operations");
+      if (operationPath.startsWith("//")) throw new Error("Connector operation target is not allowed");
+      url = new URL(operationPath.replace(/^\/+/, ""), `${baseUrl.href.replace(/\/+$/, "")}/`);
     }
-    const url = new URL(relativePath.replace(/^\/+/, ""), `${baseUrl.href.replace(/\/+$/, "")}/`);
-    if (url.origin !== baseUrl.origin || !(await isAllowedConnectorTarget(url.href))) {
+    if (!(await isAllowedConnectorTarget(url.href))) {
       throw new Error("Connector operation target is not allowed");
     }
 
     const credentials = loaded?.secrets || {};
-    if ((connection.credential_id || connection.credentials_encrypted) && !loaded) {
+    if (connection.credential_id && !loaded?.credential) {
       throw new Error("Connector credential is unavailable");
     }
     const context = { input, credentials, response: undefined };
