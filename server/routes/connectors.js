@@ -1289,9 +1289,10 @@ export default function createConnectorsRouter({
       if (!current) return res.status(404).json({ success: false, message: "Connector instance not found" });
       const manifest = effectiveConnectorManifest(current.connector_package_key, current.manifest);
       const existingSecrets = (() => { try { return decryptCredentials(current.credentials_encrypted) || {}; } catch { return {}; } })();
-      const configuration = req.body?.configuration === undefined
-        ? jsonValue(current.connector_configuration, {})
-        : req.body.configuration;
+      const configurationSupplied = req.body?.configuration !== undefined;
+      const configuration = configurationSupplied
+        ? req.body.configuration
+        : jsonValue(current.connector_configuration, {});
       const validation = validateAppConfiguration(manifest, configuration, { existingSecrets });
       if (validation.error) return res.status(400).json({ success: false, message: validation.error });
       let storeId = req.body?.storeId === undefined ? current.store_id : req.body.storeId || null;
@@ -1311,8 +1312,9 @@ export default function createConnectorsRouter({
         }
         storeId = till.rows[0].store_id;
       }
-      const configurationChanged = JSON.stringify(validation.value) !== JSON.stringify(jsonValue(current.connector_configuration, {}));
-      const secretsChanged = Object.keys(validation.secrets || {}).length > 0;
+      const configurationChanged = configurationSupplied
+        && JSON.stringify(validation.value) !== JSON.stringify(jsonValue(current.connector_configuration, {}));
+      const secretsChanged = configurationSupplied && Object.keys(validation.secrets || {}).length > 0;
       const nextCredentials = secretsChanged ? encryptCredentials({ ...existingSecrets, ...validation.secrets }) : current.credentials_encrypted;
       const assignmentChanged = String(tillId || "") !== String(current.till_id || "") || String(storeId || "") !== String(current.store_id || "");
       const resetTest = configurationChanged || secretsChanged || assignmentChanged;
