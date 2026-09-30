@@ -47,6 +47,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
   }
   const messages = [];
   const executions = [];
+  const preSave = ["before_create", "before_update", "before_save"].includes(trigger);
   let nextRecord = apiRecord(fields, record);
   const prior = apiRecord(fields, previousRecord);
 
@@ -54,6 +55,10 @@ export async function executePlatformAutomations({ db, object, fields, record, p
     if (!ruleMatches(rule, fields, nextRecord, prior)) continue;
     const actions = Array.isArray(rule.action?.actions) ? rule.action.actions : [rule.action];
     for (const action of actions) {
+      if (preSave && !["set_field", "show_message"].includes(action.type)) {
+        executions.push({ ruleId: rule.id, action: action.type || "unknown", status: "skipped", reason: "Before-save automation is mutation-only" });
+        continue;
+      }
       if (action.type === "workflow") {
         const workflowResults = await executeWorkflowActions({ actions: action.actions || [], db, object, fields, record: nextRecord, previousRecord: prior, recordId, trigger, req, companyId: req.user.companyId });
         executions.push({ ruleId: rule.id, action: action.type, status: "completed", details: workflowResults });
