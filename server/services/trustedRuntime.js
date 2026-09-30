@@ -15,7 +15,7 @@ export const TRUSTED_JOB_KINDS = Object.freeze([
 
 const PRIVILEGED_ROUTES = Object.freeze([
   { id: "platform.developer.manage", prefixes: ["/api/platform/developer/"], methods: ["POST","PUT","PATCH","DELETE"] },
-  { id: "platform.metadata.execute", prefixes: ["/api/platform/runtime/", "/api/platform/workflows", "/api/platform/events", "/api/platform/schedules"], methods: ["POST","PUT","PATCH","DELETE"] },
+  { id: "platform.metadata.execute", prefixes: ["/api/platform/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "package.lifecycle", prefixes: ["/api/packages/", "/api/platform/packages/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "security.manage", prefixes: ["/api/platform/security"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "admin.manage", prefixes: ["/api/admin/"], methods: ["POST","PUT","PATCH","DELETE"] },
@@ -35,7 +35,7 @@ const duplicateIds = definitions.map((item) => item.id).filter((id, index, all) 
 if (duplicateIds.length) throw new Error(`Duplicate Trusted Runtime capability ids: ${[...new Set(duplicateIds)].join(", ")}`);
 
 export const TRUSTED_CAPABILITIES = Object.freeze(definitions.map((item) => Object.freeze(item)));
-export const TRUSTED_CAPABILITY_MAP = new Map(TRUSTED_CAPABILITIES.map((item) => [item.id, item]));
+export const TRUSTED_CAPABILITY_MAP = Object.freeze(Object.fromEntries(TRUSTED_CAPABILITIES.map((item) => [item.id, item])));
 export const TRUSTED_RUNTIME_VERSION = createHash("sha256")
   .update(TRUSTED_CAPABILITIES.map((item) => `${item.type}:${item.id}`).sort().join("|"))
   .digest("hex");
@@ -69,7 +69,7 @@ export function isPrivilegedMutation(path, method = "GET") {
 
 export function assertTrustedJobKind(kind) {
   const key = `job:${String(kind || "")}`;
-  if (!TRUSTED_CAPABILITY_MAP.has(key)) {
+  if (!TRUSTED_CAPABILITY_MAP[key]) {
     throw Object.assign(new Error(`Unregistered platform job kind: ${kind}`), { code: "UNREGISTERED_JOB_KIND", status: 403, retryable: false });
   }
   return key;

@@ -1,6 +1,6 @@
 const DEFINITIONS = [
   { id: 'platform.developer.manage', prefixes: ['/api/platform/developer/'], methods: ['POST','PUT','PATCH','DELETE'] },
-  { id: 'platform.metadata.execute', prefixes: ['/api/platform/runtime/', '/api/platform/workflows', '/api/platform/events', '/api/platform/schedules'], methods: ['POST','PUT','PATCH','DELETE'] },
+  { id: 'platform.metadata.execute', prefixes: ['/api/platform/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'package.lifecycle', prefixes: ['/api/packages/', '/api/platform/packages/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'security.manage', prefixes: ['/api/platform/security'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'admin.manage', prefixes: ['/api/admin/'], methods: ['POST','PUT','PATCH','DELETE'] },

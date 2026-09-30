@@ -28,11 +28,11 @@ const duplicateKeys = entries.map((entry) => entry.packageKey).filter((key, inde
 if (duplicateKeys.length) throw new Error(`Duplicate trusted package keys: ${[...new Set(duplicateKeys)].join(", ")}`);
 
 export const TRUSTED_PACKAGE_MANIFESTS = Object.freeze(entries);
-export const TRUSTED_PACKAGE_MAP = new Map(entries.map((entry) => [entry.packageKey, entry]));
+export const TRUSTED_PACKAGE_MAP = Object.freeze(Object.fromEntries(entries.map((entry) => [entry.packageKey, entry])));
 
 export function assertTrustedPackageManifest(packageKey, manifest, version = null) {
   const key = String(packageKey || "").trim();
-  const trusted = TRUSTED_PACKAGE_MAP.get(key);
+  const trusted = TRUSTED_PACKAGE_MAP[key];
   if (!trusted) {
     throw Object.assign(new Error(`Package is not registered in the OneEngine trusted package catalogue: ${key || "(missing)"}`), {
       code: "UNREGISTERED_PACKAGE",
