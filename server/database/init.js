@@ -178,6 +178,14 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         await client.query(oneAssistantSchema);
       },
     },
+    {
+      key: "0013_oneassistant_channel_subflows",
+      version: "13",
+      name: "OneAssistant channel subflows and public booking links",
+      up: async client => {
+        await client.query(oneAssistantSchema);
+      },
+
 ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
