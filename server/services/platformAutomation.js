@@ -3,6 +3,7 @@ import { evaluateCondition } from "./platformConditions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { executeWorkflowActions } from "./platformWorkflow.js";
 import { systemObject, isExtensionField } from "./platformSystemObjects.js";
+import { createPlatformExecutionContext } from "./platformExecutionContext.js";
 import { createExecutionGuard } from "./platformExecutionGuard.js";
 
 function apiRecord(fields, record) {
@@ -74,7 +75,31 @@ export async function executePlatformAutomations({ db, object, fields, record, p
         continue;
       }
       if (action.type === "workflow") {
-        const workflowResults = await executeWorkflowActions({ actions: action.actions || [], db, object, fields, record: nextRecord, previousRecord: prior, recordId, trigger, req, companyId: req.user.companyId });
+        const executionContext = await createPlatformExecutionContext({
+          db,
+          req,
+          object,
+          record: nextRecord,
+          previousRecord: prior,
+          trigger: {
+            type: trigger,
+            operation: trigger.includes("create") ? "create" : trigger.includes("delete") ? "delete" : "update",
+          },
+          executionContext: req.platformExecutionContext || req.executionContext || null,
+        });
+        const workflowResults = await executeWorkflowActions({
+          actions: action.actions || [],
+          db,
+          object,
+          fields,
+          record: nextRecord,
+          previousRecord: prior,
+          recordId,
+          trigger,
+          req,
+          companyId: req.user.companyId,
+          executionContext,
+        });
         executions.push({ ruleId: rule.id, action: action.type, status: "completed", details: workflowResults });
         continue;
       }
