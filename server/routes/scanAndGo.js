@@ -476,7 +476,7 @@ export default function createScanGoRouter({ authenticate, db, pool, writeAudit 
       return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     }
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     let transactionStarted = false;
 
     try {
