@@ -501,14 +501,6 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
           />
         </label>
 
-        <div className="objects-list-columns" aria-hidden="true">
-          <span>Object</span>
-          <span>API name</span>
-          <span>Source</span>
-          <span>Status</span>
-          <span />
-        </div>
-
         <div className="objects-pane-list">
           {loading ? <div className="objects-pane-state">Loading objects…</div> : null}
           {error ? <div className="objects-pane-state is-error">{error}</div> : null}
@@ -522,17 +514,10 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                 className={`objects-list-item ${active ? 'is-active' : ''}`}
                 onClick={() => { setSelectedKey(key); setActiveTab(focusedTab || 'details'); setMobileStage(focusedTab ? 'detail' : 'menu') }}
               >
-                <span className="objects-list-object">
-                  <span className="objects-list-icon"><Box size={14} /></span>
-                  <span className="objects-list-copy">
-                    <strong>{objectName(object)}</strong>
-                    <small>{object?.description || 'Platform object'}</small>
-                  </span>
-                </span>
-                <span className="objects-list-api">{key || '—'}</span>
-                <span className="objects-list-source">{object?.source_table || '—'}</span>
-                <span className={`objects-list-status ${object.active === false ? 'is-inactive' : 'is-active'}`}>
-                  {object.active === false ? 'Inactive' : 'Active'}
+                <span className="objects-list-icon"><Box size={14} /></span>
+                <span className="objects-list-copy">
+                  <strong>{objectName(object)}</strong>
+                  <small>{key}</small>
                 </span>
                 <ChevronRight size={13} />
               </button>
