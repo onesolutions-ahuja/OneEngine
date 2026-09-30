@@ -7,6 +7,7 @@ import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing
 
 import { packageVersionHasEntitlement, reconcileCompanyPackageEntitlements } from "../services/packageEntitlements.js";
 import { executeWorkflowAction } from "../services/platformWorkflow.js";
+import { assertTrustedPackageManifest } from "../services/trustedPackages.js";
 
 
 
@@ -604,6 +605,8 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
       const selectedFeatures = resolveFeaturePlan(root, requestedFeatures);
 
+      for (const item of plan) assertTrustedPackageManifest(item.packageKey, item.manifest, item.version);
+
       if (!(await ensureLicensed(req, plan))) {
 
         return res.status(403).json({ success: false, code: "FEATURE_NOT_LICENSED", message: "This package is not licensed for this company" });
@@ -659,6 +662,8 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
         return res.status(403).json({ success: false, code: "FEATURE_NOT_LICENSED", message: "This package is not licensed for this company" });
 
       }
+
+      for (const item of plan) assertTrustedPackageManifest(item.packageKey, item.manifest, item.version);
 
       const results = await withTransaction(async (txDb) => {
 
@@ -935,6 +940,8 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
       }
 
       const selectedFeatures = resolveFeaturePlan(root, requestedFeatures);
+
+      for (const item of plan) assertTrustedPackageManifest(item.packageKey, item.manifest, item.version);
 
       if (!(await ensureLicensed(req, plan))) {
 

@@ -11,6 +11,7 @@ import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs } from "./services/platformJobs.js";
 import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
+import { validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
 import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
 import { executeRegisteredAction } from "./services/platformActions.js";
 import { claimDueScheduledWorkflows, completeScheduledWorkflow, failScheduledWorkflow } from "./services/platformSchedules.js";
@@ -2105,7 +2106,8 @@ app.use((req, res) => {
 async function startServer() {
   try {
     const trustedRuntime = validateTrustedRuntime();
-    console.log(`OneEngine Trusted Runtime ${trustedRuntime.version.slice(0, 12)} (${trustedRuntime.count} capabilities)`);
+    const trustedPackages = validateTrustedPackageCatalogue();
+    console.log(`OneEngine Trusted Runtime ${trustedRuntime.version.slice(0, 12)} (${trustedRuntime.count} capabilities; packages ${trustedPackages.digest.slice(0, 12)}/${trustedPackages.count})`);
     if (!pool) throw new Error("DATABASE_URL is not configured");
     console.log("onePOS: checking database connection...");
     await db("SELECT NOW()");
