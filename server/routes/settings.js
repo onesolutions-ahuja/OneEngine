@@ -445,7 +445,7 @@ export default function createSettingsRouter({
       });
     }
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       const previous = await client.query(
@@ -652,7 +652,7 @@ export default function createSettingsRouter({
     if (!pool) {
       return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     }
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       /* Upsert so a company without a settings row yet is seeded with column
@@ -842,7 +842,7 @@ export default function createSettingsRouter({
       return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     }
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
       await client.query(
@@ -1126,7 +1126,7 @@ export default function createSettingsRouter({
         }
       }
 
-      const client = await pool.connect();
+      const client = await (req.tenantPool || pool).connect();
       try {
         await client.query("BEGIN");
         const existing = await client.query(
@@ -1260,7 +1260,7 @@ export default function createSettingsRouter({
       notes,
     } = req.body;
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
 
     try {
       await client.query("BEGIN");
