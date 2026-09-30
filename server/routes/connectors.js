@@ -1,5 +1,5 @@
 import express from "express";
-import { encryptCredentials } from "../services/integrationCredentials.js";
+import { decryptCredentials, encryptCredentials } from "../services/integrationCredentials.js";
 import {
   isAllowedConnectorTarget,
   toPublicCredential,
@@ -104,20 +104,28 @@ function publicPlatformCredential(row) {
     : null;
 }
 
-function validateAppConfiguration(manifest, supplied) {
+function validateAppConfiguration(manifest, supplied, { existingSecrets = {} } = {}) {
   if (!supplied || typeof supplied !== "object" || Array.isArray(supplied)) {
     return { error: "configuration must be an object" };
   }
   const schema = manifest?.connectorApp?.configurationSchema || [];
   const values = Object.fromEntries(schema
-    .filter((field) => Object.hasOwn(field, "default"))
+    .filter((field) => field.type !== "secret" && Object.hasOwn(field, "default"))
     .map((field) => [field.key, field.default]));
+  const secrets = {};
   for (const [key, value] of Object.entries(supplied)) {
-    if (/(secret|password|token|credential|api[_-]?key|card|pan)/i.test(key)) {
-      return { error: "Secrets and card data must not be stored in connector configuration" };
-    }
     const field = schema.find((item) => item.key === key);
     if (!field) return { error: `Configuration field ${key} is not declared by this connector app` };
+    if (field.type === "secret") {
+      if (value !== undefined && value !== null && value !== "") {
+        if (typeof value !== "string") return { error: `${key} must be a string` };
+        secrets[key] = value;
+      }
+      continue;
+    }
+    if (/(password|token|credential|api[_-]?key|card|pan)/i.test(key)) {
+      return { error: "Secrets and card data must not be stored in connector configuration" };
+    }
     if (field.type === "string" && typeof value !== "string") return { error: `${key} must be a string` };
     if (field.type === "number" && !Number.isFinite(Number(value))) return { error: `${key} must be a number` };
     if (field.type === "boolean" && typeof value !== "boolean") return { error: `${key} must be a boolean` };
@@ -125,15 +133,19 @@ function validateAppConfiguration(manifest, supplied) {
     values[key] = value;
   }
   for (const field of schema) {
-    if (field.required && (values[field.key] === undefined || values[field.key] === null || values[field.key] === "")) {
+    const effective = field.type === "secret"
+      ? (Object.hasOwn(secrets, field.key) ? secrets[field.key] : existingSecrets?.[field.key])
+      : values[field.key];
+    if (field.required && (effective === undefined || effective === null || effective === "")) {
       return { error: `${field.key} is required` };
     }
   }
-  return { value: values };
+  return { value: values, secrets };
 }
 
 function publicConnectorInstance(row) {
-  const configuration = jsonValue(row.connector_configuration, {});
+  const rawConfiguration = jsonValue(row.connector_configuration, {});
+  const configuration = Object.fromEntries(Object.entries(rawConfiguration).filter(([key]) => !/(secret|password|token|credential|api[_-]?key|card|pan)/i.test(key)));
   return {
     id: row.id,
     packageKey: row.connector_package_key,
@@ -147,6 +159,7 @@ function publicConnectorInstance(row) {
     status: row.connection_status,
     health: jsonValue(row.last_test_result, {}),
     configuration,
+    hasCredentials: Boolean(row.credentials_encrypted),
     capabilities: jsonValue(row.connector_capabilities, []),
     fallbackOrder: Number(row.fallback_order || 0),
     createdAt: row.created_at,
@@ -1075,7 +1088,7 @@ export default function createConnectorsRouter({
     try {
       const result = await db(
         `SELECT c.id,c.company_id,c.store_id,c.till_id,c.name,c.enabled,c.connection_status,
-                c.connector_package_key,c.connector_configuration,c.connector_capabilities,
+                c.connector_package_key,c.connector_configuration,c.connector_capabilities,c.credentials_encrypted,
                 c.fallback_order,c.last_test_result,c.created_at,c.updated_at,
                 s.name AS store_name,t.name AS till_name
            FROM integration_connections c
@@ -1111,6 +1124,9 @@ export default function createConnectorsRouter({
       }
       const configurationResult = validateAppConfiguration(manifest, req.body?.configuration || {});
       if (configurationResult.error) return res.status(400).json({ success: false, message: configurationResult.error });
+      const encryptedSecrets = Object.keys(configurationResult.secrets || {}).length
+        ? encryptCredentials(configurationResult.secrets)
+        : null;
       let storeId = req.body?.storeId || null;
       const tillId = req.body?.tillId || null;
       if (storeId) {
@@ -1132,11 +1148,11 @@ export default function createConnectorsRouter({
       const result = await db(
         `INSERT INTO integration_connections
           (company_id,store_id,till_id,name,provider_name,integration_type,connector_package_key,
-           connector_configuration,connector_capabilities,fallback_order,enabled,connection_status,
+           connector_configuration,connector_capabilities,credentials_encrypted,fallback_order,enabled,connection_status,
            last_test_result,created_by)
-         VALUES($1,$2,$3,$4,$5,$6,$5,$7::jsonb,$8::jsonb,$9,FALSE,'DISCONNECTED',$10::jsonb,$11)
+         VALUES($1,$2,$3,$4,$5,$6,$5,$7::jsonb,$8::jsonb,$9,$10,FALSE,'DISCONNECTED',$11::jsonb,$12)
          RETURNING id,company_id,store_id,till_id,name,enabled,connection_status,connector_package_key,
-                   connector_configuration,connector_capabilities,fallback_order,last_test_result,created_at,updated_at`,
+                   connector_configuration,connector_capabilities,credentials_encrypted,fallback_order,last_test_result,created_at,updated_at`,
         [
           req.user.companyId,
           storeId,
@@ -1146,6 +1162,7 @@ export default function createConnectorsRouter({
           connectorApp.type || "hardware",
           JSON.stringify(configurationResult.value),
           JSON.stringify(capabilities),
+          encryptedSecrets,
           Math.min(Math.max(Number(req.body?.fallbackOrder) || 0, 0), 10),
           JSON.stringify({ success: false, code: "NOT_TESTED" }),
           req.user.id || null,
@@ -1171,10 +1188,11 @@ export default function createConnectorsRouter({
       const current = existingResult.rows[0];
       if (!current) return res.status(404).json({ success: false, message: "Connector instance not found" });
       const manifest = jsonValue(current.manifest, {});
+      const existingSecrets = (() => { try { return decryptCredentials(current.credentials_encrypted) || {}; } catch { return {}; } })();
       const configuration = req.body?.configuration === undefined
         ? jsonValue(current.connector_configuration, {})
         : req.body.configuration;
-      const validation = validateAppConfiguration(manifest, configuration);
+      const validation = validateAppConfiguration(manifest, configuration, { existingSecrets });
       if (validation.error) return res.status(400).json({ success: false, message: validation.error });
       let storeId = req.body?.storeId === undefined ? current.store_id : req.body.storeId || null;
       const tillId = req.body?.tillId === undefined ? current.till_id : req.body.tillId || null;
@@ -1194,8 +1212,10 @@ export default function createConnectorsRouter({
         storeId = till.rows[0].store_id;
       }
       const configurationChanged = JSON.stringify(validation.value) !== JSON.stringify(jsonValue(current.connector_configuration, {}));
+      const secretsChanged = Object.keys(validation.secrets || {}).length > 0;
+      const nextCredentials = secretsChanged ? encryptCredentials({ ...existingSecrets, ...validation.secrets }) : current.credentials_encrypted;
       const assignmentChanged = String(tillId || "") !== String(current.till_id || "") || String(storeId || "") !== String(current.store_id || "");
-      const resetTest = configurationChanged || assignmentChanged;
+      const resetTest = configurationChanged || secretsChanged || assignmentChanged;
       const enabled = resetTest ? false : (req.body?.enabled === undefined ? current.enabled === true : req.body.enabled === true);
       if (enabled && (!tillId || jsonValue(current.last_test_result, {})?.success !== true)) {
         return res.status(409).json({ success: false, message: "Assign and successfully test this connector before enabling it" });
@@ -1209,15 +1229,15 @@ export default function createConnectorsRouter({
       const capabilities = (manifest.connectorApp?.capabilities || []).map((item) => typeof item === "string" ? item : item.key).filter(Boolean);
       const result = await db(
         `UPDATE integration_connections SET store_id=$1,till_id=$2,connector_configuration=$3::jsonb,
-           connector_capabilities=$4::jsonb,fallback_order=$5,enabled=$6,
-           connection_status=CASE WHEN $7 THEN 'DISCONNECTED' ELSE connection_status END,
-           last_test_at=CASE WHEN $7 THEN NULL ELSE last_test_at END,
-           last_test_result=CASE WHEN $7 THEN '{"success":false,"code":"NOT_TESTED"}'::jsonb ELSE last_test_result END,
+           connector_capabilities=$4::jsonb,credentials_encrypted=$5,fallback_order=$6,enabled=$7,
+           connection_status=CASE WHEN $8 THEN 'DISCONNECTED' ELSE connection_status END,
+           last_test_at=CASE WHEN $8 THEN NULL ELSE last_test_at END,
+           last_test_result=CASE WHEN $8 THEN '{"success":false,"code":"NOT_TESTED"}'::jsonb ELSE last_test_result END,
            updated_at=NOW()
-         WHERE id=$8 AND company_id=$9
+         WHERE id=$9 AND company_id=$10
          RETURNING id,company_id,store_id,till_id,name,enabled,connection_status,connector_package_key,
-                   connector_configuration,connector_capabilities,fallback_order,last_test_result,created_at,updated_at`,
-        [storeId, tillId, JSON.stringify(validation.value), JSON.stringify(capabilities), fallbackOrder, enabled, resetTest, req.params.id, req.user.companyId]
+                   connector_configuration,connector_capabilities,credentials_encrypted,fallback_order,last_test_result,created_at,updated_at`,
+        [storeId, tillId, JSON.stringify(validation.value), JSON.stringify(capabilities), nextCredentials, fallbackOrder, enabled, resetTest, req.params.id, req.user.companyId]
       );
       const row = result.rows[0];
       await writeAudit?.(req.user.companyId, req.user.id, "connector.instance.updated", "integration_connection", row.id, { storeId, tillId, enabled, fallbackOrder });
@@ -1249,7 +1269,10 @@ export default function createConnectorsRouter({
         capabilities,
         adapter: driver.createAdapter({
           instanceId: instance.id,
-          configuration: jsonValue(instance.connector_configuration, {}),
+          configuration: {
+            ...jsonValue(instance.connector_configuration, {}),
+            ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
+          },
           companyId: instance.company_id,
           storeId: instance.store_id,
           tillId: instance.till_id,
