@@ -5354,7 +5354,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
                 company_scoped: relationship.child_company_scoped,
                 store_scoped: relationship.child_store_scoped,
               };
-              if (!(await hasPlatformObjectPermission(db: runtimeDb, req, childObject.id, "delete"))) {
+              if (!(await hasPlatformObjectPermission(runtimeDb, req, childObject.id, "delete"))) {
                 lifecycleFailure(403, "DELETE_PERMISSION_REQUIRED", "Delete permission is required for a related Object");
               }
 
@@ -5429,7 +5429,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
                   child,
                   null,
                   "delete",
-                  req
+                  req,
+                  runtimeDb
                 );
                 state.pendingAudit ||= [];
                 state.pendingAudit.push({
