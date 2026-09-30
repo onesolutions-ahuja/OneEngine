@@ -12,7 +12,7 @@ import { getRequestPool } from "../services/tenantDatabase.js";
 import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
 import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes } from "../services/paymentMethods.js";
 import { validateTenderLines } from "../services/paymentTender.js";
-import { resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 export const PAYMENT_METHODS = DEFAULT_PAYMENT_METHODS.map((method) => method.code);
 
@@ -920,24 +920,35 @@ export default function createSalesRouter({
           }
           if (connectorDrivers) {
             const idempotencyKey = `${req.user.companyId}:${clientRequestId.toLowerCase()}:payment.card`;
-            connectorPayment = await resolvePersistedConnectorCapability({
+            const paymentExecution = await executeSystemWorkflow({
               db,
-              drivers: connectorDrivers,
               companyId: req.user.companyId,
-              storeId: req.user.storeId,
-              tillId: session.rows[0].terminal_id,
-              capabilityKey: "payment.sale",
-              selfCheckout: typeof selfCheckoutMode === "function" && selfCheckoutMode(req),
-              payload: {
+              userId: req.user.id || null,
+              systemKey: "action:PAYMENT_START",
+              req,
+              input: {
                 amount: roundCurrency(cardAmount),
                 currency: "GBP",
                 idempotencyKey,
                 reference: clientRequestId,
                 terminalId: session.rows[0].terminal_id,
+                selfCheckout: typeof selfCheckoutMode === "function" && selfCheckoutMode(req),
               },
+              storeId: req.user.storeId,
+              tillId: session.rows[0].terminal_id,
+              connectorDrivers,
               writeAudit,
-              actorUserId: req.user.id || null,
+              source: {
+                type: "api",
+                method: req.method,
+                path: req.originalUrl || req.path,
+                capability: "payment.sale",
+              },
             });
+            const workflowPayment = paymentExecution.result || {};
+            connectorPayment = workflowPayment.success === true
+              ? { available: true, ...workflowPayment, workflowRunId: paymentExecution.runId }
+              : { available: false, ...workflowPayment, workflowRunId: paymentExecution.runId };
             const paymentResult = connectorPayment.result;
             const cardConnectorCode = paymentResult?.status || connectorPayment.code || null;
             const paymentGatewayUnavailable = ["CONNECTOR_UNAVAILABLE", "PROVIDER_NOT_CONFIGURED", "PROVIDER_NOT_SUPPORTED"].includes(cardConnectorCode);
