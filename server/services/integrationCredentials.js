@@ -146,11 +146,13 @@ export function redactBodyForLog(body) {
 /** Public (client-safe) shape of an integration row - never credentials. */
 export function toPublicIntegration(row) {
   if (!row) return null;
-  let hasCredentials = false;
-  try {
-    hasCredentials = Boolean(decryptCredentials(row.credentials_encrypted));
-  } catch {
-    hasCredentials = Boolean(row.credentials_encrypted);
+  let hasCredentials = Boolean(row.credential_id);
+  if (!hasCredentials) {
+    try {
+      hasCredentials = Boolean(decryptCredentials(row.credentials_encrypted));
+    } catch {
+      hasCredentials = Boolean(row.credentials_encrypted);
+    }
   }
   return {
     id: row.id,
@@ -161,7 +163,7 @@ export function toPublicIntegration(row) {
     integrationType: row.integration_type,
     baseUrl: row.base_url,
     providerAccountId: row.provider_account_id || null,
-    authType: row.auth_type,
+    authType: row.effective_auth_type || row.auth_type,
     hasCredentials,
     credentialsPreview: hasCredentials ? { [REDACTED]: REDACTED } : null,
     enabled: row.enabled,

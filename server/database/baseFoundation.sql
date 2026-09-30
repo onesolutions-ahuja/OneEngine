@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS platform_credentials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
   connector_id UUID REFERENCES platform_connector_definitions(id) ON DELETE CASCADE,
+  connection_id UUID REFERENCES integration_connections(id) ON DELETE CASCADE,
   credential_key VARCHAR(100) NOT NULL,
   name VARCHAR(200) NOT NULL,
   ciphertext TEXT NOT NULL,
@@ -203,12 +204,18 @@ CREATE TABLE IF NOT EXISTS platform_credentials (
   created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CHECK(company_id IS NOT NULL OR connector_id IS NOT NULL)
+  CHECK(company_id IS NOT NULL OR connector_id IS NOT NULL OR connection_id IS NOT NULL)
 );
+ALTER TABLE platform_credentials ADD COLUMN IF NOT EXISTS connection_id UUID REFERENCES integration_connections(id) ON DELETE CASCADE;
+DROP INDEX IF EXISTS uq_platform_credentials_company_key;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_credentials_company_key
-  ON platform_credentials(company_id, connector_id, credential_key) WHERE company_id IS NOT NULL;
+  ON platform_credentials(company_id, connector_id, credential_key)
+  WHERE company_id IS NOT NULL AND connection_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_credentials_platform_key
   ON platform_credentials(connector_id, credential_key) WHERE company_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_credentials_connection_key
+  ON platform_credentials(company_id, connection_id, credential_key)
+  WHERE company_id IS NOT NULL AND connection_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS integration_entity_mappings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   integration_id UUID NOT NULL REFERENCES integration_connections(id) ON DELETE CASCADE,

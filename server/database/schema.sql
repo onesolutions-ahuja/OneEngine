@@ -2504,7 +2504,7 @@ CREATE TABLE IF NOT EXISTS integration_connections (
     last_test_at TIMESTAMPTZ,
     last_test_result JSONB NOT NULL DEFAULT '{}'::jsonb,
     auth_type VARCHAR(30) NOT NULL DEFAULT 'none' CHECK (
-        auth_type IN ('none', 'api_key', 'bearer', 'basic')
+        auth_type IN ('none', 'api_key', 'bearer', 'basic', 'oauth2')
     ),
     credentials_encrypted TEXT,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,

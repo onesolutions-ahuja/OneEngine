@@ -13,7 +13,7 @@ import { transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createInventoryMovement } from "./inventory.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
 import { publishPlatformEvent, publishRecordChangeEvent } from "./platformEvents.js";
-import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
+import { resolveOneConnection, rotateOneConnectionOAuthTokens } from "./oneConnection.js";
 import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
 import { syncQuickBooksVendor, exportQuickBooksPurchase, exportQuickBooksSupplierPayment, exportQuickBooksSupplierCredit } from "./quickbooksSync.js";
 import { createShopifyAdapter } from "./shopifyAdapter.js";
@@ -86,72 +86,85 @@ function errorDetails(error) {
 }
 
 async function loadProviderConnection(context, providerKey, requestedConnectionId = null) {
-  const requestCompanyId = context.req?.user?.companyId || null;
-  const companyId = context.companyId || requestCompanyId;
-  if (!context.db || typeof context.db !== "function" || !companyId) {
-    throw new Error(`${providerKey} action requires a company-scoped database context`);
-  }
-  if (requestCompanyId && String(requestCompanyId) !== String(companyId)) {
-    throw new Error(`${providerKey} action company context is invalid`);
-  }
-  const storeId = context.storeId || context.req?.user?.storeId || null;
-  const connectionPredicate = requestedConnectionId ? "AND id=$4" : "";
-  const values = [companyId, providerKey, storeId];
-  if (requestedConnectionId) values.push(requestedConnectionId);
+  const companyId = context.companyId || context.req?.user?.companyId;
+  if (!context.db || !companyId) return null;
+
   const result = await context.db(
-    `SELECT id, company_id, store_id, base_url, credentials_encrypted
+    `SELECT id
        FROM integration_connections
-      WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND enabled=true
-        AND (store_id IS NULL OR store_id=$3)
-        ${connectionPredicate}
-      ORDER BY (store_id IS NULL), updated_at DESC
+      WHERE company_id=$1
+        AND enabled=TRUE
+        AND lower(COALESCE(provider_name,connector_package_key,integration_type,''))=lower($2)
+        AND ($3::uuid IS NULL OR id=$3)
+      ORDER BY CASE WHEN store_id=$4::uuid THEN 0 WHEN store_id IS NULL THEN 1 ELSE 2 END,
+               fallback_order,id
       LIMIT 1`,
-    values
+    [companyId, providerKey, requestedConnectionId || null, context.storeId || context.req?.user?.storeId || null]
   );
-  const connection = result.rows?.[0];
-  if (!connection?.credentials_encrypted) return null;
-  let credentials = decryptCredentials(connection.credentials_encrypted) || {};
+  const connectionId = result.rows?.[0]?.id;
+  if (!connectionId) return null;
+
+  const loaded = await resolveOneConnection({
+    db: context.db,
+    companyId,
+    connectionId,
+    includeSecrets: true,
+    migrateLegacy: true,
+    actorUserId: context.userId || context.req?.user?.id || null,
+  });
+  if (!loaded) return null;
+
+  const credentials = loaded.secrets || {};
   const expiry = Date.parse(credentials.tokenExpiry || credentials.token_expiry || "");
-  if (Number.isFinite(expiry) && expiry <= Date.now() + 60_000) {
+  const expiring = Number.isFinite(expiry) && expiry <= Date.now() + 60_000;
+
+  if (expiring && (providerKey === "quickbooks" || providerKey === "shopify")) {
     const clientId = credentials.clientId || credentials.client_id;
     const clientSecret = credentials.clientSecret || credentials.client_secret;
-    let refreshed;
-    if (providerKey === "quickbooks") {
-      refreshed = await createQuickBooksAdapter().refreshAuthentication({
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
+    const refreshToken = credentials.refreshToken || credentials.refresh_token;
+    let refreshed = null;
+
+    if (providerKey === "quickbooks" && clientId && clientSecret && refreshToken) {
+      refreshed = await refreshQuickBooksToken({
         clientId,
         clientSecret,
+        refreshToken,
       });
-    } else if (providerKey === "shopify") {
-      const shopDomain = credentials.shopDomain || credentials.shop_domain || connection.base_url;
-      refreshed = await createShopifyAdapter().refreshAuthentication({
-        shopDomain: String(shopDomain || "").replace(/^https?:\/\//i, "").replace(/\/$/, ""),
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
+    } else if (providerKey === "shopify" && refreshToken) {
+      const shopDomain = credentials.shopDomain || credentials.shop_domain || loaded.connection.effective_base_url || loaded.connection.base_url;
+      refreshed = await refreshShopifyToken({
+        shopDomain,
+        refreshToken,
         clientId,
         clientSecret,
       });
     }
+
     if (!refreshed) throw new Error(`${providerKey} token refresh is unavailable`);
-    credentials = {
-      ...credentials,
+    const expiresAt = new Date(Date.now() + refreshed.expiresIn * 1000).toISOString();
+
+    await rotateOneConnectionOAuthTokens({
+      db: context.db,
+      companyId,
+      connectionId,
       accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000).toISOString(),
-      ...(refreshed.refreshTokenExpiresIn
-        ? { refreshTokenExpiry: new Date(Date.now() + refreshed.refreshTokenExpiresIn * 1000).toISOString() }
-        : {}),
-      ...(refreshed.scopes?.length ? { scopes: refreshed.scopes } : {}),
-    };
-    const saved = await context.db(
-      `UPDATE integration_connections
-          SET credentials_encrypted=$1, last_error=NULL, updated_at=NOW()
-        WHERE id=$2 AND company_id=$3 AND enabled=true
-        RETURNING id`,
-      [encryptCredentials(credentials), connection.id, companyId]
-    );
-    if (!saved.rows?.length) throw new Error(`${providerKey} connection changed during token refresh`);
+      refreshToken: refreshed.refreshToken ?? refreshToken,
+      expiresAt,
+      actorUserId: context.userId || context.req?.user?.id || null,
+    });
+
+    const reloaded = await resolveOneConnection({
+      db: context.db,
+      companyId,
+      connectionId,
+      includeSecrets: true,
+      migrateLegacy: false,
+      actorUserId: context.userId || context.req?.user?.id || null,
+    });
+    return { connection: reloaded.connection, credentials: reloaded.secrets || {} };
   }
-  return { connection, credentials };
+
+  return { connection: loaded.connection, credentials };
 }
 
 async function shopifyPackageAvailability(db, companyId) {
@@ -553,7 +566,14 @@ export async function executeConnectorWorkflowAction({
       .map((item) => typeof item === "string" ? item : item?.key)
       .filter((key) => key && driver.capabilities.has(key));
     const { ConnectorService } = await import("./connectorRuntime.js");
-    const { decryptCredentials } = await import("./integrationCredentials.js");
+    const loadedConnection = await resolveOneConnection({
+      db,
+      companyId: tenantCompanyId,
+      connectionId: instance.id,
+      includeSecrets: true,
+      migrateLegacy: true,
+      actorUserId: actorUserId || req?.user?.id || null,
+    });
     const service = new ConnectorService({
       connectorKey: instance.connector_package_key,
       capabilities,
@@ -561,7 +581,7 @@ export async function executeConnectorWorkflowAction({
         instanceId: instance.id,
         configuration: {
           ...(typeof instance.connector_configuration === "string" ? JSON.parse(instance.connector_configuration || "{}") : (instance.connector_configuration || {})),
-          ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
+          ...(loadedConnection?.secrets || {}),
         },
         companyId: instance.company_id,
         storeId: instance.store_id,
@@ -2537,35 +2557,125 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "CALL_WEBHOOK",
     displayName: "Call Webhook",
-    description: "Send a webhook to an approved endpoint.",
+    description: "Send a webhook through OneConnection; legacy direct endpoints remain metadata-compatible.",
     validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a url or endpoint");
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("Call Webhook requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("Call Webhook requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a OneConnection or legacy endpoint");
     },
     async: true,
     requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
   },
   {
     key: "HTTP_REQUEST",
     displayName: "HTTP Request",
-    description: "Send an HTTP request to an approved endpoint.",
+    description: "Send an HTTP request through OneConnection; legacy direct endpoints remain metadata-compatible.",
     validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a url or endpoint");
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("HTTP Request requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("HTTP Request requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a OneConnection or legacy endpoint");
     },
     async: true,
     requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
   },
   {
     key: "WEBHOOK",
     displayName: "Webhook",
-    description: "Send a webhook to an approved endpoint.",
+    description: "Send a webhook through OneConnection; legacy direct endpoints remain metadata-compatible.",
     validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Webhook requires a url or endpoint");
+      if (action?.connectionId) {
+        if (typeof action.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+          throw new Error("Webhook requires a valid connectionId");
+        }
+        const operation = action.operation || action.endpointId || action.endpoint;
+        if (typeof operation !== "string" || !operation.trim()) {
+          throw new Error("Webhook requires an operation or endpoint when connectionId is used");
+        }
+        return;
+      }
+      if (!action?.url && !action?.endpoint) throw new Error("Webhook requires a OneConnection or legacy endpoint");
     },
     async: true,
     requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
+    executor: async ({ action, db, companyId, req }) => {
+      if (action.connectionId) {
+        const execute = createConnectorActionExecutor({ db });
+        const result = await execute({
+          companyId: companyId || req?.user?.companyId,
+          connectionId: action.connectionId,
+          operation: action.operation || action.endpointId || action.endpoint,
+          input: action.input || action.body || {},
+          platformCredentialAccess:
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+          actorUserId: req?.user?.id || null,
+        });
+        return { status: "completed", ...result };
+      }
+      return {
+        status: "queued",
+        endpoint: action.url || action.endpoint || null,
+        legacy: true,
+        warning: "Legacy direct endpoint metadata is preserved but new executions should use OneConnection",
+      };
+    },
   },
   {
     key: "CONDITION",

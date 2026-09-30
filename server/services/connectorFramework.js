@@ -5,9 +5,10 @@ import {
   encryptCredentials,
   redactValue,
 } from "./integrationCredentials.js";
+import { resolveOneConnection, buildOneConnectionAuthHeaders } from "./oneConnection.js";
 
 const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
-const AUTH_TYPES = new Set(["none", "api_key", "bearer", "basic"]);
+const AUTH_TYPES = new Set(["none", "api_key", "bearer", "basic", "oauth2"]);
 const MAX_TIMEOUT_MS = 120000;
 const MAX_ATTEMPTS = 5;
 
@@ -384,57 +385,83 @@ export function createConnectorActionExecutor({ db, fetchImpl = fetch, sleep = d
     if (!companyId || !connectionId || !operationKey) {
       throw new Error("companyId, connectionId, and operation are required");
     }
-    const connectionResult = await db(
-      `SELECT c.id, c.company_id, c.connector_definition_id, c.credential_id,
-              c.timeout_ms AS connection_timeout_ms, c.retry_policy AS connection_retry_policy,
-              d.connector_key, d.auth_type, d.base_url, d.operations,
-              d.timeout_ms AS definition_timeout_ms, d.retry_policy AS definition_retry_policy,
-              d.status AS definition_status
-       FROM integration_connections c
-       JOIN platform_connector_definitions d ON d.id = c.connector_definition_id
-       WHERE c.id = $1 AND c.company_id = $2 AND c.enabled = TRUE
-       LIMIT 1`,
-      [connectionId, companyId]
-    );
-    const connection = connectionResult.rows[0];
-    if (!connection || connection.definition_status !== "ACTIVE") {
+    const loaded = await resolveOneConnection({
+      db,
+      companyId,
+      connectionId,
+      includeSecrets: true,
+      migrateLegacy: true,
+      actorUserId,
+      platformCredentialAccess,
+    });
+    const connection = loaded?.connection || null;
+    if (!connection || connection.enabled === false) {
       throw new Error("Connector connection is unavailable");
     }
 
     const operations = parseJson(connection.operations, []);
-    const definition = Array.isArray(operations)
+    let definition = Array.isArray(operations)
       ? operations.find((item) => item?.key === operationKey || item?.name === operationKey)
       : operations?.[operationKey];
+
+    if (!definition) {
+      const endpoint = await db(
+        `SELECT id,name,method,path
+           FROM integration_endpoints
+          WHERE integration_id=$1 AND enabled=TRUE
+            AND (id::text=$2 OR lower(name)=lower($2))
+          LIMIT 1`,
+        [connectionId, operationKey]
+      );
+      if (endpoint.rows?.[0]) {
+        const row = endpoint.rows[0];
+        definition = {
+          key: row.id,
+          name: row.name,
+          method: row.method,
+          path: row.path,
+          requestMapping: {
+            body: { source: "input" },
+          },
+        };
+      }
+    }
+
     if (!definition) throw new Error("Connector operation is not defined");
     const method = String(definition.method || "GET").toUpperCase();
     if (!HTTP_METHODS.has(method)) throw new Error("Unsupported connector HTTP method");
-    const authType = String(connection.auth_type || "none").toLowerCase();
+    const authType = String(connection.effective_auth_type || connection.auth_type || "none").toLowerCase();
     if (!AUTH_TYPES.has(authType)) throw new Error("Unsupported connector auth type");
 
-    const baseUrl = new URL(connection.base_url);
-    if (!(await isAllowedConnectorTarget(baseUrl.href))) {
-      throw new Error("Connector base URL target is not allowed");
+    const configuredBaseUrl = connection.effective_base_url || connection.base_url || null;
+    const operationPath = String(definition.path || "");
+    const absoluteOperation = /^[a-z][a-z\d+.-]*:/i.test(operationPath);
+
+    let baseUrl = null;
+    if (configuredBaseUrl) {
+      baseUrl = new URL(configuredBaseUrl);
+      if (!(await isAllowedConnectorTarget(baseUrl.href))) {
+        throw new Error("Connector base URL target is not allowed");
+      }
     }
-    const relativePath = String(definition.path || "");
-    if (/^[a-z][a-z\d+.-]*:/i.test(relativePath) || relativePath.startsWith("//")) {
-      throw new Error("Connector operation path must be relative");
+
+    let url;
+    if (absoluteOperation) {
+      url = new URL(operationPath);
+      if (baseUrl && url.origin !== baseUrl.origin) {
+        throw new Error("Connector operation target must match the configured base URL origin");
+      }
+    } else {
+      if (!baseUrl) throw new Error("Connector base URL is required for relative operations");
+      if (operationPath.startsWith("//")) throw new Error("Connector operation target is not allowed");
+      url = new URL(operationPath.replace(/^\/+/, ""), `${baseUrl.href.replace(/\/+$/, "")}/`);
     }
-    const url = new URL(relativePath.replace(/^\/+/, ""), `${baseUrl.href.replace(/\/+$/, "")}/`);
-    if (url.origin !== baseUrl.origin || !(await isAllowedConnectorTarget(url.href))) {
+    if (!(await isAllowedConnectorTarget(url.href))) {
       throw new Error("Connector operation target is not allowed");
     }
 
-    const credentials = connection.credential_id
-      ? await resolveConnectorCredential({
-          db,
-          credentialId: connection.credential_id,
-          companyId,
-          connectorId: connection.connector_definition_id,
-          platformCredentialAccess,
-          actorUserId,
-        })
-      : {};
-    if (connection.credential_id && !credentials) {
+    const credentials = loaded?.secrets || {};
+    if (connection.credential_id && !loaded?.credential) {
       throw new Error("Connector credential is unavailable");
     }
     const context = { input, credentials, response: undefined };

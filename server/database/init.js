@@ -256,6 +256,32 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         `);
       },
     },
+    {
+      key: "0016_oneconnection",
+      version: "16",
+      name: "Universal OneConnection credential ownership and OAuth2 auth",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE platform_credentials
+            ADD COLUMN IF NOT EXISTS connection_id UUID REFERENCES integration_connections(id) ON DELETE CASCADE;
+
+          DROP INDEX IF EXISTS uq_platform_credentials_company_key;
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_credentials_company_key
+            ON platform_credentials(company_id, connector_id, credential_key)
+            WHERE company_id IS NOT NULL AND connection_id IS NULL;
+
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_credentials_connection_key
+            ON platform_credentials(company_id, connection_id, credential_key)
+            WHERE company_id IS NOT NULL AND connection_id IS NOT NULL;
+
+          ALTER TABLE integration_connections
+            DROP CONSTRAINT IF EXISTS integration_connections_auth_type_check;
+          ALTER TABLE integration_connections
+            ADD CONSTRAINT integration_connections_auth_type_check
+            CHECK (auth_type IN ('none','api_key','bearer','basic','oauth2'));
+        `);
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
