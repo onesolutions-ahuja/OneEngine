@@ -1,6 +1,9 @@
+import { assertTrustedJobKind } from "./trustedRuntime.js";
+
 const MAX_ATTEMPTS = 5;
 
 export async function enqueuePlatformJob({ db, companyId, kind, payload, runAt = new Date(), idempotencyKey }) {
+  assertTrustedJobKind(kind);
   if (!companyId || !kind || !idempotencyKey) throw new Error("A company, job kind and idempotency key are required");
   const result = await db(
     `INSERT INTO platform_action_jobs (company_id,kind,payload,status,attempts,next_attempt_at,idempotency_key)
