@@ -11126,3 +11126,448 @@ button.git-control-tile { cursor: pointer; }
     grid-column: auto;
   }
 }
+
+
+/* Object Manager tab content — unified macOS/record UI */
+.objects-config-content {
+  color: #20242a;
+  font-size: 10px;
+}
+
+.objects-config-content *,
+.objects-config-content *::before,
+.objects-config-content *::after {
+  box-sizing: border-box;
+}
+
+.objects-config-content button,
+.objects-config-content input,
+.objects-config-content select,
+.objects-config-content textarea {
+  font: inherit;
+}
+
+.objects-config-content .platform-editor-card,
+.objects-config-content .onepos-card,
+.objects-config-content > .space-y-4,
+.objects-config-content > .space-y-3 {
+  width: 100%;
+  min-width: 0;
+}
+
+.objects-config-content .platform-editor-card {
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.075);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.objects-config-content .platform-editor-card-header {
+  min-height: 58px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  background: #fbfbfc;
+}
+
+.objects-config-content .platform-editor-card-header h2,
+.objects-config-content .platform-editor-card-header h3,
+.objects-config-content .onepos-card h2,
+.objects-config-content .onepos-card h3 {
+  margin: 0;
+  color: #1d1d1f;
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.objects-config-content .platform-editor-card-header p {
+  margin: 3px 0 0;
+  color: rgba(31,42,58,.52);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.objects-config-content .platform-alert {
+  margin: 10px 12px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 9.5px;
+}
+
+.objects-config-content .platform-alert-error {
+  border: 1px solid rgba(255,59,48,.18);
+  background: rgba(255,59,48,.07);
+  color: #a12921;
+}
+
+.objects-config-content .platform-editor-empty,
+.objects-config-content .onepos-empty {
+  min-height: 110px;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  color: rgba(31,42,58,.46);
+  text-align: center;
+  font-size: 10px;
+}
+
+.objects-config-content .platform-form-grid {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px;
+  border-top: 1px solid rgba(0,0,0,.055);
+}
+
+.objects-config-content .platform-form-field,
+.objects-config-content .platform-toggle-field {
+  min-width: 0;
+}
+
+.objects-config-content .platform-form-field {
+  display: grid;
+  gap: 5px;
+}
+
+.objects-config-content .platform-form-field > span,
+.objects-config-content .platform-form-field > strong,
+.objects-config-content .platform-field-editor-wide legend {
+  color: #505863;
+  font-size: 9.5px;
+  font-weight: 680;
+}
+
+.objects-config-content .platform-form-field-wide {
+  grid-column: 1 / -1;
+}
+
+.objects-config-content .platform-form-field input,
+.objects-config-content .platform-form-field select,
+.objects-config-content .platform-form-field textarea,
+.objects-config-content .platform-field-editor-wide input,
+.objects-config-content .platform-field-editor-wide select,
+.objects-config-content .platform-field-editor-wide textarea,
+.objects-config-content .onepos-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid rgba(0,0,0,.11);
+  border-radius: 8px;
+  outline: 0;
+  background: #fff;
+  color: #1d1d1f;
+  font-size: 10px;
+}
+
+.objects-config-content textarea.onepos-input {
+  min-height: 72px;
+  height: auto;
+}
+
+.objects-config-content .platform-form-field textarea,
+.objects-config-content .platform-field-editor-wide textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.objects-config-content .platform-form-field select[multiple] {
+  min-height: 110px;
+}
+
+.objects-config-content .platform-form-field input:focus,
+.objects-config-content .platform-form-field select:focus,
+.objects-config-content .platform-form-field textarea:focus,
+.objects-config-content .platform-field-editor-wide input:focus,
+.objects-config-content .platform-field-editor-wide select:focus,
+.objects-config-content .platform-field-editor-wide textarea:focus,
+.objects-config-content .onepos-input:focus {
+  border-color: rgba(10,132,255,.48);
+  box-shadow: 0 0 0 2px rgba(10,132,255,.08);
+}
+
+.objects-config-content .platform-toggle-field {
+  min-height: 38px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.objects-config-content .platform-toggle-field input {
+  margin-top: 2px;
+}
+
+.objects-config-content .platform-toggle-field > span {
+  display: grid;
+  gap: 2px;
+}
+
+.objects-config-content .platform-toggle-field strong {
+  font-size: 9.5px;
+}
+
+.objects-config-content .platform-toggle-field small {
+  color: rgba(31,42,58,.5);
+  font-size: 8.5px;
+  line-height: 1.3;
+}
+
+.objects-config-content .platform-primary-button,
+.objects-config-content .onepos-btn,
+.objects-config-content .platform-editor-card button:not(.objects-config-row-button) {
+  min-height: 31px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(0,0,0,.1);
+  border-radius: 8px;
+  background: #fff;
+  color: #1d1d1f;
+  font-size: 9.5px;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.objects-config-content .platform-primary-button,
+.objects-config-content .onepos-btn-primary {
+  border-color: #0a84ff;
+  background: #0a84ff;
+  color: #fff;
+}
+
+.objects-config-content .onepos-btn-secondary {
+  background: #fff;
+  color: #303740;
+}
+
+.objects-config-content .platform-primary-button:hover,
+.objects-config-content .onepos-btn-primary:hover {
+  background: #0078ee;
+}
+
+.objects-config-content .platform-primary-button:disabled,
+.objects-config-content .onepos-btn:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.objects-config-content .platform-record-type-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid rgba(0,0,0,.055);
+}
+
+.objects-config-content .platform-record-type-list li {
+  min-height: 40px;
+  padding: 8px 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(0,0,0,.045);
+  font-size: 9.5px;
+}
+
+.objects-config-content .platform-record-type-list li:last-child {
+  border-bottom: 0;
+}
+
+.objects-config-content .platform-record-type-list code {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: #f1f3f5;
+  color: #4c5560;
+  font-size: 8.5px;
+}
+
+.objects-config-content .platform-field-editor-wide {
+  grid-column: 1 / -1;
+  padding: 11px;
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 9px;
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 9px;
+  background: #fbfbfc;
+}
+
+.objects-config-content .platform-field-editor-wide legend {
+  padding: 0 5px;
+}
+
+.objects-config-content .platform-field-editor-wide > label {
+  display: grid;
+  gap: 4px;
+}
+
+.objects-config-content .platform-field-editor-wide > button {
+  width: fit-content;
+}
+
+/* Normalize Tailwind-style editor fragments used by object tabs */
+.objects-config-content .space-y-4 > * + * { margin-top: 14px; }
+.objects-config-content .space-y-3 > * + * { margin-top: 10px; }
+.objects-config-content .space-y-2 > * + * { margin-top: 7px; }
+.objects-config-content .grid { display: grid; }
+.objects-config-content .flex { display: flex; }
+.objects-config-content .block { display: block; }
+.objects-config-content .inline-flex { display: inline-flex; }
+.objects-config-content .items-center { align-items: center; }
+.objects-config-content .items-start { align-items: flex-start; }
+.objects-config-content .justify-between { justify-content: space-between; }
+.objects-config-content .flex-1 { flex: 1 1 0%; }
+.objects-config-content .flex-wrap { flex-wrap: wrap; }
+.objects-config-content .min-w-0 { min-width: 0; }
+.objects-config-content .w-full { width: 100%; }
+.objects-config-content .gap-2 { gap: 8px; }
+.objects-config-content .gap-3 { gap: 12px; }
+.objects-config-content .gap-4 { gap: 14px; }
+.objects-config-content .p-3 { padding: 12px; }
+.objects-config-content .p-4 { padding: 14px; }
+.objects-config-content .py-2 { padding-top: 8px; padding-bottom: 8px; }
+.objects-config-content .px-3 { padding-left: 10px; padding-right: 10px; }
+.objects-config-content .mt-1 { margin-top: 4px; }
+.objects-config-content .ml-auto { margin-left: auto; }
+.objects-config-content .text-left { text-align: left; }
+.objects-config-content .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.objects-config-content .font-semibold { font-weight: 700; }
+.objects-config-content .text-sm { font-size: 9.5px; }
+.objects-config-content .text-xs { font-size: 8.5px; }
+.objects-config-content .text-slate-400 { color: #8a919a; }
+.objects-config-content .text-slate-500,
+.objects-config-content .text-slate-600 { color: #66707b; }
+.objects-config-content .text-red-700 { color: #b42318; }
+.objects-config-content .text-blue-700 { color: #0a67c2; }
+.objects-config-content .border-b { border-bottom: 1px solid rgba(0,0,0,.07); }
+.objects-config-content .border-t { border-top: 1px solid rgba(0,0,0,.06); }
+.objects-config-content .border-b-2 { border-bottom-width: 2px; }
+.objects-config-content .border-blue-600 { border-color: #0a84ff; }
+
+/* OnePOS cards inside object configuration */
+.objects-config-content .onepos-card {
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.075);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.objects-config-content .onepos-card > .flex:first-child,
+.objects-config-content .onepos-card > h3:first-child {
+  min-height: 36px;
+}
+
+.objects-config-content [role="tablist"] {
+  min-height: 38px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(0,0,0,.07);
+}
+
+.objects-config-content [role="tablist"] > button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #626b75;
+  font-size: 9.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.objects-config-content [role="tablist"] > button[aria-selected="true"] {
+  color: #0a84ff;
+  border-bottom-color: #0a84ff;
+}
+
+.objects-config-content .xl\:grid-cols-\[250px_minmax\(0\,1fr\)\] {
+  grid-template-columns: 250px minmax(0,1fr);
+}
+
+.objects-config-content .md\:grid-cols-2 {
+  grid-template-columns: repeat(2,minmax(0,1fr));
+}
+
+.objects-config-content .md\:grid-cols-\[160px_1fr_auto\] {
+  grid-template-columns: 160px minmax(0,1fr) auto;
+}
+
+.objects-config-content .objects-config-list,
+.objects-config-content .objects-detail-placeholder {
+  margin-top: 0;
+}
+
+/* Lists generated by ObjectDataList */
+.objects-config-content .objects-config-row-button {
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 11px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(0,0,0,.055);
+  background: #fff;
+  color: #20242a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.objects-config-content .objects-config-row-button:last-child {
+  border-bottom: 0;
+}
+
+.objects-config-content .objects-config-row-button:hover {
+  background: #f7f9fc;
+}
+
+.objects-config-content .objects-config-row-button > span:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.objects-config-content .objects-config-row-button strong {
+  font-size: 10.5px;
+}
+
+.objects-config-content .objects-config-row-button small,
+.objects-config-content .objects-config-row-button > span:last-child {
+  color: rgba(31,42,58,.5);
+  font-size: 8.8px;
+}
+
+/* Keep editors readable on compact widths */
+@media (max-width: 900px) {
+  .objects-config-content .platform-form-grid,
+  .objects-config-content .md\:grid-cols-2,
+  .objects-config-content .xl\:grid-cols-\[250px_minmax\(0\,1fr\)\] {
+    grid-template-columns: 1fr;
+  }
+
+  .objects-config-content .platform-field-editor-wide {
+    grid-template-columns: 1fr;
+  }
+
+  .objects-config-content .md\:grid-cols-\[160px_1fr_auto\] {
+    grid-template-columns: 1fr;
+  }
+
+  .objects-config-content .platform-form-field-wide {
+    grid-column: auto;
+  }
+}
