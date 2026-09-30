@@ -112,6 +112,7 @@ import {
   Settings as GearIcon,
   CircleUserRound,
   CircleHelp,
+  CircleAlert,
   Accessibility,
   Shield,
   Monitor,
