@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, History, Plus, RefreshCw, Upload, X } from 'lucide-react'
 import { apiFetch, apiRequest } from '../../services/api'
+import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
 
 const CORE_FIELD_NAMES = new Set([
@@ -37,13 +38,13 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
   const [exportBusy,setExportBusy]=useState(false)
   const fileRef=useRef(null)
 
-  const load=async()=>{
+  const load=async(forceRefresh=false)=>{
     try{
       setLoading(true); setError('')
       const [p,c,s]=await Promise.all([
-        apiRequest('/api/products'),
-        apiRequest('/api/categories?all=true').catch(()=>null),
-        apiRequest('/api/settings').catch(()=>null),
+        cachedGet('/api/products',{forceRefresh,onFresh:fresh=>fresh?.success&&setProducts(Array.isArray(fresh.data)?fresh.data:[])}),
+        cachedGet('/api/categories?all=true',{forceRefresh,onFresh:fresh=>fresh?.success&&setCategories(Array.isArray(fresh.data)?fresh.data:[])}).catch(()=>null),
+        cachedGet('/api/settings',{cacheKey:'settings:company',forceRefresh,onFresh:fresh=>fresh?.data?.company?.currency&&setCurrency(fresh.data.company.currency)}).catch(()=>null),
       ])
       if(!p?.success) throw new Error(p?.message||'Unable to load products')
       setProducts(Array.isArray(p.data)?p.data:[])
@@ -87,7 +88,7 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
       }else{
         await apiRequest(`/api/products/${encodeURIComponent(product.id)}`,{method:'DELETE'})
       }
-      await load()
+      await load(true)
     }catch(err){ setError(err?.message||'Unable to update product status') }
   }
 
@@ -131,7 +132,7 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
       const csv=await importFile.text()
       const r=await apiRequest('/api/products/import',{method:'POST',body:JSON.stringify({csv})})
       if(!r?.success)throw new Error(r?.message||'Import failed')
-      setImportResult(r.data||{});setImportPreview(null);await load()
+      setImportResult(r.data||{});setImportPreview(null);await load(true)
     }catch(err){setError(err?.message||'Import failed')}
     finally{setImportBusy(false)}
   }
@@ -143,7 +144,7 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
       <div className="module-header-actions">
         {onOpenCategories?<button onClick={onOpenCategories}>Categories</button>:null}
         {onOpenGlobalProducts?<button onClick={onOpenGlobalProducts}>Global Products</button>:null}
-        <button onClick={load}><RefreshCw size={14}/> Refresh</button>
+        <button onClick={()=>load(true)}><RefreshCw size={14}/> Refresh</button>
         <button onClick={doExport} disabled={exportBusy}><Download size={14}/> {exportBusy?'Exporting…':'Export'}</button>
         <button onClick={()=>setImportOpen(true)}><Upload size={14}/> Import</button>
         <button className="module-primary-button" onClick={()=>setEditor({mode:'create',product:null,preset:null})}><Plus size={14}/> Add Product</button>
@@ -181,7 +182,7 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
       preset={editor.preset}
       categories={categories}
       onClose={()=>setEditor(null)}
-      onSaved={async()=>{setEditor(null);await load()}}
+      onSaved={async()=>{setEditor(null);await load(true)}}
     />:null}
 
     {history?<ProductHistoryModal state={history} onClose={()=>setHistory(null)}/>:null}
