@@ -438,8 +438,22 @@ export const platformSchema = `
     new_value JSONB,
     action VARCHAR(20) NOT NULL CHECK (action IN ('create','update','delete')),
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    correlation_id VARCHAR(255),
+    transaction_id UUID,
+    workflow_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL,
+    event_id UUID REFERENCES platform_events(id) ON DELETE SET NULL,
+    source VARCHAR(80),
+    execution_mode VARCHAR(20),
+    runtime_contract_version VARCHAR(40),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(255);
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS transaction_id UUID;
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS workflow_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL;
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS event_id UUID REFERENCES platform_events(id) ON DELETE SET NULL;
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS source VARCHAR(80);
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(20);
+  ALTER TABLE platform_record_history ADD COLUMN IF NOT EXISTS runtime_contract_version VARCHAR(40);
   CREATE TABLE IF NOT EXISTS platform_approval_processes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
@@ -691,6 +705,7 @@ export const platformSchema = `
   CREATE INDEX IF NOT EXISTS idx_platform_fields_object ON platform_fields(object_id, display_order);
   CREATE INDEX IF NOT EXISTS idx_platform_field_security_role ON platform_field_security(role_id, company_id);
   CREATE INDEX IF NOT EXISTS idx_platform_record_history_record ON platform_record_history(object_id, record_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_platform_record_history_correlation ON platform_record_history(company_id, correlation_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_platform_approval_requests_company ON platform_approval_requests(company_id, status, submitted_at DESC);
   CREATE INDEX IF NOT EXISTS idx_platform_value_sets_company ON platform_value_sets(company_id, active);
   CREATE INDEX IF NOT EXISTS idx_platform_value_set_values_set ON platform_value_set_values(value_set_id, display_order);
