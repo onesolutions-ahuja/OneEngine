@@ -4545,14 +4545,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   }
 
-  async function writeRecordHistory(object, recordId, fields, oldRecord, newRecord, action, req) {
+  async function writeRecordHistory(object, recordId, fields, oldRecord, newRecord, action, req, historyDb = db) {
     const changes = fields.filter((field) => field.api_name && (
       action !== "update" ||
       JSON.stringify(oldRecord?.[field.api_name] ?? null) !== JSON.stringify(newRecord?.[field.api_name] ?? null)
     ));
     try {
       for (const field of changes) {
-        await db(
+        await historyDb(
           "INSERT INTO platform_record_history (company_id,object_id,object_key,record_id,field_api_name,old_value,new_value,action,actor_user_id) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)",
           [
             req.user.companyId,
@@ -5048,7 +5048,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             : Object.fromEntries(state.validation.values.map(({ field, value }) => [field.api_name, value]));
 
           const beforeAutomation = await executePlatformAutomations({
-            db,
+            db: runtimeDb,
             object,
             fields,
             record: baseRecord,
@@ -5102,7 +5102,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             const result = await runtimeDb(`UPDATE "${object.source_table}" SET ${assignments.join(",")} WHERE ${clauses.join(" AND ")} RETURNING ${returning.join(",")}`, params);
             if (!result.rows.length) lifecycleFailure(state.ruleCheck.version !== undefined ? 409 : 404, "RECORD_NOT_AVAILABLE", "Record not found or changed while validating");
             saved = result.rows[0];
-            await writeRecordHistory(object, saved.id, fields, state.ruleCheck.current, saved, "update", req);
+            await writeRecordHistory(object, saved.id, fields, state.ruleCheck.current, saved, "update", req, runtimeDb);
           } else {
             const columns = state.validation.values.map(({ column }) => `"${column}"`);
             const params = state.validation.values.map(({ value }) => value);
@@ -5112,7 +5112,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             const returning = recordReturning(fields, state.validation.values);
             const result = await runtimeDb(`INSERT INTO "${object.source_table}" (${columns.join(",")}) VALUES (${placeholders.join(",")}) RETURNING ${returning.join(",")}`, params);
             saved = result.rows[0];
-            await writeRecordHistory(object, saved.id, fields, null, saved, "create", req);
+            await writeRecordHistory(object, saved.id, fields, null, saved, "create", req, runtimeDb);
           }
           return { ...state, saved };
         },
