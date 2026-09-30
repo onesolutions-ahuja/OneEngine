@@ -1,7 +1,10 @@
 const DEFINITIONS = [
+  { id: 'platform.developer.manage', prefixes: ['/api/platform/developer/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'platform.metadata.execute', prefixes: ['/api/platform/runtime/', '/api/platform/workflows', '/api/platform/events', '/api/platform/schedules'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'package.lifecycle', prefixes: ['/api/packages/', '/api/platform/packages/'], methods: ['POST','PUT','PATCH','DELETE'] },
-  { id: 'security.manage', prefixes: ['/api/platform/security', '/api/admin/roles', '/api/admin/users', '/api/settings/roles', '/api/settings/users'], methods: ['POST','PUT','PATCH','DELETE'] },
+  { id: 'security.manage', prefixes: ['/api/platform/security'], methods: ['POST','PUT','PATCH','DELETE'] },
+  { id: 'admin.manage', prefixes: ['/api/admin/'], methods: ['POST','PUT','PATCH','DELETE'] },
+  { id: 'settings.manage', prefixes: ['/api/settings/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'payment.execute', prefixes: ['/api/payments', '/api/payment', '/api/checkout', '/api/till/payment'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'refund.execute', prefixes: ['/api/refunds', '/api/returns', '/api/exchanges'], methods: ['POST','PUT','PATCH','DELETE'] },
 ]
