@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, List, Plus, RefreshCw, Search } from 'lucide-react'
+import { CalendarDays, List, Plus, RefreshCw, Search, Settings2 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import RecordModal from '../../components/RecordModal'
 import { AdvancedRecordView, TableView } from '../../components/platform/CustomPageRenderer'
@@ -50,6 +50,8 @@ export default function OneAssistantPage(){
   const [query,setQuery]=useState('')
   const [editor,setEditor]=useState(null)
   const [detail,setDetail]=useState(null)
+  const [serviceEditor,setServiceEditor]=useState(false)
+  const [resourceEditor,setResourceEditor]=useState(false)
 
   const load=async()=>{
     try{
@@ -106,6 +108,7 @@ export default function OneAssistantPage(){
         <div style={{display:'flex',gap:8}}>
           <button type="button" className={view==='calendar'?'module-primary-button':''} onClick={()=>setView('calendar')}><CalendarDays size={14}/> Calendar</button>
           <button type="button" className={view==='list'?'module-primary-button':''} onClick={()=>setView('list')}><List size={14}/> List</button>
+          <button type="button" className={view==='setup'?'module-primary-button':''} onClick={()=>setView('setup')}><Settings2 size={14}/> Setup</button>
         </div>
         <label style={{display:'flex',alignItems:'center',gap:8,minWidth:260}}>
           <Search size={14}/>
@@ -113,11 +116,13 @@ export default function OneAssistantPage(){
         </label>
       </div>
 
-      {loading&&!appointments.length
-        ? <div className="module-state">Loading appointments…</div>
-        : view==='calendar'
-          ? <AdvancedRecordView node={calendarNode} data={calendarData} builderMode={false} onRecordClick={({record})=>setDetail(record)}/>
-          : <TableView node={tableNode} builderMode={false} data={tableData} onRecordClick={({record})=>setDetail(record)}/>
+      {view==='setup'
+        ? <AssistantSetup services={services} resources={resources} onNewService={()=>setServiceEditor(true)} onNewResource={()=>setResourceEditor(true)}/>
+        : loading&&!appointments.length
+          ? <div className="module-state">Loading appointments…</div>
+          : view==='calendar'
+            ? <AdvancedRecordView node={calendarNode} data={calendarData} builderMode={false} onRecordClick={({record})=>setDetail(record)}/>
+            : <TableView node={tableNode} builderMode={false} data={tableData} onRecordClick={({record})=>setDetail(record)}/>
       }
     </section>
 
@@ -135,7 +140,83 @@ export default function OneAssistantPage(){
       onEdit={()=>{setEditor(detail);setDetail(null)}}
       onChanged={async text=>{setDetail(null);setMessage(text);await load()}}
     />:null}
+
+    {serviceEditor?<ServiceEditor onClose={()=>setServiceEditor(false)} onSaved={async()=>{setServiceEditor(false);setMessage('Service created.');await load()}}/>:null}
+    {resourceEditor?<ResourceEditor services={services} onClose={()=>setResourceEditor(false)} onSaved={async()=>{setResourceEditor(false);setMessage('Resource created with availability.');await load()}}/>:null}
   </section>
+}
+
+function AssistantSetup({services,resources,onNewService,onNewResource}){
+  return <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:16}}>
+    <section className="module-page-card" style={{margin:0}}>
+      <div className="customer-section-head"><strong>Services</strong><button type="button" onClick={onNewService}><Plus size={13}/> New service</button></div>
+      <div className="customer-loyalty-list">{services.length?services.map(service=><div key={service.id}><div><strong>{service.name}</strong><span>{service.duration_minutes} min · {service.payment_policy}</span></div><div><b>{service.currency} {Number(service.price||0).toFixed(2)}</b></div></div>):<div className="module-state compact">No services yet.</div>}</div>
+    </section>
+    <section className="module-page-card" style={{margin:0}}>
+      <div className="customer-section-head"><strong>Resources / Staff</strong><button type="button" onClick={onNewResource}><Plus size={13}/> New resource</button></div>
+      <div className="customer-loyalty-list">{resources.length?resources.map(resource=><div key={resource.id}><div><strong>{resource.name}</strong><span>{resource.resource_type||'STAFF'}</span></div><div><b>{resource.active===false?'Inactive':'Active'}</b></div></div>):<div className="module-state compact">No resources yet.</div>}</div>
+    </section>
+  </div>
+}
+
+function ServiceEditor({onClose,onSaved}){
+  const [values,setValues]=useState({name:'',description:'',durationMinutes:30,price:0,currency:'GBP',paymentPolicy:'NO_ADVANCE',depositValue:0})
+  const [saving,setSaving]=useState(false),[error,setError]=useState('')
+  const save=async()=>{
+    if(!values.name.trim())return setError('Service name is required.')
+    try{
+      setSaving(true);setError('')
+      const result=await apiRequest('/api/appointments/services',{method:'POST',body:JSON.stringify(values)})
+      if(!result?.success)throw new Error(result?.message||'Unable to create service')
+      await onSaved?.()
+    }catch(err){setError(err?.message||'Unable to create service')}finally{setSaving(false)}
+  }
+  return <RecordModal open mode="create" title="New Service" subtitle="Create a bookable service." saving={saving} saveLabel="Create Service" onClose={onClose} onSave={save}>
+    {error?<div className="module-inline-error" style={{marginBottom:12}}>{error}</div>:null}
+    <div className="customer-editor-grid">
+      <label className="module-input-label"><span>Name</span><input value={values.name} onChange={e=>setValues(v=>({...v,name:e.target.value}))}/></label>
+      <label className="module-input-label"><span>Duration (minutes)</span><input type="number" min="5" value={values.durationMinutes} onChange={e=>setValues(v=>({...v,durationMinutes:Number(e.target.value)}))}/></label>
+      <label className="module-input-label"><span>Price</span><input type="number" min="0" step="0.01" value={values.price} onChange={e=>setValues(v=>({...v,price:Number(e.target.value)}))}/></label>
+      <label className="module-input-label"><span>Currency</span><input value={values.currency} onChange={e=>setValues(v=>({...v,currency:e.target.value.toUpperCase()}))}/></label>
+      <label className="module-input-label"><span>Payment policy</span><select value={values.paymentPolicy} onChange={e=>setValues(v=>({...v,paymentPolicy:e.target.value}))}><option value="NO_ADVANCE">No advance</option><option value="FIXED_DEPOSIT">Fixed deposit</option><option value="PERCENT_DEPOSIT">Percent deposit</option><option value="FULL_PAYMENT">Full payment</option></select></label>
+      {values.paymentPolicy!=='NO_ADVANCE'&&values.paymentPolicy!=='FULL_PAYMENT'?<label className="module-input-label"><span>Deposit value</span><input type="number" min="0" step="0.01" value={values.depositValue} onChange={e=>setValues(v=>({...v,depositValue:Number(e.target.value)}))}/></label>:null}
+      <label className="module-textarea-label customer-full"><span>Description</span><textarea rows={3} value={values.description} onChange={e=>setValues(v=>({...v,description:e.target.value}))}/></label>
+    </div>
+  </RecordModal>
+}
+
+function ResourceEditor({services,onClose,onSaved}){
+  const [values,setValues]=useState({name:'',resourceType:'STAFF',serviceIds:[],weekdays:[1,2,3,4,5],startTime:'09:00',endTime:'17:00',slotIntervalMinutes:15})
+  const [saving,setSaving]=useState(false),[error,setError]=useState('')
+  const toggleService=id=>setValues(v=>({...v,serviceIds:v.serviceIds.includes(id)?v.serviceIds.filter(x=>x!==id):[...v.serviceIds,id]}))
+  const toggleDay=day=>setValues(v=>({...v,weekdays:v.weekdays.includes(day)?v.weekdays.filter(x=>x!==day):[...v.weekdays,day].sort()}))
+  const save=async()=>{
+    if(!values.name.trim())return setError('Resource name is required.')
+    if(!values.serviceIds.length)return setError('Select at least one service.')
+    if(!values.weekdays.length)return setError('Select at least one working day.')
+    try{
+      setSaving(true);setError('')
+      const result=await apiRequest('/api/appointments/resources',{method:'POST',body:JSON.stringify({
+        name:values.name,resourceType:values.resourceType,serviceIds:values.serviceIds,
+        availability:{weekdays:values.weekdays,startTime:values.startTime,endTime:values.endTime,slotIntervalMinutes:values.slotIntervalMinutes}
+      })})
+      if(!result?.success)throw new Error(result?.message||'Unable to create resource')
+      await onSaved?.()
+    }catch(err){setError(err?.message||'Unable to create resource')}finally{setSaving(false)}
+  }
+  const days=[['Sun',0],['Mon',1],['Tue',2],['Wed',3],['Thu',4],['Fri',5],['Sat',6]]
+  return <RecordModal open mode="create" title="New Resource" subtitle="Assign services and normal working hours." size="lg" saving={saving} saveLabel="Create Resource" onClose={onClose} onSave={save}>
+    {error?<div className="module-inline-error" style={{marginBottom:12}}>{error}</div>:null}
+    <div className="customer-editor-grid">
+      <label className="module-input-label"><span>Name</span><input value={values.name} onChange={e=>setValues(v=>({...v,name:e.target.value}))}/></label>
+      <label className="module-input-label"><span>Type</span><select value={values.resourceType} onChange={e=>setValues(v=>({...v,resourceType:e.target.value}))}><option value="STAFF">Staff</option><option value="ROOM">Room</option><option value="BAY">Bay</option><option value="RESOURCE">Resource</option></select></label>
+      <div className="customer-full"><span style={{display:'block',fontSize:12,fontWeight:600,marginBottom:8}}>Services</span><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{services.filter(s=>s.active!==false).map(s=><button type="button" key={s.id} className={values.serviceIds.includes(s.id)?'module-primary-button':''} onClick={()=>toggleService(s.id)}>{s.name}</button>)}</div></div>
+      <div className="customer-full"><span style={{display:'block',fontSize:12,fontWeight:600,marginBottom:8}}>Working days</span><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{days.map(([label,day])=><button type="button" key={day} className={values.weekdays.includes(day)?'module-primary-button':''} onClick={()=>toggleDay(day)}>{label}</button>)}</div></div>
+      <label className="module-input-label"><span>Start time</span><input type="time" value={values.startTime} onChange={e=>setValues(v=>({...v,startTime:e.target.value}))}/></label>
+      <label className="module-input-label"><span>End time</span><input type="time" value={values.endTime} onChange={e=>setValues(v=>({...v,endTime:e.target.value}))}/></label>
+      <label className="module-input-label"><span>Slot interval</span><select value={values.slotIntervalMinutes} onChange={e=>setValues(v=>({...v,slotIntervalMinutes:Number(e.target.value)}))}><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></label>
+    </div>
+  </RecordModal>
 }
 
 function AppointmentEditor({appointment,services,resources,onClose,onSaved}){
