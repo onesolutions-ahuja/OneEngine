@@ -2313,7 +2313,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["functions.execute"],
-    executor: async ({ action, db, client, req, companyId, userId, record, previousRecord, object, fields }) => {
+    executor: async ({ action, db, businessDb = null, client, req, companyId, userId, record, previousRecord, object, fields }) => {
       const functionKey = action.functionKey || action.key;
       const functionDefinition = getRegisteredFunction(functionKey);
       if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
@@ -2321,7 +2321,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         throw new Error(`Function "${functionKey}" has no handler`);
       }
       const inputs = resolveBindingTree(action.inputs || {}, { record, rootObjectKey: object?.object_key || object?.objectKey || null });
-      return functionDefinition.handler({ action, inputs, db, client, req, companyId, userId, record, previousRecord, object, fields });
+      return functionDefinition.handler({
+        action,
+        inputs,
+        db: businessDb || db,
+        client,
+        req,
+        companyId,
+        userId,
+        record,
+        previousRecord,
+        object,
+        fields,
+      });
     },
   },
   {
