@@ -3432,12 +3432,14 @@ export async function executeWorkflowActions({ actions, ...context }) {
     }
     throw error;
   }
-  const governedDb = typeof context.db === "function"
-    ? async (...args) => {
-        governor.consumeQuery(1);
-        return context.db(...args);
-      }
-    : context.db;
+  let governedDb = context.db;
+  if (typeof context.db === "function" && context.db.__platformGoverned !== true) {
+    governedDb = async (...args) => {
+      governor.consumeQuery(1);
+      return context.db(...args);
+    };
+    governedDb.__platformGoverned = true;
+  }
   const runtimeContext = applyExecutionContext({
     ...context,
     db: governedDb,
@@ -3461,6 +3463,9 @@ export async function executeWorkflowActions({ actions, ...context }) {
     const actionType = resolveWorkflowActionType(item);
     if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","CALL_WEBHOOK","HTTP_REQUEST","CALL_FUNCTION"].includes(actionType)) {
       governor.consumeExternalAction(1);
+    }
+    if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","WAIT"].includes(actionType)) {
+      governor.consumeQueuedJob(1);
     }
     if (actionType === "RUN_SUBFLOW") governor.consumeSubflow(1);
     const index = results.length;
