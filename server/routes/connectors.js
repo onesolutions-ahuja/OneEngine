@@ -1422,6 +1422,19 @@ export default function createConnectorsRouter({
       if (!instance) {
         return res.status(404).json({ success: false, message: "Connector instance not found" });
       }
+      const permissionResult = await db(
+        `SELECT p.code
+           FROM users u
+           JOIN role_permissions rp ON rp.role_id=u.role_id
+           JOIN permissions p ON p.id=rp.permission_id
+          WHERE u.id=$1 AND u.active=TRUE`,
+        [req.user.id]
+      );
+      req.user = {
+        ...req.user,
+        permissionCodes: permissionResult.rows.map((row) => row.code),
+      };
+
       const execution = await executeSystemWorkflow({
         db,
         companyId: req.user.companyId,
