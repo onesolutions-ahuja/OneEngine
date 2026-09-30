@@ -9879,3 +9879,116 @@ button.git-control-tile { cursor: pointer; }
     display: none;
   }
 }
+
+
+/* Google Connect — standalone licensed OneStore app settings */
+.settings-detail-page {
+  min-height: calc(100vh - 72px);
+  padding: 28px;
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+.settings-detail-header,
+.settings-form-card {
+  max-width: 920px;
+  margin: 0 auto;
+}
+.settings-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+.settings-detail-header h1 {
+  margin: 0 0 4px;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+.settings-detail-header p {
+  margin: 0;
+  color: #6e6e73;
+}
+.settings-detail-header img {
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+}
+.settings-form-card {
+  background: rgba(255,255,255,.92);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 10px 34px rgba(0,0,0,.06);
+}
+.settings-status-row,
+.settings-field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-status-row {
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+.settings-status-row span {
+  margin-left: auto;
+  color: #6e6e73;
+  font-size: 13px;
+}
+.settings-field,
+.settings-field-row {
+  margin: 14px 0;
+}
+.settings-field {
+  display: grid;
+  gap: 7px;
+}
+.settings-field > span,
+.settings-field-row > span {
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-field input:not([type="checkbox"]) {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d2d2d7;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  color: #1d1d1f;
+  font: inherit;
+}
+.settings-field-row {
+  justify-content: space-between;
+  min-height: 38px;
+}
+.settings-field-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  margin-top: 18px;
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+.settings-actions button {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.login-success {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px;
+  margin: 10px 0;
+  border-radius: 10px;
+  background: #ecfdf3;
+  color: #067647;
+  font-size: 13px;
+}
