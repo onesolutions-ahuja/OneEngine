@@ -380,6 +380,31 @@ export async function confirmAppointmentFromHold(client, {
   return inserted.rows[0];
 }
 
+export async function createAppointmentPaymentRequest(db, {
+  companyId, holdId = null, appointmentId = null, providerPackageKey = null,
+  amount, currency = "GBP", expiresAt = null, metadata = {},
+} = {}) {
+  if (!companyId) throw new Error("companyId is required");
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount < 0) throw new Error("amount must be zero or greater");
+  if (providerPackageKey) {
+    const providers = await listPaymentRequestProviders(db, companyId);
+    if (!providers.some((provider) => provider.packageKey === providerPackageKey)) {
+      const error = new Error("Selected payment provider is not installed, active, and payment-request capable");
+      error.code = "PAYMENT_PROVIDER_UNAVAILABLE";
+      throw error;
+    }
+  }
+  const result = await db(
+    `INSERT INTO appointment_payment_requests
+      (company_id,hold_id,appointment_id,provider_package_key,amount,currency,expires_at,metadata)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+     RETURNING *`,
+    [companyId,holdId,appointmentId,providerPackageKey,numericAmount,String(currency||"GBP").toUpperCase(),expiresAt,JSON.stringify(metadata||{})]
+  );
+  return result.rows[0];
+}
+
 export function calculateAppointmentPayment(service) {
   const price = Math.max(0, Number(service?.price || 0));
   const deposit = Math.max(0, Number(service?.deposit_value || 0));
