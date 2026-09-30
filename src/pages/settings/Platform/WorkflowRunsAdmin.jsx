@@ -119,8 +119,8 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
               <div><span>Record</span><strong>{run.record_id || run.object_id || "—"}</strong></div>
             </div>
 
-            {run.error_text || run.metadata?.last_error ? (
-              <div className="workflow-run-error"><strong>Failure summary</strong><span>{run.error_text || run.metadata?.last_error || "Execution failed"}</span></div>
+            {run.error_text || run.metadata?.last_error || run.metadata?.error || run.metadata?.rootError?.message ? (
+              <div className="workflow-run-error"><strong>Failure summary</strong><span>{run.error_text || run.metadata?.last_error || run.metadata?.rootError?.message || run.metadata?.error || "Execution failed"}</span></div>
             ) : null}
 
             {run.metadata ? (
