@@ -5,7 +5,7 @@ import {
   toPublicCredential,
 } from "../services/connectorFramework.js";
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
-import { internalAppCatalog } from "../services/internalAppCatalog.js";
+import { internalAppCatalog } from "../services/internalAppCatalog.js";\nimport { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 function jsonValue(value, fallback) {
   if (typeof value !== "string") return value ?? fallback;
@@ -1352,48 +1352,32 @@ export default function createConnectorsRouter({
 
   router.post("/connector-instances/:id/test", authenticate, authorize("integration.manage"), async (req, res) => {
     try {
-      const result = await db(
-        `SELECT c.*,p.manifest FROM integration_connections c
-           JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
-           JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=c.company_id
-            AND i.status='active' AND i.suspended_by_entitlement=FALSE
-          WHERE c.id=$1 AND c.company_id=$2`,
-        [req.params.id, req.user.companyId]
-      );
-      const instance = result.rows[0];
-      if (!instance) return res.status(404).json({ success: false, message: "Installed connector instance not found" });
-      const driver = drivers?.get(instance.connector_package_key);
-      if (!driver) return res.json({ success: true, data: { success: false, code: "PROVIDER_NOT_SUPPORTED", status: "ERROR" } });
-      const manifest = effectiveConnectorManifest(instance.connector_package_key, instance.manifest);
-      const capabilities = (manifest.connectorApp?.capabilities || []).map((item) => typeof item === "string" ? item : item.key).filter((key) => driver.capabilities.has(key));
-      const service = new ConnectorService({
-        connectorKey: instance.connector_package_key,
-        capabilities,
-        adapter: driver.createAdapter({
-          instanceId: instance.id,
-          configuration: {
-            ...jsonValue(instance.connector_configuration, {}),
-            ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
-          },
-          companyId: instance.company_id,
-          storeId: instance.store_id,
-          tillId: instance.till_id,
-        }),
+      const execution = await executeSystemWorkflow({
+        db,
+        companyId: req.user.companyId,
+        userId: req.user.id || null,
+        systemKey: "action:CONNECTOR_TEST_CONNECTION",
+        req,
+        input: { connectorInstanceId: req.params.id },
+        connectorDrivers: drivers,
+        writeAudit,
+        source: {
+          type: "api",
+          method: req.method,
+          path: req.originalUrl || req.path,
+          capability: "connector.test",
+        },
       });
-      const connection = await service.connect();
-      const test = connection.healthy ? await service.test() : { success: false, status: connection.state, code: connection.errorCode, message: connection.lastError };
-      const testResult = { ...test, testMode: manifest.connectorApp?.mode === "TEST" || jsonValue(instance.connector_configuration, {}).mode === "TEST" };
-      await db(
-        `UPDATE integration_connections SET connection_status=$1::varchar,last_error=$2,last_test_at=NOW(),
-           last_test_result=$3::jsonb,last_connected_at=CASE WHEN $1::varchar='CONNECTED' THEN NOW() ELSE last_connected_at END,updated_at=NOW()
-         WHERE id=$4 AND company_id=$5`,
-        [test.success ? "CONNECTED" : connection.state, test.message || null, JSON.stringify(testResult), instance.id, req.user.companyId]
-      );
-      await writeAudit?.(req.user.companyId, req.user.id, "connector.instance.tested", "integration_connection", instance.id, { packageKey: instance.connector_package_key, success: test.success, testMode: testResult.testMode });
-      res.json({ success: true, data: testResult });
+      const result = execution.result?.result || execution.result || null;
+      res.json({ success: true, data: result, workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
-      console.error("Test connector instance error:", error);
-      res.status(500).json({ success: false, message: "Unable to test connector instance" });
+      console.error("Test connector instance workflow error:", error);
+      res.status(error.status || 500).json({
+        success: false,
+        message: error.message || "Unable to test connector instance",
+        workflowRunId: error.workflowRunId || null,
+        correlationId: error.correlationId || null,
+      });
     }
   });
 
