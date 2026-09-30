@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Calculator, History, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
 
 function qty(value){
@@ -31,10 +32,13 @@ export default function InventoryPage({onOpenReplenishment,onOpenBatches}){
   const [history,setHistory]=useState(null)
   const [reconciliation,setReconciliation]=useState(null)
 
-  const loadProducts=async()=>{
+  const loadProducts=async(forceRefresh=false)=>{
     try{
       setLoading(true);setError('')
-      const [p,s]=await Promise.all([apiRequest('/api/products'),apiRequest('/api/settings').catch(()=>null)])
+      const [p,s]=await Promise.all([
+        cachedGet('/api/products',{forceRefresh,onFresh:fresh=>fresh?.success&&setProducts(Array.isArray(fresh.data)?fresh.data:[])}),
+        cachedGet('/api/settings',{cacheKey:'settings:company',forceRefresh,onFresh:fresh=>fresh?.data?.company?.currency&&setCurrency(fresh.data.company.currency)}).catch(()=>null),
+      ])
       if(!p?.success)throw new Error(p?.message||'Unable to load inventory')
       setProducts(Array.isArray(p.data)?p.data:[])
       setCurrency(s?.data?.company?.currency||'GBP')
@@ -78,7 +82,7 @@ export default function InventoryPage({onOpenReplenishment,onOpenBatches}){
       <div className="module-header-actions">
         {onOpenReplenishment?<button onClick={onOpenReplenishment}>Replenishment</button>:null}
         {onOpenBatches?<button onClick={onOpenBatches}>Batch & Expiry</button>:null}
-        <button onClick={loadProducts}><RefreshCw size={14}/> Refresh</button>
+        <button onClick={()=>loadProducts(true)}><RefreshCw size={14}/> Refresh</button>
       </div>
     </header>
 
@@ -112,7 +116,7 @@ export default function InventoryPage({onOpenReplenishment,onOpenBatches}){
     {tab==='stores'?<StockByStore/>:null}
     {tab==='transfers'?<StockTransfers onMessage={setMessage} onError={setError}/>:null}
 
-    {adjusting?<StockAdjustmentModal product={adjusting} onClose={()=>setAdjusting(null)} onSaved={async msg=>{setAdjusting(null);setMessage(msg);await loadProducts()}}/>:null}
+    {adjusting?<StockAdjustmentModal product={adjusting} onClose={()=>setAdjusting(null)} onSaved={async msg=>{setAdjusting(null);setMessage(msg);await loadProducts(true)}}/>:null}
     {history?<MovementHistoryModal state={history} onClose={()=>setHistory(null)} onChangeType={type=>loadMovements(history.product,type)}/>:null}
     {reconciliation?<ReconciliationModal data={reconciliation} onClose={()=>setReconciliation(null)}/>:null}
   </section>
@@ -203,12 +207,12 @@ function StockByStore(){
       setState(s=>({...s,loading:true,error:''}))
       let rows=[],singleStore=false
       try{
-        const all=await apiRequest('/api/inventory/stock?allStores=true')
+        const all=await cachedGet('/api/inventory/stock?allStores=true',{cacheKey:'inventory:stock:all',onFresh:()=>{}})
         rows=Array.isArray(all?.data)?all.data:[]
       }catch(err){
         if(err?.status!==403)throw err
         singleStore=true
-        const own=await apiRequest('/api/inventory/stock')
+        const own=await cachedGet('/api/inventory/stock',{cacheKey:'inventory:stock:own',onFresh:()=>{}})
         rows=(own?.data||[]).map(r=>({...r,store_name:null}))
       }
       const storeNames=[...new Set(rows.map(r=>r.store_name).filter(Boolean))].sort()
@@ -241,7 +245,10 @@ function StockTransfers({onMessage,onError}){
   const load=async()=>{
     try{
       setLoading(true);onError?.('')
-      const [s,t]=await Promise.all([apiRequest('/api/inventory/transfer-stores'),apiRequest('/api/inventory/transfers')])
+      const [s,t]=await Promise.all([
+        cachedGet('/api/inventory/transfer-stores',{cacheKey:'inventory:transfer-stores'}),
+        cachedGet('/api/inventory/transfers',{cacheKey:'inventory:transfers',onFresh:fresh=>fresh?.success&&setRows(Array.isArray(fresh.data)?fresh.data:[])}),
+      ])
       setStores(Array.isArray(s?.data)?s.data:[]);setRows(Array.isArray(t?.data)?t.data:[])
     }catch(err){onError?.(err?.message||'Unable to load stock transfers')}
     finally{setLoading(false)}
