@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, ExternalLink, MapPin, Phone, RefreshCw, Truck } from "lucide-react";
-import { apiRequest, getStoredUser } from "../../services/api.js";
+import { apiRequest, getStoredUser, loadSessionPermissions } from "../../services/api.js";
 import { getConnectivity, subscribeConnectivity } from "../../services/connectivity.js";
 import { buildDirectionsUrl } from "./directionsAdapter.js";
 
