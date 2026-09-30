@@ -9264,3 +9264,141 @@ button.git-control-tile { cursor: pointer; }
     width: 66px;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   2026-09-30 UI/UX audit corrections
+   Root fixes for dock viewport hit areas plus responsive polish from the
+   cross-viewport visual audit.
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 681px) {
+  .dock-zone {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 2000;
+  }
+
+  .dock {
+    margin-bottom: 0;
+  }
+}
+
+.settings-sidebar,
+.settings-nav,
+.settings-nav-item {
+  position: relative;
+  pointer-events: auto;
+}
+
+.settings-sidebar {
+  z-index: 6;
+}
+
+.settings-nav-item {
+  cursor: pointer;
+}
+
+.settings-nav-item:focus-visible {
+  outline: 2px solid rgba(10,132,255,.55);
+  outline-offset: 1px;
+}
+
+.login-preparing {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(255,255,255,.88);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.login-preparing-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: rgba(255,255,255,.95);
+  border-radius: 50%;
+  animation: onepos-login-spin .75s linear infinite;
+}
+
+@keyframes onepos-login-spin {
+  to { transform: rotate(360deg); }
+}
+
+.till-action-bar button {
+  white-space: nowrap;
+}
+
+@media (max-width: 1024px) {
+  .till-action-bar {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    align-content: flex-start;
+  }
+}
+
+.till-product-card.has-negative-stock small {
+  color: #b45309;
+  font-weight: 750;
+}
+
+.till-product-card.has-negative-stock {
+  border-color: rgba(180,83,9,.28);
+}
+
+.till-cash-input {
+  min-height: 36px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #cfd4da;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.till-cash-input:focus-within {
+  border-color: rgba(10,132,255,.55);
+  box-shadow: 0 0 0 3px rgba(10,132,255,.10);
+}
+
+.till-cash-input input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+@media (max-width: 900px) {
+  .dashboard-component--sales-period {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-actions {
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto;
+    align-items: center;
+  }
+
+  .dashboard-actions > button {
+    min-width: 36px;
+    justify-content: center;
+  }
+
+  .dashboard-actions > button:not(:first-of-type) {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+.dash-empty {
+  font-size: max(14px, 0.875rem);
+  color: #626871;
+}
