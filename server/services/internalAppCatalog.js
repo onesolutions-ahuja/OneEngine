@@ -63,7 +63,7 @@ const CATALOG = [
     key: "hospitality",
     name: "Hospitality",
     description: "Floor plans, tables and reservations as an installable hospitality foundation.",
-    route: "/app/custom/hospitality",
+    route: "/app/integrations",
     permissions: [
       "hospitality.tables.view",
       "hospitality.tables.manage",
@@ -85,7 +85,7 @@ const CATALOG = [
     key: "kds",
     name: "Kitchen Display",
     description: "Kitchen tickets and preparation status, licensed independently from core EPOS.",
-    route: "/app/custom/kds",
+    route: "/app/integrations",
     permissions: ["hospitality.kds.view", "hospitality.kds.manage", "hospitality.kitchen.reprint"],
     storeScoped: true,
     category: "Operations",
@@ -949,8 +949,8 @@ const CATALOG = [
   },
   {
     key: "platform",
-    name: "Platform",
-    description: "Configurable objects, metadata, apps and workflow administration.",
+    name: "OneDeveloper",
+    description: "Developer workspace for configurable objects, metadata, apps and workflow administration.",
     route: "/app/developer",
     permissions: ["settings.manage"],
     storeScoped: false,
