@@ -20,6 +20,12 @@ const PROVIDER_BRANDS = new Map([
   ["square", "square"],
   ["mews", "mews"],
   ["mews_pms", "mews"],
+  ["fourth", "fourth"], ["deputy", "deputy"], ["caterbook", "caterbook"], ["go_upc", "go-upc"],
+  ["adobe_commerce", "adobe-commerce"], ["magento", "adobe-commerce"],
+  ["one_connect_bopp", "one-connect-bopp"], ["bopp", "one-connect-bopp"],
+  ["one_connect_wonderful", "one-connect-wonderful"], ["wonderful", "one-connect-wonderful"],
+  ["one_connect_vyne", "one-connect-vyne"], ["vyne", "one-connect-vyne"],
+  ["one_connect_stripe", "one-connect-stripe"], ["stripe", "one-connect-stripe"],
 ]);
 
 export function isStorefrontPackage(item) {
