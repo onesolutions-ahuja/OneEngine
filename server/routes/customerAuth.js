@@ -176,7 +176,7 @@ router.post("/customer-auth/register", async (req, res) => {
     if (!companyCheck.rows.length) return res.status(400).json({ success: false, message: "Company is not available" });
     await req.ensureBusinessCommandRun?.({ companyId, userId: null });
 
-    const client = await pool.connect();
+    const client = await (req.tenantPool || pool).connect();
     try {
       await client.query("BEGIN");
 
