@@ -74,9 +74,9 @@ export function createBusinessCommandGateway({ db }) {
           const status = statusCode < 400 ? "COMPLETED" : "FAILED";
           await db(
             `UPDATE platform_workflow_runs
-                SET status=$1,
+                SET status=$1::varchar,
                     completed_at=NOW(),
-                    error_text=CASE WHEN $1='FAILED' THEN COALESCE(error_text,$2) ELSE error_text END,
+                    error_text=CASE WHEN $1::varchar='FAILED' THEN COALESCE(error_text,$2::text) ELSE error_text END,
                     metadata=COALESCE(metadata,'{}'::jsonb)||$3::jsonb,
                     updated_at=NOW()
               WHERE id=$4`,
