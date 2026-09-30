@@ -36,6 +36,39 @@ function appIcon(item){
   return `${import.meta.env.BASE_URL||'/'}icons/apps/${String(key).trim().toLowerCase().replaceAll('_','-')}.svg`
 }
 
+const DEDICATED_OPEN_ROUTES={
+  platform:'/app/developer',
+  one_connect_google:'/app/google-connect',
+  client_web_shop:'/app/settings/client-web-shop',
+  own_delivery:'/app/own-delivery',
+  email_connector:'/app/settings/email-delivery',
+  sms_connector:'/app/settings/sms-delivery',
+  whatsapp_assistant:'/app/settings/whatsapp-assistant',
+  mobile_scanner_connector:'/app/settings/hardware',
+}
+
+function resolvedOpenRoute(item){
+  const key=String(item?.package_key||item?.manifest?.packageKey||'')
+  if(DEDICATED_OPEN_ROUTES[key])return DEDICATED_OPEN_ROUTES[key]
+  const declared=String(item?.route||item?.manifest?.route||item?.company_installation?.manifest?.route||'').trim()
+  if(declared==='/app/custom/client-web-shop')return '/app/settings/client-web-shop'
+  if(declared==='/app/custom/own-delivery')return '/app/own-delivery'
+  if(declared==='/app/settings/platform')return '/app/developer'
+  if(declared && !declared.startsWith('/app/custom/'))return declared
+
+  const manifest=item?.manifest||{}
+  const category=String(item?.category||manifest?.category||'').toLowerCase()
+  if(
+    manifest?.providerConnector ||
+    manifest?.provider_connector ||
+    manifest?.connectorApp ||
+    manifest?.connector_app ||
+    /connector|integration|payment|commerce|finance|hotel|pms|workforce|delivery/.test(category)
+  )return '/app/integrations'
+
+  return '/app/integrations'
+}
+
 export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],initialSelectedPackageKey='',onPackagesChange,canManagePackages=false}){
   const [packages,setPackages]=useState(()=>Array.isArray(initialPackages)?initialPackages:[])
   const [loading,setLoading]=useState(true)
@@ -121,8 +154,10 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   const version=selected?.company_installation?installedPackageVersionState(selected):null
   const selectedAction=selected?actionFor(selected):null
   const openInstalled=()=>{
-    const route=selected?.route||selected?.manifest?.route||selected?.company_installation?.manifest?.route||''
-    if(route&&selected?.company_installation){onOpenRoute?.(route);onClose?.()}
+    if(!selected?.company_installation)return
+    const route=resolvedOpenRoute(selected)
+    onOpenRoute?.(route)
+    onClose?.()
   }
 
   return <div className="mac-popover onestore-popover">
