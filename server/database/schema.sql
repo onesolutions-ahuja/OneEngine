@@ -3227,6 +3227,23 @@ CREATE TABLE IF NOT EXISTS platform_notification_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_platform_notification_subscriptions_match
 ON platform_notification_subscriptions(company_id,event_type,object_id,active);
 
+CREATE TABLE IF NOT EXISTS platform_execution_claims (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    scope_key VARCHAR(120) NOT NULL,
+    idempotency_key VARCHAR(255) NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'CLAIMED' CHECK (status IN ('CLAIMED','COMPLETED','FAILED')),
+    result JSONB,
+    error JSONB,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(company_id, scope_key, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_platform_execution_claims_company_scope
+ON platform_execution_claims(company_id, scope_key, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS platform_workflow_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
