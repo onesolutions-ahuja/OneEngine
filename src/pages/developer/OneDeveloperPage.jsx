@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   ChevronRight,
+  AppWindow,
+  BarChart3,
+  LayoutDashboard,
   LayoutGrid,
   ListChecks,
+  UserCheck,
   Rocket,
   Search,
   Workflow,
@@ -20,7 +24,11 @@ import ValueSetList from '../settings/Platform/ValueSetList'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
-  { key: 'platform', label: 'Builders', icon: LayoutGrid },
+  { key: 'workflow-builder', label: 'Workflow Builder', icon: Workflow },
+  { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
+  { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
+  { key: 'dashboard-builder', label: 'Dashboard Builder', icon: LayoutDashboard },
+  { key: 'report-builder', label: 'Report Builder', icon: BarChart3 },
   { key: 'workflow-runs', label: 'Workflow Runs', icon: Workflow },
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
   { key: 'platform-apps', label: 'Platform Apps', icon: LayoutGrid },
@@ -100,8 +108,16 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
           {error ? <div className="settings-error">{error}</div> : null}
           {current.key === 'objects' ? (
             <ObjectsSettingsPane />
-          ) : current.key === 'platform' ? (
-            <OneBuilder />
+          ) : current.key === 'workflow-builder' ? (
+            <OneBuilder initialTab="workflow" singleBuilder />
+          ) : current.key === 'approval-builder' ? (
+            <OneBuilder initialTab="approval" singleBuilder />
+          ) : current.key === 'page-builder' ? (
+            <OneBuilder initialTab="page" singleBuilder />
+          ) : current.key === 'dashboard-builder' ? (
+            <OneBuilder initialTab="dashboard" singleBuilder />
+          ) : current.key === 'report-builder' ? (
+            <OneBuilder initialTab="report" singleBuilder />
           ) : current.key === 'workflow-runs' ? (
             <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
           ) : current.key === 'work-items' ? (
