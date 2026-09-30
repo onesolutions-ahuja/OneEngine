@@ -5,9 +5,22 @@ import { resolveBindingTree } from "../services/platformRecordPaths.js";
 
 function permissionDb(codes = []) {
   return async (sql, params) => {
-    if (String(sql).includes("FROM role_permissions")) {
+    const text = String(sql);
+    if (text.includes("FROM users")) {
+      return {
+        rows: [{
+          id: params?.[0] || "user-1",
+          company_id: params?.[1] || "company-1",
+          store_id: null,
+          role_id: "role-1",
+          is_superadmin: false,
+        }],
+      };
+    }
+    if (text.includes("FROM role_permissions")) {
       return { rows: codes.map((code) => ({ code })) };
     }
+    if (text.includes("FROM platform_permission_sets ps")) return { rows: [] };
     return { rows: [] };
   };
 }
