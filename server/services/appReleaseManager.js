@@ -2,7 +2,7 @@ import { comparePackageVersions, provisionPackageMetadata } from "./packageRegis
 import { createAuditWriter } from "./auditLog.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
 import { deployPackageMetadata, rollbackMetadataDeployment, validateDeploymentManifest } from "./platformMetadataDeployment.js";
-import { PLATFORM_RUNTIME_CONTRACT_VERSION, validatePlatformCompatibility } from "./platformConformance.js";
+import { PLATFORM_RUNTIME_CONTRACT_VERSION, validatePlatformCompatibility, assertPlatformCompatibility } from "./platformConformance.js";
 
 export const RELEASE_UPDATE_POLICIES = Object.freeze(["OPTIONAL", "FORCED", "STAGED"]);
 export const RELEASE_STATUSES = Object.freeze(["DRAFT", "VALIDATED", "PUBLISHED", "PAUSED", "ARCHIVED"]);
@@ -580,6 +580,12 @@ export async function executeTenantReleaseUpgrade({ db, releaseId, companyId, pa
   );
   if (!packageRow || !Array.isArray(packageRow.rows) || !packageRow.rows.length) throw new Error("Package not found");
   const packageDefinition = packageRow.rows[0];
+  assertPlatformCompatibility(
+    release.minimumPlatformVersion
+      || release.minimum_platform_version
+      || packageDefinition.required_platform_version
+      || null
+  );
   const packageId = packageDefinition.id;
   const current = await db(
     `SELECT id, company_id, package_id, version, installed_version, target_version, update_status, auto_update_policy
