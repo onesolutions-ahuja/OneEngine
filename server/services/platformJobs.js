@@ -1,9 +1,13 @@
 import { assertTrustedJobKind } from "./trustedRuntime.js";
+import { createGovernorBudget, DEFAULT_PLATFORM_GOVERNOR_LIMITS } from "./platformGovernor.js";
 
 const MAX_ATTEMPTS = 5;
 
-export async function enqueuePlatformJob({ db, companyId, kind, payload, runAt = new Date(), idempotencyKey }) {
+export async function enqueuePlatformJob({ db, companyId, kind, payload, runAt = new Date(), idempotencyKey, governor = null }) {
   assertTrustedJobKind(kind);
+  const budget = governor || createGovernorBudget();
+  budget.checkPayload(payload || {});
+  budget.consumeQueuedJob(1);
   if (!companyId || !kind || !idempotencyKey) throw new Error("A company, job kind and idempotency key are required");
   const result = await db(
     `INSERT INTO platform_action_jobs (company_id,kind,payload,status,attempts,next_attempt_at,idempotency_key)
@@ -54,7 +58,39 @@ export async function drainDuePlatformJobs({ db, handler, limit = 20, onFailed =
   if (typeof handler !== "function") throw new Error("A platform job handler is required");
   const jobs = await claimDuePlatformJobs({ db, limit });
   const results = [];
+  const batchIdsByCompany = new Map();
   for (const job of jobs) {
+    if (!batchIdsByCompany.has(job.company_id)) batchIdsByCompany.set(job.company_id, []);
+    batchIdsByCompany.get(job.company_id).push(job.id);
+  }
+  const remainingCapacity = new Map();
+  for (const [companyId, ids] of batchIdsByCompany.entries()) {
+    const running = await db(
+      `SELECT COUNT(*)::int AS running
+         FROM platform_action_jobs
+        WHERE company_id=$1 AND status='RUNNING'
+          AND locked_until > NOW()
+          AND NOT (id = ANY($2::uuid[]))`,
+      [companyId, ids]
+    );
+    const active = Number(running.rows?.[0]?.running || 0);
+    remainingCapacity.set(
+      companyId,
+      Math.max(DEFAULT_PLATFORM_GOVERNOR_LIMITS.maxTenantConcurrentJobs - active, 0)
+    );
+  }
+
+  for (const job of jobs) {
+    const capacity = remainingCapacity.get(job.company_id) || 0;
+    if (capacity <= 0) {
+      await db(
+        "UPDATE platform_action_jobs SET status='PENDING',locked_until=NULL,next_attempt_at=NOW() + INTERVAL '15 seconds',updated_at=NOW() WHERE id=$1 AND status='RUNNING'",
+        [job.id]
+      );
+      results.push({ id: job.id, status: "PENDING", deferred: true, reason: "tenant_concurrency_limit" });
+      continue;
+    }
+    remainingCapacity.set(job.company_id, capacity - 1);
     try {
       const outcome = await handler(job);
       if (outcome?.deferred === true) {

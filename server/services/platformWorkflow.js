@@ -39,6 +39,7 @@ import {
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
 import { createPlatformExecutionContext, applyExecutionContext } from "./platformExecutionContext.js";
 import { createExecutionGuard, claimPersistentExecution, completePersistentExecution, executionFingerprint } from "./platformExecutionGuard.js";
+import { createGovernorBudget } from "./platformGovernor.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
@@ -2360,6 +2361,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const parentGuard = context.executionGuard || createExecutionGuard({ maxDepth: 8, chain: stack });
       const childGuard = parentGuard.enter(workflowKey);
       const nextDepth = childGuard.chain.length;
+      context.governor?.checkSubflowDepth(nextDepth);
       const subflowDefinition = action.workflow && Array.isArray(action.workflow.actions)
         ? action.workflow
         : (() => {
@@ -2427,6 +2429,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         workflowDepth: nextDepth,
         workflowStack: [...childGuard.chain],
         executionGuard: childGuard,
+        governor: context.governor || null,
         workflowId: workflowKey,
         parentRunId: runId || null,
         runId: childRun?.id || runId || null,
@@ -3371,6 +3374,13 @@ export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
 
   const workflowIdentity = context.workflowId || context.executionContext?.globals?.$Flow?.id || (context.runId ? `run:${context.runId}` : null);
+  const governor = context.governor || createGovernorBudget({ limits: context.governorLimits || {} });
+  governor.checkRuntime();
+  governor.checkPayload({
+    record: context.record || null,
+    previousRecord: context.previousRecord || null,
+    workflowVariables: context.workflowVariables || null,
+  });
   const executionGuard = context.executionGuard
     || (workflowIdentity
       ? createExecutionGuard({
@@ -3422,9 +3432,19 @@ export async function executeWorkflowActions({ actions, ...context }) {
     }
     throw error;
   }
+  let governedDb = context.db;
+  if (typeof context.db === "function" && context.db.__platformGoverned !== true) {
+    governedDb = async (...args) => {
+      governor.consumeQuery(1);
+      return context.db(...args);
+    };
+    governedDb.__platformGoverned = true;
+  }
   const runtimeContext = applyExecutionContext({
     ...context,
+    db: governedDb,
     executionGuard,
+    governor,
     workflowDepth: executionGuard.chain.length,
     workflowStack: [...executionGuard.chain],
   }, executionContext);
@@ -3439,6 +3459,30 @@ export async function executeWorkflowActions({ actions, ...context }) {
 
   for (const item of actions) {
     if (!item || typeof item !== "object") continue;
+    governor.consumeWorkflowStep(1);
+    const actionType = resolveWorkflowActionType(item);
+    const externalActionTypes = new Set([
+      "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","SEND_PASSWORD_RESET_EMAIL","SEND_USER_INVITATION",
+      "CALL_WEBHOOK","WEBHOOK","HTTP_REQUEST","CALL_FUNCTION","CALL_CONNECTOR",
+      "CONNECTOR_HEALTH_CHECK","CONNECTOR_TEST_CONNECTION",
+      "PAYMENT_START","PAYMENT_CANCEL","PAYMENT_REFUND","CREATE_APPOINTMENT_PAYMENT_REQUEST",
+      "GLOBAL_PRODUCT_LOOKUP_BARCODE","GO_UPC_LOOKUP_PRODUCT","GO_UPC_TEST_CONNECTION",
+      "OPEN_FOOD_FACTS_LOOKUP_PRODUCT","OPEN_FOOD_FACTS_TEST_CONNECTION",
+      "QUICKBOOKS_RETRY_FAILED_SYNC","QUICKBOOKS_SYNC_PURCHASES","QUICKBOOKS_SYNC_SUPPLIER_CREDITS",
+      "QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS","QUICKBOOKS_SYNC_VENDORS","QUICKBOOKS_TEST_CONNECTION",
+      "SHOPIFY_EXPORT_FULFILMENT","SHOPIFY_EXPORT_REFUND","SHOPIFY_PROCESS_WEBHOOK",
+      "SHOPIFY_RETRY_FAILED_SYNC","SHOPIFY_SYNC_INVENTORY","SHOPIFY_SYNC_PRODUCTS","SHOPIFY_TEST_CONNECTION",
+      "UBER_ACCEPT_ORDER","UBER_DENY_ORDER","UBER_GET_STORES","UBER_SET_ITEM_AVAILABLE",
+      "UBER_SET_ITEM_UNAVAILABLE","UBER_TEST_CONNECTION","UBER_UPDATE_ITEM_PRICE","UBER_UPLOAD_MENU",
+      "JARVES_INTERACTION"
+    ]);
+    if (externalActionTypes.has(actionType)) {
+      governor.consumeExternalAction(1);
+    }
+    if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","SEND_PASSWORD_RESET_EMAIL","SEND_USER_INVITATION","WAIT"].includes(actionType)) {
+      governor.consumeQueuedJob(1);
+    }
+    if (actionType === "RUN_SUBFLOW") governor.consumeSubflow(1);
     const index = results.length;
     let stepRun = null;
     if (runtimeContext.db && runtimeContext.runId) {
