@@ -214,7 +214,7 @@ export function createSelfCheckoutRouter({
           username: operator.username,
           mode: "self_checkout",
         },
-        jwtSecret,
+        signingSecret,
         { expiresIn: modeTtl }
       );
 
