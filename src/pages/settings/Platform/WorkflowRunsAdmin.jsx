@@ -181,7 +181,20 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
                   <div><span>Status</span><strong>{String(run.status || "—")}</strong></div>
                   <div><span>Version</span><strong>{run.workflow_version ?? 1}</strong></div>
                   <div><span>Trigger</span><strong>{run.trigger_key || "—"}</strong></div>
+                  <div><span>System key</span><strong>{run.metadata?.systemKey || "—"}</strong></div>
+                  <div><span>Capability</span><strong>{run.metadata?.capabilityKey || run.metadata?.source?.capability || "—"}</strong></div>
+                  <div><span>Capability type</span><strong>{run.metadata?.capabilityType || "—"}</strong></div>
                   <div><span>Retry count</span><strong>{run.metadata?.retryCount ?? run.retry_count ?? 0}</strong></div>
+                </div>
+              </div>
+
+              <div className="workflow-run-record-section">
+                <div className="workflow-run-record-section-title">App / origin</div>
+                <div className="workflow-run-record-grid">
+                  <div><span>App</span><strong>{run.metadata?.source?.appName || run.metadata?.source?.packageKey || "—"}</strong></div>
+                  <div><span>Package</span><strong>{run.metadata?.source?.packageKey || "—"}</strong></div>
+                  <div className="wide"><span>Instance</span><strong>{run.metadata?.source?.connectorInstanceId || "—"}</strong></div>
+                  <div className="wide"><span>Correlation ID</span><strong>{run.metadata?.correlationId || "—"}</strong></div>
                 </div>
               </div>
 
@@ -191,7 +204,7 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
                   <div><span>Started</span><strong>{formatDate(run.started_at)}</strong></div>
                   <div><span>Completed</span><strong>{formatDate(run.completed_at)}</strong></div>
                   <div><span>Duration</span><strong>{run.metadata?.durationMs != null ? `${run.metadata.durationMs} ms` : "—"}</strong></div>
-                  <div className="wide"><span>Source</span><strong>{run.metadata?.method ? `${run.metadata.method} ${run.metadata.path || ""}` : run.metadata?.source?.type || run.metadata?.source || "—"}</strong></div>
+                  <div className="wide"><span>Source</span><strong>{run.metadata?.method ? `${run.metadata.method} ${run.metadata.path || ""}` : run.metadata?.source?.method ? `${run.metadata.source.method} ${run.metadata.source.path || ""}` : run.metadata?.source?.type || run.metadata?.source || "—"}</strong></div>
                 </div>
               </div>
 
@@ -202,6 +215,8 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
                   <div><span>Object</span><strong>{run.object_id || "—"}</strong></div>
                   <div><span>Actor</span><strong>{run.metadata?.actorUserId || "—"}</strong></div>
                   <div><span>Store</span><strong>{run.metadata?.storeId || "—"}</strong></div>
+                  <div><span>Till</span><strong>{run.metadata?.tillId || "—"}</strong></div>
+                  <div><span>Parent run</span><strong>{run.parent_run_id || run.parentRunId || "—"}</strong></div>
                 </div>
               </div>
             </div>
