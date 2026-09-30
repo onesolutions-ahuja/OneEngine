@@ -31,7 +31,6 @@ const DEVELOPER_ITEMS = [
   { key: 'deployments', label: 'Deployments', icon: Rocket },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'value-sets', label: 'Value Sets', icon: ListChecks },
-  { key: 'message-templates', label: 'Message Templates', icon: ListChecks },
 ]
 
 function normalizeSection(value) {
@@ -123,11 +122,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
             <NotificationSubscriptionsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
           ) : current.key === 'value-sets' ? (
             <ValueSetList onMessage={() => {}} onError={(value) => setError(value || '')} />
-          ) : (
-            <div className="settings-card settings-state-card">
-              Message Templates now belongs to OneDeveloper. Its existing runtime remains unchanged; this standalone host replaces the old Settings location.
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
     </section>
