@@ -93,7 +93,7 @@ export async function loadSettingsContext() {
    * Licence checks are intentionally NOT part of Settings bootstrap; licensed
    * actions enforce licence validity at execution time.
    */
-  const permissionsPromise = apiRequest('/api/auth/me/permissions')
+  const permissionsPromise = apiRequest('/api/auth/me/permissions?includeEntitlements=0')
   const settingsPromise = hasCompanyContext
     ? apiRequest('/api/settings').catch((error) => ({ __settingsError: error }))
     : Promise.resolve(null)
