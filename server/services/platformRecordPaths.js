@@ -64,16 +64,29 @@ export function resolveRecordPathValue(record, path, rootObjectKey = null) {
   return value;
 }
 
-export function resolveBindingValue(binding, { record, rootObjectKey } = {}) {
+function resolveContextPathValue(path, { record, rootObjectKey, variables } = {}) {
+  const normalized = normalizeRecordPath(path);
+  if (!normalized) return undefined;
+  if (normalized === "steps" || normalized.startsWith("steps.")) {
+    return resolveRecordPathValue(variables || {}, normalized, null);
+  }
+  if (normalized === "variables" || normalized.startsWith("variables.")) {
+    const inner = normalized === "variables" ? "" : normalized.slice("variables.".length);
+    return inner ? resolveRecordPathValue(variables || {}, inner, null) : (variables || {});
+  }
+  return resolveRecordPathValue(record, normalized, rootObjectKey);
+}
+
+export function resolveBindingValue(binding, { record, rootObjectKey, variables } = {}) {
   if (!binding || typeof binding !== "object" || Array.isArray(binding) || !binding.path) return binding;
-  return resolveRecordPathValue(record, binding.path, rootObjectKey);
+  return resolveContextPathValue(binding.path, { record, rootObjectKey, variables });
 }
 
 export function resolveBindingTree(value, context = {}) {
   if (Array.isArray(value)) return value.map((item) => resolveBindingTree(item, context));
   if (!value || typeof value !== "object") return value;
   if (typeof value.path === "string" && Object.keys(value).every((key) => ["path", "fallback"].includes(key))) {
-    const resolved = resolveRecordPathValue(context.record, value.path, context.rootObjectKey);
+    const resolved = resolveContextPathValue(value.path, context);
     return resolved === undefined ? value.fallback : resolved;
   }
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveBindingTree(item, context)]));
