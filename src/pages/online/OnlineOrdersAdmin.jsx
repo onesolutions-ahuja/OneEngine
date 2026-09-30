@@ -65,7 +65,7 @@ export default function OnlineOrdersAdmin() {
   // Platform config: which platforms require a customer OTP on completion.
   const [otpRequired, setOtpRequired] = useState({});
 
-  // Guards the mount-time double fetch (see the statusFilter effect below).
+  // Guards the mount-time duplicate request (see the statusFilter effect below).
   const initialLoadDone = useRef(false);
   const detailFetches = useRef(new Set());
 
