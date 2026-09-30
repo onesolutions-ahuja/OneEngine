@@ -405,8 +405,9 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
         if (updates.length) {
           updates.push(`updated_at = NOW()`);
           params.push(existing.id);
+          const idPlaceholder = `${params.length}`;
           const result = await db(
-            `UPDATE integration_connections SET ${updates.join(", ")} WHERE id = ${params.length} RETURNING *`,
+            `UPDATE integration_connections SET ${updates.join(", ")} WHERE id = ${idPlaceholder} RETURNING *`,
             params
           );
           row = result.rows[0];
