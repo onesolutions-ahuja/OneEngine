@@ -99,7 +99,7 @@ import { createJarvesAccessChecker } from "./services/jarvis/licensing.js"; // J
 import { companyAdministrativeAccess, permissionAllows } from "./services/authorization.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
 import { createTenantPoolManager, getRequestHostname, resolveTenantFromHostname } from "./services/tenantResolver.js";
-import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, getRequestDatabaseContext, getRequestPool, createRequestAwarePool } from "./services/tenantDatabase.js";
+import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, createHostnameDatabaseMiddleware, getRequestDatabaseContext, getRequestPool, createRequestAwarePool } from "./services/tenantDatabase.js";
 /* Inventory primitives live in services/inventory.js (shared with every
  * stock writer: POS sales, purchases, returns, adjustments). */
 import {
@@ -213,9 +213,10 @@ app.use((req, res, next) => {
   const hostname = getRequestHostname(req);
   const tenant = resolveTenantFromHostname(hostname, process.env, { defaultTenantKey: "default" });
   req.tenant = tenant;
-  req.tenantPool = pool;
+  req.tenantPool = tenantPoolManager.getPoolForRequest(req) || pool;
   next();
 });
+app.use(createHostnameDatabaseMiddleware({ tenantPoolManager, fallbackPool: pool }));
 /* T10P: Scan & Go checkout deducts stock through the SAME inventory ledger
  * helper the till and online orders use (no second inventory mechanism). */
 app.locals.createInventoryMovement = createInventoryMovement;
