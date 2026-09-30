@@ -28,7 +28,8 @@ import { calculateLoyaltyEarn, calculateLoyaltyRedemption, calculateLoyaltyRever
 import { calculateTax } from "./taxRules.js";
 import { createGenericOrder, transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
-import { dispatchIntegrationEvent, getIntegrationDispatchStatus } from "./integrationDispatcher.js";\nimport { publishPlatformEvent } from "./platformEvents.js";
+import { dispatchIntegrationEvent, getIntegrationDispatchStatus } from "./integrationDispatcher.js";
+import { publishPlatformEvent } from "./platformEvents.js";
 import { normalizeEmail, isValidEmail, findNormalizedEmailConflict } from "./userIdentity.js";
 import { redactAuditDetails } from "./auditLog.js";
 import { clockInAttendance, clockOutAttendance } from "./attendanceActions.js";
