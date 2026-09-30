@@ -39,6 +39,7 @@ import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
 import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";
 import { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { runRecordSaveLifecycle, RecordLifecycleError } from "../services/platformRecordLifecycle.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
@@ -4964,74 +4965,191 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (!(await hasPlatformObjectPermission(db, req, object.id, permissionAction))) {
       return { status: 403, code: "IMPORT_PERMISSION_REQUIRED", message: `${permissionAction} permission is required` };
     }
-    const validation = await validateRecordInput(req, object, fields, input, { requireRequired: action === "create" });
-    if (validation.error) return { status: 400, code: "FIELD_VALIDATION_FAILED", message: validation.error };
-    const trigger = action === "update" ? "before_update" : "before_create";
-    const ruleCheck = await recordRuleCheck(req, object, fields, validation.values, trigger, action === "update" ? recordId : null);
-    if (ruleCheck.status) return { status: ruleCheck.status, code: ruleCheck.code, message: ruleCheck.message, errors: ruleCheck.errors };
-    const duplicateMatches = await findDatabaseDuplicateMatches(req, object, fields, input, { allowSameRecordId: action === "update" ? recordId : false });
-    const duplicateAction = resolveDuplicateAction(duplicateMatches);
-    if (duplicateAction === "BLOCK") return {
-      status: 409,
-      code: "EXISTING_RECORD_DUPLICATE",
-      duplicateAction,
-      message: "Record matches an active duplicate rule",
+
+    const lifecycleFailure = (status, code, message, extra = {}) => {
+      throw Object.assign(new Error(message), { status, code, ...extra });
     };
-    let saved;
-    if (action === "update") {
-      const valueParams = validation.values.map(({ value }) => value);
-      const assignments = validation.values.map(({ column }, index) => `"${column}"=$${index + 1}`);
-      const params = [...valueParams, recordId];
-      const clauses = [`id=$${params.length}`];
-      if (object.company_scoped) { params.push(req.user.companyId); clauses.push(`company_id=$${params.length}`); }
-      if (object.store_scoped) { params.push(req.user.storeId); clauses.push(`store_id=$${params.length}`); }
-      const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "write", paramsOffset: params.length });
-      if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
-      if (ruleCheck.version !== undefined) { params.push(ruleCheck.version); clauses.push(`xmin::text=$${params.length}`); }
-      const returning = recordReturning(fields, validation.values);
-      const result = await db(`UPDATE "${object.source_table}" SET ${assignments.join(",")} WHERE ${clauses.join(" AND ")} RETURNING ${returning.join(",")}`, params);
-      if (!result.rows.length) return { status: ruleCheck.version !== undefined ? 409 : 404, code: "RECORD_NOT_AVAILABLE", message: "Record not found or changed while validating" };
-      saved = result.rows[0];
-      await writeRecordHistory(object, saved.id, fields, ruleCheck.current, saved, "update", req);
-    } else {
-      const columns = validation.values.map(({ column }) => `"${column}"`);
-      const params = validation.values.map(({ value }) => value);
-      const placeholders = params.map((_, index) => `$${index + 1}`);
-      if (object.company_scoped) { columns.push('"company_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.companyId); }
-      if (object.store_scoped) { columns.push('"store_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.storeId); }
-      const returning = recordReturning(fields, validation.values);
-      const result = await db(`INSERT INTO "${object.source_table}" (${columns.join(",")}) VALUES (${placeholders.join(",")}) RETURNING ${returning.join(",")}`, params);
-      saved = result.rows[0];
-      await writeRecordHistory(object, saved.id, fields, null, saved, "create", req);
-    }
-    const calculate = compileFormulas(metadataFields);
-    const automation = await executePlatformAutomations({
-      db, object, fields: metadataFields, record: calculate(saved), recordId: saved.id,
-      trigger: action === "update" ? "after_update" : "after_create",
-      previousRecord: action === "update" ? ruleCheck.current : null,
-      req,
-    });
-    const approval = await submitPlatformApproval({ db, object, fields: metadataFields, recordId: saved.id, record: calculate(automation.record), req });
-    const hydrated = await populateRollups(db, object, metadataFields, [calculate(automation.record)], req);
+
     try {
-      await publishPlatformEvent({
-        db,
-        companyId: req.user.companyId,
-        eventType: `platform.object.record.${action === "update" ? "updated" : "created"}`,
-        payload: { objectId: object.id, objectKey: object.object_key, recordId: saved.id, record: hydrated[0] },
-        actorUserId: req.user.id || null,
+      const lifecycle = await runRecordSaveLifecycle({
+        operation: action,
+        initialState: {
+          input: { ...(input || {}) },
+          recordId,
+          object,
+          metadataFields,
+          fields,
+          duplicateAction: null,
+          validation: null,
+          ruleCheck: null,
+          saved: null,
+          automation: { record: null, messages: [], executions: [] },
+          approval: null,
+          hydrated: null,
+        },
+
+        beforeValidation: async (state) => state,
+
+        validate: async (state) => {
+          const validation = await validateRecordInput(req, object, fields, state.input, { requireRequired: action === "create" });
+          if (validation.error) lifecycleFailure(400, "FIELD_VALIDATION_FAILED", validation.error);
+
+          const trigger = action === "update" ? "before_update" : "before_create";
+          const ruleCheck = await recordRuleCheck(req, object, fields, validation.values, trigger, action === "update" ? recordId : null);
+          if (ruleCheck.status) lifecycleFailure(ruleCheck.status, ruleCheck.code, ruleCheck.message, { errors: ruleCheck.errors });
+
+          const duplicateMatches = await findDatabaseDuplicateMatches(req, object, fields, state.input, { allowSameRecordId: action === "update" ? recordId : false });
+          const duplicateAction = resolveDuplicateAction(duplicateMatches);
+          if (duplicateAction === "BLOCK") {
+            lifecycleFailure(409, "EXISTING_RECORD_DUPLICATE", "Record matches an active duplicate rule", { duplicateAction });
+          }
+
+          return { ...state, validation, ruleCheck, duplicateAction };
+        },
+
+        beforeSave: async (state) => {
+          const baseRecord = action === "update"
+            ? { ...(state.ruleCheck.current || {}), ...Object.fromEntries(state.validation.values.map(({ field, value }) => [field.api_name, value])) }
+            : Object.fromEntries(state.validation.values.map(({ field, value }) => [field.api_name, value]));
+
+          const beforeAutomation = await executePlatformAutomations({
+            db,
+            object,
+            fields,
+            record: baseRecord,
+            previousRecord: action === "update" ? state.ruleCheck.current : null,
+            recordId,
+            trigger: action === "update" ? "before_update" : "before_create",
+            req,
+            mutateField: async (field, value, current) => {
+              const error = fieldValueError(field, value);
+              if (error) lifecycleFailure(422, "BEFORE_SAVE_FIELD_INVALID", error);
+              return { ...current, [field.api_name]: normalizeFieldValue(field, value) };
+            },
+          });
+
+          const nextInput = { ...state.input };
+          for (const execution of beforeAutomation.executions || []) {
+            if (execution.status === "completed" && execution.mode === "in_memory" && execution.field) {
+              nextInput[execution.field] = beforeAutomation.record?.[execution.field];
+            }
+          }
+
+          const validation = await validateRecordInput(req, object, fields, nextInput, { requireRequired: action === "create" });
+          if (validation.error) lifecycleFailure(422, "BEFORE_SAVE_VALIDATION_FAILED", validation.error);
+
+          const trigger = action === "update" ? "before_update" : "before_create";
+          const ruleCheck = await recordRuleCheck(req, object, fields, validation.values, trigger, action === "update" ? recordId : null);
+          if (ruleCheck.status) lifecycleFailure(ruleCheck.status, ruleCheck.code, ruleCheck.message, { errors: ruleCheck.errors });
+
+          return {
+            ...state,
+            input: nextInput,
+            validation,
+            ruleCheck,
+            beforeAutomation,
+          };
+        },
+
+        write: async (state) => {
+          let saved;
+          if (action === "update") {
+            const valueParams = state.validation.values.map(({ value }) => value);
+            const assignments = state.validation.values.map(({ column }, index) => `"${column}"=$${index + 1}`);
+            const params = [...valueParams, recordId];
+            const clauses = [`id=$${params.length}`];
+            if (object.company_scoped) { params.push(req.user.companyId); clauses.push(`company_id=$${params.length}`); }
+            if (object.store_scoped) { params.push(req.user.storeId); clauses.push(`store_id=$${params.length}`); }
+            const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "write", paramsOffset: params.length });
+            if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
+            if (state.ruleCheck.version !== undefined) { params.push(state.ruleCheck.version); clauses.push(`xmin::text=$${params.length}`); }
+            const returning = recordReturning(fields, state.validation.values);
+            const result = await db(`UPDATE "${object.source_table}" SET ${assignments.join(",")} WHERE ${clauses.join(" AND ")} RETURNING ${returning.join(",")}`, params);
+            if (!result.rows.length) lifecycleFailure(state.ruleCheck.version !== undefined ? 409 : 404, "RECORD_NOT_AVAILABLE", "Record not found or changed while validating");
+            saved = result.rows[0];
+            await writeRecordHistory(object, saved.id, fields, state.ruleCheck.current, saved, "update", req);
+          } else {
+            const columns = state.validation.values.map(({ column }) => `"${column}"`);
+            const params = state.validation.values.map(({ value }) => value);
+            const placeholders = params.map((_, index) => `$${index + 1}`);
+            if (object.company_scoped) { columns.push('"company_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.companyId); }
+            if (object.store_scoped) { columns.push('"store_id"'); placeholders.push(`$${params.length + 1}`); params.push(req.user.storeId); }
+            const returning = recordReturning(fields, state.validation.values);
+            const result = await db(`INSERT INTO "${object.source_table}" (${columns.join(",")}) VALUES (${placeholders.join(",")}) RETURNING ${returning.join(",")}`, params);
+            saved = result.rows[0];
+            await writeRecordHistory(object, saved.id, fields, null, saved, "create", req);
+          }
+          return { ...state, saved };
+        },
+
+        afterSave: async (state) => {
+          const calculate = compileFormulas(metadataFields);
+          const automation = await executePlatformAutomations({
+            db,
+            object,
+            fields: metadataFields,
+            record: calculate(state.saved),
+            recordId: state.saved.id,
+            trigger: action === "update" ? "after_update" : "after_create",
+            previousRecord: action === "update" ? state.ruleCheck.current : null,
+            req,
+          });
+          const approval = await submitPlatformApproval({
+            db,
+            object,
+            fields: metadataFields,
+            recordId: state.saved.id,
+            record: calculate(automation.record),
+            req,
+          });
+          const hydrated = await populateRollups(db, object, metadataFields, [calculate(automation.record)], req);
+          return { ...state, automation, approval, hydrated };
+        },
+
+        afterCommit: async (state) => {
+          try {
+            await publishPlatformEvent({
+              db,
+              companyId: req.user.companyId,
+              eventType: `platform.object.record.${action === "update" ? "updated" : "created"}`,
+              payload: { objectId: object.id, objectKey: object.object_key, recordId: state.saved.id, record: state.hydrated[0] },
+              actorUserId: req.user.id || null,
+            });
+          } catch (error) {
+            console.error("Platform record event publication error:", error);
+          }
+          return state;
+        },
       });
+
+      return {
+        status: 200,
+        id: lifecycle.saved.id,
+        action,
+        data: { ...publicFormulaRecord(fields, lifecycle.hydrated[0]), approvalStatus: lifecycle.approval?.status || null },
+        messages: lifecycle.duplicateAction === "WARN"
+          ? [...(lifecycle.automation.messages || []), "A possible duplicate record was found"]
+          : (lifecycle.automation.messages || []),
+        automationExecutions: [
+          ...(lifecycle.beforeAutomation?.executions || []),
+          ...(lifecycle.automation?.executions || []),
+        ],
+        lifecycleTrace: lifecycle.lifecycleTrace,
+      };
     } catch (error) {
-      console.error("Platform record event publication error:", error);
+      if (error instanceof RecordLifecycleError) {
+        const cause = error.cause || error;
+        return {
+          status: cause.status || 422,
+          code: cause.code || error.code,
+          message: cause.message || error.message,
+          errors: cause.errors,
+          duplicateAction: cause.duplicateAction,
+          lifecycleStage: error.stage,
+        };
+      }
+      throw error;
     }
-    return {
-      status: 200,
-      id: saved.id,
-      action,
-      data: { ...publicFormulaRecord(fields, hydrated[0]), approvalStatus: approval?.status || null },
-      messages: duplicateAction === "WARN" ? [...automation.messages, "A possible duplicate record was found"] : automation.messages,
-      automationExecutions: automation.executions,
-    };
   }
 
   router.post("/platform/objects/:objectKey/records", ...recordAccess, async (req, res) => {
