@@ -5,6 +5,10 @@ const ROOT = process.cwd()
 const SRC = path.join(ROOT, 'src')
 const API_FILE = path.join(SRC, 'services', 'api.js')
 const RUNTIME_FILE = path.join(SRC, 'services', 'trustedRuntime.js')
+const SERVER = path.join(ROOT, 'server')
+const SERVER_ENTRY = path.join(SERVER, 'server.js')
+const SERVER_RUNTIME = path.join(SERVER, 'services', 'trustedRuntime.js')
+const SERVER_JOBS = path.join(SERVER, 'services', 'platformJobs.js')
 const ALLOWED_FETCH_FILES = new Set([
   path.normalize(API_FILE),
   path.normalize(path.join(SRC, 'services', 'connectivity.js')),
@@ -59,6 +63,19 @@ for (const file of walk(SRC)) {
   }
 }
 
+const serverEntry = fs.readFileSync(SERVER_ENTRY, 'utf8')
+const serverRuntime = fs.readFileSync(SERVER_RUNTIME, 'utf8')
+const serverJobs = fs.readFileSync(SERVER_JOBS, 'utf8')
+for (const required of ['createTrustedRuntimeGate()', 'validateTrustedRuntime()', 'assertTrustedJobKind(job.kind)']) {
+  if (!serverEntry.includes(required)) findings.push({ severity: 'ERROR', rule: 'SERVER_GATE_MISSING', file: path.relative(ROOT, SERVER_ENTRY), detail: required })
+}
+for (const required of ['PLATFORM_FUNCTIONS', 'PLATFORM_ACTION_REGISTRY', 'TRUSTED_JOB_KINDS', 'UNREGISTERED_CAPABILITY']) {
+  if (!serverRuntime.includes(required)) findings.push({ severity: 'ERROR', rule: 'SERVER_RUNTIME_INVALID', file: path.relative(ROOT, SERVER_RUNTIME), detail: required })
+}
+if (!serverJobs.includes('assertTrustedJobKind(kind)')) {
+  findings.push({ severity: 'ERROR', rule: 'JOB_ENQUEUE_GATE_MISSING', file: path.relative(ROOT, SERVER_JOBS) })
+}
+
 const apiText = fs.readFileSync(API_FILE, 'utf8')
 for (const required of ['isPrivilegedMutation', 'resolveTrustedCapability', 'UNREGISTERED_CAPABILITY']) {
   if (!apiText.includes(required)) {
@@ -75,7 +92,7 @@ for (const required of ['Object.freeze', 'TRUSTED_CAPABILITY_MAP', 'validateTrus
 
 const report = {
   generatedAt: new Date().toISOString(),
-  scannedFiles: walk(SRC).length,
+  scannedFiles: walk(SRC).length + walk(SERVER).length,
   errors: findings.filter((finding) => finding.severity === 'ERROR').length,
   findings,
 }
@@ -87,4 +104,4 @@ if (report.errors) {
   for (const finding of findings) console.error(`- ${finding.rule}: ${finding.file}${finding.line ? `:${finding.line}` : ''}`)
   process.exit(1)
 }
-console.log(`Trusted Runtime audit passed across ${report.scannedFiles} source files.`)
+console.log(`Trusted Runtime audit passed across ${report.scannedFiles} client/server source files.`)
