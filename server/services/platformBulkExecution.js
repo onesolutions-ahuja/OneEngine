@@ -34,6 +34,7 @@ export async function executeBulk({
       } catch (error) {
         results[index] = {
           status: "failed",
+          item,
           error: {
             message: String(error?.message || error).slice(0, 2000),
             code: error?.code || null,
