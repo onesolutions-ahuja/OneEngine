@@ -405,7 +405,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
         if (updates.length) {
           updates.push(`updated_at = NOW()`);
           params.push(existing.id);
-          const idPlaceholder = `${params.length}`;
+          const idPlaceholder = "$" + params.length;
           const result = await db(
             `UPDATE integration_connections SET ${updates.join(", ")} WHERE id = ${idPlaceholder} RETURNING *`,
             params
@@ -848,12 +848,17 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
       headers["Content-Type"] = "application/json";
     }
 
+    const headersForLog = { ...headers };
+    for (const key of Object.keys(authHeaders || {})) {
+      if (!/^authorization$/i.test(key)) headersForLog[key] = "[REDACTED]";
+    }
     const requestLog = redactRequestConfig({
       method: endpoint?.method || "GET",
       url,
-      headers,
+      headers: headersForLog,
       body,
       authType,
+      authHeader,
     });
 
     let responseStatus = null;
