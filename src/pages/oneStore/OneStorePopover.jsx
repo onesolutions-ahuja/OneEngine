@@ -72,7 +72,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
       const forced=String(item.company_installation?.auto_update_policy||item.auto_update_policy||'OPTIONAL').toUpperCase()==='FORCED'
       return forced?{label:'Forced update',disabled:true}:{label:'Update now',action:'upgrade'}
     }
-    if(installed&&item.company_installation.status==='inactive')return {label:'Activate',action:'activate'}
+    if(installed&&item.company_installation.status==='inactive')return {label:'Reinstall',action:'install'}
     if(installed)return {label:'Installed',disabled:true,secondary:'deactivate'}
     return {label:'Install',action:'install'}
   }
@@ -95,10 +95,10 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
         if(r?.success===false)throw new Error(r?.message||'Unable to update app')
         setNotice(`${item.name} update queued.`)
       }else{
-        const endpoint=action==='install'?'install':action==='activate'?'reactivate':'deactivate'
+        const endpoint=action==='install'?'install':action==='activate'?'reactivate':action==='uninstall'?'uninstall':'deactivate'
         const r=await apiRequest(`/api/packages/${key}/${endpoint}`,{method:'POST'})
         if(r?.success===false)throw new Error(r?.message||`Unable to ${action} app`)
-        setNotice(action==='install'?`${item.name} installed.`:action==='activate'?`${item.name} activated.`:`${item.name} deactivated.`)
+        setNotice(action==='install'?`${item.name} installed.`:action==='activate'?`${item.name} activated.`:action==='uninstall'?`${item.name} uninstalled. Existing data and configuration were preserved.`:`${item.name} deactivated.`)
       }
       await load({refreshCatalogue:true})
     }catch(err){setError(err?.message||'Package action failed')}
@@ -154,6 +154,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
           {workingKey===selected.package_key?<progress className="onestore-action-progress" aria-label="App action in progress"/>:null}
           <div className="onestore-actions">
             {selectedAction?.secondary?<button disabled={!canManage||workingKey===selected.package_key} onClick={()=>run(selected,selectedAction.secondary)}>Deactivate</button>:null}
+            {selected?.company_installation?.status==='active'?<button disabled={!canManage||workingKey===selected.package_key} onClick={()=>run(selected,'uninstall')}>Uninstall</button>:null}
             {selected?.company_installation&&storefrontStatus(selected)==='INSTALLED'?<button onClick={openInstalled}>Open</button>:null}
             {selected?.trial_available===true?<button className="module-primary-button" disabled={!canManage||workingKey===selected.package_key} onClick={()=>run(selected,'trial')}>{workingKey===selected.package_key?'Working…':`Free ${selected.trial_days||7}-day trial`}</button>:null}
             {selectedAction?.action?<button className="module-primary-button" disabled={selectedAction.disabled||!canManage||workingKey===selected.package_key} onClick={()=>run(selected,selectedAction.action)}>{workingKey===selected.package_key?'Working…':selectedAction.label}</button>:selectedAction?.label?<button disabled>{selectedAction.label}</button>:null}
