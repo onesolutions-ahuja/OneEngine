@@ -44,12 +44,13 @@ const seedSources=[
 ].filter(fs.existsSync).map((file)=>fs.readFileSync(file,"utf8")).join("\n");
 const seededPermissionCodes=new Set([...seedSources.matchAll(/["\']([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)["\']/gi)].map((m)=>m[1]));
 const referencedPermissions=new Map();
+const serverRouteImports=new Set([...fs.readFileSync(path.join(SERVER,"server.js"),"utf8").matchAll(/from\s+["\']\.\/routes\/([^"\']+)["\']/g)].map((m)=>`server/routes/${m[1]}`));
 function rememberPermission(code,fileName,index,source){
   if(!/^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/i.test(code)) return;
   if(!referencedPermissions.has(code)) referencedPermissions.set(code,[]);
   referencedPermissions.get(code).push({file:fileName,line:source.slice(0,index).split("\n").length});
 }
-for(const file of [...routeFiles,...serviceFiles]){
+for(const file of [...routeFiles.filter((file)=>serverRouteImports.has(rel(file))),...serviceFiles]){
   const source=fs.readFileSync(file,"utf8");
   const fileName=rel(file);
   const contexts=[
