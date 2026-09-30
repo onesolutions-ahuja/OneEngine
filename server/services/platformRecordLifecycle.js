@@ -60,6 +60,7 @@ export async function runRecordSaveLifecycle({
   write,
   afterSave,
   afterCommit,
+  transaction = null,
 }) {
   if (!["create", "update"].includes(operation)) throw new Error("Record save lifecycle operation must be create or update");
   const trace = [];
@@ -69,7 +70,30 @@ export async function runRecordSaveLifecycle({
   state = await runStage("BEFORE_SAVE", beforeSave, state, trace);
   state = await runStage("WRITE", write, state, trace);
   state = await runStage("AFTER_SAVE", afterSave, state, trace);
-  state = await runStage("AFTER_COMMIT", afterCommit, state, trace);
+  if (typeof afterCommit === "function" && transaction?.afterCommit) {
+    const snapshot = state;
+    transaction.afterCommit(async () => {
+      const startedAt = new Date().toISOString();
+      try {
+        const result = await afterCommit(snapshot);
+        trace.push({ stage: "AFTER_COMMIT", status: "COMPLETED", startedAt, completedAt: new Date().toISOString() });
+        return result;
+      } catch (error) {
+        trace.push({
+          stage: "AFTER_COMMIT",
+          status: "FAILED",
+          startedAt,
+          completedAt: new Date().toISOString(),
+          code: error?.code || null,
+          message: String(error?.message || error || "Lifecycle stage failed").slice(0, 1000),
+        });
+        throw error;
+      }
+    });
+    trace.push({ stage: "AFTER_COMMIT", status: "REGISTERED" });
+  } else {
+    state = await runStage("AFTER_COMMIT", afterCommit, state, trace);
+  }
   return { ...state, lifecycleTrace: trace };
 }
 
@@ -81,6 +105,7 @@ export async function runRecordDeleteLifecycle({
   write,
   afterDelete,
   afterCommit,
+  transaction = null,
 }) {
   const trace = [];
   let state = { ...initialState, operation: "delete", lifecycleTrace: trace };
@@ -89,6 +114,29 @@ export async function runRecordDeleteLifecycle({
   state = await runStage("BEFORE_DELETE", beforeDelete, state, trace);
   state = await runStage("WRITE", write, state, trace);
   state = await runStage("AFTER_DELETE", afterDelete, state, trace);
-  state = await runStage("AFTER_COMMIT", afterCommit, state, trace);
+  if (typeof afterCommit === "function" && transaction?.afterCommit) {
+    const snapshot = state;
+    transaction.afterCommit(async () => {
+      const startedAt = new Date().toISOString();
+      try {
+        const result = await afterCommit(snapshot);
+        trace.push({ stage: "AFTER_COMMIT", status: "COMPLETED", startedAt, completedAt: new Date().toISOString() });
+        return result;
+      } catch (error) {
+        trace.push({
+          stage: "AFTER_COMMIT",
+          status: "FAILED",
+          startedAt,
+          completedAt: new Date().toISOString(),
+          code: error?.code || null,
+          message: String(error?.message || error || "Lifecycle stage failed").slice(0, 1000),
+        });
+        throw error;
+      }
+    });
+    trace.push({ stage: "AFTER_COMMIT", status: "REGISTERED" });
+  } else {
+    state = await runStage("AFTER_COMMIT", afterCommit, state, trace);
+  }
   return { ...state, lifecycleTrace: trace };
 }
