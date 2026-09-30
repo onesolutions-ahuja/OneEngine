@@ -11659,3 +11659,17 @@ button.git-control-tile { cursor: pointer; }
     grid-template-columns: 220px minmax(0,1fr);
   }
 }
+
+
+.settings-card--company-grid {
+  width: min(1180px, 100%);
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-card--company-grid .settings-company-grid {
+  width: 100%;
+}
