@@ -2230,7 +2230,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, recordId }) => {
+    executor: async (context) => {
+      const { db, action, object, req, recordId, companyId } = context;
       const relationshipKey = action.relationshipKey;
       const relatedRecordId = action.relatedRecordId || action.recordId;
       const parentRecordId = action.parentRecordId || recordId || action.recordId || null;
@@ -2240,6 +2241,25 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" is not registered for this object` };
       }
       const column = resolved.field?.source_column || resolved.field?.api_name || null;
+      const targetObject = await resolveTargetObjectMetadata({
+        db,
+        objectId: resolved.relationship.child_object_id,
+        companyId: req?.user?.companyId || companyId,
+      });
+      if (!targetObject) throw new Error("Related target object is unavailable");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const relationFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      await assertRuntimeFieldWriteAccess({
+        db, req, object: targetObject, fields: relationFields, fieldNames: [column],
+        executionMode, trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       if (!isSafeIdentifier(resolved.relationship.child_source_table) || !isSafeIdentifier(column)) {
         return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" has no writable child link field` };
       }
@@ -2270,7 +2290,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req }) => {
+    executor: async (context) => {
+      const { db, action, object, req, companyId } = context;
       const relationshipKey = action.relationshipKey;
       const relatedRecordId = action.relatedRecordId || action.recordId;
       if (!db || typeof db !== "function") return { status: "completed", relationshipKey, relatedRecordId };
@@ -2279,6 +2300,25 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" is not registered for this object` };
       }
       const column = resolved.field?.source_column || resolved.field?.api_name || null;
+      const targetObject = await resolveTargetObjectMetadata({
+        db,
+        objectId: resolved.relationship.child_object_id,
+        companyId: req?.user?.companyId || companyId,
+      });
+      if (!targetObject) throw new Error("Related target object is unavailable");
+      const executionMode = resolveExecutionMode(context);
+      await assertRuntimeObjectPermission({
+        db, req, object: targetObject, action: "edit", executionMode,
+        trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
+      const relationFields = (await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, req?.user?.companyId || companyId]
+      )).rows;
+      await assertRuntimeFieldWriteAccess({
+        db, req, object: targetObject, fields: relationFields, fieldNames: [column],
+        executionMode, trustedSystem: context.trustedSystem === true || req?.trustedSystemExecution === true,
+      });
       if (!isSafeIdentifier(resolved.relationship.child_source_table) || !isSafeIdentifier(column)) {
         return { status: "skipped", relationshipKey, relatedRecordId, reason: `Relationship "${relationshipKey}" has no writable child link field` };
       }
