@@ -1344,8 +1344,8 @@ export default function createConnectorsRouter({
       const test = connection.healthy ? await service.test() : { success: false, status: connection.state, code: connection.errorCode, message: connection.lastError };
       const testResult = { ...test, testMode: manifest.connectorApp?.mode === "TEST" || jsonValue(instance.connector_configuration, {}).mode === "TEST" };
       await db(
-        `UPDATE integration_connections SET connection_status=$1,last_error=$2,last_test_at=NOW(),
-           last_test_result=$3::jsonb,last_connected_at=CASE WHEN $1='CONNECTED' THEN NOW() ELSE last_connected_at END,updated_at=NOW()
+        `UPDATE integration_connections SET connection_status=$1::varchar,last_error=$2,last_test_at=NOW(),
+           last_test_result=$3::jsonb,last_connected_at=CASE WHEN $1::varchar='CONNECTED' THEN NOW() ELSE last_connected_at END,updated_at=NOW()
          WHERE id=$4 AND company_id=$5`,
         [test.success ? "CONNECTED" : connection.state, test.message || null, JSON.stringify(testResult), instance.id, req.user.companyId]
       );
