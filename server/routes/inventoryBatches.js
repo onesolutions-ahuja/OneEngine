@@ -232,7 +232,7 @@ export default function createInventoryBatchesRouter({
         return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
       }
 
-      const client = await pool.connect();
+      const client = await (req.tenantPool || pool).connect();
       let transactionStarted = false;
       try {
         await client.query("BEGIN");
@@ -420,7 +420,7 @@ export default function createInventoryBatchesRouter({
         return res.status(400).json({ success: false, message: "Batch number too long" });
       }
 
-      const client = await pool.connect();
+      const client = await (req.tenantPool || pool).connect();
       let transactionStarted = false;
       try {
         await client.query("BEGIN");
@@ -538,7 +538,7 @@ export default function createInventoryBatchesRouter({
         return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
       }
 
-      const client = await pool.connect();
+      const client = await (req.tenantPool || pool).connect();
       let transactionStarted = false;
       try {
         await client.query("BEGIN");
