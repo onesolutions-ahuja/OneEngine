@@ -145,6 +145,34 @@ export async function publishPlatformEvent({
   if (lineage.hopCount > 16) {
     return { event: null, inserted: false, skipped: true, reason: "EVENT_HOP_LIMIT", notifications: { delivered: 0, skipped: 0 } };
   }
+
+  const lineageIds = [...new Set([lineage.causationEventId, lineage.rootEventId].filter(Boolean))];
+  if (lineageIds.length) {
+    const lineageRows = await db(
+      `SELECT id,company_id FROM platform_events
+        WHERE id = ANY($1::uuid[])`,
+      [lineageIds]
+    );
+    const lineageById = new Map((lineageRows.rows || []).map((row) => [String(row.id), row]));
+    for (const lineageId of lineageIds) {
+      const row = lineageById.get(String(lineageId));
+      if (!row) {
+        const error = new Error("Referenced event lineage was not found");
+        error.code = "EVENT_LINEAGE_NOT_FOUND";
+        error.status = 400;
+        throw error;
+      }
+      const sameCompany = row.company_id == null
+        ? companyId == null
+        : companyId != null && String(row.company_id) === String(companyId);
+      if (!sameCompany) {
+        const error = new Error("Cross-company event lineage is not allowed");
+        error.code = "EVENT_LINEAGE_COMPANY_MISMATCH";
+        error.status = 403;
+        throw error;
+      }
+    }
+  }
   const normalizedChangedFields = Array.isArray(changedFields) ? [...new Set(changedFields.map(String))].sort() : [];
   const derivedSignature = signature || eventSignature({
     type,
@@ -158,9 +186,11 @@ export async function publishPlatformEvent({
   if (lineage.rootEventId && derivedSignature) {
     const loop = await db(
       `SELECT * FROM platform_events
-        WHERE root_event_id=$1 AND event_signature=$2
+        WHERE root_event_id=$1
+          AND event_signature=$2
+          AND company_id IS NOT DISTINCT FROM $3
         LIMIT 1`,
-      [lineage.rootEventId, derivedSignature]
+      [lineage.rootEventId, derivedSignature, companyId]
     );
     if (loop.rows?.length) {
       return {
