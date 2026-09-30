@@ -44,6 +44,14 @@ jobs:
           set -o pipefail
           node scripts/audit-project-deep.mjs --enforce 2>&1 | tee project-consistency-audit.log
 
+      - name: Run API contract audit
+        id: api_contract_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/audit-api-contracts.mjs 2>&1 | tee api-contract-audit.log
+
       - name: Run complete server test suite
         id: server_tests
         continue-on-error: true
@@ -76,9 +84,11 @@ jobs:
           path: |
             deep-project-module-audit.log
             project-consistency-audit.log
+            api-contract-audit.log
             artifacts/deep-project-audit.json
             artifacts/project-consistency-audit.json
             artifacts/project-consistency-audit.md
+            artifacts/api-contract-audit.json
             server-tests.log
             server-build.log
             frontend-build.log
