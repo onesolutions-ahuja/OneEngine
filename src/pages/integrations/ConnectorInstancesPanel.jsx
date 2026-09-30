@@ -27,9 +27,12 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const tills = Array.isArray(selectedStore?.tills) ? selectedStore.tills : [];
   const companyScoped = selectedApp?.manifest?.connectorApp?.scope === "company";
 
-  const load = async () => {
+  const load = async ({ preserveFeedback = false } = {}) => {
     setLoading(true);
-    setError("");
+    if (!preserveFeedback) {
+      setError("");
+      setMessage("");
+    }
     try {
       const [connectorAppsResult, marketplaceResult, installed, storeResult] = await Promise.all([
         apiRequest("/api/connector-apps").catch(() => ({ success: false, data: [] })),
@@ -115,12 +118,15 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     try {
       const result = await apiRequest(`/api/connector-instances/${instance.id}/test`, { method: "POST" });
       const test = result?.data || {};
-      if (test.success) setMessage(
-        test.message
-          || (test.testMode ? "TEST connector passed its configuration check." : "Connector connection verified.")
-      );
-      else setError(test.message || test.code || "Connector test failed");
-      await load();
+      if (test.success) {
+        setMessage(
+          test.message
+            || (test.testMode ? "TEST connector passed its configuration check." : "Connector connection verified. You can enable it now.")
+        );
+      } else {
+        setError(test.message || test.code || "Connector test failed");
+      }
+      await load({ preserveFeedback: true });
     } catch (testError) {
       setError(testError.message || "Unable to test connector");
     } finally {
@@ -178,10 +184,16 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                     <td className="px-4 py-2.5 text-xs">{companyScoped ? "Company" : `${instance.storeName || "No store"} / ${instance.tillName || "No till"}`}</td>
                     <td className="px-4 py-2.5">{instance.fallbackOrder === 0 ? "Primary" : `Backup ${instance.fallbackOrder}`}</td>
                     <td className="px-4 py-2.5">
-                      <span className={instance.status === "CONNECTED" && instance.health?.success ? "text-emerald-700" : "text-amber-700"}>
-                        {instance.enabled ? instance.status : "DISABLED"}
+                      <span className={instance.health?.success === true ? "text-emerald-700" : "text-amber-700"}>
+                        {instance.enabled
+                          ? instance.status
+                          : instance.health?.success === true
+                            ? "TEST PASSED"
+                            : instance.health?.code && instance.health?.code !== "NOT_TESTED"
+                              ? "TEST FAILED"
+                              : "NOT TESTED"}
                       </span>
-                      {instance.health?.message && <div className="max-w-48 truncate text-xs text-slate-500">{instance.health.message}</div>}
+                      {instance.health?.message && <div className="max-w-64 text-xs text-slate-500">{instance.health.message}</div>}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-2">
@@ -235,12 +247,12 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                       <input
                         type={field.type === "number" ? "number" : field.type === "secret" ? "password" : "text"}
                         autoComplete={field.type === "secret" ? "new-password" : undefined}
-                        placeholder={field.type === "secret" && existingInstance?.hasCredentials ? "Saved securely — enter only to replace" : ""}
+                        placeholder={field.type === "secret" && existingInstance?.credentialFields?.includes(field.key) ? "Saved securely — enter only to replace" : ""}
                         value={configuration[field.key] ?? field.default ?? ""}
                         onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: field.type === "number" ? Number(event.target.value) : event.target.value }))}
                         className={`${inputClass} mt-1`}
                       />
-                      {field.type === "secret" && existingInstance?.hasCredentials ? (
+                      {field.type === "secret" && existingInstance?.credentialFields?.includes(field.key) ? (
                         <span className="mt-1 block text-[10px] text-emerald-700">Saved securely</span>
                       ) : null}
                     </div>
