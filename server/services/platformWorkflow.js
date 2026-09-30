@@ -33,6 +33,7 @@ import {
   createAppointmentBookingCase,
   issueAppointmentPublicLink,
   resolveAssistantSubflow,
+  completeAppointmentPayment,
 } from "./oneAssistant.js";
 
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
@@ -1228,6 +1229,28 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         metadata: action.metadata || {},
       }),
     }),
+  },
+  {
+    key: "COMPLETE_APPOINTMENT_PAYMENT",
+    displayName: "Appointments - Complete Payment",
+    description: "Standard payment-subflow callback: mark the payment request successful, confirm the held appointment, and emit appointment.confirmed.",
+    validation: (action) => {
+      if (!action?.paymentRequestId) throw new Error("Complete Appointment Payment requires paymentRequestId");
+    },
+    async: false,
+    requiredPermissions: ["appointments.payment","appointments.manage"],
+    executor: async ({ action, client, db, companyId, req }) => {
+      const tenantId=companyId||req?.user?.companyId;
+      const queryClient=client||{query:db};
+      const result=await completeAppointmentPayment(queryClient,{
+        companyId:tenantId,
+        paymentRequestId:action.paymentRequestId,
+        providerReference:action.providerReference||null,
+        paymentUrl:action.paymentUrl||null,
+        amountPaid:action.amountPaid,
+      });
+      return {status:"completed",...result};
+    },
   },
   {
     key: "CALCULATE_APPOINTMENT_PAYMENT",
