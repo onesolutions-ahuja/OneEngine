@@ -323,6 +323,20 @@ function DockItem({ item, mouseX, onActivate }) {
   )
 }
 
+function CompanyContextLoading() {
+  return (
+    <main className="screen company-context-loading" role="status" aria-live="polite" aria-label="Setting up your workspace">
+      <div className="company-context-loading__brand" aria-hidden="true">
+        <span className="company-context-loading__mark">O</span>
+        <span className="company-context-loading__word">ne</span>
+      </div>
+      <div className="company-context-loading__pulse" aria-hidden="true" />
+      <strong>Setting up your workspace…</strong>
+      <span>Preparing your company context</span>
+    </main>
+  )
+}
+
 function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const now = useClock()
   const [sessionMode] = useState(() => hasSession())
@@ -2767,7 +2781,9 @@ export default function App() {
   return (
     <div className={`app-shell ${transitioning ? 'is-transitioning' : ''}`}>
       {locked ? (
-        <LockScreen onUnlock={unlock} onSignOut={signOut} preparing={pendingUnlock && !sessionContextReady} />
+        pendingUnlock && !sessionContextReady
+          ? <CompanyContextLoading />
+          : <LockScreen onUnlock={unlock} onSignOut={signOut} preparing={pendingUnlock && !sessionContextReady} />
       ) : (
         <Desktop onLock={lock} onSignOut={signOut} />
       )}
