@@ -47,7 +47,7 @@ export default function createInventoryRouter({
 
   router.post("/inventory/balances/rebuild", authenticate, authorize("inventory.adjust"), async (req, res) => {
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
-    const client = await (req.tenantPool || pool).connect();
+    const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const rows = await rebuildInventoryBalances(client, {
@@ -234,7 +234,7 @@ export default function createInventoryRouter({
         });
       }
 
-      const client = await (req.tenantPool || pool).connect();
+      const client = await pool.connect();
       let transactionStarted = false;
 
       try {
@@ -667,7 +667,7 @@ export default function createInventoryRouter({
         return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
       }
 
-      const client = await (req.tenantPool || pool).connect();
+      const client = await pool.connect();
       let transactionStarted = false;
       try {
         await client.query("BEGIN");
