@@ -13,7 +13,6 @@ import { drainDuePlatformJobs } from "./services/platformJobs.js";
 import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
 import { validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
 import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
-import { executeRegisteredAction } from "./services/platformActions.js";
 import { claimDueScheduledWorkflows, completeScheduledWorkflow, failScheduledWorkflow } from "./services/platformSchedules.js";
 import { deliverPlatformWebhook, verifyWebhookSignature } from "./services/platformEvents.js";
 import { decryptSecret, encryptSecret } from "./services/onlineOrders/platformConfig.js";
@@ -23,6 +22,7 @@ import {
   executeWorkflowAction,
   executeWorkflowActions,
 } from "./services/platformWorkflow.js";
+import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import createTillRouter from "./routes/till.js";
 import createHeldSalesRouter from "./routes/heldSales.js";
 import createCustomersRouter from "./routes/customers.js";
@@ -2412,16 +2412,19 @@ async function startServer() {
               }
             }
             if (job.kind === "SHOPIFY_WEBHOOK_EVENT") {
-              const outcome = await executeWorkflowAction({
+              const execution = await executeSystemWorkflow({
                 db,
-                pool,
                 companyId: job.company_id,
+                userId: payload.actorUserId || null,
+                systemKey: "action:SHOPIFY_PROCESS_WEBHOOK",
+                req: { method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
+                input: { ...payload, _executeFromJob: true },
                 storeId: payload.storeId || null,
-                req: { user: { companyId: job.company_id, storeId: payload.storeId || null } },
-                createInventoryMovement,
                 writeAudit,
-                action: { type: "SHOPIFY_PROCESS_WEBHOOK", ...payload },
+                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
+                extraContext: { pool, createInventoryMovement },
               });
+              const outcome = execution.result;
               if (outcome?.success === false) {
                 throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
                   retryable: outcome.retryable === true,
@@ -2430,14 +2433,20 @@ async function startServer() {
               return outcome;
             }
             if (job.kind === "QUICKBOOKS_PROVIDER_SYNC") {
-              const outcome = await executeWorkflowAction({
+              const actionKey = String(payload.type || payload.key || "").toUpperCase();
+              if (!actionKey) throw Object.assign(new Error("QuickBooks provider job is missing an action key"), { retryable: false });
+              const execution = await executeSystemWorkflow({
                 db,
-                pool,
                 companyId: job.company_id,
-                req: { user: { companyId: job.company_id } },
+                userId: payload.actorUserId || null,
+                systemKey: `action:${actionKey}`,
+                req: { method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", user: { companyId: job.company_id, id: payload.actorUserId || null } },
+                input: { ...payload, _executeFromJob: true },
                 writeAudit,
-                action: { ...payload, _executeFromJob: true },
+                source: { type: "job", method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", capability: actionKey },
+                extraContext: { pool },
               });
+              const outcome = execution.result;
               if (outcome?.success === false) {
                 throw Object.assign(new Error(outcome.message || outcome.code || "QuickBooks sync failed"), {
                   retryable: outcome.retryable !== false,
@@ -2446,16 +2455,21 @@ async function startServer() {
               return outcome;
             }
             if (job.kind === "SHOPIFY_PROVIDER_SYNC") {
-              const outcome = await executeWorkflowAction({
+              const actionKey = String(payload.type || payload.key || "").toUpperCase();
+              if (!actionKey) throw Object.assign(new Error("Shopify provider job is missing an action key"), { retryable: false });
+              const execution = await executeSystemWorkflow({
                 db,
-                pool,
                 companyId: job.company_id,
+                userId: payload.actorUserId || null,
+                systemKey: `action:${actionKey}`,
+                req: { method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
+                input: { ...payload, _executeFromJob: true },
                 storeId: payload.storeId || null,
-                req: { user: { companyId: job.company_id, storeId: payload.storeId || null } },
-                createInventoryMovement,
                 writeAudit,
-                action: { ...payload, _executeFromJob: true },
+                source: { type: "job", method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", capability: actionKey },
+                extraContext: { pool, createInventoryMovement },
               });
+              const outcome = execution.result;
               if (outcome?.success === false) {
                 throw Object.assign(new Error(outcome.message || outcome.code || "Shopify sync failed"), {
                   retryable: outcome.retryable !== false,
@@ -2463,17 +2477,30 @@ async function startServer() {
               }
               return outcome;
             }
-            const result = await executeRegisteredAction({ db, companyId: job.company_id, action: payload, req: { user: { roleId: payload._roleId } } });
+            const actionKey = String(payload.type || payload.key || "").toUpperCase();
+            if (!actionKey) throw Object.assign(new Error("Platform action job is missing an action key"), { retryable: false });
+            const execution = await executeSystemWorkflow({
+              db,
+              companyId: job.company_id,
+              userId: payload.actorUserId || null,
+              systemKey: `action:${actionKey}`,
+              req: { method: "JOB", path: job.kind, user: { companyId: job.company_id, id: payload.actorUserId || null, roleId: payload._roleId || null } },
+              input: { ...payload, _executeFromJob: true },
+              writeAudit,
+              source: { type: "job", method: "JOB", path: job.kind, capability: actionKey },
+              extraContext: { pool, createInventoryMovement },
+            });
+            const result = execution.result;
             if (payload._stepRunId) {
               await db(
                 "UPDATE platform_workflow_step_runs SET status=$1,error_text=$2,completed_at=NOW(),updated_at=NOW() WHERE id=$3",
-                [result.status === "SUCCESS" ? "COMPLETED" : result.status, result.code || result.error?.message || null, payload._stepRunId]
+                [result?.status === "SUCCESS" ? "COMPLETED" : (result?.status || "COMPLETED"), result?.code || result?.error?.message || null, payload._stepRunId]
               );
             }
-            if (result.status === "UNAVAILABLE") return result;
-            if (result.status !== "SUCCESS") {
-              const error = new Error(result.error?.message || result.code || "Action failed");
-              error.retryable = result.retryable === true;
+            if (result?.status === "UNAVAILABLE") return result;
+            if (result?.status && !["SUCCESS","COMPLETED"].includes(result.status)) {
+              const error = new Error(result?.error?.message || result?.code || "Action failed");
+              error.retryable = result?.retryable === true;
               throw error;
             }
             return result;
