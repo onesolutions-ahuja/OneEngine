@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Download, Gift, Plus, RefreshCw, Search, Upload, Users, X } from 'lucide-react'
-import { apiFetch, apiRequest } from '../../services/api'
+import { apiFetch, apiRequest, loadSessionPermissions } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
 import { SaleDetail } from '../sales/SalesPage'
@@ -17,8 +17,6 @@ export default function CustomersPage({onOpenGiftCards}){
   const [customers,setCustomers]=useState([])
   const [currency,setCurrency]=useState('GBP')
   const [permissions,setPermissions]=useState([])
-  const [entitlements,setEntitlements]=useState({})
-  const [isAdmin,setIsAdmin]=useState(false)
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
   const [message,setMessage]=useState('')
@@ -37,14 +35,12 @@ export default function CustomersPage({onOpenGiftCards}){
       const [c,s,p]=await Promise.all([
         cachedGet('/api/customers',{forceRefresh,onFresh:fresh=>fresh?.success&&setCustomers(Array.isArray(fresh.data)?fresh.data:[])}),
         cachedGet('/api/settings',{cacheKey:'settings:company',forceRefresh,onFresh:fresh=>fresh?.data?.company?.currency&&setCurrency(fresh.data.company.currency)}).catch(()=>null),
-        apiRequest('/api/auth/me/permissions').catch(()=>null),
+        loadSessionPermissions().catch(()=>null),
       ])
       if(!c?.success)throw new Error(c?.message||'Unable to load customers')
       setCustomers(Array.isArray(c.data)?c.data:[])
       setCurrency(s?.data?.company?.currency||'GBP')
-      setPermissions(p?.data?.permissions||[])
-      setEntitlements(p?.data?.entitlements||{})
-      setIsAdmin(p?.data?.isAdmin===true)
+      setPermissions(p?.permissions||[])
     }catch(err){setError(err?.message||'Unable to load customers')}
     finally{setLoading(false)}
   }
@@ -90,9 +86,9 @@ export default function CustomersPage({onOpenGiftCards}){
     }catch(err){setError(err?.message||'Unable to load sale')}
   }
 
-  const loyaltyLicensed=entitlements.loyalty===true
-  const canManageCredit=isAdmin||permissions.includes('customer.edit')
-  const canTakePayment=isAdmin||permissions.includes('payment.manage')||permissions.includes('customer.edit')
+  const loyaltyLicensed=permissions.some((code)=>String(code).startsWith('loyalty.'))
+  const canManageCredit=permissions.includes('customer.edit')
+  const canTakePayment=permissions.includes('payment.manage')||permissions.includes('customer.edit')
   const activeCount=customers.filter(c=>c.active!==false).length
 
   const columns=useMemo(()=>{
@@ -155,7 +151,7 @@ export default function CustomersPage({onOpenGiftCards}){
 
     {editor?<CustomerEditor customer={editor} onClose={()=>setEditor(null)} onSaved={async msg=>{setEditor(null);setMessage(msg);await load(true)}}/>:null}
     {detail?<CustomerDetail customer={detail} currency={currency} loyaltyLicensed={loyaltyLicensed} onClose={()=>setDetail(null)} onEdit={()=>{setEditor(detail);setDetail(null)}} onLoyalty={()=>setLoyalty(detail)} onCredit={()=>setCredit(detail)} onSale={openSale}/>:null}
-    {loyalty?<LoyaltyModal customer={loyalty} currency={currency} canAdjust={isAdmin||permissions.includes('loyalty.adjust')||permissions.includes('customer.edit')} onClose={()=>setLoyalty(null)}/>:null}
+    {loyalty?<LoyaltyModal customer={loyalty} currency={currency} canAdjust={permissions.includes('loyalty.adjust')||permissions.includes('customer.edit')} onClose={()=>setLoyalty(null)}/>:null}
     {credit?<CustomerCredit customer={credit} currency={currency} canManage={canManageCredit} canTakePayment={canTakePayment} onClose={()=>setCredit(null)}/>:null}
     {historySale?<SaleDetail sale={historySale} currency={currency} onClose={()=>setHistorySale(null)}/>:null}
     {segmentsOpen?<CustomerSegments customers={customers} onClose={()=>setSegmentsOpen(false)}/>:null}
