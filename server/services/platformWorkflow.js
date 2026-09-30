@@ -2313,7 +2313,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["functions.execute"],
-    executor: async ({ action, db, businessDb = null, client, req, companyId, userId, record, previousRecord, object, fields }) => {
+    executor: async ({ action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields }) => {
       const functionKey = action.functionKey || action.key;
       const functionDefinition = getRegisteredFunction(functionKey);
       if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
@@ -2325,6 +2325,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         action,
         inputs,
         db: businessDb || db,
+        pool,
         client,
         req,
         companyId,
