@@ -52,7 +52,11 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: -3;
-  background: url("https://rdvnui.com/assets/sonoma-_dP7BXLz.jpg") center center / cover no-repeat;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255, 126, 160, 0.62), transparent 34%),
+    radial-gradient(circle at 78% 18%, rgba(130, 118, 255, 0.58), transparent 36%),
+    radial-gradient(circle at 72% 76%, rgba(67, 191, 255, 0.42), transparent 38%),
+    linear-gradient(135deg, #f4b18e 0%, #d7a7df 34%, #9d9dea 62%, #8fc7e8 100%);
 }
 
 .wallpaper::after {
@@ -4674,9 +4678,8 @@ button:focus-visible {
 }
 
 
-/* Workspace Object Manager — approved three-pane reference.
-   Uses the same fast spring/magnification language as the source macOS React theme,
-   while keeping data/permissions sourced from live Platform metadata. */
+/* Workspace Object Manager — approved OneTheme three-pane interaction pattern.
+   Keeps data and permissions sourced from live Platform metadata. */
 .workspace-object-manager {
   position: absolute;
   inset: 28px 0 0;
@@ -5561,9 +5564,8 @@ button:focus-visible {
 }
 
 
-/* Smart Theme canonical launcher interaction layer.
-   Motion values mirror the old published macOS React theme: mass .1,
-   stiffness 150, damping 12. */
+/* OneTheme canonical launcher interaction layer.
+   Shared motion values: mass .1, stiffness 150, damping 12. */
 .topbar-search-wrap {
   z-index: 2;
 }
@@ -5592,7 +5594,7 @@ button:focus-visible {
 }
 
 
-/* Old published macOS Git theme language for topbar network/device controls. */
+/* OneTheme topbar network/device control styling. */
 .git-macos-panel {
   width: 310px;
   padding: 10px;
