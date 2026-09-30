@@ -82,7 +82,7 @@ const functions = extractKeys(functionRegistry, /\bkey:\s*"([^"]+)"/g);
 const workflowActions = extractKeys(workflowRuntime, /\bkey:\s*"([A-Z0-9_]+)"/g);
 const coreActions = extractKeys(actionRegistry, /\bkey:\s*"([A-Z0-9_]+)"/g);
 const actions = uniq([...coreActions, ...workflowActions]);
-const jobsSection = trustedRuntime.match(/TRUSTED_JOB_KINDS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/)?.[1] || "";
+const jobsSection = platformJobRegistry.match(/TRUSTED_JOB_KINDS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/)?.[1] || "";
 const jobs = extractKeys(jobsSection, /"([A-Z0-9_]+)"/g);
 
 const serverSource = read("server/server.js");
