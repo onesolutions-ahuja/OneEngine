@@ -28,7 +28,7 @@ import { calculateLoyaltyEarn, calculateLoyaltyRedemption, calculateLoyaltyRever
 import { calculateTax } from "./taxRules.js";
 import { createGenericOrder, transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
-import { dispatchIntegrationEvent, getIntegrationDispatchStatus } from "./integrationDispatcher.js";
+import { dispatchIntegrationEvent, getIntegrationDispatchStatus } from "./integrationDispatcher.js";\nimport { publishPlatformEvent } from "./platformEvents.js";
 import { normalizeEmail, isValidEmail, findNormalizedEmailConflict } from "./userIdentity.js";
 import { redactAuditDetails } from "./auditLog.js";
 import { clockInAttendance, clockOutAttendance } from "./attendanceActions.js";
@@ -299,8 +299,50 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
   { key: "loyalty.redemption.calculate", category: "LOYALTY", description: "Validate and calculate a loyalty redemption.", inputs: { type: "object", required: ["balance", "requestedPoints"] }, outputs: { type: "object" }, permissions: ["loyalty.use"], handler: async ({ inputs = {} }) => calculateLoyaltyRedemption(inputs.balance, inputs.requestedPoints, inputs.programme || {}) },
   { key: "loyalty.reversal.calculate", category: "LOYALTY", description: "Calculate loyalty points to reverse for a refund without exceeding the current balance.", inputs: { type: "object", required: ["refundAmount", "currentBalance"] }, outputs: { type: "object" }, permissions: ["loyalty.use"], handler: async ({ inputs = {} }) => calculateLoyaltyReversal(inputs.refundAmount, inputs.currentBalance, inputs.programme || {}) },
   { key: "tax.calculate", category: "TAX", description: "Calculate canonical inclusive or exclusive tax values.", inputs: { type: "object", required: ["amount", "rate"] }, outputs: { type: "object" }, permissions: ["sales.use"], handler: async ({ inputs = {} }) => calculateTax(inputs.amount, inputs.rate, { inclusive: inputs.inclusive === true }) },
-  { key: "online_order.create", category: "ONLINE_ORDER", description: "Create a canonical direct online-order record and reserve inventory.", inputs: { type: "object", required: ["externalOrderId", "fulfilmentType", "items"] }, outputs: { type: "object" }, permissions: ["online_orders.manage"], handler: async ({ inputs = {}, db, companyId, userId, req }) => createGenericOrder({ db, pool: db, companyId: companyId || req?.user?.companyId, userId: userId || req?.user?.id, storeId: inputs.storeId || req?.user?.storeId, externalOrderId: inputs.externalOrderId, fulfilmentType: inputs.fulfilmentType, items: inputs.items, customer: inputs.customer || {}, notes: inputs.notes, payment: inputs.payment, createInventoryMovement }) },
-  { key: "online_order.transition", category: "ONLINE_ORDER", description: "Execute a canonical online-order lifecycle transition, including reservation release or sale creation when required.", inputs: { type: "object", required: ["orderId", "toStatus"] }, outputs: { type: "object" }, permissions: ["online_orders.manage"], handler: async ({ inputs = {}, db, companyId, userId, req }) => transitionGenericOrder({ pool: db, companyId: companyId || req?.user?.companyId, orderId: inputs.orderId, userId: userId || req?.user?.id, toStatus: inputs.toStatus, reason: inputs.reason || null, createSale: createSaleForCompletedOrder, createInventoryMovement }) },
+  { key: "online_order.create", category: "ONLINE_ORDER", description: "Create a canonical direct online-order record and reserve inventory.", inputs: { type: "object", required: ["externalOrderId", "fulfilmentType", "items"] }, outputs: { type: "object" }, permissions: ["online_orders.manage"], handler: async ({ inputs = {}, db, pool, companyId, userId, req }) => {
+    const tenantId = companyId || req?.user?.companyId;
+    return createGenericOrder({
+      db,
+      pool: pool || db,
+      companyId: tenantId,
+      userId: userId || req?.user?.id,
+      storeId: inputs.storeId || req?.user?.storeId,
+      externalOrderId: inputs.externalOrderId,
+      fulfilmentType: inputs.fulfilmentType,
+      items: inputs.items,
+      customer: inputs.customer || {},
+      notes: inputs.notes,
+      payment: inputs.payment,
+      createInventoryMovement,
+      publishEvent: ({ client, eventType, payload, actorUserId }) => publishPlatformEvent({
+        db: client.query.bind(client),
+        companyId: tenantId,
+        eventType,
+        payload,
+        actorUserId,
+      }),
+    });
+  } },
+  { key: "online_order.transition", category: "ONLINE_ORDER", description: "Execute a canonical online-order lifecycle transition, including reservation release or sale creation when required.", inputs: { type: "object", required: ["orderId", "toStatus"] }, outputs: { type: "object" }, permissions: ["online_orders.manage"], handler: async ({ inputs = {}, db, pool, companyId, userId, req }) => {
+    const tenantId = companyId || req?.user?.companyId;
+    return transitionGenericOrder({
+      pool: pool || db,
+      companyId: tenantId,
+      orderId: inputs.orderId,
+      userId: userId || req?.user?.id,
+      toStatus: inputs.toStatus,
+      reason: inputs.reason || null,
+      createSale: createSaleForCompletedOrder,
+      createInventoryMovement,
+      publishEvent: ({ client, eventType, payload, actorUserId }) => publishPlatformEvent({
+        db: client.query.bind(client),
+        companyId: tenantId,
+        eventType,
+        payload,
+        actorUserId,
+      }),
+    });
+  } },
   { key: "inventory.movement.create", category: "INVENTORY", description: "Create a canonical inventory movement.", inputs: { type: "object" }, outputs: { type: "object" }, permissions: ["inventory.adjust"], handler: async ({ inputs = {}, db }) => createInventoryMovement(db, inputs) },
   { key: "inventory.balance.rebuild", category: "INVENTORY", description: "Rebuild canonical inventory balances from movements.", inputs: { type: "object" }, outputs: { type: "object" }, permissions: ["inventory.adjust"], handler: async ({ inputs = {}, db, companyId, req }) => rebuildInventoryBalances(db, { ...inputs, companyId: companyId || req?.user?.companyId }) },
   { key: "inventory.balance.reconcile", category: "INVENTORY", description: "Reconcile canonical inventory balances against movements.", inputs: { type: "object" }, outputs: { type: "object" }, permissions: ["inventory.adjust"], handler: async ({ inputs = {}, db, companyId, req }) => reconcileInventoryBalances(db, { ...inputs, companyId: companyId || req?.user?.companyId }) },
