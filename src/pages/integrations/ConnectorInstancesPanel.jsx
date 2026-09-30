@@ -18,6 +18,9 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const [workingId, setWorkingId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [testRecipient, setTestRecipient] = useState("");
+  const [testMessage, setTestMessage] = useState("onePOS SMSGate test message");
+  const [sendingTestSms, setSendingTestSms] = useState(false);
   const existingInstance = instances.find((instance) => instance.packageKey === packageKey) || null;
 
   const selectedApp = apps.find((app) => app.package_key === packageKey);
@@ -134,6 +137,26 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     }
   };
 
+  const sendTestSms = async (instance) => {
+    setSendingTestSms(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await apiRequest(`/api/connector-instances/${instance.id}/send-test-sms`, {
+        method: "POST",
+        body: JSON.stringify({ recipient: testRecipient, message: testMessage }),
+      });
+      const providerId = result?.data?.providerMessageId;
+      setMessage(providerId
+        ? `Test SMS sent successfully. Provider message ID: ${providerId}`
+        : "Test SMS sent successfully.");
+    } catch (sendError) {
+      setError(sendError.message || "Unable to send test SMS");
+    } finally {
+      setSendingTestSms(false);
+    }
+  };
+
   const toggleInstance = async (instance) => {
     setWorkingId(instance.id);
     setError("");
@@ -214,6 +237,47 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
               </table>
             </div>
           )}
+
+          {requestedPackageKey === "smsgate_connector" && existingInstance?.enabled ? (
+            <div className="mx-4 mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3">
+                <h3 className="text-sm font-semibold text-slate-900">Send test SMS</h3>
+                <p className="text-xs text-slate-500">Verify the full onePOS → SMSGate → Android phone delivery path without developer assistance.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.6fr)_auto]">
+                <label className="text-xs font-medium text-slate-600">
+                  Mobile number
+                  <input
+                    type="tel"
+                    value={testRecipient}
+                    onChange={(event) => setTestRecipient(event.target.value)}
+                    placeholder="+44..."
+                    className={`${inputClass} mt-1`}
+                  />
+                </label>
+                <label className="text-xs font-medium text-slate-600">
+                  Message
+                  <input
+                    type="text"
+                    maxLength={500}
+                    value={testMessage}
+                    onChange={(event) => setTestMessage(event.target.value)}
+                    className={`${inputClass} mt-1`}
+                  />
+                </label>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => sendTestSms(existingInstance)}
+                    disabled={sendingTestSms || !testRecipient.trim() || !testMessage.trim()}
+                    className="h-9 px-4 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"
+                  >
+                    {sendingTestSms ? "Sending…" : "Send test SMS"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {apps.length ? (
             <form onSubmit={createInstance} className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-5">
