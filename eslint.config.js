@@ -14,6 +14,7 @@ export default [
         setTimeout: 'readonly', clearTimeout: 'readonly',
         setInterval: 'readonly', clearInterval: 'readonly',
         structuredClone: 'readonly', FormData: 'readonly', FileReader: 'readonly',
+        performance: 'readonly', TextEncoder: 'readonly', TextDecoder: 'readonly', requestIdleCallback: 'readonly',
         Blob: 'readonly', Event: 'readonly', CustomEvent: 'readonly',
         Node: 'readonly', HTMLElement: 'readonly',
       },
