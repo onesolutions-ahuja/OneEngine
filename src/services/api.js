@@ -296,11 +296,15 @@ export async function ensureActingCompanyContext() {
     if (user?.id) sessionStorage.setItem('onepos_user', JSON.stringify(user))
   }
 
-  // Tenant users are scoped by their authenticated company. Global platform
-  // accounts continue below so platform.manage can resolve an acting company.
-  if (user?.companyId && user?.isPlatformDeveloper !== true) return user.companyId
+  // Any authenticated company binding is authoritative for this session.
+  // Only global developer profiles with no company binding need acting-company
+  // discovery. This keeps normal tenant developer pages on the login company.
+  if (user?.companyId) {
+    setActingCompanyId(String(user.companyId))
+    return user.companyId
+  }
 
-  const rememberedCompanyId = getActingCompanyId() || (user?.isPlatformDeveloper === true ? String(user?.companyId || '') : '')
+  const rememberedCompanyId = getActingCompanyId()
   try {
     const permissionState = await loadSessionPermissions({ includeEntitlements: false })
     const permissionCodes = Array.isArray(permissionState?.permissions)
