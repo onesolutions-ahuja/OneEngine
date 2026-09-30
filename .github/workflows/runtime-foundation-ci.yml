@@ -29,20 +29,20 @@ jobs:
         run: npm install --prefix server --no-audit --no-fund
 
       - name: Run deep project module audit
-        id: deep_audit
+        id: deep_module_audit
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          node scripts/deep-project-audit.mjs 2>&1 | tee deep-project-audit.log
+          node scripts/deep-project-audit.mjs 2>&1 | tee deep-project-module-audit.log
 
-      - name: Run deep project audit
-        id: deep_audit
+      - name: Run project consistency audit
+        id: consistency_audit
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          node scripts/audit-project-deep.mjs --enforce 2>&1 | tee deep-project-audit.log
+          node scripts/audit-project-deep.mjs --enforce 2>&1 | tee project-consistency-audit.log
 
       - name: Run complete server test suite
         id: server_tests
@@ -74,22 +74,23 @@ jobs:
         with:
           name: phase-1-10-runtime-qa-logs
           path: |
-            deep-project-audit.log
+            deep-project-module-audit.log
+            project-consistency-audit.log
             artifacts/deep-project-audit.json
+            artifacts/project-consistency-audit.json
+            artifacts/project-consistency-audit.md
             server-tests.log
             server-build.log
             frontend-build.log
-            deep-project-audit.log
             artifacts/deep-project-audit.json
-            artifacts/deep-project-audit.md
           if-no-files-found: warn
 
       - name: Fail if any QA stage failed
         if: always()
         shell: bash
         run: |
-          test "${{ steps.deep_audit.outcome }}" = "success"
-          test "${{ steps.deep_audit.outcome }}" = "success"
+          test "${{ steps.deep_module_audit.outcome }}" = "success"
+          test "${{ steps.consistency_audit.outcome }}" = "success"
           test "${{ steps.server_tests.outcome }}" = "success"
           test "${{ steps.server_build.outcome }}" = "success"
           test "${{ steps.frontend_build.outcome }}" = "success"
