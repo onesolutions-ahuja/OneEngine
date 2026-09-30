@@ -1,0 +1,55 @@
+name: OneEngine Deployment Smoke Test
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: oneengine-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for deployments
+        run: sleep 45
+
+      - name: Test GitHub Pages shell and assets
+        run: |
+          set -euo pipefail
+          PAGE="https://onesolutions-ahuja.github.io/OneEngine/"
+          curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "$PAGE" -o /tmp/pages.html
+          grep -q '/OneEngine/assets/' /tmp/pages.html
+          ASSET="$(grep -oE '/OneEngine/assets/[^"]+\.js' /tmp/pages.html | head -1)"
+          test -n "$ASSET"
+          curl --retry 6 --retry-all-errors --retry-delay 5 -fsSI "https://onesolutions-ahuja.github.io$ASSET" >/dev/null
+
+      - name: Test Render frontend shell
+        run: |
+          set -euo pipefail
+          curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "https://smart-theme.onrender.com/" -o /tmp/render.html
+          grep -q '/assets/' /tmp/render.html
+          if grep -q '/smart-theme/assets/' /tmp/render.html; then
+            echo "Render frontend still contains legacy smart-theme base path"
+            exit 1
+          fi
+
+      - name: Test backend and database health
+        run: |
+          set -euo pipefail
+          BODY="$(curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "https://onepos.onrender.com/api/health")"
+          echo "$BODY"
+          echo "$BODY" | grep -q '"success":true'
+          echo "$BODY" | grep -q '"status":"online"'
+          echo "$BODY" | grep -q '"database":"connected"'
+
+      - name: Test API CORS from GitHub Pages
+        run: |
+          set -euo pipefail
+          HEADERS="$(curl --retry 6 --retry-all-errors --retry-delay 5 -fsSI \
+            -H 'Origin: https://onesolutions-ahuja.github.io' \
+            "https://onepos.onrender.com/api/health")"
+          echo "$HEADERS"
+          echo "$HEADERS" | grep -qi 'access-control-allow-origin:'
