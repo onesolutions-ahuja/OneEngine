@@ -23,6 +23,7 @@ import {
   executeWorkflowActions,
 } from "./services/platformWorkflow.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
+import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 import createTillRouter from "./routes/till.js";
 import createHeldSalesRouter from "./routes/heldSales.js";
 import createCustomersRouter from "./routes/customers.js";
@@ -283,8 +284,18 @@ async function testPaymentTerminal(terminal) {
  * services/auditLog.js (unknown users are nulled to satisfy the FK; other
  * failures are logged and swallowed so a committed business action stands).
  */
+app.use("/api", createBusinessCommandGateway({ db }));
+
 const writeAudit = createAuditWriter({ db });
 app.locals.writeAudit = writeAudit;
+const workflowTraceRetentionDays = Math.max(7, Number(process.env.WORKFLOW_TRACE_RETENTION_DAYS || 90));
+const purgeWorkflowTraceBatch = () => purgeOldBusinessCommandRuns({
+  db,
+  retentionDays: workflowTraceRetentionDays,
+  batchSize: 5000,
+}).catch((error) => console.error("Workflow trace retention cleanup error:", error?.message || error));
+setTimeout(purgeWorkflowTraceBatch, 60_000).unref?.();
+setInterval(purgeWorkflowTraceBatch, 6 * 60 * 60 * 1000).unref?.();
 const globalProductLookupService = createGlobalProductLookupService();
 
 /*
@@ -294,8 +305,18 @@ const globalProductLookupService = createGlobalProductLookupService();
 */
 
 const createToken = createSessionToken;
-const authenticate = createAuthenticate({
+const baseAuthenticate = createAuthenticate({
   onAuthenticated: createAuthenticatedDatabaseMiddleware({ router: tenantDatabaseRouter, pool }),
+});
+const authenticate = (req, res, next) => baseAuthenticate(req, res, (error) => {
+  if (error) return next(error);
+  return Promise.resolve(
+    req.ensureBusinessCommandRun?.({
+      companyId: req.user?.companyId || null,
+      userId: req.user?.id || null,
+      storeId: req.user?.storeId || null,
+    })
+  ).then(() => next()).catch(next);
 });
 
 /*
