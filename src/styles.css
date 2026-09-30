@@ -11719,3 +11719,115 @@ button.git-control-tile { cursor: pointer; }
     grid-template-columns: 190px minmax(440px, 1fr) 300px;
   }
 }
+
+
+/* Dedicated connector app settings: scroll inside the desktop app surface and
+   use the available width instead of stacking every control vertically. */
+.connector-settings-screen {
+  position: fixed;
+  inset: 28px 0 0;
+  z-index: 4;
+  max-width: none;
+  width: 100%;
+  height: calc(100vh - 28px);
+  margin: 0;
+  padding: 18px 22px 120px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,.28) transparent;
+}
+
+.connector-settings-screen::-webkit-scrollbar {
+  width: 9px;
+}
+
+.connector-settings-screen::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.connector-settings-screen::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(0,0,0,.28);
+  background-clip: padding-box;
+}
+
+.connector-settings-page-head {
+  max-width: 1560px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.connector-settings-panel {
+  max-width: 1560px;
+  margin: 0 auto 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, .8fr);
+  grid-auto-flow: row dense;
+  align-items: start;
+  overflow: hidden;
+}
+
+.connector-settings-panel > :first-child,
+.connector-settings-panel > [role="alert"],
+.connector-settings-panel > [role="status"],
+.connector-settings-panel > .overflow-x-auto {
+  grid-column: 1 / -1;
+}
+
+.connector-settings-form {
+  grid-column: 1;
+  grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+  align-content: start;
+  padding: 16px !important;
+  border-right: 1px solid rgba(0,0,0,.07);
+}
+
+.connector-sms-test-card {
+  grid-column: 2;
+  margin: 16px !important;
+  align-self: start;
+}
+
+.connector-sms-test-card .grid {
+  grid-template-columns: 1fr !important;
+}
+
+.connector-sms-test-card input {
+  width: 100%;
+}
+
+.connector-sms-test-card button {
+  width: 100%;
+  justify-content: center;
+}
+
+@media (max-width: 980px) {
+  .connector-settings-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .connector-settings-form,
+  .connector-sms-test-card {
+    grid-column: 1;
+  }
+
+  .connector-settings-form {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+    border-right: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .connector-settings-screen {
+    padding: 12px 10px 120px;
+  }
+
+  .connector-settings-form {
+    grid-template-columns: 1fr !important;
+  }
+}
