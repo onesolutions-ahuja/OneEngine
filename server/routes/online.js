@@ -2796,6 +2796,7 @@ export default function createOnlineRouter({
       }
 
       const companyId = matched.company_id;
+      await req.ensureBusinessCommandRun?.({ companyId, userId: null });
       const configuration = matched.configuration || {};
       const event = payload ? uber.parseWebhookEvent(payload) : null;
 
@@ -3205,6 +3206,7 @@ export default function createOnlineRouter({
       }
 
       const companyId = matched.company_id;
+      await req.ensureBusinessCommandRun?.({ companyId, userId: null });
       const configuration = matched.configuration || {};
       const event = payload ? deliveroo.parseWebhookEvent(payload) : null;
 
