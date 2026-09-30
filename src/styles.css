@@ -6542,7 +6542,7 @@ button:focus-visible {
   min-height: 48px;
   padding: 7px 11px;
   display: grid;
-  grid-template-columns: 30px minmax(0,1fr) auto 14px;
+  grid-template-columns: 30px minmax(0,1fr) auto 28px;
   align-items: center;
   gap: 9px;
   border: 0;
@@ -10686,4 +10686,12 @@ button.git-control-tile { cursor: pointer; }
   .value-set-add-row { grid-template-columns: 1fr; }
   .value-set-value-row { grid-template-columns: minmax(0,1fr) auto; }
   .value-set-value-actions { grid-column: 1 / -1; }
+}
+
+
+.onebuilder-list-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
 }
