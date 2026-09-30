@@ -456,6 +456,18 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     return { ...item, quantity: next }
   }).filter((item) => item.quantity > 0))
 
+  const refreshPaymentCapability = async () => {
+    try {
+      const capability = await apiRequest('/api/connector-capabilities/payment.sale')
+      const available = capability?.data?.available === true
+      setPaymentCapability(available)
+      return { available, code: capability?.data?.code || null, message: capability?.data?.message || null }
+    } catch (error) {
+      setPaymentCapability(false)
+      return { available: false, code: error?.code || null, message: error?.message || 'Unable to check payment connector' }
+    }
+  }
+
   const clearSale = () => {
     if (receiptQr?.saleId && settings?.receiptQr?.autoCloseOnNewSale !== false) void revokeReceiptQr(receiptQr.saleId)
     setBasket([])
@@ -534,7 +546,10 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
     const selectedMethod = paymentMethods.find((method) => method.code === paymentMethod)
     if (!online && paymentMethod !== 'cash' && selectedMethod?.allowOffline !== true) return setError('This payment method requires an online connection.')
-    if (paymentMethod === 'card' && !paymentCapability) return setError('No healthy payment connector is assigned to this till.')
+    if (paymentMethod === 'card' && !paymentCapability) {
+      const capability = await refreshPaymentCapability()
+      if (!capability.available) return setError(capability.message || 'No healthy payment connector is assigned to this till.')
+    }
     if (paymentMethod === 'customer_credit' && !selectedCustomer) return setError('Select a customer before using customer credit.')
     if (paymentMethod === 'gift_card' && !giftCardCode.trim()) return setError('Enter a gift card code.')
     const received = paymentMethod === 'cash' ? Number((cashReceivedOverride ?? cashReceived) || total) : total
@@ -795,7 +810,10 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     if (action === 'open_drawer') return openDrawer()
     if (action === 'pay_cash') return completeSale('cash')
     if (action === 'pay_card') return completeSale('card')
-    if (action === 'pay_more') return setModal('payment')
+    if (action === 'pay_more') {
+      void refreshPaymentCapability().finally(() => setModal('payment'))
+      return
+    }
     if (action === 'price_override' && item) { setPriceTarget(item); setModal('price_override'); return }
     if (action === 'offline_queue') return setModal('offline_queue')
     if (action === 'customer_display') return openCustomerDisplay()
