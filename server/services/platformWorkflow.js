@@ -39,6 +39,7 @@ import {
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
 import { createPlatformExecutionContext, applyExecutionContext } from "./platformExecutionContext.js";
 import { createExecutionGuard, claimPersistentExecution, completePersistentExecution, executionFingerprint } from "./platformExecutionGuard.js";
+import { createGovernorBudget } from "./platformGovernor.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
@@ -2360,6 +2361,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const parentGuard = context.executionGuard || createExecutionGuard({ maxDepth: 8, chain: stack });
       const childGuard = parentGuard.enter(workflowKey);
       const nextDepth = childGuard.chain.length;
+      context.governor?.checkSubflowDepth(nextDepth);
       const subflowDefinition = action.workflow && Array.isArray(action.workflow.actions)
         ? action.workflow
         : (() => {
@@ -2427,6 +2429,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         workflowDepth: nextDepth,
         workflowStack: [...childGuard.chain],
         executionGuard: childGuard,
+        governor: context.governor || null,
         workflowId: workflowKey,
         parentRunId: runId || null,
         runId: childRun?.id || runId || null,
@@ -3371,6 +3374,13 @@ export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
 
   const workflowIdentity = context.workflowId || context.executionContext?.globals?.$Flow?.id || (context.runId ? `run:${context.runId}` : null);
+  const governor = context.governor || createGovernorBudget({ limits: context.governorLimits || {} });
+  governor.checkRuntime();
+  governor.checkPayload({
+    record: context.record || null,
+    previousRecord: context.previousRecord || null,
+    workflowVariables: context.workflowVariables || null,
+  });
   const executionGuard = context.executionGuard
     || (workflowIdentity
       ? createExecutionGuard({
@@ -3425,6 +3435,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
   const runtimeContext = applyExecutionContext({
     ...context,
     executionGuard,
+    governor,
     workflowDepth: executionGuard.chain.length,
     workflowStack: [...executionGuard.chain],
   }, executionContext);
@@ -3439,6 +3450,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
 
   for (const item of actions) {
     if (!item || typeof item !== "object") continue;
+    governor.consumeWorkflowStep(1);
     const index = results.length;
     let stepRun = null;
     if (runtimeContext.db && runtimeContext.runId) {
