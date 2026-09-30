@@ -73,7 +73,7 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
 
 const functionRegistry = read("server/services/platformFunctionRegistry.js");
 const workflowRuntime = read("server/services/platformWorkflow.js");
-const trustedRuntime = read("server/services/trustedRuntime.js");
+const trustedRuntime = read("server/services/trustedRuntime.js");\nconst platformJobRegistry = read("server/services/platformJobRegistry.js");
 const actionRegistry = read("server/services/platformActionRegistry.js");
 const systemWorkflowCatalog = read("server/services/systemWorkflowCatalog.js");
 
