@@ -3166,9 +3166,13 @@ CREATE TABLE IF NOT EXISTS platform_action_jobs (
     completed_at TIMESTAMPTZ,
     idempotency_key VARCHAR(255) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    claimed_at TIMESTAMPTZ,
+    locked_until TIMESTAMPTZ,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(company_id, idempotency_key)
 );
+ALTER TABLE platform_action_jobs ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+ALTER TABLE platform_action_jobs ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_platform_action_jobs_due
     ON platform_action_jobs(status, next_attempt_at);
 
