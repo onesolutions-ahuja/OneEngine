@@ -101,6 +101,7 @@ const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/Con
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 const OneAssistantPage = lazyWithRecovery(() => import('./pages/assistant/OneAssistantPage'))
+const PublicAppointmentBookingPage = lazyWithRecovery(() => import('./pages/assistant/PublicAppointmentBookingPage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -724,6 +725,7 @@ function readRoute() {
   if (parts[0] === 'online-orders') return { app: 'online-orders', section: null }
   if (parts[0] === 'order-prep') return { app: 'order-prep', section: null }
   if (parts[0] === 'own-delivery') return { app: 'own-delivery', section: null }
+  if (parts[0] === 'assistant' && parts[1] === 'book' && parts[2]) return { app: 'public-assistant-booking', section: null, token: decodeURIComponent(parts[2]) }
   if (parts[0] === 'assistant') return { app: 'assistant', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
@@ -2894,6 +2896,9 @@ export default function App() {
   const route = readRoute()
   if (route.app === 'customer-display') {
     return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary>
+  }
+  if (route.app === 'public-assistant-booking') {
+    return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading booking…</div>}><PublicAppointmentBookingPage token={route.token} /></Suspense></LazyLoadBoundary>
   }
 
   // A browser refresh should restore an authenticated session, not behave like
