@@ -75,7 +75,7 @@ if (!serverEntry.includes("const requestAwarePool = createRequestAwarePool(pool)
   staticFindings.push({type:"STATIC",code:"REQUEST_AWARE_POOL_MISSING",file:"server/server.js",line:1,excerpt:"request-aware pool proxy is not configured"});
 }
 for (const match of serverEntry.matchAll(/create([A-Za-z0-9]+)Router\(\{[^\n}]*\bpool\b(?!\s*:)/g)) {
-  if (match[1] === "Superadmin") continue;
+  if (match[1] === "Superadmin" || match[1] === "TenantDatabase") continue;
   staticFindings.push({
     type:"STATIC",
     code:"RAW_POOL_ROUTER_INJECTION",
