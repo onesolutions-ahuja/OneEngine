@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "build": "node scripts/check-runtime-imports.mjs",
-    "platform:metadata:export": "node scripts/export-platform-package-metadata.mjs"
+    "build": "node ../scripts/audit-trusted-runtime.mjs && node scripts/check-runtime-imports.mjs",
+    "platform:metadata:export": "node scripts/export-platform-package-metadata.mjs",
+    "audit:trusted": "node ../scripts/audit-trusted-runtime.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
