@@ -9,6 +9,7 @@ import {
   ListChecks,
   UserCheck,
   Rocket,
+  ShieldCheck,
   Search,
   Workflow,
 } from 'lucide-react'
@@ -21,6 +22,7 @@ import PlatformAppsAdmin from '../settings/Platform/PlatformAppsAdmin'
 import DeploymentAdmin from '../settings/Platform/DeploymentAdmin'
 import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSubscriptionsAdmin'
 import ValueSetList from '../settings/Platform/ValueSetList'
+import OneEngineManager from './OneEngineManager'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
@@ -31,7 +33,8 @@ const DEVELOPER_ITEMS = [
   { key: 'report-builder', label: 'Report Builder', icon: BarChart3 },
   { key: 'workflow-runs', label: 'Workflow Runs', icon: Workflow },
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
-  { key: 'platform-apps', label: 'Platform Apps', icon: LayoutGrid },
+  { key: 'oneengine-manager', label: 'OneEngine Manager', icon: ShieldCheck },
+  { key: 'platform-apps', label: 'OneEngine Apps', icon: LayoutGrid },
   { key: 'deployments', label: 'Deployments', icon: Rocket },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'value-sets', label: 'Value Sets', icon: ListChecks },
@@ -39,7 +42,7 @@ const DEVELOPER_ITEMS = [
 
 function normalizeSection(value) {
   const raw = String(value || '').trim().toLowerCase()
-  const key = raw === 'platform' ? 'workflow-builder' : raw
+  const key = raw === 'platform' ? 'oneengine-manager' : raw
   return DEVELOPER_ITEMS.some((item) => item.key === key) ? key : 'objects'
 }
 
@@ -123,6 +126,8 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
             <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
           ) : current.key === 'work-items' ? (
             <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+          ) : current.key === 'oneengine-manager' ? (
+            <OneEngineManager />
           ) : current.key === 'platform-apps' ? (
             <PlatformAppsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
           ) : current.key === 'deployments' ? (
