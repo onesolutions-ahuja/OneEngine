@@ -40,5 +40,5 @@ jobs:
       - run: npx playwright test --project=desktop-chromium
         env:
           ONEPOS_E2E_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
-          ONEPOS_E2E_USERNAME: ${{ secrets.PLAYWRIGHT_USERNAME }}
-          ONEPOS_E2E_PASSWORD: ${{ secrets.PLAYWRIGHT_PASSWORD }}
+          ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
+          ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
