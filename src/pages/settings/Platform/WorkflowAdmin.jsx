@@ -612,7 +612,7 @@ function makeStep(type = "CREATE_RECORD") {
     type,
     label: actionOptions.find((option) => option.value === type)?.label || "Action",
     config: {
-      object: "orders",
+      object: "",
       recordId: "",
       filters: [],
       match: "all",
@@ -620,7 +620,7 @@ function makeStep(type = "CREATE_RECORD") {
       sortDirection: "asc",
       store: "first",
       limit: 1,
-      fieldMappings: { status: "status" },
+      fieldMappings: {},
       template: "",
       templateId: "",
       recipient: "customer.email",
@@ -628,7 +628,7 @@ function makeStep(type = "CREATE_RECORD") {
       functionKey: "",
       inputs: { value: "hello" },
       workflowId: "",
-      workflowInputs: { order_id: "{{id}}" },
+      workflowInputs: {},
       condition: { type: "all", rules: [blankCondition()] },
       ifBranch: [],
       elseBranch: [],
@@ -983,7 +983,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Field mappings</label>
               <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                {Object.entries(step.config?.fieldMappings || { status: "status" }).map(([key, value], mappingIndex) => (
+                {Object.entries(step.config?.fieldMappings || {}).map(([key, value], mappingIndex) => (
                   <div className="grid gap-2 md:grid-cols-2" key={`${key}-${mappingIndex}`}>
                     <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={key} label="Target field" onChange={(field) => {
                       const next = { ...(step.config?.fieldMappings || {}) };
