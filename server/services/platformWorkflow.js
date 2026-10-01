@@ -1178,7 +1178,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         ? new Date(startsAt).toLocaleString("en-GB",{timeZone:"Europe/London",dateStyle:"medium",timeStyle:"short"})
         : "the selected time";
       const defaultMessage=`Your ${record?.serviceName||"appointment"} appointment is booked for ${when}.`;
-      const message=String(action?.message||defaultMessage);
+      const template=String(action?.message||defaultMessage);
+      const message=template
+        .replaceAll("{{serviceName}}", String(record?.serviceName||"appointment"))
+        .replaceAll("{{startsAt}}", when)
+        .replaceAll("{{appointmentId}}", String(record?.appointmentId||""));
       const type=channel==="WHATSAPP"?"SEND_WHATSAPP":channel==="SMS"?"SEND_SMS":null;
       if(!type) return {status:"skipped",reason:`Booking channel ${channel||"UNKNOWN"} does not use mobile confirmation`};
       const result=await executeRegisteredAction({
