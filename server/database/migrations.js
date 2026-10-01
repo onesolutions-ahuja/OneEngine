@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0001_core_schema",
   "0002_platform_foundation",
@@ -9,6 +11,18 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0008_company_scope_permission",
   "0009_secure_invoice_expiry_required",
   "0010_workflow_run_version",
+  "0020_tenant_engine_manager_identity",
+]);
+
+const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
+  {
+    key: "0020_tenant_engine_manager_identity",
+    version: "20",
+    name: "Correct tenant OneEngine manager identity and RBAC authority",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0020_tenant_engine_manager_identity.sql", import.meta.url), "utf8")
+    ),
+  },
 ]);
 
 export async function runMigrations(database, migrations) {
@@ -27,7 +41,13 @@ export async function runMigrations(database, migrations) {
       )
     `);
 
-    for (const migration of migrations) {
+    const requestedKeys = new Set(migrations.map(migration => migration.key));
+    const migrationPlan = [
+      ...migrations,
+      ...BUILT_IN_DATABASE_MIGRATIONS.filter(migration => !requestedKeys.has(migration.key)),
+    ];
+
+    for (const migration of migrationPlan) {
       await client.query("BEGIN");
       try {
         await client.query("SELECT pg_advisory_xact_lock(1936683890, 1)");
