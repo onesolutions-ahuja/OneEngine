@@ -513,6 +513,7 @@ function LockScreen({ onUnlock, onSignOut, preparing = false }) {
                   className="login-password-toggle"
                   onClick={() => setShowPassword((value) => !value)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
                   title={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
