@@ -68,12 +68,6 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
       licence_mode: row.licence_mode,
       licence_required: row.licence_mode !== "TECHNICAL" && row.manifest?.licenceRequired !== false,
 
-      billable: row.billable,
-
-      licence_mode: row.licence_mode,
-
-      licence_required: row.licence_mode !== "TECHNICAL" && row.manifest?.licenceRequired !== false,
-
       visible: row.visible,
 
       installable: row.installable,
@@ -1326,41 +1320,53 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
       }
 
-      const result = await db(
+      const result = await withTransaction(async (txDb) => {
+        const reactivated = [];
+        for (const item of plan) {
+          const packageResult = await txDb(
+            `SELECT p.id,p.module_id,i.status,i.deactivated_by_user
+               FROM package_registry p
+               LEFT JOIN company_package_installations i
+                 ON i.package_id=p.id AND i.company_id=$2
+              WHERE p.package_key=$1 AND p.active=true`,
+            [item.packageKey, req.user.companyId]
+          );
+          const entry = packageResult.rows[0];
+          if (!entry || !entry.status) {
+            throw new Error(`Install required package dependency before reactivating: ${item.packageKey}`);
+          }
+          if (item.packageKey !== root.packageKey && entry.status !== "active" && entry.deactivated_by_user === true) {
+            throw new Error(`Required dependency was explicitly deactivated: ${item.packageKey}`);
+          }
+          if (entry.status !== "active") {
+            await txDb(
+              `UPDATE company_package_installations
+                  SET status='active',deactivated_by_user=false,suspended_by_entitlement=false,updated_at=NOW()
+                WHERE company_id=$1 AND package_id=$2`,
+              [req.user.companyId, entry.id]
+            );
+            reactivated.push(item.packageKey);
+          }
+          if (entry.module_id) {
+            await txDb(
+              `UPDATE platform_module_access
+                  SET enabled=true,updated_at=NOW()
+                WHERE module_id=$1 AND company_id=$2 AND store_id IS NULL`,
+              [entry.module_id, req.user.companyId]
+            );
+          }
+        }
+        await reconcileCompanyPackageEntitlements(txDb, req.user.companyId);
+        const rootResult = await txDb(
+          `SELECT i.* FROM company_package_installations i
+             JOIN package_registry p ON p.id=i.package_id
+            WHERE p.package_key=$1 AND i.company_id=$2`,
+          [packageKey, req.user.companyId]
+        );
+        return { installation: rootResult.rows[0], reactivated };
+      });
 
-        `UPDATE company_package_installations i
-
-            SET status='active',deactivated_by_user=false,suspended_by_entitlement=false,updated_at=NOW()
-
-           FROM package_registry p
-
-          WHERE i.package_id=p.id AND p.package_key=$1 AND i.company_id=$2
-
-          RETURNING i.*`,
-
-        [packageKey, req.user.companyId]
-
-      );
-
-      if (!result.rows.length) return res.status(404).json({ success: false, message: "Package is not installed for this company" });
-
-      await reconcileCompanyPackageEntitlements(db, req.user.companyId);
-
-      await db(
-
-        `UPDATE platform_module_access a SET enabled=true,updated_at=NOW()
-
-           FROM package_registry p
-
-          WHERE p.package_key=$1 AND a.module_id=p.module_id
-
-            AND a.company_id=$2 AND a.store_id IS NULL`,
-
-        [packageKey, req.user.companyId]
-
-      );
-
-      res.json({ success: true, data: result.rows[0] });
+      res.json({ success: true, data: result.installation, reactivated: result.reactivated });
 
     } catch (error) {
 
