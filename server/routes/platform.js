@@ -3930,7 +3930,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
       const ruleError = deactivateOnly ? null : await checkRule(req, normalizedNext);
       if (ruleError) return res.status(400).json({ success: false, message: ruleError });
-      const meaningfulEdit = ["objectId","objectKey","name","triggerKey","conditions","action"].some((key) => req.body[key] !== undefined);
+      const definitionRequested = ["objectId","objectKey","name","triggerKey","conditions","action"].some((key) => req.body[key] !== undefined);
+      const meaningfulEdit = definitionRequested && (
+        String(rule.object_id || "") !== String(normalizedNext.object_id || "")
+        || String(rule.name || "") !== String(normalizedNext.name || "")
+        || String(rule.trigger_key || "") !== String(normalizedNext.trigger_key || "")
+        || JSON.stringify(rule.conditions || []) !== JSON.stringify(normalizedNext.conditions || [])
+        || JSON.stringify(rule.action || {}) !== JSON.stringify(normalizedNext.action || {})
+      );
       if (meaningfulEdit && rule.action?.type === "workflow") {
         const maxVersion = await db(
           "SELECT GREATEST(COALESCE(MAX(version),0),$1::int) AS version FROM platform_workflow_versions WHERE company_id=$2 AND workflow_id=$3",
