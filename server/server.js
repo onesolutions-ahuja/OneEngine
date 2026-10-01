@@ -7,7 +7,8 @@ import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pg from "pg";
-import { bootstrapInitialSuperadmin, ensureGlobalSystemProfile, initializeDatabase } from "./database/init.js";
+import { initializeDatabase } from "./database/init.js";
+import { bootstrapInitialSuperadmin } from "./database/rbacBootstrap.js";
 import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs } from "./services/platformJobs.js";
@@ -2023,21 +2024,6 @@ async function startServer() {
     // Identity/profile synchronization remains cheap and intentionally runs on
     // every start so environment-driven bootstrap credentials can still change.
     await bootstrapInitialSuperadmin(pool);
-    const developerRoleId = await ensureGlobalSystemProfile(pool, {
-      name: "Developer",
-      apiKey: "oneengine_manager",
-      description: "Global OneEngine Manager profile. Access is granted through RBAC permissions.",
-      grantAllPermissions: true,
-    });
-    if (process.env.PLATFORM_DEVELOPER_PASSWORD) {
-      const developerHash = await bcrypt.hash(process.env.PLATFORM_DEVELOPER_PASSWORD, 12);
-      await db(
-        `INSERT INTO users (company_id,role_id,username,password_hash,full_name,email,is_platform_developer,active)
-         VALUES (NULL,$2,'oneengine.manager@onepos.local',$1,'OneEngine Manager','developer@onepos.local',true,true)
-         ON CONFLICT (username) DO UPDATE SET role_id=$2,is_platform_developer=true,active=true,password_hash=EXCLUDED.password_hash`,
-        [developerHash, developerRoleId]
-      );
-    }
     console.log("onePOS: platform bootstrap ready");
 
     let draining = false;
