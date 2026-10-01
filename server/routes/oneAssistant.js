@@ -1,4 +1,7 @@
 import express from "express";
+import { decryptCredentials } from "../services/integrationCredentials.js";
+import { createSmsGateDriver } from "../services/smsGateConnector.js";
+import { sendWhatsAppTextMessage } from "../services/whatsappDelivery.js";
 import {
   findAvailableAppointmentSlots,
   holdAppointmentSlot,
@@ -8,6 +11,49 @@ import {
   resolveAppointmentPublicLink,
   selectPublicAppointmentSlot,
 } from "../services/oneAssistant.js";
+
+
+async function sendBookingConfirmation(pool, link, selected) {
+  if (!selected?.appointment || !link?.sender) return { sent:false, reason:"not_confirmed" };
+  const when = selected.appointment.starts_at || selected.hold?.starts_at;
+  const serviceName = selected.service?.name || "appointment";
+  const text = `Your ${serviceName} appointment is booked for ${new Date(when).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" })}.`;
+  const channel = String(link.channel || "").toUpperCase();
+
+  if (channel === "SMS") {
+    const connectorInstanceId = link.state?.connectorInstanceId || null;
+    if (!connectorInstanceId) return { sent:false, reason:"sms_connector_missing" };
+    const result = await pool.query(
+      `SELECT id,connector_configuration,credentials_encrypted
+         FROM integration_connections
+        WHERE id=$1 AND company_id=$2 AND connector_package_key='smsgate_connector' AND enabled=true
+        LIMIT 1`,
+      [connectorInstanceId, link.company_id]
+    );
+    const connection = result.rows[0];
+    if (!connection) return { sent:false, reason:"sms_connector_unavailable" };
+    let secrets = {};
+    try { secrets = decryptCredentials(connection.credentials_encrypted) || {}; } catch { secrets = {}; }
+    const adapter = createSmsGateDriver().createAdapter({
+      configuration: { ...(connection.connector_configuration || {}), ...secrets },
+    });
+    const sent = await adapter.execute("sms.send", { recipient: link.sender, text });
+    return { sent:true, providerMessageId: sent?.providerMessageId || null, channel };
+  }
+
+  if (channel === "WHATSAPP") {
+    const sent = await sendWhatsAppTextMessage({
+      db: pool.query.bind(pool),
+      companyId: link.company_id,
+      to: link.sender,
+      body: text,
+      conversationId: link.state?.conversationId || null,
+    });
+    return { sent: sent?.ok === true, providerMessageId: sent?.reference || null, channel, error: sent?.errorText || null };
+  }
+
+  return { sent:false, reason:"channel_not_supported", channel };
+}
 
 function errorResponse(res, error) {
   const status = error?.code === "SLOT_UNAVAILABLE" ? 409 : error?.code === "HOLD_EXPIRED" ? 410 : 400;
@@ -58,15 +104,22 @@ export default function createOneAssistantRouter({ pool, authenticate, authorize
       if(!serviceId||!resourceId||!startsAt||!endsAt){await client.query("ROLLBACK");return res.status(400).json({success:false,message:"serviceId, resourceId, startsAt and endsAt are required"});}
       const selected=await selectPublicAppointmentSlot(client,{publicLink:link,serviceId,resourceId,startsAt,endsAt,holdMinutes:req.body?.holdMinutes||10});
       await client.query("COMMIT");
+      let confirmation={sent:false,reason:selected.amount>0?"payment_required":"not_attempted"};
+      if(selected.amount<=0){
+        try{ confirmation=await sendBookingConfirmation(pool,link,selected); }
+        catch(error){ console.error("OneAssistant booking confirmation delivery error:",error); confirmation={sent:false,reason:"delivery_failed"}; }
+      }
       res.json({
         success:true,
         data:{
           bookingCaseId:link.booking_case_id,
           hold:selected.hold,
+          appointment:selected.appointment||null,
           amountDue:selected.amount,
           currency:selected.service.currency,
           requiresPayment:selected.amount>0,
-          paymentRequest:selected.paymentRequest
+          paymentRequest:selected.paymentRequest,
+          confirmation
         }
       });
     }catch(error){await client.query("ROLLBACK");errorResponse(res,error);}finally{client.release();}
