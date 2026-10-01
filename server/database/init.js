@@ -1,33 +1,4 @@
-import,
-    {
-      key: "0034_user_store_assignment_permission",
-      version: "34",
-      name: "Add explicit user store assignment authority",
-      up: async client => {
-        await client.query(
-          `INSERT INTO permissions (code,name,description)
-           VALUES ('user.store_assignment.manage','Manage User Store Assignments','Assign active company stores to users, including the caller when explicitly authorised')
-           ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description`
-        );
-        await client.query(
-          `INSERT INTO role_permissions (role_id,permission_id)
-           SELECT DISTINCT r.id,p.id
-             FROM roles r
-             JOIN permissions p ON p.code='user.store_assignment.manage'
-            WHERE EXISTS (
-                    SELECT 1 FROM role_permissions rp
-                    JOIN permissions existing ON existing.id=rp.permission_id
-                    WHERE rp.role_id=r.id AND existing.code='user.manage'
-                  )
-              AND EXISTS (
-                    SELECT 1 FROM role_permissions rp
-                    JOIN permissions existing ON existing.id=rp.permission_id
-                    WHERE rp.role_id=r.id AND existing.code='store.edit'
-                  )
-           ON CONFLICT (role_id,permission_id) DO NOTHING`
-        );
-      },
-    } bcrypt from "bcryptjs";
+import bcrypt from "bcryptjs";
 import { readFileSync } from "node:fs";
 import { runMigrations } from "./migrations.js";
 import { ensureReleaseTablesSql } from "../services/appReleaseManager.js";
@@ -962,6 +933,35 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           CREATE INDEX IF NOT EXISTS idx_platform_approval_delegations_active
             ON platform_approval_delegations(company_id,user_id,active,starts_at,ends_at);
         `);
+      },
+    },
+    {
+      key: "0034_user_store_assignment_permission",
+      version: "34",
+      name: "Add explicit user store assignment authority",
+      up: async client => {
+        await client.query(
+          `INSERT INTO permissions (code,name,description)
+           VALUES ('user.store_assignment.manage','Manage User Store Assignments','Assign active company stores to users, including the caller when explicitly authorised')
+           ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description`
+        );
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT DISTINCT r.id,p.id
+             FROM roles r
+             JOIN permissions p ON p.code='user.store_assignment.manage'
+            WHERE EXISTS (
+                    SELECT 1 FROM role_permissions rp
+                    JOIN permissions existing ON existing.id=rp.permission_id
+                    WHERE rp.role_id=r.id AND existing.code='user.manage'
+                  )
+              AND EXISTS (
+                    SELECT 1 FROM role_permissions rp
+                    JOIN permissions existing ON existing.id=rp.permission_id
+                    WHERE rp.role_id=r.id AND existing.code='store.edit'
+                  )
+           ON CONFLICT (role_id,permission_id) DO NOTHING`
+        );
       },
     }
   ]);
