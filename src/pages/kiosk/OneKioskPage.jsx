@@ -1635,6 +1635,16 @@ export default function OneKioskPage({ publicMode = false }) {
                     : "Available"}
                 </div>
               ) : null}
+              {Array.isArray(productOptions?.bundleComponents) && productOptions.bundleComponents.length ? (
+                <div className="one-kiosk-bundle-contents">
+                  <strong>Includes</strong>
+                  <div>
+                    {productOptions.bundleComponents.map((component) => (
+                      <span key={component.id}>{component.quantity > 1 ? `${component.quantity}× ` : ""}{component.name}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {productScreen.modifiers && Array.isArray(productOptions?.modifierGroups) ? productOptions.modifierGroups.map((group) => (
                 <div className="one-kiosk-option-group" key={group.id}>
                   <div className="one-kiosk-option-title">
