@@ -1426,7 +1426,7 @@ app.use("/api", createGlobalProductLookupRouter({
 }));
 
 app.use("/api", createDashboardRouter({ authenticate, db }));
-app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canAccessStore, writeAudit, hasPermission }));
+app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
 
 /*
  * JARVIS AI assistant (V1) - POST /api/jarvis, GET /api/jarvis/status.
