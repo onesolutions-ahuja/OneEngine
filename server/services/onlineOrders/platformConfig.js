@@ -75,9 +75,7 @@ export function sanitizeUberStoreMenuMappings(value) {
 
 function encryptionKey() {
   const secret =
-    process.env.ONLINE_PLATFORMS_SECRET ||
-    process.env.JWT_SECRET ||
-    "development-secret-change-this";
+    process.env.ONLINE_PLATFORMS_SECRET || process.env.JWT_SECRET;
 
   return crypto.createHash("sha256").update(String(secret)).digest();
 }
