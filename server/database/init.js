@@ -1036,6 +1036,9 @@ async function initializeLegacyDatabase(pool) {
     ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_paper_width VARCHAR(20) NOT NULL DEFAULT '80mm';
     ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS assistance_requested_at TIMESTAMPTZ;
     ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS assistance_note VARCHAR(300);
+    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS age_approval_requested_at TIMESTAMPTZ;
+    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS age_approved_until TIMESTAMPTZ;
+    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS age_approved_by UUID REFERENCES users(id) ON DELETE SET NULL;
 
     CREATE TABLE IF NOT EXISTS payment_terminals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
