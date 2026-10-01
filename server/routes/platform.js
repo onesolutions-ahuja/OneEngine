@@ -615,31 +615,26 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   async function resolveActingCompany(req, res, next) {
     try {
       const legacyDeveloper = req.user?.isPlatformDeveloper === true || req.user?.is_platform_developer === true;
+      const oneEngineManager = await hasOneEngineManageAccess(req.user?.id);
+      const requestedOverride = req.headers["x-acting-company-id"] || req.body?.actingCompanyId || req.query?.actingCompanyId;
 
-      // Fast path: authenticated tenant users already carry the authoritative
-      // company in the verified session. Do not query RBAC just to rediscover
-      // company context on every Platform request.
-      if (req.user?.companyId) {
-        const requestedOverride = req.headers["x-acting-company-id"] || req.body?.actingCompanyId || req.query?.actingCompanyId;
-        if (requestedOverride && String(requestedOverride) !== String(req.user.companyId) && !legacyDeveloper) {
+      // Ordinary tenant users, including tenant Superadmins, are permanently
+      // scoped to their own company. OneEngine Managers are the only RBAC users
+      // allowed to select a different explicitly assigned tenant.
+      if (req.user?.companyId && !oneEngineManager && !legacyDeveloper) {
+        if (requestedOverride && String(requestedOverride) !== String(req.user.companyId)) {
           return res.status(403).json({ success: false, message: "Tenant users cannot switch company context" });
         }
-        if (!legacyDeveloper || !requestedOverride || String(requestedOverride) === String(req.user.companyId)) {
-          req.platformCompanyId = req.user.companyId;
-          return next();
-        }
-      }
-
-      // Only global/cross-company profiles reach the permission lookup.
-      const platformManage = await hasOneEngineManageAccess(req.user?.id);
-      if (!platformManage && !legacyDeveloper) {
         req.platformCompanyId = req.user.companyId;
         return next();
       }
 
-      // Only a global developer profile with no authenticated company binding
-      // needs an acting-company selection.
-      const actingCompanyId = req.headers["x-acting-company-id"] || req.body?.actingCompanyId || req.query?.actingCompanyId;
+      if (!oneEngineManager && !legacyDeveloper) {
+        req.platformCompanyId = req.user.companyId;
+        return next();
+      }
+
+      const actingCompanyId = requestedOverride || req.user?.companyId;
       if (!actingCompanyId) return res.status(409).json({ success: false, code: "ACTING_COMPANY_REQUIRED", message: "Select a company before customising tenant metadata" });
 
       const access = await db(
@@ -697,9 +692,9 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   }
 
   router.get("/platform/developer/companies", authenticate, async (req, res) => {
-    const platformManage = await hasOneEngineManageAccess(req.user?.id);
+    const oneEngineManager = await hasOneEngineManageAccess(req.user?.id);
     const legacyDeveloper = req.user?.isPlatformDeveloper === true || req.user?.is_platform_developer === true;
-    if (!platformManage && !legacyDeveloper) {
+    if (!oneEngineManager && !legacyDeveloper) {
       return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
     }
 
@@ -717,9 +712,9 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.put("/platform/developer/acting-company", authenticate, async (req, res) => {
     const companyId = req.body?.actingCompanyId;
-    const platformManage = await hasOneEngineManageAccess(req.user?.id);
+    const oneEngineManager = await hasOneEngineManageAccess(req.user?.id);
     const legacyDeveloper = req.user?.isPlatformDeveloper === true || req.user?.is_platform_developer === true;
-    if (!platformManage && !legacyDeveloper) {
+    if (!oneEngineManager && !legacyDeveloper) {
       return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
     }
 
