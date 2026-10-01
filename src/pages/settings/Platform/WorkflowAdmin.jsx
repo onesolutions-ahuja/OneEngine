@@ -3223,7 +3223,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
         <div className="workflow-builder-field">
           <label>Trigger</label>
-          <select className={inputClass} value={workflow.trigger || "after_update"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
+          <select aria-label="Workflow trigger" className={inputClass} value={workflow.trigger || "after_update"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
             {scopeKey === "whatsapp_assistant" ? <option value="whatsapp_message_received">WhatsApp message received</option> : null}
             {workflow.systemGenerated ? <option value="system_function">System function</option> : null}
             {workflow.systemGenerated ? <option value="system_action">System action</option> : null}
