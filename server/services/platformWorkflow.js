@@ -1007,7 +1007,7 @@ async function executeOnlineOrderTransition({ db, pool, action, req, record, rec
   if (req?.user?.storeId && String(req.user.storeId) !== String(order.store_id || "")) {
     throw Object.assign(new Error("Online order is outside the current store scope"), { status: 403 });
   }
-  if (order.platform !== "direct") {
+  if (!["direct", "one_kiosk"].includes(order.platform)) {
     throw Object.assign(new Error("Provider-specific order actions must be executed by the provider integration"), { status: 409 });
   }
 
@@ -1036,7 +1036,7 @@ async function executeOnlineOrderTransition({ db, pool, action, req, record, rec
     userId: userId || req?.user?.id || null,
     toStatus,
     reason: action.reason || null,
-    createSale: createSaleForCompletedOrder,
+    createSale: order.platform === "one_kiosk" ? null : createSaleForCompletedOrder,
     createInventoryMovement,
     publishEvent: ({ client, eventType, payload, actorUserId }) => publishPlatformEvent({
       db: client.query.bind(client),
