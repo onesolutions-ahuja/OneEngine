@@ -1127,8 +1127,9 @@ export default function createKioskRouter({
 
       const saleResult = await client.query(
         `SELECT s.id,s.company_id,s.store_id,s.user_id,s.customer_id,s.receipt_number,
-                s.subtotal,s.tax,s.total,s.status,s.created_at
+                s.subtotal,s.tax,s.total,s.status,s.created_at,c.currency
            FROM sales s
+           JOIN companies c ON c.id=s.company_id
           WHERE s.id=$1
             AND s.company_id=$2
             AND s.store_id=$3
@@ -1212,8 +1213,8 @@ export default function createKioskRouter({
          )
          VALUES (
            $1,$2,$3,'one_kiosk',$4,$5,
-           'PREPARING',$6,'GBP',$7,$8,0,$9,$10,
-           $11,'paid',$12::jsonb,FALSE,
+           'PREPARING',$6,$7,$8,$9,0,$10,$11,
+           $12,'paid',$13::jsonb,FALSE,
            NOW(),NOW()
          )
          RETURNING *`,
@@ -1224,6 +1225,7 @@ export default function createKioskRouter({
           externalOrderId,
           collectionNumber,
           canonicalFulfilmentType,
+          String(sale.currency || "GBP").toUpperCase(),
           Number(sale.subtotal) || 0,
           Number(sale.tax) || 0,
           Number(sale.total) || 0,
