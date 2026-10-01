@@ -2365,7 +2365,7 @@ function Desktop({ onLock, onSignOut }) {
     const cached = getStoredSessionPermissions()
     return Array.isArray(cached?.permissions) ? cached.permissions : []
   })
-  const canManageOneEngine = desktopPermissions.includes('oneengine.manage') || (desktopPermissions.includes('oneengine.manage') || desktopPermissions.includes('platform.manage'))
+  const canManageOneEngine = desktopPermissions.includes('oneengine.manage') || desktopPermissions.includes('platform.manage')
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
   const isTillUser = /till|cashier|sales/i.test(String(storedUser?.role || ''))
