@@ -2150,7 +2150,7 @@ async function startServer() {
                   const clauses = ["id=$1"];
                   if (object.company_scoped !== false) {
                     params.push(job.company_id);
-                    clauses.push(`company_id=${params.length}`);
+                    clauses.push("company_id=$" + params.length);
                   }
                   const recordResult = await db(`SELECT * FROM "${table}" WHERE ${clauses.join(" AND ")} LIMIT 1`, params);
                   record = recordResult.rows[0] || null;
