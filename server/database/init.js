@@ -456,17 +456,22 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     [email]
   );
 
-  // Safe bootstrap email migration: when the configured Superadmin email changes,
-  // reuse the existing tenant Superadmin identity instead of creating a duplicate.
+  // Safe bootstrap email migration: when the configured tenant Superadmin
+  // email changes, reuse the existing identity instead of creating a duplicate.
+  // The onePOS demo tenant historically used superadmin@onepos.local; migrate
+  // that legacy address only, while preserving the per-tenant Superadmin model.
   if (!existing.rows[0]) {
     existing = await pool.query(
       `SELECT u.id,u.username,u.email,u.company_id,u.role_id
          FROM users u
-         JOIN roles r ON r.id=u.role_id
         WHERE u.company_id=$1
-          AND r.api_key='platform_superadmin'
           AND u.active=true
-        ORDER BY u.created_at,u.id
+          AND (
+            LOWER(COALESCE(u.email,''))='superadmin@onepos.local'
+            OR LOWER(COALESCE(u.username,''))='superadmin'
+          )
+        ORDER BY CASE WHEN LOWER(COALESCE(u.email,''))='superadmin@onepos.local' THEN 0 ELSE 1 END,
+                 u.created_at,u.id
         LIMIT 1`,
       [companyId]
     );
