@@ -3824,6 +3824,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         db("SELECT * FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1", [run.id, req.user.companyId]),
         db("SELECT * FROM platform_workflow_step_runs WHERE run_id=$1 ORDER BY step_order,created_at,id", [run.id]),
       ]);
+      const handledFaults = (stepResult.rows || [])
+        .filter((step) => String(step.status || "").toUpperCase() === "FAILED")
+        .map((step) => ({
+          stepId: String(step.step_identifier || "").split("@")[0],
+          actionType: step.action_type || null,
+          error: step.metadata?.friendlyError || (step.error_text ? { title: "This step failed but its error path handled the failure", whatHappened: step.error_text } : null),
+        }));
       const debugData = {
         status: finalStatus,
         run: runResult.rows[0] || run,
@@ -3831,6 +3838,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         results,
         record: record ? { id: record.id } : null,
         friendlyError: friendly,
+        handledFaults: debugError ? [] : handledFaults,
+        completedWithHandledError: !debugError && handledFaults.length > 0,
         rolledBack: true,
         externalActionsSimulated: true,
         variables: workflowVariables,
