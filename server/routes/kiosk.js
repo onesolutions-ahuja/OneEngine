@@ -149,6 +149,7 @@ export default function createKioskRouter({
              ON ps.company_id=p.company_id AND ps.store_id=$2 AND ps.product_id=p.id
           WHERE p.company_id=$1
             AND p.active=TRUE
+            AND p.parent_product_id IS NULL
             AND p.sku IS DISTINCT FROM 'MISC'
           ORDER BY COALESCE((p.kiosk_metadata->>'sortOrder')::int,999999),c.display_order,p.name`,
         [req.user.companyId, req.user.storeId]
@@ -289,12 +290,13 @@ export default function createKioskRouter({
       for (const item of items) {
         const quantity = Math.max(1, Number(item.quantity) || 1);
         const product = await db(
-          `SELECT id,name,price,category_id,vat_rate,vat_applicable
+          `SELECT id,name,price,category_id,vat_rate,vat_applicable,parent_product_id
              FROM products WHERE id=$1 AND company_id=$2 AND active=TRUE LIMIT 1`,
           [item.productId, req.user.companyId]
         );
         if (!product.rows[0]) return res.status(400).json({ success: false, message: "A basket product is unavailable" });
 
+        const modifierOwnerId = product.rows[0].parent_product_id || item.productId;
         const selectedIds = (Array.isArray(item.modifiers) ? item.modifiers : []).map((m) => m.optionId).filter(Boolean);
         let modifierUnit = 0;
         if (selectedIds.length) {
@@ -304,7 +306,7 @@ export default function createKioskRouter({
                JOIN product_modifier_groups g ON g.id=o.group_id
               WHERE o.id=ANY($1::uuid[]) AND g.company_id=$2 AND g.product_id=$3
                 AND o.active=TRUE AND g.active=TRUE`,
-            [selectedIds, req.user.companyId, item.productId]
+            [selectedIds, req.user.companyId, modifierOwnerId]
           );
           if (selected.rows.length !== new Set(selectedIds.map(String)).size) {
             return res.status(400).json({ success: false, message: "A selected product option is no longer available" });
