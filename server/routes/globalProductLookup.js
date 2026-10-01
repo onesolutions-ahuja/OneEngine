@@ -139,6 +139,27 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
     }
   });
 
+  router.get("/global-products/search", authenticate, authorize("global_product.view"), async (req, res) => {
+    try {
+      const result = await lookupService.search({
+        db,
+        companyId: req.user.companyId,
+        reqCompanyId: req.user.companyId,
+        query: req.query?.q,
+        page: req.query?.page,
+        pageSize: req.query?.pageSize,
+      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      const status = error?.code === "INVALID_SEARCH" ? 400 : 500;
+      res.status(status).json({
+        success: false,
+        code: error?.code || "SEARCH_FAILED",
+        message: status === 400 ? error.message : "Unable to search the global product database",
+      });
+    }
+  });
+
   router.post("/global-products/lookup", authenticate, authorize("global_product.view"), async (req, res) => {
     try {
       const result = await lookupService.lookup({
