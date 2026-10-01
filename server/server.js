@@ -1863,7 +1863,7 @@ app.post("/api/setup/database", authenticate, authorize("oneengine.manage"), asy
 | legacy browser entry points so old bookmarks do not depend on a duplicate
 | frontend bundle in this repository.
 */
-const SMART_THEME_URL = String(process.env.SMART_THEME_URL || "https://smart-theme.onrender.com").replace(/\/$/, "");
+const SMART_THEME_URL = String(process.env.SMART_THEME_URL || "https://onesolutions-ahuja.github.io/OneEngine").replace(/\/$/, "");
 
 app.get(["/", "/login", "/app", "/app/*", "/customer-display"], (req, res) => {
   return res.redirect(302, SMART_THEME_URL);
