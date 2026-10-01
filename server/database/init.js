@@ -247,6 +247,24 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             WHERE COALESCE(system_permissions,'[]'::jsonb) ? 'platform.manage'`
         );
       },
+    {
+      key: "0016_audit_schema_hardening",
+      version: "16",
+      name: "Audit schema hardening for terminals and sales",
+      up: async client => {
+        await client.query("ALTER TABLE terminals ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE");
+        await client.query(
+          `UPDATE terminals t
+              SET company_id=s.company_id
+             FROM stores s
+            WHERE t.store_id=s.id
+              AND t.company_id IS NULL`
+        );
+        await client.query("ALTER TABLE terminals ALTER COLUMN company_id SET NOT NULL");
+        await client.query("CREATE INDEX IF NOT EXISTS idx_terminals_company_store ON terminals(company_id,store_id)");
+        await client.query("CREATE INDEX IF NOT EXISTS idx_sales_company_store_status_date ON sales(company_id,store_id,status,created_at DESC)");
+      },
+    },
     },
   ]);
 
