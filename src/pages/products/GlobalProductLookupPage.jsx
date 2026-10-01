@@ -8,8 +8,11 @@ const DEFAULT_PROVIDER={enabled:true,priority:100,timeoutMs:5000,fallbackEnabled
 export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const [providers,setProviders]=useState([])
   const [categories,setCategories]=useState([])
+  const [lookupMode,setLookupMode]=useState('barcode')
   const [barcode,setBarcode]=useState('')
+  const [searchText,setSearchText]=useState('')
   const [result,setResult]=useState(null)
+  const [searchResults,setSearchResults]=useState([])
   const [loading,setLoading]=useState(false)
   const [settingsLoading,setSettingsLoading]=useState(true)
   const [error,setError]=useState('')
@@ -33,13 +36,22 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
 
   const lookup=async(e)=>{
     e.preventDefault()
-    if(!barcode.trim())return
     try{
-      setLoading(true);setError('');setNotice('');setResult(null)
-      const r=await apiRequest('/api/global-products/lookup',{method:'POST',body:JSON.stringify({barcode:barcode.trim()})})
-      if(!r?.success)throw new Error(r?.message||'Product lookup failed')
-      setResult(r.data)
-    }catch(err){setError(err?.message||'Unable to look up this barcode')}
+      setLoading(true);setError('');setNotice('');setResult(null);setSearchResults([])
+      if(lookupMode==='barcode'){
+        if(!barcode.trim())return
+        const r=await apiRequest('/api/global-products/lookup',{method:'POST',body:JSON.stringify({barcode:barcode.trim()})})
+        if(!r?.success)throw new Error(r?.message||'Product lookup failed')
+        setResult(r.data)
+      }else{
+        const q=searchText.trim()
+        if(q.length<2)return
+        const r=await apiRequest(`/api/global-products/search?q=${encodeURIComponent(q)}&pageSize=24`)
+        if(!r?.success)throw new Error(r?.message||'Product search failed')
+        setResult(r.data)
+        setSearchResults(Array.isArray(r.data?.products)?r.data.products:[])
+      }
+    }catch(err){setError(err?.message||'Unable to search the worldwide product database')}
     finally{setLoading(false)}
   }
 
@@ -96,7 +108,7 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
 
   return <section className="module-page global-product-page">
     <header className="module-page-header">
-      <div><span>Catalogue</span><h1>Global Product Lookup</h1><p>Look up a barcode from installed providers, then choose whether to add it to your company catalogue.</p></div>
+      <div><span>Catalogue</span><h1>Global Product Lookup</h1><p>Search worldwide products by barcode or product name, then add the result to your company catalogue.</p></div>
       <div className="module-header-actions">{onBack?<button onClick={onBack}>Back to Products</button>:null}</div>
     </header>
 
@@ -105,14 +117,24 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
 
     <section className="module-panel global-lookup-panel">
       <form onSubmit={lookup} className="global-lookup-form">
-        <label className="module-input-label"><span>Barcode</span><input inputMode="numeric" autoComplete="off" value={barcode} maxLength={20} onChange={e=>setBarcode(e.target.value)} placeholder="Scan or enter EAN, UPC or GTIN"/></label>
-        <button className="module-primary-button" type="submit" disabled={loading||!barcode.trim()||providerMissing}>{loading?<LoaderCircle size={14}/>:<Search size={14}/>} {loading?'Looking up…':'Look up'}</button>
+        <label className="module-input-label"><span>Search by</span><select value={lookupMode} onChange={e=>{setLookupMode(e.target.value);setResult(null);setSearchResults([]);setError('')}}><option value="barcode">Barcode / EAN / UPC / GTIN</option><option value="name">Product name / brand</option></select></label>
+        {lookupMode==='barcode'
+          ?<label className="module-input-label"><span>Barcode</span><input inputMode="numeric" autoComplete="off" value={barcode} maxLength={20} onChange={e=>setBarcode(e.target.value)} placeholder="Scan or enter EAN, UPC or GTIN"/></label>
+          :<label className="module-input-label"><span>Product search</span><input autoComplete="off" value={searchText} maxLength={120} onChange={e=>setSearchText(e.target.value)} placeholder="e.g. Nutella, Haribo, Coca-Cola"/></label>}
+        <button className="module-primary-button" type="submit" disabled={loading||providerMissing||(lookupMode==='barcode'?!barcode.trim():searchText.trim().length<2)}>{loading?<LoaderCircle size={14}/>:<Search size={14}/>} {loading?'Searching…':'Search worldwide'}</button>
       </form>
+      <div className="module-state" style={{paddingTop:8,paddingBottom:8}}>Worldwide scope — no UK or Europe-only restriction. Open Food Facts does not require an API key for read/search access.</div>
 
       {providerMissing?<div className="module-state global-provider-missing">No Global Product Lookup provider is installed and enabled.{onOpenStore?<button type="button" onClick={onOpenStore}>Browse oneStore</button>:null}</div>:null}
 
       {result?.status==='not_found'?<div className="module-state">No provider found a Product for this barcode.</div>:null}
       {result?.status==='unavailable'?<div className="module-inline-error">Product Lookup providers are temporarily unavailable.</div>:null}
+      {lookupMode==='name'&&result?.status==='not_found'?<div className="module-state">No matching products were found in the worldwide database.</div>:null}
+      {lookupMode==='name'&&searchResults.length?<div className="global-product-search-results">{searchResults.map(product=><div className="global-product-result" key={`${product.sourceProvider}:${product.barcode}`}>
+        {product.imageUrl?<img src={product.imageUrl} alt="" />:null}
+        <div><strong>{product.name}</strong><span>{[product.brand,product.quantity].filter(Boolean).join(' · ')}</span><small>Barcode {product.barcode} · {[product.country,product.sourceProvider&&String(product.sourceProvider).replaceAll('_',' ')].filter(Boolean).join(' · ')}</small>{product.category?<small>{product.category}</small>:null}</div>
+        <button className="module-primary-button" type="button" onClick={()=>addToCatalogue(product)}><Plus size={14}/> Add to company catalogue</button>
+      </div>)}</div>:null}
       {result?.status==='found'?<div className="global-product-result">
         {result.product.imageUrl?<img src={result.product.imageUrl} alt="" />:null}
         <div><strong>{result.product.name}</strong><span>{[result.product.brand,result.product.variant,result.product.quantity].filter(Boolean).join(' · ')}</span><small>Barcode {result.product.barcode} · Source {String(result.product.sourceProvider||'').replaceAll('_',' ')}</small>{result.product.description?<p>{result.product.description}</p>:null}{result.product.category?<small>{result.product.category}</small>:null}</div>
