@@ -457,6 +457,46 @@ export default function createKioskRouter({
     }
   });
 
+  router.get("/kiosk/orders/search", authenticate, async (req, res) => {
+    if (req.user?.mode === "kiosk") return res.status(403).json({ success: false, message: "Staff access required" });
+    const query = String(req.query?.q || "").trim().slice(0, 120);
+    const limit = Math.min(50, Math.max(1, Number(req.query?.limit) || 20));
+    try {
+      const numeric = Number(query.replace(/[^0-9.]/g, ""));
+      const result = await db(
+        `SELECT o.id,o.external_order_id,o.external_reference,o.status,o.fulfilment_type,o.created_at,o.updated_at,
+                o.store_id,o.platform_data,
+                s.id AS sale_id,s.receipt_number,s.total,s.created_at AS sale_created_at,
+                kd.id AS kiosk_device_id,kd.name AS kiosk_name,kd.device_key
+           FROM online_orders o
+           LEFT JOIN sales s
+             ON s.company_id=o.company_id
+            AND s.id::text=o.platform_data->>'saleId'
+           LEFT JOIN kiosk_devices kd
+             ON kd.company_id=o.company_id
+            AND kd.id::text=o.platform_data->>'kioskDeviceId'
+          WHERE o.company_id=$1
+            AND o.platform='one_kiosk'
+            AND (
+              $2='' OR
+              LOWER(COALESCE(o.external_reference,'')) LIKE LOWER('%'||$2||'%') OR
+              LOWER(COALESCE(o.external_order_id,'')) LIKE LOWER('%'||$2||'%') OR
+              LOWER(COALESCE(s.receipt_number,'')) LIKE LOWER('%'||$2||'%') OR
+              LOWER(COALESCE(kd.name,'')) LIKE LOWER('%'||$2||'%') OR
+              LOWER(COALESCE(kd.device_key,'')) LIKE LOWER('%'||$2||'%') OR
+              ($3::numeric IS NOT NULL AND ABS(COALESCE(s.total,0)-$3::numeric) < 0.005)
+            )
+          ORDER BY o.created_at DESC
+          LIMIT $4`,
+        [req.user.companyId, query, Number.isFinite(numeric) && query ? numeric : null, limit]
+      );
+      res.json({ success: true, data: result.rows });
+    } catch (error) {
+      console.error("Search OneKiosk orders error:", error);
+      res.status(500).json({ success: false, message: "Unable to search kiosk orders" });
+    }
+  });
+
   router.get("/kiosk/flows", authenticate, async (req, res) => {
     try {
       const result = await db(
