@@ -29,7 +29,13 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
 
   const configuredEmail = String(env.BOOTSTRAP_TENANT_SUPERADMIN_EMAIL || env.BOOTSTRAP_SUPERADMIN_EMAIL || "").trim().toLowerCase();
   const domain = String(company.user_email_domain || "").trim().toLowerCase().replace(/^@/, "");
-  const email = configuredEmail || (String(company.name || "").trim().toLowerCase() === "onepos demo" ? "superadmin@onepos.com" : (domain ? `superadmin@${domain}` : "superadmin@local"));
+  const isDemoCompany = String(company.name || "").trim().toLowerCase() === "onepos demo";
+  const legacyDemoEmails = new Set(["superadmin", "superadmin@local", "superadmin@onepos.local"]);
+  const effectiveConfiguredEmail =
+    isDemoCompany && legacyDemoEmails.has(configuredEmail)
+      ? ""
+      : configuredEmail;
+  const email = effectiveConfiguredEmail || (isDemoCompany ? "superadmin@onepos.com" : (domain ? `superadmin@${domain}` : "superadmin@local"));
   const password = String(env.BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD || env.BOOTSTRAP_SUPERADMIN_PASSWORD || "");
   const name = String(env.BOOTSTRAP_TENANT_SUPERADMIN_NAME || env.BOOTSTRAP_SUPERADMIN_NAME || `${company.name} Superadmin`).trim();
 
