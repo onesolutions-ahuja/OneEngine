@@ -47,7 +47,7 @@ export default function MetadataResourcePicker({ objectKey = "", value = "", onC
   return <div className={`space-y-1 ${className}`}>
     <label className="block text-xs font-medium text-slate-600">{label}</label>
     <input className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search fields or related records…" />
-    <select className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" value={value || ""} onChange={e => onChange?.(e.target.value)} disabled={!objectKey || loading}>
+    <select className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" value={value || ""} onChange={e => onChange?.(e.target.value)} disabled={loading}>
       <option value="">{loading ? "Loading metadata…" : "Select resource"}</option>
       {value && !options.some(o => o.value === value) ? <option value={value}>{value}</option> : null}
       {options.map(o => <option key={o.value} value={o.value}>{o.label} · {o.type}</option>)}
