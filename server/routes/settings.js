@@ -677,7 +677,7 @@ export default function createSettingsRouter({
   /* LEGACY whole-form settings save (company identity + full config form).
      Kept for the General/Company/Tax form and backward compatibility; new
      section cards must use the canonical PATCH command above. */
-  router.put("/settings", authenticate, ...(requireLoyaltyEntitlement ? [requireLoyaltyEntitlement] : []), async (req, res) => {
+  router.put("/settings", authenticate, authorize("settings.manage"), ...(requireLoyaltyEntitlement ? [requireLoyaltyEntitlement] : []), async (req, res) => {
     const {
       companyName,
       legalName,
@@ -921,7 +921,7 @@ export default function createSettingsRouter({
     }
   });
 
-  router.post("/payment-terminals", authenticate, async (req, res) => {
+  router.post("/payment-terminals", authenticate, authorize("settings.manage"), async (req, res) => {
     const { provider, name, terminalIdentifier = null, connectionUrl = null, apiCredentials = null, storeId = null } = req.body;
     if (!provider || !name) return res.status(400).json({ success: false, message: "Provider and terminal name are required" });
     try {
@@ -937,7 +937,7 @@ export default function createSettingsRouter({
     }
   });
 
-  router.put("/payment-terminals/:id", authenticate, async (req, res) => {
+  router.put("/payment-terminals/:id", authenticate, authorize("settings.manage"), async (req, res) => {
     const { provider, name, terminalIdentifier = null, connectionUrl = null, apiCredentials, active = true } = req.body;
     try {
       const existing = await db("SELECT api_credentials FROM payment_terminals WHERE id = $1 AND company_id = $2", [req.params.id, req.user.companyId]);
@@ -955,7 +955,7 @@ export default function createSettingsRouter({
     }
   });
 
-  router.post("/payment-terminals/:id/test", authenticate, async (req, res) => {
+  router.post("/payment-terminals/:id/test", authenticate, authorize("settings.manage"), async (req, res) => {
     try {
       const result = await db("SELECT * FROM payment_terminals WHERE id = $1 AND company_id = $2", [req.params.id, req.user.companyId]);
       if (!result.rows.length) return res.status(404).json({ success: false, message: "Payment terminal not found" });
@@ -981,7 +981,7 @@ export default function createSettingsRouter({
     }
   });
 
-  router.put("/hardware", authenticate, async (req, res) => {
+  router.put("/hardware", authenticate, authorize("settings.manage"), async (req, res) => {
     const { deviceType, deviceName = null, connectionType = null, connectionAddress = null, paperWidth = null, isDefault = false, active = false } = req.body;
     if (!["BARCODE_SCANNER", "CASH_DRAWER", "RECEIPT_PRINTER"].includes(deviceType)) return res.status(400).json({ success: false, message: "Invalid hardware type" });
     try {
@@ -997,7 +997,7 @@ export default function createSettingsRouter({
     }
   });
 
-  router.post("/hardware/:type/test", authenticate, async (req, res) => {
+  router.post("/hardware/:type/test", authenticate, authorize("settings.manage"), async (req, res) => {
     const allowed = ["BARCODE_SCANNER", "CASH_DRAWER", "RECEIPT_PRINTER"];
     if (!allowed.includes(req.params.type)) return res.status(400).json({ success: false, message: "Invalid hardware type" });
     const message = "Hardware integration not configured";
@@ -1195,7 +1195,7 @@ export default function createSettingsRouter({
     }
   });
 
-  router.put("/settings/online-platforms/:platform", authenticate, async (req, res) => {
+  router.put("/settings/online-platforms/:platform", authenticate, authorize("online_orders.configure"), async (req, res) => {
     const platform = req.params.platform;
     const names = { uber: "Uber Eats", deliveroo: "Deliveroo" };
 
