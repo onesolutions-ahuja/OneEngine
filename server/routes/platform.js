@@ -4434,7 +4434,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   router.get("/platform/approval-requests", authenticate, async (req, res) => {
     const result = await db(
-      `SELECT r.*,p.name AS process_name,p.config AS process_config,s.label AS step_label,
+      `SELECT r.*,p.name AS process_name,COALESCE(r.definition_snapshot->'process'->'config',p.config) AS process_config,s.label AS step_label,
               o.object_key,o.label AS object_name,w.id AS work_item_id,w.assigned_to,w.role_id,
               w.status AS work_item_status,w.due_at,w.reassigned_from,w.reassigned_at,w.reminder_sent_at,w.escalated_at,w.escalation_count,
               u.username AS assignee_name,u.email AS assignee_email
