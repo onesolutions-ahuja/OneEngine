@@ -2955,6 +2955,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             companyId: targetCompanyId || runtimeCompanyId,
             workflowId: workflowKey,
             workflowName: definition.name || action.workflowName || "Subflow",
+            workflowVersion: Number(definition.version || definition.active_version || 1),
             objectId: object?.id || action.objectId || null,
             recordId: record?.id || action.recordId || null,
             triggerKey: "subflow",
@@ -3148,7 +3149,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record, previousRecord, object, workflowVariables = {}, debugMode = false }) => {
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record, previousRecord, object, workflowVariables = {}, debugMode = false, workflowVersion = 1 }) => {
       const mode = String(action.scheduleMode || "OFFSET").toUpperCase();
       let runAt;
       if (mode === "AT_DATETIME") {
@@ -3173,6 +3174,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           scheduledPath: true,
           parentRunId: runId || null,
           workflowId: action.workflowId || null,
+          workflowVersion: Number(workflowVersion || 1),
           scheduledPathId: action.id || null,
           scheduledPathLabel: action.pathLabel,
           scheduledPathStepIds: action.branch,
@@ -4040,13 +4042,14 @@ async function checkWorkflowDuplicateRules({ db, object, entries, companyId, req
   return action;
 }
 
-export function createWorkflowRun({ db, companyId, workflowId, workflowName, objectId, recordId, triggerKey, parentRunId = null, startedAt = new Date(), status = "PENDING", metadata = {} }) {
+export function createWorkflowRun({ db, companyId, workflowId, workflowName, workflowVersion = 1, objectId, recordId, triggerKey, parentRunId = null, startedAt = new Date(), status = "PENDING", metadata = {} }) {
   if (!db || typeof db !== "function") return null;
-  const payload = { workflowId, workflowName, objectId, recordId, triggerKey, parentRunId, status, metadata: metadata || {} };
+  const normalizedVersion = Math.max(1, Number.parseInt(workflowVersion, 10) || 1);
+  const payload = { workflowId, workflowName, workflowVersion: normalizedVersion, objectId, recordId, triggerKey, parentRunId, status, metadata: metadata || {} };
   return db(
-    `INSERT INTO platform_workflow_runs (company_id, workflow_id, workflow_name, object_id, record_id, trigger_key, parent_run_id, status, started_at, metadata)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) RETURNING *`,
-    [companyId, workflowId || null, workflowName || null, objectId || null, recordId || null, triggerKey || null, parentRunId || null, status, startedAt, JSON.stringify(payload.metadata || {})]
+    `INSERT INTO platform_workflow_runs (company_id, workflow_id, workflow_name, workflow_version, object_id, record_id, trigger_key, parent_run_id, status, started_at, metadata)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb) RETURNING *`,
+    [companyId, workflowId || null, workflowName || null, normalizedVersion, objectId || null, recordId || null, triggerKey || null, parentRunId || null, status, startedAt, JSON.stringify(payload.metadata || {})]
   ).then((result) => result.rows[0] || null);
 }
 
