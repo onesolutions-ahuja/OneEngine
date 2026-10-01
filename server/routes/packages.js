@@ -1267,7 +1267,7 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
          FROM package_registry p
 
-         WHERE p.package_key=$1 AND a.module_id=p.module_id AND a.company_id=$2 AND a.store_id IS NULL`,
+         WHERE p.package_key=$1 AND a.module_id=p.module_id AND a.company_id=$2`,
 
         [packageKey, req.user.companyId]
 
@@ -1351,7 +1351,7 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
             await txDb(
               `UPDATE platform_module_access
                   SET enabled=true,updated_at=NOW()
-                WHERE module_id=$1 AND company_id=$2 AND store_id IS NULL`,
+                WHERE module_id=$1 AND company_id=$2`,
               [entry.module_id, req.user.companyId]
             );
           }
