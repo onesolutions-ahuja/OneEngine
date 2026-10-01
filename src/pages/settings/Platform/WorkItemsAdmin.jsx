@@ -24,6 +24,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
   const [users, setUsers] = useState([]);
   const [reassignTo, setReassignTo] = useState("");
   const [history, setHistory] = useState({ actions: [], events: [] });
+  const [context,setContext]=useState(null);
   const [groups,setGroups]=useState([]); const [delegations,setDelegations]=useState([]); const [newGroup,setNewGroup]=useState(""); const [groupMembers,setGroupMembers]=useState([]); const [delegateTo,setDelegateTo]=useState(""); const [managerUser,setManagerUser]=useState(""); const [managerId,setManagerId]=useState("");
 
   const loadItems = async () => {
@@ -44,7 +45,9 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
 
   useEffect(() => {
     if (!selectedId) { setHistory({actions:[],events:[]}); return; }
-    apiRequest(`/api/platform/approval-requests/${selectedId}/history`).then(r=>setHistory(r.data||{actions:[],events:[]})).catch(()=>setHistory({actions:[],events:[]}));
+    const requestId=items.find(x=>String(x.work_item_id||x.id)===String(selectedId))?.id||selectedId;
+    apiRequest(`/api/platform/approval-requests/${requestId}/history`).then(r=>setHistory(r.data||{actions:[],events:[]})).catch(()=>setHistory({actions:[],events:[]}));
+    apiRequest(`/api/platform/approval-requests/${requestId}/context`).then(r=>setContext(r.data||null)).catch(()=>setContext(null));
     setComment(""); setReassignTo("");
   }, [selectedId]);
 
@@ -199,7 +202,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
               <span className={`developer-record-status status-${normalizedStatus(selected.status).toLowerCase()}`}>{normalizedStatus(selected.status)}</span>
             </div>
 
-            <div className="developer-record-section">
+            <div className="developer-record-section"><div className="developer-record-section-title">Approval progress</div><div className="flex flex-wrap gap-2">{(context?.steps||[]).map(step=><span key={step.step_order} className={`rounded-full border px-3 py-1 text-sm ${step.status==="current"?"font-semibold":""}`}>{step.status==="complete"?"✓":step.status==="current"?"→":"○"} {step.label}</span>)}</div>{context?.why?<div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm"><strong>Why approval is required</strong><div>{context.why}</div></div>:null}</div>\n            <div className="developer-record-section"><div className="developer-record-section-title">{context?.object?.label||"Record"} details</div><div className="developer-record-fields">{(context?.fields||[]).slice(0,10).map(field=>{const key=field.source_column||field.api_name;return <div key={key}><span>{field.label||field.api_name}</span><strong>{String(context?.record?.[key]??"—")}</strong></div>})}</div></div>\n            <div className="developer-record-section">
               <div className="developer-record-section-title">Assignment</div>
               <div className="developer-record-fields">
                 <div><span>Assignee</span><strong>{selected.assignee_name || selected.assigned_to || "Unassigned"}</strong></div>
