@@ -943,7 +943,7 @@ function MappingEditor({ value = {}, onChange, rootObjectKey, extraResources = [
   );
 }
 
-function workflowStepResources(steps = [], currentIndex = 0) {
+function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog = {}) {
   const resources = [
     { value: "variables.fault.message", label: "Fault → Error message", type: "fault" },
     { value: "variables.fault.title", label: "Fault → Problem", type: "fault" },
@@ -1004,10 +1004,18 @@ function workflowStepResources(steps = [], currentIndex = 0) {
       );
     } else if (step.type === "GET_RECORDS") {
       resources.push(
-        { value: `${prefix}.record.id`, label: `${label} → First Record → Record ID`, type: "step output" },
-        { value: `${prefix}.count`, label: `${label} → Record Count`, type: "step output" },
+        { value: `${prefix}.record.id`, label: `${label} → First Record → Record ID`, type: "record id" },
+        { value: `${prefix}.count`, label: `${label} → Record Count`, type: "number" },
         { value: `${prefix}.records`, label: `${label} → All Records`, type: "collection" },
       );
+      for (const field of objectFieldCatalog?.[step.config?.object] || []) {
+        if (!field?.apiName) continue;
+        resources.push({
+          value: `${prefix}.record.${field.apiName}`,
+          label: `${label} → First Record → ${field.label || field.apiName}`,
+          type: field.type || "field",
+        });
+      }
     } else if (step.type === "CREATE_RECORD") {
       resources.push({ value: `${prefix}.created.id`, label: `${label} → Created Record ID`, type: "step output" });
     } else if (step.type === "UPDATE_RECORD") {
@@ -1200,9 +1208,9 @@ function BranchStepPicker({ label, value = [], onChange, steps = [], currentInde
   );
 }
 
-function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null, debugInfo = null }) {
+function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {} }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
-  const extraResources = workflowStepResources(allSteps, index);
+  const extraResources = workflowStepResources(allSteps, index, objectFieldCatalog);
   const registryDefinition = registryOptions.find((option) => option.value === step.type) || null;
   const updateFieldMapping = (key, value) => {
     const fieldMappings = { ...(step.config?.fieldMappings || {}) };
@@ -1845,7 +1853,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 }
 
 
-function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null }) {
+function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {} }) {
   const [selectedId, setSelectedId] = useState("__start__");
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
@@ -1913,7 +1921,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     { label: "Current User", detail: "The user whose context runs the workflow", type: "Global" },
     { label: "Current Date / Time", detail: "The time this workflow step executes", type: "Global" },
   ];
-  const stepResources = workflowStepResources(workflow.steps, workflow.steps.length);
+  const stepResources = workflowStepResources(workflow.steps, workflow.steps.length, objectFieldCatalog);
   const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA"].includes(step.type));
   const scheduledPathSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => step.type === "SCHEDULE_PATH");
   const visibleCanvasSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(step.type));
@@ -2131,7 +2139,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               </div>
             ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
           </div>
-        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
+        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
       </aside> : null}
     </div>
   );
@@ -2258,6 +2266,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [testDraft, setTestDraft] = useState({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
   const [testBusyId, setTestBusyId] = useState(null);
   const [versionsBusy, setVersionsBusy] = useState(false);
+  const [objectFieldCatalog, setObjectFieldCatalog] = useState({});
 
 
   useEffect(() => {
@@ -2378,6 +2387,39 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       })
       .catch((error) => onError?.(error.message || "Unable to load workflows"));
   }, [onError]);
+
+  useEffect(() => {
+    const objectKeys = [...new Set((workflow.steps || [])
+      .filter((step) => step.type === "GET_RECORDS" && step.config?.object)
+      .map((step) => step.config.object))];
+    if (!objectKeys.length) return;
+    let live = true;
+    (async () => {
+      try {
+        const objectsResponse = await apiRequest("/api/platform/objects");
+        const objects = objectsResponse?.data?.objects || objectsResponse?.data || [];
+        const next = { ...objectFieldCatalog };
+        for (const objectKey of objectKeys) {
+          if (next[objectKey]) continue;
+          const object = objects.find((item) => String(item.object_key || item.api_name || item.key || "") === String(objectKey));
+          if (!object?.id) continue;
+          const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/record-paths?depth=1`);
+          const paths = Array.isArray(response?.data) ? response.data : [];
+          next[objectKey] = paths
+            .filter((path) => path.kind === "field" && String(path.path || "").split(".").length === 2)
+            .map((path) => ({
+              apiName: String(path.path).split(".").at(-1),
+              label: path.label || String(path.path).split(".").at(-1),
+              type: path.fieldType || "field",
+            }));
+        }
+        if (live) setObjectFieldCatalog(next);
+      } catch {
+        // MetadataResourcePicker still exposes the core record/count/collection resources.
+      }
+    })();
+    return () => { live = false; };
+  }, [workflow.steps]);
 
   useEffect(() => {
     apiRequest("/api/integrations")
@@ -3071,7 +3113,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                           {workflow.steps.filter((step) => assertion.type !== "DECISION_OUTCOME" || step.type === "CONDITION").map((step) => <option key={step.id} value={step.id}>{step.label || getActionLabel(step.type)}</option>)}
                         </select>
                       ) : assertion.type === "RESOURCE_EQUALS" ? (
-                        <MetadataResourcePicker objectKey={workflow.object || ""} extraResources={workflowStepResources(workflow.steps, workflow.steps.length)} label="" value={assertion.resource || ""} onChange={(resource) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, resource } : item) }))} />
+                        <MetadataResourcePicker objectKey={workflow.object || ""} extraResources={workflowStepResources(workflow.steps, workflow.steps.length, objectFieldCatalog)} label="" value={assertion.resource || ""} onChange={(resource) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, resource } : item) }))} />
                       ) : <div />}
                       {assertion.type === "RUN_STATUS" ? (
                         <select className={inputClass} value={assertion.expected || "COMPLETED"} onChange={(event) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, expected: event.target.value } : item) }))}>
@@ -3175,7 +3217,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   </select>
                   <button type="button" className="text-xs text-red-600" onClick={() => setWorkflow((current) => ({ ...current, outputContract: (current.outputContract || []).filter((_, index) => index !== outputIndex) }))}>Remove</button>
                 </div>
-                <MetadataResourcePicker objectKey={workflow.object || ""} extraResources={workflowStepResources(workflow.steps, workflow.steps.length)} label="Output Resource" value={output.source || ""} onChange={(source) => setWorkflow((current) => ({ ...current, outputContract: (current.outputContract || []).map((item, index) => index === outputIndex ? { ...item, source } : item) }))} />
+                <MetadataResourcePicker objectKey={workflow.object || ""} extraResources={workflowStepResources(workflow.steps, workflow.steps.length, objectFieldCatalog)} label="Output Resource" value={output.source || ""} onChange={(source) => setWorkflow((current) => ({ ...current, outputContract: (current.outputContract || []).map((item, index) => index === outputIndex ? { ...item, source } : item) }))} />
               </div>
             ))}
             {!(workflow.outputContract || []).length ? <div className="text-[11px] text-slate-500">No declared outputs.</div> : null}
@@ -3415,7 +3457,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : (
         <div id="workflow-canvas-section">
-          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} />
+          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} />
         </div>
       )}
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
