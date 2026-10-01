@@ -383,7 +383,8 @@ export function packageDefinition(entry) {
                     { key: "TAKEAWAY", label: "Takeaway", canonicalType: "SELF_PICKUP" },
                     { key: "COLLECT", label: "Collect", canonicalType: "SELF_PICKUP" }
                   ] },
-                  { key: "basket", type: "BASKET", editable: true, promotions: true, next: "payment" },
+                  { key: "basket", type: "BASKET", editable: true, promotions: true, next: "loyalty" },
+                  { key: "loyalty", type: "LOYALTY", title: "Rewards", subtitle: "Scan or enter your details to collect rewards, or continue as a guest.", optional: true, next: "payment" },
                   { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & collect", next: "confirmation" },
                   { key: "confirmation", type: "CONFIRMATION", title: "Thank you", subtitle: "Your order has been sent for preparation.", collectionNumber: true, collectionLabel: "Your collection number", helpText: "Keep this number and go to the collection counter. Your number will be shown when your order is ready.", doneLabel: "Start a new order", receipt: ["PRINT","QR"], resetAfterSeconds: 30 }
                 ],
@@ -423,7 +424,8 @@ export function packageDefinition(entry) {
                     { key: "OTHER_STORE", label: "Collect another store", canonicalType: "SELF_PICKUP", requires: ["STORE"] },
                     { key: "DELIVERY", label: "Home delivery", canonicalType: "DELIVERY", requires: ["ADDRESS","CONTACT"] }
                   ], stockPromise: true },
-                  { key: "basket", type: "BASKET", editable: true, promotions: true, next: "payment" },
+                  { key: "basket", type: "BASKET", editable: true, promotions: true, next: "loyalty" },
+                  { key: "loyalty", type: "LOYALTY", title: "Your details", subtitle: "Enter your phone number or email for rewards and order updates, or continue as a guest.", optional: true, next: "payment" },
                   { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & order", next: "confirmation" },
                   { key: "confirmation", type: "CONFIRMATION", title: "Order confirmed", subtitle: "Your order has been placed.", collectionNumber: true, collectionLabel: "Order / collection number", helpText: "Keep this reference. We will show when your order is ready for collection.", doneLabel: "Start another order", receipt: ["PRINT","QR","EMAIL"], collectionVerification: true, resetAfterSeconds: 30 }
                 ],
