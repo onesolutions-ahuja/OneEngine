@@ -4081,6 +4081,15 @@ export function resolveWorkflowActionType(action) {
   return String(normalized || "").toUpperCase();
 }
 
+async function workflowEffectivePermissionSets(context) {
+  const req = context?.req;
+  if (!req?.user?.companyId || !req?.user?.roleId || !context?.db) return [];
+  if (Array.isArray(req._workflowEffectivePermissionSets)) return req._workflowEffectivePermissionSets;
+  const sets = await loadEffectivePermissionSets(context.db, req.user, req);
+  req._workflowEffectivePermissionSets = Array.isArray(sets) ? sets : [];
+  return req._workflowEffectivePermissionSets;
+}
+
 async function assertWorkflowActionPermission(context, definition) {
   const req = context?.req;
   const required = [...new Set((Array.isArray(definition.requiredPermissions) ? definition.requiredPermissions : []).filter(Boolean).map(String))];
@@ -4091,19 +4100,8 @@ async function assertWorkflowActionPermission(context, definition) {
   if (!context?.db || typeof context.db !== "function") {
     throw new Error("Workflow action authorization context is unavailable");
   }
-  const result = await context.db(
-    `SELECT COUNT(DISTINCT p.code)::int AS granted
-       FROM role_permissions rp
-       JOIN permissions p ON p.id=rp.permission_id
-       JOIN roles r ON r.id=rp.role_id
-      WHERE rp.role_id=$1
-        AND (r.company_id IS NULL OR r.company_id=$2)
-        AND p.code = ANY($3::text[])`,
-    [req.user.roleId, req.user.companyId, required]
-  );
-  const granted = Number(result.rows[0]?.granted || 0);
-  if (granted !== required.length) {
-    const available = await context.db(
+  const [roleResult, permissionSets] = await Promise.all([
+    context.db(
       `SELECT DISTINCT p.code
          FROM role_permissions rp
          JOIN permissions p ON p.id=rp.permission_id
@@ -4112,9 +4110,14 @@ async function assertWorkflowActionPermission(context, definition) {
           AND (r.company_id IS NULL OR r.company_id=$2)
           AND p.code = ANY($3::text[])`,
       [req.user.roleId, req.user.companyId, required]
-    );
-    const owned = new Set((available.rows || []).map((row) => String(row.code)));
-    const missing = required.filter((code) => !owned.has(code));
+    ),
+    workflowEffectivePermissionSets(context),
+  ]);
+  const rolePermissions = new Set((roleResult.rows || []).map((row) => String(row.code)));
+  const missing = required.filter((code) =>
+    !rolePermissions.has(code) && !permissionSetAllowsSystemPermission(permissionSets, code)
+  );
+  if (missing.length) {
     throw new Error(`You do not have permission to execute this workflow action. Missing: ${missing.join(", ")}`);
   }
 }
@@ -4147,7 +4150,7 @@ async function assertSpecificWorkflowObjectPermission(context, targetObject, acc
         LIMIT 1`,
       [targetObject.id, req.user.roleId, req.user.companyId]
     ),
-    loadEffectivePermissionSets(context.db, req.user, req),
+    workflowEffectivePermissionSets(context),
   ]);
   const column = `can_${access}`;
   if (roleGrant.rows[0]?.[column] === true) return;
