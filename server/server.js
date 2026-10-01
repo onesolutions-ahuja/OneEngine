@@ -1675,7 +1675,7 @@ app.use(
 
 app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, createInventoryMovement, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
 app.use("/api", createLayawaysRouter({ authenticate, authorize, db, pool, createInventoryMovement }));
-app.use("/api", createKioskRouter({ authenticate, authorize, db, pool, writeAudit }));
+app.use("/api", createKioskRouter({ authenticate, authorize, db, pool, writeAudit, connectorDrivers }));
 
 app.use("/api", createReturnsRouter({ authenticate, authorize, db, pool, createInventoryMovement, writeAudit, canonicalTransactionWriter: createCanonicalRelatedTransaction }));
 
