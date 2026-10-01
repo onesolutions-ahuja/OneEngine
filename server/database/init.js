@@ -842,6 +842,57 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             ON platform_workflow_tests(company_id, workflow_id, active, created_at DESC);
         `);
       },
+    },
+    {
+      key: "0032_approval_work_items",
+      version: "32",
+      name: "Complete approval submission and work item lifecycle",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE platform_approval_requests ADD COLUMN IF NOT EXISTS locked BOOLEAN NOT NULL DEFAULT FALSE;
+          CREATE TABLE IF NOT EXISTS platform_approval_work_items (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            request_id UUID NOT NULL REFERENCES platform_approval_requests(id) ON DELETE CASCADE,
+            step_id UUID REFERENCES platform_approval_steps(id) ON DELETE SET NULL,
+            step_order INTEGER NOT NULL,
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            role_id UUID REFERENCES roles(id) ON DELETE SET NULL,
+            assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('waiting','pending','approved','rejected','cancelled')),
+            decision VARCHAR(20),
+            comment TEXT,
+            due_at TIMESTAMPTZ,
+            completed_at TIMESTAMPTZ,
+            reassigned_from UUID REFERENCES users(id) ON DELETE SET NULL,
+            reassigned_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(request_id,step_order)
+          );
+          CREATE INDEX IF NOT EXISTS idx_platform_approval_work_items_assignee ON platform_approval_work_items(company_id,assigned_to,status,created_at DESC);
+          CREATE TABLE IF NOT EXISTS platform_approval_events (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            request_id UUID NOT NULL REFERENCES platform_approval_requests(id) ON DELETE CASCADE,
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            event_type VARCHAR(40) NOT NULL,
+            actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_platform_approval_events_request ON platform_approval_events(request_id,created_at);
+          UPDATE platform_approval_requests r
+             SET locked=COALESCE((p.config->>'lockRecord')::boolean,TRUE)
+            FROM platform_approval_processes p
+           WHERE p.id=r.process_id AND r.status='pending';
+          INSERT INTO platform_approval_work_items(request_id,step_id,step_order,company_id,role_id,assigned_to,status,created_at)
+          SELECT r.id,s.id,s.step_order,r.company_id,s.role_id,
+                 (SELECT u.id FROM users u WHERE u.company_id=r.company_id AND u.role_id=s.role_id AND u.active=TRUE ORDER BY u.created_at,u.id LIMIT 1),
+                 'pending',r.submitted_at
+            FROM platform_approval_requests r
+            JOIN platform_approval_steps s ON s.process_id=r.process_id AND s.step_order=r.current_step
+           WHERE r.status='pending'
+          ON CONFLICT(request_id,step_order) DO NOTHING;
+        `);
+      },
     }
   ]);
 
