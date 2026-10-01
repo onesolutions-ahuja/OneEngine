@@ -20,6 +20,10 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState("");
+  const [comment, setComment] = useState("");
+  const [users, setUsers] = useState([]);
+  const [reassignTo, setReassignTo] = useState("");
+  const [history, setHistory] = useState({ actions: [], events: [] });
 
   const loadItems = async () => {
     setLoading(true);
@@ -35,7 +39,13 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
     }
   };
 
-  useEffect(() => { void loadItems(); }, []);
+  useEffect(() => { void loadItems(); apiRequest("/api/platform/approval-users").then(r=>setUsers(r.data||[])).catch(()=>setUsers([])); }, []);
+
+  useEffect(() => {
+    if (!selectedId) { setHistory({actions:[],events:[]}); return; }
+    apiRequest(`/api/platform/approval-requests/${selectedId}/history`).then(r=>setHistory(r.data||{actions:[],events:[]})).catch(()=>setHistory({actions:[],events:[]}));
+    setComment(""); setReassignTo("");
+  }, [selectedId]);
 
   const statuses = useMemo(() => {
     const values = [...new Set(items.map((item) => normalizedStatus(item.status)).filter(Boolean))];
@@ -78,9 +88,10 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
       setWorking(requestId);
       await apiRequest(`/api/platform/approval-requests/${requestId}/decision`, {
         method: "POST",
-        body: JSON.stringify({ decision, comment: "Completed from work-item UI" }),
+        body: JSON.stringify({ decision, comment: comment.trim() }),
       });
       await loadItems();
+      setComment("");
       onMessage?.("Work item updated.");
     } catch (error) {
       onError?.(error?.message || "Unable to update work item");
@@ -90,6 +101,28 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
   };
 
   const terminal = selected ? ["APPROVED","REJECTED","CANCELLED"].includes(normalizedStatus(selected.status)) : false;
+
+  const processConfig = selected?.process_config || {};
+  const canReassign = selected && !terminal && processConfig.allowReassign !== false;
+  const requireRejectComment = processConfig.requireCommentOnReject !== false;
+
+  const reassign = async () => {
+    if (!selected || !reassignTo) return;
+    try {
+      setWorking(selected.id);
+      await apiRequest(`/api/platform/approval-requests/${selected.id}/reassign`, { method:"POST", body:JSON.stringify({assigneeUserId:reassignTo,comment:comment.trim()}) });
+      setComment(""); setReassignTo(""); await loadItems(); onMessage?.("Approval reassigned.");
+    } catch(error) { onError?.(error?.message || "Unable to reassign approval"); } finally { setWorking(""); }
+  };
+
+  const recall = async () => {
+    if (!selected) return;
+    try {
+      setWorking(selected.id);
+      await apiRequest(`/api/platform/approval-requests/${selected.id}/recall`, { method:"POST", body:JSON.stringify({comment:comment.trim()}) });
+      setComment(""); await loadItems(); onMessage?.("Approval recalled.");
+    } catch(error) { onError?.(error?.message || "Unable to recall approval"); } finally { setWorking(""); }
+  };
 
   return (
     <div className="developer-record-shell work-items-record-shell">
@@ -183,25 +216,33 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
               </div>
             </div>
 
-            {!terminal ? (
-              <div className="developer-record-actions">
-                <button
-                  type="button"
-                  className="is-primary"
-                  disabled={working === selected.id}
-                  onClick={() => updateItem(selected.id, "approve")}
-                >
-                  {working === selected.id ? "Working…" : "Approve"}
-                </button>
-                <button
-                  type="button"
-                  className="is-danger"
-                  disabled={working === selected.id}
-                  onClick={() => updateItem(selected.id, "reject")}
-                >
-                  Reject
-                </button>
+            <div className="developer-record-section">
+              <div className="developer-record-section-title">Approval History</div>
+              <div className="space-y-2">
+                {[...(history.events||[]),...(history.actions||[])].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map((entry,index)=>(
+                  <div key={entry.id||index} className="rounded-lg border p-2 text-sm">
+                    <strong>{entry.event_type || entry.decision || "Activity"}</strong>
+                    <span className="ml-2 text-slate-500">{entry.actor_name || "System"} · {formatDate(entry.created_at)}</span>
+                    {entry.comment ? <div className="mt-1">{entry.comment}</div> : null}
+                  </div>
+                ))}
+                {!(history.events||[]).length && !(history.actions||[]).length ? <span className="text-sm text-slate-500">No approval activity yet.</span> : null}
               </div>
+            </div>
+
+            {!terminal ? (
+              <>
+                <div className="developer-record-section">
+                  <div className="developer-record-section-title">Decision comment {requireRejectComment ? "· required for rejection" : ""}</div>
+                  <textarea className="w-full rounded-lg border p-3" rows={3} value={comment} onChange={e=>setComment(e.target.value)} placeholder="Add context for the submitter and future audit history…" />
+                </div>
+                <div className="developer-record-actions">
+                  <button type="button" className="is-primary" disabled={working===selected.id} onClick={()=>updateItem(selected.id,"approve")}>{working===selected.id?"Working…":"Approve"}</button>
+                  <button type="button" className="is-danger" disabled={working===selected.id || (requireRejectComment && !comment.trim())} onClick={()=>updateItem(selected.id,"reject")}>Reject</button>
+                  {canReassign ? <><select value={reassignTo} onChange={e=>setReassignTo(e.target.value)}><option value="">Reassign to…</option>{users.map(user=><option key={user.id} value={user.id}>{user.username||user.email} · {user.role_name||"User"}</option>)}</select><button type="button" disabled={!reassignTo||working===selected.id} onClick={reassign}>Reassign</button></> : null}
+                  <button type="button" disabled={working===selected.id} onClick={recall}>Recall</button>
+                </div>
+              </>
             ) : null}
           </>
         ) : (
