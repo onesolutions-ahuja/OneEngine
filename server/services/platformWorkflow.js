@@ -2066,8 +2066,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, companyId }) => {
+    executor: async ({ db, action, object, req, companyId, record, previousRecord, workflowVariables }) => {
       if (!action.recordId) throw new Error("Update Related Record requires a recordId");
+      const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
       const parentObject = await resolveWorkflowTargetObject({ db, action: { objectId: action.parentObjectId }, object, companyId, req });
       let table = null;
       let targetObject = null;
@@ -2080,11 +2081,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
       }
       if (!table) throw new Error("Update Related Record requires a target table");
-      const entries = Object.entries(action.fieldValues || {});
-      if (!entries.length) return { status: "completed", recordId: action.recordId, updated: null };
-      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: action.recordId });
+      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      const entries = Object.entries(resolvedFieldValues || {});
+      if (!entries.length) return { status: "completed", recordId: resolvedRecordId, updated: null };
+      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: resolvedRecordId });
       const sets = entries.map(([field], index) => `"${String(field).replace(/"/g, "")}"=$${index + 1}`).join(", ");
-      const params = [...entries.map(([, value]) => value), action.recordId];
+      const params = [...entries.map(([, value]) => value), resolvedRecordId];
       const clauses = ["id=$" + params.length];
       if (req?.user?.companyId) {
         params.push(req.user.companyId);
@@ -2095,7 +2097,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       try {
         if (updated?.id) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.updated", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated }, actorUserId: req?.user?.id || null });
       } catch (error) { console.error("Platform workflow record event publication error:", error); }
-      return { status: result.rows.length ? "completed" : "skipped", recordId: action.recordId, updated, duplicateWarning: duplicateAction === "WARN" };
+      return { status: result.rows.length ? "completed" : "skipped", recordId: resolvedRecordId, updated, duplicateWarning: duplicateAction === "WARN" };
     },
   },
   {
@@ -2108,12 +2110,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.create"],
-    executor: async ({ db, action, req, object, recordId, companyId }) => {
+    executor: async ({ db, action, req, object, recordId, companyId, record, previousRecord, workflowVariables }) => {
       let relationship = action.relationship || null;
       const parentObject = await resolveWorkflowTargetObject({ db, action: { objectId: action.parentObjectId || action.parent_object_id }, object, companyId, req });
       let table = null;
       let targetObject = null;
-      const parentRecordId = action.recordId || action.parentRecordId || recordId || null;
+      const parentRecordId = resolveConfiguredResource(action.recordId || action.parentRecordId || recordId || null, { record, previousRecord, req, object, workflowVariables });
       const relationshipKey = action.relationshipKey || action.relationship_key || null;
       if (relationshipKey && db && typeof db === "function") {
         const relationshipResult = await db("SELECT * FROM platform_relationships WHERE relationship_key=$1 AND parent_object_id=$2 AND active=true LIMIT 1", [relationshipKey, parentObject.id]);
@@ -2124,7 +2126,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         table = targetObject?.source_table || table;
       }
       if (!table) throw new Error("Create Related Record requires a target table");
-      const fieldValues = { ...(action.fieldValues || {}) };
+      const fieldValues = { ...(resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables }) || {}) };
       let relationField = action.relationshipField || action.relatedField || action.foreignKey || action.foreign_key || null;
       if (!relationField && relationship?.child_field_id && db && typeof db === "function") {
         const fieldResult = await db("SELECT * FROM platform_fields WHERE id=$1 AND active=true LIMIT 1", [relationship.child_field_id]);
