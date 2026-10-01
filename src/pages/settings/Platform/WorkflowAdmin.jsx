@@ -600,7 +600,7 @@ const actionOptions = [
   { value: "CALL_FUNCTION", label: "Call Function" },
   { value: "RUN_SUBFLOW", label: "Run Subflow" },
   { value: "WEBHOOK", label: "Webhook" },
-  { value: "CONDITION", label: "Condition" },
+  { value: "CONDITION", label: "Decision" },
   { value: "WAIT", label: "Wait" },
   { value: "STOP", label: "Stop" },
 ];
@@ -756,6 +756,17 @@ function workflowActionIssue(step, definition = null) {
       if (outcomes.some((outcome) => !conditionIsValid(outcome?.condition))) return "Complete every Decision outcome condition.";
       const ids = outcomes.map((outcome) => String(outcome?.id || ""));
       if (new Set(ids).size !== ids.length) return "Decision outcome identifiers must be unique.";
+      const seenTargets = new Set();
+      for (const outcome of outcomes) {
+        for (const targetId of outcome?.branch || []) {
+          if (seenTargets.has(String(targetId))) return "A step can only belong to one Decision outcome.";
+          seenTargets.add(String(targetId));
+        }
+      }
+      for (const targetId of config.defaultBranch || []) {
+        if (seenTargets.has(String(targetId))) return "A step cannot belong to both an outcome and Default.";
+        seenTargets.add(String(targetId));
+      }
       return "";
     }
     return conditionIsValid(config.condition) ? "" : "Complete the condition field/operator/value.";
@@ -1113,7 +1124,7 @@ function BranchStepPicker({ label, value = [], onChange, steps = [], currentInde
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
       <div className="mb-2 text-xs font-semibold text-slate-700">{label}</div>
-      {!candidates.length ? <p className="text-xs text-slate-500">Add an action after this Decision, then assign it to this outcome.</p> : null}
+      {!candidates.length ? <p className="text-xs text-slate-500">Add a later action, then assign it to this path.</p> : null}
       <div className="space-y-1">
         {candidates.map(({ candidate, index }) => (
           <label key={candidate.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-700 hover:bg-white">
