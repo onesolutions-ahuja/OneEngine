@@ -126,6 +126,7 @@ export default function OneKioskPage({ publicMode = false }) {
   const [deviceState, setDeviceState] = useState(null);
   const [experienceUi, setExperienceUi] = useState(null);
   const [experienceFlow, setExperienceFlow] = useState(null);
+  const [paymentRuntime, setPaymentRuntime] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productOptions, setProductOptions] = useState(null);
   const [selectedVariantId, setSelectedVariantId] = useState("");
@@ -187,6 +188,7 @@ export default function OneKioskPage({ publicMode = false }) {
     }
     setExperienceUi(response.data.ui);
     setExperienceFlow(response.data.flow || null);
+    setPaymentRuntime(response.data.payment || null);
     return response.data;
   };
 
@@ -216,9 +218,11 @@ export default function OneKioskPage({ publicMode = false }) {
       }
 
       try {
-        const payment = await apiRequest("/api/connector-capabilities/payment.sale", { timeoutMs: 6000, retryGet: false });
-        paymentStatus = payment?.data?.available === true ? "READY" : "NOT_CONFIGURED";
-        paymentMessage = payment?.message || payment?.data?.message || "";
+        const runtime = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(key)}`, { timeoutMs: 6000, retryGet: false });
+        const payment = runtime?.data?.payment || null;
+        paymentStatus = payment?.status || "NOT_CONFIGURED";
+        paymentMessage = payment?.error || "";
+        if (live && payment) setPaymentRuntime(payment);
       } catch (reason) {
         paymentStatus = serverStatus === "OFFLINE" ? "UNKNOWN" : "ERROR";
         paymentMessage = reason?.message || "Payment status unavailable";
@@ -504,9 +508,13 @@ export default function OneKioskPage({ publicMode = false }) {
         return;
       }
 
-      const capability = await apiRequest("/api/connector-capabilities/payment.sale");
-      if (capability?.data?.available !== true) {
-        throw new Error(capability?.message || "No healthy card payment connector is assigned to this kiosk");
+      const runtime = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(kioskDeviceKey())}`);
+      const exactPayment = runtime?.data?.payment || paymentRuntime;
+      if (!exactPayment?.connectorInstanceId) {
+        throw new Error("No One Connect card machine is assigned to this kiosk");
+      }
+      if (!["READY","CONNECTED"].includes(String(exactPayment.status || "").toUpperCase())) {
+        throw new Error(exactPayment.error || "The assigned card machine is not currently ready");
       }
 
       const clientRequestId = crypto.randomUUID();
@@ -528,6 +536,7 @@ export default function OneKioskPage({ publicMode = false }) {
           discount: 0,
           total,
           paymentMethod: "card",
+          kioskDeviceKey: kioskDeviceKey(),
         }),
       });
 
