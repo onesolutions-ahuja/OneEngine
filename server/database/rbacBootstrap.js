@@ -1,7 +1,6 @@
 import bcrypt from "bcryptjs";
 
 export const ONEENGINE_MANAGE_PERMISSION = "oneengine.manage";
-export const PLATFORM_MANAGE_PERMISSION = ONEENGINE_MANAGE_PERMISSION;
 
 export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   const configuredCompanyId = String(env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || "").trim();
@@ -49,15 +48,14 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
 
   if (user.rows[0]) {
     const hash = password ? await bcrypt.hash(password,12) : user.rows[0].password_hash;
-    await pool.query(`UPDATE users SET company_id=$1,role_id=$2,username=$3,email=$3,full_name=$4,password_hash=$5,active=TRUE,is_platform_developer=FALSE,updated_at=NOW() WHERE id=$6`, [company.id,roleId,email,name,hash,user.rows[0].id]);
+    await pool.query(`UPDATE users SET company_id=$1,role_id=$2,username=$3,email=$3,full_name=$4,password_hash=$5,active=TRUE,updated_at=NOW() WHERE id=$6`, [company.id,roleId,email,name,hash,user.rows[0].id]);
   } else {
     if (!password) throw new Error("BOOTSTRAP_SUPERADMIN_PASSWORD is required to create the company Superadmin");
     const hash = await bcrypt.hash(password,12);
-    user = await pool.query(`INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active,must_change_password) VALUES ($1,$2,$3,$3,$4,$5,FALSE,TRUE,TRUE) RETURNING id,password_hash,company_id`, [company.id,roleId,email,hash,name]);
+    user = await pool.query(`INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,active,must_change_password) VALUES ($1,$2,$3,$3,$4,$5,TRUE,TRUE) RETURNING id,password_hash,company_id`, [company.id,roleId,email,hash,name]);
   }
 
   await pool.query(`UPDATE users u SET company_id=$1, active=FALSE, username='legacy_engine_'||REPLACE(u.id::text,'-',''), email=NULL, updated_at=NOW() FROM roles r WHERE u.role_id=r.id AND u.id<>$2 AND u.company_id IS NULL AND r.api_key IN ('engine_manager','oneengine_manager')`, [company.id,user.rows[0].id]);
-  await pool.query(`UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1`, [user.rows[0].id]);
 
   console.log("onePOS: company-bound Superadmin synchronized through RBAC", { companyId: company.id, email });
   return { superadminReady: true, superadminEmail: email, companyId: company.id, roleId };
