@@ -41,7 +41,7 @@ function normalizePhone(value) {
 export default function createSmsGateWebhookRouter({ pool } = {}) {
   const router = express.Router();
 
-  router.post("/smsgate/webhook/:connectionId", async (req, res) => {
+  router.post("/smsgate/webhook/:connectionId/:webhookToken?", async (req, res) => {
     if (!pool) return res.status(503).json({ success: false, message: "Database unavailable" });
     try {
       const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
@@ -74,8 +74,16 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
       let secrets = {};
       try { secrets = decryptCredentials(connection.credentials_encrypted) || {}; } catch { secrets = {}; }
       const signingKey = secrets.webhookSigningKey || configuration.webhookSigningKey || "";
-      if (!verifySmsGateSignature(rawBody, req.headers, signingKey)) {
-        return res.status(401).json({ success: false, message: "Invalid SMSGate webhook signature" });
+      const configuredToken = String(secrets.webhookToken || "").trim();
+      const suppliedToken = String(req.params.webhookToken || "").trim();
+      const tokenValid = configuredToken && suppliedToken
+        ? crypto.timingSafeEqual(Buffer.from(configuredToken), Buffer.from(suppliedToken))
+        : false;
+      const signatureValid = signingKey
+        ? verifySmsGateSignature(rawBody, req.headers, signingKey)
+        : false;
+      if (!signatureValid && !tokenValid) {
+        return res.status(401).json({ success: false, message: "Invalid SMSGate webhook authentication" });
       }
 
       if (String(body?.event || "").toLowerCase() !== "sms:received") {
