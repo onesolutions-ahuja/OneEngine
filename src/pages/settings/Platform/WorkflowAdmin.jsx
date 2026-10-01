@@ -2528,6 +2528,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       FULFILMENT: { title: "Choose fulfilment", options: [{ key: "COLLECT", label: "Collect", canonicalType: "SELF_PICKUP", requires: [] }] },
       BASKET: { title: "Review your order", editable: true, promotions: true },
       LOYALTY: { title: "Rewards", subtitle: "Enter phone or email, or continue as a guest.", optional: true },
+      FORM: { title: "Order details", optional: true, fields: [] },
       PAYMENT: { title: "Payment", methods: ["CARD"], actionLabel: "Pay now" },
       CONFIRMATION: { title: "Order confirmed", collectionNumber: true, receipt: ["PRINT","QR"], resetAfterSeconds: 30 },
     };
@@ -3302,7 +3303,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <p className="mt-1 max-w-3xl text-xs text-slate-600">This ordered screen flow is the customer journey used by kiosks assigned to this workflow. Reorder, add or remove screens here; no application code is required.</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","LOYALTY","PAYMENT","CONFIRMATION"].map((type) => (
+                {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","LOYALTY","FORM","PAYMENT","CONFIRMATION"].map((type) => (
                   <button key={type} type="button" className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-blue-700" onClick={() => addKioskScreen(type)}>+ {type.replaceAll("_"," ")}</button>
                 ))}
               </div>
@@ -3363,7 +3364,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <div className="mt-4 grid gap-3 md:grid-cols-4">
                   <label className="text-xs font-medium text-slate-700">Type
                     <select className={inputClass} value={screen.type || "CATALOGUE"} onChange={(event) => updateKioskScreen(index,{ type:event.target.value })}>
-                      {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","LOYALTY","PAYMENT","CONFIRMATION"].map((type) => <option key={type} value={type}>{type.replaceAll("_"," ")}</option>)}
+                      {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","LOYALTY","FORM","PAYMENT","CONFIRMATION"].map((type) => <option key={type} value={type}>{type.replaceAll("_"," ")}</option>)}
                     </select>
                   </label>
                   <label className="text-xs font-medium text-slate-700">Key
@@ -3378,6 +3379,35 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                       {(kioskUi.screens || []).filter((candidate) => candidate.key !== screen.key).map((candidate) => <option key={candidate.key} value={candidate.key}>{candidate.title || candidate.key}</option>)}
                     </select>
                   </label>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="text-[11px] font-semibold text-slate-600">Conditional display / branching</div>
+                  <div className="mt-2 grid gap-2 md:grid-cols-4">
+                    <input className={inputClass} value={screen.showWhen?.path || ""} onChange={(e)=>updateKioskScreen(index,{showWhen:e.target.value?{...(screen.showWhen||{}),path:e.target.value}:null})} placeholder="Show when path, e.g. fulfilmentType"/>
+                    <select className={inputClass} value={screen.showWhen?.operator || "equals"} onChange={(e)=>updateKioskScreen(index,{showWhen:{...(screen.showWhen||{}),operator:e.target.value}})} disabled={!screen.showWhen?.path}>
+                      <option value="equals">equals</option><option value="not_equals">not equals</option><option value="in">in list</option><option value="not_in">not in list</option><option value="truthy">is set / true</option><option value="falsy">is empty / false</option><option value="greater_than">greater than</option><option value="less_than">less than</option>
+                    </select>
+                    <input className={inputClass} value={screen.showWhen?.value ?? ""} onChange={(e)=>updateKioskScreen(index,{showWhen:{...(screen.showWhen||{}),value:e.target.value}})} placeholder="Value" disabled={!screen.showWhen?.path || ["truthy","falsy"].includes(screen.showWhen?.operator)}/>
+                    <button type="button" className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600" onClick={()=>updateKioskScreen(index,{showWhen:null})}>Clear condition</button>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {(screen.nextRules || []).map((rule,ruleIndex)=>(
+                      <div key={`${screen.key}-branch-${ruleIndex}`} className="grid gap-2 md:grid-cols-[1fr_150px_1fr_1fr_auto]">
+                        <input className={inputClass} value={rule.when?.path || ""} placeholder="Branch path" onChange={(e)=>{const nextRules=[...(screen.nextRules||[])];nextRules[ruleIndex]={...rule,when:{...(rule.when||{}),path:e.target.value}};updateKioskScreen(index,{nextRules})}}/>
+                        <select className={inputClass} value={rule.when?.operator || "equals"} onChange={(e)=>{const nextRules=[...(screen.nextRules||[])];nextRules[ruleIndex]={...rule,when:{...(rule.when||{}),operator:e.target.value}};updateKioskScreen(index,{nextRules})}}>
+                          <option value="equals">equals</option><option value="not_equals">not equals</option><option value="in">in</option><option value="truthy">truthy</option><option value="falsy">falsy</option>
+                        </select>
+                        <input className={inputClass} value={rule.when?.value ?? ""} placeholder="Value" onChange={(e)=>{const nextRules=[...(screen.nextRules||[])];nextRules[ruleIndex]={...rule,when:{...(rule.when||{}),value:e.target.value}};updateKioskScreen(index,{nextRules})}}/>
+                        <select className={inputClass} value={rule.next || ""} onChange={(e)=>{const nextRules=[...(screen.nextRules||[])];nextRules[ruleIndex]={...rule,next:e.target.value};updateKioskScreen(index,{nextRules})}}>
+                          <option value="">Next screen…</option>{(kioskUi.screens||[]).filter((candidate)=>candidate.key!==screen.key).map((candidate)=><option key={candidate.key} value={candidate.key}>{candidate.title||candidate.key}</option>)}
+                        </select>
+                        <button type="button" className="text-xs text-red-700" onClick={()=>updateKioskScreen(index,{nextRules:(screen.nextRules||[]).filter((_,i)=>i!==ruleIndex)})}>Remove</button>
+                      </div>
+                    ))}
+                    <button type="button" className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700" onClick={()=>updateKioskScreen(index,{nextRules:[...(screen.nextRules||[]),{when:{path:"",operator:"equals",value:""},next:""}]})}>+ Conditional branch</button>
+                  </div>
                 </div>
 
                 {screen.type === "CATALOGUE" ? (
@@ -3434,6 +3464,26 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                       </div>
                     ))}
                     <button type="button" className="rounded border border-slate-200 px-3 py-2 text-xs font-medium" onClick={()=>updateKioskScreen(index,{options:[...(screen.options||[]),{key:`OPTION_${(screen.options||[]).length+1}`,label:"New option",canonicalType:"SELF_PICKUP",requires:[]}]})}>+ Fulfilment option</button>
+                  </div>
+                ) : null}
+
+                {screen.type === "FORM" ? (
+                  <div className="mt-3 space-y-2">
+                    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={screen.optional !== false} onChange={(e)=>updateKioskScreen(index,{optional:e.target.checked})}/> Customer may skip this form</label>
+                    {(screen.fields || []).map((field,fieldIndex)=>(
+                      <div key={`${screen.key}-field-${fieldIndex}`} className="grid gap-2 rounded-lg border border-slate-100 bg-slate-50 p-2 md:grid-cols-[1fr_1fr_140px_auto]">
+                        <input className={inputClass} value={field.key || ""} placeholder="Field key" onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,key:e.target.value.replace(/[^a-zA-Z0-9_]/g,"")};updateKioskScreen(index,{fields})}}/>
+                        <input className={inputClass} value={typeof field.label==="string"?field.label:""} placeholder="Customer label" onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,label:e.target.value};updateKioskScreen(index,{fields})}}/>
+                        <select className={inputClass} value={field.type || "text"} onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,type:e.target.value};updateKioskScreen(index,{fields})}}>
+                          {["text","textarea","select","checkbox","email","tel","number","date","time"].map((type)=><option key={type} value={type}>{type}</option>)}
+                        </select>
+                        <button type="button" className="text-xs text-red-700" onClick={()=>updateKioskScreen(index,{fields:(screen.fields||[]).filter((_,i)=>i!==fieldIndex)})}>Remove</button>
+                        <input className={inputClass} value={typeof field.placeholder==="string"?field.placeholder:""} placeholder="Placeholder" onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,placeholder:e.target.value};updateKioskScreen(index,{fields})}}/>
+                        {field.type==="select" ? <input className={inputClass} value={Array.isArray(field.options)?field.options.map((option)=>typeof option==="string"?option:option.label||option.value).join(", "):""} placeholder="Options, comma separated" onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,options:e.target.value.split(",").map(value=>value.trim()).filter(Boolean)};updateKioskScreen(index,{fields})}}/> : <span />}
+                        <label className="inline-flex items-center gap-2 px-1 text-xs"><input type="checkbox" checked={field.required===true} onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,required:e.target.checked};updateKioskScreen(index,{fields})}}/> Required</label>
+                      </div>
+                    ))}
+                    <button type="button" className="rounded border border-slate-200 px-3 py-2 text-xs font-medium" onClick={()=>updateKioskScreen(index,{fields:[...(screen.fields||[]),{key:`field_${(screen.fields||[]).length+1}`,label:"New field",type:"text",required:false}]})}>+ Form field</button>
                   </div>
                 ) : null}
 
