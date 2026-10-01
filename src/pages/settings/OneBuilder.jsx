@@ -98,27 +98,6 @@ function GenericProperties({ item, fields = [], actionRegistry = [], roles = [],
 
   const patchConfig = (patch) => onChange({ ...item, config: { ...(item.config || {}), ...patch } })
 
-  if (item.builderType === 'workflow') {
-    const definition = actionRegistry.find((row) => row.key === item.key) || {}
-    const properties = definition?.schema?.properties || {}
-    return (
-      <div className="onebuilder-properties-form">
-        <label>Label<input value={item.label || ''} onChange={(e) => onChange({ ...item, label: e.target.value })}/></label>
-        <label>Registered action<select value={item.key} onChange={(e) => {
-          const action = actionRegistry.find((row) => row.key === e.target.value)
-          onChange({ ...item, key: e.target.value, label: action?.label || e.target.value, config: {} })
-        }}>{actionRegistry.map((action) => <option key={action.key} value={action.key}>{action.label}</option>)}</select></label>
-        {definition.description ? <p className="onebuilder-property-help">{definition.description}</p> : null}
-        {Object.entries(properties).map(([name, spec]) => (
-          <SchemaPropertyEditor key={name} name={name} spec={spec} value={item.config?.[name]} fields={fields} onChange={(value) => patchConfig({ [name]: value })}/>
-        ))}
-        {!Object.keys(properties).length ? <label>Configuration<textarea rows="10" value={JSON.stringify(item.config || {}, null, 2)} onChange={(e) => { try { onChange({ ...item, config: JSON.parse(e.target.value) }) } catch {} }}/></label> : (
-          <details className="onebuilder-advanced-config"><summary>Advanced JSON</summary><textarea rows="8" value={JSON.stringify(item.config || {}, null, 2)} onChange={(e) => { try { onChange({ ...item, config: JSON.parse(e.target.value) }) } catch {} }}/></details>
-        )}
-      </div>
-    )
-  }
-
   if (item.builderType === 'approval') {
     if (item.key === 'approver') {
       return <div className="onebuilder-properties-form"><label>Step label<input value={item.label || ''} onChange={(e) => onChange({ ...item, label: e.target.value })}/></label><label>Approver role<select value={item.config?.roleId || ''} onChange={(e) => patchConfig({ roleId: e.target.value })}><option value="">Select role</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name || role.label}</option>)}</select></label></div>
@@ -265,7 +244,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const palette = useMemo(() => {
     let rows = []
     if (tab === 'workflow') {
-      rows = actionRegistry.map((action) => ({ ...action, category: action.category || 'Registered Action', icon: Workflow, builderType: 'workflow' }))
+      rows = []
     } else if (tab === 'approval') {
       rows = APPROVAL_STRUCTURAL_COMPONENTS.map((item) => ({ ...item, builderType: 'approval' }))
     } else if (tab === 'dashboard') {
@@ -343,11 +322,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     setError('')
     try {
       if (tab === 'workflow') {
-        const row = saved.workflow.find((item) => String(item.id) === String(id))
-        if (!row) return
-        const actions = Array.isArray(row.action?.actions) ? row.action.actions : []
-        setMeta((current) => ({ ...current, workflow: { name: row.name || '', objectId: row.object_id || '', triggerKey: row.trigger_key || '', active: row.active !== false } }))
-        setCanvas((current) => ({ ...current, workflow: actions.map((action, index) => ({ id: action._visual?.id || `workflow_${index}_${Date.now()}`, key: action.type || action.key, label: action._visual?.label || action.label || action.type || action.key, category: 'Registered Action', builderType: 'workflow', config: Object.fromEntries(Object.entries(action).filter(([key]) => !['type','key','_visual'].includes(key))) })) }))
+        throw new Error('Workflow definitions must be saved through WorkflowAdmin.')
       } else if (tab === 'approval') {
         const response = await apiRequest(`/api/platform/approval-processes/${encodeURIComponent(id)}`)
         const row = response?.data || {}
