@@ -1,9 +1,37 @@
 import { expect } from "@playwright/test";
 
+let cachedBrowserSession = null;
+
+async function captureBrowserSession(page) {
+  cachedBrowserSession = await page.evaluate(() => ({
+    session: Object.fromEntries(Object.entries(sessionStorage)),
+    local: Object.fromEntries(Object.entries(localStorage)),
+  }));
+}
+
+async function restoreBrowserSession(page) {
+  if (!cachedBrowserSession) return false;
+  await page.addInitScript((state) => {
+    for (const [key, value] of Object.entries(state.session || {})) sessionStorage.setItem(key, value);
+    for (const [key, value] of Object.entries(state.local || {})) localStorage.setItem(key, value);
+  }, cachedBrowserSession);
+  await page.goto("./");
+  const authenticated = await page.evaluate(() => Boolean(sessionStorage.getItem("onepos_token")));
+  if (!authenticated) return false;
+  await expect(page.getByPlaceholder("Email or username")).toBeHidden({ timeout: 15_000 });
+  return true;
+}
+
 export async function loginIfConfigured(page) {
   const username = process.env.ONEPOS_E2E_USERNAME || "";
   const password = process.env.ONEPOS_E2E_PASSWORD || "";
   if (!username || !password) return false;
+
+  // The authenticated audit contains many tests. Logging in independently for
+  // every test exhausts the production login rate limiter and looks like an
+  // RBAC/auth failure after the first few routes. Reuse the already-issued
+  // browser session while still letting every test run in a fresh page.
+  if (await restoreBrowserSession(page)) return true;
 
   await page.goto("./");
   const usernameField = page.getByPlaceholder("Email or username");
@@ -31,6 +59,7 @@ export async function loginIfConfigured(page) {
     ).toBe(true);
 
     await expect(usernameField).toBeHidden({ timeout: 15_000 });
+    await captureBrowserSession(page);
   }
   return true;
 }
