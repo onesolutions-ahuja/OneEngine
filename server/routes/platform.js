@@ -3539,6 +3539,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
       if (!actions.length) return res.status(422).json({ success: false, message: "Workflow contains no executable steps" });
+      const executionMode = String(req.body?.mode || "debug").toLowerCase() === "test" ? "TEST" : "DEBUG";
 
       let object = null;
       let record = null;
@@ -3596,10 +3597,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         workflowName: workflow.name,
         objectId: object?.id || null,
         recordId: record?.id || null,
-        triggerKey: "DEBUG",
+        triggerKey: executionMode,
         status: "RUNNING",
         metadata: {
-          debug: true,
+          debug: executionMode === "DEBUG",
+          test: executionMode === "TEST",
           dryRun: true,
           unsavedDefinition: Boolean(definition),
           rolledBack: false,
@@ -3623,7 +3625,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           };
           await db(
             "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
-            [JSON.stringify({ debug: true, dryRun: true, rolledBack: true, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
+            [JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
           );
           return res.json({ success: true, data: { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: true, externalActionsSimulated: true } });
         }
@@ -3647,7 +3649,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: record?.id || null,
           companyId: req.user.companyId,
           runId: run?.id || null,
-          trigger: "DEBUG",
+          trigger: executionMode,
           debugMode: true,
         });
       } catch (error) {
@@ -3670,7 +3672,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         [
           finalStatus,
           debugError ? String(debugError?.message || debugError).slice(0, 2000) : null,
-          JSON.stringify({ debug: true, dryRun: true, rolledBack: true, startMatched: true, friendlyError: friendly }),
+          JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, startMatched: true, friendlyError: friendly }),
           run.id,
           req.user.companyId,
         ]
@@ -3702,7 +3704,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,updated_at=NOW() WHERE id=$3 AND company_id=$4",
           [
             String(error?.message || error).slice(0, 2000),
-            JSON.stringify({ debug: true, dryRun: true, rolledBack: true, friendlyError: friendlyWorkflowError(error) }),
+            JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, friendlyError: friendlyWorkflowError(error) }),
             run.id,
             req.user.companyId,
           ]
