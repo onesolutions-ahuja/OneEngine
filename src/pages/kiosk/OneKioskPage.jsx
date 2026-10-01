@@ -127,6 +127,7 @@ export default function OneKioskPage({ publicMode = false }) {
   const [experienceUi, setExperienceUi] = useState(null);
   const [experienceFlow, setExperienceFlow] = useState(null);
   const [paymentRuntime, setPaymentRuntime] = useState(null);
+  const [printerRuntime, setPrinterRuntime] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productOptions, setProductOptions] = useState(null);
   const [selectedVariantId, setSelectedVariantId] = useState("");
@@ -189,6 +190,7 @@ export default function OneKioskPage({ publicMode = false }) {
     setExperienceUi(response.data.ui);
     setExperienceFlow(response.data.flow || null);
     setPaymentRuntime(response.data.payment || null);
+    setPrinterRuntime(response.data.printer || null);
     return response.data;
   };
 
@@ -229,9 +231,11 @@ export default function OneKioskPage({ publicMode = false }) {
       }
 
       try {
-        const printer = await apiRequest("/api/connector-capabilities/printer.status", { timeoutMs: 6000, retryGet: false });
-        printerStatus = printer?.data?.available === true ? "READY" : "NOT_CONFIGURED";
-        printerMessage = printer?.message || printer?.data?.message || "";
+        const runtime = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(key)}`, { timeoutMs: 6000, retryGet: false });
+        const printer = runtime?.data?.printer || printerRuntime || null;
+        printerStatus = printer?.status || (printer?.name ? "UNKNOWN" : "NOT_CONFIGURED");
+        printerMessage = printer?.name ? `${printer.name}${printer.address ? ` · ${printer.address}` : ""}` : "";
+        if (live && printer) setPrinterRuntime(printer);
       } catch (reason) {
         printerStatus = serverStatus === "OFFLINE" ? "UNKNOWN" : "ERROR";
         printerMessage = reason?.message || "Printer status unavailable";
