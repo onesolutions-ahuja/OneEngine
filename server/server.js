@@ -1173,7 +1173,6 @@ app.get("/api/auth/me", authenticate, async (req, res) => {
         defaultLandingPage: user.default_landing_page || 'dashboard',
         companyId: user.company_id,
         storeId: user.store_id,
-        isPlatformDeveloper: user.is_platform_developer === true,
         mustChangePassword: user.must_change_password === true,
       },
     });
