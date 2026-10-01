@@ -3,7 +3,7 @@ import { enqueuePlatformJob } from "./platformJobs.js";
 import { executeRegisteredAction } from "./platformActions.js";
 import { executeInventoryPlatformAction } from "./inventoryPlatform.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
-import { resolveBindingTree, resolveRecordPathValue } from "./platformRecordPaths.js";
+import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { domainAllowed, issueAccountToken, normalizeEmail } from "./accountPolicy.js";
 import { getPlatformService } from "./onlineOrders/index.js";
 import { loadPlatformConfig } from "./onlineOrders/platformConfig.js";
@@ -1876,10 +1876,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.create"],
-    executor: async ({ db, action, req, object, companyId, fields }) => {
+    executor: async ({ db, action, req, object, companyId, fields, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const entries = Object.entries(action.fieldValues || {});
+      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", created: null };
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, fields, entries });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
@@ -1926,15 +1927,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, companyId, fields }) => {
+    executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const entries = Object.entries(action.fieldValues || {});
+      const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
+      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", updated: null };
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, fields, entries });
-      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: action.recordId });
+      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: resolvedRecordId });
       const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
-      const params = [...entries.map(([, value]) => value), action.recordId];
+      const params = [...entries.map(([, value]) => value), resolvedRecordId];
       const clauses = ["id=$" + params.length];
       if (targetObject.company_scoped) {
         params.push(req?.user?.companyId || companyId || null);
@@ -2369,7 +2372,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (typeof functionDefinition.handler !== "function") {
         throw new Error(`Function "${functionKey}" has no handler`);
       }
-      const inputs = resolveBindingTree(action.inputs || {}, { record, rootObjectKey: object?.object_key || object?.objectKey || null });
+      const inputs = Object.fromEntries(Object.entries(action.inputs || {}).map(([key, value]) => [
+        key,
+        resolveConfiguredResource(value, { record, previousRecord, req, object, workflowVariables: arguments[0]?.workflowVariables }),
+      ]));
       return functionDefinition.handler({
         action,
         inputs,
@@ -2395,7 +2401,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ action, db, companyId, req, record, previousRecord, object, fields, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
+    executor: async ({ action, db, companyId, req, record, previousRecord, object, fields, workflowVariables = {}, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
       const workflowKey = action.workflowId || action.subflowId || action.workflow?.id || action.workflow?.key || "inline-subflow";
       const stack = Array.isArray(workflowStack) ? workflowStack.slice() : [];
       if (stack.includes(workflowKey)) {
@@ -2427,12 +2433,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "skipped", workflowId: workflowKey, reason: "Subflow contains no actions" };
       }
       const mappedInputs = {};
-      const mappings = action.inputs || action.inputMap || action.mappings || {};
-      for (const [sourceKey, targetKey] of Object.entries(mappings)) {
-        const sourceValue = sourceKey in (context || {}) ? context[sourceKey] : (record && Object.prototype.hasOwnProperty.call(record, sourceKey) ? record[sourceKey] : undefined);
-        if (sourceValue !== undefined) {
-          mappedInputs[targetKey] = sourceValue;
-        }
+      const mappings = action.workflowInputs || action.inputs || action.inputMap || action.mappings || {};
+      for (const [targetKey, sourceBinding] of Object.entries(mappings)) {
+        const sourceValue = resolveConfiguredResource(sourceBinding, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+        if (sourceValue !== undefined) mappedInputs[targetKey] = sourceValue;
       }
       const mergedRecord = { ...(record || {}), ...mappedInputs };
       const childRun = db && typeof db === "function"
@@ -3247,6 +3251,41 @@ async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId 
     [value, companyId]
   );
   return result.rows[0] || null;
+}
+
+function workflowBindingContext({ record, previousRecord, req, object, workflowVariables } = {}) {
+  return {
+    record: record || null,
+    previousRecord: previousRecord || null,
+    user: req?.user || null,
+    rootObjectKey: object?.object_key || object?.objectKey || object?.api_name || null,
+    variables: workflowVariables || {},
+  };
+}
+
+function resolveConfiguredResource(value, context = {}, { preserveMissing = true } = {}) {
+  if (value && typeof value === "object" && !Array.isArray(value) && typeof value.path === "string") {
+    return resolveBindingTree(value, workflowBindingContext(context));
+  }
+  if (typeof value !== "string") return value;
+  const raw = value.trim();
+  if (!raw) return value;
+  const rootKey = context.object?.object_key || context.object?.objectKey || context.object?.api_name || "";
+  const resourceLike = raw.startsWith("$")
+    || raw.startsWith("steps.")
+    || raw.startsWith("variables.")
+    || (rootKey && (raw === rootKey || raw.startsWith(`${rootKey}.`)));
+  if (!resourceLike) return value;
+  const resolved = resolveWorkflowResource(raw, workflowBindingContext(context));
+  return resolved === undefined && preserveMissing ? value : resolved;
+}
+
+function resolveFieldValueMap(input, context = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  return Object.fromEntries(Object.entries(input).map(([key, value]) => [
+    key,
+    resolveConfiguredResource(value, context),
+  ]));
 }
 
 async function resolveWorkflowTargetObject({ db, action = {}, object = null, companyId, req }) {
