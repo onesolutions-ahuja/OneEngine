@@ -2667,6 +2667,20 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               </div>
               <div className="flex gap-3">
                 <button type="button" className="text-sm text-blue-700" onClick={() => { setWorkflowId(item.id || null); setWorkflow(item); setShowBuilder(true); }}>Edit</button>
+                <button type="button" className="text-sm text-indigo-700" onClick={() => {
+                  setWorkflowId(null);
+                  setWorkflow({
+                    ...item,
+                    id: null,
+                    name: `${item.name || "Workflow"} Copy`,
+                    lifecycleStatus: "DRAFT",
+                    active: false,
+                    version: 1,
+                    actionMetadata: item.actionMetadata ? JSON.parse(JSON.stringify(item.actionMetadata)) : null,
+                    steps: (item.steps || []).map((step) => ({ ...step, id: `step-${Date.now()}-${Math.random().toString(16).slice(2)}` })),
+                  });
+                  setShowBuilder(true);
+                }}>Clone</button>
                 {item.id && item.active !== false ? <button type="button" className="text-sm text-slate-600" onClick={() => {
                   apiRequest(`/api/platform/rules/${item.id}`, { method: "PUT", body: JSON.stringify({
                     name: item.name,
