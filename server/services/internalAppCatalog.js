@@ -1107,7 +1107,7 @@ const CATALOG = [
     packageKey: "one_kiosk",
     name: "OneKiosk",
     description: "Customer self-service ordering and collection workflow for restaurants, retail, electronics and other counter-service businesses.",
-    route: "/app/kiosk",
+    route: "/app/kiosk-devices",
     permissions: ["sale.create", "online_orders.view", "online_orders.manage"],
     storeScoped: true,
     category: "Operations",
