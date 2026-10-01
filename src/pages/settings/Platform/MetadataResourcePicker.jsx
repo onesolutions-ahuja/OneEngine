@@ -52,6 +52,5 @@ export default function MetadataResourcePicker({ objectKey = "", value = "", onC
       {value && !options.some(o => o.value === value) ? <option value={value}>{value}</option> : null}
       {options.map(o => <option key={o.value} value={o.value}>{o.label} · {o.type}</option>)}
     </select>
-    {value ? <div className="truncate text-[11px] text-slate-400" title={value}>API path: {value}</div> : null}
   </div>;
 }
