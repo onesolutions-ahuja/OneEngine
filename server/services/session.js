@@ -24,7 +24,6 @@ export function createSessionToken(user, userStores = []) {
       companyId: user.company_id,
       storeId: user.store_id,
       roleId: user.role_id,
-      isPlatformDeveloper: user.is_platform_developer === true,
       mustChangePassword: false,
       username: user.username,
       assignedStoreIds: userStores.map(us => us.store_id),
