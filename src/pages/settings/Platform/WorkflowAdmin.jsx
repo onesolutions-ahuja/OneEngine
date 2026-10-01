@@ -421,6 +421,28 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-node-card.is-debug-simulated {
     border-style: dashed;
   }
+  .workflow-node-card.is-fault-source:not(.is-debug-failed) {
+    box-shadow: inset 3px 0 0 #ef4444, 0 8px 24px rgba(15,23,42,.055);
+  }
+  .workflow-node-card.is-fault-target:not(.is-debug-failed) {
+    border-color: #fecaca;
+    background: #fffafa;
+  }
+  .workflow-node-card.is-fault-target:not(.is-debug-failed)::before {
+    background: #dc2626;
+  }
+  .workflow-fault-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    border-radius: 999px;
+    background: #fee2e2;
+    padding: 3px 7px;
+    color: #b91c1c;
+    font-size: 9px;
+    font-weight: 700;
+  }
   .workflow-node-kind {
     display: block;
     margin-bottom: 4px;
@@ -1992,6 +2014,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const stepResources = workflowStepResources(workflow.steps, workflow.steps.length, objectFieldCatalog);
   const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA"].includes(step.type));
   const scheduledPathSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => step.type === "SCHEDULE_PATH");
+  const faultTargetIds = new Set(workflow.steps.flatMap((step) => {
+    const mode = String(step.config?.faultMode || "FAIL").toUpperCase();
+    return ["ROUTE","RETRY"].includes(mode) ? (step.config?.faultBranch || []).map(String) : [];
+  }));
   const visibleCanvasSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(step.type));
   const addScheduledPath = () => {
     const path = makeStep("SCHEDULE_PATH");
@@ -2109,14 +2135,15 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <div className="workflow-node-connector" />
           {visibleCanvasSteps.map(({ step, index }) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
             <button type="button" className="workflow-node-delete" title="Remove step" aria-label={`Remove ${step.label || getActionLabel(step.type)}`} onClick={(event) => { event.stopPropagation(); removeStep(index); }}>×</button>
-            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${debugTrace?.[step.id]?.status === "FAILED" ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
+            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${debugTrace?.[step.id]?.status === "FAILED" ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
               <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : getActionLabel(step.type)}</span>
               <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
               {step.type === "CONDITION" ? <span className="workflow-node-note">{Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? `${step.config.outcomes.length} ordered outcome${step.config.outcomes.length === 1 ? "" : "s"} + Default` : "Decision branches are evaluated from metadata conditions."}</span> : null}
               {step.type === "LOOP" ? <span className="workflow-node-note">Runs selected body steps once per collection item.</span> : null}
               {step.config?.faultMode && step.config.faultMode !== "FAIL" ? (
-                <span className="workflow-node-note">On Error · {String(step.config.faultMode).toLowerCase().replace("_"," ")}{Array.isArray(step.config?.faultBranch) && step.config.faultBranch.length ? ` · ${step.config.faultBranch.length} recovery step${step.config.faultBranch.length === 1 ? "" : "s"}` : ""}</span>
+                <span className="workflow-fault-badge">↳ On Error · {String(step.config.faultMode).toLowerCase().replace("_"," ")}{Array.isArray(step.config?.faultBranch) && step.config.faultBranch.length ? ` · ${step.config.faultBranch.length} recovery step${step.config.faultBranch.length === 1 ? "" : "s"}` : ""}</span>
               ) : null}
+              {faultTargetIds.has(String(step.id)) ? <span className="workflow-node-note">Error recovery path</span> : null}
             </button>
             {visibleCanvasSteps.findIndex((item) => item.index === index) < visibleCanvasSteps.length - 1 ? <div className="workflow-node-connector" /> : null}
           </div>)}
