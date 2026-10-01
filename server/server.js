@@ -2164,8 +2164,16 @@ async function startServer() {
                     LIMIT 1`,
                   [workflowId, job.company_id]
                 );
-                const workflow = workflowResult.rows[0];
+                let workflow = workflowResult.rows[0];
                 if (!workflow) throw Object.assign(new Error("Scheduled Path workflow no longer exists"), { retryable: false });
+                const pinnedVersion = Number(payload.workflowVersion || parentRun?.workflow_version || workflow.active_version || workflow.version || 1);
+                const snapshotResult = await db(
+                  "SELECT definition FROM platform_workflow_versions WHERE company_id=$1 AND workflow_id=$2 AND version=$3 LIMIT 1",
+                  [job.company_id, workflow.id, pinnedVersion]
+                );
+                if (snapshotResult.rows[0]?.definition && typeof snapshotResult.rows[0].definition === "object") {
+                  workflow = { ...workflow, ...snapshotResult.rows[0].definition, id: workflow.id, company_id: workflow.company_id };
+                }
                 const allActions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
                 const stepIds = new Set((payload.scheduledPathStepIds || []).map(String));
                 const actions = allActions.filter((action) => stepIds.has(String(action?.id || "")));
@@ -2213,6 +2221,7 @@ async function startServer() {
                   companyId: job.company_id,
                   workflowId: workflow.id,
                   workflowName: `${workflow.name} · ${payload.scheduledPathLabel || "Scheduled Path"}`,
+                  workflowVersion: pinnedVersion,
                   objectId: object?.id || objectId,
                   recordId,
                   triggerKey: "SCHEDULED_PATH",
@@ -2263,6 +2272,7 @@ async function startServer() {
                     connectorDrivers,
                     writeAudit,
                     runId: childRun.id,
+                    workflowVersion: pinnedVersion,
                     trigger: "SCHEDULED_PATH",
                     workflowVariables: scheduledVariables,
                   });
@@ -2319,8 +2329,16 @@ async function startServer() {
                   LIMIT 1`,
                 [run.workflow_id, job.company_id]
               );
-              const workflow = workflowResult.rows[0];
+              let workflow = workflowResult.rows[0];
               if (!workflow) throw Object.assign(new Error("Waiting workflow definition is unavailable"), { retryable: false });
+              const resumeVersion = Number(run.workflow_version || workflow.active_version || workflow.version || 1);
+              const resumeSnapshot = await db(
+                "SELECT definition FROM platform_workflow_versions WHERE company_id=$1 AND workflow_id=$2 AND version=$3 LIMIT 1",
+                [job.company_id, workflow.id, resumeVersion]
+              );
+              if (resumeSnapshot.rows[0]?.definition && typeof resumeSnapshot.rows[0].definition === "object") {
+                workflow = { ...workflow, ...resumeSnapshot.rows[0].definition, id: workflow.id, company_id: workflow.company_id };
+              }
 
               if (payload.stepRunId) {
                 await db(
@@ -2423,6 +2441,7 @@ async function startServer() {
                   connectorDrivers,
                   writeAudit,
                   runId: run.id,
+                  workflowVersion: resumeVersion,
                   trigger: run.trigger_key || workflow.trigger_key,
                   workflowVariables,
                 });
