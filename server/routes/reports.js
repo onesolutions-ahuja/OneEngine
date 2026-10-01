@@ -505,13 +505,14 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         };
       });
       if (by === "store" || by === "user") {
-        const table = by === "store" ? "stores" : "users";
-        const names = new Map();
-        for (const row of rows) {
-          const lookup = await db(`SELECT id, ${by === "store" ? "name" : "COALESCE(full_name, username) AS name"} FROM ${table} WHERE id = $1 AND company_id = $2 LIMIT 1`, [row.key, companyId]);
-          if (lookup.rows[0]?.name) names.set(row.key, lookup.rows[0].name);
+        const ids = rows.map((row) => row.key).filter(Boolean);
+        if (ids.length) {
+          const lookup = by === "store"
+            ? await db("SELECT id,name FROM stores WHERE company_id=$1 AND id=ANY($2::uuid[])", [companyId, ids])
+            : await db("SELECT id,COALESCE(full_name,username) AS name FROM users WHERE company_id=$1 AND id=ANY($2::uuid[])", [companyId, ids]);
+          const names = new Map(lookup.rows.map((entry) => [String(entry.id), entry.name]));
+          for (const row of rows) row.label = names.get(String(row.key)) || row.label;
         }
-        for (const row of rows) row.label = names.get(row.key) || row.label;
       }
       const totals = rows.reduce((sum, row) => {
         for (const key of ["total_qty", "total_sales", "total_returns", "total_discount", "total_tax", "count_sales", "count_returns"]) sum[key] += row[key];
