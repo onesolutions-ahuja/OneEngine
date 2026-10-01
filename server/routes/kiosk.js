@@ -198,7 +198,7 @@ export default function createKioskRouter({
       if (!product.rows[0]) return res.status(404).json({ success: false, message: "Product not found" });
 
       const parentId = product.rows[0].parent_product_id || product.rows[0].id;
-      const [variants, modifierRows] = await Promise.all([
+      const [variants, modifierRows, bundleRows] = await Promise.all([
         db(
           `SELECT p.id,p.parent_product_id,p.name,p.sku,p.barcode,p.price,p.variant_attributes,
                   p.image_url,p.kiosk_metadata,p.track_stock,
@@ -218,6 +218,14 @@ export default function createKioskRouter({
             WHERE g.company_id=$1 AND g.product_id=$2 AND g.active=TRUE
             ORDER BY g.display_order,o.display_order,o.name`,
           [req.user.companyId, req.params.id]
+        ),
+        db(
+          `SELECT bc.component_product_id AS id,p.name,p.image_url,bc.quantity
+             FROM product_bundle_components bc
+             JOIN products p ON p.id=bc.component_product_id AND p.company_id=$2 AND p.active=TRUE
+            WHERE bc.bundle_product_id=$1
+            ORDER BY p.name`,
+          [req.params.id, req.user.companyId]
         ),
       ]);
 
@@ -256,6 +264,12 @@ export default function createKioskRouter({
           },
           variants: variants.rows,
           modifierGroups: groups,
+          bundleComponents: bundleRows.rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            imageUrl: row.image_url || null,
+            quantity: Number(row.quantity || 1),
+          })),
           metadata: product.rows[0].kiosk_metadata || {},
         },
       });
