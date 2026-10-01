@@ -22,7 +22,7 @@ const NAV_CATALOGUE = [
   ["Returns", RefreshCw, (s)=>has(s,"returns.view")||has(s,"returns.create")],
   ["Supplier Returns", RefreshCw, (s)=>has(s,"returns.create")],
   ["Products", Package, (s)=>has(s,"product.view")||has(s,"product.create")||has(s,"product.edit")],
-  ["Global Products", Database],
+  ["Global Products", Database, (s)=>has(s,"global_product.view")||has(s,"global_product.create")||has(s,"global_product.edit")],
   ["Categories", Tag, (s)=>has(s,"category.view")||has(s,"category.create")||has(s,"category.edit")],
   ["Purchases", Receipt, (s)=>has(s,"purchase.view")||has(s,"reports.purchases.view")||has(s,"inventory.view")],
   ["Suppliers", Users, (s)=>has(s,"inventory.view")],
