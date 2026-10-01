@@ -2086,7 +2086,119 @@ async function startServer() {
           },
           handler: async (job) => {
             assertTrustedJobKind(job.kind);
-            if (job.kind === "WAIT") return;
+            if (job.kind === "WAIT") {
+              const payload = job.payload || {};
+              if (!payload.runId) return { status: "COMPLETED", resumed: false };
+
+              const runResult = await db(
+                `SELECT * FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1`,
+                [payload.runId, job.company_id]
+              );
+              const run = runResult.rows[0];
+              if (!run) throw Object.assign(new Error("Waiting workflow run no longer exists"), { retryable: false });
+
+              const workflowResult = await db(
+                `SELECT * FROM platform_rules
+                  WHERE id=$1 AND company_id=$2
+                    AND action->>'type'='workflow'
+                  LIMIT 1`,
+                [run.workflow_id, job.company_id]
+              );
+              const workflow = workflowResult.rows[0];
+              if (!workflow) throw Object.assign(new Error("Waiting workflow definition is unavailable"), { retryable: false });
+
+              if (payload.stepRunId) {
+                await db(
+                  `UPDATE platform_workflow_step_runs
+                      SET status='COMPLETED',
+                          completed_at=COALESCE(completed_at,NOW()),
+                          metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,
+                          updated_at=NOW()
+                    WHERE id=$2 AND run_id=$3`,
+                  [JSON.stringify({ resumedAt: new Date().toISOString(), waitJobId: job.id }), payload.stepRunId, run.id]
+                );
+              }
+
+              await db(
+                "UPDATE platform_workflow_runs SET status='RUNNING',completed_at=NULL,error_text=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+                [run.id, job.company_id]
+              );
+
+              let object = null;
+              let record = null;
+              if (run.object_id) {
+                const objectResult = await db(
+                  `SELECT * FROM platform_objects
+                    WHERE id=$1 AND active=TRUE AND (company_id IS NULL OR company_id=$2)
+                    LIMIT 1`,
+                  [run.object_id, job.company_id]
+                );
+                object = objectResult.rows[0] || null;
+              }
+              if (object?.source_table && run.record_id) {
+                const table = String(object.source_table || "");
+                if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) {
+                  throw Object.assign(new Error("Waiting workflow record source is invalid"), { retryable: false });
+                }
+                const params = [run.record_id];
+                let where = "id=$1";
+                if (object.company_scoped !== false) {
+                  params.push(job.company_id);
+                  where += ` AND company_id=${params.length}`;
+                }
+                const recordResult = await db(`SELECT * FROM "${table}" WHERE ${where} LIMIT 1`, params);
+                record = recordResult.rows[0] || null;
+              }
+
+              const actorId = run.metadata?.actorUserId || null;
+              const actorResult = actorId
+                ? await db(
+                    "SELECT id,role_id,store_id,till_id FROM users WHERE id=$1 AND company_id=$2 LIMIT 1",
+                    [actorId, job.company_id]
+                  )
+                : { rows: [] };
+              const actor = actorResult.rows[0] || {};
+              const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
+              const req = {
+                user: {
+                  id: actor.id || actorId || null,
+                  roleId: actor.role_id || null,
+                  companyId: job.company_id,
+                  storeId: actor.store_id || run.metadata?.storeId || null,
+                  tillId: actor.till_id || run.metadata?.tillId || null,
+                },
+              };
+
+              const results = await executeWorkflowActions({
+                actions,
+                db,
+                pool,
+                req,
+                companyId: job.company_id,
+                userId: req.user.id,
+                object,
+                record,
+                recordId: run.record_id || null,
+                storeId: req.user.storeId,
+                tillId: req.user.tillId,
+                connectorDrivers,
+                writeAudit,
+                runId: run.id,
+                trigger: run.trigger_key || workflow.trigger_key,
+              });
+
+              const containsWaiting = (entries = []) => entries.some((entry) =>
+                entry?.result?.status === "waiting"
+                || containsWaiting(entry?.result?.branch?.results || [])
+              );
+              if (!containsWaiting(results)) {
+                await db(
+                  "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
+                  [run.id, job.company_id]
+                );
+              }
+              return { status: containsWaiting(results) ? "WAITING" : "COMPLETED", resumed: true, runId: run.id };
+            }
             const payload = job.payload || {};
             if (job.kind === "APP_RELEASE_UPGRADE") {
               const release = await db("SELECT status FROM package_releases WHERE id=$1", [payload.releaseId]);
