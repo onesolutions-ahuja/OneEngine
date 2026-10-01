@@ -3,6 +3,8 @@ import { getCompanyEntitlements, hasEntitlement } from "./licensing.js";
 import { sendEmailViaProvider, sendSmsViaProvider, sendSmsViaTwilio } from "./invoiceDelivery.js";
 import { sendWhatsAppTextMessage } from "./whatsappDelivery.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationCore.js";
+import { decryptCredentials } from "./integrationCredentials.js";
+import { createSmsGateDriver } from "./smsGateConnector.js";
 
 const ACTIONS = {
   SEND_EMAIL: { provider: "EMAIL", entitlement: "communications.email" },
@@ -25,6 +27,27 @@ async function provider(db, companyId, kind) {
     const apiKey = decryptSecret(config.auth_token) || decryptSecret(config.api_key) || null;
     if (endpoint && apiKey) {
       return { provider: String(row.provider || kind).toLowerCase(), endpoint, apiKey, authScheme: config.auth_scheme === "bearer" ? "bearer" : "raw", config };
+    }
+  }
+
+  // Prefer the installed SMSGate connector when SMS is configured through OneConnect.
+  if (kind === "SMS") {
+    const connector = await db(
+      `SELECT id,connector_configuration,credentials_encrypted
+         FROM integration_connections
+        WHERE company_id=$1 AND connector_package_key='smsgate_connector' AND enabled=true
+        ORDER BY updated_at DESC LIMIT 1`,
+      [companyId]
+    );
+    const row = connector.rows?.[0];
+    if (row) {
+      let secrets = {};
+      try { secrets = decryptCredentials(row.credentials_encrypted) || {}; } catch { secrets = {}; }
+      return {
+        provider: "smsgate",
+        connectorId: row.id,
+        config: { ...(row.connector_configuration || {}), ...secrets },
+      };
     }
   }
 
@@ -141,7 +164,17 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
             subject: renderTemplate(action.subject || template?.subject || "onePOS notification", action.templateContext || {}),
             body,
           })
-        : runtime.provider === "twilio"
+        : runtime.provider === "smsgate"
+          ? await (async()=>{
+              try {
+                const adapter = createSmsGateDriver().createAdapter({ configuration: runtime.config });
+                const sent = await adapter.execute("sms.send", { recipient, text: body });
+                return { ok:true, httpStatus:200, reference: sent?.providerMessageId || null };
+              } catch (error) {
+                return { ok:false, httpStatus:0, errorText:String(error?.message || "SMSGate send failed") };
+              }
+            })()
+          : runtime.provider === "twilio"
           ? await sendSmsViaTwilio({
               accountSid: runtime.twilio.accountSid,
               authToken: runtime.twilio.authToken,
