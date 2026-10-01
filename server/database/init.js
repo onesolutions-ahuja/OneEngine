@@ -217,13 +217,12 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
                  description=EXCLUDED.description`
         );
         await client.query(
-          `INSERT INTO role_permissions (role_id,permission_id,company_id)
-           SELECT rp.role_id,p_new.id,rp.company_id
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT rp.role_id,p_new.id
              FROM role_permissions rp
              JOIN permissions p_old ON p_old.id=rp.permission_id AND p_old.code='platform.manage'
              JOIN permissions p_new ON p_new.code='oneengine.manage'
-           ON CONFLICT (role_id,permission_id)
-           DO UPDATE SET company_id=COALESCE(EXCLUDED.company_id,role_permissions.company_id)`
+           ON CONFLICT (role_id,permission_id) DO NOTHING`
         );
         await client.query(
           `UPDATE roles
