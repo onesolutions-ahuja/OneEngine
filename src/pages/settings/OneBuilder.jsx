@@ -355,21 +355,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     setMessage('')
     try {
       if (tab === 'workflow') {
-        if (!activeMeta.name || !activeMeta.triggerKey) throw new Error('Workflow name and trigger are required.')
-        const trigger = triggers.find((row) => row.key === activeMeta.triggerKey)
-        if (trigger?.kind !== 'event' && !activeMeta.objectId) throw new Error('Record-triggered workflows require an object.')
-        const object = objects.find((row) => String(row.id) === String(activeMeta.objectId))
-        const payload = {
-          name: activeMeta.name,
-          objectKey: object ? objectKey(object) : null,
-          objectId: activeMeta.objectId || null,
-          triggerKey: activeMeta.triggerKey,
-          conditions: [],
-          active: activeMeta.active === true,
-          action: { type: 'workflow', match: 'all', actions: items.map((item) => ({ type: item.key, ...(item.config || {}), _visual: { id: item.id, label: item.label } })) },
-        }
-        const response = await apiRequest(selectedSavedId ? `/api/platform/rules/${encodeURIComponent(selectedSavedId)}` : '/api/platform/rules', { method: selectedSavedId ? 'PUT' : 'POST', body: JSON.stringify(payload) })
-        if (response?.data?.id) setSelectedSavedId(response.data.id)
+        throw new Error('Workflow definitions are saved only through WorkflowAdmin.')
       } else if (tab === 'approval') {
         if (!activeMeta.name || !activeMeta.objectId) throw new Error('Approval name and object are required.')
         const conditions = items.filter((item) => item.key === 'criteria' && item.config?.field).map((item) => ({ id: item.id, field: item.config.field, operator: item.config.operator || 'equals', value: item.config.value }))
