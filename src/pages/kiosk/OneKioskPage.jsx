@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2, ArrowLeft, Accessibility, Languages, HelpCircle, QrCode, GitCompareArrows } from "lucide-react";
 import { apiRequest, KIOSK_TOKEN_STORAGE_KEY } from "../../services/api.js";
 import "./oneKiosk.css";
@@ -139,6 +139,7 @@ export default function OneKioskPage({ publicMode = false }) {
   const [currentScreenKey, setCurrentScreenKey] = useState("");
   const [lastAddedProductId, setLastAddedProductId] = useState("");
   const [compareIds, setCompareIds] = useState([]);
+  const [showCompare, setShowCompare] = useState(false);
   const [accessMode, setAccessMode] = useState("DEFAULT");
   const [language, setLanguage] = useState("en");
   const [attractMode, setAttractMode] = useState(publicMode);
@@ -1150,6 +1151,35 @@ export default function OneKioskPage({ publicMode = false }) {
         </div>
       ) : null}
 
+      {productScreen.compare && compareIds.length ? (
+        <div className="one-kiosk-compare-bar">
+          <span><GitCompareArrows size={18}/> {compareIds.length} selected</span>
+          <button type="button" disabled={compareIds.length < 2} onClick={() => setShowCompare(true)}>Compare</button>
+          <button type="button" onClick={() => setCompareIds([])}>Clear</button>
+        </div>
+      ) : null}
+
+      {showCompare && comparedProducts.length >= 2 ? (
+        <div className="one-kiosk-compare-overlay" role="dialog" aria-modal="true" aria-label="Compare products">
+          <div className="one-kiosk-compare-panel">
+            <div className="one-kiosk-compare-head"><h2>Compare products</h2><button type="button" onClick={() => setShowCompare(false)}>×</button></div>
+            <div className="one-kiosk-compare-table">
+              <div className="label">Product</div>
+              {comparedProducts.map((product) => <div key={product.id} className="product"><strong>{product.name}</strong><span>{money(product.price,currency)}</span></div>)}
+              {Array.from(new Set(comparedProducts.flatMap((product) => Object.keys(product.kiosk_metadata?.specifications || product.kioskMetadata?.specifications || {})))).map((spec) => (
+                <Fragment key={spec}>
+                  <div className="label">{spec}</div>
+                  {comparedProducts.map((product) => <div key={`${product.id}-${spec}`}>{String((product.kiosk_metadata?.specifications || product.kioskMetadata?.specifications || {})[spec] ?? "—")}</div>)}
+                </Fragment>
+              ))}
+              <div className="label">Availability</div>
+              {comparedProducts.map((product) => <div key={`${product.id}-stock`}>{product.track_stock === false ? "Available" : Number(product.store_stock || 0) > 0 ? `${Number(product.store_stock)} in stock` : "Out of stock"}</div>)}
+            </div>
+            <button type="button" className="one-kiosk-pay" onClick={() => setShowCompare(false)}>Done</button>
+          </div>
+        </div>
+      ) : null}
+
       {featureFlags.assistance ? <button type="button" className="one-kiosk-help" onClick={requestAssistance}><HelpCircle size={20}/> Need help?</button> : null}
 
       {selectedProduct ? (
@@ -1236,6 +1266,18 @@ export default function OneKioskPage({ publicMode = false }) {
                 </div>
               )) : null}
               {productOptions?.metadata?.warranty && productScreen.warranty ? <div className="one-kiosk-warranty">{productOptions.metadata.warranty}</div> : null}
+              {productScreen.compare ? (
+                <button
+                  type="button"
+                  className={`one-kiosk-compare-toggle ${compareIds.includes(String(selectedProduct.id)) ? "is-active" : ""}`}
+                  onClick={() => setCompareIds((current) => current.includes(String(selectedProduct.id))
+                    ? current.filter((id) => id !== String(selectedProduct.id))
+                    : [...current.filter((id) => id !== String(selectedProduct.id)), String(selectedProduct.id)].slice(-3))}
+                >
+                  <GitCompareArrows size={18}/>
+                  {compareIds.includes(String(selectedProduct.id)) ? "Remove from comparison" : "Add to comparison"}
+                </button>
+              ) : null}
               <div className="one-kiosk-product-modal-footer">
                 <strong>{money(configuredProductPrice, currency)}</strong>
                 <button
