@@ -387,15 +387,26 @@ const createToken = createSessionToken;
 const baseAuthenticate = createAuthenticate({
   onAuthenticated: createAuthenticatedDatabaseMiddleware({ router: tenantDatabaseRouter, pool }),
 });
-const authenticate = (req, res, next) => baseAuthenticate(req, res, (error) => {
+const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error) => {
   if (error) return next(error);
-  return Promise.resolve(
-    req.ensureBusinessCommandRun?.({
+  try {
+    const requestedStoreId = String(req.headers?.["x-store-id"] || "").trim();
+    if (requestedStoreId) {
+      const allowed = await canAccessStore(req.user, requestedStoreId);
+      if (!allowed) {
+        return res.status(403).json({ success: false, message: "You are not authorised for the selected store" });
+      }
+      req.user = { ...req.user, storeId: requestedStoreId };
+    }
+    await req.ensureBusinessCommandRun?.({
       companyId: req.user?.companyId || null,
       userId: req.user?.id || null,
       storeId: req.user?.storeId || null,
-    })
-  ).then(() => next()).catch(next);
+    });
+    return next();
+  } catch (nextError) {
+    return next(nextError);
+  }
 });
 
 /*
@@ -555,20 +566,25 @@ async function canViewCompanyCustomers(user, request = null) {
 }
 
 async function canAccessStore(user, storeId) {
-  if (!storeId) return false;
+  if (!storeId || !user?.companyId) return false;
 
-  // Company-wide scope permission bypasses per-store assignment checks.
+  // Always verify the selected store belongs to the active company.
+  const store = await db(
+    `SELECT id FROM stores WHERE id=$1 AND company_id=$2 AND active=true LIMIT 1`,
+    [storeId, user.companyId]
+  );
+  if (!store.rows.length) return false;
+
+  // Company-wide scope permission bypasses only the assignment requirement.
   if (await canViewCompanyCustomers(user)) {
     return true;
   }
 
-  // Never trust the login-time assignedStoreIds claim for a security decision;
-  // assignments can be revoked while a session token is still valid.
+  // Never trust login-time store claims; assignments can be revoked mid-session.
   const assignment = await db(
-    `SELECT 1 FROM stores s
-      JOIN user_stores us ON us.store_id=s.id AND us.user_id=$3 AND us.active=true
-     WHERE s.id=$1 AND s.company_id=$2 AND s.active=true LIMIT 1`,
-    [storeId, user.companyId, user.id]
+    `SELECT 1 FROM user_stores
+      WHERE user_id=$1 AND store_id=$2 AND active=true LIMIT 1`,
+    [user.id, storeId]
   );
   return assignment.rows.length > 0;
 }
@@ -1212,6 +1228,39 @@ app.get("/api/auth/me", authenticate, async (req, res) => {
 | (T10B-SMALL: the frontend AdminLayout calls this to show/hide gated
 | sidebar entries such as Reports, Returns, Order Prep and Integrations.)
 */
+
+app.get("/api/auth/me/stores", authenticate, async (req, res) => {
+  try {
+    if (!req.user?.companyId) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const hasCompanyWideScope = await canViewCompanyCustomers(req.user, req);
+    const result = hasCompanyWideScope
+      ? await db(
+          `SELECT s.id,s.code,s.name,s.active,(u.store_id=s.id) AS is_primary
+             FROM stores s
+             LEFT JOIN users u ON u.id=$2
+            WHERE s.company_id=$1 AND s.active=true
+            ORDER BY s.name`,
+          [req.user.companyId, req.user.id]
+        )
+      : await db(
+          `SELECT s.id,s.code,s.name,s.active,(u.store_id=s.id) AS is_primary
+             FROM stores s
+             JOIN user_stores us ON us.store_id=s.id AND us.user_id=$2 AND us.active=true
+             LEFT JOIN users u ON u.id=$2
+            WHERE s.company_id=$1 AND s.active=true
+            ORDER BY s.name`,
+          [req.user.companyId, req.user.id]
+        );
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error("Current user stores error:", error);
+    res.status(500).json({ success: false, message: "Unable to retrieve store access" });
+  }
+});
 
 app.get("/api/auth/me/permissions", authenticate, async (req, res) => {
   try {
