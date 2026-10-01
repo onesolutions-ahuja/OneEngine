@@ -3434,6 +3434,30 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               </div>
             </div>
 
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-xs font-semibold text-slate-700">Collection display</div>
+              <div className="mt-2 grid gap-3 md:grid-cols-3">
+                <label className="text-xs font-medium text-slate-700">Display title
+                  <input className={inputClass} value={typeof kioskUi.orderDisplay?.title === "string" ? kioskUi.orderDisplay.title : ""} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),title:e.target.value}})} placeholder="Order collection"/>
+                </label>
+                <label className="text-xs font-medium text-slate-700">In progress label
+                  <input className={inputClass} value={typeof kioskUi.orderDisplay?.activeLabel === "string" ? kioskUi.orderDisplay.activeLabel : ""} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),activeLabel:e.target.value}})} placeholder="Preparing / Processing"/>
+                </label>
+                <label className="text-xs font-medium text-slate-700">Ready label
+                  <input className={inputClass} value={typeof kioskUi.orderDisplay?.readyLabel === "string" ? kioskUi.orderDisplay.readyLabel : ""} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),readyLabel:e.target.value}})} placeholder="Ready to collect"/>
+                </label>
+                <label className="text-xs font-medium text-slate-700">In progress statuses
+                  <input className={inputClass} value={(kioskUi.orderDisplay?.activeStatuses||["PREPARING","ACCEPTED"]).join(", ")} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),activeStatuses:e.target.value.split(",").map(v=>v.trim().toUpperCase()).filter(Boolean)}})}/>
+                </label>
+                <label className="text-xs font-medium text-slate-700">Ready statuses
+                  <input className={inputClass} value={(kioskUi.orderDisplay?.readyStatuses||["READY","READY_FOR_PICKUP"]).join(", ")} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),readyStatuses:e.target.value.split(",").map(v=>v.trim().toUpperCase()).filter(Boolean)}})}/>
+                </label>
+                <label className="text-xs font-medium text-slate-700">Ready empty text
+                  <input className={inputClass} value={typeof kioskUi.orderDisplay?.readyEmpty === "string" ? kioskUi.orderDisplay.readyEmpty : ""} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),readyEmpty:e.target.value}})} placeholder="No orders ready"/>
+                </label>
+              </div>
+            </div>
+
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <label className="text-xs font-medium text-slate-700">Start screen
                 <select className={inputClass} value={kioskUi.startScreen || ""} onChange={(event) => updateKioskUi({ startScreen: event.target.value })}>
