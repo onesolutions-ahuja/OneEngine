@@ -51,26 +51,26 @@ function licenceStatus({ active, startsAt, expiresAt }) {
 export default function createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env = process.env }) {
   const router = express.Router();
   const writeAudit = createAuditWriter({ db });
-  const requirePlatformManage = async (req, res, next) => {
+  const requireOneEngineManage = async (req, res, next) => {
     try {
       const result = await db(
         `SELECT 1
            FROM users u
            JOIN role_permissions rp ON rp.role_id=u.role_id
            JOIN permissions p ON p.id=rp.permission_id
-          WHERE u.id=$1 AND u.active=true AND p.code='platform.manage'
+          WHERE u.id=$1 AND u.active=true AND p.code IN ('oneengine.manage','platform.manage')
           LIMIT 1`,
         [req.user?.id]
       );
-      if (!result.rows.length) return res.status(403).json({ success: false, message: "Platform permission required" });
+      if (!result.rows.length) return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
       return next();
     } catch (error) {
-      console.error("Platform authorization error:", error);
-      return res.status(500).json({ success: false, message: "Unable to verify platform access" });
+      console.error("OneEngine authorization error:", error);
+      return res.status(500).json({ success: false, message: "Unable to verify OneEngine Manager access" });
     }
   };
 
-  router.use("/superadmin", authenticate, requirePlatformManage);
+  router.use("/superadmin", authenticate, requireOneEngineManage);
 
   router.get("/superadmin/platform-developers", async (req, res) => {
     const result = await db(
@@ -91,7 +91,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
       return res.status(400).json({ success: false, message: "companyIds must be an array" });
     }
     const developer = await db("SELECT id FROM users WHERE id=$1 AND is_platform_developer=true", [req.params.userId]);
-    if (!developer.rows.length) return res.status(404).json({ success: false, message: "Platform Developer not found" });
+    if (!developer.rows.length) return res.status(404).json({ success: false, message: "OneEngine Manager not found" });
     const companies = await db("SELECT id FROM companies WHERE id=ANY($1::uuid[]) AND active=true", [req.body.companyIds]);
     if (companies.rows.length !== req.body.companyIds.length) return res.status(400).json({ success: false, message: "One or more companies are invalid" });
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
@@ -111,8 +111,8 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
       res.json({ success: true, data: { developerId: req.params.userId, companyIds: companies.rows.map((company) => company.id) } });
     } catch (error) {
       await client.query("ROLLBACK");
-      console.error("Platform Developer access update error:", error);
-      res.status(500).json({ success: false, message: "Unable to update Platform Developer access" });
+      console.error("OneEngine Manager access update error:", error);
+      res.status(500).json({ success: false, message: "Unable to update OneEngine Manager access" });
     } finally {
       client.release();
     }
