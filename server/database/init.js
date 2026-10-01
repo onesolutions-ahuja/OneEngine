@@ -977,6 +977,7 @@ async function initializeLegacyDatabase(pool) {
       ON kiosk_devices(company_id, store_id, active);
     ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS workflow_id UUID;
     ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS payment_connector_id UUID;
+    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_connector_id UUID;
     ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_name VARCHAR(150);
     ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_connection_type VARCHAR(50);
     ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_connection_address VARCHAR(500);
