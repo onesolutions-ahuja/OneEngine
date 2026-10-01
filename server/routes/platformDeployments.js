@@ -4,7 +4,7 @@ import { deployMetadata, planMetadataDeployment, rollbackMetadataDeployment } fr
 
 export default function createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }) {
   const router = express.Router();
-  const gated = [authenticate, authorize("platform.manage")];
+  const gated = [authenticate, authorize("oneengine.manage")];
 
   router.post("/platform/metadata/export", ...gated, async (req, res) => {
     try {
