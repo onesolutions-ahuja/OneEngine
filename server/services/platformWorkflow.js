@@ -875,25 +875,18 @@ async function executeUberItemAction(context, operation) {
     : { ...response, code: response.code || "UBER_ITEM_UPDATE_FAILED", productId: resolved.product.id, itemId: resolved.itemId, storeId: resolved.storeId };
 }
 
-function resolveCommunicationWorkflowAction(action, record, object = null, workflowVariables = null) {
-  const rootObjectKey = object?.object_key || object?.objectKey || null;
+function resolveCommunicationWorkflowAction(action, record, object = null, workflowVariables = null, req = null, previousRecord = null) {
+  const context = { record, previousRecord, req, object, workflowVariables };
   const resolveRecipient = (value) => {
-    if (value && typeof value === "object") {
-      const resolved = resolveBindingTree(value, { record, rootObjectKey, variables: workflowVariables });
-      return resolved == null ? value : resolved;
-    }
-    if (typeof value === "string" && record) {
-      const resolved = resolveRecordPathValue(record, value, rootObjectKey);
-      if (resolved !== undefined && resolved !== null && resolved !== "") return resolved;
-    }
-    return value;
+    const resolved = resolveConfiguredResource(value, context);
+    return resolved == null || resolved === "" ? value : resolved;
   };
   return {
     ...action,
     recipient: resolveRecipient(action?.recipient),
     to: resolveRecipient(action?.to),
     templateContext: action?.templateContext
-      ? resolveBindingTree(action.templateContext, { record, rootObjectKey, variables: workflowVariables })
+      ? resolveBindingTree(action.templateContext, workflowBindingContext(context))
       : (record || {}),
   };
 }
@@ -2175,15 +2168,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.delete"],
-    executor: async ({ db, action, object, req, companyId }) => {
+    executor: async ({ db, action, object, req, companyId, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
+      const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
       const hasActive = await db(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'`, [table]);
       const result = hasActive.rows.length
-        ? await db(`UPDATE "${table}" SET active=false WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId])
-        : await db(`DELETE FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [action.recordId, req?.user?.companyId || companyId] : [action.recordId]);
+        ? await db(`UPDATE "${table}" SET active=false WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [resolvedRecordId, req?.user?.companyId || companyId] : [resolvedRecordId])
+        : await db(`DELETE FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [resolvedRecordId, req?.user?.companyId || companyId] : [resolvedRecordId]);
       try {
-        if (result.rows[0]) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.deleted", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: action.recordId, record: result.rows[0], archived: hasActive.rows.length > 0 }, actorUserId: req?.user?.id || null });
+        if (result.rows[0]) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.deleted", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: resolvedRecordId, record: result.rows[0], archived: hasActive.rows.length > 0 }, actorUserId: req?.user?.id || null });
       } catch (error) { console.error("Platform workflow record event publication error:", error); }
       return { status: result.rows.length ? "completed" : "skipped", deleted: result.rows[0] || null };
     },
@@ -2198,11 +2192,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, companyId }) => {
+    executor: async ({ db, action, object, req, companyId, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const assignee = action.assignee ?? action.assignedTo;
-      const params = [assignee, action.recordId];
+      const assignee = resolveConfiguredResource(action.assignee ?? action.assignedTo, { record, previousRecord, req, object, workflowVariables });
+      const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
+      const params = [assignee, resolvedRecordId];
       const scope = targetObject.company_scoped ? " AND company_id=$3" : "";
       if (targetObject.company_scoped) params.push(req?.user?.companyId || companyId);
       const result = await db(`UPDATE "${table}" SET assigned_to=$1 WHERE id=$2${scope} RETURNING *`, params);
@@ -2219,10 +2214,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, recordId }) => {
+    executor: async ({ db, action, object, req, recordId, record, previousRecord, workflowVariables }) => {
       const relationshipKey = action.relationshipKey;
-      const relatedRecordId = action.relatedRecordId || action.recordId;
-      const parentRecordId = action.parentRecordId || recordId || action.recordId || null;
+      const relatedRecordId = resolveConfiguredResource(action.relatedRecordId || action.recordId, { record, previousRecord, req, object, workflowVariables });
+      const parentRecordId = resolveConfiguredResource(action.parentRecordId || recordId || action.recordId || null, { record, previousRecord, req, object, workflowVariables });
       if (!db || typeof db !== "function") return { status: "completed", relationshipKey, relatedRecordId };
       const resolved = await loadRecordRelationship({ db, action, object });
       if (!resolved?.relationship) {
@@ -2259,9 +2254,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req }) => {
+    executor: async ({ db, action, object, req, record, previousRecord, workflowVariables }) => {
       const relationshipKey = action.relationshipKey;
-      const relatedRecordId = action.relatedRecordId || action.recordId;
+      const relatedRecordId = resolveConfiguredResource(action.relatedRecordId || action.recordId, { record, previousRecord, req, object, workflowVariables });
       if (!db || typeof db !== "function") return { status: "completed", relationshipKey, relatedRecordId };
       const resolved = await loadRecordRelationship({ db, action, object });
       if (!resolved?.relationship) {
@@ -2320,13 +2315,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["communications.send"],
     requiredEntitlement: "communications.email",
-    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
+    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
       const company = companyId || req?.user?.companyId;
       const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
       if (!provider.configured) {
         return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
@@ -2341,13 +2336,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["communications.send"],
     requiredEntitlement: "communications.sms",
-    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
+    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
       const company = companyId || req?.user?.companyId;
       const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "SMS", stepRunId });
       if (!provider.configured) {
         return { status: "failed", provider: "SMS", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_SMS", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
@@ -2362,13 +2357,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["communications.send"],
     requiredEntitlement: "communications.whatsapp",
-    executor: async ({ db, action, req, companyId, stepRunId, record, object, workflowVariables }) => {
+    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
       const company = companyId || req?.user?.companyId;
       const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "WHATSAPP", stepRunId });
       if (!provider.configured) {
         return { status: "failed", provider: "WHATSAPP", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables);
+      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
