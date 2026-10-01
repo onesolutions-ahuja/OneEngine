@@ -739,14 +739,24 @@ export default function createOnlineRouter({
       const conditions = ["o.company_id = $1"];
       const params = [req.user.companyId];
 
+      if (req.user?.mode === "kiosk_display") {
+        if (!req.user.kioskDisplayFlowId) {
+          return res.status(403).json({ success: false, message: "This collection display is not assigned to a OneKiosk flow" });
+        }
+        params.push("one_kiosk");
+        conditions.push(`o.platform = ${params.length}`);
+        params.push(String(req.user.kioskDisplayFlowId));
+        conditions.push(`o.platform_data->>'workflowId' = ${params.length}`);
+      }
+
       if (status) {
         params.push(status);
         conditions.push(`o.status = $${params.length}`);
       }
 
-      if (platform) {
+      if (platform && req.user?.mode !== "kiosk_display") {
         params.push(platform);
-        conditions.push(`o.platform = $${params.length}`);
+        conditions.push(`o.platform = ${params.length}`);
       }
 
       const result = await db(
