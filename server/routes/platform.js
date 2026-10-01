@@ -3403,7 +3403,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
     if (rule.object_id && !await getObject(rule.object_id, req)) return "Object not found";
     const conditionFields = rule.object_id ? await db("SELECT * FROM platform_fields WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) ORDER BY display_order, label", [rule.object_id, req.user.companyId]) : { rows: [] };
-    if (strictWorkflow) {
+    if (strictWorkflow && rule.conditions.length) {
       try {
         validateConditionConfig({ match: rule.action.match || "all", conditions: rule.conditions }, conditionFields.rows, "Automation conditions");
       } catch (error) {
@@ -3419,6 +3419,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     };
     const workflowMatch = isWorkflow ? rule.action.match || "all" : null;
     if (isWorkflow && !["all", "any"].includes(workflowMatch)) return "Workflow actions require a match mode of all or any";
+    if (isWorkflow) {
+      const entryTransition = String(rule.action?.entryTransition || "EVERY_TIME").toUpperCase();
+      if (!["EVERY_TIME","UPDATED_TO_MEET"].includes(entryTransition)) return "Workflow entry transition must be Every Time or Updated To Meet";
+      if (strictWorkflow && entryTransition === "UPDATED_TO_MEET" && !rule.conditions.length) return "Updated To Meet requires at least one Start condition";
+      if (strictWorkflow && entryTransition === "UPDATED_TO_MEET" && !["after_update","after_save","before_update","before_save","field_changed"].includes(rule.trigger_key)) {
+        return "Updated To Meet can only be used with an update trigger";
+      }
+    }
     if (isWorkflow && strictWorkflow && (!Array.isArray(rule.action.actions) || !rule.action.actions.length)) return "Workflow actions require at least one action";
     const registryTypes = new Set(getWorkflowActionRegistry().map((definition) => definition.key));
     const legacyTypes = new Set(["validation", "set_field", "show_message", "SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "workflow"]);
