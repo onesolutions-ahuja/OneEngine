@@ -2872,7 +2872,21 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         const sourceValue = resolveConfiguredResource(sourceBinding, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
         if (sourceValue !== undefined) mappedInputs[targetKey] = sourceValue;
       }
+      const inputContract = Array.isArray(definition.action?.inputContract) ? definition.action.inputContract : Array.isArray(definition.inputContract) ? definition.inputContract : [];
+      for (const input of inputContract) {
+        const name = String(input?.name || "");
+        if (!name) continue;
+        if (input.required === true && (mappedInputs[name] === undefined || mappedInputs[name] === null || mappedInputs[name] === "")) {
+          throw new Error(`Subflow "${definition.name || workflowKey}" requires input "${input.label || name}"`);
+        }
+        if (mappedInputs[name] === undefined) continue;
+        const type = String(input.type || "text").toLowerCase();
+        if (type === "number" && !Number.isFinite(Number(mappedInputs[name]))) throw new Error(`Subflow input "${input.label || name}" must be a number`);
+        if (type === "boolean" && typeof mappedInputs[name] !== "boolean") throw new Error(`Subflow input "${input.label || name}" must be true or false`);
+        if (type === "collection" && !Array.isArray(mappedInputs[name])) throw new Error(`Subflow input "${input.label || name}" must be a collection`);
+      }
       const mergedRecord = { ...(record || {}), ...mappedInputs };
+      const childWorkflowVariables = { variables: { ...mappedInputs }, steps: {} };
       const childRun = db && typeof db === "function"
         ? await createWorkflowRun({
             db,
@@ -2911,8 +2925,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         workflowStack: [...stack, workflowKey],
         runId: childRun?.id || runId || null,
         stepRunId: childStep?.id || stepRunId || null,
+        workflowVariables: childWorkflowVariables,
       });
-      const childWaiting = workflowResultsContainStatus(childResult, "waiting");
+      const outputContract = Array.isArray(definition.action?.outputContract) ? definition.action.outputContract : Array.isArray(definition.outputContract) ? definition.outputContract : [];
+      const outputs = {};
+      for (const output of outputContract) {
+        const name = String(output?.name || "");
+        if (!name) continue;
+        const source = output.source || `variables.${name}`;
+        const value = resolveConfiguredResource(source, { record: mergedRecord, previousRecord, req, object, workflowVariables: childWorkflowVariables }, { preserveMissing: false });
+        if (output.required === true && value === undefined) throw new Error(`Subflow output "${output.label || name}" was not produced`);
+        outputs[name] = value;
+      }
+            const childWaiting = workflowResultsContainStatus(childResult, "waiting");
       const childFailed = childResult.some((item) => item.result?.status === "failed");
       const childStatus = childFailed ? "FAILED" : childWaiting ? "WAITING" : "COMPLETED";
       if (childRun && db && typeof db === "function") {
@@ -2938,6 +2963,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         workflowId: workflowKey,
         runId: childRun?.id || null,
         results: childResult,
+        outputs,
       };
     },
   },
