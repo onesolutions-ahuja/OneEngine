@@ -678,6 +678,7 @@ export default function createKioskRouter({
 
   router.get("/kiosk/flows", authenticate, async (req, res) => {
     try {
+      const displayFlowId = req.user?.mode === "kiosk_display" ? req.user.kioskDisplayFlowId || null : null;
       const result = await db(
         `SELECT id,name,trigger_key,conditions,action,active,lifecycle_status,version,
                 managed,user_modified,source_package_version,updated_at
@@ -687,10 +688,11 @@ export default function createKioskRouter({
             AND action->>'flowType'='KIOSK_EXPERIENCE'
             AND active=TRUE
             AND lifecycle_status='ACTIVE'
+            AND ($2::uuid IS NULL OR id=$2::uuid)
           ORDER BY
             CASE WHEN action->>'defaultForNewDevices'='true' THEN 0 ELSE 1 END,
             name`,
-        [req.user.companyId]
+        [req.user.companyId, displayFlowId]
       );
       res.json({ success: true, data: result.rows });
     } catch (error) {
