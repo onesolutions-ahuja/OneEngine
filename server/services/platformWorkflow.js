@@ -2960,7 +2960,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             triggerKey: "subflow",
             parentRunId: runId || null,
             status: "RUNNING",
-            metadata: { parentWorkflow: workflowKey, inputMappings: mappings, initialVariables: childWorkflowVariables },
+            metadata: {
+              parentWorkflow: workflowKey,
+              inputMappings: mappings,
+              initialVariables: childWorkflowVariables,
+              initialPreviousRecord: redact(previousRecord || null),
+            },
           })
         : null;
       const childResult = await executeWorkflowActions({
@@ -3175,6 +3180,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           recordId: record?.id || null,
           objectId: object?.id || null,
           workflowVariables: redact(workflowVariables),
+          previousRecord: redact(previousRecord || null),
         },
         runAt,
         idempotencyKey: `${tenantId || "workflow"}:scheduled-path:${runId || "no-run"}:${action.id || action.pathLabel}:${runAt.toISOString()}`,
