@@ -425,39 +425,32 @@ export default function createAdminRouter({
       }
       const activate = req.body.active !== false;
       if (!activate) {
-        const scoped = await client.query(
-          `SELECT 1
-             FROM role_permissions rp
-             JOIN permissions p ON p.id=rp.permission_id
-            WHERE rp.role_id=$1 AND p.code='company.scope.all'
-            LIMIT 1`,
-          [role.id]
+        // Prevent tenant lock-out using effective RBAC, not role-only grants.
+        // A remaining active user may retain company.scope.all through either
+        // their role or an active permission set.
+        const holders = await client.query(
+          "SELECT id,role_id FROM users WHERE role_id=$1 AND company_id=$2 AND active",
+          [role.id, req.user.companyId]
         );
-        if (scoped.rows.length) {
-          const holders = await client.query(
-            "SELECT COUNT(*)::int AS n FROM users WHERE role_id=$1 AND company_id=$2 AND active",
-            [role.id, req.user.companyId]
+        if (holders.rows.length) {
+          const otherUsers = await client.query(
+            "SELECT id,role_id FROM users WHERE company_id=$1 AND active AND role_id IS DISTINCT FROM $2",
+            [req.user.companyId, role.id]
           );
-          if (holders.rows[0].n > 0) {
-            const alternatives = await client.query(
-              `SELECT COUNT(DISTINCT r.id)::int AS n
-                 FROM roles r
-                 JOIN role_permissions rp ON rp.role_id=r.id
-                 JOIN permissions p ON p.id=rp.permission_id AND p.code='company.scope.all'
-                WHERE r.company_id=$1 AND r.id<>$2
-                  AND EXISTS (
-                    SELECT 1 FROM users u
-                     WHERE u.role_id=r.id AND u.company_id=$1 AND u.active
-                  )`,
-              [req.user.companyId, role.id]
-            );
-            if (alternatives.rows[0].n === 0) {
-              await client.query("ROLLBACK");
-              return res.status(400).json({
-                success: false,
-                message: "Cannot deactivate the last active company-wide access profile",
-              });
+          let hasAlternativeCompanyScope = false;
+          for (const user of otherUsers.rows) {
+            const permissionReq = { ...req, user: { ...req.user, id: user.id, roleId: user.role_id, companyId: req.user.companyId } };
+            if (await hasPermission(permissionReq, "company.scope.all")) {
+              hasAlternativeCompanyScope = true;
+              break;
             }
+          }
+          if (!hasAlternativeCompanyScope) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+              success: false,
+              message: "Cannot deactivate the last active company-wide access profile",
+            });
           }
         }
         /* Deactivate = detach all users from the role (soft, reversible: set
