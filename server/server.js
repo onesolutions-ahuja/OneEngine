@@ -113,6 +113,37 @@ import {
 
 const { Pool } = pg;
 
+/*
+ * Express 4 does not forward rejected promises from async route handlers to
+ * error middleware. All onePOS routers are created after this patch, so wrap
+ * async handlers once at Router creation time instead of duplicating
+ * try/catch boilerplate across every route module.
+ */
+const originalExpressRouter = express.Router;
+express.Router = function onePosAsyncSafeRouter(...args) {
+  const router = originalExpressRouter(...args);
+  for (const method of ["get", "post", "put", "patch", "delete", "use"]) {
+    const register = router[method].bind(router);
+    router[method] = (...registrationArgs) => {
+      const wrap = (handler) => {
+        if (Array.isArray(handler)) return handler.map(wrap);
+        if (typeof handler !== "function" || handler.length === 4 || handler.constructor?.name !== "AsyncFunction") return handler;
+        return function onePosAsyncRouteHandler(req, res, next) {
+          return Promise.resolve(handler(req, res, next)).catch(next);
+        };
+      };
+      if (!registrationArgs.length) return register();
+      const [first, ...rest] = registrationArgs;
+      if (typeof first === "function" || Array.isArray(first)) {
+        return register(wrap(first), ...rest.map(wrap));
+      }
+      return register(first, ...rest.map(wrap));
+    };
+  }
+  return router;
+};
+Object.assign(express.Router, originalExpressRouter);
+
 const app = express();
 
 const PORT = process.env.PORT || 10000;
@@ -1851,6 +1882,24 @@ app.post("/api/setup/database", authenticate, authorize("oneengine.manage"), asy
     console.error("Database migration error:", error);
     return res.status(500).json({ success: false, message: "Database migration failed" });
   }
+});
+
+/*
+ * Final API error boundary for async route failures. Local route handlers may
+ * still return richer domain-specific errors; this catches only errors they
+ * did not handle so clients receive a deterministic JSON response instead of
+ * a hung request / browser "Failed to fetch".
+ */
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  const status = Number.isInteger(error?.status) && error.status >= 400 && error.status < 600
+    ? error.status
+    : 500;
+  console.error("Unhandled API route error:", error);
+  return res.status(status).json({
+    success: false,
+    message: status >= 500 ? "Request failed" : (error?.message || "Request failed"),
+  });
 });
 
 /*
