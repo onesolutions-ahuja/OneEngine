@@ -90,6 +90,10 @@ export default function PublicAppointmentBookingPage({token:tokenProp}){
     <section className="module-page-card" style={{maxWidth:840,margin:'5vh auto'}}>
       <div style={{display:'flex',gap:12,alignItems:'center'}}><CalendarDays size={28}/><div><span>OneAssistant</span><h1>Book an appointment</h1></div></div>
       <p>Choose a service and an available time. No account or sign-in is required.</p>
+      {data?.expiresAt?<div className="module-page-card" style={{margin:'12px 0',padding:12}}>
+        <strong><Clock3 size={14} style={{verticalAlign:'middle',marginRight:6}}/>Temporary booking link</strong>
+        <div>This link expires 15 minutes after it was issued. Current expiry: {new Date(data.expiresAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}.</div>
+      </div>:null}
       {error?<div className="module-inline-error" style={{marginBottom:12}}>{error}</div>:null}
       <div className="customer-editor-grid">
         <label className="module-input-label"><span>Service</span><select value={serviceId} onChange={e=>{setServiceId(e.target.value);setSlots([])}}><option value="">Choose service</option>{services.map(s=><option key={s.id} value={s.id}>{s.name} · {s.duration_minutes} min</option>)}</select></label>
