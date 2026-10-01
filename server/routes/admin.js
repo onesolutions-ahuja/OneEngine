@@ -169,14 +169,9 @@ export default function createAdminRouter({
    * PUT /api/admin/users/:id/stores
    * Updates the stores assigned to a user.
    */
-  router.put("/admin/users/:id/stores", authenticate, authorize("user.edit"), async (req, res) => {
+  router.put("/admin/users/:id/stores", authenticate, authorize("user.store_assignment.manage"), async (req, res) => {
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     if (!Array.isArray(req.body.storeIds)) return res.status(400).json({ success: false, message: "storeIds must be an array" });
-    
-    // Prevent users from modifying their own store access
-    if (String(req.params.id) === String(req.user.id)) {
-      return res.status(403).json({ success: false, message: "Cannot modify your own store access" });
-    }
 
     const client = await pool.connect();
     try {
