@@ -3320,7 +3320,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       "CONSTANT","FORMULA","ASSIGNMENT","LOOP","GET_RECORDS","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","ASSIGN_RECORD",
       "ADD_RELATIONSHIP","REMOVE_RELATIONSHIP","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
       "IN_APP_NOTIFICATION","SEND_EMAIL","SEND_SMS","SEND_WHATSAPP",
-      "RUN_SUBFLOW","CONDITION","WAIT","STOP","WEBHOOK","CALL_WEBHOOK","HTTP_REQUEST"
+      "RUN_SUBFLOW","CONDITION","SCHEDULE_PATH","WAIT","STOP","WEBHOOK","CALL_WEBHOOK","HTTP_REQUEST"
     ]);
     const actions = getWorkflowActionRegistry()
       .filter((definition) => scope !== "whatsapp_assistant" || whatsappAssistantActions.has(definition.key))
