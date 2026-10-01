@@ -1922,24 +1922,16 @@ async function markPlatformBootstrapCurrent(fingerprint) {
 async function runOneTimeTestTenantCleanup() {
   if (String(process.env.ONEPOS_CLEANUP_TEST_TENANTS || "") !== "keep-top-5-v2") return;
 
-  const keepNames = [
-    "onePOS Demo",
-    "profit-4bb1e232",
-    "profit-bffb422a",
-    "profit-4fb3c146",
-    "profit-5c7c14a8",
-  ];
-
+  const keepSql = "'onePOS Demo','profit-4bb1e232','profit-bffb422a','profit-4fb3c146','profit-5c7c14a8'";
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
     const keepCheck = await client.query(
-      "SELECT id, name FROM companies WHERE name IN ($1,$2,$3,$4,$5) ORDER BY name",
-      keepNames
+      `SELECT id, name FROM companies WHERE name IN (${keepSql}) ORDER BY name`
     );
-    if (keepCheck.rowCount !== keepNames.length) {
-      throw new Error(`Tenant cleanup aborted: expected ${keepNames.length} preserved companies, found ${keepCheck.rowCount}`);
+    if (keepCheck.rowCount !== 5) {
+      throw new Error(`Tenant cleanup aborted: expected 5 preserved companies, found ${keepCheck.rowCount}`);
     }
 
     const before = await client.query("SELECT COUNT(*)::int AS count FROM companies");
@@ -1948,27 +1940,24 @@ async function runOneTimeTestTenantCleanup() {
       `DELETE FROM hospitality_bill_sales h
          USING sales s
          WHERE h.sale_id = s.id
-           AND s.company_id NOT IN (SELECT id FROM companies WHERE name IN ($1,$2,$3,$4,$5))`,
-      keepNames
+           AND s.company_id NOT IN (SELECT id FROM companies WHERE name IN (${keepSql}))`
     );
     await client.query(
       `DELETE FROM refunds r
          USING sales s
          WHERE r.sale_id = s.id
-           AND s.company_id NOT IN (SELECT id FROM companies WHERE name IN ($1,$2,$3,$4,$5))`,
-      keepNames
+           AND s.company_id NOT IN (SELECT id FROM companies WHERE name IN (${keepSql}))`
     );
     await client.query(
-      "DELETE FROM sales WHERE company_id NOT IN (SELECT id FROM companies WHERE name IN ($1,$2,$3,$4,$5))",
-      keepNames
+      `DELETE FROM sales
+         WHERE company_id NOT IN (SELECT id FROM companies WHERE name IN (${keepSql}))`
     );
     await client.query(
-      "DELETE FROM audit_logs WHERE company_id NOT IN (SELECT id FROM companies WHERE name IN ($1,$2,$3,$4,$5))",
-      keepNames
+      `DELETE FROM audit_logs
+         WHERE company_id NOT IN (SELECT id FROM companies WHERE name IN (${keepSql}))`
     );
     const deleted = await client.query(
-      "DELETE FROM companies WHERE name NOT IN ($1,$2,$3,$4,$5) RETURNING name",
-      keepNames
+      `DELETE FROM companies WHERE name NOT IN (${keepSql}) RETURNING name`
     );
 
     const after = await client.query("SELECT COUNT(*)::int AS count FROM companies");
