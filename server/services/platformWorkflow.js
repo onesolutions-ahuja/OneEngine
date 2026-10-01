@@ -4074,7 +4074,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
 
     if (stepRun?.status === "COMPLETED") {
       const priorResult = stepRun.metadata?.result || { status: "completed", idempotentReplay: true };
-      results.push({ action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
+      results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
       if (resolveWorkflowActionType(item) === "ASSIGNMENT" && priorResult?.variableName) {
         workflowVariables.variables[priorResult.variableName] = priorResult.value;
@@ -4087,7 +4087,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
     }
     if (stepRun?.status === "WAITING" && !["LOOP","CONDITION","RUN_SUBFLOW"].includes(resolveWorkflowActionType(item))) {
       const priorResult = stepRun.metadata?.result || { status: "waiting", idempotentReplay: true };
-      results.push({ action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
+      results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
       break;
     }
@@ -4176,7 +4176,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
         }
       }
 
-      const entry = { action: item.type || item.key, result, stepRunId: stepRun?.id || null };
+      const entry = { stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result, stepRunId: stepRun?.id || null };
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = result;
       results.push(entry);
 
@@ -4244,7 +4244,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
           faultBranch: { stepIds: faultIds, results: faultResults },
         };
         workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
-        results.push({ action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
+        results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
         if (handled.status === "waiting") break;
         continue;
       }
