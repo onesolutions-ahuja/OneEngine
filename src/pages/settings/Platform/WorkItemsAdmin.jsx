@@ -224,6 +224,8 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
               <div className="developer-record-fields">
                 <div><span>Created</span><strong>{formatDate(selected.submitted_at || selected.created_at)}</strong></div>
                 <div><span>Due</span><strong>{formatDate(selected.due_at || selected.due_date)}</strong></div>
+                <div><span>Reminder</span><strong>{selected.reminder_sent_at ? formatDate(selected.reminder_sent_at) : "—"}</strong></div>
+                <div><span>Escalated</span><strong>{selected.escalated_at ? `${formatDate(selected.escalated_at)} (${selected.escalation_count||1})` : "—"}</strong></div>
                 <div><span>Completed</span><strong>{formatDate(selected.resolved_at || selected.completed_at)}</strong></div>
                 <div><span>Decision</span><strong>{selected.result || selected.decision || "—"}</strong></div>
               </div>
