@@ -359,7 +359,10 @@ export async function ensureGlobalSystemProfile(pool, {
 }
 
 export async function bootstrapInitialSuperadmin(pool, env = process.env) {
-  const email = String(env.BOOTSTRAP_SUPERADMIN_EMAIL || "").trim();
+  const configuredEmail = String(env.BOOTSTRAP_SUPERADMIN_EMAIL || "").trim();
+  const email = configuredEmail.toLowerCase() === "superadmin@onepos.local"
+    ? "superadmin@onepos.com"
+    : configuredEmail;
   const password = String(env.BOOTSTRAP_SUPERADMIN_PASSWORD || "");
   const name = String(env.BOOTSTRAP_SUPERADMIN_NAME || "OnePOS Superadmin").trim();
   const configuredCompanyId = String(env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || "").trim();
