@@ -2022,7 +2022,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const addScheduledPath = () => {
     const path = makeStep("SCHEDULE_PATH");
     path.label = "Scheduled Path";
-    const insertAt = workflow.steps.findIndex((step) => step.type !== "SCHEDULE_PATH");
+    const insertAt = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(step.type));
     const target = insertAt < 0 ? workflow.steps.length : insertAt;
     setWorkflow((current) => ({ ...current, steps: [...current.steps.slice(0, target), path, ...current.steps.slice(target)] }));
     setSelectedId("__start__");
@@ -2211,7 +2211,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                       label="Steps on this scheduled path"
                       value={pathStep.config?.branch || []}
                       onChange={(branch) => updateScheduledPath(pathIndex, { branch })}
-                      steps={workflow.steps.filter((candidate) => candidate.type !== "SCHEDULE_PATH")}
+                      steps={workflow.steps.filter((candidate) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(candidate.type))}
                       currentIndex={-1}
                     />
                   </div>
