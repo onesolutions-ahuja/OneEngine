@@ -3360,6 +3360,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (error instanceof ConditionError) return error.message;
       throw error;
     }
+    const normalizeDecisionCondition = (condition) => {
+      if (!condition || typeof condition !== "object" || Array.isArray(condition)) return condition;
+      if (Array.isArray(condition.conditions)) return { ...condition, match: condition.match || condition.type || "all" };
+      if (Array.isArray(condition.rules)) return { match: condition.match || condition.type || "all", conditions: condition.rules };
+      return condition;
+    };
     const isWorkflow = rule.action.type === "workflow";
     const workflowMatch = isWorkflow ? rule.action.match || "all" : null;
     if (isWorkflow && !["all", "any"].includes(workflowMatch)) return "Workflow actions require a match mode of all or any";
@@ -3376,6 +3382,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           continue;
         }
         validateWorkflowAction(action);
+        if (String(action.type || action.key || "").toUpperCase() === "CONDITION") {
+          const outcomes = Array.isArray(action.outcomes) ? action.outcomes : [];
+          if (outcomes.length) {
+            for (const outcome of outcomes) {
+              validateConditionConfig(normalizeDecisionCondition(outcome.condition), conditionFields.rows, `Decision outcome "${outcome.label || outcome.id || "Outcome"}"`);
+            }
+          } else {
+            validateConditionConfig(normalizeDecisionCondition(action.condition), conditionFields.rows, "Decision condition");
+          }
+        }
       } catch (error) {
         return error.message;
       }
