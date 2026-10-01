@@ -1180,6 +1180,8 @@ export default function createKioskRouter({
       return res.status(400).json({ success: false, message: "This fulfilment option is not allowed by the assigned OneKiosk flow" });
     }
     const canonicalFulfilmentType = String(configuredOption.canonicalType || "SELF_PICKUP").toUpperCase();
+    const confirmationScreen = (runtimeRow.action.ui.screens || []).find((screen) => screen?.type === "CONFIRMATION") || {};
+    const collectionVerificationRequired = confirmationScreen.collectionVerification === true;
 
     let fulfilmentStoreId = req.user.storeId;
     if (requestedFulfilmentStoreId) {
@@ -1330,6 +1332,7 @@ export default function createKioskRouter({
             paymentProvider: paymentRow.provider || null,
             paymentTransactionId: paymentRow.provider_transaction_id || null,
             inventoryHandledBySale: true,
+            collectionVerificationRequired,
           }),
         ]
       );
