@@ -4477,6 +4477,42 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({success:true,data:result.rows[0]});
   });
 
+  router.get("/platform/objects/:objectKey/records/:recordId/approval", ...recordAccess, async (req,res) => {
+    try {
+      const {object}=await getRecordMetadata(req.params.objectKey,req);
+      if(!object) return res.status(404).json({success:false,message:"Unknown object"});
+      const requests=await db(`SELECT r.*,p.name AS process_name,p.config AS process_config,s.label AS step_label
+        FROM platform_approval_requests r JOIN platform_approval_processes p ON p.id=r.process_id
+        LEFT JOIN platform_approval_steps s ON s.process_id=r.process_id AND s.step_order=r.current_step
+        WHERE r.company_id=$1 AND r.object_id=$2 AND r.record_id=$3 ORDER BY r.submitted_at DESC`,[req.user.companyId,object.id,req.params.recordId]);
+      const request=requests.rows[0]||null;
+      let history={actions:[],events:[]};
+      if(request) {
+        const actions=await db("SELECT a.*,u.username AS actor_name FROM platform_approval_actions a LEFT JOIN users u ON u.id=a.actor_user_id WHERE a.request_id=$1 ORDER BY a.created_at",[request.id]);
+        const events=await db("SELECT e.*,u.username AS actor_name FROM platform_approval_events e LEFT JOIN users u ON u.id=e.actor_user_id WHERE e.request_id=$1 ORDER BY e.created_at",[request.id]);
+        history={actions:actions.rows,events:events.rows};
+      }
+      const eligible=await db("SELECT id,name,config FROM platform_approval_processes WHERE company_id=$1 AND object_id=$2 AND active=TRUE ORDER BY name",[req.user.companyId,object.id]);
+      res.json({success:true,data:{request,history,availableProcesses:eligible.rows}});
+    } catch(error) { console.error("Record approval state error:",error); res.status(500).json({success:false,message:"Unable to load approval state"}); }
+  });
+
+  router.post("/platform/objects/:objectKey/records/:recordId/submit-approval", ...recordAccess, async (req,res) => {
+    try {
+      const {object,fields:metadataFields}=await getRecordMetadata(req.params.objectKey,req);
+      if(!object) return res.status(404).json({success:false,message:"Unknown object"});
+      if(!object.source_table||!isSafeIdentifier(object.source_table)) return res.status(400).json({success:false,message:"Object records are not available"});
+      const params=[req.params.recordId]; const clauses=["id=$1"];
+      if(object.company_scoped){params.push(req.user.companyId);clauses.push(`company_id=$${params.length}`);}
+      const found=await db(`SELECT * FROM "${object.source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`,params);
+      if(!found.rows.length) return res.status(404).json({success:false,message:"Record not found"});
+      const request=await submitPlatformApproval({db,object,fields:metadataFields,recordId:req.params.recordId,record:found.rows[0],req});
+      if(!request) return res.status(422).json({success:false,message:"This record does not meet an active approval process's entry criteria"});
+      if(req.body?.comment) await db("UPDATE platform_approval_requests SET submission_comment=$1 WHERE id=$2",[String(req.body.comment).trim(),request.id]);
+      res.json({success:true,data:request});
+    } catch(error) { console.error("Manual approval submission error:",error); res.status(500).json({success:false,message:"Unable to submit this record for approval"}); }
+  });
+
   router.post("/platform/approval-requests/:requestId/decision", authenticate, async (req, res) => {
     try {
       const result = await decidePlatformApproval({ db, requestId: req.params.requestId, decision: req.body?.decision, comment: req.body?.comment, req });
