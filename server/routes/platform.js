@@ -4462,6 +4462,15 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({ success: true, data: { actions: actions.rows, events: events.rows } });
   });
 
+  router.get("/platform/approval-requests/:requestId/context", authenticate, async (req,res) => {
+    const q=await db(`SELECT r.*,o.object_key,o.label AS object_name,o.source_table FROM platform_approval_requests r JOIN platform_objects o ON o.id=r.object_id WHERE r.id=$1 AND r.company_id=$2`,[req.params.requestId,req.user.companyId]);
+    const request=q.rows[0]; if(!request)return res.status(404).json({success:false,message:"Approval request not found"});
+    let record={}; if(request.source_table&&/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(request.source_table)){const rr=await db(`SELECT * FROM "${request.source_table}" WHERE id=$1 AND company_id=$2 LIMIT 1`,[request.record_id,req.user.companyId]).catch(()=>({rows:[]}));record=rr.rows[0]||{};}
+    const fields=await db("SELECT api_name,label,field_type,source_column FROM platform_fields WHERE object_id=$1 AND active=TRUE ORDER BY sort_order NULLS LAST,label",[request.object_id]).catch(()=>({rows:[]}));
+    const snapshot=cfg(request.definition_snapshot); const steps=(snapshot.steps||[]).map(step=>({step_order:step.step_order,label:step.label,status:Number(step.step_order)<Number(request.current_step)?"complete":Number(step.step_order)===Number(request.current_step)&&request.status==="pending"?"current":request.status==="approved"?"complete":"upcoming"}));
+    res.json({success:true,data:{request,object:{key:request.object_key,label:request.object_name},record,fields:fields.rows,steps,why:cfg(snapshot.process?.config).approvalReason||""}});
+  });
+
   router.get("/platform/approval-users", authenticate, async (req,res) => {
     const result=await db("SELECT u.id,u.username,u.email,u.manager_id,r.name AS role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.company_id=$1 AND u.active=TRUE ORDER BY u.username,u.email",[req.user.companyId]);
     res.json({success:true,data:result.rows});
