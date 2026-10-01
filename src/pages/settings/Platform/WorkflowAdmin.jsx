@@ -214,6 +214,35 @@ const WORKFLOW_VISUAL_CSS = `
     background: #0a84ff;
     box-shadow: 0 0 0 4px rgba(10,132,255,.08);
   }
+  .workflow-palette-group-title {
+    margin: 12px 4px 6px;
+    color: #94a3b8;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .workflow-palette-item-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .workflow-palette-item-copy strong {
+    color: #334155;
+    font-size: 11px;
+    font-weight: 650;
+  }
+  .workflow-palette-item-copy small {
+    display: block;
+    overflow: hidden;
+    color: #94a3b8;
+    font-size: 9px;
+    font-weight: 450;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .workflow-palette-item:hover {
     background: #f8fbff;
     border-color: rgba(10,132,255,.28);
@@ -608,6 +637,20 @@ function makeStep(type = "CREATE_RECORD") {
 
 function getActionLabel(type) {
   return actionOptions.find((option) => option.value === type)?.label || "Action";
+}
+
+function workflowActionCategory(type = "") {
+  const key = String(type || "").toUpperCase();
+  if (["CONDITION","WAIT","STOP"].includes(key)) return "Logic";
+  if (key === "RUN_SUBFLOW") return "Workflows";
+  if (["CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
+  if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION"].includes(key)) return "Communication";
+  if (key === "CALL_FUNCTION") return "Advanced";
+  if (key.includes("WEBHOOK") || key === "HTTP_REQUEST" || key.startsWith("CONNECTOR_")) return "Integrations";
+  if (key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER")) return "Hardware & Payments";
+  if (key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_")) return "Connected Apps";
+  if (key.includes("APPOINTMENT")) return "Appointments";
+  return "App Actions";
 }
 
 /* Trigger values arrive as machine keys ("after_update"); the canvas Start
@@ -1090,7 +1133,16 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       return { ...current, steps: next };
     });
   };
-  const palette = registryOptions.filter((option) => option.value !== "WHEN").filter((option) => !paletteSearch.trim() || String(option.label || option.value).toLowerCase().includes(paletteSearch.trim().toLowerCase()));
+  const palette = registryOptions
+    .filter((option) => option.value !== "WHEN")
+    .map((option) => ({ ...option, category: option.category || workflowActionCategory(option.value) }))
+    .filter((option) => !paletteSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || ""}`.toLowerCase().includes(paletteSearch.trim().toLowerCase()));
+  const paletteGroups = palette.reduce((groups, option) => {
+    const category = option.category || "App Actions";
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(option);
+    return groups;
+  }, {});
   return (
     <div className={`workflow-visual-shell ${!paletteOpen ? "palette-collapsed" : ""} ${!propertiesOpen ? "properties-collapsed" : ""}`}>
       {paletteOpen ? <aside className="workflow-node-palette">
@@ -1103,7 +1155,27 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
         <p className="workflow-palette-help">Drag or click an element to add it to the flow.</p>
         <div className="workflow-palette-scroll">
-          {palette.map((option) => <button key={option.value} type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)} onClick={() => addFromPalette(option.value)} className="workflow-palette-item">{option.label}</button>)}
+          {Object.entries(paletteGroups).map(([category, options]) => (
+            <div key={category}>
+              <div className="workflow-palette-group-title">{category}</div>
+              {options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  draggable
+                  title={option.description || option.label}
+                  onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)}
+                  onClick={() => addFromPalette(option.value)}
+                  className="workflow-palette-item"
+                >
+                  <span className="workflow-palette-item-copy">
+                    <strong>{option.label}</strong>
+                    {option.description ? <small>{option.description}</small> : null}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ))}
           {!palette.length ? <div className="workflow-palette-empty">No matching elements</div> : null}
         </div>
       </aside> : null}
@@ -1313,7 +1385,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       : "/api/platform/workflow-actions")
       .then((response) => {
         const source = scopeKey ? response?.data?.actions : response?.data;
-        const registry = (Array.isArray(source) ? source : []).map((item) => ({ value: item.key, label: item.displayName || item.key }));
+        const registry = (Array.isArray(source) ? source : []).map((item) => ({
+          value: item.key,
+          label: item.displayName || item.key,
+          description: item.description || "",
+          category: workflowActionCategory(item.key),
+        }));
         if (registry.length) setRegistryOptions(registry);
       })
       .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load workflow actions."])]));
