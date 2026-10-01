@@ -264,7 +264,7 @@ export default function createSalesRouter({
 
         let session = kioskContext
           ? await db(
-              `SELECT ts.id,ts.terminal_id,t.terminal_number,c.timezone
+              `SELECT ts.id,ts.terminal_id,t.terminal_number,c.timezone,c.currency
                  FROM till_sessions ts
                  JOIN terminals t ON t.id=ts.terminal_id
                  JOIN stores s ON s.id=ts.store_id
@@ -278,7 +278,7 @@ export default function createSalesRouter({
               [req.user.companyId, req.user.storeId, kioskContext.till_id]
             )
           : await db(
-              `SELECT ts.id, ts.terminal_id, t.terminal_number, c.timezone
+              `SELECT ts.id, ts.terminal_id, t.terminal_number, c.timezone, c.currency
                  FROM till_sessions ts
                  INNER JOIN terminals t ON t.id = ts.terminal_id
                  INNER JOIN stores s ON s.id = ts.store_id
@@ -303,7 +303,7 @@ export default function createSalesRouter({
             [req.user.companyId, kioskContext.till_id, req.user.storeId, req.user.id]
           );
           session = await db(
-            `SELECT ts.id,ts.terminal_id,t.terminal_number,c.timezone
+            `SELECT ts.id,ts.terminal_id,t.terminal_number,c.timezone,c.currency
                FROM till_sessions ts
                JOIN terminals t ON t.id=ts.terminal_id
                JOIN stores s ON s.id=ts.store_id
@@ -1037,7 +1037,7 @@ export default function createSalesRouter({
               req,
               input: {
                 amount: roundCurrency(cardAmount),
-                currency: "GBP",
+                currency: String(session.rows[0]?.currency || "GBP").toUpperCase(),
                 idempotencyKey,
                 reference: clientRequestId,
                 terminalId: session.rows[0].terminal_id,
