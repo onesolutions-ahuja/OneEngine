@@ -77,3 +77,23 @@ export function companyAdministrativeAccess({
 } = {}) {
   return Array.isArray(permissions) && permissions.includes(requiredPermission);
 }
+
+export async function roleHasSystemPermission(db, roleId, permissionCodes = []) {
+  if (!db || !roleId) return false;
+  const codes = [...new Set((Array.isArray(permissionCodes) ? permissionCodes : [permissionCodes]).map((value) => String(value || "").trim()).filter(Boolean))];
+  if (!codes.length) return false;
+  const result = await db(
+    `SELECT 1
+       FROM role_permissions rp
+       JOIN permissions p ON p.id=rp.permission_id
+      WHERE rp.role_id=$1
+        AND p.code=ANY($2::text[])
+      LIMIT 1`,
+    [roleId, codes]
+  );
+  return result.rows.length > 0;
+}
+
+export async function hasOneEngineManagePermission(db, roleId) {
+  return roleHasSystemPermission(db, roleId, ["oneengine.manage", "platform.manage"]);
+}
