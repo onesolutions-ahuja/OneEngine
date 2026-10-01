@@ -2938,6 +2938,33 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return out;
   }
 
+  function workflowAuthoringRow(row) {
+    if (!row || row.action?.type !== "workflow") return row;
+    const draft = row.draft_definition && typeof row.draft_definition === "object" ? row.draft_definition : null;
+    if (!draft) {
+      return {
+        ...row,
+        runtime_active: row.active === true,
+        active_version: row.active_version || (row.active ? row.version : null),
+        draft_version: row.draft_version || null,
+      };
+    }
+    return {
+      ...row,
+      object_id: draft.object_id ?? row.object_id ?? null,
+      name: draft.name ?? row.name,
+      trigger_key: draft.trigger_key ?? row.trigger_key,
+      conditions: Array.isArray(draft.conditions) ? draft.conditions : (row.conditions || []),
+      action: draft.action && typeof draft.action === "object" ? draft.action : row.action,
+      active: false,
+      lifecycle_status: "DRAFT",
+      version: Number(row.draft_version || draft.version || row.version || 1),
+      runtime_active: row.active === true,
+      active_version: row.active_version || (row.active ? row.version : null),
+      draft_version: Number(row.draft_version || draft.version || row.version || 1),
+    };
+  }
+
   router.get("/platform/rules", ...manage, async (req, res) => {
     await ensureSystemWorkflowCatalog({ db, companyId: req.user.companyId, userId: req.user.id || null });
     const result = await db(
@@ -2948,7 +2975,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         ORDER BY r.name`,
       [req.user.companyId]
     );
-    const rows = result.rows || [];
+    const rows = (result.rows || []).map(workflowAuthoringRow);
     const fieldIds = [...new Set(rows.flatMap((rule) => [
       ...collectRuleFieldIds(rule.conditions),
       ...collectRuleFieldIds(rule.action),
@@ -3909,9 +3936,39 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         : { conditions, action };
       const ruleError = await checkRule(req, { object_id: resolvedObject?.id || null, name, trigger_key: triggerKey, conditions: normalizedReferences.conditions, action: normalizedReferences.action, active: lifecycleState.active, lifecycle_status: lifecycleState.lifecycle, version: lifecycleState.version });
       if (ruleError) return res.status(400).json({ success: false, message: ruleError });
-      const result = await db("INSERT INTO platform_rules (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,company_id,created_by) VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8,$9,$10) RETURNING *", [resolvedObject?.id || null, name.trim(), triggerKey, JSON.stringify(normalizedReferences.conditions), JSON.stringify(normalizedReferences.action), lifecycleState.active, lifecycleState.lifecycle, lifecycleState.version, req.user.companyId, req.user.id]);
+      const initialDefinition = {
+        object_id: resolvedObject?.id || null,
+        name: name.trim(),
+        trigger_key: triggerKey,
+        conditions: normalizedReferences.conditions,
+        action: normalizedReferences.action,
+        active: lifecycleState.active,
+        lifecycle_status: lifecycleState.lifecycle,
+        version: lifecycleState.version,
+      };
+      const result = await db(
+        `INSERT INTO platform_rules
+           (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,active_version,draft_version,draft_definition,company_id,created_by)
+         VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8,$9,$10,$11::jsonb,$12,$13)
+         RETURNING *`,
+        [
+          initialDefinition.object_id,
+          initialDefinition.name,
+          initialDefinition.trigger_key,
+          JSON.stringify(initialDefinition.conditions),
+          JSON.stringify(initialDefinition.action),
+          lifecycleState.active,
+          lifecycleState.lifecycle,
+          lifecycleState.version,
+          lifecycleState.active ? lifecycleState.version : null,
+          lifecycleState.active ? null : lifecycleState.version,
+          lifecycleState.active ? null : JSON.stringify(initialDefinition),
+          req.user.companyId,
+          req.user.id,
+        ]
+      );
       await saveWorkflowVersion(result.rows[0], req.user.id);
-      res.status(201).json({ success: true, data: result.rows[0] });
+      res.status(201).json({ success: true, data: workflowAuthoringRow(result.rows[0]) });
     } catch (error) {
       if (["22P02", "23503"].includes(error.code)) return res.status(400).json({ success: false, message: "Invalid rule reference" });
       console.error("Platform rule create error:", error);
@@ -3924,12 +3981,26 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const existing = await db("SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2", [req.params.ruleId, req.user.companyId]);
       if (!existing.rows.length) return res.status(404).json({ success: false, message: "Rule not found or not editable" });
       const rule = existing.rows[0];
-      const next = { ...rule };
+      const isWorkflow = rule.action?.type === "workflow";
+      const draftBase = isWorkflow && rule.draft_definition && typeof rule.draft_definition === "object"
+        ? {
+            ...rule,
+            object_id: rule.draft_definition.object_id ?? rule.object_id,
+            name: rule.draft_definition.name ?? rule.name,
+            trigger_key: rule.draft_definition.trigger_key ?? rule.trigger_key,
+            conditions: rule.draft_definition.conditions ?? rule.conditions,
+            action: rule.draft_definition.action ?? rule.action,
+            active: false,
+            lifecycle_status: "DRAFT",
+            version: Number(rule.draft_version || rule.draft_definition.version || rule.version || 1),
+          }
+        : { ...rule };
+      const next = { ...draftBase };
       const requestedLifecycle = await normalizeRuleLifecycle({
-        active: req.body.active ?? rule.active,
-        lifecycle_status: req.body.lifecycleStatus ?? req.body.lifecycle_status ?? rule.lifecycle_status,
-        version: req.body.version ?? rule.version,
-      }, Boolean(rule.active));
+        active: req.body.active ?? draftBase.active,
+        lifecycle_status: req.body.lifecycleStatus ?? req.body.lifecycle_status ?? draftBase.lifecycle_status,
+        version: req.body.version ?? draftBase.version,
+      }, Boolean(draftBase.active));
       for (const [api, column] of Object.entries({ objectId: "object_id", name: "name", triggerKey: "trigger_key", conditions: "conditions", action: "action", active: "active", lifecycleStatus: "lifecycle_status", version: "version" })) {
         if (req.body[api] !== undefined) next[column] = req.body[api];
       }
@@ -3943,9 +4014,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if ((req.body.objectId || req.body.objectKey) && !resolvedObject) {
           return res.status(400).json({ success: false, message: "Object not found" });
         }
-        if (resolvedObject) next.object_id = resolvedObject.id;
+        next.object_id = resolvedObject?.id || null;
       }
-      // Deactivation must remain possible even after a referenced field is removed.
+
       const deactivateOnly = req.body.active === false && Object.keys(req.body).length === 1;
       let normalizedNext = next;
       if (!deactivateOnly && next.object_id) {
@@ -3959,28 +4030,113 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
       const ruleError = deactivateOnly ? null : await checkRule(req, normalizedNext);
       if (ruleError) return res.status(400).json({ success: false, message: ruleError });
+
       const definitionRequested = ["objectId","objectKey","name","triggerKey","conditions","action"].some((key) => req.body[key] !== undefined);
       const forceNewVersion = req.body?.forceNewVersion === true;
       const meaningfulEdit = definitionRequested && (
-        String(rule.object_id || "") !== String(normalizedNext.object_id || "")
-        || String(rule.name || "") !== String(normalizedNext.name || "")
-        || String(rule.trigger_key || "") !== String(normalizedNext.trigger_key || "")
-        || JSON.stringify(rule.conditions || []) !== JSON.stringify(normalizedNext.conditions || [])
-        || JSON.stringify(rule.action || {}) !== JSON.stringify(normalizedNext.action || {})
+        String(draftBase.object_id || "") !== String(normalizedNext.object_id || "")
+        || String(draftBase.name || "") !== String(normalizedNext.name || "")
+        || String(draftBase.trigger_key || "") !== String(normalizedNext.trigger_key || "")
+        || JSON.stringify(draftBase.conditions || []) !== JSON.stringify(normalizedNext.conditions || [])
+        || JSON.stringify(draftBase.action || {}) !== JSON.stringify(normalizedNext.action || {})
       );
-      if ((meaningfulEdit || forceNewVersion) && rule.action?.type === "workflow") {
+
+      if (isWorkflow && (meaningfulEdit || forceNewVersion || requestedLifecycle.lifecycle === "ACTIVE")) {
         const maxVersion = await db(
-          "SELECT GREATEST(COALESCE(MAX(version),0),$1::int) AS version FROM platform_workflow_versions WHERE company_id=$2 AND workflow_id=$3",
-          [Number(rule.version || 1), req.user.companyId, rule.id]
+          "SELECT GREATEST(COALESCE(MAX(version),0),$1::int,$2::int,$3::int) AS version FROM platform_workflow_versions WHERE company_id=$4 AND workflow_id=$5",
+          [
+            Number(rule.version || 1),
+            Number(rule.active_version || 0),
+            Number(rule.draft_version || 0),
+            req.user.companyId,
+            rule.id,
+          ]
         );
-        normalizedNext.version = Number(maxVersion.rows[0]?.version || rule.version || 1) + 1;
+        const currentMax = Number(maxVersion.rows[0]?.version || rule.version || 1);
+        const activatingExistingDraft = requestedLifecycle.lifecycle === "ACTIVE"
+          && rule.draft_version
+          && !meaningfulEdit
+          && !forceNewVersion;
+        normalizedNext.version = activatingExistingDraft ? Number(rule.draft_version) : currentMax + 1;
       }
+
+      if (isWorkflow && requestedLifecycle.lifecycle === "DRAFT" && rule.active === true) {
+        const draftDefinition = workflowVersionDefinition({
+          ...normalizedNext,
+          company_id: rule.company_id,
+          id: rule.id,
+          active: false,
+          lifecycle_status: "DRAFT",
+        });
+        const updated = await db(
+          `UPDATE platform_rules
+              SET draft_definition=$1::jsonb,draft_version=$2,user_modified=true,updated_at=NOW()
+            WHERE id=$3 AND company_id=$4
+            RETURNING *`,
+          [JSON.stringify(draftDefinition), Number(normalizedNext.version || rule.version || 1), rule.id, req.user.companyId]
+        );
+        if (meaningfulEdit || forceNewVersion) {
+          await saveWorkflowVersion({
+            ...rule,
+            ...normalizedNext,
+            id: rule.id,
+            company_id: rule.company_id,
+            active: false,
+            lifecycle_status: "DRAFT",
+          }, req.user.id);
+        }
+        return res.json({ success: true, data: workflowAuthoringRow(updated.rows[0]) });
+      }
+
+      if (isWorkflow && requestedLifecycle.lifecycle === "ACTIVE") {
+        const promoted = await db(
+          `UPDATE platform_rules SET
+              object_id=$1,name=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,
+              active=true,lifecycle_status='ACTIVE',version=$6,active_version=$6,
+              draft_definition=NULL,draft_version=NULL,user_modified=true,updated_at=NOW()
+            WHERE id=$7 AND company_id=$8
+            RETURNING *`,
+          [
+            normalizedNext.object_id,
+            normalizedNext.name,
+            normalizedNext.trigger_key,
+            JSON.stringify(normalizedNext.conditions),
+            JSON.stringify(normalizedNext.action),
+            Number(normalizedNext.version || rule.version || 1),
+            rule.id,
+            req.user.companyId,
+          ]
+        );
+        await saveWorkflowVersion(promoted.rows[0], req.user.id);
+        return res.json({ success: true, data: workflowAuthoringRow(promoted.rows[0]) });
+      }
+
       const result = await db(
-        "UPDATE platform_rules SET object_id=$1,name=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,active=$6,lifecycle_status=$7,version=$8,user_modified=true,updated_at=NOW() WHERE id=$9 RETURNING *",
-        [normalizedNext.object_id, normalizedNext.name, normalizedNext.trigger_key, JSON.stringify(normalizedNext.conditions), JSON.stringify(normalizedNext.action), normalizedNext.active, normalizedNext.lifecycle_status, normalizedNext.version, rule.id]
+        `UPDATE platform_rules SET
+            object_id=$1,name=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,
+            active=$6,lifecycle_status=$7,version=$8,
+            active_version=CASE WHEN $6=TRUE THEN $8 ELSE active_version END,
+            draft_version=CASE WHEN $7='DRAFT' THEN $8 ELSE draft_version END,
+            draft_definition=CASE WHEN $7='DRAFT' THEN $9::jsonb ELSE draft_definition END,
+            user_modified=true,updated_at=NOW()
+          WHERE id=$10 AND company_id=$11
+          RETURNING *`,
+        [
+          normalizedNext.object_id,
+          normalizedNext.name,
+          normalizedNext.trigger_key,
+          JSON.stringify(normalizedNext.conditions),
+          JSON.stringify(normalizedNext.action),
+          normalizedNext.active,
+          normalizedNext.lifecycle_status,
+          normalizedNext.version,
+          normalizedNext.lifecycle_status === "DRAFT" ? JSON.stringify(workflowVersionDefinition({ ...normalizedNext, active: false, lifecycle_status: "DRAFT" })) : null,
+          rule.id,
+          req.user.companyId,
+        ]
       );
-      if (meaningfulEdit) await saveWorkflowVersion(result.rows[0], req.user.id);
-      res.json({ success: true, data: result.rows[0] });
+      if (isWorkflow && (meaningfulEdit || forceNewVersion)) await saveWorkflowVersion(result.rows[0], req.user.id);
+      res.json({ success: true, data: workflowAuthoringRow(result.rows[0]) });
     } catch (error) {
       if (["22P02", "23503"].includes(error.code)) return res.status(400).json({ success: false, message: "Invalid rule reference" });
       console.error("Platform rule update error:", error);
@@ -4005,17 +4161,55 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const current = currentResult.rows[0];
       const snapshot = versionResult.rows[0];
       if (!current || !snapshot) return res.status(404).json({ success: false, message: "Workflow version not found" });
-      const maxVersion = await db("SELECT GREATEST(COALESCE(MAX(version),0),$1::int) AS version FROM platform_workflow_versions WHERE company_id=$2 AND workflow_id=$3", [Number(current.version || 1), req.user.companyId, current.id]);
-      const nextVersion = Number(maxVersion.rows[0]?.version || current.version || 1) + 1;
-      const definition = snapshot.definition || {};
-      const restored = await db(
-        `UPDATE platform_rules SET object_id=$1,name=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,
-          active=false,lifecycle_status='DRAFT',version=$6,user_modified=true,updated_at=NOW()
-         WHERE id=$7 AND company_id=$8 RETURNING *`,
-        [definition.object_id || null, definition.name, definition.trigger_key, JSON.stringify(definition.conditions || []), JSON.stringify(definition.action || {}), nextVersion, current.id, req.user.companyId]
+      const maxVersion = await db(
+        "SELECT GREATEST(COALESCE(MAX(version),0),$1::int,$2::int,$3::int) AS version FROM platform_workflow_versions WHERE company_id=$4 AND workflow_id=$5",
+        [Number(current.version || 1), Number(current.active_version || 0), Number(current.draft_version || 0), req.user.companyId, current.id]
       );
-      await saveWorkflowVersion(restored.rows[0], req.user.id);
-      res.json({ success: true, data: restored.rows[0], restoredFromVersion: Number(req.params.version) });
+      const nextVersion = Number(maxVersion.rows[0]?.version || current.version || 1) + 1;
+      const definition = {
+        ...(snapshot.definition || {}),
+        active: false,
+        lifecycle_status: "DRAFT",
+        version: nextVersion,
+      };
+
+      let restored;
+      if (current.active === true) {
+        const updated = await db(
+          `UPDATE platform_rules
+              SET draft_definition=$1::jsonb,draft_version=$2,user_modified=true,updated_at=NOW()
+            WHERE id=$3 AND company_id=$4 RETURNING *`,
+          [JSON.stringify(definition), nextVersion, current.id, req.user.companyId]
+        );
+        restored = workflowAuthoringRow(updated.rows[0]);
+      } else {
+        const updated = await db(
+          `UPDATE platform_rules SET object_id=$1,name=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,
+              active=false,lifecycle_status='DRAFT',version=$6,draft_version=$6,draft_definition=$7::jsonb,
+              user_modified=true,updated_at=NOW()
+            WHERE id=$8 AND company_id=$9 RETURNING *`,
+          [
+            definition.object_id || null,
+            definition.name,
+            definition.trigger_key,
+            JSON.stringify(definition.conditions || []),
+            JSON.stringify(definition.action || {}),
+            nextVersion,
+            JSON.stringify(definition),
+            current.id,
+            req.user.companyId,
+          ]
+        );
+        restored = workflowAuthoringRow(updated.rows[0]);
+      }
+
+      await saveWorkflowVersion({
+        ...current,
+        ...definition,
+        id: current.id,
+        company_id: current.company_id,
+      }, req.user.id);
+      res.json({ success: true, data: restored, restoredFromVersion: Number(req.params.version) });
     } catch (error) {
       console.error("Workflow version restore error:", error);
       res.status(500).json({ success: false, message: "Unable to restore workflow version" });
