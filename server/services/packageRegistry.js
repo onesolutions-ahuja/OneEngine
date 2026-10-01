@@ -1640,7 +1640,7 @@ export function packageDefinition(entry) {
           { key: "attendance_records", objectKey: "attendance", permission: "attendance.view", access: "read" },
           { key: "attendance_actions", objectKey: "attendance", permission: "attendance.use", access: "execute" },
         ],
-        permissions: ["user.view", "user.edit", "attendance.view", "attendance.use"],
+        permissions: ["user.view", "user.create", "user.edit", "attendance.view", "attendance.use"],
         capabilities: ["staff_core", "employee_metadata", "attendance_metadata"],
         ownership: {
           metadataTypes: ["object", "field", "relationship", "layout", "list_view", "validation", "workflow", "action"],
