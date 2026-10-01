@@ -125,6 +125,9 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       up: async client => {
         const permissionRows = [
           ["attendance.use", "Use Attendance", "Clock in/out and execute attendance actions"],
+          ["appointments.view", "View Appointments", "View appointment and availability data used by workflow actions"],
+          ["appointments.manage", "Manage Appointments", "Create, hold, release and manage appointments through workflow actions"],
+          ["appointments.payment", "Manage Appointment Payments", "Create and complete appointment payment requests through workflow actions"],
           ["communications.send", "Send Communications", "Send messages through Communication Core"],
           ["connector.manage", "Manage Connectors", "Enable, disable and configure connector runtime"],
           ["connector.test", "Test Connectors", "Run connector test and diagnostic actions"],
