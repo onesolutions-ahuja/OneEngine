@@ -991,6 +991,10 @@ function workflowStepResources(steps = [], currentIndex = 0) {
       resources.push({ value: `${prefix}.updated.id`, label: `${label} → Updated Record ID`, type: "step output" });
     } else if (step.type === "RUN_SUBFLOW") {
       resources.push({ value: `${prefix}.runId`, label: `${label} → Child Run ID`, type: "step output" });
+      for (const output of step.config?.declaredOutputs || []) {
+        if (!output?.name) continue;
+        resources.push({ value: `${prefix}.outputs.${output.name}`, label: `${label} → ${output.label || output.name}`, type: output.type || "subflow output" });
+      }
     }
   });
   return resources;
@@ -2088,6 +2092,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     active: initialWorkflow.active !== false,
     conditions: initialWorkflow.conditions || [],
     match: initialWorkflow.action?.match || initialWorkflow.match || "all",
+    inputContract: initialWorkflow.action?.inputContract || initialWorkflow.inputContract || [],
+    outputContract: initialWorkflow.action?.outputContract || initialWorkflow.outputContract || [],
     scope: initialWorkflow.scope || initialWorkflow.action?.scope || null,
     actionMetadata: {
       flowType: initialWorkflow.action?.flowType || null,
@@ -2141,6 +2147,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       version: 1,
       lifecycleStatus: "DRAFT",
       active: false,
+      inputContract: [],
+      outputContract: [],
       steps: scopeKey === "whatsapp_assistant"
         ? [
             { ...makeStep("WHEN"), type: "CONDITION", label: "Condition" },
@@ -2211,6 +2219,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         version: 1,
         lifecycleStatus: "DRAFT",
         active: false,
+        inputContract: [],
+        outputContract: [],
         steps: [],
       });
     }
@@ -2274,6 +2284,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           capabilityType: rule.action.capabilityType || null,
           capabilityKey: rule.action.capabilityKey || null,
           match: rule.action.match || "all",
+          inputContract: rule.action.inputContract || [],
+          outputContract: rule.action.outputContract || [],
           actionMetadata: {
             flowType: rule.action?.flowType || null,
             templateKey: rule.action?.templateKey || null,
@@ -2462,7 +2474,18 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       : !actionSteps.length
         ? "Add at least one action."
         : actionIssues[0] || "";
-  const reviewIssue = triggerIssue || entryConditionIssue || conditionIssue || actionsIssue || (!workflow.name ? "Enter a workflow name." : "");
+  const contractEntries = [...(workflow.inputContract || []), ...(workflow.outputContract || [])];
+  const invalidContractName = contractEntries.find((item) => !item?.name || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(item.name)));
+  const duplicateInput = (workflow.inputContract || []).find((item, index, list) => list.findIndex((other) => other.name === item.name) !== index);
+  const duplicateOutput = (workflow.outputContract || []).find((item, index, list) => list.findIndex((other) => other.name === item.name) !== index);
+  const missingOutputSource = (workflow.outputContract || []).find((item) => !item?.source);
+  const contractIssue = invalidContractName
+    ? "Subflow input/output names can only use letters, numbers and underscores."
+    : duplicateInput ? `Subflow input "${duplicateInput.name}" is declared more than once.`
+      : duplicateOutput ? `Subflow output "${duplicateOutput.name}" is declared more than once.`
+        : missingOutputSource ? `Choose a Resource for subflow output "${missingOutputSource.label || missingOutputSource.name || "output"}".`
+          : "";
+  const reviewIssue = triggerIssue || entryConditionIssue || conditionIssue || actionsIssue || contractIssue || (!workflow.name ? "Enter a workflow name." : "");
   const guideSteps = [
     { key: "trigger", label: "Trigger", status: triggerIssue ? "error" : "complete", message: triggerIssue },
     {
@@ -2496,6 +2519,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       active: nextLifecycle === "ACTIVE",
       action: {
         type: "workflow",
+        inputContract: workflow.inputContract || [],
+        outputContract: workflow.outputContract || [],
         ...(scopeKey ? { scope: scopeKey } : workflow.scope ? { scope: workflow.scope } : {}),
         ...(workflow.systemGenerated ? {
           systemGenerated: true,
