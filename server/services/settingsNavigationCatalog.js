@@ -47,18 +47,18 @@ export const SETTINGS_SECTIONS = [
   { key: "sms-delivery", label: "SMS Delivery", groupKey: "communications", order: 10, iconKey: "credit-card", description: "Invoice and receipt delivery by SMS.", action: { type: "tab", tab: "SMS Delivery" } },
   { key: "email-delivery", label: "Email Delivery", groupKey: "communications", order: 20, iconKey: "credit-card", description: "Invoice and receipt delivery by email.", action: { type: "tab", tab: "Email Delivery" } },
 
-  { key: "server-api", label: "Server / API Configuration", groupKey: "system", order: 10, iconKey: "monitor-cog", description: "Device-level server and API connection settings.", gate: "platform-manage", action: { type: "tab", tab: "Server / API Configuration" } },
+  { key: "server-api", label: "Server / API Configuration", groupKey: "system", order: 10, iconKey: "monitor-cog", description: "Device-level server and API connection settings.", gate: "oneengine-manage", action: { type: "tab", tab: "Server / API Configuration" } },
 
-  { key: "objects", label: "Objects", groupKey: "developer", order: 10, iconKey: "layout-grid", description: "Objects, fields, relationships, rules, approvals and object metadata.", gate: "platform-manage", action: { type: "tab", tab: "Objects" } },
-  { key: "assignment-rules", label: "Assignment Rules", groupKey: "developer", order: 20, iconKey: "layout-grid", description: "Object-scoped record assignment and routing rules.", gate: "platform-manage", action: { type: "tab", tab: "Assignment Rules" } },
-  { key: "sharing-rules", label: "Sharing Rules", groupKey: "developer", order: 30, iconKey: "shield", description: "Object-scoped record sharing and access rules.", gate: "platform-manage", action: { type: "tab", tab: "Sharing Rules" } },
-  { key: "platform", label: "Builders", groupKey: "developer", order: 40, iconKey: "layout-grid", description: "Workflow, Approval Flow, Page, Dashboard and Report canvases.", gate: "platform-manage", action: { type: "tab", tab: "Platform" } },
-  { key: "workflow-runs", label: "Workflow Runs", groupKey: "developer", order: 50, iconKey: "workflow", description: "Inspect workflow execution history and outcomes.", gate: "platform-manage", action: { type: "tab", tab: "Workflow Runs" } },
-  { key: "work-items", label: "Work Items", groupKey: "developer", order: 60, iconKey: "list", description: "Review workflow and approval work items.", gate: "platform-manage", action: { type: "tab", tab: "Work Items" } },
-  { key: "platform-apps", label: "Platform Apps", groupKey: "developer", order: 70, iconKey: "layout-grid", description: "Manage platform app metadata and composition.", gate: "platform-manage", action: { type: "tab", tab: "Platform Apps" } },
-  { key: "deployments", label: "Deployments", groupKey: "developer", order: 80, iconKey: "rocket", description: "Manage metadata deployments and promotion.", gate: "platform-manage", action: { type: "tab", tab: "Deployments" } },
-  { key: "notifications", label: "Notifications", groupKey: "developer", order: 90, iconKey: "bell", description: "Manage platform notification subscriptions.", gate: "platform-manage", action: { type: "tab", tab: "Notifications" } },
-  { key: "value-sets", label: "Value Sets", groupKey: "developer", order: 100, iconKey: "list", description: "Reusable picklist and value-set metadata.", gate: "platform-manage", action: { type: "tab", tab: "Value Sets" } },
+  { key: "objects", label: "Objects", groupKey: "developer", order: 10, iconKey: "layout-grid", description: "Objects, fields, relationships, rules, approvals and object metadata.", gate: "oneengine-manage", action: { type: "tab", tab: "Objects" } },
+  { key: "assignment-rules", label: "Assignment Rules", groupKey: "developer", order: 20, iconKey: "layout-grid", description: "Object-scoped record assignment and routing rules.", gate: "oneengine-manage", action: { type: "tab", tab: "Assignment Rules" } },
+  { key: "sharing-rules", label: "Sharing Rules", groupKey: "developer", order: 30, iconKey: "shield", description: "Object-scoped record sharing and access rules.", gate: "oneengine-manage", action: { type: "tab", tab: "Sharing Rules" } },
+  { key: "platform", label: "Builders", groupKey: "developer", order: 40, iconKey: "layout-grid", description: "Workflow, Approval Flow, Page, Dashboard and Report canvases.", gate: "oneengine-manage", action: { type: "tab", tab: "Platform" } },
+  { key: "workflow-runs", label: "Workflow Runs", groupKey: "developer", order: 50, iconKey: "workflow", description: "Inspect workflow execution history and outcomes.", gate: "oneengine-manage", action: { type: "tab", tab: "Workflow Runs" } },
+  { key: "work-items", label: "Work Items", groupKey: "developer", order: 60, iconKey: "list", description: "Review workflow and approval work items.", gate: "oneengine-manage", action: { type: "tab", tab: "Work Items" } },
+  { key: "platform-apps", label: "Platform Apps", groupKey: "developer", order: 70, iconKey: "layout-grid", description: "Manage platform app metadata and composition.", gate: "oneengine-manage", action: { type: "tab", tab: "Platform Apps" } },
+  { key: "deployments", label: "Deployments", groupKey: "developer", order: 80, iconKey: "rocket", description: "Manage metadata deployments and promotion.", gate: "oneengine-manage", action: { type: "tab", tab: "Deployments" } },
+  { key: "notifications", label: "Notifications", groupKey: "developer", order: 90, iconKey: "bell", description: "Manage platform notification subscriptions.", gate: "oneengine-manage", action: { type: "tab", tab: "Notifications" } },
+  { key: "value-sets", label: "Value Sets", groupKey: "developer", order: 100, iconKey: "list", description: "Reusable picklist and value-set metadata.", gate: "oneengine-manage", action: { type: "tab", tab: "Value Sets" } },
   { key: "message-templates", label: "Message Templates", groupKey: "developer", order: 110, iconKey: "receipt", description: "Message templates used across communications.", gate: "settings-manage", action: { type: "tab", tab: "Message Templates" } },
 ];
 
@@ -66,7 +66,7 @@ export function settingsSectionAllowed(section, { permissions = [] } = {}) {
   const codes = new Set(Array.isArray(permissions) ? permissions : []);
   switch (section.gate) {
     case "settings-manage": return codes.has("settings.manage");
-    case "platform-manage": return codes.has("platform.manage");
+    case "oneengine-manage": return codes.has("oneengine.manage");
     default: return true;
   }
 }
