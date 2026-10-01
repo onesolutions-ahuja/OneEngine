@@ -843,6 +843,117 @@ function workflowStepResources(steps = [], currentIndex = 0) {
   return resources;
 }
 
+function looksLikeWorkflowResource(value = "") {
+  const text = String(value || "");
+  return text.startsWith("$") || text.startsWith("steps.") || text.startsWith("variables.");
+}
+
+function ResourceOrLiteralInput({ label, value, onChange, rootObjectKey, extraResources = [], type = "string", required = false }) {
+  const [mode, setMode] = useState(() => looksLikeWorkflowResource(value) ? "resource" : "value");
+  const numeric = type === "number" || type === "integer";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-xs font-medium text-slate-600">{label}{required ? " *" : ""}</label>
+        <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
+          <button type="button" className={`rounded px-2 py-1 text-[10px] ${mode === "value" ? "bg-slate-100 text-slate-800" : "text-slate-500"}`} onClick={() => setMode("value")}>Value</button>
+          <button type="button" className={`rounded px-2 py-1 text-[10px] ${mode === "resource" ? "bg-blue-50 text-blue-700" : "text-slate-500"}`} onClick={() => setMode("resource")}>Resource</button>
+        </div>
+      </div>
+      {mode === "resource" ? (
+        <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="" value={String(value ?? "")} onChange={onChange} />
+      ) : (
+        <input
+          className={inputClass}
+          type={numeric ? "number" : "text"}
+          value={value ?? ""}
+          onChange={(event) => onChange(numeric ? (event.target.value === "" ? "" : Number(event.target.value)) : event.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, extraResources = [] }) {
+  const schema = definition?.schema;
+  const properties = schema?.properties && typeof schema.properties === "object" ? schema.properties : {};
+  const required = new Set(Array.isArray(schema?.required) ? schema.required : []);
+  const entries = Object.entries(properties);
+  if (!schema || schema.type !== "object" || !entries.length) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+        This registered API action does not publish a visual input schema yet. Its runtime capability is available, but its configuration cannot safely be exposed as a no-code form until the action publishes schema metadata.
+      </div>
+    );
+  }
+
+  const patch = (key, value) => onChange({ [key]: value });
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <strong className="text-xs text-slate-700">{definition.label || definition.value}</strong>
+        {definition.description ? <p className="mt-1 text-xs text-slate-500">{definition.description}</p> : null}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {definition.capability ? <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] text-blue-700">Capability: {definition.capability}</span> : null}
+          {(definition.requiredPermissions || []).map((permission) => <span key={permission} className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-600">{permission}</span>)}
+          {definition.requiredEntitlement ? <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] text-amber-700">Licence: {definition.requiredEntitlement}</span> : null}
+        </div>
+      </div>
+      {entries.map(([key, property]) => {
+        const fieldLabel = property.title || key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ").replace(/^./, (char) => char.toUpperCase());
+        const value = config?.[key];
+        if (Array.isArray(property.enum)) {
+          return (
+            <label key={key} className="block space-y-1 text-xs font-medium text-slate-600">
+              <span>{fieldLabel}{required.has(key) ? " *" : ""}</span>
+              <select className={inputClass} value={value ?? ""} onChange={(event) => patch(key, event.target.value)}>
+                <option value="">Select {fieldLabel.toLowerCase()}</option>
+                {property.enum.map((option) => <option key={String(option)} value={option}>{String(option).replace(/_/g, " ")}</option>)}
+              </select>
+            </label>
+          );
+        }
+        if (property.type === "boolean") {
+          return (
+            <label key={key} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
+              <input type="checkbox" checked={value === true} onChange={(event) => patch(key, event.target.checked)} />
+              <span>{fieldLabel}{required.has(key) ? " *" : ""}</span>
+            </label>
+          );
+        }
+        if (property.type === "object") {
+          return (
+            <div key={key} className="space-y-1">
+              <label className="text-xs font-medium text-slate-600">{fieldLabel}{required.has(key) ? " *" : ""}</label>
+              <MappingEditor value={value && typeof value === "object" && !Array.isArray(value) ? value : {}} onChange={(next) => patch(key, next)} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Key" valueLabel="Value / resource" />
+            </div>
+          );
+        }
+        if (property.type === "array") {
+          const values = Array.isArray(value) ? value : [];
+          return (
+            <div key={key} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-medium text-slate-600">{fieldLabel}{required.has(key) ? " *" : ""}</div>
+              {values.map((item, itemIndex) => (
+                <div key={itemIndex} className="grid grid-cols-[1fr_auto] gap-2">
+                  <ResourceOrLiteralInput label={`Item ${itemIndex + 1}`} value={item} onChange={(nextValue) => {
+                    const next = [...values]; next[itemIndex] = nextValue; patch(key, next);
+                  }} rootObjectKey={rootObjectKey} extraResources={extraResources} type={property.items?.type || "string"} />
+                  <button type="button" className="self-end rounded border border-slate-200 px-2 py-2 text-xs text-red-600" onClick={() => patch(key, values.filter((_, index) => index !== itemIndex))}>Remove</button>
+                </div>
+              ))}
+              <button type="button" className="text-sm text-blue-700" onClick={() => patch(key, [...values, ""])}>+ Add item</button>
+            </div>
+          );
+        }
+        return (
+          <ResourceOrLiteralInput key={key} label={fieldLabel} value={value} onChange={(next) => patch(key, next)} rootObjectKey={rootObjectKey} extraResources={extraResources} type={property.type || "string"} required={required.has(key)} />
+        );
+      })}
+    </div>
+  );
+}
+
 function BranchStepPicker({ label, value = [], onChange, steps = [], currentIndex }) {
   const candidates = steps
     .map((candidate, index) => ({ candidate, index }))
@@ -875,6 +986,7 @@ function BranchStepPicker({ label, value = [], onChange, steps = [], currentInde
 function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const extraResources = workflowStepResources(allSteps, index);
+  const registryDefinition = registryOptions.find((option) => option.value === step.type) || null;
   const updateFieldMapping = (key, value) => {
     const fieldMappings = { ...(step.config?.fieldMappings || {}) };
     fieldMappings[key] = value;
@@ -1158,7 +1270,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           </div>
         );
       default:
-        return null;
+        return <SchemaActionEditor definition={registryDefinition} config={step.config || {}} onChange={updateConfig} rootObjectKey={rootObjectKey} extraResources={extraResources} />;
     }
   };
 
@@ -1497,6 +1609,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           label: item.displayName || item.key,
           description: item.description || "",
           category: workflowActionCategory(item.key),
+          schema: item.schema || null,
+          requiredPermissions: Array.isArray(item.requiredPermissions) ? item.requiredPermissions : [],
+          requiredEntitlement: item.requiredEntitlement || null,
+          capability: item.capability || null,
+          async: item.async === true,
         }));
         if (registry.length) setRegistryOptions(registry);
       })
