@@ -936,7 +936,7 @@ function SettingsPage({ onOpenProfile }) {
   const settingsVisibleLogged = useRef(false)
   const settingsStartedWithCache = useRef(Boolean(readSettingsContextCache()))
   const settings = context?.settings
-  const user = context?.user
+  const user = context?.user || getStoredUser()
 
   const load = async () => {
     const cached = readSettingsContextCache()
