@@ -744,9 +744,9 @@ export default function createOnlineRouter({
           return res.status(403).json({ success: false, message: "This collection display is not assigned to a OneKiosk flow" });
         }
         params.push("one_kiosk");
-        conditions.push(`o.platform = ${params.length}`);
+        conditions.push(`o.platform = $${params.length}`);
         params.push(String(req.user.kioskDisplayFlowId));
-        conditions.push(`o.platform_data->>'workflowId' = ${params.length}`);
+        conditions.push(`o.platform_data->>'workflowId' = $${params.length}`);
       }
 
       if (status) {
@@ -756,7 +756,7 @@ export default function createOnlineRouter({
 
       if (platform && req.user?.mode !== "kiosk_display") {
         params.push(platform);
-        conditions.push(`o.platform = ${params.length}`);
+        conditions.push(`o.platform = $${params.length}`);
       }
 
       const result = await db(
