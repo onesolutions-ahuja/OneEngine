@@ -2556,17 +2556,34 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ db, action, companyId, req }) => {
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null }) => {
+      const tenantId = companyId || req?.user?.companyId;
+      const requestedResumeAt = action.resumeAt || action.until || null;
       const waitSeconds = Number(action.durationSeconds ?? action.waitSeconds ?? 0);
-      const runAt = new Date(Date.now() + Math.max(0, waitSeconds || 0) * 1000);
+      const runAt = requestedResumeAt
+        ? new Date(requestedResumeAt)
+        : new Date(Date.now() + Math.max(0, waitSeconds || 0) * 1000);
+      if (Number.isNaN(runAt.getTime())) throw new Error("Wait resume time is invalid");
       const job = await enqueuePlatformJob({
         db,
-        companyId: companyId || req?.user?.companyId,
+        companyId: tenantId,
         kind: "WAIT",
-        payload: { waitSeconds, action },
+        payload: { waitSeconds, resumeAt: runAt.toISOString(), runId, stepRunId },
         runAt,
-        idempotencyKey: `${companyId || req?.user?.companyId || "workflow"}:wait:${Date.now()}`,
+        idempotencyKey: `${tenantId || "workflow"}:wait:${runId || "no-run"}:${stepRunId || Date.now()}`,
       });
+      if (job?.id && stepRunId) {
+        await db(
+          "UPDATE platform_workflow_step_runs SET durable_job_id=$1,updated_at=NOW() WHERE id=$2",
+          [job.id, stepRunId]
+        );
+      }
+      if (job?.id && runId && tenantId) {
+        await db(
+          "UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+          [runId, tenantId]
+        );
+      }
       return { status: job ? "waiting" : "skipped", jobId: job?.id || null, resumeAt: runAt.toISOString() };
     },
   },
@@ -3415,40 +3432,124 @@ export async function executeWorkflowActions({ actions, ...context }) {
     ...(context.workflowVariables || {}),
     steps: { ...(context.workflowVariables?.steps || {}) },
   };
-  for (const item of actions) {
+  const allActions = Array.isArray(context.allActions) ? context.allActions : actions;
+  const actionById = new Map(allActions.filter((item) => item?.id).map((item) => [String(item.id), item]));
+  const branchTargetIds = new Set();
+  if (context.branchExecution !== true) {
+    for (const candidate of allActions) {
+      if (resolveWorkflowActionType(candidate) !== "CONDITION") continue;
+      for (const branchId of [...(candidate.ifBranch || []), ...(candidate.elseBranch || [])]) {
+        if (branchId) branchTargetIds.add(String(branchId));
+      }
+    }
+  }
+
+  for (let actionIndex = 0; actionIndex < actions.length; actionIndex += 1) {
+    const item = actions[actionIndex];
     if (!item || typeof item !== "object") continue;
-    const index = results.length;
+    if (context.branchExecution !== true && item.id && branchTargetIds.has(String(item.id))) continue;
+
+    const globalIndex = item.id
+      ? Math.max(0, allActions.findIndex((candidate) => String(candidate?.id || "") === String(item.id)))
+      : actionIndex;
     let stepRun = null;
     if (context.db && context.runId) {
       stepRun = await getOrCreateWorkflowStepRun({
         db: context.db,
         runId: context.runId,
-        stepIdentifier: item.id || `step-${index + 1}`,
-        stepOrder: index + 1,
+        stepIdentifier: item.id || `step-${globalIndex + 1}`,
+        stepOrder: globalIndex + 1,
         actionType: resolveWorkflowActionType(item),
       });
     }
-    if (stepRun?.status === "COMPLETED" || stepRun?.status === "WAITING") {
-      const priorResult = stepRun.metadata?.result || { status: stepRun.status === "WAITING" ? "waiting" : "completed", idempotentReplay: true };
+
+    if (stepRun?.status === "COMPLETED") {
+      const priorResult = stepRun.metadata?.result || { status: "completed", idempotentReplay: true };
       results.push({ action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
-      workflowVariables.steps[item.id || `step-${index + 1}`] = priorResult;
-      completed.push({ action: item, stepRunId: stepRun.id, index });
+      workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
+      completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
       continue;
     }
+    if (stepRun?.status === "WAITING") {
+      const priorResult = stepRun.metadata?.result || { status: "waiting", idempotentReplay: true };
+      results.push({ action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
+      workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
+      break;
+    }
+
     try {
-      const result = await executeWorkflowAction({ ...context, workflowVariables, action: item, stepRunId: stepRun?.id || null });
+      const result = await executeWorkflowAction({
+        ...context,
+        workflowVariables,
+        allActions,
+        action: item,
+        stepRunId: stepRun?.id || null,
+      });
+
+      let branchPaused = false;
+      if (resolveWorkflowActionType(item) === "CONDITION" && typeof result?.matched === "boolean") {
+        const selectedIds = result.matched ? (item.ifBranch || []) : (item.elseBranch || []);
+        const selectedActions = selectedIds
+          .map((id) => actionById.get(String(id)))
+          .filter(Boolean)
+          .sort((a, b) => allActions.indexOf(a) - allActions.indexOf(b));
+        if (selectedActions.length) {
+          const branchResults = await executeWorkflowActions({
+            actions: selectedActions,
+            ...context,
+            workflowVariables,
+            allActions,
+            branchExecution: true,
+          });
+          result.branch = {
+            outcome: result.matched ? "IF" : "ELSE",
+            stepIds: selectedIds,
+            results: branchResults,
+          };
+          branchPaused = branchResults.some((entry) => entry?.result?.status === "waiting");
+        } else {
+          result.branch = { outcome: result.matched ? "IF" : "ELSE", stepIds: [], results: [] };
+        }
+      }
+
       const entry = { action: item.type || item.key, result, stepRunId: stepRun?.id || null };
-      workflowVariables.steps[item.id || `step-${index + 1}`] = result;
+      workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = result;
       results.push(entry);
+
       if (result?.status === "failed") throw new WorkflowExecutionError(errorDetails(result.error || result), []);
       if (result?.status === "completed" || result?.status === "queued" || result?.status === "waiting") {
-        completed.push({ action: item, stepRunId: stepRun?.id || null, index });
+        completed.push({ action: item, stepRunId: stepRun?.id || null, index: globalIndex });
       }
-      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: context.db, stepRunId: stepRun.id, status: result?.status === "stopped" ? "STOPPED" : result?.status === "waiting" ? "WAITING" : result?.status === "queued" ? "WAITING" : "COMPLETED", metadata: { result: redact(result), irreversible: IRREVERSIBLE_ACTIONS.has(resolveWorkflowActionType(item)) } });
-      if (result?.status === "stopped") break;
+      if (stepRun?.id) {
+        await updateWorkflowStepRunStatus({
+          db: context.db,
+          stepRunId: stepRun.id,
+          status: result?.status === "stopped"
+            ? "STOPPED"
+            : result?.status === "waiting"
+              ? "WAITING"
+              : result?.status === "queued"
+                ? "WAITING"
+                : "COMPLETED",
+          metadata: {
+            result: redact(result),
+            irreversible: IRREVERSIBLE_ACTIONS.has(resolveWorkflowActionType(item)),
+          },
+        });
+      }
+
+      if (result?.status === "stopped" || result?.status === "waiting" || branchPaused) break;
     } catch (error) {
       const details = errorDetails(error);
-      if (stepRun?.id) await updateWorkflowStepRunStatus({ db: context.db, stepRunId: stepRun.id, status: "FAILED", errorText: details.message, metadata: { error: details } });
+      if (stepRun?.id) {
+        await updateWorkflowStepRunStatus({
+          db: context.db,
+          stepRunId: stepRun.id,
+          status: "FAILED",
+          errorText: details.message,
+          metadata: { error: details },
+        });
+      }
       const compensationFailures = await compensateCompletedSteps(completed, context, error);
       if (context.runId && context.db) {
         await context.db(
