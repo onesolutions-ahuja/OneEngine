@@ -60,9 +60,10 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   const savedTest = page.locator("div").filter({ hasText: qaTestName }).filter({ has: page.getByRole("button", { name: "Run", exact: true }) }).last();
   await expect(savedTest).toBeVisible();
   await savedTest.getByRole("button", { name: "Run", exact: true }).click();
-  await expect(page.getByText("Test passed", { exact: true })).toBeVisible();
-  await expect(page.getByText(/No database changes were kept/i)).toBeVisible();
-  await page.getByRole("button", { name: "Close", exact: true }).first().click();
+  const debugPanel = page.locator("div").filter({ hasText: "Debug / Test workflow" }).filter({ hasText: "No database changes were kept" }).last();
+  await expect(debugPanel.getByText("Test passed", { exact: true })).toBeVisible();
+  await expect(debugPanel.getByText(/No database changes were kept/i)).toBeVisible();
+  await debugPanel.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Tests", exact: true }).click();
 
   // Record-triggered Start configuration exposes Salesforce-style transition
