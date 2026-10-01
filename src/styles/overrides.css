@@ -2967,3 +2967,23 @@
 .launcher-app strong,.onestore-list strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 @media(max-width:700px){:root{--onepos-dock-clearance:92px}.demo-menubar{padding-right:max(8px,env(safe-area-inset-right))}}
 
+
+
+/* Audit hardening: keep top-bar menus clear of the OS taskbar/dock. */
+.mac-popover,.git-control-center{
+  max-height:calc(100dvh - 58px - env(safe-area-inset-bottom));
+  overflow:auto;
+  overscroll-behavior:contain;
+}
+
+/* Shared empty/error state treatment across modules. */
+.module-state,.dash-empty,.settings-state-card{
+  border-radius:12px;
+  border:1px solid rgba(15,23,42,.08);
+  background:rgba(255,255,255,.68);
+  min-height:54px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
