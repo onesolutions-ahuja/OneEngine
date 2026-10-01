@@ -35,14 +35,16 @@ export function moduleRuntimeAccess({
   licensed = false,
   permitted = false,
   canManageOneEngine = false,
+  canManagePlatform = false,
 } = {}) {
+  const oneEngineManager = canManageOneEngine === true || canManagePlatform === true;
   if (enabledByCompany === false) {
     return { allowed: false, reason: MODULE_ACCESS_REASONS.COMPANY_DISABLED };
   }
   if (permitted !== true) {
     return { allowed: false, reason: MODULE_ACCESS_REASONS.NOT_PERMITTED };
   }
-  if (canManageOneEngine === true) {
+  if (oneEngineManager) {
     return {
       allowed: true,
       reason:
