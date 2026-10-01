@@ -69,3 +69,19 @@
 .one-kiosk.is-demo .one-kiosk-product:hover .one-kiosk-product-image img{transform:scale(1.035)}
 .one-kiosk.is-demo .one-kiosk-product-copy small{min-height:34px;line-height:1.35}
 @media(max-width:640px){.one-kiosk-demo-ribbon{font-size:11px;padding:7px 10px;margin-bottom:10px}}
+
+.one-kiosk-product-modal{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.58);backdrop-filter:blur(8px);display:grid;place-items:center;padding:24px}
+.one-kiosk-product-modal-card{position:relative;width:min(920px,96vw);max-height:90vh;overflow:auto;background:#fff;border-radius:28px;display:grid;grid-template-columns:minmax(280px,.9fr) minmax(320px,1.1fr);box-shadow:0 36px 90px rgba(15,23,42,.28)}
+.one-kiosk-modal-close{position:absolute;right:14px;top:14px;z-index:2;width:42px;height:42px;border:0;border-radius:50%;background:rgba(255,255,255,.92);font-size:28px;line-height:1;box-shadow:0 8px 22px rgba(15,23,42,.12)}
+.one-kiosk-product-modal-image{min-height:420px;background:#f1f3f6;display:grid;place-items:center;overflow:hidden}
+.one-kiosk-product-modal-image img{width:100%;height:100%;object-fit:cover}
+.one-kiosk-product-modal-image>span{font-size:80px;font-weight:800;color:#a4adba}
+.one-kiosk-product-modal-copy{padding:clamp(24px,4vw,42px);display:flex;flex-direction:column;gap:14px}
+.one-kiosk-product-modal-copy h2{font-size:clamp(28px,4vw,44px);letter-spacing:-.04em;margin:0}
+.one-kiosk-product-modal-copy p{margin:0;color:#687386;line-height:1.55;font-size:16px}
+.one-kiosk-specs{display:grid;gap:7px;padding:12px 0;border-top:1px solid #eceff3;border-bottom:1px solid #eceff3}
+.one-kiosk-specs>div{display:flex;justify-content:space-between;gap:16px;padding:7px 0}.one-kiosk-specs span{color:#7b8492}
+.one-kiosk-stock-promise{padding:12px 14px;border-radius:12px;background:#ecfdf3;color:#047857;font-weight:800}
+.one-kiosk-modifier-list{display:flex;flex-wrap:wrap;gap:8px}.one-kiosk-modifier-list button{border:1px solid #dfe4eb;background:white;border-radius:999px;padding:9px 12px;font-weight:700}
+.one-kiosk-product-modal-footer{margin-top:auto;display:grid;grid-template-columns:auto minmax(180px,1fr);align-items:center;gap:18px;padding-top:16px}.one-kiosk-product-modal-footer>strong{font-size:28px}
+@media(max-width:760px){.one-kiosk-product-modal{padding:10px}.one-kiosk-product-modal-card{grid-template-columns:1fr;border-radius:20px}.one-kiosk-product-modal-image{min-height:240px;max-height:36vh}.one-kiosk-product-modal-copy{padding:20px}.one-kiosk-product-modal-footer{grid-template-columns:1fr}.one-kiosk-product-modal-footer>strong{text-align:center}}
