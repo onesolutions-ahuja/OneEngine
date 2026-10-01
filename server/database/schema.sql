@@ -102,6 +102,7 @@ ON stores(company_id);
 
 CREATE TABLE IF NOT EXISTS terminals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
     terminal_number VARCHAR(50),
@@ -112,6 +113,9 @@ CREATE TABLE IF NOT EXISTS terminals (
 
 CREATE INDEX IF NOT EXISTS idx_terminals_store
 ON terminals(store_id);
+
+CREATE INDEX IF NOT EXISTS idx_terminals_company_store
+ON terminals(company_id, store_id);
 
 -- ============================================================
 -- COMPANY SETTINGS
@@ -1493,6 +1497,9 @@ WHERE terminal_id IS NOT NULL
 
 CREATE INDEX IF NOT EXISTS idx_sales_company
 ON sales(company_id);
+
+CREATE INDEX IF NOT EXISTS idx_sales_company_store_status_date
+ON sales(company_id, store_id, status, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_sales_store
 ON sales(store_id);
