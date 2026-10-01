@@ -4,7 +4,7 @@ import { databaseConfigurationPayload } from "../../services/tenantDatabaseForm.
 
 const DEFAULT_KEYS = ["pos", "inventory", "purchasing", "customers", "reports", "loyalty", "jarvis"];
 
-export default function LicensingAdmin() {
+export default function LicensingAdmin({ companyId = '', lockCompany = false }) {
   const [licences, setLicences] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [marketplacePackages, setMarketplacePackages] = useState([]);
@@ -18,7 +18,7 @@ export default function LicensingAdmin() {
   });
   const name = licenceForm.name;
   const [licencePackages, setLicencePackages] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState("");
+  const [selectedCompany, setSelectedCompany] = useState(companyId || "");
   const [selectedLicence, setSelectedLicence] = useState("");
   const [companyEntitlements, setCompanyEntitlements] = useState(null);
   const [companyLicenceForm, setCompanyLicenceForm] = useState({ startsAt: "", expiresAt: "", active: true });
@@ -29,7 +29,7 @@ export default function LicensingAdmin() {
   const [entitlements, setEntitlements] = useState(Object.fromEntries(DEFAULT_KEYS.map((key) => [key, false])));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [databaseCompany, setDatabaseCompany] = useState("");
+  const [databaseCompany, setDatabaseCompany] = useState(companyId || "");
   const [databaseConfig, setDatabaseConfig] = useState(null);
   const [databaseForm, setDatabaseForm] = useState({
     databaseMode: "ONEPOS_MANAGED",
@@ -66,6 +66,7 @@ export default function LicensingAdmin() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (companyId) { void selectCompany(companyId); void loadDatabaseConfig(companyId); } }, [companyId, companies.length]);
 
   const updateMarketplaceItem = (setter, id, field, value) => {
     setter((items) => items.map((item) => item.id === id ? { ...item, [field]: value } : item));
@@ -438,7 +439,7 @@ export default function LicensingAdmin() {
 
   return (
     <div className="max-w-5xl space-y-6">
-      <div className="onepos-page-header"><div><h1 className="onepos-page-title">Platform licensing</h1><p className="onepos-page-subtitle">Manage company entitlements without changing user permissions.</p></div></div>
+      <div className="onepos-page-header"><div><h1 className="onepos-page-title">OneEngine licensing</h1><p className="onepos-page-subtitle">Manage company entitlements without changing user permissions.</p></div></div>
       {message && <div className="onepos-alert onepos-alert-success" role="status">{message}</div>}
       {error && <div className="onepos-alert onepos-alert-error" role="alert">{error}</div>}
       <section className="onepos-card onepos-card-body space-y-4">
@@ -480,7 +481,9 @@ export default function LicensingAdmin() {
       <section className="onepos-card onepos-card-body space-y-4">
         <h2 className="onepos-card-title">Assign company licence</h2>
         <div className="flex flex-wrap gap-3">
-          <select className="onepos-input flex-1" value={selectedCompany} onChange={(event) => selectCompany(event.target.value)}><option value="">Select company</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name} ({company.licence_name || "unlicensed"})</option>)}</select>
+          {lockCompany
+            ? <div className="onepos-input flex-1" aria-label="Selected company">{companies.find((company) => company.id === selectedCompany)?.name || "Selected client"}</div>
+            : <select className="onepos-input flex-1" value={selectedCompany} onChange={(event) => selectCompany(event.target.value)}><option value="">Select company</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name} ({company.licence_name || "unlicensed"})</option>)}</select>}
           <select className="onepos-input flex-1" value={selectedLicence} onChange={(event) => setSelectedLicence(event.target.value)}><option value="">No licence</option>{licences.filter((licence) => licence.active === true).map((licence) => <option key={licence.id} value={licence.id}>{licence.name}</option>)}</select>
           <button className="onepos-btn onepos-btn-primary" onClick={assignLicence} disabled={!selectedCompany}>Assign</button>
         </div>
@@ -619,10 +622,12 @@ export default function LicensingAdmin() {
           <h2 className="onepos-card-title">Company database routing</h2>
           <p className="text-sm text-slate-600 mt-1">Platform Developer Superadmin only. Passwords are write-only and are never displayed after saving.</p>
         </div>
-        <select className="onepos-input w-full" value={databaseCompany} onChange={(event) => loadDatabaseConfig(event.target.value)}>
-          <option value="">Select company</option>
-          {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-        </select>
+        {lockCompany
+          ? <div className="onepos-input w-full">{companies.find((company) => company.id === databaseCompany)?.name || "Selected client"}</div>
+          : <select className="onepos-input w-full" value={databaseCompany} onChange={(event) => loadDatabaseConfig(event.target.value)}>
+              <option value="">Select company</option>
+              {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+            </select>}
         {databaseCompany && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-4">
