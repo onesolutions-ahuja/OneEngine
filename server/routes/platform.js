@@ -893,7 +893,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         "UPDATE platform_value_sets SET value_set_key=COALESCE($1,value_set_key),label=COALESCE($2,label),description=COALESCE($3,description),active=COALESCE($4,active),updated_at=NOW() WHERE id=$5 AND company_id=$6 RETURNING *",
         [req.body.valueSetKey, req.body.label, req.body.description, req.body.active, req.params.valueSetId, req.user.companyId]
       );
-      if (meaningfulEdit) await saveWorkflowVersion(result.rows[0], req.user.id);
+      if (meaningfulEdit || forceNewVersion) await saveWorkflowVersion(result.rows[0], req.user.id);
       res.json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (error.code === "23505") return res.status(409).json({ success: false, message: "A value set with this API name already exists" });
@@ -3959,6 +3959,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const ruleError = deactivateOnly ? null : await checkRule(req, normalizedNext);
       if (ruleError) return res.status(400).json({ success: false, message: ruleError });
       const definitionRequested = ["objectId","objectKey","name","triggerKey","conditions","action"].some((key) => req.body[key] !== undefined);
+      const forceNewVersion = req.body?.forceNewVersion === true;
       const meaningfulEdit = definitionRequested && (
         String(rule.object_id || "") !== String(normalizedNext.object_id || "")
         || String(rule.name || "") !== String(normalizedNext.name || "")
@@ -3966,7 +3967,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         || JSON.stringify(rule.conditions || []) !== JSON.stringify(normalizedNext.conditions || [])
         || JSON.stringify(rule.action || {}) !== JSON.stringify(normalizedNext.action || {})
       );
-      if (meaningfulEdit && rule.action?.type === "workflow") {
+      if ((meaningfulEdit || forceNewVersion) && rule.action?.type === "workflow") {
         const maxVersion = await db(
           "SELECT GREATEST(COALESCE(MAX(version),0),$1::int) AS version FROM platform_workflow_versions WHERE company_id=$2 AND workflow_id=$3",
           [Number(rule.version || 1), req.user.companyId, rule.id]
