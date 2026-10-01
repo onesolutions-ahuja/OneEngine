@@ -2670,13 +2670,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   };
 
   const saveTestCase = async () => {
-    if (!workflowId) {
+    let id = workflowId || null;
+    if (!id) {
       const saved = await saveWorkflow("DRAFT", { keepOpen: true, silent: true });
       if (!saved?.id) return;
+      id = saved.id;
     }
     if (!testDraft.name.trim()) { onError?.("Enter a test name."); return; }
-    const id = workflowId || null;
-    if (!id) return;
     try {
       setTestBusyId("new");
       await apiRequest(`/api/platform/rules/${id}/tests`, {
