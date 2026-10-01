@@ -135,6 +135,7 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
         configured: ["bearer","x-api-key"].includes(manifestConnector.authType) ? connection?.has_credentials === true : true,
         usingCustomerKey: connection?.has_credentials === true,
         isDefault: defaultProviderKey === manifestConnector.providerKey,
+        supportsSearch: Boolean(manifestConnector.searchEndpoint),
         lastSuccessfulLookup: connection?.last_connected_at || null,
         lastProviderError: connection?.last_error ? "Test connection reported an error" : null,
       };
