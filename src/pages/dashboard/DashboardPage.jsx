@@ -56,7 +56,7 @@ function mergeCaseInsensitiveSeries(points) {
   return [...merged.values()]
 }
 
-function ComponentCard({ component, result, loading, currency }) {
+function ComponentCard({ component, result, loading, currency, onRetry }) {
   const config = component?.config || {}
   const type = component?.type === 'chart' ? (config.chartType || 'bar') : component?.type
   const rawPoints = seriesFrom(config, result)
@@ -69,7 +69,7 @@ function ComponentCard({ component, result, loading, currency }) {
   if (loading) {
     body = <div className="dash-skeleton" />
   } else if (result?.error) {
-    body = <div className="dash-empty">This component could not be loaded.</div>
+    body = <div className="dashboard-component-error" role="alert"><strong>This component could not be loaded.</strong><span>{result.error}</span><button type="button" onClick={onRetry}>Retry</button></div>
   } else if (type === 'text') {
     body = <p className="dash-text">{config.content || ''}</p>
   } else if (type === 'kpi' || type === 'modern_kpi_card') {
@@ -200,7 +200,7 @@ export default function DashboardPage({ onOpenBuilder }) {
     </header>
     {error ? <div className="dashboard-inline-error">{error}</div> : null}
     <div className="dashboard-grid">
-      {ordered.map((component) => <ComponentCard key={component.id} component={component} result={results.find((item) => item.id === component.id)} loading={loading} currency={currency} />)}
+      {ordered.map((component) => <ComponentCard key={component.id} component={component} result={results.find((item) => item.id === component.id)} loading={loading} currency={currency} onRetry={() => loadDashboard(activeId, dateRange)} />)}
       {!loading && !ordered.length ? <div className="dash-empty">This dashboard has no components yet.</div> : null}
     </div>
     {loading && definition ? <div className="dashboard-refreshing">Refreshing…</div> : null}
