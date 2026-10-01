@@ -2971,6 +2971,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             metadata: {
               parentWorkflow: workflowKey,
               inputMappings: mappings,
+              actorUserId: req?.user?.id || context.actorUserId || null,
+              storeId: req?.user?.storeId || context.storeId || null,
+              tillId: req?.user?.tillId || context.tillId || null,
               initialVariables: childWorkflowVariables,
               initialPreviousRecord: redact(previousRecord || null),
             },
