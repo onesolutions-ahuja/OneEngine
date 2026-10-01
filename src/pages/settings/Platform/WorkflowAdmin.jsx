@@ -406,6 +406,21 @@ const WORKFLOW_VISUAL_CSS = `
     box-shadow: 0 0 0 2px rgba(10,132,255,.10), 0 12px 27px rgba(15,23,42,.08);
   }
   .workflow-node-card.is-disabled { opacity: .5; }
+  .workflow-node-card.is-debug-completed {
+    border-color: #22c55e;
+    background: #f0fdf4;
+    box-shadow: 0 0 0 2px rgba(34,197,94,.10), 0 10px 24px rgba(34,197,94,.08);
+  }
+  .workflow-node-card.is-debug-failed {
+    border-color: #ef4444;
+    background: #fff1f2;
+    box-shadow: 0 0 0 3px rgba(239,68,68,.12), 0 12px 28px rgba(239,68,68,.12);
+  }
+  .workflow-node-card.is-debug-failed::before { background: #ef4444; }
+  .workflow-node-card.is-debug-completed::before { background: #22c55e; }
+  .workflow-node-card.is-debug-simulated {
+    border-style: dashed;
+  }
   .workflow-node-kind {
     display: block;
     margin-bottom: 4px;
@@ -1727,7 +1742,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 }
 
 
-function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange }) {
+function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null }) {
   const [selectedId, setSelectedId] = useState("__start__");
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
@@ -1900,8 +1915,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <div className="workflow-node-connector" />
           {visibleCanvasSteps.map(({ step, index }) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
             <button type="button" className="workflow-node-delete" title="Remove step" aria-label={`Remove ${step.label || getActionLabel(step.type)}`} onClick={(event) => { event.stopPropagation(); removeStep(index); }}>×</button>
-            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""}`}>
-              <span className="workflow-node-kind">{getActionLabel(step.type)}</span>
+            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${debugTrace?.[step.id]?.status === "FAILED" ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
+              <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : getActionLabel(step.type)}</span>
               <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
               {step.type === "CONDITION" ? <span className="workflow-node-note">{Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? `${step.config.outcomes.length} ordered outcome${step.config.outcomes.length === 1 ? "" : "s"} + Default` : "Decision branches are evaluated from metadata conditions."}</span> : null}
               {step.type === "LOOP" ? <span className="workflow-node-note">Runs selected body steps once per collection item.</span> : null}
@@ -2056,6 +2071,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     { key: "manual", label: "Manual trigger", kind: "record" },
   ]);
   const [builderLoadIssues, setBuilderLoadIssues] = useState([]);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debugRunning, setDebugRunning] = useState(false);
+  const [debugRecordMode, setDebugRecordMode] = useState("latest");
+  const [debugRecordId, setDebugRecordId] = useState("");
+  const [debugResult, setDebugResult] = useState(null);
 
 
   useEffect(() => {
@@ -2271,11 +2291,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const saveWorkflow = (lifecycleOverride = null) => {
+  const saveWorkflow = async (lifecycleOverride = null, { keepOpen = false, silent = false } = {}) => {
     const nextLifecycle = String(lifecycleOverride || workflow.lifecycleStatus || (workflow.active === true ? "ACTIVE" : "DRAFT")).toUpperCase();
     if (nextLifecycle === "ACTIVE" && reviewIssue) {
       onError?.(`Cannot activate workflow: ${reviewIssue}`);
-      return;
+      return null;
     }
     const payload = {
       objectId: workflow.objectId || null,
@@ -2311,22 +2331,66 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         }),
       },
     };
-    const request = workflowId
-      ? apiRequest(`/api/platform/rules/${workflowId}`, { method: "PUT", body: JSON.stringify(payload) })
-      : apiRequest("/api/platform/rules", { method: "POST", body: JSON.stringify(payload) });
-    request.then((response) => {
+    try {
+      const response = workflowId
+        ? await apiRequest(`/api/platform/rules/${workflowId}`, { method: "PUT", body: JSON.stringify(payload) })
+        : await apiRequest("/api/platform/rules", { method: "POST", body: JSON.stringify(payload) });
       const saved = response?.data || {};
-      setWorkflowId(saved.id || workflowId);
-      const savedWorkflow = { ...workflow, ...saved, id: saved.id || workflowId, lifecycleStatus: nextLifecycle, active: nextLifecycle === "ACTIVE" };
+      const nextId = saved.id || workflowId;
+      setWorkflowId(nextId);
+      const savedWorkflow = { ...workflow, ...saved, id: nextId, lifecycleStatus: nextLifecycle, active: nextLifecycle === "ACTIVE" };
       setWorkflow(savedWorkflow);
-      setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => item.id !== (saved.id || workflowId))]);
-      if (embedded) {
-        onSaved?.({ ...workflow, ...saved, id: saved.id || workflowId });
-      } else {
-        setShowBuilder(false);
-      }
-      onMessage?.(nextLifecycle === "ACTIVE" ? "Workflow activated." : "Workflow draft saved.");
-    }).catch((error) => onError?.(error.message || "Unable to save workflow."));
+      setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => item.id !== nextId)]);
+      if (embedded) onSaved?.({ ...workflow, ...saved, id: nextId });
+      else if (!keepOpen) setShowBuilder(false);
+      if (!silent) onMessage?.(nextLifecycle === "ACTIVE" ? "Workflow activated." : "Workflow draft saved.");
+      return { id: nextId, workflow: savedWorkflow };
+    } catch (error) {
+      onError?.(error.message || "Unable to save workflow.");
+      return null;
+    }
+  };
+
+  const debugTrace = (() => {
+    const trace = {};
+    for (const stepRun of debugResult?.steps || []) {
+      const baseId = String(stepRun.step_identifier || "").split("@")[0];
+      if (!baseId) continue;
+      const current = trace[baseId];
+      const status = String(stepRun.status || "").toUpperCase();
+      const result = stepRun.metadata?.result || {};
+      const next = {
+        status,
+        simulated: result?.simulated === true,
+        error: stepRun.metadata?.friendlyError || (stepRun.error_text ? { title: "This step could not complete", whatHappened: stepRun.error_text, howToFix: "Open the step Properties and check its required values and Resources." } : null),
+      };
+      if (!current || status === "FAILED" || (current.status !== "FAILED" && status === "COMPLETED")) trace[baseId] = next;
+    }
+    return trace;
+  })();
+
+  const runDebug = async () => {
+    if (reviewIssue) {
+      onError?.(`Fix the workflow before Debug: ${reviewIssue}`);
+      return;
+    }
+    setDebugRunning(true);
+    setDebugResult(null);
+    try {
+      let targetId = workflowId;
+      const saved = await saveWorkflow("DRAFT", { keepOpen: true, silent: true });
+      if (!saved?.id) return;
+      targetId = saved.id;
+      const response = await apiRequest(`/api/platform/rules/${targetId}/debug`, {
+        method: "POST",
+        body: JSON.stringify(debugRecordMode === "specific" && debugRecordId.trim() ? { recordId: debugRecordId.trim() } : {}),
+      });
+      setDebugResult(response?.data || null);
+    } catch (error) {
+      onError?.(error.message || "Unable to run Debug.");
+    } finally {
+      setDebugRunning(false);
+    }
   };
 
   const visibleSavedWorkflows = savedWorkflows.filter((item) => {
@@ -2477,14 +2541,59 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           </select>
         </div>
         <div className="workflow-builder-actions">
+          <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
           <button type="button" className="workflow-cancel-button" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>Cancel</button>
           <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save Draft</button>
           <button type="button" className="workflow-save-button" disabled={Boolean(reviewIssue)} title={reviewIssue || "Activate workflow"} onClick={() => saveWorkflow("ACTIVE")}>Activate</button>
         </div>
       </div>
 
+      {debugOpen ? (
+        <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-base font-semibold text-slate-800">Debug workflow</div>
+              <p className="mt-1 text-xs text-slate-500">Tests the workflow safely. Database changes are rolled back and external actions such as messages, payments, webhooks and printing are simulated.</p>
+            </div>
+            <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(false)}>Close</button>
+          </div>
+          {workflow.object ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-[180px_1fr_auto]">
+              <select className={inputClass} value={debugRecordMode} onChange={(event) => setDebugRecordMode(event.target.value)}>
+                <option value="latest">Use latest record</option>
+                <option value="specific">Use specific record</option>
+              </select>
+              {debugRecordMode === "specific" ? <input className={inputClass} value={debugRecordId} onChange={(event) => setDebugRecordId(event.target.value)} placeholder="Record ID" /> : <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">The most recent record in the current company/store will be used.</div>}
+              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue)} onClick={runDebug}>{debugRunning ? "Running…" : "Run Debug"}</button>
+            </div>
+          ) : (
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-600">This workflow has no trigger object, so Debug will run with user/company/store context only.</div>
+              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue)} onClick={runDebug}>{debugRunning ? "Running…" : "Run Debug"}</button>
+            </div>
+          )}
+          {debugResult ? (
+            <div className={`mt-4 rounded-xl border p-4 ${debugResult.status === "FAILED" ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
+              <div className="flex items-center justify-between gap-3">
+                <strong className={debugResult.status === "FAILED" ? "text-red-800" : "text-emerald-800"}>{debugResult.status === "FAILED" ? "Debug found a problem" : "Debug completed successfully"}</strong>
+                <span className="text-xs text-slate-500">No database changes were kept.</span>
+              </div>
+              {debugResult.status === "FAILED" ? (
+                <div className="mt-3 space-y-2 text-sm text-red-800">
+                  <div><strong>{debugResult.friendlyError?.title || "A step failed"}</strong></div>
+                  <div>{debugResult.friendlyError?.whatHappened || debugResult.run?.error_text || "The workflow could not complete."}</div>
+                  <div className="rounded-lg bg-white/70 p-3"><strong>How to fix it:</strong> {debugResult.friendlyError?.howToFix || "Click the red step on the canvas and check its Properties."}</div>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-emerald-800">Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action.</p>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div id="workflow-canvas-section">
-        <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} />
+        <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} />
       </div>
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
         {reviewIssue || "Trigger, conditions and actions are valid."}
