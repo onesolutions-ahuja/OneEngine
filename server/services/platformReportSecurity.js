@@ -8,7 +8,7 @@ export async function hasPlatformObjectPermission(db, req, objectId, action) {
   if (!objectId || !req.user?.companyId) return false;
   if (!req.user?.roleId) return false;
   const platformPermission = await db(
-    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='platform.manage' LIMIT 1",
+    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
     [req.user.roleId]
   );
   if (platformPermission.rows.length) return true;
