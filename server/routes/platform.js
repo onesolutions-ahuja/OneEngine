@@ -3774,8 +3774,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             [JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
           );
           const notStartedData = { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: true, externalActionsSimulated: true, variables: { variables: {}, steps: {} } };
-          const assertionResult = evaluateWorkflowAssertions(notStartedData, req.body?.assertions || [], { record, user: req.user });
-          return res.json({ success: true, data: { ...notStartedData, assertionResult, testPassed: executionMode === "TEST" ? assertionResult.passed : null } });
+          const assertions = Array.isArray(req.body?.assertions) ? req.body.assertions : [];
+          const assertionResult = evaluateWorkflowAssertions(notStartedData, assertions, { record, user: req.user });
+          const testPassed = executionMode === "TEST"
+            ? (assertions.length ? assertionResult.passed : false)
+            : null;
+          return res.json({ success: true, data: { ...notStartedData, assertionResult, testPassed } });
         }
       }
 
@@ -3851,13 +3855,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         externalActionsSimulated: true,
         variables: workflowVariables,
       };
-      const assertionResult = evaluateWorkflowAssertions(debugData, req.body?.assertions || [], { record, user: req.user });
+      const assertions = Array.isArray(req.body?.assertions) ? req.body.assertions : [];
+      const assertionResult = evaluateWorkflowAssertions(debugData, assertions, { record, user: req.user });
+      const testPassed = executionMode === "TEST"
+        ? (assertions.length ? assertionResult.passed : finalStatus === "COMPLETED")
+        : null;
       return res.json({
         success: true,
         data: {
           ...debugData,
           assertionResult,
-          testPassed: executionMode === "TEST" ? assertionResult.passed : null,
+          testPassed,
         },
       });
     } catch (error) {
