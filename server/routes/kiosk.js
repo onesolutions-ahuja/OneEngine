@@ -218,7 +218,7 @@ export default function createKioskRouter({
              LEFT JOIN product_modifier_options o ON o.group_id=g.id AND o.active=TRUE
             WHERE g.company_id=$1 AND g.product_id=$2 AND g.active=TRUE
             ORDER BY g.display_order,o.display_order,o.name`,
-          [req.user.companyId, req.params.id]
+          [req.user.companyId, parentId]
         ),
         db(
           `SELECT bc.component_product_id AS id,p.name,p.image_url,bc.quantity
