@@ -453,13 +453,13 @@ function normalizeConnectorActionKey(rawKey) {
 
 function permissionAllowsConnectorAction(user, actionKey) {
   if (!user || typeof user !== "object") return true;
-  const hasUserIdentity = [user.id, user.userId, user.companyId, user.storeId, user.roleId, user.isAdmin]
+  const hasUserIdentity = [user.id, user.userId, user.companyId, user.storeId, user.roleId]
     .some((value) => value !== undefined && value !== null && value !== false);
   if (!hasUserIdentity) return true;
   const permissions = Array.isArray(user?.permissions) ? user.permissions : Array.isArray(user?.permissionCodes) ? user.permissionCodes : [];
   const required = connectorActionPermission(actionKey);
   if (!required.length) return true;
-  return required.some((permission) => permissions.includes(permission) || user?.isAdmin === true);
+  return required.some((permission) => permissions.includes(permission));
 }
 
 export async function executeConnectorWorkflowAction({
