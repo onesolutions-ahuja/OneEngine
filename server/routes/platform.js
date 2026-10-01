@@ -3942,6 +3942,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         "UPDATE platform_rules SET object_id=$1,name=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,active=$6,lifecycle_status=$7,version=$8,user_modified=true,updated_at=NOW() WHERE id=$9 RETURNING *",
         [normalizedNext.object_id, normalizedNext.name, normalizedNext.trigger_key, JSON.stringify(normalizedNext.conditions), JSON.stringify(normalizedNext.action), normalizedNext.active, normalizedNext.lifecycle_status, normalizedNext.version, rule.id]
       );
+      if (meaningfulEdit) await saveWorkflowVersion(result.rows[0], req.user.id);
       res.json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (["22P02", "23503"].includes(error.code)) return res.status(400).json({ success: false, message: "Invalid rule reference" });
