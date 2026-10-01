@@ -2863,7 +2863,6 @@ async function initializeLegacyDatabase(pool) {
     ["reports.payments.view", "Payments Report"],
     ["reports.purchases.view", "Purchase Report"],
     ["reports.returns.view", "Sales Returns Report"],
-    ["reports.profit.view", "Profit Report"],
     ["reports.till.view", "Till Report"],
     ["reports.vat.view", "Tax / VAT Report"],
     ["reports.summary.view", "Reports Summary"],
