@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Third-party connector preview - UNAPPROVED">
+ <defs>
+  <linearGradient id="one" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#19d8ff"/><stop offset=".5" stop-color="#0874ff"/><stop offset="1" stop-color="#071ca8"/></linearGradient>
+  <filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-opacity=".22"/></filter>
+ </defs>
+ <rect x="16" y="16" width="480" height="480" rx="92" fill="#00CCBC"/>
+ <g transform="translate(0 -32)"><g transform="translate(151 142)" filter="url(#ps)" fill="#00CCBC"><path d="M105 8 130 5l-7 88-23 42-63-14-10-48 43-11-8-42 30-8 13 50Z"/><circle cx="82" cy="76" r="6" fill="#fff"/><circle cx="105" cy="78" r="6" fill="#fff"/><text x="4" y="184" font-family="Arial,Helvetica,sans-serif" font-size="43" font-weight="700">deliveroo</text></g></g>
+ <rect x="16" y="382" width="480" height="114" rx="0" fill="#000" opacity=".22"/>
+ <line x1="42" y1="382" x2="470" y2="382" stroke="#fff" opacity=".45" stroke-width="2"/>
+ <text x="56" y="452" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="700" fill="#fff">Connector</text>
+ <g transform="translate(392 402)" filter="url(#s)"><path d="M40 0 80 23v46L40 92 0 69V23Z" fill="url(#one)"/><path d="M36 20 22 35h11v34h15V20Z" fill="#fff"/></g>
+ <g transform="rotate(-24 256 216)"><rect x="76" y="181" width="360" height="70" rx="18" fill="#C00000" opacity=".80"/><text x="256" y="229" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="48" font-weight="900" letter-spacing="3" fill="#fff">UNAPPROVED</text></g>
+ </svg>
