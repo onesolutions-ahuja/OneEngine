@@ -95,7 +95,14 @@ export default function OneKioskPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
-  const [basket, setBasket] = useState([]);
+  const [basket, setBasket] = useState(() => demoMode
+    ? [
+        { ...DEMO_PRODUCTS.find((product) => product.id === "demo-classic-beef"), quantity: 1 },
+        { ...DEMO_PRODUCTS.find((product) => product.id === "demo-cheese-fries"), quantity: 1 },
+        { ...DEMO_PRODUCTS.find((product) => product.id === "demo-cola"), quantity: 1 },
+      ]
+    : []
+  );
   const [fulfilmentType, setFulfilmentType] = useState("COLLECT");
   const [paying, setPaying] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
