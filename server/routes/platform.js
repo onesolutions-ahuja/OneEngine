@@ -205,13 +205,6 @@ async function canManageGlobal(db, req) {
 
 async function hasPlatformObjectPermission(db, req, objectId, action) {
   if (!objectId) return false;
-  if (req.user?.roleId) {
-    const platformPermission = await db(
-      "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
-      [req.user.roleId]
-    );
-    if (platformPermission.rows.length) return true;
-  }
   if (!req.user?.companyId) return false;
   if (!req.user?.roleId) return false;
   const [result, permissionSets] = await Promise.all([
@@ -3271,7 +3264,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             manifest: object.module_package_manifest || {},
           }),
           permitted: true,
-          canManageOneEngine: permissions.includes("oneengine.manage"),
         });
         if (!access.allowed) return false;
       }
@@ -3812,25 +3804,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       getCompanyEntitlements(db, req.user.companyId),
     ]);
     const permissions = permissionResult.rows.map((row) => row.code);
-    const canManageOneEngine = permissions.includes("oneengine.manage");
     const byKey = new Map(internalAppCatalog.map((entry) => [entry.key, entry]));
-    /*
-     * Visibility is decided by the SHARED rule (services/authorization.js) so
-     * the runtime catalogue, the navigation filter and the route guards cannot
-     * disagree about Platform Superadmin. See moduleRuntimeAccess() for why the
-     * company enablement gate still applies to a Superadmin while the
-     * entitlement gates do not.
-     */
     const data = moduleResult.rows
       .map((module) => ({ ...byKey.get(module.module_key), ...module }))
       .filter((module) => {
         const definition = byKey.get(module.module_key);
+        const requiredPermissions = Array.isArray(definition?.permissions) ? definition.permissions : [];
         return moduleRuntimeAccess({
           enabledByCompany: module.company_enabled ?? true,
           packageInstalled: module.package_status === "active",
           licensed: isPackageLicensed(entitlementResult, { manifest: module.package_manifest || {} }),
-          permitted: canManageOneEngine || Boolean(definition?.permissions?.some((code) => permissions.includes(code))),
-          canManageOneEngine,
+          permitted: requiredPermissions.length === 0 || requiredPermissions.some((code) => permissions.includes(code)),
         }).allowed;
       });
     /* The configured Object navigation rides in the SAME payload as the module
