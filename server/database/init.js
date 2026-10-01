@@ -347,6 +347,45 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         await client.query(`UPDATE users SET active=false,updated_at=NOW() WHERE company_id IS NULL AND role_id IN (SELECT id FROM roles WHERE company_id IS NULL AND api_key IN ('engine_manager','oneengine_manager'))`);
       },
     },
+    {
+      key: "0021_oneassistant_confirmation_workflow",
+      version: "21",
+      name: "Seed editable OneAssistant appointment confirmation workflow",
+      up: async client => {
+        await client.query(`
+          INSERT INTO platform_rules
+            (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,company_id,created_by)
+          SELECT
+            NULL,
+            'OneAssistant · Appointment Confirmed',
+            'appointment.confirmed',
+            '[]'::jsonb,
+            jsonb_build_object(
+              'type','workflow',
+              'scope','oneassistant',
+              'actions',jsonb_build_array(
+                jsonb_build_object(
+                  'id','send-confirmation',
+                  'type','SEND_APPOINTMENT_CONFIRMATION'
+                )
+              )
+            ),
+            TRUE,
+            'ACTIVE',
+            1,
+            c.id,
+            NULL
+          FROM companies c
+          WHERE c.active=TRUE
+            AND NOT EXISTS (
+              SELECT 1 FROM platform_rules r
+               WHERE r.company_id=c.id
+                 AND r.trigger_key='appointment.confirmed'
+                 AND r.action::text LIKE '%SEND_APPOINTMENT_CONFIRMATION%'
+            )
+        `);
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
