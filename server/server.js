@@ -42,7 +42,7 @@ import createInventoryBatchesRouter from "./routes/inventoryBatches.js";
 import createSalesRouter from "./routes/sales.js";
 import createLayawaysRouter from "./routes/layaways.js";
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
-import createKioskRouter from "./routes/kiosk.js";
+import createKioskRouter, { createKioskModeGate } from "./routes/kiosk.js";
 import createScanGoRouter from "./routes/scanAndGo.js";
 import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReturnsRouter from "./routes/returns.js";
@@ -232,6 +232,7 @@ app.use(express.json({ limit: "10mb" }));
  * self-checkout mode token is refused for privileged operations
  * server-side (never merely hidden in the UI). */
 app.use(createSelfCheckoutModeGate());
+app.use(createKioskModeGate());
 app.use(createTrustedRuntimeGate());
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
