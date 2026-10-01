@@ -2758,6 +2758,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             {workflow.systemGenerated ? <option value="system_function">System function</option> : null}
             {workflow.systemGenerated ? <option value="system_action">System action</option> : null}
             {workflow.systemGenerated ? <option value="system_job">System job trigger</option> : null}
+            {isKioskExperience ? <option value="kiosk_experience">Kiosk experience</option> : null}
             {!scopeKey ? triggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>) : null}
           </select>
         </div>
@@ -2824,9 +2825,177 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : null}
 
-      <div id="workflow-canvas-section">
-        <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} />
-      </div>
+      {isKioskExperience ? (
+        <div id="workflow-canvas-section" className="space-y-3">
+          <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">OneKiosk Experience</div>
+                <p className="mt-1 max-w-3xl text-xs text-slate-600">This ordered screen flow is the customer journey used by kiosks assigned to this workflow. Reorder, add or remove screens here; no application code is required.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","PAYMENT","CONFIRMATION"].map((type) => (
+                  <button key={type} type="button" className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-blue-700" onClick={() => addKioskScreen(type)}>+ {type.replaceAll("_"," ")}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <label className="text-xs font-medium text-slate-700">Start screen
+                <select className={inputClass} value={kioskUi.startScreen || ""} onChange={(event) => updateKioskUi({ startScreen: event.target.value })}>
+                  {(kioskUi.screens || []).map((screen) => <option key={screen.key} value={screen.key}>{screen.title || screen.key} · {screen.type}</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-medium text-slate-700">Idle timeout (seconds)
+                <input className={inputClass} type="number" min="30" value={kioskUi.idleTimeoutSeconds || 75} onChange={(event) => updateKioskUi({ idleTimeoutSeconds: Math.max(30, Number(event.target.value) || 75) })} />
+              </label>
+              <label className="text-xs font-medium text-slate-700">Attract screen title
+                <input className={inputClass} value={typeof kioskUi.attractTitle === "string" ? kioskUi.attractTitle : ""} onChange={(event) => updateKioskUi({ attractTitle: event.target.value })} placeholder="Touch to start" />
+              </label>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[
+                ["accessibility","Accessibility"],
+                ["language","Language"],
+                ["assistance","Need Help"],
+                ["idleReset","Idle privacy reset"],
+                ["loyalty","Loyalty"],
+                ["promotions","Promotions"],
+                ["upsell","Upsell / accessories"],
+                ["compare","Product compare"],
+                ["stockPromise","Stock promise"],
+              ].map(([key,label]) => (
+                <label key={key} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                  <input type="checkbox" checked={kioskUi.features?.[key] === true} onChange={(event) => updateKioskFeature(key, event.target.checked)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {(kioskUi.screens || []).map((screen, index) => (
+              <div key={screen.key || index} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-9 w-9 place-items-center rounded-full bg-blue-50 text-xs font-bold text-blue-700">{index + 1}</div>
+                    <div>
+                      <strong className="block text-sm text-slate-800">{screen.title || screen.key || "Kiosk screen"}</strong>
+                      <span className="text-xs text-slate-500">{screen.type}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" disabled={index === 0} className="rounded border border-slate-200 px-2 py-1 text-xs disabled:opacity-40" onClick={() => moveKioskScreen(index,-1)}>↑</button>
+                    <button type="button" disabled={index === (kioskUi.screens || []).length - 1} className="rounded border border-slate-200 px-2 py-1 text-xs disabled:opacity-40" onClick={() => moveKioskScreen(index,1)}>↓</button>
+                    <button type="button" className="rounded border border-red-200 px-2 py-1 text-xs text-red-700" onClick={() => removeKioskScreen(index)}>Remove</button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-4">
+                  <label className="text-xs font-medium text-slate-700">Type
+                    <select className={inputClass} value={screen.type || "CATALOGUE"} onChange={(event) => updateKioskScreen(index,{ type:event.target.value })}>
+                      {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","PAYMENT","CONFIRMATION"].map((type) => <option key={type} value={type}>{type.replaceAll("_"," ")}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-xs font-medium text-slate-700">Key
+                    <input className={inputClass} value={screen.key || ""} onChange={(event) => updateKioskScreen(index,{ key:event.target.value.trim().replace(/[^a-zA-Z0-9_-]/g,"_") })} />
+                  </label>
+                  <label className="text-xs font-medium text-slate-700">Title
+                    <input className={inputClass} value={typeof screen.title === "string" ? screen.title : ""} onChange={(event) => updateKioskScreen(index,{ title:event.target.value })} />
+                  </label>
+                  <label className="text-xs font-medium text-slate-700">Next
+                    <select className={inputClass} value={screen.next || ""} onChange={(event) => updateKioskScreen(index,{ next:event.target.value || null })}>
+                      <option value="">Next screen in order</option>
+                      {(kioskUi.screens || []).filter((candidate) => candidate.key !== screen.key).map((candidate) => <option key={candidate.key} value={candidate.key}>{candidate.title || candidate.key}</option>)}
+                    </select>
+                  </label>
+                </div>
+
+                {screen.type === "CATALOGUE" ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={screen.search !== false} onChange={(e)=>updateKioskScreen(index,{search:e.target.checked})}/> Search</label>
+                    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={screen.categories !== false} onChange={(e)=>updateKioskScreen(index,{categories:e.target.checked})}/> Categories</label>
+                    <select className={inputClass} style={{maxWidth:220}} value={screen.productAction || "OPEN_DETAIL"} onChange={(e)=>updateKioskScreen(index,{productAction:e.target.value})}>
+                      <option value="OPEN_DETAIL">Open product detail</option>
+                      <option value="ADD">Add directly</option>
+                    </select>
+                  </div>
+                ) : null}
+
+                {screen.type === "PRODUCT_DETAIL" ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {[
+                      ["description","Description"],["variants","Variants"],["modifiers","Modifiers"],["specifications","Specifications"],
+                      ["stockPromise","Stock"],["compare","Compare"],["nutrition","Nutrition"],["allergens","Allergens"],["warranty","Warranty"],
+                    ].map(([key,label]) => <label key={key} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"><input type="checkbox" checked={screen[key] === true} onChange={(e)=>updateKioskScreen(index,{[key]:e.target.checked})}/>{label}</label>)}
+                  </div>
+                ) : null}
+
+                {screen.type === "RECOMMENDATIONS" ? (
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="text-xs font-medium text-slate-700">Relationship source
+                      <select className={inputClass} value={screen.source || "CROSS_SELL"} onChange={(e)=>updateKioskScreen(index,{source:e.target.value})}>
+                        <option value="CROSS_SELL">Cross-sell</option><option value="UPSELL">Upsell</option><option value="ACCESSORY">Accessory</option>
+                      </select>
+                    </label>
+                    <label className="inline-flex items-center gap-2 self-end pb-2 text-xs"><input type="checkbox" checked={screen.optional !== false} onChange={(e)=>updateKioskScreen(index,{optional:e.target.checked})}/> Customer may skip this screen</label>
+                  </div>
+                ) : null}
+
+                {screen.type === "FULFILMENT" ? (
+                  <div className="mt-3 space-y-2">
+                    {(screen.options || []).map((option, optionIndex) => (
+                      <div key={`${screen.key}-option-${optionIndex}`} className="grid gap-2 rounded-lg border border-slate-100 bg-slate-50 p-2 md:grid-cols-[1fr_1fr_1fr_auto]">
+                        <input className={inputClass} value={option.key || ""} placeholder="Key" onChange={(e)=>{
+                          const options=[...(screen.options||[])]; options[optionIndex]={...option,key:e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")}; updateKioskScreen(index,{options});
+                        }}/>
+                        <input className={inputClass} value={typeof option.label==="string"?option.label:""} placeholder="Customer label" onChange={(e)=>{
+                          const options=[...(screen.options||[])]; options[optionIndex]={...option,label:e.target.value}; updateKioskScreen(index,{options});
+                        }}/>
+                        <select className={inputClass} value={option.canonicalType || "SELF_PICKUP"} onChange={(e)=>{
+                          const options=[...(screen.options||[])]; options[optionIndex]={...option,canonicalType:e.target.value}; updateKioskScreen(index,{options});
+                        }}><option value="SELF_PICKUP">Pickup / collection</option><option value="DELIVERY">Delivery</option></select>
+                        <button type="button" className="text-xs text-red-700" onClick={()=>updateKioskScreen(index,{options:(screen.options||[]).filter((_,i)=>i!==optionIndex)})}>Remove</button>
+                        <div className="md:col-span-4 flex gap-3 px-1 text-xs">
+                          {["STORE","ADDRESS","CONTACT"].map((requirement)=><label key={requirement} className="inline-flex items-center gap-1"><input type="checkbox" checked={(option.requires||[]).includes(requirement)} onChange={(e)=>{
+                            const requirements=new Set(option.requires||[]); if(e.target.checked) requirements.add(requirement); else requirements.delete(requirement);
+                            const options=[...(screen.options||[])]; options[optionIndex]={...option,requires:[...requirements]}; updateKioskScreen(index,{options});
+                          }}/>{requirement.toLowerCase()}</label>)}
+                        </div>
+                      </div>
+                    ))}
+                    <button type="button" className="rounded border border-slate-200 px-3 py-2 text-xs font-medium" onClick={()=>updateKioskScreen(index,{options:[...(screen.options||[]),{key:`OPTION_${(screen.options||[]).length+1}`,label:"New option",canonicalType:"SELF_PICKUP",requires:[]}]})}>+ Fulfilment option</button>
+                  </div>
+                ) : null}
+
+                {screen.type === "PAYMENT" ? (
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="text-xs font-medium text-slate-700">Button label<input className={inputClass} value={screen.actionLabel || ""} onChange={(e)=>updateKioskScreen(index,{actionLabel:e.target.value})}/></label>
+                    <div className="self-end pb-2 text-xs text-slate-500">OneKiosk currently executes card payment through the device's assigned One Connect instance.</div>
+                  </div>
+                ) : null}
+
+                {screen.type === "CONFIRMATION" ? (
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <label className="text-xs font-medium text-slate-700">Collection label<input className={inputClass} value={screen.collectionLabel || ""} onChange={(e)=>updateKioskScreen(index,{collectionLabel:e.target.value})}/></label>
+                    <label className="text-xs font-medium text-slate-700">Auto reset seconds<input type="number" min="5" className={inputClass} value={screen.resetAfterSeconds || 30} onChange={(e)=>updateKioskScreen(index,{resetAfterSeconds:Math.max(5,Number(e.target.value)||30)})}/></label>
+                    <div className="flex items-end gap-3 pb-2 text-xs">
+                      {["PRINT","QR","EMAIL"].map((method)=><label key={method} className="inline-flex items-center gap-1"><input type="checkbox" checked={(screen.receipt||[]).includes(method)} onChange={(e)=>{
+                        const methods=new Set(screen.receipt||[]); if(e.target.checked) methods.add(method); else methods.delete(method); updateKioskScreen(index,{receipt:[...methods]});
+                      }}/>{method}</label>)}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div id="workflow-canvas-section">
+          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} />
+        </div>
+      )}
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
         {reviewIssue || "Trigger, conditions and actions are valid."}
       </div>
