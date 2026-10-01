@@ -49,11 +49,6 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   useEffect(()=>{void load()},[])
   useEffect(()=>{if(Array.isArray(initialPackages)&&initialPackages.length){setPackages(initialPackages);writeMarketplaceCache(initialPackages)}},[initialPackages])
   useEffect(()=>{setSelectedKey(String(initialSelectedPackageKey||''))},[initialSelectedPackageKey])
-  useEffect(()=>{
-    if(!shown.length){if(selectedKey)setSelectedKey('');return}
-    if(!shown.some(item=>item.package_key===selectedKey))setSelectedKey(shown[0].package_key)
-  },[shown,selectedKey])
-
   const hasPending=packages.some(item=>['QUEUED','UPDATING'].includes(String(item.company_installation?.update_status||'').toUpperCase()))
   useEffect(()=>{
     if(!hasPending)return undefined
@@ -63,6 +58,10 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
 
   const categories=useMemo(()=>['All',...new Set(packages.filter(i=>i.visible===true&&i.system_only!==true).map(i=>i.category||'Uncategorised').sort())],[packages])
   const shown=useMemo(()=>filterStorePackages(packages,{search:query,category,view}),[packages,query,category,view])
+  useEffect(()=>{
+    if(!shown.length){if(selectedKey)setSelectedKey('');return}
+    if(!shown.some(item=>item.package_key===selectedKey))setSelectedKey(shown[0].package_key)
+  },[shown,selectedKey])
   const selected=shown.find(i=>i.package_key===selectedKey)||packages.find(i=>i.package_key===selectedKey)||shown[0]||null
   const dependencies=selected?packageDependencies(selected):[]
   const installedKeys=new Set(packages.filter(i=>i.company_installation).map(i=>i.package_key))
