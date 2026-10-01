@@ -24,6 +24,7 @@ import {
   executeWorkflowAction,
   executeWorkflowActions,
 } from "./services/platformWorkflow.js";
+import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 import createTillRouter from "./routes/till.js";
@@ -2433,6 +2434,20 @@ async function startServer() {
                     [run.id, run.parent_run_id]
                   );
                   if (parentStep.rows[0]) {
+                    const outputContract = Array.isArray(workflow.action?.outputContract) ? workflow.action.outputContract : [];
+                    const childOutputs = {};
+                    for (const output of outputContract) {
+                      const name = String(output?.name || "");
+                      if (!name) continue;
+                      const source = output.source || `variables.${name}`;
+                      childOutputs[name] = resolveWorkflowResource(source, {
+                        record,
+                        previousRecord: null,
+                        user: req.user,
+                        rootObjectKey: object?.object_key || null,
+                        variables: workflowVariables,
+                      });
+                    }
                     await db(
                       `UPDATE platform_workflow_step_runs
                           SET status='COMPLETED',completed_at=NOW(),
@@ -2445,7 +2460,7 @@ async function startServer() {
                           status: "completed",
                           runId: run.id,
                           resumedChildCompleted: true,
-                          outputs: workflowVariables?.outputs || workflowVariables?.variables || {},
+                          outputs: childOutputs,
                         },
                       }), parentStep.rows[0].id]
                     );
