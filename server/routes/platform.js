@@ -3373,6 +3373,23 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         return error.message;
       }
     }
+    if (isWorkflow) {
+      const ids = actions.map((action) => action?.id).filter(Boolean).map(String);
+      if (new Set(ids).size !== ids.length) return "Workflow element identifiers must be unique";
+      const indexById = new Map(actions.map((action, index) => [String(action?.id || ""), index]).filter(([id]) => id));
+      for (let index = 0; index < actions.length; index += 1) {
+        const action = actions[index];
+        if (String(action?.type || action?.key || "").toUpperCase() !== "CONDITION") continue;
+        const yes = Array.isArray(action.ifBranch) ? action.ifBranch.map(String) : [];
+        const otherwise = Array.isArray(action.elseBranch) ? action.elseBranch.map(String) : [];
+        for (const targetId of [...yes, ...otherwise]) {
+          if (!indexById.has(targetId)) return `Decision "${action.label || action.id || index + 1}" references an action that no longer exists`;
+          if (indexById.get(targetId) <= index) return `Decision "${action.label || action.id || index + 1}" can only route to later actions`;
+        }
+        const overlap = yes.find((targetId) => otherwise.includes(targetId));
+        if (overlap) return `Decision "${action.label || action.id || index + 1}" assigns the same action to both outcomes`;
+      }
+    }
     if (actions.some((action) => action.type === "set_field" && (typeof action.field !== "string" || action.value === undefined))) return "Each field update action requires a field and value";
     if (actions.some((action) => action.type === "show_message" && (!action.message || typeof action.message !== "string"))) return "Each message action requires a message";
     if (actions.some((action) => ["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP"].includes(action.type) && (!action.templateId || !action.recipient))) return "Communication actions require a template and recipient";
