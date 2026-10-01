@@ -178,3 +178,12 @@ export async function configureSmsGateInboundWebhook(configuration = {}, { webho
     event: "sms:received",
   };
 }
+
+
+export async function getSmsGateDiagnostics(configuration = {}) {
+  const [webhooks, logs] = await Promise.all([
+    request(configuration, "/3rdparty/v1/webhooks"),
+    request(configuration, "/3rdparty/v1/logs").catch((error) => ({ error: error.message, code: error.code || null })),
+  ]);
+  return { webhooks, logs };
+}
