@@ -2908,17 +2908,48 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "CONDITION",
-    displayName: "Condition",
-    description: "Evaluate a branch condition and select flow path.",
+    displayName: "Decision",
+    description: "Evaluate ordered outcomes and follow the first matching path, otherwise the Default path.",
     validation: (action) => {
-      if (!action?.condition) throw new Error("Condition requires a condition");
+      const outcomes = Array.isArray(action?.outcomes) ? action.outcomes : [];
+      if (outcomes.length) {
+        if (outcomes.length > 20) throw new Error("Decision supports a maximum of 20 outcomes");
+        const ids = new Set();
+        for (const outcome of outcomes) {
+          if (!outcome?.id || !/^[A-Za-z0-9_-]{1,100}$/.test(String(outcome.id))) throw new Error("Each Decision outcome requires a valid id");
+          if (ids.has(String(outcome.id))) throw new Error("Decision outcome identifiers must be unique");
+          ids.add(String(outcome.id));
+          if (!String(outcome.label || "").trim()) throw new Error("Each Decision outcome requires a label");
+          if (!outcome.condition) throw new Error(`Decision outcome "${outcome.label}" requires conditions`);
+          if (outcome.branch !== undefined && !Array.isArray(outcome.branch)) throw new Error(`Decision outcome "${outcome.label}" branch must be a list`);
+        }
+        if (action.defaultBranch !== undefined && !Array.isArray(action.defaultBranch)) throw new Error("Decision Default branch must be a list");
+        return;
+      }
+      if (!action?.condition) throw new Error("Decision requires at least one outcome");
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, fields, record, previousRecord }) => {
-      const condition = action.condition;
-      const result = evaluateCondition(condition, fields || [], record || {}, previousRecord || null);
-      return { status: result ? "completed" : "skipped", matched: Boolean(result) };
+      const outcomes = Array.isArray(action?.outcomes) ? action.outcomes : [];
+      if (outcomes.length) {
+        for (let index = 0; index < outcomes.length; index += 1) {
+          const outcome = outcomes[index];
+          const matched = evaluateCondition(outcome.condition, fields || [], record || {}, previousRecord || null);
+          if (matched) {
+            return {
+              status: "completed",
+              matched: true,
+              outcomeId: String(outcome.id),
+              outcomeLabel: String(outcome.label || `Outcome ${index + 1}`),
+              outcomeIndex: index,
+            };
+          }
+        }
+        return { status: "completed", matched: false, outcomeId: null, outcomeLabel: "Default", outcomeIndex: -1 };
+      }
+      const result = evaluateCondition(action.condition, fields || [], record || {}, previousRecord || null);
+      return { status: result ? "completed" : "skipped", matched: Boolean(result), legacyBinary: true };
     },
   },
   {
@@ -3851,7 +3882,10 @@ export async function executeWorkflowActions({ actions, ...context }) {
     for (const candidate of allActions) {
       const candidateType = resolveWorkflowActionType(candidate);
       if (candidateType === "CONDITION") {
-        for (const branchId of [...(candidate.ifBranch || []), ...(candidate.elseBranch || [])]) {
+        const decisionTargets = Array.isArray(candidate.outcomes) && candidate.outcomes.length
+          ? [...candidate.outcomes.flatMap((outcome) => outcome?.branch || []), ...(candidate.defaultBranch || [])]
+          : [...(candidate.ifBranch || []), ...(candidate.elseBranch || [])];
+        for (const branchId of decisionTargets) {
           if (branchId) branchTargetIds.add(String(branchId));
         }
       }
@@ -3946,7 +3980,19 @@ export async function executeWorkflowActions({ actions, ...context }) {
         result.collection = undefined;
       }
       if (resolveWorkflowActionType(item) === "CONDITION" && typeof result?.matched === "boolean") {
-        const selectedIds = result.matched ? (item.ifBranch || []) : (item.elseBranch || []);
+        const outcomes = Array.isArray(item.outcomes) ? item.outcomes : [];
+        let selectedIds;
+        let outcomeName;
+        if (outcomes.length) {
+          const selectedOutcome = result.outcomeId == null
+            ? null
+            : outcomes.find((outcome) => String(outcome?.id) === String(result.outcomeId));
+          selectedIds = selectedOutcome ? (selectedOutcome.branch || []) : (item.defaultBranch || []);
+          outcomeName = selectedOutcome?.label || "Default";
+        } else {
+          selectedIds = result.matched ? (item.ifBranch || []) : (item.elseBranch || []);
+          outcomeName = result.matched ? "IF" : "ELSE";
+        }
         const selectedActions = selectedIds
           .map((id) => actionById.get(String(id)))
           .filter(Boolean)
@@ -3958,15 +4004,17 @@ export async function executeWorkflowActions({ actions, ...context }) {
             workflowVariables,
             allActions,
             branchExecution: true,
+            executionScope: `${context.executionScope ? context.executionScope + ":" : ""}${item.id || globalIndex}:decision:${result.outcomeId ?? "default"}`,
           });
           result.branch = {
-            outcome: result.matched ? "IF" : "ELSE",
+            outcome: outcomeName,
+            outcomeId: result.outcomeId ?? null,
             stepIds: selectedIds,
             results: branchResults,
           };
           branchPaused = branchResults.some((entry) => entry?.result?.status === "waiting");
         } else {
-          result.branch = { outcome: result.matched ? "IF" : "ELSE", stepIds: [], results: [] };
+          result.branch = { outcome: outcomeName, outcomeId: result.outcomeId ?? null, stepIds: [], results: [] };
         }
       }
 
