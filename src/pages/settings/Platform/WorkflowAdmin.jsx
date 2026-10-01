@@ -2194,18 +2194,30 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             </div>
 
             {workflow.object ? (
-              <div>
-                <div className="mb-2 text-xs font-semibold text-slate-700">Entry conditions</div>
-                <StepConditionEditor
-                  objectKey={workflow.object}
-                  value={{ type: workflow.match || "all", rules: workflow.conditions?.length ? workflow.conditions : [blankCondition()] }}
-                  onChange={(condition) => setWorkflow((current) => ({
-                    ...current,
-                    match: condition.type || "all",
-                    conditions: condition.rules || [],
-                  }))}
-                />
-                <p className="mt-2 text-[11px] text-slate-500">Use Changed / Changed to when the workflow should run only on a transition instead of every later edit.</p>
+              <div className="space-y-3">
+                {["after_update","after_save","before_update","before_save","field_changed"].includes(workflow.trigger) ? (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">When conditions become true</label>
+                    <select className={inputClass} value={workflow.entryTransition || "EVERY_TIME"} onChange={(event) => setWorkflow((current) => ({ ...current, entryTransition: event.target.value }))}>
+                      <option value="EVERY_TIME">Every time the record meets the conditions</option>
+                      <option value="UPDATED_TO_MEET">Only when the record is updated to meet the conditions</option>
+                    </select>
+                    <p className="mt-1 text-[11px] text-slate-500">“Only when updated to meet” runs when the full entry criteria changes from false to true. Later edits are ignored while the record remains matched.</p>
+                  </div>
+                ) : null}
+                <div>
+                  <div className="mb-2 text-xs font-semibold text-slate-700">Entry conditions</div>
+                  <StepConditionEditor
+                    objectKey={workflow.object}
+                    value={{ type: workflow.match || "all", rules: workflow.conditions?.length ? workflow.conditions : [blankCondition()] }}
+                    onChange={(condition) => setWorkflow((current) => ({
+                      ...current,
+                      match: condition.type || "all",
+                      conditions: condition.rules || [],
+                    }))}
+                  />
+                  <p className="mt-2 text-[11px] text-slate-500">Use Changed / Changed to for a specific field transition. Use the option above when the full entry criteria should transition from false to true.</p>
+                </div>
               </div>
             ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
           </div>
@@ -2231,6 +2243,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     draftVersion: Number(initialWorkflow.draftVersion || initialWorkflow.draft_version || 0) || null,
     conditions: initialWorkflow.conditions || [],
     match: initialWorkflow.action?.match || initialWorkflow.match || "all",
+    entryTransition: initialWorkflow.action?.entryTransition || initialWorkflow.entryTransition || "EVERY_TIME",
     inputContract: initialWorkflow.action?.inputContract || initialWorkflow.inputContract || [],
     outputContract: initialWorkflow.action?.outputContract || initialWorkflow.outputContract || [],
     scope: initialWorkflow.scope || initialWorkflow.action?.scope || null,
@@ -2265,6 +2278,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       version: 1,
       lifecycleStatus: "DRAFT",
       active: false,
+      entryTransition: "EVERY_TIME",
       inputContract: [],
       outputContract: [],
       steps: scopeKey === "whatsapp_assistant"
@@ -2333,6 +2347,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         version: 1,
         lifecycleStatus: "DRAFT",
         active: false,
+        entryTransition: "EVERY_TIME",
         inputContract: [],
         outputContract: [],
         steps: [],
@@ -2401,6 +2416,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           capabilityType: rule.action.capabilityType || null,
           capabilityKey: rule.action.capabilityKey || null,
           match: rule.action.match || "all",
+          entryTransition: rule.action.entryTransition || "EVERY_TIME",
           inputContract: rule.action.inputContract || [],
           outputContract: rule.action.outputContract || [],
           actionMetadata: {
@@ -2690,6 +2706,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         ...(workflow.actionMetadata?.defaultForNewDevices ? { defaultForNewDevices: true } : {}),
         ...(workflow.actionMetadata?.ui ? { ui: workflow.actionMetadata.ui } : {}),
         match: workflow.match || "all",
+        entryTransition: workflow.entryTransition || "EVERY_TIME",
         actions: workflow.steps.filter((step) => step.enabled !== false).map((step) => {
           const config = { ...(step.config || {}) };
           if (config.fieldMappings && !config.fieldValues) config.fieldValues = config.fieldMappings;
@@ -2898,6 +2915,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         inputContract: rule.action?.inputContract || [],
         outputContract: rule.action?.outputContract || [],
         match: rule.action?.match || "all",
+        entryTransition: rule.action?.entryTransition || "EVERY_TIME",
         lifecycleStatus: "DRAFT",
         version: Number(rule.version || 1),
         actionMetadata: {
