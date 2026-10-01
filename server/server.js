@@ -2181,6 +2181,7 @@ async function startServer() {
                   },
                 };
                 try {
+                  const scheduledVariables = { variables: {}, steps: {} };
                   const results = await executeWorkflowActions({
                     actions,
                     allActions,
@@ -2198,8 +2199,14 @@ async function startServer() {
                     writeAudit,
                     runId: childRun.id,
                     trigger: "SCHEDULED_PATH",
+                    workflowVariables: scheduledVariables,
                   });
-                  const scheduledWaiting = containsWaiting(results);
+                  const scheduledContainsWaiting = (entries = []) => (Array.isArray(entries) ? entries : []).some((entry) =>
+                    entry?.result?.status === "waiting"
+                    || scheduledContainsWaiting(entry?.result?.branch?.results || [])
+                    || (Array.isArray(entry?.result?.iterations) && entry.result.iterations.some((iteration) => scheduledContainsWaiting(iteration?.results || [])))
+                  );
+                  const scheduledWaiting = scheduledContainsWaiting(results);
                   await db(
                     `UPDATE platform_workflow_runs
                         SET status=$1,
@@ -2209,7 +2216,7 @@ async function startServer() {
                       WHERE id=$3 AND company_id=$4`,
                     [
                       scheduledWaiting ? "WAITING" : "COMPLETED",
-                      JSON.stringify({ childResults: results, finalVariables: workflowVariables || { variables: {}, steps: {} } }),
+                      JSON.stringify({ childResults: results, finalVariables: scheduledVariables }),
                       childRun.id,
                       job.company_id,
                     ]
