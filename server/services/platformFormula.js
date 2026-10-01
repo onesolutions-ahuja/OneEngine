@@ -186,6 +186,24 @@ function evaluate(node, get) {
   }
 }
 
+export function evaluateWorkflowFormula(expression, inputs = {}) {
+  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
+    throw new FormulaError("Workflow formula inputs must be an object");
+  }
+  const names = Object.keys(inputs);
+  for (const name of names) {
+    if (!SAFE.test(name) || RESERVED.has(name)) fail(`Invalid workflow formula input: ${name}`);
+  }
+  const ast = parseFormula(expression);
+  const value = evaluate(ast, (name) => {
+    if (!Object.prototype.hasOwnProperty.call(inputs, name)) fail(`Workflow formula references an unknown input: ${name}`);
+    const input = inputs[name];
+    if (input === undefined || input === "") return null;
+    return input;
+  });
+  return typeof value === "number" && !Number.isFinite(value) ? null : value;
+}
+
 export function compileFormulas(fields) {
   const byName = new Map(fields.filter(f => f.active !== false).map(f => [f.api_name, f]));
   const compiled = new Map(), visiting = new Set(), dependencyDepths = new Map();
