@@ -191,6 +191,16 @@ export function packageDefinition(entry) {
     loyalty: "Loyalty Core",
     finance_core: "Finance Core",
     paypal_qr: "PayPal QR Payment",
+    one_connect_google: "Google Connect",
+    smsgate_connector: "SMSGate",
+    one_assistant: "OneAssistant",
+    payment_reference: "Payment Reference",
+    payment_connector_template: "Payment Connector Template",
+    receipt_printer_connector_template: "Receipt Printer Connector Template",
+    kitchen_printer_connector_template: "Kitchen Printer Connector Template",
+    cash_drawer_connector_template: "Cash Drawer Connector Template",
+    mobile_scanner_connector: "Mobile Scanner Connector",
+    barcode_scanner_connector_template: "Barcode Scanner Connector Template",
   };
   const packageDescriptions = {
     retail_pos: "Sales, payments, returns and order processing.",
@@ -233,6 +243,16 @@ export function packageDefinition(entry) {
     mobile_scanner_connector: "Send-only phone barcode scanning paired to one store and till.",
     payment_reference: "Test-only reference payment simulator; not a certified or production payment provider.",
     paypal_qr: "Metadata-driven PayPal QR payment connector for transaction-specific checkout and verification.",
+    one_connect_google: "Licensed Google Workspace/OpenID Connect single sign-on for onePOS users.",
+    smsgate_connector: "SMSGate Android SMS provider for Communication Core.",
+    one_assistant: "Workflow-first appointment booking, calendar and communication automation.",
+    payment_reference: "Test-only reference payment simulator for connector validation.",
+    payment_connector_template: "Hidden payment connector package template.",
+    receipt_printer_connector_template: "Hidden receipt-printer connector package template.",
+    kitchen_printer_connector_template: "Hidden kitchen-printer connector package template.",
+    cash_drawer_connector_template: "Hidden cash-drawer connector package template.",
+    mobile_scanner_connector: "Phone barcode scanner connector paired to a store and till.",
+    barcode_scanner_connector_template: "Hidden barcode-scanner connector package template.",
   };
   const entitlementKeys = {
     retail_pos: "pos", one_kiosk: "one_kiosk", products: "pos", inventory: "inventory", batch_expiry: "batch_expiry",
@@ -247,6 +267,9 @@ export function packageDefinition(entry) {
     whatsapp: "integrations", whatsapp_connector: "integrations", whatsapp_assistant: "whatsapp_assistant",
     open_food_facts: "open_food_facts_connector", upcitemdb: "upcitemdb_connector", barcode_nest: "barcode_nest_connector",
     paypal_qr: "paypal_qr",
+    one_connect_google: "google_sso",
+    smsgate_connector: "communications.sms",
+    one_assistant: "one_assistant",
   };
   const dependencies = {
     retail_pos: ["products"],
@@ -281,6 +304,15 @@ export function packageDefinition(entry) {
     one_connect_dojo: ["connector_core"],
     one_connect_sumup: ["connector_core"],
     one_connect_square: ["connector_core"],
+    one_connect_google: ["connector_core"],
+    smsgate_connector: ["connector_core", "communication_core", "sms_connector"],
+    one_assistant: ["customers", "platform"],
+    payment_reference: ["connector_core"],
+    payment_connector_template: ["connector_core"],
+    receipt_printer_connector_template: ["connector_core"],
+    kitchen_printer_connector_template: ["connector_core"],
+    cash_drawer_connector_template: ["connector_core"],
+    barcode_scanner_connector_template: ["connector_core"],
   };
   const packageType = entry.packageType === "FOUNDATION" || entry.technical === true
     ? "FOUNDATION"
