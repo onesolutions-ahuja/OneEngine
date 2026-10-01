@@ -132,7 +132,17 @@ export default function OneKioskPage() {
     if (demoMode) {
       setProducts(DEMO_PRODUCTS);
       setCurrency("GBP");
-      setLoading(false);
+      apiRequest("/api/kiosk/flows")
+        .then((response) => {
+          const flows = Array.isArray(response?.data) ? response.data : [];
+          const selected = flows.find((flow) => flow?.action?.defaultForNewDevices === true) || flows[0];
+          if (selected?.action?.ui) {
+            setExperienceUi(selected.action.ui);
+            setExperienceFlow({ id: selected.id, name: selected.name, version: selected.version, templateKey: selected.action?.templateKey || null });
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
       return undefined;
     }
     let live = true;
@@ -290,6 +300,15 @@ export default function OneKioskPage() {
   const fulfilmentOptions = Array.isArray(fulfilmentScreen.options) ? fulfilmentScreen.options : [];
   const featureFlags = experienceUi?.features || {};
 
+  useEffect(() => {
+    if (!fulfilmentOptions.length) return;
+    const requestedDefault = fulfilmentScreen.defaultOption;
+    const next = fulfilmentOptions.some((option) => option.key === requestedDefault)
+      ? requestedDefault
+      : fulfilmentOptions[0]?.key;
+    if (next) setFulfilmentType(next);
+  }, [experienceFlow?.id, fulfilmentScreen.defaultOption, fulfilmentOptions.map((option) => option.key).join("|")]);
+
   const categories = useMemo(
     () => ["All", ...new Set(products.map((product) => product.categoryLabel).filter(Boolean))],
     [products]
@@ -418,7 +437,8 @@ export default function OneKioskPage() {
     setConfirmation(null);
     setPaidSale(null);
     setError("");
-    setFulfilmentType("COLLECT");
+    const next = fulfilmentScreen.defaultOption || fulfilmentOptions[0]?.key || "";
+    if (next) setFulfilmentType(next);
   };
 
   if (loading) {
@@ -430,19 +450,19 @@ export default function OneKioskPage() {
       <main className="one-kiosk one-kiosk-confirmation">
         <section className="one-kiosk-confirmation-card">
           <div className="one-kiosk-success-icon"><CheckCircle2 size={52} /></div>
-          <span className="one-kiosk-eyebrow">Payment complete</span>
-          <h1>Thank you</h1>
-          <p>Your order has been sent to the counter.</p>
+          <span className="one-kiosk-eyebrow">{confirmationScreen.eyebrow || "Payment complete"}</span>
+          <h1>{confirmationScreen.title || "Order confirmed"}</h1>
+          <p>{confirmationScreen.subtitle || "Your order has been placed."}</p>
           <div className="one-kiosk-collection-number">
-            <span>Your collection number</span>
+            <span>{confirmationScreen.collectionLabel || "Order reference"}</span>
             <strong>{confirmation.collectionNumber}</strong>
           </div>
           <div className="one-kiosk-confirmation-meta">
             <div><span>Total paid</span><strong>{money(confirmation.total, currency)}</strong></div>
             <div><span>Receipt</span><strong>{confirmation.receiptNumber || "Created"}</strong></div>
           </div>
-          <p className="one-kiosk-collection-help">Please keep this number and go to the collection counter. Your number will be called or shown when your order is ready.</p>
-          <button type="button" className="one-kiosk-pay" onClick={startNewOrder}>Start a new order</button>
+          <p className="one-kiosk-collection-help">{confirmationScreen.helpText || "Keep this reference for your order."}</p>
+          <button type="button" className="one-kiosk-pay" onClick={startNewOrder}>{confirmationScreen.doneLabel || "Start a new order"}</button>
         </section>
       </main>
     );
