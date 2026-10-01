@@ -4546,8 +4546,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const events=await db("SELECT e.*,u.username AS actor_name FROM platform_approval_events e LEFT JOIN users u ON u.id=e.actor_user_id WHERE e.request_id=$1 ORDER BY e.created_at",[request.id]);
         history={actions:actions.rows,events:events.rows};
       }
-      const eligible=await db("SELECT id,name,config FROM platform_approval_processes WHERE company_id=$1 AND object_id=$2 AND active=TRUE ORDER BY name",[req.user.companyId,object.id]);
-      res.json({success:true,data:{request,history,availableProcesses:eligible.rows}});
+      const eligible=await db("SELECT id,name,config,conditions FROM platform_approval_processes WHERE company_id=$1 AND object_id=$2 AND active=TRUE ORDER BY name",[req.user.companyId,object.id]);
+      const manualProcesses=eligible.rows.filter(p=>cfg(p.config).submissionMode==="MANUAL");
+      res.json({success:true,data:{request,history,availableProcesses:manualProcesses}});
     } catch(error) { console.error("Record approval state error:",error); res.status(500).json({success:false,message:"Unable to load approval state"}); }
   });
 
