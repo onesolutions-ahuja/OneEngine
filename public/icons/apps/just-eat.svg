@@ -1,22 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Just Eat connector">
-<defs>
- <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#eef2f7"/></linearGradient>
- <linearGradient id="one" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#19d8ff"/><stop offset=".48" stop-color="#0874ff"/><stop offset="1" stop-color="#071ca8"/></linearGradient>
- <filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-opacity=".18"/></filter>
- <filter id="ps" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-opacity=".25"/></filter>
-</defs>
-<rect x="28" y="28" width="456" height="456" rx="96" fill="url(#bg)" stroke="#dce3eb" stroke-width="3" filter="url(#s)"/>
-<path d="M120 356C82 319 76 169 138 115c53-46 240-44 291 12 43 47 40 155 4 212" fill="none" stroke="#4c5157" stroke-width="18" stroke-linecap="round" filter="url(#ps)"/>
-<g transform="translate(153 145)" filter="url(#ps)"><rect width="206" height="185" rx="40" fill="#ff8000"/><path d="M58 73 103 31l46 42h-16v48H73V73Z" fill="#fff"/><path d="M90 66v55M113 66v55M90 81h23" stroke="#ff8000" stroke-width="7" stroke-linecap="round"/><text x="28" y="164" font-family="Arial,Helvetica,sans-serif" font-size="35" font-style="italic" font-weight="800" fill="#fff">JUST EAT</text></g>
-<g filter="url(#ps)" transform="translate(166 350) rotate(-8)">
- <rect x="0" y="0" width="84" height="76" rx="20" fill="#666c72"/>
- <rect x="-18" y="22" width="28" height="34" rx="8" fill="#5a6066"/>
- <rect x="74" y="15" width="54" height="12" rx="6" fill="#aeb5bc"/>
- <rect x="74" y="47" width="54" height="12" rx="6" fill="#aeb5bc"/>
-</g>
-<path d="M274 484C365 436 413 355 484 295V484Z" fill="#fff" stroke="#e6ebf0" stroke-width="2"/>
-<g transform="translate(372 365)" filter="url(#ps)">
- <path d="M50 0 98 28v56L50 112 0 84V28Z" fill="url(#one)"/>
- <path d="M45 24 28 42h13v42h18V24Z" fill="#fff"/>
-</g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="JUST EAT connector">
+  <defs>
+    <linearGradient id="one" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#19d8ff"/><stop offset=".5" stop-color="#0874ff"/><stop offset="1" stop-color="#071ca8"/></linearGradient>
+    <filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-opacity=".20"/></filter>
+  </defs>
+  <rect x="8" y="8" width="496" height="496" rx="98" fill="#FF8000"/>
+  <path d="M36 26 H476 Q494 26 494 44 V210 Q370 70 36 170Z" fill="#FFFFFF" opacity=".06"/>
+  <text x="256" y="275" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="76" font-weight="800" fill="#FFFFFF">JUST EAT</text>
+  <g transform="rotate(-27 256 230)" opacity="0.28">
+      <text x="256" y="245" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="44" font-weight="700" fill="#D6D9DE">Approval required</text>
+    </g>
+  <rect x="8" y="382" width="496" height="122" fill="#000000" opacity="0.30"/>
+  <line x1="38" y1="382" x2="474" y2="382" stroke="#FFFFFF" opacity=".35" stroke-width="2"/>
+  <text x="54" y="454" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="700" fill="#FFFFFF">Connector</text>
+  <line x1="356" y1="410" x2="356" y2="474" stroke="#FFFFFF" opacity=".35" stroke-width="2"/>
+  <g transform="translate(384 401)" filter="url(#s)"><path d="M48 0 94 27v54L48 108 0 81V27Z" fill="url(#one)"/><path d="M44 23 27 41h13v42h17V23Z" fill="#fff"/></g>
 </svg>
