@@ -140,8 +140,64 @@ export async function executePlatformAutomations({ db, object, fields, record, p
     const actions = Array.isArray(rule.action?.actions) ? rule.action.actions : [rule.action];
     for (const action of actions) {
       if (action.type === "workflow") {
-        const workflowResults = await executeWorkflowActions({ actions: action.actions || [], db, object, fields, record: nextRecord, previousRecord: prior, recordId, trigger, req, companyId: req.user.companyId });
-        executions.push({ ruleId: rule.id, action: action.type, status: "completed", details: workflowResults });
+        const nestedActions = Array.isArray(action.actions) ? action.actions : [];
+        if (!nestedActions.length) {
+          executions.push({ ruleId: rule.id, action: action.type, status: "skipped", reason: "Nested workflow has no actions" });
+          continue;
+        }
+        const workflowVariables = { variables: {}, steps: {} };
+        const run = await createWorkflowRun({
+          db,
+          companyId: req.user.companyId,
+          workflowId: rule.id,
+          workflowName: rule.name || "Workflow",
+          workflowVersion: Number(rule.active_version || rule.version || 1),
+          objectId: object.id,
+          recordId,
+          triggerKey: trigger,
+          status: "RUNNING",
+          metadata: {
+            legacyNestedWorkflow: true,
+            actorUserId: req.user.id || null,
+            storeId: req.user.storeId || null,
+            tillId: req.user.tillId || null,
+            initialVariables: workflowVariables,
+            initialPreviousRecord: workflowRecordSnapshot(fields, previousRecord),
+          },
+        });
+        try {
+          const workflowResults = await executeWorkflowActions({
+            actions: nestedActions,
+            db,
+            object,
+            fields,
+            record: nextRecord,
+            previousRecord: prior,
+            recordId,
+            trigger,
+            req,
+            companyId: req.user.companyId,
+            runId: run?.id || null,
+            workflowVersion: Number(rule.active_version || rule.version || 1),
+            workflowVariables,
+          });
+          const waiting = workflowResultsContainStatus(workflowResults, "waiting");
+          if (run?.id && !waiting) {
+            await db(
+              "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
+              [JSON.stringify({ childResults: workflowResults, finalVariables: workflowVariables }), run.id, req.user.companyId]
+            );
+          }
+          executions.push({ ruleId: rule.id, action: action.type, status: waiting ? "waiting" : "completed", runId: run?.id || null, details: workflowResults });
+        } catch (error) {
+          if (run?.id) {
+            await db(
+              "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,updated_at=NOW() WHERE id=$3 AND company_id=$4",
+              [String(error?.message || error).slice(0,2000), JSON.stringify({ finalVariables: workflowVariables }), run.id, req.user.companyId]
+            );
+          }
+          throw error;
+        }
         continue;
       }
       if (action.type === "show_message") {
