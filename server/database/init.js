@@ -778,6 +778,34 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     console.log(`onePOS: synchronized bootstrap password for ${synced.rowCount || synced.rows.length} Superadmin/OneEngine account(s)`);
   }
 
+  const engineVerify = await pool.query(
+    `SELECT u.id,u.email,u.username,u.company_id,u.password_hash,r.api_key
+       FROM users u
+       LEFT JOIN roles r ON r.id=u.role_id
+      WHERE LOWER(COALESCE(u.email,''))='superadmin@onepos.com'
+         OR LOWER(COALESCE(u.username,''))='superadmin@onepos.com'
+      ORDER BY u.created_at,u.id`
+  );
+  const engineVerifyRows = [];
+  for (const row of engineVerify.rows) {
+    engineVerifyRows.push({
+      id: row.id,
+      email: row.email,
+      username: row.username,
+      companyBound: row.company_id != null,
+      roleApiKey: row.api_key || null,
+      configuredPasswordMatches: row.password_hash && enginePassword
+        ? await bcrypt.compare(enginePassword, row.password_hash)
+        : false,
+    });
+  }
+  const dbVerify = await pool.query("SELECT current_database() AS database_name");
+  console.log("onePOS: bootstrap auth verification", {
+    database: dbVerify.rows[0]?.database_name || null,
+    engineIdentityCount: engineVerifyRows.length,
+    engineIdentities: engineVerifyRows,
+  });
+
   return {
     tenantSuperadminReady: Boolean(tenantUser.rows?.[0]),
     tenantSuperadminEmail: tenantEmail,
