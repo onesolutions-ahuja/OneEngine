@@ -107,7 +107,10 @@ export default function OneKioskDevicesPage() {
           <h1>Kiosk devices</h1>
           <p>Monitor every kiosk and manage its own payment terminal, printer and connectivity settings.</p>
         </div>
-        <button type="button" onClick={load} disabled={loading}><RefreshCw size={17}/> Refresh</button>
+        <div className="kiosk-devices-header-actions">
+          <button type="button" onClick={() => { window.location.hash = "/app/kiosk"; }}><Monitor size={17}/> Open kiosk</button>
+          <button type="button" onClick={load} disabled={loading}><RefreshCw size={17}/> Refresh</button>
+        </div>
       </header>
 
       {error ? <div className="kiosk-devices-error">{error}</div> : null}
@@ -141,8 +144,8 @@ export default function OneKioskDevicesPage() {
               <div className="kiosk-health-grid">
                 <div><Wifi size={20}/><span>Internet</span><StatusPill status={selected.internet_status} /></div>
                 <div><Monitor size={20}/><span>onePOS server</span><StatusPill status={selected.server_status} /></div>
-                <div><CreditCard size={20}/><span>Card terminal</span><StatusPill status={selected.payment_status} /></div>
-                <div><Printer size={20}/><span>Receipt printer</span><StatusPill status={selected.printer_status} /></div>
+                <div><CreditCard size={20}/><span>Card terminal</span><StatusPill status={selected.effective_payment_status || selected.payment_status} /></div>
+                <div><Printer size={20}/><span>Receipt printer</span><StatusPill status={selected.effective_printer_status || selected.printer_status} /></div>
               </div>
 
               <div className="kiosk-device-section">
