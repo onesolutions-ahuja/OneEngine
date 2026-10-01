@@ -3047,6 +3047,78 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "SCHEDULE_PATH",
+    displayName: "Scheduled Path",
+    description: "Run selected workflow steps later without blocking the immediate workflow.",
+    schema: {
+      type: "object",
+      properties: {
+        pathLabel: { type: "string" },
+        scheduleMode: { type: "string", enum: ["OFFSET","AT_DATETIME"] },
+        delayAmount: { type: "number" },
+        delayUnit: { type: "string", enum: ["MINUTES","HOURS","DAYS"] },
+        runAt: { type: "string" },
+        branch: { type: "array" },
+      },
+      required: ["pathLabel","scheduleMode","branch"],
+    },
+    validation: (action) => {
+      if (!String(action?.pathLabel || "").trim()) throw new Error("Scheduled Path requires a name");
+      const mode = String(action?.scheduleMode || "OFFSET").toUpperCase();
+      if (!["OFFSET","AT_DATETIME"].includes(mode)) throw new Error("Scheduled Path requires a supported timing mode");
+      if (!Array.isArray(action?.branch) || !action.branch.length) throw new Error("Scheduled Path requires at least one path step");
+      if (mode === "OFFSET") {
+        const amount = Number(action.delayAmount);
+        if (!Number.isFinite(amount) || amount < 0) throw new Error("Scheduled Path delay must be zero or greater");
+        if (!["MINUTES","HOURS","DAYS"].includes(String(action.delayUnit || "MINUTES").toUpperCase())) throw new Error("Scheduled Path delay unit is invalid");
+      } else if (!action.runAt) {
+        throw new Error("Scheduled Path requires a date/time Resource");
+      }
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record, previousRecord, object, workflowVariables = {}, debugMode = false }) => {
+      const mode = String(action.scheduleMode || "OFFSET").toUpperCase();
+      let runAt;
+      if (mode === "AT_DATETIME") {
+        const resolved = resolveConfiguredResource(action.runAt, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+        runAt = new Date(resolved);
+      } else {
+        const amount = Number(action.delayAmount || 0);
+        const unit = String(action.delayUnit || "MINUTES").toUpperCase();
+        const multiplier = unit === "DAYS" ? 86400000 : unit === "HOURS" ? 3600000 : 60000;
+        runAt = new Date(Date.now() + amount * multiplier);
+      }
+      if (Number.isNaN(runAt.getTime())) throw new Error("Scheduled Path resolved to an invalid date/time");
+      if (debugMode) {
+        return { status: "scheduled", simulated: true, runAt: runAt.toISOString(), pathLabel: action.pathLabel, stepIds: action.branch };
+      }
+      const tenantId = companyId || req?.user?.companyId;
+      const job = await enqueuePlatformJob({
+        db,
+        companyId: tenantId,
+        kind: "WAIT",
+        payload: {
+          scheduledPath: true,
+          parentRunId: runId || null,
+          workflowId: action.workflowId || null,
+          scheduledPathId: action.id || null,
+          scheduledPathLabel: action.pathLabel,
+          scheduledPathStepIds: action.branch,
+          sourceStepRunId: stepRunId || null,
+          recordId: record?.id || null,
+          objectId: object?.id || null,
+        },
+        runAt,
+        idempotencyKey: `${tenantId || "workflow"}:scheduled-path:${runId || "no-run"}:${action.id || action.pathLabel}:${runAt.toISOString()}`,
+      });
+      if (job?.id && stepRunId) {
+        await db("UPDATE platform_workflow_step_runs SET durable_job_id=$1,updated_at=NOW() WHERE id=$2", [job.id, stepRunId]);
+      }
+      return { status: "scheduled", jobId: job?.id || null, runAt: runAt.toISOString(), pathLabel: action.pathLabel, stepIds: action.branch };
+    },
+  },
+  {
     key: "WAIT",
     displayName: "Wait",
     description: "Pause a workflow without blocking an HTTP request.",
@@ -3919,7 +3991,7 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "CONSTANT","FORMULA","ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
-  "BULK_UPDATE_RECORDS","STOP",
+  "BULK_UPDATE_RECORDS","SCHEDULE_PATH","STOP",
 ]);
 
 export function friendlyWorkflowError(error, actionType = "") {
@@ -4070,6 +4142,11 @@ export async function executeWorkflowActions({ actions, ...context }) {
       if (candidateType === "LOOP") {
         for (const bodyId of candidate.bodyBranch || []) {
           if (bodyId) branchTargetIds.add(String(bodyId));
+        }
+      }
+      if (candidateType === "SCHEDULE_PATH") {
+        for (const scheduledId of candidate.branch || []) {
+          if (scheduledId) branchTargetIds.add(String(scheduledId));
         }
       }
       for (const faultId of candidate.faultBranch || []) {
