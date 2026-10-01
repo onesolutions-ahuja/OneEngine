@@ -150,3 +150,5 @@
 @media(max-width:640px){.one-kiosk-staff-exit span{display:none}.one-kiosk-staff-exit{width:34px;height:34px;justify-content:center;padding:0}}
 
 .one-kiosk-redeem-points{display:grid;gap:10px;padding:14px;border:1px solid #dbeafe;background:#eff6ff;border-radius:14px}.one-kiosk-redeem-points>div:first-child{display:grid;gap:2px}.one-kiosk-redeem-points span{font-size:13px;color:#475569}.one-kiosk-redeem-points input[type=range]{width:100%}.one-kiosk-redeem-actions{display:flex;gap:8px;justify-content:flex-end}.one-kiosk-redeem-actions button{border:1px solid #bfdbfe;background:#fff;border-radius:10px;padding:7px 10px;font-weight:750;color:#1d4ed8}
+
+.one-kiosk-bundle-contents{display:grid;gap:8px;padding:12px 14px;border:1px solid #e5e9ef;border-radius:12px;background:#f8fafc}.one-kiosk-bundle-contents>div{display:flex;flex-wrap:wrap;gap:7px}.one-kiosk-bundle-contents span{padding:6px 9px;border-radius:999px;background:#fff;border:1px solid #e5e9ef;font-size:13px;color:#475569}
