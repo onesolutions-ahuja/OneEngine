@@ -61,15 +61,6 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
         return res.status(404).json({ success: false, message: "SMSGate connection unavailable" });
       }
 
-      // Public provider webhooks are still mutation entry points. Once the
-      // signed connector instance resolves the tenant, attach the request to
-      // the shared business-command workflow trace before writing anything.
-      await req.ensureBusinessCommandRun?.({
-        companyId: connection.company_id,
-        userId: null,
-        storeId: null,
-      });
-
       const configuration = jsonValue(connection.connector_configuration, {});
       let secrets = {};
       try { secrets = decryptCredentials(connection.credentials_encrypted) || {}; } catch { secrets = {}; }
@@ -87,6 +78,15 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
       if (!signatureValid && !tokenValid) {
         return res.status(401).json({ success: false, message: "Invalid SMSGate webhook authentication" });
       }
+
+      // Only authenticated provider callbacks become business-command traces.
+      // Rejected/stale webhook attempts must not pollute Workflow Runs as
+      // failed business commands.
+      await req.ensureBusinessCommandRun?.({
+        companyId: connection.company_id,
+        userId: null,
+        storeId: null,
+      });
 
       if (String(body?.event || "").toLowerCase() !== "sms:received") {
         return res.status(202).json({ success: true, ignored: true });
