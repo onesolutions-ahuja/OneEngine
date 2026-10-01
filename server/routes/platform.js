@@ -893,7 +893,6 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         "UPDATE platform_value_sets SET value_set_key=COALESCE($1,value_set_key),label=COALESCE($2,label),description=COALESCE($3,description),active=COALESCE($4,active),updated_at=NOW() WHERE id=$5 AND company_id=$6 RETURNING *",
         [req.body.valueSetKey, req.body.label, req.body.description, req.body.active, req.params.valueSetId, req.user.companyId]
       );
-      if (meaningfulEdit || forceNewVersion) await saveWorkflowVersion(result.rows[0], req.user.id);
       res.json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (error.code === "23505") return res.status(409).json({ success: false, message: "A value set with this API name already exists" });
