@@ -47,8 +47,7 @@ function JarvisVideo() {
       playsInline
       preload="auto"
     >
-      <source src="https://onepos.onrender.com/assets/jarvis/jarves-transparent.webm" type="video/webm" />
-      <source src="https://raw.githubusercontent.com/onesolutions-ahuja/OneEngine/main/server/public/assets/jarvis/jarves-transparent.webm" type="video/webm" />
+      <source src="https://raw.githubusercontent.com/onesolutions-ahuja/OneEngine/c557c8f528a9cce1eb1577aea43d22c90a75e36a/server/public/assets/jarvis/jarves-transparent.webm" type="video/webm" />
     </video>
   );
 }
