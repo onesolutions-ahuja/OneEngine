@@ -87,6 +87,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
         companyId: req.user.companyId,
         workflowId: rule.id,
         workflowName: rule.name,
+        workflowVersion: Number(rule.active_version || rule.version || 1),
         objectId: object.id,
         recordId,
         triggerKey: trigger,
@@ -113,6 +114,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
           req,
           companyId: req.user.companyId,
           runId: run?.id || null,
+          workflowVersion: Number(rule.active_version || rule.version || 1),
           workflowVariables,
         });
         const containsWaiting = (entries = []) => (Array.isArray(entries) ? entries : []).some((entry) =>
