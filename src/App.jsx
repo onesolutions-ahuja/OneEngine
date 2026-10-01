@@ -1017,10 +1017,10 @@ function SettingsPage({ onOpenProfile }) {
   const platformOnlySection = DEVELOPER_SETTINGS_KEYS.has(current?.key)
   /*
    * Server/API configuration is device/platform configuration, not tenant
-   * company settings. Access is granted by platform.manage.
+   * company settings. Access is granted by oneengine.manage.
    */
   const companyIndependentSection = platformOnlySection
-    || (current?.key === 'server-api' && permissionCodes.includes('platform.manage'))
+    || (current?.key === 'server-api' && (permissionCodes.includes('oneengine.manage') || permissionCodes.includes('platform.manage')))
   const hasCompanyContext = context?.hasCompanyContext === true
   const companySettingsError = context?.settingsError || ''
 
@@ -2365,7 +2365,7 @@ function Desktop({ onLock, onSignOut }) {
     const cached = getStoredSessionPermissions()
     return Array.isArray(cached?.permissions) ? cached.permissions : []
   })
-  const canManagePlatform = desktopPermissions.includes('platform.manage')
+  const canManageOneEngine = desktopPermissions.includes('oneengine.manage') || (desktopPermissions.includes('oneengine.manage') || desktopPermissions.includes('platform.manage'))
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
   const isTillUser = /till|cashier|sales/i.test(String(storedUser?.role || ''))
@@ -2811,12 +2811,10 @@ function Desktop({ onLock, onSignOut }) {
                   initialSelectedPackageKey={storeFocusPackageKey}
                   onPackagesChange={setStoreApps}
                   canManagePackages={
-                    storedUser?.isSuperadmin === true ||
-                    storedUser?.is_superadmin === true ||
                     desktopPermissions.includes('package.install') ||
                     desktopPermissions.includes('package.manage') ||
                     desktopPermissions.includes('settings.manage') ||
-                    desktopPermissions.includes('platform.manage')
+                    (desktopPermissions.includes('oneengine.manage') || desktopPermissions.includes('platform.manage'))
                   }
                   onClose={() => setTopPanel('')}
                   onOpenRoute={openRoutePath}
@@ -2909,7 +2907,7 @@ function Desktop({ onLock, onSignOut }) {
       <LazyLoadBoundary resetKey={`${activeApp || ""}:${routeState?.section || ""}`}>
       <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>
         {activeApp === 'developer' ? (
-          canManagePlatform ? (
+          canManageOneEngine ? (
             <OneDeveloperPage
               initialSection={routeState?.section || 'objects'}
               onSectionChange={(section) => {
@@ -2918,7 +2916,7 @@ function Desktop({ onLock, onSignOut }) {
                 setRoute('developer', section)
               }}
             />
-          ) : <div className="module-state">Platform Management permission required.</div>
+          ) : <div className="module-state">OneEngine Manager permission required.</div>
         ) : activeApp === 'settings' ? (
           <SettingsPage onOpenProfile={() => {
             const next = { app: 'profile', section: null }
@@ -2998,9 +2996,9 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
-          canManagePlatform ? <div className="superadmin-theme"><LicensingAdmin /></div> : <div className="module-state">Platform Management permission required.</div>
+          canManageOneEngine ? <div className="superadmin-theme"><LicensingAdmin /></div> : <div className="module-state">OneEngine Manager permission required.</div>
         ) : activeApp === 'app-releases' ? (
-          canManagePlatform ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : <div className="module-state">Platform Management permission required.</div>
+          canManageOneEngine ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : <div className="module-state">OneEngine Manager permission required.</div>
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'company' }
