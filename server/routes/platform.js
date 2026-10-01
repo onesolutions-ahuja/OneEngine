@@ -3988,7 +3988,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   router.get("/platform/rules/:ruleId/versions", ...manage, async (req, res) => {
     const result = await db(
-      "SELECT id,workflow_id,version,lifecycle_status,created_by,created_at FROM platform_workflow_versions WHERE company_id=$1 AND workflow_id=$2 ORDER BY version DESC",
+      "SELECT id,workflow_id,version,definition,lifecycle_status,created_by,created_at FROM platform_workflow_versions WHERE company_id=$1 AND workflow_id=$2 ORDER BY version DESC",
       [req.user.companyId, req.params.ruleId]
     );
     res.json({ success: true, data: result.rows });
