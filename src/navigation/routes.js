@@ -157,10 +157,6 @@ export function setRoute(app, section = null, options = {}) {
         ? `${base}/kiosk-display`
       : app === 'kiosk-devices'
         ? `${base}/kiosk-devices`
-      : app === 'returns'
-        ? `${base}/returns`
-      : app === 'supplier-returns'
-        ? `${base}/supplier-returns`
       : app === 'audit-log'
         ? `${base}/audit-log`
       : app === 'licensing'
