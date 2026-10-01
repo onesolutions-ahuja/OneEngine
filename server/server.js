@@ -837,7 +837,6 @@ app.get("/api/auth/google/callback", async (req, res) => {
         u.store_id,
         u.role_id,
         u.active,
-        u.is_platform_developer,
         u.must_change_password,
         r.name AS role_name,
         COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page
@@ -876,7 +875,6 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || req.body?.username || "").trim();
     const { password } = req.body;
-    const requestedActingCompanyId = String(req.body?.actingCompanyId || "").trim();
 
     if (!email || !password) {
       return res.status(400).json({
@@ -902,7 +900,6 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         u.store_id,
         u.role_id,
         u.active,
-        u.is_platform_developer,
         u.must_change_password,
         r.name AS role_name,
         COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page
@@ -989,53 +986,9 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     );
     markLoginTiming("last_login_update_ms", stepStartedAt);
 
-    /*
-     * Resolve the optional OneEngine Manager acting-company inside the login
-     * request. Smart Theme previously performed two extra HTTP round trips
-     * after authentication (developer/companies + acting-company), which kept
-     * the login button stuck on "Signing in..." even though the password had
-     * already been accepted.
-     *
-     * The requested company is never trusted directly: it is selected only
-     * when an active developer-company mapping exists. If no remembered company
-     * is valid and exactly one mapping exists, that single company is selected.
-     */
-    let actingCompanyId = null;
-    const oneEngineAuthority = user.role_id
-      ? await loginPool.query(
-          `SELECT 1
-             FROM role_permissions rp
-             JOIN permissions p ON p.id=rp.permission_id
-            WHERE rp.role_id=$1 AND p.code='oneengine.manage'
-            LIMIT 1`,
-          [user.role_id]
-        )
-      : { rows: [] };
-    const canActAcrossCompanies = oneEngineAuthority.rows.length > 0 || user.is_platform_developer === true;
-    if (canActAcrossCompanies) {
-      stepStartedAt = Date.now();
-      const companyAccess = oneEngineAuthority.rows.length
-        ? await pool.query(
-            `SELECT id FROM companies WHERE active=true ORDER BY name`
-          )
-        : await pool.query(
-            `SELECT c.id
-               FROM companies c
-               JOIN platform_developer_company_access a ON a.company_id=c.id
-              WHERE a.developer_id=$1
-                AND a.active=true
-                AND c.active=true
-              ORDER BY c.name`,
-            [user.id]
-          );
-      markLoginTiming("acting_company_lookup_ms", stepStartedAt);
-      const authorisedCompanyIds = companyAccess.rows.map((row) => String(row.id));
-      if (requestedActingCompanyId && authorisedCompanyIds.includes(requestedActingCompanyId)) {
-        actingCompanyId = requestedActingCompanyId;
-      } else if (authorisedCompanyIds.length === 1) {
-        actingCompanyId = authorisedCompanyIds[0];
-      }
-    }
+    // Login always keeps the authenticated company binding. OneDeveloper
+    // selects a target company separately, and only through oneengine.manage.
+    const actingCompanyId = null;
 
     /*
      * Return the effective RBAC permission set with the login response so the
@@ -1056,7 +1009,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       : { rows: [] };
     const loginPermissionUser = {
       id: user.id,
-      companyId: user.company_id || actingCompanyId || null,
+      companyId: user.company_id || null,
     };
     const permissionSets = await loadEffectivePermissionSets(loginDb, loginPermissionUser);
     const effectivePermissions = [...new Set([
@@ -1069,8 +1022,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     loginTimings.total_ms = Date.now() - loginStartedAt;
     console.log("onePOS: auth login timings", {
       ...loginTimings,
-      platform_identity: isPlatformIdentity,
-      platform_developer: user.is_platform_developer === true,
+      company_bound: Boolean(user.company_id),
     });
 
     res.setHeader("Server-Timing", [
@@ -1089,7 +1041,6 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       actingCompanyId,
       permissions: {
         permissions: effectivePermissions,
-        isPlatformDeveloper: user.is_platform_developer === true,
       },
       user: {
         id: user.id,
@@ -1099,7 +1050,6 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         defaultLandingPage: user.default_landing_page || 'dashboard',
         companyId: user.company_id,
         storeId: user.store_id,
-        isPlatformDeveloper: user.is_platform_developer === true,
         mustChangePassword: user.must_change_password === true,
       },
     });
@@ -1194,7 +1144,6 @@ app.get("/api/auth/me", authenticate, async (req, res) => {
         u.full_name,
         u.company_id,
         u.store_id,
-        u.is_platform_developer,
         u.must_change_password,
         r.name AS role_name,
         COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page
@@ -1299,7 +1248,6 @@ app.get("/api/auth/me/permissions", authenticate, async (req, res) => {
       success: true,
       data: {
         isAdmin,
-        isPlatformDeveloper: req.user?.isPlatformDeveloper === true,
         permissions,
         ...(includeEntitlements ? { entitlements: await getCompanyEntitlements(db, req.user.companyId) } : {}),
       },
