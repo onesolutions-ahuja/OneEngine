@@ -597,6 +597,7 @@ const actionOptions = [
   { value: "FORMULA", label: "Formula" },
   { value: "ASSIGNMENT", label: "Assignment" },
   { value: "LOOP", label: "Loop" },
+  { value: "SCHEDULE_PATH", label: "Scheduled Path" },
   { value: "GET_RECORDS", label: "Get Records" },
   { value: "BULK_UPDATE_RECORDS", label: "Bulk Update Records" },
   { value: "CREATE_RECORD", label: "Create Record" },
@@ -647,6 +648,12 @@ function makeStep(type = "CREATE_RECORD") {
       itemVariable: "currentItem",
       bodyBranch: [],
       recordIds: "",
+      pathLabel: "Scheduled Path",
+      scheduleMode: "OFFSET",
+      delayAmount: 30,
+      delayUnit: "MINUTES",
+      runAt: "",
+      branch: [],
       filters: [],
       match: "all",
       sortField: "",
@@ -686,7 +693,7 @@ function getActionLabel(type) {
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONSTANT","FORMULA"].includes(key)) return "Resources";
-  if (["CONDITION","WAIT","STOP","ASSIGNMENT","LOOP"].includes(key)) return "Logic";
+  if (["CONDITION","WAIT","STOP","ASSIGNMENT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (key === "RUN_SUBFLOW") return "Workflows";
   if (["GET_RECORDS","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION"].includes(key)) return "Communication";
@@ -1829,7 +1836,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     });
   };
   const palette = registryOptions
-    .filter((option) => option.value !== "WHEN" && !["CONSTANT","FORMULA"].includes(option.value))
+    .filter((option) => option.value !== "WHEN" && !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(option.value))
     .map((option) => ({ ...option, category: option.category || workflowActionCategory(option.value) }))
     .filter((option) => !paletteSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || ""}`.toLowerCase().includes(paletteSearch.trim().toLowerCase()));
   const paletteGroups = palette.reduce((groups, option) => {
@@ -1846,7 +1853,18 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   ];
   const stepResources = workflowStepResources(workflow.steps, workflow.steps.length);
   const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA"].includes(step.type));
-  const visibleCanvasSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA"].includes(step.type));
+  const scheduledPathSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => step.type === "SCHEDULE_PATH");
+  const visibleCanvasSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(step.type));
+  const addScheduledPath = () => {
+    const path = makeStep("SCHEDULE_PATH");
+    path.label = "Scheduled Path";
+    const insertAt = workflow.steps.findIndex((step) => step.type !== "SCHEDULE_PATH");
+    const target = insertAt < 0 ? workflow.steps.length : insertAt;
+    setWorkflow((current) => ({ ...current, steps: [...current.steps.slice(0, target), path, ...current.steps.slice(target)] }));
+    setSelectedId("__start__");
+  };
+  const updateScheduledPath = (index, patch) => updateStep(index, { config: { ...(workflow.steps[index]?.config || {}), ...patch } });
+  const removeScheduledPath = (index) => deleteStep(index);
   const addResource = (type) => {
     const resource = makeStep(type);
     resource.label = type === "CONSTANT" ? "Constant" : "Formula";
@@ -1949,7 +1967,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" className="workflow-start-node" onClick={() => setSelectedId("__start__")} title="Configure when this workflow starts">
             <span className="workflow-start-icon">▶</span>
             <span className="workflow-start-title">Start</span>
-            <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}{workflow.conditions?.length ? ` · ${workflow.conditions.length} condition${workflow.conditions.length === 1 ? "" : "s"}` : ""}</span>
+            <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}{workflow.conditions?.length ? ` · ${workflow.conditions.length} condition${workflow.conditions.length === 1 ? "" : "s"}` : ""}{scheduledPathSteps.length ? ` · ${scheduledPathSteps.length} scheduled path${scheduledPathSteps.length === 1 ? "" : "s"}` : ""}</span>
           </button>
           <div className="workflow-node-connector" />
           {visibleCanvasSteps.map(({ step, index }) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
@@ -1991,6 +2009,50 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <label className="mb-1 block text-xs font-medium text-slate-600">Trigger</label>
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">{getTriggerLabel(workflow.trigger)}</div>
             </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-semibold text-slate-700">Scheduled paths</div>
+                  <p className="mt-1 text-[11px] text-slate-500">Run selected steps later without using a Wait element in the immediate path.</p>
+                </div>
+                <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-blue-700" onClick={addScheduledPath}>+ Add path</button>
+              </div>
+              <div className="space-y-3">
+                {scheduledPathSteps.map(({ step: pathStep, index: pathIndex }) => (
+                  <div key={pathStep.id} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="flex items-center gap-2">
+                      <input className={inputClass} value={pathStep.config?.pathLabel || ""} onChange={(event) => updateScheduledPath(pathIndex, { pathLabel: event.target.value })} placeholder="Path name" />
+                      <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-red-600" onClick={() => removeScheduledPath(pathIndex)}>Remove</button>
+                    </div>
+                    <select className={inputClass} value={pathStep.config?.scheduleMode || "OFFSET"} onChange={(event) => updateScheduledPath(pathIndex, { scheduleMode: event.target.value })}>
+                      <option value="OFFSET">Run after a delay</option>
+                      <option value="AT_DATETIME">Run at date/time from record</option>
+                    </select>
+                    {(pathStep.config?.scheduleMode || "OFFSET") === "OFFSET" ? (
+                      <div className="grid grid-cols-[1fr_1fr] gap-2">
+                        <input className={inputClass} type="number" min="0" value={Number(pathStep.config?.delayAmount ?? 30)} onChange={(event) => updateScheduledPath(pathIndex, { delayAmount: Math.max(0, Number(event.target.value || 0)) })} />
+                        <select className={inputClass} value={pathStep.config?.delayUnit || "MINUTES"} onChange={(event) => updateScheduledPath(pathIndex, { delayUnit: event.target.value })}>
+                          <option value="MINUTES">Minutes later</option>
+                          <option value="HOURS">Hours later</option>
+                          <option value="DAYS">Days later</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <MetadataResourcePicker objectKey={workflow.object || ""} extraResources={[]} label="Date / time Resource" value={pathStep.config?.runAt || ""} onChange={(runAt) => updateScheduledPath(pathIndex, { runAt })} />
+                    )}
+                    <BranchStepPicker
+                      label="Steps on this scheduled path"
+                      value={pathStep.config?.branch || []}
+                      onChange={(branch) => updateScheduledPath(pathIndex, { branch })}
+                      steps={workflow.steps.filter((candidate) => candidate.type !== "SCHEDULE_PATH")}
+                      currentIndex={-1}
+                    />
+                  </div>
+                ))}
+                {!scheduledPathSteps.length ? <div className="text-[11px] text-slate-500">No scheduled paths. Immediate workflow steps run normally.</div> : null}
+              </div>
+            </div>
+
             {workflow.object ? (
               <div>
                 <div className="mb-2 text-xs font-semibold text-slate-700">Entry conditions</div>
