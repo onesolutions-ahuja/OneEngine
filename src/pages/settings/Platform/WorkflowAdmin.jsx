@@ -2114,6 +2114,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
               {step.type === "CONDITION" ? <span className="workflow-node-note">{Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? `${step.config.outcomes.length} ordered outcome${step.config.outcomes.length === 1 ? "" : "s"} + Default` : "Decision branches are evaluated from metadata conditions."}</span> : null}
               {step.type === "LOOP" ? <span className="workflow-node-note">Runs selected body steps once per collection item.</span> : null}
+              {step.config?.faultMode && step.config.faultMode !== "FAIL" ? (
+                <span className="workflow-node-note">On Error · {String(step.config.faultMode).toLowerCase().replace("_"," ")}{Array.isArray(step.config?.faultBranch) && step.config.faultBranch.length ? ` · ${step.config.faultBranch.length} recovery step${step.config.faultBranch.length === 1 ? "" : "s"}` : ""}</span>
+              ) : null}
             </button>
             {visibleCanvasSteps.findIndex((item) => item.index === index) < visibleCanvasSteps.length - 1 ? <div className="workflow-node-connector" /> : null}
           </div>)}
