@@ -2248,7 +2248,11 @@ async function startServer() {
                   },
                 };
                 try {
-                  const scheduledVariables = { variables: {}, steps: {} };
+                  const scheduledVariables = payload.workflowVariables && typeof payload.workflowVariables === "object"
+                    ? JSON.parse(JSON.stringify(payload.workflowVariables))
+                    : { variables: {}, steps: {} };
+                  if (!scheduledVariables.variables || typeof scheduledVariables.variables !== "object") scheduledVariables.variables = {};
+                  if (!scheduledVariables.steps || typeof scheduledVariables.steps !== "object") scheduledVariables.steps = {};
                   const results = await executeWorkflowActions({
                     actions,
                     allActions,
