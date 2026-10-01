@@ -228,27 +228,100 @@ export default function createSalesRouter({
           }
         }
 
-        const session = await db(
-          `
-          SELECT ts.id, ts.terminal_id, t.terminal_number, c.timezone
-          FROM till_sessions ts
-          INNER JOIN terminals t ON t.id = ts.terminal_id
-          INNER JOIN stores s ON s.id = ts.store_id
-          INNER JOIN companies c ON c.id = s.company_id
-          WHERE ts.company_id = $1
-            AND ts.store_id = $2
-            AND ts.status = 'open'
-          ORDER BY ts.opened_at DESC
-          LIMIT 1
-          `,
-          [req.user.companyId, req.user.storeId]
-        );
+        const kioskDeviceKey = String(req.body?.kioskDeviceKey || "").trim();
+        let kioskContext = null;
+        if (kioskDeviceKey) {
+          const kiosk = await db(
+            `SELECT kd.id AS kiosk_device_id,kd.payment_connector_id,
+                    ic.id AS connector_instance_id,ic.till_id,ic.store_id AS connector_store_id,
+                    ic.enabled AS connector_enabled,ic.connection_status,
+                    t.terminal_number
+               FROM kiosk_devices kd
+               JOIN integration_connections ic
+                 ON ic.id=kd.payment_connector_id
+                AND ic.company_id=kd.company_id
+               JOIN terminals t
+                 ON t.id=ic.till_id
+                AND t.company_id=kd.company_id
+                AND t.store_id=kd.store_id
+              WHERE kd.company_id=$1
+                AND kd.store_id=$2
+                AND kd.device_key=$3
+                AND kd.active=TRUE
+              LIMIT 1`,
+            [req.user.companyId, req.user.storeId, kioskDeviceKey]
+          );
+          kioskContext = kiosk.rows[0] || null;
+          if (!kioskContext?.connector_instance_id || !kioskContext?.till_id || kioskContext.connector_enabled !== true) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({
+              success: false,
+              code: "KIOSK_PAYMENT_NOT_CONFIGURED",
+              message: "This kiosk does not have an active One Connect card machine assigned.",
+            });
+          }
+        }
+
+        let session = kioskContext
+          ? await db(
+              `SELECT ts.id,ts.terminal_id,t.terminal_number,c.timezone
+                 FROM till_sessions ts
+                 JOIN terminals t ON t.id=ts.terminal_id
+                 JOIN stores s ON s.id=ts.store_id
+                 JOIN companies c ON c.id=s.company_id
+                WHERE ts.company_id=$1
+                  AND ts.store_id=$2
+                  AND ts.terminal_id=$3
+                  AND ts.status='open'
+                ORDER BY ts.opened_at DESC
+                LIMIT 1`,
+              [req.user.companyId, req.user.storeId, kioskContext.till_id]
+            )
+          : await db(
+              `SELECT ts.id, ts.terminal_id, t.terminal_number, c.timezone
+                 FROM till_sessions ts
+                 INNER JOIN terminals t ON t.id = ts.terminal_id
+                 INNER JOIN stores s ON s.id = ts.store_id
+                 INNER JOIN companies c ON c.id = s.company_id
+                WHERE ts.company_id = $1
+                  AND ts.store_id = $2
+                  AND ts.status = 'open'
+                ORDER BY ts.opened_at DESC
+                LIMIT 1`,
+              [req.user.companyId, req.user.storeId]
+            );
+
+        // Public/card-only kiosks own a persistent zero-cash terminal session.
+        // It is created only for the exact terminal bound to the kiosk's
+        // selected One Connect instance; normal staff Till behaviour is untouched.
+        if (kioskContext && !session.rows.length) {
+          await db(
+            `INSERT INTO till_sessions
+               (company_id,terminal_id,store_id,user_id,opening_cash,status,opened_at)
+             VALUES($1,$2,$3,$4,0,'open',NOW())
+             ON CONFLICT (terminal_id) WHERE status='open' DO NOTHING`,
+            [req.user.companyId, kioskContext.till_id, req.user.storeId, req.user.id]
+          );
+          session = await db(
+            `SELECT ts.id,ts.terminal_id,t.terminal_number,c.timezone
+               FROM till_sessions ts
+               JOIN terminals t ON t.id=ts.terminal_id
+               JOIN stores s ON s.id=ts.store_id
+               JOIN companies c ON c.id=s.company_id
+              WHERE ts.company_id=$1 AND ts.store_id=$2
+                AND ts.terminal_id=$3 AND ts.status='open'
+              LIMIT 1`,
+            [req.user.companyId, req.user.storeId, kioskContext.till_id]
+          );
+        }
 
         if (!session.rows.length) {
           await client.query("ROLLBACK");
           return res.status(400).json({
             success: false,
-            message: "No open till session. Open a till before selling.",
+            message: kioskContext
+              ? "The kiosk payment terminal could not start its transaction session."
+              : "No open till session. Open a till before selling.",
           });
         }
 
@@ -266,6 +339,14 @@ export default function createSalesRouter({
           ageVerified, // T10C: operator confirmation flag, verified against the DB below
           vatEnabled, // Till Misc Item: the company's global VAT master switch, as applied by the till
         } = req.body;
+
+        if (kioskContext && String(paymentMethod || "").toLowerCase() !== "card") {
+          await client.query("ROLLBACK");
+          return res.status(403).json({
+            success: false,
+            message: "OneKiosk customer transactions are card-only on this device.",
+          });
+        }
 
         /*
          * T10D: a Self-Checkout session may only pay by card. The payment
@@ -932,6 +1013,7 @@ export default function createSalesRouter({
                 idempotencyKey,
                 reference: clientRequestId,
                 terminalId: session.rows[0].terminal_id,
+                connectorInstanceId: kioskContext?.connector_instance_id || null,
                 selfCheckout: typeof selfCheckoutMode === "function" && selfCheckoutMode(req),
               },
               storeId: req.user.storeId,
@@ -943,6 +1025,8 @@ export default function createSalesRouter({
                 method: req.method,
                 path: req.originalUrl || req.path,
                 capability: "payment.sale",
+                connectorInstanceId: kioskContext?.connector_instance_id || null,
+                appName: kioskContext ? "OneKiosk" : null,
               },
             });
             const workflowPayment = paymentExecution.result || {};
