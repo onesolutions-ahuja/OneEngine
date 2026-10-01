@@ -135,6 +135,17 @@ export default function OneKioskPage({ publicMode = false }) {
   const [quote, setQuote] = useState(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [lastInteractionAt, setLastInteractionAt] = useState(() => Date.now());
+  const [storeAvailability, setStoreAvailability] = useState([]);
+  const [fulfilmentDetails, setFulfilmentDetails] = useState({
+    storeId: "",
+    name: "",
+    email: "",
+    phone: "",
+    address1: "",
+    address2: "",
+    city: "",
+    postcode: "",
+  });
 
   useEffect(() => {
     if (demoMode) {
@@ -336,7 +347,39 @@ export default function OneKioskPage({ publicMode = false }) {
   const basketScreen = screensByType.BASKET || {};
   const confirmationScreen = screensByType.CONFIRMATION || {};
   const fulfilmentOptions = Array.isArray(fulfilmentScreen.options) ? fulfilmentScreen.options : [];
+  const selectedFulfilmentOption = fulfilmentOptions.find((option) => option.key === fulfilmentType) || null;
+  const fulfilmentRequirements = Array.isArray(selectedFulfilmentOption?.requires) ? selectedFulfilmentOption.requires : [];
   const featureFlags = experienceUi?.features || {};
+
+  const needsStoreAvailability = fulfilmentRequirements.includes("STORE") || fulfilmentType === "DELIVERY";
+
+  useEffect(() => {
+    if (!needsStoreAvailability || !basket.length || demoMode) {
+      if (!needsStoreAvailability) setStoreAvailability([]);
+      return undefined;
+    }
+    let live = true;
+    const timer = window.setTimeout(() => {
+      apiRequest("/api/kiosk/availability", {
+        method: "POST",
+        body: JSON.stringify({
+          items: basket.map((line) => ({ productId: line.id, quantity: Number(line.quantity) || 1 })),
+        }),
+      })
+        .then((response) => {
+          if (!live || !response?.success) return;
+          const rows = Array.isArray(response.data) ? response.data : [];
+          setStoreAvailability(rows);
+          if (fulfilmentType === "DELIVERY") {
+            const current = rows.find((store) => store.current && store.canFulfil);
+            const available = current || rows.find((store) => store.canFulfil);
+            if (available) setFulfilmentDetails((details) => ({ ...details, storeId: available.id }));
+          }
+        })
+        .catch(() => { if (live) setStoreAvailability([]); });
+    }, 180);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [needsStoreAvailability, fulfilmentType, basket, demoMode]);
 
   useEffect(() => {
     if (!fulfilmentOptions.length) return;
@@ -346,6 +389,14 @@ export default function OneKioskPage({ publicMode = false }) {
       : fulfilmentOptions[0]?.key;
     if (next) setFulfilmentType(next);
   }, [experienceFlow?.id, fulfilmentScreen.defaultOption, fulfilmentOptions.map((option) => option.key).join("|")]);
+
+  useEffect(() => {
+    if (!selectedFulfilmentOption) return;
+    setLastInteractionAt(Date.now());
+    if (!fulfilmentRequirements.includes("STORE") && fulfilmentType !== "DELIVERY") {
+      setFulfilmentDetails((details) => ({ ...details, storeId: "" }));
+    }
+  }, [fulfilmentType]);
 
   const categories = useMemo(
     () => ["All", ...new Set(products.map((product) => product.categoryLabel).filter(Boolean))],
@@ -493,10 +544,39 @@ export default function OneKioskPage({ publicMode = false }) {
       .filter((line) => line.quantity > 0));
   };
 
+  const validateFulfilmentDetails = () => {
+    if (fulfilmentRequirements.includes("STORE") && !fulfilmentDetails.storeId) {
+      throw new Error("Choose a collection store before continuing");
+    }
+    if (fulfilmentRequirements.includes("ADDRESS")) {
+      if (!fulfilmentDetails.address1.trim() || !fulfilmentDetails.city.trim() || !fulfilmentDetails.postcode.trim()) {
+        throw new Error("Enter the delivery address before continuing");
+      }
+    }
+    if (fulfilmentRequirements.includes("CONTACT")) {
+      if (!fulfilmentDetails.email.trim() && !fulfilmentDetails.phone.trim()) {
+        throw new Error("Enter an email address or phone number for delivery updates");
+      }
+    }
+    if ((fulfilmentRequirements.includes("STORE") || fulfilmentType === "DELIVERY") && fulfilmentDetails.storeId) {
+      const selectedStore = storeAvailability.find((store) => String(store.id) === String(fulfilmentDetails.storeId));
+      if (selectedStore && selectedStore.canFulfil !== true) {
+        throw new Error("The selected store cannot fulfil the current basket");
+      }
+    }
+    return true;
+  };
+
   const createFulfilmentFromPaidSale = async (sale) => {
     const fulfilment = await apiRequest("/api/kiosk/orders/from-sale", {
       method: "POST",
-      body: JSON.stringify({ saleId: sale.id, fulfilmentType, deviceKey: kioskDeviceKey() }),
+      body: JSON.stringify({
+        saleId: sale.id,
+        fulfilmentType,
+        fulfilmentDetails,
+        fulfilmentStoreId: fulfilmentDetails.storeId || null,
+        deviceKey: kioskDeviceKey(),
+      }),
     });
     if (!fulfilment?.success) {
       throw new Error(fulfilment?.message || "Payment succeeded, but the collection order could not be created");
@@ -516,6 +596,7 @@ export default function OneKioskPage({ publicMode = false }) {
     setPaying(true);
     setError("");
     try {
+      validateFulfilmentDetails();
       if (demoMode) {
         await new Promise((resolve) => window.setTimeout(resolve, 850));
         setConfirmation({
@@ -563,6 +644,7 @@ export default function OneKioskPage({ publicMode = false }) {
           total,
           paymentMethod: "card",
           kioskDeviceKey: kioskDeviceKey(),
+          kioskFulfilmentStoreId: fulfilmentDetails.storeId || null,
         }),
       });
 
@@ -583,6 +665,8 @@ export default function OneKioskPage({ publicMode = false }) {
     setConfirmation(null);
     setPaidSale(null);
     setError("");
+    setFulfilmentDetails({ storeId: "", name: "", email: "", phone: "", address1: "", address2: "", city: "", postcode: "" });
+    setStoreAvailability([]);
     const next = fulfilmentScreen.defaultOption || fulfilmentOptions[0]?.key || "";
     if (next) setFulfilmentType(next);
   };
@@ -730,6 +814,41 @@ export default function OneKioskPage({ publicMode = false }) {
                     {option.label || option.key}
                   </button>
                 ))}
+              </div>
+            </div>
+          ) : null}
+
+          {fulfilmentRequirements.includes("STORE") ? (
+            <div className="one-kiosk-fulfilment-detail">
+              <strong>Choose collection store</strong>
+              <div className="one-kiosk-store-list">
+                {storeAvailability.map((store) => (
+                  <button
+                    type="button"
+                    key={store.id}
+                    disabled={!store.canFulfil}
+                    className={String(fulfilmentDetails.storeId) === String(store.id) ? "is-active" : ""}
+                    onClick={() => setFulfilmentDetails((details) => ({ ...details, storeId: store.id }))}
+                  >
+                    <span>{store.name}{store.current ? " · This store" : ""}</span>
+                    <small>{store.canFulfil ? "Available for this order" : "Not enough stock"}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {fulfilmentRequirements.includes("ADDRESS") ? (
+            <div className="one-kiosk-fulfilment-detail">
+              <strong>Delivery details</strong>
+              <div className="one-kiosk-form-grid">
+                <input value={fulfilmentDetails.name} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, name: e.target.value }))} placeholder="Name" />
+                <input value={fulfilmentDetails.phone} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, phone: e.target.value }))} placeholder="Mobile number" />
+                <input className="wide" value={fulfilmentDetails.email} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, email: e.target.value }))} placeholder="Email address" />
+                <input className="wide" value={fulfilmentDetails.address1} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, address1: e.target.value }))} placeholder="Address line 1" />
+                <input className="wide" value={fulfilmentDetails.address2} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, address2: e.target.value }))} placeholder="Address line 2 (optional)" />
+                <input value={fulfilmentDetails.city} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, city: e.target.value }))} placeholder="Town / city" />
+                <input value={fulfilmentDetails.postcode} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, postcode: e.target.value }))} placeholder="Postcode" />
               </div>
             </div>
           ) : null}
