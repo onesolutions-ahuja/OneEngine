@@ -2126,6 +2126,7 @@ async function startServer() {
 
                 let object = null;
                 let record = null;
+                let fields = [];
                 const objectId = payload.objectId || parentRun?.object_id || workflow.object_id || null;
                 const recordId = payload.recordId || parentRun?.record_id || null;
                 if (objectId) {
@@ -2134,6 +2135,13 @@ async function startServer() {
                     [objectId, job.company_id]
                   );
                   object = objectResult.rows[0] || null;
+                  if (object?.id) {
+                    const fieldsResult = await db(
+                      "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
+                      [object.id, job.company_id]
+                    );
+                    fields = fieldsResult.rows || [];
+                  }
                 }
                 if (object?.source_table && recordId) {
                   const table = String(object.source_table || "");
@@ -2192,6 +2200,7 @@ async function startServer() {
                     companyId: job.company_id,
                     userId: req.user.id,
                     object,
+                    fields,
                     record,
                     recordId,
                     storeId: req.user.storeId,
@@ -2277,6 +2286,7 @@ async function startServer() {
 
               let object = null;
               let record = null;
+              let fields = [];
               if (run.object_id) {
                 const objectResult = await db(
                   `SELECT * FROM platform_objects
@@ -2285,6 +2295,13 @@ async function startServer() {
                   [run.object_id, job.company_id]
                 );
                 object = objectResult.rows[0] || null;
+                if (object?.id) {
+                  const fieldsResult = await db(
+                    "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
+                    [object.id, job.company_id]
+                  );
+                  fields = fieldsResult.rows || [];
+                }
               }
               if (object?.source_table && run.record_id) {
                 const table = String(object.source_table || "");
@@ -2336,6 +2353,7 @@ async function startServer() {
                 companyId: job.company_id,
                 userId: req.user.id,
                 object,
+                fields,
                 record,
                 recordId: run.record_id || null,
                 storeId: req.user.storeId,
@@ -2366,24 +2384,12 @@ async function startServer() {
                     [run.id, run.parent_run_id]
                   );
                   if (parentStep.rows[0]) {
-                    const childFinal = await db(
-                      "SELECT metadata FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1",
-                      [run.id, job.company_id]
-                    );
-                    const childMetadata = childFinal.rows[0]?.metadata || {};
-                    const replayResult = {
-                      status: "completed",
-                      runId: run.id,
-                      results: childMetadata.childResults || [],
-                      outputs: childMetadata.outputs || {},
-                      resumed: true,
-                    };
                     await db(
                       `UPDATE platform_workflow_step_runs
-                          SET status='COMPLETED',completed_at=NOW(),
+                          SET status='WAITING',completed_at=NULL,
                               metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW()
                         WHERE id=$2`,
-                      [JSON.stringify({ childRunId: run.id, resumedChildCompleted: true, result: replayResult }), parentStep.rows[0].id]
+                      [JSON.stringify({ childRunId: run.id, resumedChildCompleted: true }), parentStep.rows[0].id]
                     );
                   }
                   const parentRun = await db(
