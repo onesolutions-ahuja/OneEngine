@@ -3642,11 +3642,11 @@ export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
   const results = [];
   const completed = [];
-  const workflowVariables = {
-    ...(context.workflowVariables || {}),
-    variables: { ...(context.workflowVariables?.variables || {}) },
-    steps: { ...(context.workflowVariables?.steps || {}) },
-  };
+  const workflowVariables = context.workflowVariables && typeof context.workflowVariables === "object"
+    ? context.workflowVariables
+    : {};
+  if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+  if (!workflowVariables.steps || typeof workflowVariables.steps !== "object") workflowVariables.steps = {};
   const allActions = Array.isArray(context.allActions) ? context.allActions : actions;
   const actionById = new Map(allActions.filter((item) => item?.id).map((item) => [String(item.id), item]));
   const branchTargetIds = new Set();
@@ -3682,6 +3682,9 @@ export async function executeWorkflowActions({ actions, ...context }) {
       const priorResult = stepRun.metadata?.result || { status: "completed", idempotentReplay: true };
       results.push({ action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
+      if (resolveWorkflowActionType(item) === "ASSIGNMENT" && priorResult?.variableName) {
+        workflowVariables.variables[priorResult.variableName] = priorResult.value;
+      }
       completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
       continue;
     }
