@@ -135,3 +135,13 @@
 
 .one-kiosk-email-receipt{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:8px;width:min(580px,92vw);margin:0 auto}.one-kiosk-email-receipt input{min-height:46px;border:1px solid #dfe4eb;border-radius:12px;padding:0 13px;font-size:15px}.one-kiosk-email-receipt button{border:0;border-radius:12px;background:#111827;color:#fff;padding:0 15px;font-weight:800}.one-kiosk-email-receipt button:disabled{opacity:.5}
 @media(max-width:560px){.one-kiosk-email-receipt{grid-template-columns:1fr}.one-kiosk-email-receipt button{min-height:44px}}
+
+.one-kiosk-generic-form{display:grid;gap:14px;padding:22px;border:1px solid #e5e9ef;border-radius:20px;background:#fff}
+.one-kiosk-generic-form h2{margin:0;font-size:clamp(28px,4vw,40px);letter-spacing:-.035em}
+.one-kiosk-generic-form p{margin:0;color:#667085}
+.one-kiosk-generic-form label{display:grid;gap:6px}
+.one-kiosk-generic-form label>span{font-size:13px;font-weight:750;color:#475467}
+.one-kiosk-generic-form input:not([type=checkbox]),.one-kiosk-generic-form select,.one-kiosk-generic-form textarea{width:100%;box-sizing:border-box;border:1px solid #dfe4eb;border-radius:12px;background:#fff;padding:11px 13px;font:inherit}
+.one-kiosk-generic-form input:not([type=checkbox]),.one-kiosk-generic-form select{min-height:48px}
+.one-kiosk-form-checkbox{grid-template-columns:auto 1fr!important;align-items:center;border:1px solid #e5e9ef;border-radius:12px;padding:12px}
+.one-kiosk-form-checkbox input{width:20px;height:20px}
