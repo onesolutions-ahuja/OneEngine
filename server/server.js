@@ -130,7 +130,6 @@ const configuredCorsOrigins = String(process.env.CORS_ALLOWED_ORIGINS || "")
   .filter(Boolean);
 const defaultCorsOrigins = new Set([
   "https://onesolutions-ahuja.github.io",
-  "https://smart-theme.onrender.com",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ]);
@@ -754,7 +753,7 @@ app.get("/api/auth/google/start", async (req, res) => {
 app.get("/api/auth/google/callback", async (req, res) => {
   const secret = process.env.JWT_SECRET;
 
-  let returnTo = "https://onesolutions-ahuja.github.io/smart-theme/";
+  let returnTo = "https://onesolutions-ahuja.github.io/OneEngine/";
   try {
     if (!pool) return res.redirect(googleOAuthErrorRedirect(returnTo, "sso_not_connected"));
 
@@ -1858,10 +1857,9 @@ app.post("/api/setup/database", authenticate, authorize("oneengine.manage"), asy
 |--------------------------------------------------------------------------
 | Frontend ownership
 |--------------------------------------------------------------------------
-| The operational UI now lives in the smart-theme repository and is deployed
-| separately. This service is API/backend only. Keep a small redirect for
-| legacy browser entry points so old bookmarks do not depend on a duplicate
-| frontend bundle in this repository.
+| The operational UI is deployed separately from this API service. Keep a
+| small redirect for legacy browser entry points so old bookmarks land on the
+| active OneEngine frontend.
 */
 const SMART_THEME_URL = String(process.env.SMART_THEME_URL || "https://onesolutions-ahuja.github.io/OneEngine").replace(/\/$/, "");
 
@@ -1869,7 +1867,7 @@ app.get(["/", "/login", "/app", "/app/*", "/customer-display"], (req, res) => {
   return res.redirect(302, SMART_THEME_URL);
 });
 
-/* Unknown API routes remain JSON; unknown browser routes also go to Smart Theme. */
+/* Unknown API routes remain JSON; unknown browser routes go to the active frontend. */
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
     return res.status(404).json({ success: false, message: "API endpoint not found" });
