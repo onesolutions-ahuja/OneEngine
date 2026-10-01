@@ -95,8 +95,12 @@ export default function PublicAppointmentBookingPage({token:tokenProp}){
         <div>This link expires 15 minutes after it was issued. Current expiry: {new Date(data.expiresAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}.</div>
       </div>:null}
       {error?<div className="module-inline-error" style={{marginBottom:12}}>{error}</div>:null}
+      {services.length===0?<div className="module-page-card" style={{margin:'12px 0',padding:14}}>
+        <strong>No appointment services are configured yet.</strong>
+        <div style={{marginTop:4}}>Please contact the business to complete its OneAssistant setup before booking.</div>
+      </div>:null}
       <div className="customer-editor-grid">
-        <label className="module-input-label"><span>Service</span><select value={serviceId} onChange={e=>{setServiceId(e.target.value);setSlots([])}}><option value="">Choose service</option>{services.map(s=><option key={s.id} value={s.id}>{s.name} · {s.duration_minutes} min</option>)}</select></label>
+        <label className="module-input-label"><span>Service</span><select value={serviceId} disabled={services.length===0} onChange={e=>{setServiceId(e.target.value);setSlots([])}}><option value="">{services.length===0?'No services available':'Choose service'}</option>{services.map(s=><option key={s.id} value={s.id}>{s.name} · {s.duration_minutes} min</option>)}</select></label>
         <label className="module-input-label"><span>Search from</span><input type="date" value={date} onChange={e=>{setDate(e.target.value);setSlots([])}}/></label>
       </div>
       {selectedService?<div className="product-stats" style={{marginTop:12}}><div><span>Service</span><strong>{selectedService.name}</strong></div><div><span>Price</span><strong>{selectedService.currency} {Number(selectedService.price||0).toFixed(2)}</strong></div><div><span>Payment</span><strong>{String(selectedService.payment_policy||'NO_ADVANCE').replaceAll('_',' ')}</strong></div></div>:null}
