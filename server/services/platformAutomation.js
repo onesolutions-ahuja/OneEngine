@@ -14,10 +14,24 @@ function apiRecord(fields, record) {
 }
 
 function ruleMatches(rule, fields, record, previousRecord) {
+  const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
+  if (!conditions.length) return true;
   return evaluateCondition({
     match: rule.action?.match || "all",
-    conditions: rule.conditions,
+    conditions,
   }, fields, record, previousRecord);
+}
+
+function workflowRecordSnapshot(fields = [], record = null) {
+  if (!record || typeof record !== "object") return null;
+  const snapshot = {};
+  if (record.id !== undefined) snapshot.id = record.id;
+  for (const field of fields || []) {
+    if (!field || field.active === false || field.readable === false || !field.api_name) continue;
+    const value = record[field.api_name] !== undefined ? record[field.api_name] : field.source_column ? record[field.source_column] : undefined;
+    if (value !== undefined) snapshot[field.api_name] = value;
+  }
+  return snapshot;
 }
 
 export async function executePlatformAutomations({ db, object, fields, record, previousRecord = null, recordId, trigger, req, writeExtension }) {
@@ -83,7 +97,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
           tillId: req.user.tillId || null,
           entryTransition,
           initialVariables: workflowVariables,
-          initialPreviousRecord: previousRecord || null,
+          initialPreviousRecord: workflowRecordSnapshot(fields, previousRecord),
         },
       });
       try {
