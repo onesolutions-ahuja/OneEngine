@@ -3587,7 +3587,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return result.rows[0] || null;
   }
 
-  function evaluateWorkflowAssertions(debugData, assertions = []) {
+  function evaluateWorkflowAssertions(debugData, assertions = [], context = {}) {
     const steps = Array.isArray(debugData?.steps) ? debugData.steps : [];
     const results = Array.isArray(debugData?.results) ? debugData.results : [];
     const traceByStep = new Map();
@@ -3623,9 +3623,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         passed = String(actual ?? "") === String(assertion.expected ?? "");
       } else if (type === "RESOURCE_EQUALS") {
         actual = resolveWorkflowResource(assertion.resource, {
-          record: debugData?.recordData || null,
-          previousRecord: debugData?.previousRecordData || null,
-          user: debugData?.user || null,
+          record: context.record || null,
+          previousRecord: context.previousRecord || null,
+          user: context.user || null,
           variables: debugData?.variables || {},
         });
         const expected = assertion.expected;
@@ -3774,7 +3774,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             [JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
           );
           const notStartedData = { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: true, externalActionsSimulated: true, variables: { variables: {}, steps: {} } };
-          const assertionResult = evaluateWorkflowAssertions(notStartedData, req.body?.assertions || []);
+          const assertionResult = evaluateWorkflowAssertions(notStartedData, req.body?.assertions || [], { record, user: req.user });
           return res.json({ success: true, data: { ...notStartedData, assertionResult, testPassed: executionMode === "TEST" ? assertionResult.passed : null } });
         }
       }
@@ -3844,8 +3844,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         steps: stepResult.rows || [],
         results,
         record: record ? { id: record.id } : null,
-        recordData: record || null,
-        user: req.user || null,
         friendlyError: friendly,
         handledFaults: debugError ? [] : handledFaults,
         completedWithHandledError: !debugError && handledFaults.length > 0,
@@ -3853,7 +3851,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         externalActionsSimulated: true,
         variables: workflowVariables,
       };
-      const assertionResult = evaluateWorkflowAssertions(debugData, req.body?.assertions || []);
+      const assertionResult = evaluateWorkflowAssertions(debugData, req.body?.assertions || [], { record, user: req.user });
       return res.json({
         success: true,
         data: {
