@@ -578,6 +578,7 @@ const WORKFLOW_VISUAL_CSS = `
 `;
 
 const actionOptions = [
+  { value: "ASSIGNMENT", label: "Assignment" },
   { value: "GET_RECORDS", label: "Get Records" },
   { value: "CREATE_RECORD", label: "Create Record" },
   { value: "UPDATE_RECORD", label: "Update Record" },
@@ -614,6 +615,10 @@ function makeStep(type = "CREATE_RECORD") {
     config: {
       object: "",
       recordId: "",
+      variableName: "",
+      variableType: "text",
+      operator: "set",
+      value: "",
       filters: [],
       match: "all",
       sortField: "",
@@ -649,7 +654,7 @@ function getActionLabel(type) {
 
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
-  if (["CONDITION","WAIT","STOP"].includes(key)) return "Logic";
+  if (["CONDITION","WAIT","STOP","ASSIGNMENT"].includes(key)) return "Logic";
   if (key === "RUN_SUBFLOW") return "Workflows";
   if (["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION"].includes(key)) return "Communication";
@@ -700,6 +705,11 @@ function workflowActionIssue(step, definition = null) {
       const label = String(key).replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ");
       return `Complete required field: ${label}.`;
     }
+  }
+  if (step.type === "ASSIGNMENT") {
+    if (!config.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.variableName))) return "Enter a valid variable name.";
+    if (!config.variableType) return "Choose a variable type.";
+    if (!config.operator) return "Choose an assignment operation.";
   }
   if (step.type === "CONDITION") {
     return conditionIsValid(config.condition) ? "" : "Complete the condition field/operator/value.";
@@ -835,7 +845,18 @@ function workflowStepResources(steps = [], currentIndex = 0) {
   steps.slice(0, currentIndex).forEach((step, index) => {
     const label = step.label || getActionLabel(step.type) || `Step ${index + 1}`;
     const prefix = `steps.${step.id}`;
-    if (step.type === "GET_RECORDS") {
+    if (step.type === "ASSIGNMENT" && step.config?.variableName) {
+      resources.push({
+        value: `variables.${step.config.variableName}`,
+        label: `${step.config.variableName} · ${step.config.variableType || "text"}`,
+        type: step.config.variableType || "variable",
+      });
+      resources.push({
+        value: `${prefix}.value`,
+        label: `${label} → Assigned Value`,
+        type: step.config.variableType || "step output",
+      });
+    } else if (step.type === "GET_RECORDS") {
       resources.push(
         { value: `${prefix}.record.id`, label: `${label} → First Record → Record ID`, type: "step output" },
         { value: `${prefix}.count`, label: `${label} → Record Count`, type: "step output" },
@@ -1033,6 +1054,57 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 
   const renderConfig = () => {
     switch (step.type) {
+      case "ASSIGNMENT":
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Variable name</label>
+              <input
+                className={inputClass}
+                value={step.config?.variableName || ""}
+                onChange={(event) => updateConfig({ variableName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })}
+                placeholder="e.g. followUpDate"
+              />
+              <p className="mt-1 text-[11px] text-slate-500">This becomes available to later steps as a Resource.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Type</label>
+                <select className={inputClass} value={step.config?.variableType || "text"} onChange={(event) => updateConfig({ variableType: event.target.value })}>
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="boolean">Boolean</option>
+                  <option value="date">Date</option>
+                  <option value="datetime">Date / Time</option>
+                  <option value="record">Record</option>
+                  <option value="collection">Collection</option>
+                  <option value="object">Object</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Operation</label>
+                <select className={inputClass} value={step.config?.operator || "set"} onChange={(event) => updateConfig({ operator: event.target.value })}>
+                  <option value="set">Set value</option>
+                  <option value="add">Add</option>
+                  <option value="subtract">Subtract</option>
+                  <option value="append">Append to collection</option>
+                </select>
+              </div>
+            </div>
+            <ResourceOrLiteralInput
+              label="Value"
+              value={step.config?.value ?? ""}
+              onChange={(value) => updateConfig({ value })}
+              rootObjectKey={rootObjectKey}
+              extraResources={extraResources}
+              type={step.config?.variableType === "number" ? "number" : "string"}
+              required={step.config?.operator !== "set" || true}
+            />
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+              Later steps will find this under Resources as <strong>{step.config?.variableName ? `variables.${step.config.variableName}` : "your variable"}</strong>.
+            </div>
+          </div>
+        );
       case "GET_RECORDS": {
         const filters = Array.isArray(step.config?.filters) ? step.config.filters : [];
         const updateFilter = (filterIndex, patch) => {
