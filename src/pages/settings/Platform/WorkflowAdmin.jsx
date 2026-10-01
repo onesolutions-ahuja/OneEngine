@@ -2829,21 +2829,23 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     return trace;
   })();
 
-  const loadSavedTests = async () => {
-    if (!workflowId) { setSavedTests([]); return; }
+  const loadSavedTests = async (workflowIdOverride = null) => {
+    const id = workflowIdOverride || workflowId;
+    if (!id) { setSavedTests([]); return; }
     try {
-      const response = await apiRequest(`/api/platform/rules/${workflowId}/tests`);
+      const response = await apiRequest(`/api/platform/rules/${id}/tests`);
       setSavedTests(Array.isArray(response?.data) ? response.data : []);
     } catch (error) {
       onError?.(error.message || "Unable to load workflow tests.");
     }
   };
 
-  const loadWorkflowVersions = async () => {
-    if (!workflowId) { setWorkflowVersions([]); return; }
+  const loadWorkflowVersions = async (workflowIdOverride = null) => {
+    const id = workflowIdOverride || workflowId;
+    if (!id) { setWorkflowVersions([]); return; }
     try {
       setVersionsBusy(true);
-      const response = await apiRequest(`/api/platform/rules/${workflowId}/versions`);
+      const response = await apiRequest(`/api/platform/rules/${id}/versions`);
       setWorkflowVersions(Array.isArray(response?.data) ? response.data : []);
     } catch (error) {
       onError?.(error.message || "Unable to load workflow versions.");
@@ -2883,7 +2885,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         }),
       });
       setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
-      await loadSavedTests();
+      await loadSavedTests(id);
       onMessage?.("Workflow test saved.");
     } catch (error) {
       onError?.(error.message || "Unable to save workflow test.");
