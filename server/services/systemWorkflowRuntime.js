@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ensureSystemWorkflowCatalog } from "./systemWorkflowCatalog.js";
-import { createWorkflowRun, executeWorkflowActions } from "./platformWorkflow.js";
+import { createWorkflowRun, executeWorkflowActions, workflowResultsContainStatus } from "./platformWorkflow.js";
 
 function safeSource(req, source = null) {
   return {
@@ -125,11 +125,14 @@ export async function executeSystemWorkflow({
       trigger: workflow.trigger_key || "system",
       ...extraContext,
     });
-    await db(
-      "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
-      [run.id, companyId]
-    );
-    return { runId: run.id, correlationId, results, result: results.at(-1)?.result ?? null };
+    const waiting = workflowResultsContainStatus(results, "waiting");
+    if (!waiting) {
+      await db(
+        "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
+        [run.id, companyId]
+      );
+    }
+    return { runId: run.id, correlationId, status: waiting ? "WAITING" : "COMPLETED", results, result: results.at(-1)?.result ?? null };
   } catch (error) {
     await db(
       `UPDATE platform_workflow_runs
