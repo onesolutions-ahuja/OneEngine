@@ -64,9 +64,7 @@ export async function ensureActiveStoreContext() {
   const primary = stores.find((store) => store.is_primary === true)
   const selected = rememberedAllowed
     ? remembered
-    : stores.length === 1
-      ? stores[0].id
-      : primary?.id || ''
+    : primary?.id || stores[0]?.id || ''
 
   setActiveStoreId(selected || '')
   return { stores, activeStoreId: selected || '' }
