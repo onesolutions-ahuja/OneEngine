@@ -2013,6 +2013,14 @@ async function startServer() {
     });
     console.log(`onePOS running on port ${PORT}`);
 
+    // Reconcile the canonical company-bound Superadmin immediately after the
+    // core schema and listener are ready. This is intentionally before the
+    // potentially long metadata bootstrap so login/E2E cannot be stranded on
+    // a legacy identity during rolling deploys. The same idempotent bootstrap
+    // runs again after metadata creation to grant any newly-created objects.
+    await bootstrapInitialSuperadmin(pool);
+    console.log("onePOS: identity bootstrap ready");
+
     // Reconcile SMSGate inbound webhooks after the HTTP listener is live. This
     // is idempotent: existing callbacks are reused, while missing callbacks
     // are created. Signing keys stay encrypted in integration credentials.
