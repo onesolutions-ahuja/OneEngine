@@ -344,7 +344,6 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255),
     pin_hash TEXT,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    is_platform_developer BOOLEAN NOT NULL DEFAULT FALSE,
     /* JARVES per-user opt-in; count vs company_settings.jarves_licence_users
        is enforced by services/jarvis/licensing.js (never above the allowance). */
     jarves_enabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -353,16 +352,6 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-CREATE TABLE IF NOT EXISTS platform_developer_company_access (
-    developer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    granted_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (developer_id, company_id)
-);
-
 
 CREATE INDEX IF NOT EXISTS idx_users_company
 ON users(company_id);
