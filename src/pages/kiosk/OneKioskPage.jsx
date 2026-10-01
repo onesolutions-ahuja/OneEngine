@@ -149,6 +149,7 @@ export default function OneKioskPage({ publicMode = false }) {
   const [customerLookup, setCustomerLookup] = useState("");
   const [customer, setCustomer] = useState(null);
   const [customerLookupBusy, setCustomerLookupBusy] = useState(false);
+  const [redeemPoints, setRedeemPoints] = useState(0);
   const [receiptEmail, setReceiptEmail] = useState("");
   const [receiptEmailBusy, setReceiptEmailBusy] = useState(false);
   const [receiptEmailSent, setReceiptEmailSent] = useState(false);
@@ -567,6 +568,7 @@ export default function OneKioskPage({ publicMode = false }) {
         setReceiptQr(null);
         setCustomer(null);
         setCustomerLookup("");
+        setRedeemPoints(0);
         setReceiptEmail("");
         setReceiptEmailSent(false);
         setJourneyData({});
@@ -677,6 +679,15 @@ export default function OneKioskPage({ publicMode = false }) {
   const visualTotal = basket.reduce((sum, line) => sum + Number(line.price || 0) * Number(line.quantity || 0), 0);
   const total = quote?.total ?? visualTotal;
   const itemCount = basket.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+
+  const loyaltyRedeemValue = useMemo(() => {
+    const valuePerPoint = Number(customer?.loyalty_redeem_value_per_point || 0);
+    const points = Number(redeemPoints || 0);
+    if (!customer?.loyalty_enabled || valuePerPoint <= 0 || points <= 0) return 0;
+    return Math.min(total, Math.round(points * valuePerPoint * 100) / 100);
+  }, [customer, redeemPoints, total]);
+
+  const amountDue = Math.max(0, Math.round((Number(total || 0) - loyaltyRedeemValue) * 100) / 100);
 
   const modifierSelections = useMemo(
     () => Object.values(selectedModifiers).flat().filter(Boolean),
@@ -933,6 +944,7 @@ export default function OneKioskPage({ publicMode = false }) {
           total,
           paymentMethod: "card",
           customerId: customer?.id || null,
+          redeemPoints: Number(redeemPoints || 0),
           kioskDeviceKey: kioskDeviceKey(),
           kioskFulfilmentStoreId: fulfilmentDetails.storeId || null,
         }),
@@ -971,6 +983,7 @@ export default function OneKioskPage({ publicMode = false }) {
       });
       if (!response?.success || !response?.data) throw new Error(response?.message || "Account not found");
       setCustomer(response.data);
+      setRedeemPoints(0);
     } catch (reason) {
       setCustomer(null);
       setError(reason?.message || "Account not found — continue as guest");
@@ -1101,6 +1114,7 @@ export default function OneKioskPage({ publicMode = false }) {
     setReceiptQr(null);
     setCustomer(null);
     setCustomerLookup("");
+    setRedeemPoints(0);
     setReceiptEmail("");
     setReceiptEmailSent(false);
     setJourneyData({});
@@ -1405,7 +1419,7 @@ export default function OneKioskPage({ publicMode = false }) {
                   <div className="one-kiosk-customer-found">
                     <CheckCircle2 size={28}/>
                     <div><strong>{customer.name || "Rewards account"}</strong><span>Balance: {Number(customer.loyalty_balance || 0).toLocaleString()} points</span></div>
-                    <button type="button" onClick={() => { setCustomer(null); setCustomerLookup(""); }}>Change</button>
+                    <button type="button" onClick={() => { setCustomer(null); setCustomerLookup(""); setRedeemPoints(0); }}>Change</button>
                   </div>
                 ) : (
                   <div className="one-kiosk-customer-search">
@@ -1413,6 +1427,33 @@ export default function OneKioskPage({ publicMode = false }) {
                     <button type="button" disabled={!customerLookup.trim() || customerLookupBusy} onClick={lookupCustomer}>{customerLookupBusy ? "Checking…" : "Find account"}</button>
                   </div>
                 )}
+                {customer?.loyalty_enabled && Number(customer?.loyalty_redeem_value_per_point || 0) > 0 && Number(customer?.loyalty_balance || 0) >= Number(customer?.loyalty_min_points_redeem || 0) ? (
+                  <div className="one-kiosk-redeem-points">
+                    <div>
+                      <strong>Use points</strong>
+                      <span>{redeemPoints > 0 ? `${redeemPoints} points · save ${money(loyaltyRedeemValue,currency)}` : "Choose how many points to use"}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.max(0, Math.min(Number(customer.loyalty_balance || 0), Math.floor(total / Number(customer.loyalty_redeem_value_per_point || 1))))}
+                      step="1"
+                      value={Math.min(Number(redeemPoints || 0), Math.max(0, Math.min(Number(customer.loyalty_balance || 0), Math.floor(total / Number(customer.loyalty_redeem_value_per_point || 1)))))}
+                      onChange={(e) => {
+                        const next = Number(e.target.value || 0);
+                        const min = Number(customer.loyalty_min_points_redeem || 0);
+                        setRedeemPoints(next > 0 && next < min ? min : next);
+                      }}
+                    />
+                    <div className="one-kiosk-redeem-actions">
+                      <button type="button" onClick={()=>setRedeemPoints(0)}>No points</button>
+                      <button type="button" onClick={()=>{
+                        const maxByTotal=Math.floor(total / Number(customer.loyalty_redeem_value_per_point || 1));
+                        setRedeemPoints(Math.min(Number(customer.loyalty_balance || 0),maxByTotal));
+                      }}>Use maximum</button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <div className="one-kiosk-stage-actions">
                 <button type="button" onClick={() => { setCustomer(null); setCustomerLookup(""); const next=nextScreenFrom(loyaltyScreen,"PAYMENT"); if(next?.key)setCurrentScreenKey(next.key); }}>Continue as guest</button>
@@ -1426,7 +1467,8 @@ export default function OneKioskPage({ publicMode = false }) {
               <CreditCard size={48}/>
               <h2>{translateKey(`screen.${paymentScreen.key}.title`, paymentScreen.title) || "Pay by card"}</h2>
               <p>{translateKey(`screen.${paymentScreen.key}.subtitle`, paymentScreen.subtitle) || "Follow the instructions on the card machine."}</p>
-              <div className="one-kiosk-total"><span>Total to pay</span><strong>{money(total,currency)}</strong></div>
+              {loyaltyRedeemValue > 0 ? <div className="one-kiosk-savings">Points applied: −{money(loyaltyRedeemValue,currency)}</div> : null}
+              <div className="one-kiosk-total"><span>Total to pay</span><strong>{money(amountDue,currency)}</strong></div>
               <button type="button" className="one-kiosk-pay" disabled={!basket.length || paying || quoteLoading} onClick={payAndCollect}>
                 <CreditCard size={20}/>{paying ? "Processing…" : paidSale ? "Finish order" : (translateKey(`screen.${paymentScreen.key}.actionLabel`, paymentScreen.actionLabel) || "Pay now")}
               </button>
