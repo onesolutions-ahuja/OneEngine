@@ -917,12 +917,19 @@ function workflowStepResources(steps = [], currentIndex = 0) {
         type: step.config.variableType || "step output",
       });
     } else if (step.type === "LOOP" && step.config?.itemVariable) {
-      resources.push({
-        value: `variables.${step.config.itemVariable}`,
-        label: `${step.config.itemVariable} · Current Loop Item`,
-        type: "record",
-      });
-      resources.push({ value: `${prefix}.count`, label: `${label} → Iteration Count`, type: "number" });
+      resources.push(
+        {
+          value: `variables.${step.config.itemVariable}`,
+          label: `${step.config.itemVariable} · Current Loop Item`,
+          type: "record",
+        },
+        {
+          value: `variables.${step.config.itemVariable}.id`,
+          label: `${step.config.itemVariable} → Record ID`,
+          type: "record id",
+        },
+        { value: `${prefix}.count`, label: `${label} → Iteration Count`, type: "number" },
+      );
     } else if (step.type === "GET_RECORDS") {
       resources.push(
         { value: `${prefix}.record.id`, label: `${label} → First Record → Record ID`, type: "step output" },
