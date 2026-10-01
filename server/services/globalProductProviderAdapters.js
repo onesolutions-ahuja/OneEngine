@@ -121,18 +121,25 @@ function providerUrl(baseUrl, endpoint, barcode, allowedHostSuffix) {
 }
 
 export function createOpenFoodFactsAdapter({ fetchImpl = globalThis.fetch } = {}) {
+  const headersFor = (config) => ({
+    Accept: "application/json",
+    "User-Agent": String(config.userAgent || "onePOS/1.0 (product lookup; support@onesolutions.example)").slice(0, 200),
+  });
+
   return {
     async lookup({ barcode: input, config = {} }) {
       const barcode = normalizeProductBarcode(input);
       const baseUrl = config.baseUrl || "https://world.openfoodfacts.org";
       const endpoint = config.lookupEndpoint || "/api/v2/product/{barcode}.json";
-      const url = providerUrl(baseUrl, endpoint, barcode, "openfoodfacts.org");
-      const payload = await requestJson(fetchImpl, url, {
+      const base = providerUrl(baseUrl, endpoint, barcode, "openfoodfacts.org");
+      const url = new URL(base);
+      // The world endpoint is intentionally not country-filtered. product_type=all
+      // lets barcode lookups follow Open Food Facts' cross-product-type routing.
+      url.searchParams.set("product_type", "all");
+      url.searchParams.set("fields", "code,product_name,product_name_en,brands,categories,categories_tags,quantity,image_front_url,countries,countries_tags,manufacturing_places");
+      const payload = await requestJson(fetchImpl, url.toString(), {
         timeoutMs: Number(config.timeoutMs) || DEFAULT_TIMEOUT_MS,
-        headers: {
-          Accept: "application/json",
-          "User-Agent": String(config.userAgent || "onePOS/1.0 (product lookup; support@onesolutions.example)").slice(0, 200),
-        },
+        headers: headersFor(config),
       });
       if (!payload || payload.status === 0 || !payload.product) return { status: "not_found" };
       const product = normalizeExternalProduct(payload.product, {
@@ -140,9 +147,58 @@ export function createOpenFoodFactsAdapter({ fetchImpl = globalThis.fetch } = {}
       });
       return product ? { status: "found", product } : { status: "not_found" };
     },
+
+    async search({ query: input, config = {}, page = 1, pageSize = 20 } = {}) {
+      const query = String(input || "").trim().replace(/\s+/g, " ");
+      if (query.length < 2 || query.length > 120) {
+        throw new ProductProviderError("Search text must be between 2 and 120 characters", {
+          code: "INVALID_SEARCH", retryable: false,
+        });
+      }
+      const base = new URL(config.baseUrl || "https://world.openfoodfacts.org");
+      if (base.protocol !== "https:" || !(base.hostname === "openfoodfacts.org" || base.hostname.endsWith(".openfoodfacts.org"))) {
+        throw new ProductProviderError("Configured provider URL is not permitted", { code: "INVALID_PROVIDER_URL", retryable: false });
+      }
+      // Official documentation currently directs plain-text search to the
+      // legacy CGI search endpoint. No country filter is supplied: results are worldwide.
+      const url = new URL("/cgi/search.pl", base.origin);
+      url.searchParams.set("search_terms", query);
+      url.searchParams.set("search_simple", "1");
+      url.searchParams.set("action", "process");
+      url.searchParams.set("json", "1");
+      url.searchParams.set("page", String(Math.max(1, Number(page) || 1)));
+      url.searchParams.set("page_size", String(Math.max(1, Math.min(Number(pageSize) || 20, 40))));
+      url.searchParams.set("fields", "code,product_name,product_name_en,brands,categories,categories_tags,quantity,image_front_url,countries,countries_tags,manufacturing_places");
+      const payload = await requestJson(fetchImpl, url.toString(), {
+        timeoutMs: Number(config.timeoutMs) || DEFAULT_TIMEOUT_MS,
+        headers: headersFor(config),
+      });
+      const products = (Array.isArray(payload?.products) ? payload.products : [])
+        .map((item) => {
+          try {
+            return normalizeExternalProduct(item, {
+              provider: "open_food_facts",
+              barcode: item?.code,
+              referenceId: item?.code,
+              fieldMappings: config.fieldMappings,
+            });
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      return {
+        status: products.length ? "found" : "not_found",
+        products,
+        count: Number(payload?.count) || products.length,
+        page: Number(payload?.page) || Math.max(1, Number(page) || 1),
+        pageSize: Number(payload?.page_size) || Math.max(1, Math.min(Number(pageSize) || 20, 40)),
+      };
+    },
+
     async testConnection({ config = {} } = {}) {
       const result = await this.lookup({ barcode: "737628064502", config });
-      return { connected: true, sampleFound: result.status === "found" };
+      return { connected: true, sampleFound: result.status === "found", scope: "worldwide" };
     },
   };
 }
