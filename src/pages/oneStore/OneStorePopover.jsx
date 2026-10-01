@@ -86,20 +86,20 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
       setWorkingKey(item.package_key);setError('');setNotice('')
       const key=encodeURIComponent(item.package_key)
       if(action==='trial'){
-        const r=await apiRequest(`/api/packages/${key}/activate-trial`,{method:'POST'})
+        const r=await apiRequest(`/api/packages/${key}/activate-trial`,{method:'POST',timeoutMs:60000})
         if(r?.success===false)throw new Error(r?.message||'Unable to activate free trial')
         setNotice(`7-day free trial activated for ${item.name}. Install is now available.`)
       }else if(action==='request-licence'){
-        const r=await apiRequest(`/api/packages/${key}/request-licence`,{method:'POST'})
+        const r=await apiRequest(`/api/packages/${key}/request-licence`,{method:'POST',timeoutMs:60000})
         if(r?.success===false)throw new Error(r?.message||'Unable to request licence')
         setNotice('Licence request sent.')
       }else if(action==='upgrade'){
-        const r=await apiRequest(`/api/packages/${key}/upgrade`,{method:'POST'})
+        const r=await apiRequest(`/api/packages/${key}/upgrade`,{method:'POST',timeoutMs:60000})
         if(r?.success===false)throw new Error(r?.message||'Unable to update app')
         setNotice(`${item.name} update queued.`)
       }else{
         const endpoint=action==='install'?'install':action==='activate'?'reactivate':action==='uninstall'?'uninstall':'deactivate'
-        const r=await apiRequest(`/api/packages/${key}/${endpoint}`,{method:'POST'})
+        const r=await apiRequest(`/api/packages/${key}/${endpoint}`,{method:'POST',timeoutMs:60000})
         if(r?.success===false)throw new Error(r?.message||`Unable to ${action} app`)
         setNotice(action==='install'?`${item.name} installed.`:action==='activate'?`${item.name} activated.`:action==='uninstall'?`${item.name} uninstalled. Existing data and configuration were preserved.`:`${item.name} deactivated.`)
       }
