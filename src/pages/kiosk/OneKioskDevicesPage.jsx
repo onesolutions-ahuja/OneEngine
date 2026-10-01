@@ -163,7 +163,7 @@ export default function OneKioskDevicesPage() {
           {orderResults.map((order) => (
             <div key={order.id}>
               <div><strong>{order.external_reference || order.external_order_id || "Kiosk order"}</strong><span>{order.kiosk_name || "OneKiosk"} · {order.created_at ? new Date(order.created_at).toLocaleString() : ""}</span></div>
-              <div><span>{order.receipt_number || "No receipt"}</span><strong>{order.total != null ? new Intl.NumberFormat(undefined,{style:"currency",currency:"GBP"}).format(Number(order.total)) : ""}</strong></div>
+              <div><span>{order.receipt_number || "No receipt"}</span><strong>{order.total != null ? new Intl.NumberFormat(undefined,{style:"currency",currency:order.currency || "GBP"}).format(Number(order.total)) : ""}</strong></div>
               <StatusPill status={order.status} />
             </div>
           ))}
