@@ -106,22 +106,22 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   useEffect(() => {
     let live = true
     setLoadingObjects(true)
-    Promise.all([
-      cachedGet('/api/platform/runtime/navigation-targets', { cacheKey: 'workspace:navigation-targets' }),
-      cachedGet('/api/platform/objects', { cacheKey: 'workspace:object-metadata' }),
-    ])
-      .then(([navigationResponse, objectResponse]) => {
+
+    // Workspace is the metadata-backed object manager, not the application
+    // navigation menu. A platform object must not disappear here just because
+    // it has no Platform Page (or its app/package is not currently exposed in
+    // navigation). /api/platform/objects is already protected by
+    // oneengine.manage and tenant scoping, while record endpoints enforce the
+    // object's own RBAC again when the object is opened.
+    cachedGet('/api/platform/objects', {
+      cacheKey: 'workspace:object-metadata',
+      forceRefresh: true,
+    })
+      .then((objectResponse) => {
         if (!live) return
-        const navigation = navigationResponse?.data?.objectPages || []
-        const visibleKeys = new Set(
-          (Array.isArray(navigation) ? navigation : [])
-            .map((item) => item?.objectKey)
-            .filter(Boolean),
-        )
         const data = objectResponse?.data?.objects || objectResponse?.data || []
         const list = (Array.isArray(data) ? data : [])
           .filter((item) => item?.active !== false && item?.source_table)
-          .filter((item) => visibleKeys.has(objectKey(item)))
         setObjects(list)
 
         const requested = initialObjectKey && list.some((item) => objectKey(item) === initialObjectKey)
