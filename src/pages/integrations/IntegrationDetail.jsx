@@ -13,7 +13,7 @@ import EndpointFormModal from "./EndpointFormModal.jsx";
 import MappingEditorModal from "./MappingEditorModal.jsx";
 import EndpointTestModal from "./EndpointTestModal.jsx";
 import ApiLogsPanel from "./ApiLogsPanel.jsx";
-import { BrandIcon } from "../../marketing/components/BrandIcons.jsx";
+import { BrandIcon } from "../../components/BrandIcons.jsx";
 
 export default function IntegrationDetail({ integration, onBack }) {
   const [endpoints, setEndpoints] = useState([]);
