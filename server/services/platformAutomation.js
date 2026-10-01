@@ -82,6 +82,8 @@ export async function executePlatformAutomations({ db, object, fields, record, p
           storeId: req.user.storeId || null,
           tillId: req.user.tillId || null,
           entryTransition,
+          initialVariables: workflowVariables,
+          initialPreviousRecord: previousRecord || null,
         },
       });
       try {
