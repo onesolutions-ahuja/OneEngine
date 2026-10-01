@@ -4354,7 +4354,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       try { validateConditionConfig(next.conditions, processFields.rows, "Approval entry conditions"); }
       catch (error) { if (error instanceof ConditionError) return res.status(400).json({ success: false, message: error.message }); throw error; }
     }
-    if (Array.isArray(next.steps) && (!next.steps.length || next.steps.some((step) => !step?.label?.trim() || !step.roleId))) {
+    if (Array.isArray(next.steps) && (!next.steps.length || next.steps.some((step) => !step?.label?.trim() || ((step.assignmentType || "role") === "role" && !step.roleId)))) {
       return res.status(400).json({ success: false, message: "At least one valid ordered approval step is required" });
     }
     const requestedLifecycle = next.lifecycleStatus ?? next.lifecycle_status ?? (next.active === true ? "ACTIVE" : next.active === false ? "INACTIVE" : undefined);
@@ -4366,9 +4366,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       await db("DELETE FROM platform_approval_steps WHERE process_id=$1", [process.id]);
       for (let index = 0; index < next.steps.length; index += 1) {
         const step = next.steps[index];
-        const role = await db("SELECT id FROM roles WHERE id=$1 AND company_id=$2", [step.roleId, req.user.companyId]);
-        if (!role.rows.length || !step.label?.trim()) return res.status(400).json({ success: false, message: "Each approval step requires a valid company role and label" });
-        await db("INSERT INTO platform_approval_steps (process_id,step_order,label,role_id,config) VALUES ($1,$2,$3,$4,$5::jsonb)", [process.id, index + 1, step.label.trim(), step.roleId, JSON.stringify(step.config || {})]);
+        if ((step.assignmentType || "role") === "role") { const role = await db("SELECT id FROM roles WHERE id=$1 AND company_id=$2", [step.roleId, req.user.companyId]); if (!role.rows.length || !step.label?.trim()) return res.status(400).json({ success: false, message: "Each approval step requires a valid company role and label" }); }
+        await db("INSERT INTO platform_approval_steps (process_id,step_order,label,role_id,config,assignment_type,assignment_config) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb)", [process.id, index + 1, step.label.trim(), step.roleId || null, JSON.stringify(step.config || {}), step.assignmentType || "role", JSON.stringify(step.assignmentConfig || {})]);
       }
     }
     res.json({ success: true, data: result.rows[0] });
@@ -4406,10 +4405,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       );
       for (let index = 0; index < steps.length; index += 1) {
         const step = steps[index];
-        if (!step?.roleId || typeof step.label !== "string" || !step.label.trim()) return res.status(400).json({ success: false, message: "Each approval step requires a role and label" });
-        const role = await db("SELECT id FROM roles WHERE id=$1 AND company_id=$2", [step.roleId, req.user.companyId]);
-        if (!role.rows.length) return res.status(400).json({ success: false, message: "Approval step role is not available to this company" });
-        await db("INSERT INTO platform_approval_steps (process_id,step_order,label,role_id,config) VALUES ($1,$2,$3,$4,$5::jsonb)", [process.rows[0].id, index + 1, step.label.trim(), step.roleId, JSON.stringify(step.config || {})]);
+        if (typeof step.label !== "string" || !step.label.trim() || ((step.assignmentType || "role") === "role" && !step.roleId)) return res.status(400).json({ success: false, message: "Each approval step requires a label and a valid approver assignment" });
+        if ((step.assignmentType || "role") === "role") { const role = await db("SELECT id FROM roles WHERE id=$1 AND company_id=$2", [step.roleId, req.user.companyId]); if (!role.rows.length) return res.status(400).json({ success: false, message: "Approval step role is not available to this company" }); }
+        await db("INSERT INTO platform_approval_steps (process_id,step_order,label,role_id,config,assignment_type,assignment_config) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb)", [process.rows[0].id, index + 1, step.label.trim(), step.roleId || null, JSON.stringify(step.config || {}), step.assignmentType || "role", JSON.stringify(step.assignmentConfig || {})]);
       }
       res.status(201).json({ success: true, data: process.rows[0] });
     } catch (error) {
