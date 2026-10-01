@@ -667,6 +667,7 @@ function makeStep(type = "CREATE_RECORD") {
       defaultBranch: [],
       ifBranch: [],
       elseBranch: [],
+      faultBranch: [],
       durationSeconds: 60,
       reason: "",
       url: "",
@@ -913,7 +914,12 @@ function MappingEditor({ value = {}, onChange, rootObjectKey, extraResources = [
 }
 
 function workflowStepResources(steps = [], currentIndex = 0) {
-  const resources = [];
+  const resources = [
+    { value: "variables.fault.message", label: "Fault → Error message", type: "fault" },
+    { value: "variables.fault.title", label: "Fault → Problem", type: "fault" },
+    { value: "variables.fault.howToFix", label: "Fault → How to fix", type: "fault" },
+    { value: "variables.fault.actionType", label: "Fault → Failed action type", type: "fault" },
+  ];
   const seenVariables = new Set();
   steps.slice(0, currentIndex).forEach((step, index) => {
     const label = step.label || getActionLabel(step.type) || `Step ${index + 1}`;
@@ -1240,8 +1246,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <p className="mt-1 text-[11px] text-slate-500">Steps inside the Loop can use this Resource to access the item being processed.</p>
             </div>
             <BranchStepPicker label="Loop body steps" value={step.config?.bodyBranch || []} onChange={(bodyBranch) => updateConfig({ bodyBranch })} steps={allSteps} currentIndex={index} />
-            <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-800">
-              WAIT is currently blocked inside Loop bodies so durable resume cannot repeat or skip an iteration.
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+              Loop bodies support durable Wait. Completed iterations replay idempotently after resume, so already-finished side effects are not repeated.
             </div>
           </div>
         );
@@ -1747,7 +1753,22 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
         </div>
 
         {step.expanded && (
-          <div className="pt-1">{renderConfig()}</div>
+          <div className="space-y-3 pt-1">
+            {renderConfig()}
+            <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <summary className="cursor-pointer text-xs font-semibold text-slate-700">On Error</summary>
+              <div className="mt-3">
+                <BranchStepPicker
+                  label="Run these steps if this element fails"
+                  value={step.config?.faultBranch || []}
+                  onChange={(faultBranch) => updateConfig({ faultBranch })}
+                  steps={allSteps}
+                  currentIndex={index}
+                />
+                <p className="mt-2 text-[11px] text-slate-500">Recovery steps can use Fault resources such as Error message and How to fix. If no error path is configured, the workflow fails normally.</p>
+              </div>
+            </details>
+          </div>
         )}
       </div>
     </div>
