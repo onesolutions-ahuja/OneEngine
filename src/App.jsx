@@ -2292,8 +2292,8 @@ function HelpMenu({ onSelect }) {
     ['Getting started', 'Basic onePOS setup and first steps'],
     ['Till guide', 'Sales, payments, returns and till workflows'],
     ['Settings guide', 'Company, store, users and permissions'],
-    ['Troubleshooting', 'Common issues and recovery steps'],
-    ['Contact support', 'Support and service information'],
+    ['Troubleshooting', 'Connection health and recovery tools'],
+    ['System diagnostics', 'Server, database and integration status'],
   ]
 
   return (
@@ -2301,7 +2301,7 @@ function HelpMenu({ onSelect }) {
       <div className="git-macos-card">
         <div className="git-macos-row git-macos-row--top">
           <span className="git-macos-icon git-macos-icon--blue"><CircleHelp size={16} /></span>
-          <div className="git-macos-copy"><strong>Help & Guides</strong><small>Quick links for onePOS help. These pages can be replaced later.</small></div>
+          <div className="git-macos-copy"><strong>Help & Guides</strong><small>Open the relevant onePOS workspace or diagnostics page.</small></div>
         </div>
       </div>
       <div className="git-macos-section-title">Help</div>
@@ -2878,7 +2878,12 @@ function Desktop({ onLock, onSignOut }) {
               <CircleHelp size={17} strokeWidth={2.1} />
             </button>
             <AnimatePresence>
-              {topPanel === 'help' ? <HelpMenu onSelect={(label) => { setMessage(`${label} — help page placeholder`); setTopPanel('') }} /> : null}
+              {topPanel === 'help' ? <HelpMenu onSelect={(label) => {
+                setTopPanel('')
+                if (label === 'Till guide') openItem('till')
+                else if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
+                else { setRoute('settings', 'connections'); setRouteState({ app: 'settings', section: 'connections' }); setActiveApp('settings') }
+              }} /> : null}
             </AnimatePresence>
           </div>
           <div className="topbar-status-wrap">
