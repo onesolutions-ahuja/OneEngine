@@ -270,6 +270,47 @@ export default function createKioskRouter({
     }
   });
 
+  router.post("/kiosk/availability", authenticate, async (req, res) => {
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (!items.length) return res.json({ success: true, data: [] });
+    const productIds = [...new Set(items.map((item) => String(item.productId || "")).filter(Boolean))];
+    if (!productIds.length) return res.json({ success: true, data: [] });
+    try {
+      const stores = await db(
+        `SELECT s.id,s.name,s.code,
+                COALESCE(jsonb_object_agg(p.id::text,COALESCE(ps.quantity,0)) FILTER (WHERE p.id IS NOT NULL),'{}'::jsonb) AS stock
+           FROM stores s
+           CROSS JOIN products p
+           LEFT JOIN product_store_stock ps
+             ON ps.company_id=s.company_id AND ps.store_id=s.id AND ps.product_id=p.id
+          WHERE s.company_id=$1 AND s.active=TRUE AND p.company_id=$1 AND p.id=ANY($2::uuid[])
+          GROUP BY s.id,s.name,s.code
+          ORDER BY s.name`,
+        [req.user.companyId, productIds]
+      );
+      const requested = new Map(items.map((item) => [String(item.productId), Math.max(1, Number(item.quantity) || 1)]));
+      const data = stores.rows.map((store) => {
+        const stock = store.stock || {};
+        const shortages = [...requested.entries()]
+          .filter(([productId, qty]) => Number(stock[productId] || 0) < qty)
+          .map(([productId, qty]) => ({ productId, requested: qty, available: Number(stock[productId] || 0) }));
+        return {
+          id: store.id,
+          name: store.name,
+          code: store.code,
+          canFulfil: shortages.length === 0,
+          shortages,
+          stock,
+          current: String(store.id) === String(req.user.storeId),
+        };
+      });
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error("Load OneKiosk store availability error:", error);
+      res.status(500).json({ success: false, message: "Unable to check collection availability" });
+    }
+  });
+
   router.get("/kiosk/flows", authenticate, async (req, res) => {
     try {
       const result = await db(
@@ -645,6 +686,10 @@ export default function createKioskRouter({
     const saleId = String(req.body?.saleId || "").trim();
     const deviceKey = String(req.body?.deviceKey || "").trim();
     const fulfilmentType = String(req.body?.fulfilmentType || "").trim().toUpperCase();
+    const fulfilmentDetails = req.body?.fulfilmentDetails && typeof req.body.fulfilmentDetails === "object"
+      ? req.body.fulfilmentDetails
+      : {};
+    const requestedFulfilmentStoreId = fulfilmentDetails.storeId || req.body?.fulfilmentStoreId || null;
 
     if (!saleId) {
       return res.status(400).json({ success: false, message: "A completed sale is required" });
@@ -677,6 +722,18 @@ export default function createKioskRouter({
       return res.status(400).json({ success: false, message: "This fulfilment option is not allowed by the assigned OneKiosk flow" });
     }
     const canonicalFulfilmentType = String(configuredOption.canonicalType || "SELF_PICKUP").toUpperCase();
+
+    let fulfilmentStoreId = req.user.storeId;
+    if (requestedFulfilmentStoreId) {
+      const targetStore = await db(
+        "SELECT id FROM stores WHERE id=$1 AND company_id=$2 AND active=TRUE",
+        [requestedFulfilmentStoreId, req.user.companyId]
+      );
+      if (!targetStore.rows.length) {
+        return res.status(400).json({ success: false, message: "Selected collection store is unavailable" });
+      }
+      fulfilmentStoreId = targetStore.rows[0].id;
+    }
 
     const client = await pool.connect();
     let transactionStarted = false;
@@ -778,7 +835,7 @@ export default function createKioskRouter({
          RETURNING *`,
         [
           req.user.companyId,
-          req.user.storeId,
+          fulfilmentStoreId,
           sale.customer_id || null,
           externalOrderId,
           collectionNumber,
@@ -791,6 +848,9 @@ export default function createKioskRouter({
           JSON.stringify({
             source: "ONE_KIOSK",
             requestedFulfilmentType: fulfilmentType,
+            fulfilmentDetails,
+            orderingStoreId: req.user.storeId,
+            fulfilmentStoreId,
             workflowId: runtimeRow.workflow_id || null,
             kioskDeviceId: runtimeRow.device_id || null,
             saleId: sale.id,
@@ -851,7 +911,8 @@ export default function createKioskRouter({
             saleId: sale.id,
             collectionNumber,
             fulfilmentType,
-            storeId: req.user.storeId,
+            storeId: fulfilmentStoreId,
+            orderingStoreId: req.user.storeId,
           })
         ).catch(() => {});
       }
