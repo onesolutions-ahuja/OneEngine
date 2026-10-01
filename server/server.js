@@ -2137,6 +2137,10 @@ async function startServer() {
           [preferredUserId, companyId]
         );
         if (preferred.rows[0]) return preferred.rows[0];
+        throw Object.assign(
+          new Error("Workflow automation actor is no longer active or no longer has an RBAC role. Reassign or recreate the workflow/schedule with an active user."),
+          { retryable: false }
+        );
       }
       const fallback = await db(
         `SELECT u.id,u.role_id,u.store_id,u.till_id
