@@ -89,6 +89,6 @@ export function Dock({ onItemOpen }) {
         </div>
       </motion.div>
     </div>
-    {jarvesOpen ? createPortal(<JarvisPanel embedded onClose={closeJarves} onActivityChange={setJarvesOpen} />, document.body) : null}
+    {jarvesOpen ? createPortal(<JarvisPanel embedded onClose={closeJarves} onActivityChange={setJarvesActivity} />, document.body) : null}
   </>
 }
