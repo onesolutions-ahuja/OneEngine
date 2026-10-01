@@ -148,13 +148,15 @@ export default function createAdminRouter({
    */
   router.get("/admin/users/:id/stores", authenticate, authorize("user.view"), async (req, res) => {
     try {
-      const userCheck = await db("SELECT 1 FROM users WHERE id=$1 AND company_id=$2", [req.params.id, req.user.companyId]);
+      const userCheck = await db("SELECT store_id FROM users WHERE id=$1 AND company_id=$2", [req.params.id, req.user.companyId]);
       if (!userCheck.rows.length) return res.status(404).json({ success: false, message: "User not found" });
       
       const result = await db(
-        `SELECT s.id, s.name, s.code, s.active, us.active AS assigned
+        `SELECT s.id, s.name, s.code, s.active, us.active AS assigned,
+                (u.store_id=s.id) AS is_default
          FROM stores s
          LEFT JOIN user_stores us ON us.store_id = s.id AND us.user_id = $1 AND us.active = true
+         LEFT JOIN users u ON u.id=$1
          WHERE s.company_id = $2
          ORDER BY s.name`,
         [req.params.id, req.user.companyId]
@@ -172,6 +174,7 @@ export default function createAdminRouter({
   router.put("/admin/users/:id/stores", authenticate, authorize("user.store_assignment.manage"), async (req, res) => {
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
     if (!Array.isArray(req.body.storeIds)) return res.status(400).json({ success: false, message: "storeIds must be an array" });
+    const requestedDefaultStoreId = req.body.defaultStoreId ? String(req.body.defaultStoreId) : null;
 
     const client = await pool.connect();
     try {
@@ -186,6 +189,10 @@ export default function createAdminRouter({
         [req.body.storeIds, req.user.companyId]
       );
       const validStoreIds = storeCheck.rows.map(row => row.id);
+      if (requestedDefaultStoreId && !validStoreIds.map(String).includes(requestedDefaultStoreId)) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ success: false, message: "Default store must be one of the assigned stores" });
+      }
       
       // Deactivate all existing user-store assignments
       await client.query(
@@ -204,8 +211,14 @@ export default function createAdminRouter({
         );
       }
       
+      const defaultStoreId = requestedDefaultStoreId || validStoreIds[0] || null;
+      await client.query(
+        "UPDATE users SET store_id=$1, updated_at=NOW() WHERE id=$2 AND company_id=$3",
+        [defaultStoreId, req.params.id, req.user.companyId]
+      );
+
       await client.query("COMMIT");
-      res.json({ success: true, message: "Store access updated" });
+      res.json({ success: true, message: "Store access updated", defaultStoreId });
     } catch (error) {
       await client.query("ROLLBACK");
       console.error("Update user stores error:", error);
