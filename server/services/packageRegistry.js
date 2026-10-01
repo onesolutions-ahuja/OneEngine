@@ -356,6 +356,88 @@ export function packageDefinition(entry) {
       providerConnector: entry.providerConnector || null,
       connectorApp: entry.connectorApp || null,
       iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
+      ...(entry.key === "one_kiosk" ? {
+        workflows: [
+          {
+            objectKey: "product",
+            name: "OneKiosk - Case 1 Restaurant",
+            triggerKey: "kiosk_experience",
+            conditions: [],
+            action: {
+              type: "workflow",
+              scope: "one_kiosk",
+              flowType: "KIOSK_EXPERIENCE",
+              templateKey: "one_kiosk_case_1_restaurant",
+              defaultForNewDevices: true,
+              ui: {
+                schemaVersion: 1,
+                profile: "RESTAURANT",
+                startScreen: "catalogue",
+                theme: { density: "touch", productCard: "image", accentRole: "primary" },
+                screens: [
+                  { key: "catalogue", type: "CATALOGUE", title: "What would you like?", search: true, categories: true, productAction: "OPEN_DETAIL" },
+                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, modifiers: true, nutrition: true, allergens: true },
+                  { key: "upsell", type: "RECOMMENDATIONS", source: "CROSS_SELL", title: "Make it yours", optional: true },
+                  { key: "fulfilment", type: "FULFILMENT", title: "How would you like it?", options: [
+                    { key: "EAT_IN", label: "Eat in" },
+                    { key: "TAKEAWAY", label: "Takeaway" },
+                    { key: "COLLECT", label: "Collect" }
+                  ] },
+                  { key: "basket", type: "BASKET", editable: true, promotions: true },
+                  { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & collect" },
+                  { key: "confirmation", type: "CONFIRMATION", collectionNumber: true, receipt: ["PRINT","QR"], resetAfterSeconds: 30 }
+                ],
+                features: {
+                  variants: true, modifiers: true, promotions: true, upsell: true, loyalty: true,
+                  stockPromise: false, compare: false, specifications: false, warranty: false,
+                  accessibility: true, language: true, assistance: true, idleReset: true
+                }
+              },
+              actions: []
+            },
+            active: false
+          },
+          {
+            objectKey: "product",
+            name: "OneKiosk - Case 2 Retail / Electronics",
+            triggerKey: "kiosk_experience",
+            conditions: [],
+            action: {
+              type: "workflow",
+              scope: "one_kiosk",
+              flowType: "KIOSK_EXPERIENCE",
+              templateKey: "one_kiosk_case_2_retail",
+              defaultForNewDevices: false,
+              ui: {
+                schemaVersion: 1,
+                profile: "RETAIL",
+                startScreen: "catalogue",
+                theme: { density: "touch", productCard: "image_specs", accentRole: "primary" },
+                screens: [
+                  { key: "catalogue", type: "CATALOGUE", title: "Find your product", search: true, categories: true, productAction: "OPEN_DETAIL" },
+                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true },
+                  { key: "extras", type: "RECOMMENDATIONS", source: "ACCESSORY", title: "Accessories & protection", warranty: true, optional: true },
+                  { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", options: [
+                    { key: "COLLECT", label: "Collect here" },
+                    { key: "OTHER_STORE", label: "Collect another store" },
+                    { key: "DELIVERY", label: "Home delivery" }
+                  ], stockPromise: true },
+                  { key: "basket", type: "BASKET", editable: true, promotions: true },
+                  { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & order" },
+                  { key: "confirmation", type: "CONFIRMATION", collectionNumber: true, receipt: ["PRINT","QR","EMAIL"], collectionVerification: true, resetAfterSeconds: 30 }
+                ],
+                features: {
+                  variants: true, modifiers: false, promotions: true, upsell: true, loyalty: true,
+                  stockPromise: true, compare: true, specifications: true, warranty: true,
+                  accessibility: true, language: true, assistance: true, idleReset: true
+                }
+              },
+              actions: []
+            },
+            active: false
+          }
+        ]
+      } : {}),
       ...(entry.key === "communication_core" ? {
         packageKey: "communication_core",
         packageType: "FOUNDATION",
