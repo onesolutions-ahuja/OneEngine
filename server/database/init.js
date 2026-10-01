@@ -331,6 +331,143 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
       },
     },
+    {
+      key: "0019_dual_superadmin_seed",
+      version: "19",
+      name: "Seed OneEngine Manager and tenant Superadmin separately",
+      up: async client => {
+        const companyResult = String(env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || "").trim()
+          ? await client.query(
+              "SELECT id,name,user_email_domain FROM companies WHERE id=$1 AND active=true LIMIT 1",
+              [String(env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || "").trim()]
+            )
+          : await client.query(
+              "SELECT id,name,user_email_domain FROM companies WHERE LOWER(name)=LOWER('onePOS Demo') AND active=true ORDER BY created_at,id LIMIT 1"
+            );
+        const company = companyResult.rows[0] || null;
+        if (!company) return;
+
+        const engineEmail = "superadmin@onepos.com";
+        const configuredTenantEmail = String(env.BOOTSTRAP_TENANT_SUPERADMIN_EMAIL || "").trim().toLowerCase();
+        const domain = String(company.user_email_domain || "").trim().toLowerCase().replace(/^@/, "");
+        const tenantEmail = configuredTenantEmail
+          || (String(company.name || "").trim().toLowerCase() === "onepos demo"
+            ? "superadmin@local"
+            : (domain ? `superadmin@${domain}` : "superadmin@local"));
+
+        let tenantRole = await client.query(
+          "SELECT id FROM roles WHERE company_id=$1 AND api_key='platform_superadmin' ORDER BY created_at,id LIMIT 1",
+          [company.id]
+        );
+        let tenantRoleId = tenantRole.rows[0]?.id || null;
+        if (!tenantRoleId) {
+          const inserted = await client.query(
+            `INSERT INTO roles (company_id,name,description,is_system_role,api_key)
+             VALUES ($1,'Superadmin','Tenant Superadmin. Full tenant access without OneEngine Manager authority.',TRUE,'platform_superadmin')
+             RETURNING id`,
+            [company.id]
+          );
+          tenantRoleId = inserted.rows[0].id;
+        }
+
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT $1,p.id FROM permissions p
+            WHERE p.code NOT IN ('oneengine.manage','platform.manage')
+           ON CONFLICT (role_id,permission_id) DO NOTHING`,
+          [tenantRoleId]
+        );
+        await client.query(
+          `DELETE FROM role_permissions rp
+            USING permissions p
+            WHERE rp.role_id=$1
+              AND rp.permission_id=p.id
+              AND p.code IN ('oneengine.manage','platform.manage')`,
+          [tenantRoleId]
+        );
+
+        const engineRoleId = await ensureGlobalSystemProfile(client, {
+          name: "OneEngine Manager",
+          apiKey: "engine_manager",
+          description: "Cross-tenant OneEngine operator. Authority is granted through RBAC oneengine.manage.",
+          grantAllPermissions: false,
+        });
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT $1,p.id FROM permissions p WHERE p.code='oneengine.manage'
+           ON CONFLICT (role_id,permission_id) DO NOTHING`,
+          [engineRoleId]
+        );
+
+        const legacyTenant = await client.query(
+          `SELECT id,password_hash
+             FROM users
+            WHERE company_id=$1
+              AND (
+                LOWER(COALESCE(email,'')) IN ('superadmin@onepos.local','superadmin@onepos.com','superadmin@local')
+                OR LOWER(COALESCE(username,''))='superadmin'
+              )
+            ORDER BY created_at,id
+            LIMIT 1`,
+          [company.id]
+        );
+
+        let sharedHash = legacyTenant.rows[0]?.password_hash || null;
+        if (!sharedHash) {
+          const bootstrapPassword = String(
+            env.BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD
+              || env.BOOTSTRAP_SUPERADMIN_PASSWORD
+              || ""
+          );
+          if (!bootstrapPassword) throw new Error("BOOTSTRAP_SUPERADMIN_PASSWORD is required to seed Superadmin accounts");
+          sharedHash = await bcrypt.hash(bootstrapPassword, 12);
+        }
+
+        if (legacyTenant.rows[0]) {
+          await client.query(
+            `UPDATE users
+                SET company_id=$1,role_id=$2,username=$3,email=$3,
+                    full_name=$4,active=TRUE,is_platform_developer=FALSE,
+                    password_hash=$5,must_change_password=TRUE,updated_at=NOW()
+              WHERE id=$6`,
+            [company.id, tenantRoleId, tenantEmail, `${company.name} Superadmin`, sharedHash, legacyTenant.rows[0].id]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO users
+               (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active,must_change_password)
+             VALUES ($1,$2,$3,$3,$4,$5,FALSE,TRUE,TRUE)`,
+            [company.id, tenantRoleId, tenantEmail, sharedHash, `${company.name} Superadmin`]
+          );
+        }
+
+        let engineUser = await client.query(
+          `SELECT id FROM users
+            WHERE LOWER(COALESCE(email,''))=LOWER($1)
+               OR LOWER(COALESCE(username,''))=LOWER($1)
+            ORDER BY created_at,id
+            LIMIT 1`,
+          [engineEmail]
+        );
+        if (engineUser.rows[0]) {
+          await client.query(
+            `UPDATE users
+                SET company_id=NULL,role_id=$1,username=$2,email=$2,
+                    full_name='OneEngine Manager',active=TRUE,is_platform_developer=FALSE,
+                    password_hash=$3,must_change_password=TRUE,updated_at=NOW()
+              WHERE id=$4`,
+            [engineRoleId, engineEmail, sharedHash, engineUser.rows[0].id]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO users
+               (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active,must_change_password)
+             VALUES (NULL,$1,$2,$2,$3,'OneEngine Manager',FALSE,TRUE,TRUE)`,
+            [engineRoleId, engineEmail, sharedHash]
+          );
+        }
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
