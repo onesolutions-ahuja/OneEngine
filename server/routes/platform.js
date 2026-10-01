@@ -3589,7 +3589,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         actual = String(traceByStep.get(String(assertion.stepId || ""))?.status || "NOT_RUN").toUpperCase();
         passed = actual === String(assertion.expected || "COMPLETED").toUpperCase();
       } else if (type === "DECISION_OUTCOME") {
-        const result = resultByStep.get(String(assertion.stepId || ""));
+        const step = traceByStep.get(String(assertion.stepId || ""));
+        const result = resultByStep.get(String(assertion.stepId || "")) || step?.metadata?.result || {};
         actual = result?.outcomeId ?? result?.outcomeLabel ?? result?.branch?.outcome ?? null;
         passed = String(actual ?? "") === String(assertion.expected ?? "");
       } else if (type === "RESOURCE_EQUALS") {
@@ -3737,7 +3738,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
             [JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
           );
-          return res.json({ success: true, data: { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: true, externalActionsSimulated: true } });
+          const notStartedData = { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: true, externalActionsSimulated: true, variables: { variables: {}, steps: {} } };
+          const assertionResult = evaluateWorkflowAssertions(notStartedData, req.body?.assertions || []);
+          return res.json({ success: true, data: { ...notStartedData, assertionResult, testPassed: executionMode === "TEST" ? assertionResult.passed : null } });
         }
       }
 
@@ -3793,18 +3796,24 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         db("SELECT * FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1", [run.id, req.user.companyId]),
         db("SELECT * FROM platform_workflow_step_runs WHERE run_id=$1 ORDER BY step_order,created_at,id", [run.id]),
       ]);
+      const debugData = {
+        status: finalStatus,
+        run: runResult.rows[0] || run,
+        steps: stepResult.rows || [],
+        results,
+        record: record ? { id: record.id } : null,
+        friendlyError: friendly,
+        rolledBack: true,
+        externalActionsSimulated: true,
+        variables: workflowVariables,
+      };
+      const assertionResult = evaluateWorkflowAssertions(debugData, req.body?.assertions || []);
       return res.json({
         success: true,
         data: {
-          status: finalStatus,
-          run: runResult.rows[0] || run,
-          steps: stepResult.rows || [],
-          results,
-          record: record ? { id: record.id } : null,
-          friendlyError: friendly,
-          rolledBack: true,
-          externalActionsSimulated: true,
-          variables: workflowVariables,
+          ...debugData,
+          assertionResult,
+          testPassed: executionMode === "TEST" ? assertionResult.passed : null,
         },
       });
     } catch (error) {
@@ -3970,8 +3979,25 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   router.put("/platform/rules/:ruleId/tests/:testId", ...manage, async (req, res) => {
     const result = await db(
-      "UPDATE platform_workflow_tests SET name=COALESCE($1,name),config=COALESCE($2::jsonb,config),updated_at=NOW() WHERE id=$3 AND workflow_id=$4 AND company_id=$5 RETURNING *",
-      [req.body?.name || null, req.body?.config === undefined ? null : JSON.stringify(req.body.config || {}), req.params.testId, req.params.ruleId, req.user.companyId]
+      `UPDATE platform_workflow_tests SET
+         name=COALESCE($1,name),
+         config=COALESCE($2::jsonb,config),
+         last_status=COALESCE($3,last_status),
+         last_run_id=COALESCE($4,last_run_id),
+         last_result=COALESCE($5::jsonb,last_result),
+         last_run_at=CASE WHEN $3::text IS NULL THEN last_run_at ELSE NOW() END,
+         updated_at=NOW()
+       WHERE id=$6 AND workflow_id=$7 AND company_id=$8 RETURNING *`,
+      [
+        req.body?.name || null,
+        req.body?.config === undefined ? null : JSON.stringify(req.body.config || {}),
+        req.body?.lastStatus || null,
+        req.body?.lastRunId || null,
+        req.body?.lastResult === undefined ? null : JSON.stringify(req.body.lastResult || {}),
+        req.params.testId,
+        req.params.ruleId,
+        req.user.companyId,
+      ]
     );
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Saved test not found" });
     res.json({ success: true, data: result.rows[0] });
