@@ -8,10 +8,10 @@ import {
   writePlatformFile,
 } from "../services/platformFiles.js";
 
-async function hasPlatformManage(db, req) {
+async function hasOneEngineManage(db, req) {
   if (!req.user?.roleId) return false;
   const result = await db(
-    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='platform.manage' LIMIT 1",
+    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
     [req.user.roleId],
     req
   );
@@ -56,7 +56,7 @@ async function resolveTarget(db, req, res, action) {
     [object.id, req.user.roleId || null, req.user.companyId],
     req
   );
-  const allowed = (await hasPlatformManage(db, req)) || (permission.rows[0]?.[`can_${action}`] === true);
+  const allowed = (await hasOneEngineManage(db, req)) || (permission.rows[0]?.[`can_${action}`] === true);
   if (!allowed) {
     res.status(403).json({ success: false, message: `${action} permission is required` });
     return null;
@@ -129,7 +129,7 @@ export default function createPlatformFilesRouter({ authenticate, db }) {
         [object.id, req.user.roleId || null, req.user.companyId],
         req
       );
-      if (!(await hasPlatformManage(db, req)) && permission.rows[0]?.can_view !== true) return res.status(403).json({ success: false, message: "view permission is required" });
+      if (!(await hasOneEngineManage(db, req)) && permission.rows[0]?.can_view !== true) return res.status(403).json({ success: false, message: "view permission is required" });
       res.json({ success: true, data: file });
     } catch (error) {
       console.error("Platform file download error:", error);
@@ -160,7 +160,7 @@ export default function createPlatformFilesRouter({ authenticate, db }) {
         [object.id, req.user.roleId || null, req.user.companyId],
         req
       );
-      if (!(await hasPlatformManage(db, req)) && permission.rows[0]?.can_delete !== true) return res.status(403).json({ success: false, message: "delete permission is required" });
+      if (!(await hasOneEngineManage(db, req)) && permission.rows[0]?.can_delete !== true) return res.status(403).json({ success: false, message: "delete permission is required" });
       await deletePlatformFile({ db: (query, params) => db(query, params, req), companyId: req.user.companyId, fileId: req.params.id });
       res.json({ success: true, data: { id: req.params.id } });
     } catch (error) {
