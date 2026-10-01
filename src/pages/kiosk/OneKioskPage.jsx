@@ -149,6 +149,9 @@ export default function OneKioskPage({ publicMode = false }) {
   const [customerLookup, setCustomerLookup] = useState("");
   const [customer, setCustomer] = useState(null);
   const [customerLookupBusy, setCustomerLookupBusy] = useState(false);
+  const [receiptEmail, setReceiptEmail] = useState("");
+  const [receiptEmailBusy, setReceiptEmailBusy] = useState(false);
+  const [receiptEmailSent, setReceiptEmailSent] = useState(false);
   const [fulfilmentDetails, setFulfilmentDetails] = useState({
     storeId: "",
     name: "",
@@ -488,6 +491,8 @@ export default function OneKioskPage({ publicMode = false }) {
         setReceiptQr(null);
         setCustomer(null);
         setCustomerLookup("");
+        setReceiptEmail("");
+        setReceiptEmailSent(false);
         setError("");
         setIdleWarning(false);
         setAttractMode(true);
@@ -744,6 +749,7 @@ export default function OneKioskPage({ publicMode = false }) {
       ...(fulfilment.data || {}),
       total: sale.total,
     });
+    setReceiptEmail(customer?.email || fulfilmentDetails.email || "");
     setPaidSale(null);
     setBasket([]);
     setSearch("");
@@ -763,7 +769,9 @@ export default function OneKioskPage({ publicMode = false }) {
           receiptNumber: `DEMO-${Date.now().toString().slice(-6)}`,
           total,
           fulfilmentType,
+          saleId: null,
         });
+        setReceiptEmail(customer?.email || fulfilmentDetails.email || "");
         setBasket([]);
         setSearch("");
         setCategory("All");
@@ -849,6 +857,30 @@ export default function OneKioskPage({ publicMode = false }) {
     }
   };
 
+  const sendReceiptEmail = async () => {
+    if (!receiptEmail.trim() || receiptEmailBusy) return;
+    if (demoMode) {
+      setReceiptEmailSent(true);
+      return;
+    }
+    const saleId = confirmation?.saleId || confirmation?.order?.platform_data?.saleId || confirmation?.order?.platform_data?.sale_id;
+    if (!saleId) return setError("Email receipt is not available for this order.");
+    setReceiptEmailBusy(true);
+    setError("");
+    try {
+      const response = await apiRequest("/api/kiosk/receipt/email", {
+        method: "POST",
+        body: JSON.stringify({ saleId, email: receiptEmail.trim(), deviceKey: kioskDeviceKey() }),
+      });
+      if (!response?.success) throw new Error(response?.message || "Unable to send receipt");
+      setReceiptEmailSent(true);
+    } catch (reason) {
+      setError(reason?.message || "Unable to send email receipt");
+    } finally {
+      setReceiptEmailBusy(false);
+    }
+  };
+
   const requestAssistance = async () => {
     try {
       const response = await apiRequest("/api/kiosk/assistance", {
@@ -892,6 +924,8 @@ export default function OneKioskPage({ publicMode = false }) {
     setReceiptQr(null);
     setCustomer(null);
     setCustomerLookup("");
+    setReceiptEmail("");
+    setReceiptEmailSent(false);
     if (publicMode) setAttractMode(true);
   };
 
@@ -956,6 +990,14 @@ export default function OneKioskPage({ publicMode = false }) {
             <div className="one-kiosk-receipt-qr">
               <img src={receiptQr.qrcodeUrl} alt="Receipt QR" />
               <small>{receiptQr.expiresAt ? `Available until ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : "Scan for your receipt"}</small>
+            </div>
+          ) : null}
+          {receiptMethods.includes("EMAIL") ? (
+            <div className="one-kiosk-email-receipt">
+              <input type="email" value={receiptEmail} disabled={receiptEmailSent} onChange={(e)=>{setReceiptEmail(e.target.value);setReceiptEmailSent(false);}} placeholder="Email receipt to…" />
+              <button type="button" disabled={!receiptEmail.trim() || receiptEmailBusy || receiptEmailSent} onClick={sendReceiptEmail}>
+                {receiptEmailSent ? "Sent ✓" : receiptEmailBusy ? "Sending…" : "Email receipt"}
+              </button>
             </div>
           ) : null}
           <div className="one-kiosk-confirmation-actions">
