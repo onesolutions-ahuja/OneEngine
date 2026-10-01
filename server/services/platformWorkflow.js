@@ -23,6 +23,7 @@ import { exportShopifyFulfillment, exportShopifyRefund, syncShopifyInventory, sy
 import { processShopifyWebhookEvent } from "./onlineOrders/shopifyWebhookProcessor.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
+import { loadEffectivePermissionSets, permissionSetAllowsObject } from "./platformPermissionSets.js";
 import { createGlobalProductLookupService, testGlobalProductProvider } from "./globalProductLookup.js";
 import {
   findAvailableAppointmentSlots,
@@ -4053,6 +4054,47 @@ async function assertWorkflowActionPermission(context, definition) {
   }
 }
 
+const WORKFLOW_OBJECT_ACCESS = Object.freeze({
+  GET_RECORDS: "view",
+  CREATE_RECORD: "create",
+  CREATE_RELATED_RECORD: "create",
+  UPDATE_RECORD: "edit",
+  UPDATE_RELATED_RECORD: "edit",
+  BULK_UPDATE_RECORDS: "edit",
+  DELETE_RECORD: "delete",
+  ASSIGN_RECORD: "edit",
+  ADD_RELATIONSHIP: "edit",
+  REMOVE_RELATIONSHIP: "edit",
+  SET_FIELD: "edit",
+});
+
+async function assertWorkflowObjectPermission(context, actionType) {
+  const access = WORKFLOW_OBJECT_ACCESS[actionType];
+  const req = context?.req;
+  if (!access || !req?.user?.roleId || !req?.user?.companyId) return;
+  const targetObject = await resolveWorkflowTargetObject({
+    db: context.db,
+    action: context.action || {},
+    object: context.object || null,
+    companyId: context.companyId || req.user.companyId,
+    req,
+  });
+  const [roleGrant, permissionSets] = await Promise.all([
+    context.db(
+      `SELECT can_view,can_create,can_edit,can_delete
+         FROM platform_object_permissions
+        WHERE object_id=$1 AND role_id=$2 AND company_id=$3
+        LIMIT 1`,
+      [targetObject.id, req.user.roleId, req.user.companyId]
+    ),
+    loadEffectivePermissionSets(context.db, req.user, req),
+  ]);
+  const column = `can_${access}`;
+  if (roleGrant.rows[0]?.[column] === true) return;
+  if (permissionSetAllowsObject(permissionSets, targetObject.object_key, access)) return;
+  throw new Error(`You do not have permission to ${access} records for ${targetObject.label || targetObject.object_key}`);
+}
+
 const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "CONSTANT","FORMULA","ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
@@ -4100,6 +4142,7 @@ export async function executeWorkflowAction(context) {
   const definition = validateWorkflowAction(action);
   await assertWorkflowActionPermission(context, definition);
   const actionType = resolveWorkflowActionType(action);
+  await assertWorkflowObjectPermission(context, actionType);
   if (context?.debugMode === true && !DEBUG_EXECUTABLE_ACTIONS.has(actionType)) {
     return {
       status: "completed",
