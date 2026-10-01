@@ -729,7 +729,12 @@ function conditionIsValid(condition) {
   return rules.every((rule) => {
     if (!rule?.field) return false;
     const operator = rule.operator || "equals";
-    if (["is_empty","changed"].includes(operator)) return true;
+    if (["is_empty","is_not_empty","changed"].includes(operator)) return true;
+    if (operator === "changed_from_to") {
+      return rule.value && typeof rule.value === "object"
+        && rule.value.from !== undefined && rule.value.from !== null && String(rule.value.from).trim() !== ""
+        && rule.value.to !== undefined && rule.value.to !== null && String(rule.value.to).trim() !== "";
+    }
     return rule.value !== undefined && rule.value !== null && String(rule.value).trim() !== "";
   });
 }
@@ -841,7 +846,7 @@ function ProviderStatusPill({ available }) {
   );
 }
 
-function StepConditionEditor({ value, onChange, objectKey }) {
+function StepConditionEditor({ value, onChange, objectKey, extraResources = [] }) {
   const config = value || { type: "all", rules: [blankCondition()] };
   const update = (patch) => onChange({ ...config, ...patch });
 
@@ -869,18 +874,36 @@ function StepConditionEditor({ value, onChange, objectKey }) {
             <option value="equals">Equals</option>
             <option value="not_equals">Not equal</option>
             <option value="greater_than">Greater than</option>
+            <option value="greater_than_or_equal">Greater than or equal</option>
             <option value="less_than">Less than</option>
+            <option value="less_than_or_equal">Less than or equal</option>
             <option value="changed">Changed</option>
             <option value="changed_from">Changed from</option>
             <option value="changed_to">Changed to</option>
             <option value="changed_from_to">Changed from/to</option>
             <option value="is_empty">Is empty</option>
+            <option value="is_not_empty">Is not empty</option>
           </select>
-          <input className={inputClass} value={rule.value || ""} onChange={(event) => {
-            const next = [...(config.rules || [])];
-            next[index] = { ...rule, value: event.target.value };
-            update({ rules: next });
-          }} placeholder="Value" disabled={["is_empty"].includes(rule.operator)} />
+          {["is_empty","is_not_empty","changed"].includes(rule.operator) ? <div /> : rule.operator === "changed_from_to" ? (
+            <div className="grid gap-2">
+              <ResourceOrLiteralInput label="From" value={rule.value?.from ?? ""} onChange={(from) => {
+                const next = [...(config.rules || [])];
+                next[index] = { ...rule, value: { ...(rule.value && typeof rule.value === "object" ? rule.value : {}), from } };
+                update({ rules: next });
+              }} rootObjectKey={objectKey} extraResources={extraResources} />
+              <ResourceOrLiteralInput label="To" value={rule.value?.to ?? ""} onChange={(to) => {
+                const next = [...(config.rules || [])];
+                next[index] = { ...rule, value: { ...(rule.value && typeof rule.value === "object" ? rule.value : {}), to } };
+                update({ rules: next });
+              }} rootObjectKey={objectKey} extraResources={extraResources} />
+            </div>
+          ) : (
+            <ResourceOrLiteralInput label="Value" value={rule.value ?? ""} onChange={(value) => {
+              const next = [...(config.rules || [])];
+              next[index] = { ...rule, value };
+              update({ rules: next });
+            }} rootObjectKey={objectKey} extraResources={extraResources} />
+          )}
           <button type="button" className="rounded border border-slate-200 px-2 text-sm text-slate-600" onClick={() => {
             const next = [...(config.rules || [])].filter((_, itemIndex) => itemIndex !== index);
             update({ rules: next.length ? next : [blankCondition()] });
@@ -1664,6 +1687,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 </div>
                 <StepConditionEditor
                   objectKey={rootObjectKey}
+                  extraResources={extraResources}
                   value={outcome.condition || { type: "all", rules: [blankCondition()] }}
                   onChange={(condition) => {
                     const next = [...outcomes];
