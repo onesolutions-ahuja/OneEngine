@@ -7,7 +7,7 @@ export const CHART_TYPES = Object.freeze(["bar", "line", "pie", "donut"]);
 export const KPI_SIZES = Object.freeze(["small", "medium", "large"]);
 export const VALUE_FORMATS = Object.freeze(["number", "currency", "percent"]);
 export const DATE_RANGES = Object.freeze([
-  "today", "yesterday", "this_week", "last_7_days", "this_month", "this_quarter", "fiscal_year",
+  "all_time", "today", "yesterday", "this_week", "last_7_days", "this_month", "this_quarter", "fiscal_year",
 ]);
 export const FILTER_FIELDS = Object.freeze(["store", "date"]);
 export const DASHBOARD_PRINCIPAL_TYPES = Object.freeze(["USER", "ROLE", "PUBLIC_GROUP", "COMPANY"]);
@@ -253,7 +253,7 @@ export const DEFAULT_DASHBOARD_DEFINITION = Object.freeze({
   default_assignments: [],
   filters: [],
   components: [
-    { id: "default-kpi-total-sales", type: "kpi", title: "Total Sales", config: { reportId: "report_total_sales", valueField: "net_sales", format: "currency", size: "medium", dateRange: "fiscal_year", report: { ...salesDatasource, fields: ["net_sales"] } }, layout: { x: 0, y: 0, w: 3, h: 1 } },
+    { id: "default-kpi-total-sales", type: "kpi", title: "Total Sales", config: { reportId: "report_total_sales", valueField: "net_sales", format: "currency", size: "medium", dateRange: "all_time", report: { ...salesDatasource, fields: ["net_sales"] } }, layout: { x: 0, y: 0, w: 3, h: 1 } },
     { id: "default-kpi-quarter-sales", type: "kpi", title: "Quarter Sales", config: { reportId: "report_quarter_sales", valueField: "net_sales", format: "currency", size: "medium", dateRange: "this_quarter", report: { ...salesDatasource, fields: ["net_sales"] } }, layout: { x: 3, y: 0, w: 3, h: 1 } },
     { id: "default-kpi-annual-sales", type: "kpi", title: "Annual Sales", config: { reportId: "report_annual_sales", valueField: "net_sales", format: "currency", size: "medium", dateRange: "fiscal_year", report: { ...salesDatasource, fields: ["net_sales"] } }, layout: { x: 6, y: 0, w: 3, h: 1 } },
     { id: "default-kpi-top-product", type: "kpi", title: "Most Selling Product", config: { reportId: "report_top_product", valueField: "quantity", labelField: "product", format: "number", size: "medium", dateRange: "fiscal_year", report: { ...salesDatasource, fields: ["product", "quantity"], groupBy: ["product"], sort: [{ field: "quantity", direction: "desc" }] } }, layout: { x: 9, y: 0, w: 3, h: 1 } },
