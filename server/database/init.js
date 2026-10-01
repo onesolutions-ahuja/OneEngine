@@ -704,27 +704,16 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     );
     if (engineUser.rows[0]) {
       /*
-       * superadmin@onepos.com is a platform-managed service identity, not a
-       * tenant user's personal account. Keep its credential synchronized with
-       * the configured bootstrap secret so GitHub E2E, Render and the seeded
-       * database cannot drift apart after migrations/redeploys.
+       * Bootstrap reconciles identity/RBAC only. Preserve the password after
+       * initial seeding so a first-login password change is never undone by a
+       * later deploy.
        */
-      let passwordHash = engineUser.rows[0].password_hash;
-      if (enginePassword) {
-        const matchesConfiguredPassword = passwordHash
-          ? await bcrypt.compare(enginePassword, passwordHash)
-          : false;
-        if (!matchesConfiguredPassword) {
-          passwordHash = await bcrypt.hash(enginePassword, 12);
-          console.log("onePOS: OneEngine Manager password synchronized from bootstrap configuration");
-        }
-      }
       await pool.query(
         `UPDATE users
             SET company_id=NULL,role_id=$1,username=$2,email=$2,full_name=$3,
-                password_hash=$4,active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
-          WHERE id=$5`,
-        [engineRoleId, engineEmail, engineName, passwordHash, engineUser.rows[0].id]
+                active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
+          WHERE id=$4`,
+        [engineRoleId, engineEmail, engineName, engineUser.rows[0].id]
       );
       engineManagerReady = true;
     } else if (enginePassword) {
