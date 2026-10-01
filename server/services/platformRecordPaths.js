@@ -81,8 +81,9 @@ function resolveContextPathValue(path, { record, previousRecord, user, rootObjec
     return resolveRecordPathValue(variables || {}, normalized, null);
   }
   if (normalized === "variables" || normalized.startsWith("variables.")) {
+    const namespace = variables?.variables && typeof variables.variables === "object" ? variables.variables : (variables || {});
     const inner = normalized === "variables" ? "" : normalized.slice("variables.".length);
-    return inner ? resolveRecordPathValue(variables || {}, inner, null) : (variables || {});
+    return inner ? resolveRecordPathValue(namespace, inner, null) : namespace;
   }
   return resolveRecordPathValue(record, normalized, rootObjectKey);
 }
