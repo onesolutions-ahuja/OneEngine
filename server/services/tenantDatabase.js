@@ -172,7 +172,7 @@ export function createTenantDatabaseRouter({ controlPool, sharedPool, PoolFactor
 export function createAuthenticatedDatabaseMiddleware({ router, pool }) {
   return async (req, res, next) => {
     /*
-     * Platform Developers use an explicit, authorised acting-company header.
+     * OneEngine Managers use an explicit RBAC-authorised acting-company header.
      * Resolve it ONCE here, before tenant DB routing, so every downstream
      * company-scoped route (Settings, integrations, packages, WhatsApp, etc.)
      * receives the same req.user.companyId instead of only Platform routes.
@@ -181,23 +181,36 @@ export function createAuthenticatedDatabaseMiddleware({ router, pool }) {
     if (actingCompanyId) {
       try {
         /*
-         * Company switching is a platform RBAC capability. The old implementation
+         * Company switching is a OneEngine RBAC capability. The old implementation
          * incorrectly required the legacy is_platform_developer identity flag,
          * while the rest of the platform already authorises operators with
-         * platform.manage. Keep legacy mapped-developer access for compatibility,
-         * but make platform.manage the canonical authority.
+         * oneengine.manage. Keep legacy mapped-developer access for compatibility,
+         * but make oneengine.manage the canonical authority.
          */
-        const access = await pool.query(
-          `SELECT c.id
-             FROM companies c
-             JOIN platform_developer_company_access a ON a.company_id=c.id
-            WHERE a.developer_id=$1
-              AND a.company_id=$2
-              AND a.active=true
-              AND c.active=true
+        const manager = await pool.query(
+          `SELECT 1
+             FROM users u
+             JOIN role_permissions rp ON rp.role_id=u.role_id
+             JOIN permissions p ON p.id=rp.permission_id
+            WHERE u.id=$1
+              AND u.active=true
+              AND p.code='oneengine.manage'
             LIMIT 1`,
-          [req.user.id, actingCompanyId]
+          [req.user.id]
         );
+        const access = manager.rows.length
+          ? await pool.query("SELECT id FROM companies WHERE id=$1 AND active=true LIMIT 1", [actingCompanyId])
+          : await pool.query(
+              `SELECT c.id
+                 FROM companies c
+                 JOIN platform_developer_company_access a ON a.company_id=c.id
+                WHERE a.developer_id=$1
+                  AND a.company_id=$2
+                  AND a.active=true
+                  AND c.active=true
+                LIMIT 1`,
+              [req.user.id, actingCompanyId]
+            );
         if (!access.rows.length) {
           return res.status(403).json({ success: false, message: "You are not authorised for the selected company" });
         }
