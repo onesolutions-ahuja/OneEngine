@@ -22,13 +22,10 @@ export default function createCustomersRouter({
   associateCustomerWithStore,
   requireLoyaltyEntitlement = (_req, _res, next) => next(),
   /*
-   * Administrative GATE for customer administration: Admin/Owner roles AND a
-   * Platform Superadmin. Deliberately separate from canViewCompanyCustomers,
-   * which also drives DATA SCOPE (company-wide vs store-restricted reads) —
-   * widening that helper would silently change query scope.
-   *
-   * Defaults to the company-admin check alone, so existing callers and tests
-   * keep exactly today's behaviour.
+   * Administrative customer access is permission-driven. Keep action authority
+   * separate from canViewCompanyCustomers, which controls DATA SCOPE
+   * (company-wide vs store-restricted reads), so changing an action permission
+   * cannot silently widen customer visibility.
    */
   hasCompanyAdminAccess = async (req) => canViewCompanyCustomers(req.user),
 }) {
