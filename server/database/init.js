@@ -555,6 +555,60 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log(`onePOS: internal package catalog synchronized (${verified.rows.map(row => row.package_key).join(", ")})`);
       },
     },
+
+    {
+      key: "0025_communication_core_runtime_tables",
+      version: "25",
+      name: "Ensure Communication Core runtime tables exist",
+      up: async client => {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS platform_communication_deliveries (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
+            channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP')),
+            template_id UUID REFERENCES platform_message_templates(id) ON DELETE SET NULL,
+            object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
+            record_id UUID,
+            recipient TEXT NOT NULL,
+            provider_name VARCHAR(100),
+            status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            failure_reason TEXT,
+            provider_message_id VARCHAR(255),
+            triggered_by_rule UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
+            attempted_at TIMESTAMPTZ,
+            sent_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_platform_communication_deliveries_company
+            ON platform_communication_deliveries(company_id, created_at DESC);
+
+          CREATE TABLE IF NOT EXISTS platform_communication_events (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP')),
+            event_type VARCHAR(100) NOT NULL,
+            direction VARCHAR(20),
+            provider VARCHAR(100),
+            provider_message_id VARCHAR(255),
+            recipient TEXT,
+            sender TEXT,
+            template_id UUID REFERENCES platform_message_templates(id) ON DELETE SET NULL,
+            object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
+            record_id UUID,
+            communication_id UUID,
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_platform_communication_events_company
+            ON platform_communication_events(company_id, created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_platform_communication_events_trigger
+            ON platform_communication_events(company_id, channel, event_type, created_at DESC);
+        `);
+        console.log("onePOS: Communication Core runtime tables ready");
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
