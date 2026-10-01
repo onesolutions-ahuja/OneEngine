@@ -600,11 +600,11 @@ async function associateCustomerWithStore(client, customerId, storeId, companyId
 }
 
 async function canViewCompanyCustomers(user, request = null) {
-  if (!user?.roleId) return false;
-  // Reuse the request-scoped RBAC lookup when a request is available instead
-  // of issuing a second company.scope.all query.
-  const codes = await getRolePermissionCodes(user.roleId, request);
-  return codes.includes("company.scope.all");
+  if (!user?.id || !user?.companyId) return false;
+  const codes = user.roleId ? await getRolePermissionCodes(user.roleId, request) : [];
+  const permissionSets = await loadEffectivePermissionSets(db, user, request);
+  return codes.includes("company.scope.all")
+    || permissionSetAllowsSystemPermission(permissionSets, "company.scope.all");
 }
 
 async function canAccessStore(user, storeId) {
