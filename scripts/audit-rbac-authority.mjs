@@ -25,6 +25,8 @@ const runtimeForbiddenTokens = [
   "canManagePlatform",
   "platform_developer_company_access",
   "PLATFORM_MANAGE_PERMISSION",
+  "isAdmin === true",
+  "isAdmin===true",
 ];
 
 const runtimePrefixes = [
