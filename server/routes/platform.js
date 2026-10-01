@@ -3515,6 +3515,35 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (actions.some((action) => action.type === "show_message" && (!action.message || typeof action.message !== "string"))) return "Each message action requires a message";
     if (actions.some((action) => ["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP"].includes(action.type) && (!action.templateId || !action.recipient))) return "Communication actions require a template and recipient";
     if (actions.some((action) => ["CALL_WEBHOOK", "HTTP_REQUEST"].includes(action.type) && (!action.connectorId || !action.endpoint))) return "Webhook actions require a connector and endpoint";
+    if (isWorkflow) {
+      const allowedContractTypes = new Set(["text","number","boolean","date","datetime","record","collection","object"]);
+      for (const [kind, entries] of [["input", rule.action?.inputContract], ["output", rule.action?.outputContract]]) {
+        const contract = Array.isArray(entries) ? entries : [];
+        const names = new Set();
+        for (const item of contract) {
+          const name = String(item?.name || "");
+          if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(name)) return `Subflow ${kind} names can only use letters, numbers and underscores`;
+          if (names.has(name)) return `Subflow ${kind} "${name}" is declared more than once`;
+          names.add(name);
+          if (!allowedContractTypes.has(String(item?.type || "text").toLowerCase())) return `Subflow ${kind} "${name}" uses an unsupported type`;
+          if (kind === "output" && !item?.source) return `Subflow output "${item?.label || name}" requires a Resource`;
+        }
+      }
+      for (const subflowAction of actions.filter((action) => String(action?.type || action?.key || "").toUpperCase() === "RUN_SUBFLOW")) {
+        const id = subflowAction.workflowId || subflowAction.subflowId;
+        if (!id) continue;
+        const childResult = await db(
+          "SELECT id,name,action FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",
+          [id, req.user.companyId]
+        );
+        const child = childResult.rows[0];
+        if (!child) return "Run Subflow references a workflow that is not available to this company";
+        const contract = Array.isArray(child.action?.inputContract) ? child.action.inputContract : [];
+        const mappings = subflowAction.workflowInputs || subflowAction.inputs || subflowAction.inputMap || subflowAction.mappings || {};
+        const missing = contract.find((input) => input?.required === true && (mappings[input.name] === undefined || mappings[input.name] === null || mappings[input.name] === ""));
+        if (missing) return `Run Subflow "${subflowAction.label || child.name}" is missing required input "${missing.label || missing.name}"`;
+      }
+    }
     if (rule.active) {
       for (const providerAction of actions.filter((action) => ["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP"].includes(action.type))) {
         const configured = await hasConfiguredCommunicationProvider({ db, companyId: req.user.companyId, providerKind: providerAction.type.replace("SEND_", "") });
