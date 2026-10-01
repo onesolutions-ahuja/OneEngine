@@ -1872,7 +1872,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (!["set","add","subtract","append"].includes(String(action.operator || "set"))) {
         throw new Error("Assignment requires a supported operator");
       }
-      if (String(action.operator || "set") !== "set" && action.value === undefined) {
+      const assignmentType = String(action.variableType || "");
+      const assignmentOperator = String(action.operator || "set");
+      if (["add","subtract"].includes(assignmentOperator) && assignmentType !== "number") {
+        throw new Error("Add and subtract are only supported for number variables");
+      }
+      if (assignmentOperator === "append" && assignmentType !== "collection") {
+        throw new Error("Append is only supported for collection variables");
+      }
+      if (assignmentOperator !== "set" && action.value === undefined) {
         throw new Error("Assignment requires a value");
       }
     },
