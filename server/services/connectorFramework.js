@@ -326,7 +326,7 @@ export function toPublicCredential(row) {
 
 /**
  * Internal-only credential resolver. Platform credentials require explicit
- * platformCredentialAccess=true and the actor must hold platform.manage.
+ * platformCredentialAccess=true and the actor must hold oneengine.manage.
  */
 export async function resolveConnectorCredential({
   db,
@@ -343,7 +343,7 @@ export async function resolveConnectorCredential({
          FROM users u
          JOIN role_permissions rp ON rp.role_id=u.role_id
          JOIN permissions p ON p.id=rp.permission_id
-        WHERE u.id=$1 AND u.active=TRUE AND p.code='platform.manage'
+        WHERE u.id=$1 AND u.active=TRUE AND p.code='oneengine.manage'
         LIMIT 1`,
       [actorUserId]
     );
