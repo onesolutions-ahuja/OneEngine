@@ -61,7 +61,15 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
     {key:'barcode',label:'Barcode',render:r=>r.barcode||'—'},
     {key:'category_name',label:'Category',render:r=>r.category_name||'—'},
     {key:'price',label:'Price',render:r=>money(r.price,currency)},
-    {key:'stock_quantity',label:'Stock',render:r=>r.stock_quantity ?? r.stock ?? '—'},
+    {key:'stock_quantity',label:'Stock',render:r=>{
+      const raw=r.stock_quantity ?? r.stock
+      if(raw==null||raw==='')return '—'
+      const value=Number(raw)
+      const label=Number.isFinite(value)
+        ? new Intl.NumberFormat(undefined,{maximumFractionDigits:3}).format(value)
+        : String(raw)
+      return <span className={Number.isFinite(value)&&value<0?'product-stock-negative':''}>{label}</span>
+    }},
     {key:'product_kind',label:'Type',render:r=>r.product_kind||'standard'},
     {key:'active',label:'Status',render:r=>r.active===false?'Inactive':'Active'},
   ],[currency])
@@ -162,7 +170,7 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
     <div className="module-page-card">
       <RecordListView
         title="Product Master"
-        subtitle={`${products.length} products`}
+        subtitle={({filteredCount,totalCount})=>filteredCount===totalCount?`${totalCount} products`:`${filteredCount} of ${totalCount} products`}
         rows={products}
         columns={columns}
         searchKeys={['name','sku','barcode','category_name','product_kind']}
