@@ -2951,17 +2951,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             metadata: { parentWorkflow: workflowKey, inputMappings: mappings },
           })
         : null;
-      const childStep = childRun && runDb && typeof runDb === "function"
-        ? await createWorkflowStepRun({
-            db: runDb,
-            runId: childRun.id,
-            stepIdentifier: `subflow:${workflowKey}`,
-            stepOrder: 0,
-            actionType: "RUN_SUBFLOW",
-            status: "RUNNING",
-            metadata: { parentRunId: runId || null },
-          })
-        : null;
       const childResult = await executeWorkflowActions({
         actions: childActions,
         db,
@@ -2974,7 +2963,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         workflowDepth: nextDepth,
         workflowStack: [...stack, workflowKey],
         runId: childRun?.id || runId || null,
-        stepRunId: childStep?.id || stepRunId || null,
+        stepRunId: null,
         workflowVariables: childWorkflowVariables,
         traceDb,
         debugMode,
