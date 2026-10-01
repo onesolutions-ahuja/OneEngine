@@ -1,5 +1,6 @@
 import { evaluateCondition } from "./platformConditions.js";
 import { executeWorkflowActions } from "./platformWorkflow.js";
+import { enqueuePlatformJob } from "./platformJobs.js";
 
 function cfg(value) {
   if (!value) return {};
@@ -77,7 +78,7 @@ async function createWorkItems({ db, request, step }) {
        ON CONFLICT DO NOTHING RETURNING *`,
       [request.id,step.id,step.step_order,request.company_id,step.role_id,assigneeId,dueHours]
     );
-    if(result.rows[0]) rows.push(result.rows[0]);
+    if(result.rows[0]) { rows.push(result.rows[0]); if(result.rows[0].due_at) await enqueuePlatformJob({db,companyId:request.company_id,kind:"APPROVAL_DUE",payload:{requestId:request.id,workItemId:result.rows[0].id},runAt:result.rows[0].due_at,idempotencyKey:`approval-due:${result.rows[0].id}`}); }
   }
   return rows;
 }
@@ -225,4 +226,18 @@ export async function recallPlatformApproval({ db, requestId, comment, req }) {
 export async function isPlatformRecordLocked({db,companyId,objectId,recordId}) {
   const result=await db("SELECT id FROM platform_approval_requests WHERE company_id=$1 AND object_id=$2 AND record_id=$3 AND status='pending' AND locked=TRUE LIMIT 1",[companyId,objectId,recordId]);
   return Boolean(result.rows.length);
+}
+
+
+export async function processApprovalDueJob({db,job}) {
+  const payload=cfg(job.payload); const q=await db(`SELECT w.*,r.status AS request_status,r.definition_snapshot,r.submitted_by,r.object_id,r.record_id FROM platform_approval_work_items w JOIN platform_approval_requests r ON r.id=w.request_id WHERE w.id=$1 AND w.company_id=$2`,[payload.workItemId,job.company_id]); const item=q.rows[0];
+  if(!item||item.status!=="pending"||item.request_status!=="pending") return {status:"COMPLETED",ignored:true};
+  const snapshot=cfg(item.definition_snapshot); const step=(snapshot.steps||[]).find(s=>Number(s.step_order)===Number(item.step_order))||{}; const sc=cfg(step.config);
+  await db("UPDATE platform_approval_work_items SET reminder_sent_at=COALESCE(reminder_sent_at,NOW()) WHERE id=$1",[item.id]);
+  await db("INSERT INTO platform_approval_events(request_id,company_id,event_type,metadata) VALUES($1,$2,'due_reminder',$3::jsonb)",[item.request_id,item.company_id,JSON.stringify({workItemId:item.id})]);
+  const reminderActions=Array.isArray(sc.reminderActions)?sc.reminderActions:[];
+  if(reminderActions.length) await executeWorkflowActions({actions:reminderActions,db,companyId:item.company_id,objectId:item.object_id,recordId:item.record_id,record:{id:item.record_id},req:{user:{companyId:item.company_id,id:item.submitted_by}},trigger:{type:"approval.due",approvalRequestId:item.request_id}});
+  const escalationUserId=sc.escalateToUserId||null;
+  if(escalationUserId){const target=await db("SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE",[escalationUserId,item.company_id]);if(target.rows.length){await db("UPDATE platform_approval_work_items SET assigned_to=$1,escalated_at=NOW(),escalation_count=escalation_count+1 WHERE id=$2",[escalationUserId,item.id]);await db("INSERT INTO platform_approval_events(request_id,company_id,event_type,metadata) VALUES($1,$2,'escalated',$3::jsonb)",[item.request_id,item.company_id,JSON.stringify({workItemId:item.id,to:escalationUserId})]);}}
+  return {status:"COMPLETED"};
 }
