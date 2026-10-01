@@ -1,6 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import { resolvePrice } from "../services/pricingEngine.js";
+import { resendInvoiceByChannel } from "../services/invoiceDelivery.js";
 
 const KIOSK_MODE_TTL = process.env.KIOSK_MODE_TTL || "12h";
 
@@ -396,6 +397,63 @@ export default function createKioskRouter({
     } catch (error) {
       console.error("OneKiosk customer lookup error:", error);
       res.status(500).json({ success: false, message: "Unable to look up rewards account" });
+    }
+  });
+
+  router.post("/kiosk/receipt/email", authenticate, async (req, res) => {
+    const saleId = String(req.body?.saleId || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 255);
+    const deviceKey = String(req.body?.deviceKey || req.user?.kioskDeviceKey || "").trim();
+    if (!saleId || !deviceKey) return res.status(400).json({ success: false, message: "Sale and kiosk device are required" });
+    if (req.user?.mode === "kiosk" && String(req.user.kioskDeviceKey || "") !== deviceKey) {
+      return res.status(403).json({ success: false, message: "This kiosk session belongs to another device" });
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: "Enter a valid email address" });
+    }
+    try {
+      const owned = await db(
+        `SELECT s.id,s.customer_id,c.email AS customer_email,kd.id AS kiosk_device_id
+           FROM sales s
+           JOIN kiosk_devices kd
+             ON kd.company_id=s.company_id AND kd.store_id=s.store_id AND kd.device_key=$3
+           JOIN online_orders o
+             ON o.company_id=s.company_id
+            AND o.platform='one_kiosk'
+            AND o.platform_data->>'saleId'=s.id::text
+            AND o.platform_data->>'kioskDeviceId'=kd.id::text
+           LEFT JOIN customers c ON c.id=s.customer_id AND c.company_id=s.company_id
+          WHERE s.id=$1 AND s.company_id=$2
+          LIMIT 1`,
+        [saleId, req.user.companyId, deviceKey]
+      );
+      if (!owned.rows.length) {
+        return res.status(404).json({ success: false, message: "Receipt is not available for this kiosk order" });
+      }
+      const recipient = email || owned.rows[0].customer_email || "";
+      if (!recipient) return res.status(400).json({ success: false, message: "Enter an email address for the receipt" });
+      const result = await resendInvoiceByChannel({
+        db,
+        channel: "email",
+        saleId,
+        companyId: req.user.companyId,
+        storeId: req.user.storeId || null,
+        userId: req.user.id || null,
+        overrideRecipient: recipient,
+      });
+      if (!result?.ok) {
+        const message = result?.reason === "not_configured"
+          ? "Email receipt delivery is not configured for this business"
+          : result?.error || result?.reason || "Email receipt could not be sent";
+        return res.status(result?.reason === "not_configured" ? 409 : 502).json({ success: false, message });
+      }
+      await writeAudit?.(req.user.companyId, req.user.id || null, "KIOSK_RECEIPT_EMAILED", "sale", saleId, {
+        kioskDeviceId: owned.rows[0].kiosk_device_id,
+      });
+      res.json({ success: true, message: "Receipt sent by email" });
+    } catch (error) {
+      console.error("OneKiosk email receipt error:", error);
+      res.status(500).json({ success: false, message: "Unable to send email receipt" });
     }
   });
 
@@ -1057,6 +1115,7 @@ export function createKioskModeGate() {
       (method === "POST" && path === "/api/kiosk/availability") ||
       (method === "POST" && path === "/api/kiosk/assistance") ||
       (method === "POST" && path === "/api/kiosk/customer-lookup") ||
+      (method === "POST" && path === "/api/kiosk/receipt/email") ||
       (method === "POST" && path === "/api/kiosk/orders/from-sale") ||
       (method === "POST" && /^\/api\/kiosk\/devices\/[^/]+\/heartbeat$/.test(path)) ||
       (method === "POST" && path === "/api/sales") ||
