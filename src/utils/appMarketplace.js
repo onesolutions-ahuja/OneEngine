@@ -2,10 +2,10 @@ import { apiUrl } from '../services/api'
 
 const ICON_ALIASES = Object.freeze({
   onestore: 'onestore',
-  onetill: 'onetill',
-  one_till: 'onetill',
-  till: 'onetill',
-  retail_pos: 'onetill',
+  onetill: 'onetill-new',
+  one_till: 'onetill-new',
+  till: 'onetill-new',
+  retail_pos: 'onetill-new',
   receipt_qr: 'default-app',
   inventory: 'inventory',
   batch_expiry: 'batch-expiry',
@@ -70,10 +70,10 @@ const ICON_ALIASES = Object.freeze({
   stripe: 'one-connect-stripe',
 })
 
-const PNG_APP_ICONS = new Set(['onetill'])
+const PNG_APP_ICONS = new Set([])
 
 const BRAND_ICON_MATCHES = [
-  [/\bone\s*till\b|\bone_till\b|\bretail\s*pos\b/i,'onetill'],
+  [/\bone\s*till\b|\bone_till\b|\bretail\s*pos\b/i,'onetill-new'],
   [/quickbooks/i,'quickbooks'],[/shopify/i,'shopify'],[/xero/i,'xero-accounting'],[/sage/i,'sage-business-cloud-accounting'],
   [/prestashop/i,'prestashop'],[/woocommerce|woo commerce/i,'woocommerce'],[/wix/i,'wix'],[/uber\s*eats/i,'uber-eats'],
   [/deliveroo/i,'deliveroo'],[/just\s*eat/i,'just-eat'],[/whatsapp/i,'whatsapp'],
@@ -96,7 +96,7 @@ export function localAppIcon(assetKey = 'default-app') {
 export function appIconUrl(item) {
   const manifest = item?.manifest || {}
   const provider = manifest.providerConnector || manifest.provider_connector || {}
-  const brandText = [item?.name, item?.publisher, item?.package_key, provider?.providerKey, provider?.provider_key]
+  const brandText = [item?.name, item?.publisher, item?.package_key, provider?.providerKey, provider.provider_key]
     .filter(Boolean)
     .join(' ')
   const brand = BRAND_ICON_MATCHES.find(([pattern]) => pattern.test(brandText))
