@@ -3444,6 +3444,47 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               </label>
             </div>
 
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-xs font-semibold text-slate-700">Experience languages</div>
+              <div className="mt-2 space-y-2">
+                {(kioskUi.languages || [{key:"en",label:"English"}]).map((item,languageIndex)=>(
+                  <div key={`${item.key}-${languageIndex}`} className="grid gap-2 md:grid-cols-[120px_1fr_auto]">
+                    <input className={inputClass} value={item.key || ""} placeholder="en" onChange={(e)=>{
+                      const languages=[...(kioskUi.languages||[])]; languages[languageIndex]={...item,key:e.target.value.trim().toLowerCase()}; updateKioskUi({languages});
+                    }}/>
+                    <input className={inputClass} value={item.label || ""} placeholder="Language label" onChange={(e)=>{
+                      const languages=[...(kioskUi.languages||[])]; languages[languageIndex]={...item,label:e.target.value}; updateKioskUi({languages});
+                    }}/>
+                    <button type="button" disabled={item.key==="en"} className="text-xs text-red-700 disabled:opacity-40" onClick={()=>{
+                      const languages=(kioskUi.languages||[]).filter((_,i)=>i!==languageIndex);
+                      const translations={...(kioskUi.translations||{})}; delete translations[item.key];
+                      updateKioskUi({languages,translations});
+                    }}>Remove</button>
+                    {item.key && item.key !== "en" ? (
+                      <label className="md:col-span-3 text-xs font-medium text-slate-700">
+                        {item.label || item.key} translations · one per line as key = translated text
+                        <textarea className={inputClass} rows={7} value={Object.entries(kioskUi.translations?.[item.key] || {}).map(([key,value])=>`${key} = ${value}`).join("\n")} onChange={(e)=>{
+                          const dictionary={};
+                          for(const line of e.target.value.split(/\r?\n/)){
+                            const divider=line.indexOf("=");
+                            if(divider<1)continue;
+                            const key=line.slice(0,divider).trim();
+                            const value=line.slice(divider+1).trim();
+                            if(key&&value)dictionary[key]=value;
+                          }
+                          updateKioskUi({translations:{...(kioskUi.translations||{}),[item.key]:dictionary}});
+                        }} placeholder={"screen.catalogue.title = Find your product\nfulfilment.COLLECT = Collect here\nconfirmation.doneLabel = Start another order"}/>
+                      </label>
+                    ) : null}
+                  </div>
+                ))}
+                <button type="button" className="rounded border border-slate-200 px-3 py-2 text-xs font-medium" onClick={()=>{
+                  const languages=[...(kioskUi.languages||[{key:"en",label:"English"}]),{key:`lang${(kioskUi.languages||[]).length+1}`,label:"New language"}];
+                  updateKioskUi({languages});
+                }}>+ Language</button>
+              </div>
+            </div>
+
             <div className="mt-3 flex flex-wrap gap-2">
               {[
                 ["accessibility","Accessibility"],
