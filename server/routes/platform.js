@@ -4448,12 +4448,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         ORDER BY r.submitted_at DESC`,
       [req.user.companyId, req.query.status || null]
     );
-    const data=result.rows.map(row=>({
-      ...row,
-      can_decide: row.status==="pending" && ((row.assigned_to && String(row.assigned_to)===String(req.user.id)) || (!row.assigned_to && String(row.role_id)===String(req.user.roleId))),
-      can_reassign: row.status==="pending" && cfg(row.process_config).allowReassign!==false && ((row.assigned_to && String(row.assigned_to)===String(req.user.id)) || (!row.assigned_to && String(row.role_id)===String(req.user.roleId))),
-      can_recall: row.status==="pending" && String(row.submitted_by)===String(req.user.id),
-    }));
+    const data=result.rows.map(row=>{
+      const snapshot=cfg(row.definition_snapshot); const pinned=(snapshot.steps||[]).find(step=>Number(step.step_order)===Number(row.current_step)); const processConfig=cfg(snapshot.process?.config||row.process_config);
+      const eligible=row.status==="pending" && ((row.assigned_to && String(row.assigned_to)===String(req.user.id)) || (!row.assigned_to && String(row.role_id)===String(req.user.roleId)));
+      return {...row,process_name:snapshot.process?.name||row.process_name,process_config:processConfig,step_label:pinned?.label||row.step_label,can_decide:eligible,can_reassign:eligible&&processConfig.allowReassign!==false,can_recall:row.status==="pending"&&String(row.submitted_by)===String(req.user.id)};
+    });
     res.json({ success: true, data });
   });
 
