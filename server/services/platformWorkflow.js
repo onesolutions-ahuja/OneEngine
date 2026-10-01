@@ -4279,7 +4279,33 @@ async function compensateCompletedSteps(completed, context, originalError) {
   return failures;
 }
 
-export function workflowResultsContainStatus(entries = [], status = "waiting") {
+export function restoreWorkflowRuntimeState(result, workflowVariables) {
+  if (!result || typeof result !== "object" || !workflowVariables?.variables) return;
+  if (result.variableName) workflowVariables.variables[result.variableName] = result.value;
+  if (result.resourceName) workflowVariables.variables[result.resourceName] = result.value;
+  if (result.faultHandled) {
+    const friendly = result.friendlyError || {};
+    const error = result.error || {};
+    workflowVariables.variables.fault = {
+      stepId: result.fault?.stepId || null,
+      actionType: friendly.actionType || null,
+      message: error.message || friendly.whatHappened || "Workflow step failed",
+      title: friendly.title || "This step could not complete",
+      howToFix: friendly.howToFix || null,
+    };
+  }
+  const branchResults = result.branch?.results || result.faultBranch?.results || [];
+  for (const entry of Array.isArray(branchResults) ? branchResults : []) {
+    restoreWorkflowRuntimeState(entry?.result, workflowVariables);
+  }
+  for (const iteration of Array.isArray(result.iterations) ? result.iterations : []) {
+    for (const entry of Array.isArray(iteration?.results) ? iteration.results : []) {
+      restoreWorkflowRuntimeState(entry?.result, workflowVariables);
+    }
+  }
+}
+
+function workflowResultsContainStatus(entries = [], status = "waiting") {
   return (Array.isArray(entries) ? entries : []).some((entry) => {
     if (String(entry?.result?.status || "").toLowerCase() === String(status).toLowerCase()) return true;
     if (workflowResultsContainStatus(entry?.result?.branch?.results || [], status)) return true;
@@ -4408,12 +4434,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       const priorResult = stepRun.metadata?.result || { status: "completed", idempotentReplay: true };
       results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
-      if (resolveWorkflowActionType(item) === "ASSIGNMENT" && priorResult?.variableName) {
-        workflowVariables.variables[priorResult.variableName] = priorResult.value;
-      }
-      if (["CONSTANT","FORMULA"].includes(resolveWorkflowActionType(item)) && priorResult?.resourceName) {
-        workflowVariables.variables[priorResult.resourceName] = priorResult.value;
-      }
+      restoreWorkflowRuntimeState(priorResult, workflowVariables);
       completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
       continue;
     }
