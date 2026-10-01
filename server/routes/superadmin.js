@@ -59,7 +59,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
            FROM users u
            JOIN role_permissions rp ON rp.role_id=u.role_id
            JOIN permissions p ON p.id=rp.permission_id
-          WHERE u.id=$1 AND u.active=true AND p.code IN ('oneengine.manage','platform.manage')
+          WHERE u.id=$1 AND u.active=true AND p.code='oneengine.manage'
           LIMIT 1`,
         [req.user?.id]
       );
@@ -73,51 +73,8 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
 
   router.use("/superadmin", authenticate, requireOneEngineManage);
 
-  router.get("/superadmin/platform-developers", async (req, res) => {
-    const result = await db(
-      `SELECT u.id, u.username, u.email, u.full_name, u.active,
-              COALESCE(json_agg(json_build_object('id', c.id, 'name', c.name))
-                FILTER (WHERE c.id IS NOT NULL), '[]'::json) AS companies
-       FROM users u
-       LEFT JOIN platform_developer_company_access a ON a.developer_id=u.id AND a.active=true
-       LEFT JOIN companies c ON c.id=a.company_id
-       WHERE u.is_platform_developer=true
-       GROUP BY u.id ORDER BY u.full_name`,
-    );
-    res.json({ success: true, data: result.rows });
-  });
-
-  router.put("/superadmin/platform-developers/:userId", async (req, res) => {
-    if (!Array.isArray(req.body?.companyIds)) {
-      return res.status(400).json({ success: false, message: "companyIds must be an array" });
-    }
-    const developer = await db("SELECT id FROM users WHERE id=$1 AND is_platform_developer=true", [req.params.userId]);
-    if (!developer.rows.length) return res.status(404).json({ success: false, message: "OneEngine Manager not found" });
-    const companies = await db("SELECT id FROM companies WHERE id=ANY($1::uuid[]) AND active=true", [req.body.companyIds]);
-    if (companies.rows.length !== req.body.companyIds.length) return res.status(400).json({ success: false, message: "One or more companies are invalid" });
-    if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1", [req.params.userId]);
-      for (const company of companies.rows) {
-        await client.query(
-          `INSERT INTO platform_developer_company_access (developer_id,company_id,granted_by,active)
-           VALUES ($1,$2,$3,true)
-           ON CONFLICT (developer_id,company_id) DO UPDATE SET granted_by=EXCLUDED.granted_by,active=true`,
-          [req.params.userId, company.id, req.user.id]
-        );
-      }
-      await client.query("COMMIT");
-      res.json({ success: true, data: { developerId: req.params.userId, companyIds: companies.rows.map((company) => company.id) } });
-    } catch (error) {
-      await client.query("ROLLBACK");
-      console.error("OneEngine Manager access update error:", error);
-      res.status(500).json({ success: false, message: "Unable to update OneEngine Manager access" });
-    } finally {
-      client.release();
-    }
-  });
+  /* Legacy platform-developer identity/mapping endpoints were removed.
+   * OneEngine authority is assigned through RBAC using oneengine.manage. */
 
   router.get("/superadmin/licences", async (req, res) => {
     const result = await db(`SELECT l.*, COUNT(c.id)::int AS company_count,
