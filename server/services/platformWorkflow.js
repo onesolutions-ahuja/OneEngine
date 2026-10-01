@@ -3880,6 +3880,15 @@ async function compensateCompletedSteps(completed, context, originalError) {
   return failures;
 }
 
+function workflowResultsContainStatus(entries = [], status = "waiting") {
+  return (Array.isArray(entries) ? entries : []).some((entry) => {
+    if (String(entry?.result?.status || "").toLowerCase() === String(status).toLowerCase()) return true;
+    if (workflowResultsContainStatus(entry?.result?.branch?.results || [], status)) return true;
+    const iterations = Array.isArray(entry?.result?.iterations) ? entry.result.iterations : [];
+    return iterations.some((iteration) => workflowResultsContainStatus(iteration?.results || [], status));
+  });
+}
+
 export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
   const results = [];
@@ -3982,7 +3991,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
             executionScope: `${context.executionScope ? context.executionScope + ":" : ""}${item.id || globalIndex}:loop:${loopIndex}`,
           });
           iterations.push({ index: loopIndex, results: iterationResults });
-          if (iterationResults.some((entry) => entry?.result?.status === "waiting")) {
+          if (workflowResultsContainStatus(iterationResults, "waiting")) {
             throw new Error("Wait is not supported inside a Loop body yet. Move the Wait after the Loop.");
           }
           if (iterationResults.some((entry) => entry?.result?.status === "stopped")) break;
@@ -4026,7 +4035,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
             stepIds: selectedIds,
             results: branchResults,
           };
-          branchPaused = branchResults.some((entry) => entry?.result?.status === "waiting");
+          branchPaused = workflowResultsContainStatus(branchResults, "waiting");
         } else {
           result.branch = { outcome: outcomeName, outcomeId: result.outcomeId ?? null, stepIds: [], results: [] };
         }
