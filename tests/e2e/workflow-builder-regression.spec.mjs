@@ -30,9 +30,17 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(page.getByText(/database changes are rolled back/i)).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).first().click();
 
+  // Record-triggered Start configuration exposes Salesforce-style transition
+  // semantics without requiring Changed operators on every individual field.
+  const triggerSelect = page.locator(".workflow-builder-field").filter({ hasText: "Trigger" }).locator("select");
+  await triggerSelect.selectOption("after_update");
+  await page.locator(".workflow-start-node").click();
+  await expect(page.getByText("When conditions become true", { exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Every time the record meets the conditions" })).toHaveCount(1);
+  await expect(page.getByRole("option", { name: "Only when the record is updated to meet the conditions" })).toHaveCount(1);
+
   // Start configuration owns scheduled paths; adding one must expose the
   // no-code timing controls without adding a normal canvas node.
-  await page.locator(".workflow-start-node").click();
   await expect(page.getByText("Scheduled paths", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "+ Add path", exact: true }).click();
   await expect(page.getByPlaceholder("Path name")).toHaveValue("Scheduled Path");
