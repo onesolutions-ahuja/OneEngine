@@ -49,22 +49,17 @@ function licenceStatus({ active, startsAt, expiresAt }) {
   return "ACTIVE";
 }
 
-export default function createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env = process.env }) {
+export default function createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env = process.env, hasPermission = null }) {
   const router = express.Router();
   const writeAudit = createAuditWriter({ db });
   const requireOneEngineManage = async (req, res, next) => {
     try {
-      if (!req.user?.id || !req.user?.companyId) {
+      if (!req.user?.id) {
         return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
       }
-      const [roleResult, permissionSets] = await Promise.all([
-        req.user.roleId
-          ? db("SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1", [req.user.roleId])
-          : Promise.resolve({ rows: [] }),
-        loadEffectivePermissionSets(db, req.user, req),
-      ]);
-      const allowed = roleResult.rows.length > 0
-        || permissionSetAllowsSystemPermission(permissionSets, "oneengine.manage");
+      const allowed = hasPermission
+        ? await hasPermission(req, "oneengine.manage")
+        : false;
       if (!allowed) return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
       return next();
     } catch (error) {
