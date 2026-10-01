@@ -2007,7 +2007,7 @@ async function startServer() {
             [encryptCredentials(nextSecrets), row.id]
           );
 
-          console.log(`onePOS: SMSGate inbound webhook ready (${webhook.created ? "created" : "existing"}) ${webhookUrl}`);
+          console.log(`onePOS: SMSGate inbound webhook ready (${webhook.created ? "created" : "existing"}) connection=${row.id} staleRemoved=${webhook.removedStale || 0}`);
           const diagnostics = await getSmsGateDiagnostics({ ...configuration, ...nextSecrets }).catch((error) => ({ error: error?.message || String(error) }));
           const webhookRows = Array.isArray(diagnostics?.webhooks)
             ? diagnostics.webhooks
