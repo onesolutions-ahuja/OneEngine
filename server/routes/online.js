@@ -3517,10 +3517,10 @@ export default function createOnlineRouter({
   });
 
   router.post("/online/orders/generic/:id/complete", authenticate, authorize("online_orders.manage"), async (req, res) => {
-    const { reason } = req.body || {};
+    const { reason, collectionReference } = req.body || {};
 
     const orderResult = await db(
-      "SELECT fulfilment_type, status, platform, store_id FROM online_orders WHERE id = $1 AND company_id = $2",
+      "SELECT fulfilment_type, status, platform, store_id, external_reference, platform_data FROM online_orders WHERE id = $1 AND company_id = $2",
       [req.params.id, req.user.companyId]
     );
 
@@ -3529,6 +3529,30 @@ export default function createOnlineRouter({
     }
 
     const order = orderResult.rows[0];
+
+    if (
+      order.platform === "one_kiosk"
+      && order.platform_data?.collectionVerificationRequired === true
+      && (order.status === "READY_FOR_PICKUP" || order.status === "READY")
+    ) {
+      const supplied = String(collectionReference || "").trim().toUpperCase();
+      const expected = String(order.external_reference || "").trim().toUpperCase();
+      if (!supplied) {
+        return res.status(409).json({
+          success: false,
+          code: "COLLECTION_REFERENCE_REQUIRED",
+          message: "Enter the customer's collection reference before completing this order.",
+        });
+      }
+      if (!expected || supplied !== expected) {
+        return res.status(409).json({
+          success: false,
+          code: "INVALID_COLLECTION_REFERENCE",
+          message: "The collection reference does not match this order.",
+        });
+      }
+    }
+
     let toStatus;
 
     const collectionTypes = new Set(["SELF_PICKUP", "COLLECT", "TAKEAWAY", "COUNTER_SERVICE", "EAT_IN"]);
