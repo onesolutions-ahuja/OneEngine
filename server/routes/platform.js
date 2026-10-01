@@ -4449,6 +4449,34 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({success:true,data:result.rows});
   });
 
+  router.get("/platform/approval-groups", authenticate, async (req,res) => {
+    const result=await db(`SELECT g.*,COUNT(gm.user_id)::int AS member_count FROM platform_approval_groups g LEFT JOIN platform_approval_group_members gm ON gm.group_id=g.id WHERE g.company_id=$1 AND g.active=TRUE GROUP BY g.id ORDER BY g.name`,[req.user.companyId]);
+    res.json({success:true,data:result.rows});
+  });
+
+  router.post("/platform/approval-groups", ...manage, async (req,res) => {
+    const name=String(req.body?.name||"").trim(); const memberIds=Array.isArray(req.body?.memberIds)?req.body.memberIds:[];
+    if(!name) return res.status(400).json({success:false,message:"Group name is required"});
+    const group=await db("INSERT INTO platform_approval_groups(company_id,name) VALUES($1,$2) RETURNING *",[req.user.companyId,name]);
+    for(const userId of memberIds) await db(`INSERT INTO platform_approval_group_members(group_id,user_id) SELECT $1,u.id FROM users u WHERE u.id=$2 AND u.company_id=$3 ON CONFLICT DO NOTHING`,[group.rows[0].id,userId,req.user.companyId]);
+    res.json({success:true,data:group.rows[0]});
+  });
+
+  router.get("/platform/approval-delegations", authenticate, async (req,res) => {
+    const result=await db(`SELECT d.*,u.username AS user_name,du.username AS delegate_name FROM platform_approval_delegations d JOIN users u ON u.id=d.user_id JOIN users du ON du.id=d.delegate_user_id WHERE d.company_id=$1 ORDER BY d.active DESC,d.created_at DESC`,[req.user.companyId]);
+    res.json({success:true,data:result.rows});
+  });
+
+  router.post("/platform/approval-delegations", authenticate, async (req,res) => {
+    const userId=req.body?.userId||req.user.id; const delegateUserId=req.body?.delegateUserId;
+    if(String(userId)!==String(req.user.id)) return res.status(403).json({success:false,message:"Users can only configure their own approval delegate"});
+    const target=await db("SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE",[delegateUserId,req.user.companyId]);
+    if(!target.rows.length || String(delegateUserId)===String(userId)) return res.status(400).json({success:false,message:"Choose another active user in this company"});
+    await db("UPDATE platform_approval_delegations SET active=FALSE WHERE company_id=$1 AND user_id=$2 AND active=TRUE",[req.user.companyId,userId]);
+    const result=await db("INSERT INTO platform_approval_delegations(company_id,user_id,delegate_user_id,starts_at,ends_at) VALUES($1,$2,$3,$4,$5) RETURNING *",[req.user.companyId,userId,delegateUserId,req.body?.startsAt||null,req.body?.endsAt||null]);
+    res.json({success:true,data:result.rows[0]});
+  });
+
   router.post("/platform/approval-requests/:requestId/decision", authenticate, async (req, res) => {
     try {
       const result = await decidePlatformApproval({ db, requestId: req.params.requestId, decision: req.body?.decision, comment: req.body?.comment, req });
