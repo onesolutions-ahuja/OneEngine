@@ -932,7 +932,7 @@ async function initializeLegacyDatabase(pool) {
       device_key VARCHAR(120) NOT NULL,
       name VARCHAR(150) NOT NULL,
       active BOOLEAN NOT NULL DEFAULT TRUE,
-      payment_terminal_id UUID REFERENCES payment_terminals(id) ON DELETE SET NULL,
+      payment_terminal_id UUID,
       printer_hardware_id UUID,
       printer_required BOOLEAN NOT NULL DEFAULT FALSE,
       payment_required BOOLEAN NOT NULL DEFAULT TRUE,
@@ -965,17 +965,6 @@ async function initializeLegacyDatabase(pool) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    ALTER TABLE kiosk_devices
-      DROP CONSTRAINT IF EXISTS kiosk_devices_payment_terminal_id_fkey;
-    ALTER TABLE kiosk_devices
-      ADD CONSTRAINT kiosk_devices_payment_terminal_id_fkey
-      FOREIGN KEY (payment_terminal_id) REFERENCES payment_terminals(id) ON DELETE SET NULL;
-    ALTER TABLE kiosk_devices
-      DROP CONSTRAINT IF EXISTS kiosk_devices_printer_hardware_id_fkey;
-    ALTER TABLE kiosk_devices
-      ADD CONSTRAINT kiosk_devices_printer_hardware_id_fkey
-      FOREIGN KEY (printer_hardware_id) REFERENCES hardware_configurations(id) ON DELETE SET NULL;
-
     CREATE INDEX IF NOT EXISTS idx_payment_terminals_company
     ON payment_terminals(company_id, store_id);
 
@@ -1001,6 +990,16 @@ async function initializeLegacyDatabase(pool) {
 
     CREATE INDEX IF NOT EXISTS idx_hardware_configurations_store
     ON hardware_configurations(company_id, store_id);
+    ALTER TABLE kiosk_devices
+      DROP CONSTRAINT IF EXISTS kiosk_devices_payment_terminal_id_fkey;
+    ALTER TABLE kiosk_devices
+      ADD CONSTRAINT kiosk_devices_payment_terminal_id_fkey
+      FOREIGN KEY (payment_terminal_id) REFERENCES payment_terminals(id) ON DELETE SET NULL;
+    ALTER TABLE kiosk_devices
+      DROP CONSTRAINT IF EXISTS kiosk_devices_printer_hardware_id_fkey;
+    ALTER TABLE kiosk_devices
+      ADD CONSTRAINT kiosk_devices_printer_hardware_id_fkey
+      FOREIGN KEY (printer_hardware_id) REFERENCES hardware_configurations(id) ON DELETE SET NULL;
 
     CREATE TABLE IF NOT EXISTS server_settings (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
