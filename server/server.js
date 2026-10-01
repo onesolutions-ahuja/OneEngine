@@ -608,25 +608,22 @@ async function canViewCompanyCustomers(user, request = null) {
 }
 
 async function canAccessStore(user, storeId) {
-  if (!storeId || !user?.companyId) return false;
+  if (!storeId || !user?.companyId || !user?.id) return false;
 
-  // Always verify the selected store belongs to the active company.
-  const store = await db(
-    `SELECT id FROM stores WHERE id=$1 AND company_id=$2 AND active=true LIMIT 1`,
-    [storeId, user.companyId]
-  );
-  if (!store.rows.length) return false;
-
-  // Company-wide scope permission bypasses only the assignment requirement.
-  if (await canViewCompanyCustomers(user)) {
-    return true;
-  }
-
-  // Never trust login-time store claims; assignments can be revoked mid-session.
+  // Store context is assignment-driven for every tenant user. Permissions
+  // control what a user may do; user_stores controls where they may do it.
+  // This deliberately has no company.scope.all/admin bypass.
   const assignment = await db(
-    `SELECT 1 FROM user_stores
-      WHERE user_id=$1 AND store_id=$2 AND active=true LIMIT 1`,
-    [user.id, storeId]
+    `SELECT 1
+       FROM user_stores us
+       JOIN stores s ON s.id=us.store_id
+      WHERE us.user_id=$1
+        AND us.store_id=$2
+        AND us.active=true
+        AND s.company_id=$3
+        AND s.active=true
+      LIMIT 1`,
+    [user.id, storeId, user.companyId]
   );
   return assignment.rows.length > 0;
 }
@@ -1240,25 +1237,18 @@ app.get("/api/auth/me/stores", authenticate, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    const hasCompanyWideScope = await canViewCompanyCustomers(req.user, req);
-    const result = hasCompanyWideScope
-      ? await db(
-          `SELECT s.id,s.code,s.name,s.active,(u.store_id=s.id) AS is_primary
-             FROM stores s
-             LEFT JOIN users u ON u.id=$2
-            WHERE s.company_id=$1 AND s.active=true
-            ORDER BY s.name`,
-          [req.user.companyId, req.user.id]
-        )
-      : await db(
-          `SELECT s.id,s.code,s.name,s.active,(u.store_id=s.id) AS is_primary
-             FROM stores s
-             JOIN user_stores us ON us.store_id=s.id AND us.user_id=$2 AND us.active=true
-             LEFT JOIN users u ON u.id=$2
-            WHERE s.company_id=$1 AND s.active=true
-            ORDER BY s.name`,
-          [req.user.companyId, req.user.id]
-        );
+    const result = await db(
+      `SELECT s.id,s.code,s.name,s.active,(u.store_id=s.id) AS is_primary
+         FROM user_stores us
+         JOIN stores s ON s.id=us.store_id
+         LEFT JOIN users u ON u.id=us.user_id
+        WHERE us.user_id=$2
+          AND us.active=true
+          AND s.company_id=$1
+          AND s.active=true
+        ORDER BY s.name`,
+      [req.user.companyId, req.user.id]
+    );
 
     res.json({ success: true, data: result.rows });
   } catch (error) {
