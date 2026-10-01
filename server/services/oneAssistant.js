@@ -498,7 +498,7 @@ export async function createAppointmentBookingCase(db, {
 }
 
 export async function issueAppointmentPublicLink(db, {
-  companyId, bookingCaseId, purpose = "BOOK_SLOT", ttlMinutes = 30, publicBaseUrl = "",
+  companyId, bookingCaseId, purpose = "BOOK_SLOT", ttlMinutes = 15, publicBaseUrl = "",
   metadata = {},
 } = {}) {
   if (!companyId || !bookingCaseId) throw new Error("companyId and bookingCaseId are required");
@@ -508,7 +508,7 @@ export async function issueAppointmentPublicLink(db, {
   );
   if (!bookingCase.rows[0]) throw new Error("Appointment booking case not found");
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + Math.max(5, Number(ttlMinutes) || 30) * 60000);
+  const expiresAt = new Date(Date.now() + Math.max(5, Number(ttlMinutes) || 15) * 60000);
   const result = await db(
     `INSERT INTO appointment_public_links(company_id,booking_case_id,purpose,token_hash,expires_at,metadata)
      VALUES($1,$2,$3,$4,$5,$6::jsonb) RETURNING id,booking_case_id,purpose,expires_at`,
@@ -686,6 +686,12 @@ export async function selectPublicAppointmentSlot(client, {
       paymentRequestId: paymentRequest?.id || null,
       amount,
       currency: service.currency,
+      sender: publicLink.sender || null,
+      recipient: publicLink.recipient || null,
+      serviceName: service.name || null,
+      startsAt,
+      endsAt,
+      customerPhone: ["SMS","WHATSAPP"].includes(String(publicLink.channel || "").toUpperCase()) ? publicLink.sender : null,
     },
     idempotencyKey: `appointment-public-slot:${bookingCaseId}:${hold.id}`,
   });
