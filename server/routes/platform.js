@@ -893,6 +893,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         "UPDATE platform_value_sets SET value_set_key=COALESCE($1,value_set_key),label=COALESCE($2,label),description=COALESCE($3,description),active=COALESCE($4,active),updated_at=NOW() WHERE id=$5 AND company_id=$6 RETURNING *",
         [req.body.valueSetKey, req.body.label, req.body.description, req.body.active, req.params.valueSetId, req.user.companyId]
       );
+      if (meaningfulEdit) await saveWorkflowVersion(result.rows[0], req.user.id);
       res.json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (error.code === "23505") return res.status(409).json({ success: false, message: "A value set with this API name already exists" });
@@ -3524,6 +3525,78 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return validationRuleError(rule, conditionFields.rows);
   }
 
+  function workflowVersionDefinition(row) {
+    return {
+      object_id: row.object_id || null,
+      name: row.name,
+      trigger_key: row.trigger_key,
+      conditions: row.conditions || [],
+      action: row.action || {},
+      active: row.active === true,
+      lifecycle_status: row.lifecycle_status || (row.active ? "ACTIVE" : "DRAFT"),
+      version: Number(row.version || 1),
+    };
+  }
+
+  async function saveWorkflowVersion(row, userId = null) {
+    if (!row?.id || row.action?.type !== "workflow") return null;
+    const definition = workflowVersionDefinition(row);
+    const result = await db(
+      `INSERT INTO platform_workflow_versions
+         (company_id,workflow_id,version,definition,lifecycle_status,created_by)
+       VALUES ($1,$2,$3,$4::jsonb,$5,$6)
+       ON CONFLICT (company_id,workflow_id,version) DO NOTHING
+       RETURNING *`,
+      [row.company_id, row.id, Number(row.version || 1), JSON.stringify(definition), definition.lifecycle_status, userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  function evaluateWorkflowAssertions(debugData, assertions = []) {
+    const steps = Array.isArray(debugData?.steps) ? debugData.steps : [];
+    const results = Array.isArray(debugData?.results) ? debugData.results : [];
+    const traceByStep = new Map();
+    for (const step of steps) {
+      const id = String(step.step_identifier || "").split("@")[0];
+      if (id && !traceByStep.has(id)) traceByStep.set(id, step);
+      if (id && String(step.status || "").toUpperCase() === "FAILED") traceByStep.set(id, step);
+    }
+    const resultByStep = new Map();
+    const flatten = (entries = []) => {
+      for (const entry of entries) {
+        const stepId = entry?.result?.stepId || entry?.stepId || null;
+        if (stepId) resultByStep.set(String(stepId), entry.result);
+        if (entry?.result?.branch?.results) flatten(entry.result.branch.results);
+        for (const iteration of entry?.result?.iterations || []) flatten(iteration?.results || []);
+      }
+    };
+    flatten(results);
+    const checks = (Array.isArray(assertions) ? assertions : []).map((assertion, index) => {
+      const type = String(assertion?.type || "RUN_STATUS").toUpperCase();
+      let actual;
+      let passed = false;
+      if (type === "RUN_STATUS") {
+        actual = String(debugData?.status || "");
+        passed = actual === String(assertion.expected || "COMPLETED").toUpperCase();
+      } else if (type === "STEP_STATUS") {
+        actual = String(traceByStep.get(String(assertion.stepId || ""))?.status || "NOT_RUN").toUpperCase();
+        passed = actual === String(assertion.expected || "COMPLETED").toUpperCase();
+      } else if (type === "DECISION_OUTCOME") {
+        const result = resultByStep.get(String(assertion.stepId || ""));
+        actual = result?.outcomeId ?? result?.outcomeLabel ?? result?.branch?.outcome ?? null;
+        passed = String(actual ?? "") === String(assertion.expected ?? "");
+      } else if (type === "RESOURCE_EQUALS") {
+        const path = String(assertion.resource || "").replace(/^variables\./, "");
+        actual = debugData?.variables?.variables?.[path];
+        passed = JSON.stringify(actual) === JSON.stringify(assertion.expected);
+      } else {
+        actual = "Unsupported assertion";
+      }
+      return { index, type, passed, expected: assertion?.expected, actual, label: assertion?.label || null };
+    });
+    return { passed: checks.every((check) => check.passed), checks };
+  }
+
   async function runWorkflowDebugRequest(req, res, workflowId = null) {
     let client = null;
     let run = null;
@@ -3666,6 +3739,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const debugDb = (query, params = []) => client.query(query, params);
       let results = [];
       let debugError = null;
+      const workflowVariables = { variables: {}, steps: {} };
       try {
         results = await executeWorkflowActions({
           actions,
@@ -3681,6 +3755,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           runId: run?.id || null,
           trigger: executionMode,
           debugMode: true,
+          workflowVariables,
         });
       } catch (error) {
         debugError = error;
@@ -3722,6 +3797,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           friendlyError: friendly,
           rolledBack: true,
           externalActionsSimulated: true,
+          variables: workflowVariables,
         },
       });
     } catch (error) {
@@ -3761,6 +3837,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const ruleError = await checkRule(req, { object_id: resolvedObject?.id || null, name, trigger_key: triggerKey, conditions: normalizedReferences.conditions, action: normalizedReferences.action, active: lifecycleState.active, lifecycle_status: lifecycleState.lifecycle, version: lifecycleState.version });
       if (ruleError) return res.status(400).json({ success: false, message: ruleError });
       const result = await db("INSERT INTO platform_rules (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,company_id,created_by) VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8,$9,$10) RETURNING *", [resolvedObject?.id || null, name.trim(), triggerKey, JSON.stringify(normalizedReferences.conditions), JSON.stringify(normalizedReferences.action), lifecycleState.active, lifecycleState.lifecycle, lifecycleState.version, req.user.companyId, req.user.id]);
+      await saveWorkflowVersion(result.rows[0], req.user.id);
       res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (["22P02", "23503"].includes(error.code)) return res.status(400).json({ success: false, message: "Invalid rule reference" });
@@ -3809,6 +3886,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
       const ruleError = deactivateOnly ? null : await checkRule(req, normalizedNext);
       if (ruleError) return res.status(400).json({ success: false, message: ruleError });
+      const meaningfulEdit = ["objectId","objectKey","name","triggerKey","conditions","action"].some((key) => req.body[key] !== undefined);
+      if (meaningfulEdit && rule.action?.type === "workflow") {
+        const maxVersion = await db(
+          "SELECT GREATEST(COALESCE(MAX(version),0),$1::int) AS version FROM platform_workflow_versions WHERE company_id=$2 AND workflow_id=$3",
+          [Number(rule.version || 1), req.user.companyId, rule.id]
+        );
+        normalizedNext.version = Number(maxVersion.rows[0]?.version || rule.version || 1) + 1;
+      }
       const result = await db(
         "UPDATE platform_rules SET object_id=$1,name=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,active=$6,lifecycle_status=$7,version=$8,user_modified=true,updated_at=NOW() WHERE id=$9 RETURNING *",
         [normalizedNext.object_id, normalizedNext.name, normalizedNext.trigger_key, JSON.stringify(normalizedNext.conditions), JSON.stringify(normalizedNext.action), normalizedNext.active, normalizedNext.lifecycle_status, normalizedNext.version, rule.id]
@@ -3819,6 +3904,79 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       console.error("Platform rule update error:", error);
       res.status(500).json({ success: false, message: "Unable to update rule" });
     }
+  });
+
+  router.get("/platform/rules/:ruleId/versions", ...manage, async (req, res) => {
+    const result = await db(
+      "SELECT id,workflow_id,version,lifecycle_status,created_by,created_at FROM platform_workflow_versions WHERE company_id=$1 AND workflow_id=$2 ORDER BY version DESC",
+      [req.user.companyId, req.params.ruleId]
+    );
+    res.json({ success: true, data: result.rows });
+  });
+
+  router.post("/platform/rules/:ruleId/versions/:version/restore", ...manage, async (req, res) => {
+    try {
+      const [currentResult, versionResult] = await Promise.all([
+        db("SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 LIMIT 1", [req.params.ruleId, req.user.companyId]),
+        db("SELECT * FROM platform_workflow_versions WHERE company_id=$1 AND workflow_id=$2 AND version=$3 LIMIT 1", [req.user.companyId, req.params.ruleId, Number(req.params.version)]),
+      ]);
+      const current = currentResult.rows[0];
+      const snapshot = versionResult.rows[0];
+      if (!current || !snapshot) return res.status(404).json({ success: false, message: "Workflow version not found" });
+      const maxVersion = await db("SELECT GREATEST(COALESCE(MAX(version),0),$1::int) AS version FROM platform_workflow_versions WHERE company_id=$2 AND workflow_id=$3", [Number(current.version || 1), req.user.companyId, current.id]);
+      const nextVersion = Number(maxVersion.rows[0]?.version || current.version || 1) + 1;
+      const definition = snapshot.definition || {};
+      const restored = await db(
+        `UPDATE platform_rules SET object_id=$1,name=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,
+          active=false,lifecycle_status='DRAFT',version=$6,user_modified=true,updated_at=NOW()
+         WHERE id=$7 AND company_id=$8 RETURNING *`,
+        [definition.object_id || null, definition.name, definition.trigger_key, JSON.stringify(definition.conditions || []), JSON.stringify(definition.action || {}), nextVersion, current.id, req.user.companyId]
+      );
+      await saveWorkflowVersion(restored.rows[0], req.user.id);
+      res.json({ success: true, data: restored.rows[0], restoredFromVersion: Number(req.params.version) });
+    } catch (error) {
+      console.error("Workflow version restore error:", error);
+      res.status(500).json({ success: false, message: "Unable to restore workflow version" });
+    }
+  });
+
+  router.get("/platform/rules/:ruleId/tests", ...manage, async (req, res) => {
+    const result = await db(
+      "SELECT * FROM platform_workflow_tests WHERE company_id=$1 AND workflow_id=$2 AND active=true ORDER BY created_at DESC",
+      [req.user.companyId, req.params.ruleId]
+    );
+    res.json({ success: true, data: result.rows });
+  });
+
+  router.post("/platform/rules/:ruleId/tests", ...manage, async (req, res) => {
+    const name = String(req.body?.name || "").trim();
+    const config = req.body?.config && typeof req.body.config === "object" ? req.body.config : {};
+    if (!name) return res.status(400).json({ success: false, message: "Test name is required" });
+    const workflow = await db("SELECT id FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1", [req.params.ruleId, req.user.companyId]);
+    if (!workflow.rows.length) return res.status(404).json({ success: false, message: "Workflow not found" });
+    const result = await db(
+      "INSERT INTO platform_workflow_tests (company_id,workflow_id,name,config,created_by) VALUES ($1,$2,$3,$4::jsonb,$5) RETURNING *",
+      [req.user.companyId, req.params.ruleId, name, JSON.stringify(config), req.user.id]
+    );
+    res.status(201).json({ success: true, data: result.rows[0] });
+  });
+
+  router.put("/platform/rules/:ruleId/tests/:testId", ...manage, async (req, res) => {
+    const result = await db(
+      "UPDATE platform_workflow_tests SET name=COALESCE($1,name),config=COALESCE($2::jsonb,config),updated_at=NOW() WHERE id=$3 AND workflow_id=$4 AND company_id=$5 RETURNING *",
+      [req.body?.name || null, req.body?.config === undefined ? null : JSON.stringify(req.body.config || {}), req.params.testId, req.params.ruleId, req.user.companyId]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: "Saved test not found" });
+    res.json({ success: true, data: result.rows[0] });
+  });
+
+  router.delete("/platform/rules/:ruleId/tests/:testId", ...manage, async (req, res) => {
+    const result = await db(
+      "UPDATE platform_workflow_tests SET active=false,updated_at=NOW() WHERE id=$1 AND workflow_id=$2 AND company_id=$3 RETURNING id",
+      [req.params.testId, req.params.ruleId, req.user.companyId]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: "Saved test not found" });
+    res.json({ success: true });
   });
 
   router.delete("/platform/rules/:ruleId", ...manage, async (req, res) => {
