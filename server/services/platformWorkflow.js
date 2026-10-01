@@ -23,6 +23,7 @@ import { exportShopifyFulfillment, exportShopifyRefund, syncShopifyInventory, sy
 import { processShopifyWebhookEvent } from "./onlineOrders/shopifyWebhookProcessor.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
+import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject } from "./platformPermissionSets.js";
 import { createGlobalProductLookupService, testGlobalProductProvider } from "./globalProductLookup.js";
 import {
@@ -2149,7 +2150,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
       const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", updated: [], count: 0 };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, fields, entries });
+      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
       const params = entries.map(([, value]) => value);
       const sets = mappedFields.map((field, index) => `"${field.source_column}"=${index + 1}`).join(", ");
       params.push(ids);
@@ -2313,7 +2314,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
       const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", created: null };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, fields, entries });
+      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
       const columns = mappedFields.map((field) => `"${field.source_column}"`);
       const params = entries.map(([, value]) => value);
@@ -2365,7 +2366,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
       const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", updated: null };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, fields, entries });
+      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: resolvedRecordId });
       const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
       const params = [...entries.map(([, value]) => value), resolvedRecordId];
@@ -3958,16 +3959,18 @@ async function resolveWorkflowTargetObject({ db, action = {}, object = null, com
   return target;
 }
 
-async function resolveWorkflowWritableFields({ db, object, fields = [], entries }) {
+async function resolveWorkflowWritableFields({ db, object, entries, req = null }) {
   const requested = new Map(entries.map(([name]) => [String(name), true]));
-  const metadata = Array.isArray(fields) && fields.length
-    ? fields
-    : (await db(
-      `SELECT api_name, source_column, writable, active
-         FROM platform_fields
-        WHERE object_id=$1 AND active=true AND writable=true`,
-      [object.id]
-    )).rows;
+  const metadataResult = await db(
+    `SELECT *
+       FROM platform_fields
+      WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)
+      ORDER BY display_order,label`,
+    [object.id, req?.user?.companyId || object.company_id]
+  );
+  const metadata = req?.user
+    ? await applyFieldSecurity(db, metadataResult.rows || [], req)
+    : (metadataResult.rows || []);
   const resolved = [];
   for (const [name] of requested) {
     const field = metadata.find((candidate) =>
