@@ -812,6 +812,12 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "CALL_FUNCTION" && !config.functionKey) return "Choose a registered function.";
   if (step.type === "RUN_SUBFLOW" && !config.workflowId) return "Choose a subflow.";
   if (step.type === "WEBHOOK" && !config.url) return "Enter the webhook URL.";
+  if (step.type === "SCHEDULE_PATH") {
+    if (!String(config.pathLabel || "").trim()) return "Name the Scheduled Path.";
+    if (!Array.isArray(config.branch) || !config.branch.length) return "Choose at least one step for the Scheduled Path.";
+    if ((config.scheduleMode || "OFFSET") === "OFFSET" && (!Number.isFinite(Number(config.delayAmount)) || Number(config.delayAmount) < 0)) return "Enter a valid Scheduled Path delay.";
+    if ((config.scheduleMode || "OFFSET") === "AT_DATETIME" && !config.runAt) return "Choose the Scheduled Path date/time Resource.";
+  }
   if (step.type === "WAIT" && !Number(config.durationSeconds || 0) && !config.resumeAt) return "Set a wait duration or resume time.";
   return "";
 }
@@ -1743,6 +1749,44 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           </div>
         );
       }
+      case "SCHEDULE_PATH":
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Path name</label>
+              <input className={inputClass} value={step.config?.pathLabel || ""} onChange={(event) => updateConfig({ pathLabel: event.target.value })} placeholder="e.g. Follow up after 2 hours" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">When should this path run?</label>
+              <select className={inputClass} value={step.config?.scheduleMode || "OFFSET"} onChange={(event) => updateConfig({ scheduleMode: event.target.value })}>
+                <option value="OFFSET">After a delay</option>
+                <option value="AT_DATETIME">At a date/time Resource</option>
+              </select>
+            </div>
+            {(step.config?.scheduleMode || "OFFSET") === "OFFSET" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Delay</label>
+                  <input className={inputClass} type="number" min="0" value={step.config?.delayAmount ?? 30} onChange={(event) => updateConfig({ delayAmount: Number(event.target.value || 0) })} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Unit</label>
+                  <select className={inputClass} value={step.config?.delayUnit || "MINUTES"} onChange={(event) => updateConfig({ delayUnit: event.target.value })}>
+                    <option value="MINUTES">Minutes</option>
+                    <option value="HOURS">Hours</option>
+                    <option value="DAYS">Days</option>
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Run at" value={step.config?.runAt || ""} onChange={(runAt) => updateConfig({ runAt })} />
+            )}
+            <BranchStepPicker label="Scheduled path steps" value={step.config?.branch || []} onChange={(branch) => updateConfig({ branch })} steps={allSteps} currentIndex={index} />
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+              The immediate workflow continues. These selected steps run later as a durable child run and appear separately in Run History.
+            </div>
+          </div>
+        );
       case "WAIT":
         return (
           <div className="space-y-3">
@@ -2814,29 +2858,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       setDebugMode("test");
       setDebugOpen(true);
       const definition = buildWorkflowPayload("DRAFT");
-      const response = await apiRequest(`/api/platform/rules/${workflowId}/debug`, {
+      const response = await apiRequest(`/api/platform/rules/${workflowId}/tests/${test.id}/run`, {
         method: "POST",
-        body: JSON.stringify({
-          definition,
-          mode: "test",
-          assertions: test.config?.assertions || [],
-          ...(test.config?.recordMode === "specific" && test.config?.recordId ? { recordId: test.config.recordId } : {}),
-        }),
+        body: JSON.stringify({ definition }),
       });
       const result = response?.data || null;
       setDebugResult(result);
-      await apiRequest(`/api/platform/rules/${workflowId}/tests/${test.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          lastStatus: result?.testPassed === true ? "PASSED" : "FAILED",
-          lastRunId: result?.run?.id || null,
-          lastResult: {
-            status: result?.status || null,
-            testPassed: result?.testPassed === true,
-            assertionResult: result?.assertionResult || null,
-          },
-        }),
-      });
       await loadSavedTests();
     } catch (error) {
       onError?.(error.message || "Unable to run saved workflow test.");
