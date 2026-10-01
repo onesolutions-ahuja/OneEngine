@@ -36,11 +36,9 @@ jobs:
           VITE_API_BASE: https://onepos.onrender.com
         run: npm run build
 
-      # GitHub Pages has no server-side SPA rewrite support. This is strictly a
-      # deployment-adapter fallback: keep application routing host-agnostic and
-      # let the production host provide its normal /* -> index.html rewrite.
-      - name: Add GitHub Pages SPA fallback
-        run: cp dist/index.html dist/404.html
+      # Fixed route documents must return 200, not the SPA fallback's 404.
+      - name: Add GitHub Pages route entry points and SPA fallback
+        run: node scripts/build-pages-routes.mjs
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

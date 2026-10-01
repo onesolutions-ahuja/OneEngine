@@ -42,3 +42,13 @@ jobs:
           ONEPOS_E2E_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
           ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
           ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
+      - name: Upload Playwright report and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validate-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+            !test-results/.auth/
+          retention-days: 14
