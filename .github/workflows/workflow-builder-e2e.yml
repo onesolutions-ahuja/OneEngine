@@ -8,6 +8,7 @@ on:
       - "tests/e2e/workflow-builder-regression.spec.mjs"
       - "src/pages/settings/Platform/WorkflowAdmin.jsx"
       - "src/pages/settings/Platform/WorkflowRunsAdmin.jsx"
+      - "src/pages/settings/Platform/ApprovalProcessBuilder.jsx"
       - "server/routes/platform.js"
       - "server/routes/platformSchedules.js"
       - "server/services/platformWorkflow.js"
