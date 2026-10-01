@@ -16,6 +16,7 @@ import {
   getWorkflowActionDefinition,
   getWorkflowActionRegistry,
   validateWorkflowAction,
+  friendlyWorkflowError,
 } from "../services/platformWorkflow.js";
 import { decidePlatformApproval, submitPlatformApproval } from "../services/platformApprovals.js";
 import { systemObject, systemObjectRbacPermission, tenantFields, isExtensionField, safeSystemFields, hydrateExtensions, appendSystemReadScope, platformFieldSql } from "../services/platformSystemObjects.js";
@@ -3492,6 +3493,162 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (!actions.some((action) => action.type === "validation")) return null;
     return validationRuleError(rule, conditionFields.rows);
   }
+
+  router.post("/platform/rules/:ruleId/debug", ...manage, async (req, res) => {
+    let client = null;
+    let run = null;
+    try {
+      const workflowResult = await db(
+        "SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",
+        [req.params.ruleId, req.user.companyId]
+      );
+      const workflow = workflowResult.rows[0];
+      if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
+      const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
+      if (!actions.length) return res.status(422).json({ success: false, message: "Workflow contains no executable steps" });
+
+      let object = null;
+      let record = null;
+      if (workflow.object_id) {
+        const objectResult = await db(
+          "SELECT * FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) LIMIT 1",
+          [workflow.object_id, req.user.companyId]
+        );
+        object = objectResult.rows[0] || null;
+        if (!object || !object.source_table || !isSafeIdentifier(object.source_table)) {
+          return res.status(422).json({ success: false, message: "Workflow object is unavailable" });
+        }
+        const clauses = [];
+        const params = [];
+        const requestedRecordId = req.body?.recordId ? String(req.body.recordId) : null;
+        if (requestedRecordId) {
+          if (!recordIdIsValid(requestedRecordId)) return res.status(400).json({ success: false, message: "Choose a valid record for Debug" });
+          params.push(requestedRecordId);
+          clauses.push(`id=${params.length}`);
+        }
+        if (object.company_scoped !== false) {
+          params.push(req.user.companyId);
+          clauses.push(`company_id=${params.length}`);
+        }
+        if (object.store_scoped && req.user.storeId) {
+          params.push(req.user.storeId);
+          clauses.push(`store_id=${params.length}`);
+        }
+        const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+        const hasCreatedAt = await db(
+          "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1 AND column_name='created_at' LIMIT 1",
+          [object.source_table]
+        );
+        const orderBy = requestedRecordId ? "" : (hasCreatedAt.rows.length ? " ORDER BY created_at DESC" : "");
+        const recordResult = await db(`SELECT * FROM "${object.source_table}"${where}${orderBy} LIMIT 1`, params);
+        record = recordResult.rows[0] || null;
+        if (!record) {
+          return res.status(404).json({ success: false, message: requestedRecordId ? "The selected Debug record was not found in this company/store" : "No record is available to test this workflow yet" });
+        }
+      }
+
+      for (const action of actions) validateWorkflowAction(action);
+
+      run = await createWorkflowRun({
+        db,
+        companyId: req.user.companyId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        objectId: object?.id || null,
+        recordId: record?.id || null,
+        triggerKey: "DEBUG",
+        status: "RUNNING",
+        metadata: {
+          debug: true,
+          dryRun: true,
+          rolledBack: false,
+          actorUserId: req.user.id || null,
+          recordSource: req.body?.recordId ? "selected" : object ? "latest" : "none",
+        },
+      });
+
+      client = await pool.connect();
+      await client.query("BEGIN");
+      const debugDb = (query, params = []) => client.query(query, params);
+      let results = [];
+      let debugError = null;
+      try {
+        results = await executeWorkflowActions({
+          actions,
+          db: debugDb,
+          traceDb: db,
+          pool,
+          req,
+          object,
+          record,
+          recordId: record?.id || null,
+          companyId: req.user.companyId,
+          runId: run?.id || null,
+          trigger: "DEBUG",
+          debugMode: true,
+        });
+      } catch (error) {
+        debugError = error;
+      }
+      await client.query("ROLLBACK");
+      client.release();
+      client = null;
+
+      const finalStatus = debugError ? "FAILED" : "COMPLETED";
+      const friendly = debugError ? friendlyWorkflowError(debugError) : null;
+      await db(
+        `UPDATE platform_workflow_runs
+            SET status=$1,
+                completed_at=NOW(),
+                error_text=$2,
+                metadata=COALESCE(metadata,'{}'::jsonb)||$3::jsonb,
+                updated_at=NOW()
+          WHERE id=$4 AND company_id=$5`,
+        [
+          finalStatus,
+          debugError ? String(debugError?.message || debugError).slice(0, 2000) : null,
+          JSON.stringify({ debug: true, dryRun: true, rolledBack: true, friendlyError: friendly }),
+          run.id,
+          req.user.companyId,
+        ]
+      );
+      const [runResult, stepResult] = await Promise.all([
+        db("SELECT * FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1", [run.id, req.user.companyId]),
+        db("SELECT * FROM platform_workflow_step_runs WHERE run_id=$1 ORDER BY step_order,created_at,id", [run.id]),
+      ]);
+      return res.json({
+        success: true,
+        data: {
+          status: finalStatus,
+          run: runResult.rows[0] || run,
+          steps: stepResult.rows || [],
+          results,
+          record: record ? { id: record.id } : null,
+          friendlyError: friendly,
+          rolledBack: true,
+          externalActionsSimulated: true,
+        },
+      });
+    } catch (error) {
+      if (client) {
+        await client.query("ROLLBACK").catch(() => {});
+        client.release();
+      }
+      if (run?.id) {
+        await db(
+          "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,updated_at=NOW() WHERE id=$3 AND company_id=$4",
+          [
+            String(error?.message || error).slice(0, 2000),
+            JSON.stringify({ debug: true, dryRun: true, rolledBack: true, friendlyError: friendlyWorkflowError(error) }),
+            run.id,
+            req.user.companyId,
+          ]
+        ).catch(() => {});
+      }
+      console.error("Workflow debug error:", error);
+      return res.status(error.status || 500).json({ success: false, message: error.message || "Unable to run workflow Debug" });
+    }
+  });
 
   router.post("/platform/rules", ...manage, async (req, res) => {
     try {
