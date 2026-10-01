@@ -110,6 +110,8 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
       const collectionNumber = `K${compactId}`;
       const externalOrderId = `KIOSK-${sale.id}`;
 
+      const canonicalFulfilmentType = "SELF_PICKUP";
+
       const orderResult = await client.query(
         `INSERT INTO online_orders (
            company_id,store_id,customer_id,platform,external_order_id,external_reference,
@@ -130,7 +132,7 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
           sale.customer_id || null,
           externalOrderId,
           collectionNumber,
-          fulfilmentType,
+          canonicalFulfilmentType,
           Number(sale.subtotal) || 0,
           Number(sale.tax) || 0,
           Number(sale.total) || 0,
@@ -138,6 +140,7 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
           paymentRow.payment_method || "card",
           JSON.stringify({
             source: "ONE_KIOSK",
+            requestedFulfilmentType: fulfilmentType,
             saleId: sale.id,
             receiptNumber: sale.receipt_number,
             paymentProvider: paymentRow.provider || null,
