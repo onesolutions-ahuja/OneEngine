@@ -265,15 +265,40 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
     }
 
     const saleId = String(req.body?.saleId || "").trim();
-    const fulfilmentType = String(req.body?.fulfilmentType || "COLLECT").trim().toUpperCase();
-    const allowedFulfilment = new Set(["COLLECT", "TAKEAWAY", "EAT_IN", "COUNTER_SERVICE"]);
+    const deviceKey = String(req.body?.deviceKey || "").trim();
+    const fulfilmentType = String(req.body?.fulfilmentType || "").trim().toUpperCase();
 
     if (!saleId) {
       return res.status(400).json({ success: false, message: "A completed sale is required" });
     }
-    if (!allowedFulfilment.has(fulfilmentType)) {
-      return res.status(400).json({ success: false, message: "Unsupported kiosk fulfilment type" });
+    if (!deviceKey) {
+      return res.status(400).json({ success: false, message: "Kiosk device identity is required" });
     }
+
+    const runtime = await db(
+      `SELECT kd.id AS device_id,kd.workflow_id,pr.action
+         FROM kiosk_devices kd
+         LEFT JOIN platform_rules pr
+           ON pr.id=kd.workflow_id
+          AND pr.company_id=kd.company_id
+          AND pr.action->>'scope'='one_kiosk'
+          AND pr.action->>'flowType'='KIOSK_EXPERIENCE'
+        WHERE kd.company_id=$1 AND kd.store_id=$2 AND kd.device_key=$3 AND kd.active=TRUE
+        LIMIT 1`,
+      [req.user.companyId, req.user.storeId, deviceKey]
+    );
+    const runtimeRow = runtime.rows[0];
+    if (!runtimeRow?.action?.ui) {
+      return res.status(409).json({ success: false, message: "No active OneKiosk experience flow is assigned to this device" });
+    }
+    const fulfilmentScreen = (runtimeRow.action.ui.screens || []).find((screen) => screen?.type === "FULFILMENT");
+    const configuredOption = (fulfilmentScreen?.options || []).find(
+      (option) => String(option?.key || "").toUpperCase() === fulfilmentType
+    );
+    if (!configuredOption) {
+      return res.status(400).json({ success: false, message: "This fulfilment option is not allowed by the assigned OneKiosk flow" });
+    }
+    const canonicalFulfilmentType = String(configuredOption.canonicalType || "SELF_PICKUP").toUpperCase();
 
     const client = await pool.connect();
     let transactionStarted = false;
@@ -359,8 +384,6 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
       const collectionNumber = `K${compactId}`;
       const externalOrderId = `KIOSK-${sale.id}`;
 
-      const canonicalFulfilmentType = "SELF_PICKUP";
-
       const orderResult = await client.query(
         `INSERT INTO online_orders (
            company_id,store_id,customer_id,platform,external_order_id,external_reference,
@@ -390,6 +413,8 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
           JSON.stringify({
             source: "ONE_KIOSK",
             requestedFulfilmentType: fulfilmentType,
+            workflowId: runtimeRow.workflow_id || null,
+            kioskDeviceId: runtimeRow.device_id || null,
             saleId: sale.id,
             receiptNumber: sale.receipt_number,
             paymentProvider: paymentRow.provider || null,
