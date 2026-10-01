@@ -74,7 +74,9 @@ function ComponentCard({ component, result, loading, currency, onRetry }) {
     body = <p className="dash-text">{config.content || ''}</p>
   } else if (type === 'kpi' || type === 'modern_kpi_card') {
     const total = points.reduce((sum, point) => sum + point.value, 0)
-    body = <div className="dash-kpi"><strong>{formatNumber(config.labelField ? points[0]?.value : total, config.format, currency)}</strong>{config.labelField && points[0] ? <span>{points[0].label}</span> : null}</div>
+    body = points.length
+      ? <div className="dash-kpi"><strong>{formatNumber(config.labelField ? points[0]?.value : total, config.format, currency)}</strong>{config.labelField && points[0] ? <span>{points[0].label}</span> : null}</div>
+      : <div className="dash-empty">No data</div>
   } else if (type === 'bar') {
     const shown = points.slice(0, config.limit || 12)
     const max = Math.max(...shown.map((point) => Math.abs(point.value)), 0)
