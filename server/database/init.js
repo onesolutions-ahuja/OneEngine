@@ -235,6 +235,17 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             WHERE company_id IS NULL
               AND (api_key='platform_developer' OR name='Platform Developer')`
         );
+        await client.query(
+          `UPDATE platform_permission_sets
+              SET system_permissions = (
+                SELECT COALESCE(jsonb_agg(DISTINCT value), '[]'::jsonb)
+                  FROM jsonb_array_elements_text(
+                    COALESCE(system_permissions,'[]'::jsonb) || '["oneengine.manage"]'::jsonb
+                  ) AS item(value)
+                 WHERE value <> 'platform.manage'
+              )
+            WHERE COALESCE(system_permissions,'[]'::jsonb) ? 'platform.manage'`
+        );
       },
     },
   ]);
