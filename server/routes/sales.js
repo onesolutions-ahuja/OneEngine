@@ -232,7 +232,7 @@ export default function createSalesRouter({
         let kioskContext = null;
         if (kioskDeviceKey) {
           const kiosk = await db(
-            `SELECT kd.id AS kiosk_device_id,kd.payment_connector_id,
+            `SELECT kd.id AS kiosk_device_id,kd.payment_connector_id,kd.age_approved_until,
                     ic.id AS connector_instance_id,ic.till_id,ic.store_id AS connector_store_id,
                     ic.enabled AS connector_enabled,ic.connection_status,
                     t.terminal_number
@@ -732,12 +732,19 @@ export default function createSalesRouter({
          * without a confirmed verification is rejected here, before any
          * sale/payment/inventory write.
          */
-        if (basketHasAgeRestricted && ageVerified !== true) {
-          await client.query("ROLLBACK");
-          return res.status(403).json({
-            success: false,
-            message: "Age verification required for age-restricted products",
-          });
+        if (basketHasAgeRestricted) {
+          const kioskAgeApproved = kioskContext
+            ? Boolean(kioskContext.age_approved_until && new Date(kioskContext.age_approved_until).getTime() > Date.now())
+            : false;
+          const verified = kioskContext ? kioskAgeApproved : ageVerified === true;
+          if (!verified) {
+            await client.query("ROLLBACK");
+            return res.status(403).json({
+              success: false,
+              code: kioskContext ? "KIOSK_AGE_APPROVAL_REQUIRED" : "AGE_VERIFICATION_REQUIRED",
+              message: "Age verification required for age-restricted products",
+            });
+          }
         }
 
         /*
@@ -1555,6 +1562,16 @@ export default function createSalesRouter({
               previous: null,
             });
           }
+        }
+
+        if (kioskContext && basketHasAgeRestricted) {
+          await db(
+            `UPDATE kiosk_devices
+                SET age_approved_until=NULL,age_approved_by=NULL,age_approval_requested_at=NULL,updated_at=NOW()
+              WHERE id=$1 AND company_id=$2`,
+            [kioskContext.kiosk_device_id, req.user.companyId]
+          );
+          await writeAudit?.(req.user.companyId, req.user.id || null, "KIOSK_AGE_APPROVAL_CONSUMED", "kiosk_device", kioskContext.kiosk_device_id, {});
         }
 
         await client.query("COMMIT");
