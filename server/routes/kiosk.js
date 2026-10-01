@@ -30,6 +30,57 @@ export default function createKioskRouter({
     return ["ONLINE","OFFLINE","DEGRADED","READY","ERROR","NOT_CONFIGURED","UNKNOWN"].includes(key) ? key : "UNKNOWN";
   };
 
+  router.post("/kiosk/display-session", authenticate, authorize("online_orders.view"), async (req, res) => {
+    const flowId = req.body?.flowId ? String(req.body.flowId) : null;
+    try {
+      let selectedFlowId = flowId;
+      if (selectedFlowId) {
+        const flow = await db(
+          `SELECT id FROM platform_rules
+            WHERE id=$1 AND company_id=$2
+              AND action->>'scope'='one_kiosk'
+              AND action->>'flowType'='KIOSK_EXPERIENCE'
+              AND active=TRUE AND lifecycle_status='ACTIVE'
+            LIMIT 1`,
+          [selectedFlowId, req.user.companyId]
+        );
+        if (!flow.rows.length) return res.status(400).json({ success: false, message: "Selected OneKiosk display flow is unavailable" });
+      } else {
+        const flow = await db(
+          `SELECT id FROM platform_rules
+            WHERE company_id=$1
+              AND action->>'scope'='one_kiosk'
+              AND action->>'flowType'='KIOSK_EXPERIENCE'
+              AND active=TRUE AND lifecycle_status='ACTIVE'
+            ORDER BY CASE WHEN action->>'defaultForNewDevices'='true' THEN 0 ELSE 1 END,name
+            LIMIT 1`,
+          [req.user.companyId]
+        );
+        selectedFlowId = flow.rows[0]?.id || null;
+      }
+      const modeToken = jwt.sign(
+        {
+          id: req.user.id,
+          companyId: req.user.companyId,
+          storeId: req.user.storeId,
+          roleId: req.user.roleId,
+          username: req.user.username,
+          mode: "kiosk_display",
+          kioskDisplayFlowId: selectedFlowId,
+        },
+        jwtSecret,
+        { expiresIn: modeTtl }
+      );
+      await writeAudit?.(req.user.companyId, req.user.id, "KIOSK_DISPLAY_SESSION_STARTED", "platform_rule", selectedFlowId, {
+        storeId: req.user.storeId,
+      });
+      res.status(201).json({ success: true, data: { modeToken, flowId: selectedFlowId, mode: "kiosk_display" } });
+    } catch (error) {
+      console.error("Start kiosk display session error:", error);
+      res.status(500).json({ success: false, message: "Unable to start kiosk display session" });
+    }
+  });
+
   router.post("/kiosk/device-session", authenticate, authorize("sale.create"), async (req, res) => {
     const deviceKey = String(req.body?.deviceKey || "").trim();
     if (!deviceKey) return res.status(400).json({ success: false, message: "Kiosk device key is required" });
@@ -1340,10 +1391,21 @@ export function createKioskModeGate() {
     } catch {
       return next();
     }
-    if (payload?.mode !== "kiosk") return next();
+    if (!["kiosk","kiosk_display"].includes(payload?.mode)) return next();
 
     const path = String(req.originalUrl || req.url || "").split("?")[0];
     const method = String(req.method || "GET").toUpperCase();
+
+    if (payload?.mode === "kiosk_display") {
+      const displayAllowed =
+        (method === "GET" && path === "/api/kiosk/flows") ||
+        (method === "GET" && path === "/api/online/orders" && String(req.query?.platform || "") === "one_kiosk");
+      if (displayAllowed) return next();
+      return res.status(403).json({
+        success: false,
+        message: "Not available in OneKiosk display mode",
+      });
+    }
 
     const allowed =
       (method === "GET" && path === "/api/health") ||
