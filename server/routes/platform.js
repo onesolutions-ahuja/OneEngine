@@ -24,7 +24,7 @@ import { readDomainConfiguration, saveDomainConfiguration, withDomainSave } from
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { moduleRuntimeAccess } from "../services/authorization.js";
 import { normalizeDeviceProfile } from "../services/runtimeAccess.js";
-import { buildRecordPathCatalog } from "../services/platformRecordPaths.js";
+import { buildRecordPathCatalog, resolveWorkflowResource } from "../services/platformRecordPaths.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "../services/licensing.js";
 import { resolvePageLayout } from "../services/platformLayoutResolver.js";
 import { searchPlatformRecords } from "../services/platformSearch.js";
@@ -3622,9 +3622,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         actual = result?.outcomeId ?? result?.outcomeLabel ?? result?.branch?.outcome ?? null;
         passed = String(actual ?? "") === String(assertion.expected ?? "");
       } else if (type === "RESOURCE_EQUALS") {
-        const path = String(assertion.resource || "").replace(/^variables\./, "");
-        actual = debugData?.variables?.variables?.[path];
-        passed = JSON.stringify(actual) === JSON.stringify(assertion.expected);
+        actual = resolveWorkflowResource(assertion.resource, {
+          record: debugData?.recordData || null,
+          previousRecord: debugData?.previousRecordData || null,
+          user: debugData?.user || null,
+          variables: debugData?.variables || {},
+        });
+        const expected = assertion.expected;
+        passed = actual != null && typeof actual === "object"
+          ? JSON.stringify(actual) === JSON.stringify(expected)
+          : String(actual ?? "") === String(expected ?? "");
       } else {
         actual = "Unsupported assertion";
       }
@@ -3837,6 +3844,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         steps: stepResult.rows || [],
         results,
         record: record ? { id: record.id } : null,
+        recordData: record || null,
+        user: req.user || null,
         friendlyError: friendly,
         handledFaults: debugError ? [] : handledFaults,
         completedWithHandledError: !debugError && handledFaults.length > 0,
