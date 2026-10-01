@@ -4433,12 +4433,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     const result = await db(
       `SELECT r.*,p.name AS process_name,p.config AS process_config,s.label AS step_label,
               o.object_key,o.label AS object_name,w.id AS work_item_id,w.assigned_to,w.role_id,
-              w.status AS work_item_status,w.due_at,w.reassigned_from,w.reassigned_at,
+              w.status AS work_item_status,w.due_at,w.reassigned_from,w.reassigned_at,w.reminder_sent_at,w.escalated_at,w.escalation_count,
               u.username AS assignee_name,u.email AS assignee_email
          FROM platform_approval_requests r
          JOIN platform_approval_processes p ON p.id=r.process_id
          JOIN platform_objects o ON o.id=r.object_id
-         JOIN platform_approval_steps s ON s.process_id=r.process_id AND s.step_order=r.current_step
+         LEFT JOIN platform_approval_steps s ON s.process_id=r.process_id AND s.step_order=r.current_step
          LEFT JOIN platform_approval_work_items w ON w.request_id=r.id AND w.step_order=r.current_step
          LEFT JOIN users u ON u.id=w.assigned_to
         WHERE r.company_id=$1 AND ($2::text IS NULL OR r.status=$2)
