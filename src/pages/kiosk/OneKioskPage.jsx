@@ -103,7 +103,7 @@ function money(value, currency = "GBP") {
   }
 }
 
-export default function OneKioskPage() {
+export default function OneKioskPage({ publicMode = false }) {
   const demoMode = useMemo(() => new URLSearchParams(window.location.search).get("demo") === "1", []);
   const [products, setProducts] = useState(demoMode ? DEMO_PRODUCTS : []);
   const [currency, setCurrency] = useState("GBP");
@@ -127,6 +127,12 @@ export default function OneKioskPage() {
   const [experienceUi, setExperienceUi] = useState(null);
   const [experienceFlow, setExperienceFlow] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productOptions, setProductOptions] = useState(null);
+  const [selectedVariantId, setSelectedVariantId] = useState("");
+  const [selectedModifiers, setSelectedModifiers] = useState({});
+  const [quote, setQuote] = useState(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [lastInteractionAt, setLastInteractionAt] = useState(() => Date.now());
 
   useEffect(() => {
     if (demoMode) {
@@ -147,7 +153,7 @@ export default function OneKioskPage() {
     }
     let live = true;
     Promise.all([
-      apiRequest("/api/products"),
+      apiRequest("/api/kiosk/catalogue"),
       apiRequest("/api/settings").catch(() => null),
     ])
       .then(([productResponse, settingsResponse]) => {
@@ -157,7 +163,7 @@ export default function OneKioskPage() {
           .filter((product) => product?.active !== false)
           .map((product) => ({
             ...product,
-            categoryLabel: product.category_name || product.category || "Other",
+            categoryLabel: product.categoryLabel || product.category_name || product.category || "Other",
           }));
         setProducts(rows);
         setCurrency(settingsResponse?.data?.company?.currency || settingsResponse?.company?.currency || "GBP");
@@ -296,6 +302,8 @@ export default function OneKioskPage() {
   const productScreen = screensByType.PRODUCT_DETAIL || {};
   const fulfilmentScreen = screensByType.FULFILMENT || {};
   const paymentScreen = screensByType.PAYMENT || {};
+  const recommendationsScreen = screensByType.RECOMMENDATIONS || {};
+  const basketScreen = screensByType.BASKET || {};
   const confirmationScreen = screensByType.CONFIRMATION || {};
   const fulfilmentOptions = Array.isArray(fulfilmentScreen.options) ? fulfilmentScreen.options : [];
   const featureFlags = experienceUi?.features || {};
@@ -325,31 +333,133 @@ export default function OneKioskPage() {
     });
   }, [products, category, search]);
 
-  const total = basket.reduce((sum, line) => sum + Number(line.price || 0) * Number(line.quantity || 0), 0);
+  useEffect(() => {
+    if (demoMode || !basket.length) {
+      setQuote(null);
+      setQuoteLoading(false);
+      return undefined;
+    }
+    let live = true;
+    const timer = window.setTimeout(() => {
+      setQuoteLoading(true);
+      apiRequest("/api/kiosk/quote", {
+        method: "POST",
+        body: JSON.stringify({
+          items: basket.map((line) => ({
+            productId: line.id,
+            quantity: Number(line.quantity) || 1,
+            modifiers: Array.isArray(line.modifiers) ? line.modifiers : [],
+          })),
+        }),
+      })
+        .then((response) => {
+          if (!live) return;
+          if (!response?.success) throw new Error(response?.message || "Unable to price order");
+          setQuote(response.data || null);
+          setError("");
+        })
+        .catch((reason) => {
+          if (live) setError(reason?.message || "Unable to confirm current prices");
+        })
+        .finally(() => {
+          if (live) setQuoteLoading(false);
+        });
+    }, 180);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [basket, demoMode]);
+
+  const visualTotal = basket.reduce((sum, line) => sum + Number(line.price || 0) * Number(line.quantity || 0), 0);
+  const total = quote?.total ?? visualTotal;
   const itemCount = basket.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
 
-  const addToBasket = (product) => {
+  const modifierSelections = useMemo(
+    () => Object.values(selectedModifiers).flat().filter(Boolean),
+    [selectedModifiers]
+  );
+
+  const selectedVariant = useMemo(() => {
+    const variants = Array.isArray(productOptions?.variants) ? productOptions.variants : [];
+    return variants.find((variant) => String(variant.id) === String(selectedVariantId)) || selectedProduct;
+  }, [productOptions, selectedVariantId, selectedProduct]);
+
+  const requiredModifiersSatisfied = useMemo(() => {
+    const groups = Array.isArray(productOptions?.modifierGroups) ? productOptions.modifierGroups : [];
+    return groups.every((group) => !group.required || (selectedModifiers[group.id] || []).length > 0);
+  }, [productOptions, selectedModifiers]);
+
+  const configuredProductPrice = useMemo(() => {
+    const base = Number(selectedVariant?.price ?? selectedProduct?.price ?? 0);
+    const extras = modifierSelections.reduce((sum, option) => sum + Number(option.price || 0), 0);
+    return base + extras;
+  }, [selectedVariant, selectedProduct, modifierSelections]);
+
+  const addToBasket = (product, { variant = null, modifiers = [] } = {}) => {
+    const target = variant || product;
+    const selected = modifiers.map((option) => ({
+      optionId: option.id,
+      name: option.name,
+      price: Number(option.price || 0),
+      quantity: 1,
+    }));
+    const modifierKey = selected.map((item) => String(item.optionId)).sort().join(",");
+    const lineKey = `${target.id}::${modifierKey}`;
+    const displayPrice = Number(target.price || 0) + selected.reduce((sum, item) => sum + item.price, 0);
     setBasket((current) => {
-      const existing = current.find((line) => line.id === product.id);
+      const existing = current.find((line) => line.lineKey === lineKey);
       if (existing) {
-        return current.map((line) => line.id === product.id ? { ...line, quantity: line.quantity + 1 } : line);
+        return current.map((line) => line.lineKey === lineKey ? { ...line, quantity: line.quantity + 1 } : line);
       }
-      return [...current, { ...product, quantity: 1 }];
+      return [...current, {
+        ...target,
+        id: target.id,
+        lineKey,
+        name: target.name || product.name,
+        price: displayPrice,
+        quantity: 1,
+        modifiers: selected,
+        parentProductId: product.id,
+      }];
     });
     setSelectedProduct(null);
+    setProductOptions(null);
+    setSelectedVariantId("");
+    setSelectedModifiers({});
+    setLastInteractionAt(Date.now());
   };
 
-  const handleProductAction = (product) => {
+  const handleProductAction = async (product) => {
+    setLastInteractionAt(Date.now());
     if (catalogueScreen.productAction === "OPEN_DETAIL" && Object.keys(productScreen).length) {
       setSelectedProduct(product);
+      setProductOptions(null);
+      setSelectedVariantId(String(product.id));
+      setSelectedModifiers({});
+      if (!demoMode) {
+        try {
+          const response = await apiRequest(`/api/kiosk/products/${product.id}/options`);
+          if (!response?.success) throw new Error(response?.message || "Unable to load product options");
+          setProductOptions(response.data || null);
+          const variants = Array.isArray(response.data?.variants) ? response.data.variants : [];
+          const initial = variants.find((variant) => String(variant.id) === String(product.id))
+            || variants.find((variant) => Number(variant.store_stock || 0) > 0)
+            || variants[0];
+          if (initial?.id) setSelectedVariantId(String(initial.id));
+        } catch (reason) {
+          setError(reason?.message || "Unable to load product options");
+        }
+      }
       return;
     }
     addToBasket(product);
   };
 
-  const changeQuantity = (productId, delta) => {
+  const changeQuantity = (lineKey, delta) => {
+    setLastInteractionAt(Date.now());
     setBasket((current) => current
-      .map((line) => line.id === productId ? { ...line, quantity: Math.max(0, line.quantity + delta) } : line)
+      .map((line) => line.lineKey === lineKey ? { ...line, quantity: Math.max(0, line.quantity + delta) } : line)
       .filter((line) => line.quantity > 0));
   };
 
@@ -411,6 +521,7 @@ export default function OneKioskPage() {
             discount: 0,
             tax: 0,
             total: (Number(line.price) || 0) * (Number(line.quantity) || 1),
+            modifiers: Array.isArray(line.modifiers) ? line.modifiers : [],
           })),
           subtotal: total,
           tax: 0,
@@ -547,15 +658,16 @@ export default function OneKioskPage() {
 
           <div className="one-kiosk-lines">
             {basket.map((line) => (
-              <div className="one-kiosk-line" key={line.id}>
+              <div className="one-kiosk-line" key={line.lineKey || line.id}>
                 <div>
                   <strong>{line.name}</strong>
+                  {Array.isArray(line.modifiers) && line.modifiers.length ? <small>{line.modifiers.map((item) => item.name).join(" · ")}</small> : null}
                   <span>{money(Number(line.price || 0) * line.quantity, currency)}</span>
                 </div>
                 <div className="one-kiosk-quantity">
-                  <button type="button" disabled={Boolean(paidSale)} onClick={() => changeQuantity(line.id, -1)}><Minus size={17} /></button>
+                  <button type="button" disabled={Boolean(paidSale)} onClick={() => changeQuantity(line.lineKey || line.id, -1)}><Minus size={17} /></button>
                   <strong>{line.quantity}</strong>
-                  <button type="button" disabled={Boolean(paidSale)} onClick={() => changeQuantity(line.id, 1)}><Plus size={17} /></button>
+                  <button type="button" disabled={Boolean(paidSale)} onClick={() => changeQuantity(line.lineKey || line.id, 1)}><Plus size={17} /></button>
                 </div>
               </div>
             ))}
@@ -588,14 +700,15 @@ export default function OneKioskPage() {
           ) : null}
 
           <div className="one-kiosk-total">
-            <span>Total</span>
+            <span>{quoteLoading ? "Checking price…" : "Total"}</span>
             <strong>{money(total, currency)}</strong>
           </div>
+          {Number(quote?.savings || 0) > 0 ? <div className="one-kiosk-savings">You save {money(quote.savings, currency)}</div> : null}
 
           <button
             type="button"
             className="one-kiosk-pay"
-            disabled={!basket.length || paying}
+            disabled={!basket.length || paying || quoteLoading}
             onClick={payAndCollect}
           >
             <CreditCard size={20} />
@@ -618,21 +731,86 @@ export default function OneKioskPage() {
               <span className="one-kiosk-eyebrow">{selectedProduct.categoryLabel || "Product"}</span>
               <h2>{selectedProduct.name}</h2>
               {productScreen.description !== false && selectedProduct.description ? <p>{selectedProduct.description}</p> : null}
-              {productScreen.specifications && selectedProduct.specifications ? (
+              {productScreen.variants && Array.isArray(productOptions?.variants) && productOptions.variants.length > 1 ? (
+                <div className="one-kiosk-option-group">
+                  <strong>Choose option</strong>
+                  <div className="one-kiosk-choice-grid">
+                    {productOptions.variants.map((variant) => (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        className={String(selectedVariantId) === String(variant.id) ? "is-active" : ""}
+                        disabled={variant.track_stock === true && Number(variant.store_stock || 0) <= 0}
+                        onClick={() => setSelectedVariantId(String(variant.id))}
+                      >
+                        <span>{Object.values(variant.variant_attributes || {}).join(" · ") || variant.name}</span>
+                        <small>{variant.track_stock === true && Number(variant.store_stock || 0) <= 0 ? "Out of stock" : money(variant.price, currency)}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {productScreen.specifications && productOptions?.metadata?.specifications ? (
                 <div className="one-kiosk-specs">
-                  {Object.entries(selectedProduct.specifications).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value)}</strong></div>)}
+                  {Object.entries(productOptions.metadata.specifications).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value)}</strong></div>)}
                 </div>
               ) : null}
-              {productScreen.stockPromise && selectedProduct.stock_message ? <div className="one-kiosk-stock-promise">{selectedProduct.stock_message}</div> : null}
-              {productScreen.modifiers && Array.isArray(selectedProduct.modifiers) && selectedProduct.modifiers.length ? (
-                <div className="one-kiosk-modifier-list">
-                  {selectedProduct.modifiers.map((modifier) => <button key={modifier.key || modifier.name} type="button">{modifier.label || modifier.name}</button>)}
+              {productScreen.nutrition && productOptions?.metadata?.nutrition ? (
+                <div className="one-kiosk-specs">
+                  {Object.entries(productOptions.metadata.nutrition).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value)}</strong></div>)}
                 </div>
               ) : null}
+              {productScreen.allergens && Array.isArray(productOptions?.metadata?.allergens) && productOptions.metadata.allergens.length ? (
+                <div className="one-kiosk-allergens"><strong>Allergens</strong><span>{productOptions.metadata.allergens.join(" · ")}</span></div>
+              ) : null}
+              {productScreen.stockPromise ? (
+                <div className="one-kiosk-stock-promise">
+                  {selectedVariant?.track_stock === true
+                    ? Number(selectedVariant?.store_stock || selectedProduct.store_stock || 0) > 0
+                      ? `Available here · ${Number(selectedVariant?.store_stock || selectedProduct.store_stock || 0)} in stock`
+                      : "Not currently available at this store"
+                    : "Available"}
+                </div>
+              ) : null}
+              {productScreen.modifiers && Array.isArray(productOptions?.modifierGroups) ? productOptions.modifierGroups.map((group) => (
+                <div className="one-kiosk-option-group" key={group.id}>
+                  <div className="one-kiosk-option-title">
+                    <strong>{group.name}</strong>
+                    <small>{group.required ? "Required" : "Optional"} · choose up to {group.maxSelections}</small>
+                  </div>
+                  <div className="one-kiosk-choice-grid">
+                    {group.options.map((option) => {
+                      const selected = (selectedModifiers[group.id] || []).some((item) => item.id === option.id);
+                      return (
+                        <button
+                          type="button"
+                          key={option.id}
+                          className={selected ? "is-active" : ""}
+                          onClick={() => setSelectedModifiers((current) => {
+                            const existing = current[group.id] || [];
+                            if (selected) return { ...current, [group.id]: existing.filter((item) => item.id !== option.id) };
+                            const next = group.maxSelections <= 1 ? [option] : [...existing, option].slice(-group.maxSelections);
+                            return { ...current, [group.id]: next };
+                          })}
+                        >
+                          <span>{option.name}</span>
+                          <small>{Number(option.price || 0) > 0 ? `+${money(option.price, currency)}` : "Included"}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )) : null}
+              {productOptions?.metadata?.warranty && productScreen.warranty ? <div className="one-kiosk-warranty">{productOptions.metadata.warranty}</div> : null}
               <div className="one-kiosk-product-modal-footer">
-                <strong>{money(selectedProduct.price, currency)}</strong>
-                <button type="button" className="one-kiosk-pay" onClick={() => addToBasket(selectedProduct)}>
-                  {productScreen.addLabel || "Add to order"}
+                <strong>{money(configuredProductPrice, currency)}</strong>
+                <button
+                  type="button"
+                  className="one-kiosk-pay"
+                  disabled={!requiredModifiersSatisfied || (selectedVariant?.track_stock === true && Number(selectedVariant?.store_stock || 0) <= 0)}
+                  onClick={() => addToBasket(selectedProduct, { variant: selectedVariant, modifiers: modifierSelections })}
+                >
+                  {!requiredModifiersSatisfied ? "Choose required options" : (productScreen.addLabel || "Add to order")}
                 </button>
               </div>
             </div>
