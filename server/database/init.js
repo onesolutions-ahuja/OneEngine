@@ -934,7 +934,25 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             ON platform_approval_delegations(company_id,user_id,active,starts_at,ends_at);
         `);
       },
-    },
+    },,
+    {
+      key: "0034_approval_version_manager_escalation",
+      version: "34",
+      name: "Pin approval definitions and add manager hierarchy and escalation state",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS manager_id UUID REFERENCES users(id) ON DELETE SET NULL;
+          CREATE INDEX IF NOT EXISTS idx_users_manager ON users(company_id,manager_id) WHERE manager_id IS NOT NULL;
+          ALTER TABLE platform_approval_processes ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+          ALTER TABLE platform_approval_requests ADD COLUMN IF NOT EXISTS process_version INTEGER NOT NULL DEFAULT 1;
+          ALTER TABLE platform_approval_work_items ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
+          ALTER TABLE platform_approval_work_items ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ;
+          ALTER TABLE platform_approval_work_items ADD COLUMN IF NOT EXISTS escalation_count INTEGER NOT NULL DEFAULT 0;
+          UPDATE platform_approval_requests r SET process_version=p.version
+            FROM platform_approval_processes p WHERE p.id=r.process_id AND r.process_version=1;
+        `);
+      },
+    }
     {
       key: "0034_user_store_assignment_permission",
       version: "34",
