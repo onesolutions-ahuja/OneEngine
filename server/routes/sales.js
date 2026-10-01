@@ -538,6 +538,15 @@ export default function createSalesRouter({
           );
         }
 
+        const payableAfterLoyalty = roundCurrency(Math.max((Number(total) || 0) - Number(loyaltyRedeemValue || 0), 0));
+        if (loyaltyTenderApplied && String(paymentMethod || "").toLowerCase() === "loyalty" && payableAfterLoyalty > 0) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({
+            success: false,
+            message: "Selected loyalty points do not cover the full sale. Choose cash or card for the remaining amount.",
+          });
+        }
+
         if (customerId) {
           await associateCustomerWithStore(
             client,
@@ -1020,9 +1029,9 @@ export default function createSalesRouter({
         const cardTender = paymentLines?.find((line) => line.method === "card");
         const cardAmount = cardTender
           ? Number(cardTender.amount)
-          : paymentMethod === "card" ? Number(total) : null;
+          : paymentMethod === "card" ? payableAfterLoyalty : null;
         let connectorPayment = null;
-        if (cardAmount !== null) {
+        if (cardAmount !== null && cardAmount > 0) {
           if (!clientRequestId) {
             await client.query("ROLLBACK");
             return res.status(400).json({ success: false, code: "IDEMPOTENCY_REQUIRED", message: "Card payments require a stable clientRequestId" });
@@ -1400,7 +1409,12 @@ export default function createSalesRouter({
          */
         const tenderRows = paymentLines
           ? paymentLines.map((line) => [saleId, line.method, line.amount])
-          : [[saleId, loyaltyTenderApplied ? "loyalty" : paymentMethod, Number(total) || 0]];
+          : loyaltyTenderApplied
+            ? [
+                [saleId, "loyalty", roundCurrency(loyaltyRedeemValue)],
+                ...(payableAfterLoyalty > 0 ? [[saleId, paymentMethod, payableAfterLoyalty]] : []),
+              ]
+            : [[saleId, paymentMethod, Number(total) || 0]];
         for (const [tSaleId, tMethod, tAmount] of tenderRows) {
           const isConnectorCardTender = tMethod === "card" && connectorPayment?.result?.status === "APPROVED";
           const paymentResult = isConnectorCardTender ? connectorPayment.result : null;
