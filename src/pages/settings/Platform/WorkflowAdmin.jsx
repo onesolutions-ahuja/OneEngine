@@ -578,6 +578,7 @@ const WORKFLOW_VISUAL_CSS = `
 `;
 
 const actionOptions = [
+  { value: "GET_RECORDS", label: "Get Records" },
   { value: "CREATE_RECORD", label: "Create Record" },
   { value: "UPDATE_RECORD", label: "Update Record" },
   { value: "UPDATE_RELATED_RECORD", label: "Update Related Record" },
@@ -613,6 +614,12 @@ function makeStep(type = "CREATE_RECORD") {
     config: {
       object: "orders",
       recordId: "",
+      filters: [],
+      match: "all",
+      sortField: "",
+      sortDirection: "asc",
+      store: "first",
+      limit: 1,
       fieldMappings: { status: "status" },
       template: "",
       templateId: "",
@@ -643,7 +650,7 @@ function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONDITION","WAIT","STOP"].includes(key)) return "Logic";
   if (key === "RUN_SUBFLOW") return "Workflows";
-  if (["CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
+  if (["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION"].includes(key)) return "Communication";
   if (key === "CALL_FUNCTION") return "Advanced";
   if (key.includes("WEBHOOK") || key === "HTTP_REQUEST" || key.startsWith("CONNECTOR_")) return "Integrations";
@@ -688,7 +695,7 @@ function workflowActionIssue(step) {
   if (step.type === "CONDITION") {
     return conditionIsValid(config.condition) ? "" : "Complete the condition field/operator/value.";
   }
-  if (RECORD_ACTION_TYPES.has(step.type) && !config.object) return "Choose the target object.";
+  if ((RECORD_ACTION_TYPES.has(step.type) || step.type === "GET_RECORDS") && !config.object) return "Choose the target object.";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP"].includes(step.type)) {
     if (!config.templateId && !config.template) return "Choose a message template.";
     if (!config.recipient) return "Choose a recipient.";
@@ -786,7 +793,7 @@ function StepConditionEditor({ value, onChange, objectKey }) {
   );
 }
 
-function MappingEditor({ value = {}, onChange, rootObjectKey, keyLabel = "Input", valueLabel = "Value" }) {
+function MappingEditor({ value = {}, onChange, rootObjectKey, extraResources = [], keyLabel = "Input", valueLabel = "Value" }) {
   const entries = Object.entries(value || {});
   const setEntry = (index, nextKey, nextValue) => {
     const next = {};
@@ -802,7 +809,7 @@ function MappingEditor({ value = {}, onChange, rootObjectKey, keyLabel = "Input"
       {entries.map(([key, currentValue], index) => (
         <div key={`${key}-${index}`} className="grid gap-2 md:grid-cols-[0.8fr_1.2fr_auto]">
           <input className={inputClass} value={key} onChange={(event) => setEntry(index, event.target.value, currentValue)} placeholder={keyLabel} />
-          <MetadataResourcePicker objectKey={rootObjectKey} label={valueLabel} value={String(currentValue ?? "")} onChange={(nextValue) => setEntry(index, key, nextValue)} />
+          <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label={valueLabel} value={String(currentValue ?? "")} onChange={(nextValue) => setEntry(index, key, nextValue)} />
           <button type="button" className="rounded border border-slate-200 px-2 text-xs text-red-600" onClick={() => {
             const next = Object.fromEntries(entries.filter((_, itemIndex) => itemIndex !== index));
             onChange(next);
@@ -812,6 +819,28 @@ function MappingEditor({ value = {}, onChange, rootObjectKey, keyLabel = "Input"
       <button type="button" className="text-sm text-blue-700" onClick={() => onChange({ ...(value || {}), [`input_${entries.length + 1}`]: "" })}>+ Add mapping</button>
     </div>
   );
+}
+
+function workflowStepResources(steps = [], currentIndex = 0) {
+  const resources = [];
+  steps.slice(0, currentIndex).forEach((step, index) => {
+    const label = step.label || getActionLabel(step.type) || `Step ${index + 1}`;
+    const prefix = `steps.${step.id}`;
+    if (step.type === "GET_RECORDS") {
+      resources.push(
+        { value: `${prefix}.record.id`, label: `${label} → First Record → Record ID`, type: "step output" },
+        { value: `${prefix}.count`, label: `${label} → Record Count`, type: "step output" },
+        { value: `${prefix}.records`, label: `${label} → All Records`, type: "collection" },
+      );
+    } else if (step.type === "CREATE_RECORD") {
+      resources.push({ value: `${prefix}.created.id`, label: `${label} → Created Record ID`, type: "step output" });
+    } else if (step.type === "UPDATE_RECORD") {
+      resources.push({ value: `${prefix}.updated.id`, label: `${label} → Updated Record ID`, type: "step output" });
+    } else if (step.type === "RUN_SUBFLOW") {
+      resources.push({ value: `${prefix}.runId`, label: `${label} → Child Run ID`, type: "step output" });
+    }
+  });
+  return resources;
 }
 
 function BranchStepPicker({ label, value = [], onChange, steps = [], currentIndex }) {
@@ -845,6 +874,7 @@ function BranchStepPicker({ label, value = [], onChange, steps = [], currentInde
 
 function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
+  const extraResources = workflowStepResources(allSteps, index);
   const updateFieldMapping = (key, value) => {
     const fieldMappings = { ...(step.config?.fieldMappings || {}) };
     fieldMappings[key] = value;
@@ -853,6 +883,83 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 
   const renderConfig = () => {
     switch (step.type) {
+      case "GET_RECORDS": {
+        const filters = Array.isArray(step.config?.filters) ? step.config.filters : [];
+        const updateFilter = (filterIndex, patch) => {
+          const next = [...filters];
+          next[filterIndex] = { ...next[filterIndex], ...patch };
+          updateConfig({ filters: next });
+        };
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Object</label>
+              <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, filters: [], sortField: "" })} />
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <strong className="text-xs text-slate-700">Filter conditions</strong>
+                <select className={inputClass} value={step.config?.match || "all"} onChange={(event) => updateConfig({ match: event.target.value })}>
+                  <option value="all">Match ALL</option>
+                  <option value="any">Match ANY</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                {filters.map((filter, filterIndex) => (
+                  <div key={filter.id || filterIndex} className="grid gap-2 md:grid-cols-[1.1fr_.8fr_1fr_auto]">
+                    <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={filter.field || ""} label="Field" onChange={(field) => updateFilter(filterIndex, { field })} />
+                    <select className={inputClass} value={filter.operator || "equals"} onChange={(event) => updateFilter(filterIndex, { operator: event.target.value })}>
+                      <option value="equals">Equals</option>
+                      <option value="not_equals">Not equal</option>
+                      <option value="greater_than">Greater than</option>
+                      <option value="greater_than_or_equal">Greater than or equal</option>
+                      <option value="less_than">Less than</option>
+                      <option value="less_than_or_equal">Less than or equal</option>
+                      <option value="contains">Contains</option>
+                      <option value="is_empty">Is empty</option>
+                      <option value="is_not_empty">Is not empty</option>
+                    </select>
+                    {["is_empty","is_not_empty"].includes(filter.operator) ? <div /> : (
+                      <input className={inputClass} value={filter.value ?? ""} onChange={(event) => updateFilter(filterIndex, { value: event.target.value })} placeholder="Value" />
+                    )}
+                    <button type="button" className="rounded border border-slate-200 px-2 text-xs text-red-600" onClick={() => updateConfig({ filters: filters.filter((_, itemIndex) => itemIndex !== filterIndex) })}>Remove</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="mt-2 text-sm text-blue-700" onClick={() => updateConfig({ filters: [...filters, { id: `filter-${Date.now()}`, field: "", operator: "equals", value: "" }] })}>+ Add filter</button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Sort by</label>
+                <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.sortField || ""} label="Optional sort field" onChange={(sortField) => updateConfig({ sortField })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Direction</label>
+                <select className={inputClass} value={step.config?.sortDirection || "asc"} onChange={(event) => updateConfig({ sortDirection: event.target.value })}>
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Store result</label>
+                <select className={inputClass} value={step.config?.store || "first"} onChange={(event) => updateConfig({ store: event.target.value, limit: event.target.value === "first" ? 1 : Math.max(Number(step.config?.limit || 50), 2) })}>
+                  <option value="first">First matching record</option>
+                  <option value="all">All matching records</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Maximum records</label>
+                <input className={inputClass} type="number" min="1" max="200" disabled={(step.config?.store || "first") === "first"} value={(step.config?.store || "first") === "first" ? 1 : Number(step.config?.limit || 50)} onChange={(event) => updateConfig({ limit: Math.max(1, Math.min(200, Number(event.target.value || 1))) })} />
+              </div>
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+              Later steps can use this element from the Resource picker, including its first Record ID, record count, or collection.
+            </div>
+          </div>
+        );
+      }
       case "CREATE_RECORD":
       case "UPDATE_RECORD":
       case "UPDATE_RELATED_RECORD":
@@ -870,7 +977,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Record source</label>
-                <MetadataResourcePicker objectKey={rootObjectKey} label="Record / related record" value={step.config?.recordId || ""} onChange={(recordId) => updateConfig({ recordId })} />
+                <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Record / related record" value={step.config?.recordId || ""} onChange={(recordId) => updateConfig({ recordId })} />
               </div>
             </div>
             <div>
@@ -885,7 +992,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                       next[field] = currentValue;
                       updateConfig({ fieldMappings: next });
                     }} />
-                    <MetadataResourcePicker objectKey={rootObjectKey} label="Source value" value={value} onChange={(source) => updateFieldMapping(key, source)} />
+                    <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Source value" value={value} onChange={(source) => updateFieldMapping(key, source)} />
                   </div>
                 ))}
                 <button type="button" className="text-sm text-blue-700" onClick={() => updateConfig({ fieldMappings: { ...(step.config?.fieldMappings || {}), [`field_${Object.keys(step.config?.fieldMappings || {}).length + 1}`]: "" } })}>+ Add mapping</button>
@@ -981,7 +1088,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Inputs</label>
-              <MappingEditor value={step.config?.inputs || {}} onChange={(inputs) => updateConfig({ inputs })} rootObjectKey={rootObjectKey} keyLabel="Input name" valueLabel="Input value" />
+              <MappingEditor value={step.config?.inputs || {}} onChange={(inputs) => updateConfig({ inputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Input name" valueLabel="Input value" />
             </div>
           </div>
         );
@@ -999,7 +1106,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Input mapping</label>
-              <MappingEditor value={step.config?.workflowInputs || {}} onChange={(workflowInputs) => updateConfig({ workflowInputs })} rootObjectKey={rootObjectKey} keyLabel="Subflow input" valueLabel="Map from resource" />
+              <MappingEditor value={step.config?.workflowInputs || {}} onChange={(workflowInputs) => updateConfig({ workflowInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Subflow input" valueLabel="Map from resource" />
             </div>
           </div>
         );
