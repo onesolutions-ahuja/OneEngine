@@ -3504,6 +3504,38 @@ ON secure_invoice_links(company_id, created_at DESC);
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_workflow_compensation_once
         ON platform_workflow_compensation_runs(run_id, step_run_id);
+
+      CREATE TABLE IF NOT EXISTS platform_workflow_versions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        workflow_id UUID NOT NULL REFERENCES platform_rules(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        definition JSONB NOT NULL,
+        lifecycle_status VARCHAR(20),
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(company_id, workflow_id, version)
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_versions_lookup
+        ON platform_workflow_versions(company_id, workflow_id, version DESC);
+
+      CREATE TABLE IF NOT EXISTS platform_workflow_tests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        workflow_id UUID NOT NULL REFERENCES platform_rules(id) ON DELETE CASCADE,
+        name VARCHAR(200) NOT NULL,
+        config JSONB NOT NULL DEFAULT '{}'::jsonb,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        last_status VARCHAR(20),
+        last_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL,
+        last_result JSONB,
+        last_run_at TIMESTAMPTZ,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_tests_lookup
+        ON platform_workflow_tests(company_id, workflow_id, active, created_at DESC);
       CREATE TABLE IF NOT EXISTS platform_communication_deliveries (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
