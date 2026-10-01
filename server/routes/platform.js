@@ -3406,10 +3406,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           const outcomes = Array.isArray(action.outcomes) ? action.outcomes : [];
           if (outcomes.length) {
             for (const outcome of outcomes) {
-              validateConditionConfig(normalizeDecisionCondition(outcome.condition), conditionFields.rows, `Decision outcome "${outcome.label || outcome.id || "Outcome"}"`);
+              validateConditionConfig(normalizeDecisionCondition(outcome.condition), conditionFields.rows, `Decision outcome "${outcome.label || outcome.id || "Outcome"}"`, { allowResources: true });
             }
           } else {
-            validateConditionConfig(normalizeDecisionCondition(action.condition), conditionFields.rows, "Decision condition");
+            validateConditionConfig(normalizeDecisionCondition(action.condition), conditionFields.rows, "Decision condition", { allowResources: true });
           }
         }
       } catch (error) {
