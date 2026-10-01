@@ -4195,16 +4195,31 @@ export function friendlyWorkflowError(error, actionType = "") {
   const lower = message.toLowerCase();
   let title = "This step could not complete";
   let howToFix = "Open this step in Workflow Builder and check its required fields and Resources, then run Debug again.";
-  if (lower.includes("permission")) {
+  if (lower.includes("permission") || lower.includes("rbac")) {
     title = "Permission is missing";
-    howToFix = "Check the running user's role and make sure it has the permission required by this step.";
+    howToFix = "Check the running user's role and make sure it has every permission required by this step.";
+  } else if (lower.includes("duplicate") || lower.includes("unique constraint") || lower.includes("already exists")) {
+    title = "This would create a duplicate record";
+    howToFix = "Check the values being created or updated. A record with the same unique value already exists.";
+  } else if (lower.includes("foreign key") || lower.includes("related record") && (lower.includes("missing") || lower.includes("not found"))) {
+    title = "A related record is no longer available";
+    howToFix = "Check the selected related-record Resource and choose a record that still exists in this company/store.";
+  } else if (lower.includes("timeout") || lower.includes("timed out")) {
+    title = "This step took too long";
+    howToFix = "Try Debug again. If it repeats, check the connected service or reduce the amount of data this step processes.";
+  } else if (lower.includes("network") || lower.includes("failed to fetch") || lower.includes("connection refused")) {
+    title = "The connected service could not be reached";
+    howToFix = "Check the connection health and service availability, then run Debug again.";
+  } else if (lower.includes("invalid input syntax") || lower.includes("invalid value") || lower.includes("wrong type")) {
+    title = "A value has the wrong format";
+    howToFix = "Open this step and check the highlighted values and Resources match the field types expected by the target object.";
   } else if (lower.includes("not configured") || lower.includes("provider")) {
     title = "A connection or provider is not configured";
     howToFix = "Open Settings for this app or connector, complete its connection setup, test it successfully, then run Debug again.";
   } else if (lower.includes("record") && (lower.includes("not found") || lower.includes("does not exist"))) {
     title = "The record could not be found";
     howToFix = "Check the Resource feeding this step and confirm the record exists in the current company/store.";
-  } else if (lower.includes("required") || lower.includes("requires")) {
+  } else if (lower.includes("required") || lower.includes("requires") || lower.includes("not null")) {
     title = "Required information is missing";
     howToFix = "Open this step and complete the required value or Resource shown in its Properties.";
   } else if (lower.includes("formula")) {
