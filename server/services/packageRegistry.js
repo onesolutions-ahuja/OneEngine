@@ -374,6 +374,15 @@ export function packageDefinition(entry) {
                 profile: "RESTAURANT",
                 startScreen: "catalogue",
                 theme: { density: "touch", productCard: "image", accentRole: "primary" },
+                orderDisplay: {
+                  title: "Order collection",
+                  activeLabel: "Preparing",
+                  readyLabel: "Ready to collect",
+                  activeStatuses: ["PREPARING","ACCEPTED"],
+                  readyStatuses: ["READY","READY_FOR_PICKUP"],
+                  activeEmpty: "No orders preparing",
+                  readyEmpty: "No orders ready"
+                },
                 screens: [
                   { key: "catalogue", type: "CATALOGUE", title: "What would you like?", search: true, categories: true, productAction: "OPEN_DETAIL", next: "product" },
                   { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, modifiers: true, nutrition: true, allergens: true, next: "upsell" },
@@ -418,6 +427,15 @@ export function packageDefinition(entry) {
                 profile: "RETAIL",
                 startScreen: "catalogue",
                 theme: { density: "touch", productCard: "image_specs", accentRole: "primary" },
+                orderDisplay: {
+                  title: "Collection status",
+                  activeLabel: "Processing",
+                  readyLabel: "Ready for collection",
+                  activeStatuses: ["PREPARING","ACCEPTED"],
+                  readyStatuses: ["READY","READY_FOR_PICKUP"],
+                  activeEmpty: "No orders being processed",
+                  readyEmpty: "No orders ready for collection"
+                },
                 screens: [
                   { key: "catalogue", type: "CATALOGUE", title: "Find your product", search: true, categories: true, productAction: "OPEN_DETAIL", next: "product" },
                   { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true, next: "extras" },
