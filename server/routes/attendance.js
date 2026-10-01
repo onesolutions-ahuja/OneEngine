@@ -199,9 +199,9 @@ export default function createAttendanceRouter({
     authenticate,
     async (req, res) => {
       try {
-        const isAdmin = await canViewCompanyCustomers(req.user);
+        const hasCompanyScope = await canViewCompanyCustomers(req.user);
 
-        let hasPermission = isAdmin;
+        let hasPermission = hasCompanyScope;
         if (!hasPermission && req.user.roleId) {
           const codes = await db(
             `SELECT p.code
@@ -282,9 +282,9 @@ export default function createAttendanceRouter({
    */
   router.get("/attendance", authenticate, async (req, res) => {
     try {
-      const isAdmin = await canViewCompanyCustomers(req.user);
+      const hasCompanyScope = await canViewCompanyCustomers(req.user);
 
-      if (!isAdmin) {
+      if (!hasCompanyScope) {
         const codes = await db(
           `SELECT p.code
              FROM role_permissions rp
@@ -314,7 +314,7 @@ export default function createAttendanceRouter({
           /* Another company's store (or an unknown store) is not addressable. */
           return res.status(404).json({ success: false, message: "Store not found" });
         }
-        if (!isAdmin) {
+        if (!hasCompanyScope) {
           const allowed = await canAccessStore(req.user, storeId);
           if (!allowed) {
             return res
@@ -336,7 +336,7 @@ export default function createAttendanceRouter({
         }
         /* Store-level rule for non-admin callers: the staff member's own
          * store must be within the caller's assignments. */
-        if (!isAdmin) {
+        if (!hasCompanyScope) {
           const targetUser = await db(
             `SELECT store_id FROM users WHERE id = $1 LIMIT 1`,
             [String(req.query.userId)]
