@@ -233,6 +233,13 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
 
   useEffect(() => { void loadBase() }, [])
   useEffect(() => {
+    const lock = tab === 'workflow' && mode === 'builder'
+    if (!lock) return undefined
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [tab, mode])
+  useEffect(() => {
     if (!initialTab || initialTab === tab) return
     setTab(initialTab)
     setMode('list')
@@ -448,6 +455,37 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     if (tab === 'approval') return item?.active === false ? 'Inactive' : 'Active'
     if (tab === 'dashboard') return item?.description || item?.api_key || 'Dashboard'
     return item?.description || item?.report_key || 'Report'
+  }
+
+  if (tab === 'workflow' && mode === 'builder') {
+    return (
+      <div className="onebuilder-workflow-workspace" role="dialog" aria-modal="true" aria-label="Workflow Builder workspace">
+        <div className="onebuilder-workflow-window">
+          <WorkflowAdmin
+            embedded
+            initialWorkflow={selectedSavedId ? saved.workflow.find((item) => String(item.id) === String(selectedSavedId)) || null : null}
+            onMessage={(value) => setMessage(value || '')}
+            onError={(value) => setError(value || '')}
+            onClose={() => {
+              setMode('list')
+              setSelectedSavedId('')
+              setSelectedNodeId('')
+              setSideTab('components')
+              setError('')
+              void loadSavedDefinitions('workflow')
+            }}
+            onSaved={() => {
+              setMessage('Saved.')
+              setMode('list')
+              setSelectedSavedId('')
+              setSelectedNodeId('')
+              setSideTab('components')
+              void loadSavedDefinitions('workflow')
+            }}
+          />
+        </div>
+      </div>
+    )
   }
 
   return (
