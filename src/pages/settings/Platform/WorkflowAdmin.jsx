@@ -724,6 +724,7 @@ function workflowActionIssue(step, definition = null) {
     if (!config.resultType) return "Choose a formula result type.";
     if (!String(config.expression || "").trim()) return "Enter a formula expression.";
     if (!config.formulaInputs || !Object.keys(config.formulaInputs).length) return "Add at least one formula input.";
+    if (Object.keys(config.formulaInputs).some((name) => !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(name)))) return "Formula input names can only use letters, numbers and underscores.";
   }
   if (step.type === "ASSIGNMENT") {
     if (!config.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.variableName))) return "Enter a valid variable name.";
@@ -1153,7 +1154,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Formula</label>
               <textarea className={inputClass} rows={4} value={step.config?.expression || ""} onChange={(event) => updateConfig({ expression: event.target.value })} placeholder="amount + tax" />
-              <p className="mt-1 text-[11px] text-slate-500">Supported: + − × ÷ %, comparisons, AND/OR, IF, COALESCE, CONCAT, ROUND, ABS, MIN and MAX. JavaScript is never executed.</p>
+              <p className="mt-1 text-[11px] text-slate-500">Supported: + - * / %, comparisons, && / ||, IF, COALESCE, CONCAT, ROUND, ABS, MIN and MAX. JavaScript is never executed.</p>
             </div>
           </div>
         );
@@ -1786,6 +1787,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         ...(makeStep(step.type || step.key || "CREATE_RECORD").config),
         ...(step.config || {}),
         ...Object.fromEntries(Object.entries(step).filter(([key]) => !["id","type","key","label","enabled","expanded","config","_visual"].includes(key))),
+        ...((step.type || step.key) === "FORMULA" ? { formulaInputs: step.formulaInputs || step.inputs || step.config?.formulaInputs || step.config?.inputs || {} } : {}),
       },
     })),
   } : null;
@@ -1957,7 +1959,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               id: action.id || base.id,
               label: action.label || getActionLabel(action.type || action.key),
               type: action.type || action.key,
-              config: { ...base.config, ...action },
+              config: {
+                ...base.config,
+                ...action,
+                ...(action.type === "FORMULA" ? { formulaInputs: action.formulaInputs || action.inputs || {} } : {}),
+              },
             };
           }),
         }));
@@ -2094,6 +2100,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           const config = { ...(step.config || {}) };
           if (config.fieldMappings && !config.fieldValues) config.fieldValues = config.fieldMappings;
           if (config.template && !config.templateId) config.templateId = config.template;
+          if (step.type === "FORMULA") {
+            config.inputs = config.formulaInputs || config.inputs || {};
+            delete config.formulaInputs;
+          }
           const apiParameters = config.apiParameters && typeof config.apiParameters === "object" ? config.apiParameters : {};
           delete config.apiParameters;
           return { id: step.id, label: step.label || getActionLabel(step.type), type: step.type, ...config, ...apiParameters };
