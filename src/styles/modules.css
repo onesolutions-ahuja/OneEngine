@@ -2979,3 +2979,113 @@ button.git-control-tile { cursor: pointer; }
   align-items: center;
   gap: 8px;
 }
+
+
+/* Workflow Builder — dedicated full-screen in-app workspace.
+   This deliberately sits above OneBuilder/Developer navigation while editing
+   so the user gets the full canvas and cannot switch to another work surface
+   until the workflow is saved or closed. */
+.onebuilder-workflow-workspace {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  padding: 10px;
+  overflow: hidden;
+  background: #eef1f5;
+}
+
+.onebuilder-workflow-window {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(15,23,42,.10);
+  border-radius: 14px;
+  background: #f7f9fc;
+  box-shadow: 0 24px 80px rgba(15,23,42,.18);
+}
+
+.onebuilder-workflow-window .workflow-builder-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto minmax(0,1fr);
+  gap: 10px;
+  overflow: hidden;
+}
+
+.onebuilder-workflow-window #workflow-canvas-section {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.onebuilder-workflow-window .workflow-visual-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.onebuilder-workflow-window .workflow-node-palette,
+.onebuilder-workflow-window .workflow-properties-panel,
+.onebuilder-workflow-window .workflow-canvas-surface {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
+.onebuilder-workflow-window .workflow-node-palette,
+.onebuilder-workflow-window .workflow-properties-panel {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.onebuilder-workflow-window .workflow-palette-scroll {
+  min-height: 0;
+  max-height: none;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.onebuilder-workflow-window .workflow-properties-panel {
+  overflow: auto;
+}
+
+.onebuilder-workflow-window .workflow-canvas-surface {
+  overflow: auto;
+}
+
+.onebuilder-workflow-window .workflow-canvas-lane {
+  min-height: calc(100% - 84px);
+  margin-top: 54px;
+}
+
+@media (max-width: 760px) {
+  .onebuilder-workflow-workspace {
+    padding: 0;
+  }
+
+  .onebuilder-workflow-window {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .onebuilder-workflow-window .workflow-builder-page {
+    padding: 7px;
+    overflow: auto;
+  }
+
+  .onebuilder-workflow-window #workflow-canvas-section,
+  .onebuilder-workflow-window .workflow-visual-shell {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+}
