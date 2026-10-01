@@ -26,6 +26,33 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
 
   await pool.query(`INSERT INTO role_permissions (role_id,permission_id) SELECT $1,p.id FROM permissions p ON CONFLICT (role_id,permission_id) DO NOTHING`, [roleId]);
 
+  // Superadmin is not a runtime bypass. Seed explicit Object RBAC grants so
+  // its authority is represented in the same permission tables as every role.
+  const objectPermissionColumns = await pool.query(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema=current_schema()
+        AND table_name='platform_object_permissions'
+        AND column_name IN ('can_import','can_export')`
+  );
+  const extendedObjectPermissions = new Set(objectPermissionColumns.rows.map((row) => row.column_name));
+  const extraColumns = [
+    extendedObjectPermissions.has('can_import') ? 'can_import' : null,
+    extendedObjectPermissions.has('can_export') ? 'can_export' : null,
+  ].filter(Boolean);
+  const insertColumns = ['object_id','role_id','company_id','can_view','can_create','can_edit','can_delete', ...extraColumns];
+  const selectValues = ['o.id','$1','$2','TRUE','TRUE','TRUE','TRUE', ...extraColumns.map(() => 'TRUE')];
+  const updateValues = ['can_view=TRUE','can_create=TRUE','can_edit=TRUE','can_delete=TRUE', ...extraColumns.map((column) => `${column}=TRUE`)];
+  await pool.query(
+    `INSERT INTO platform_object_permissions (${insertColumns.join(',')})
+     SELECT ${selectValues.join(',')}
+       FROM platform_objects o
+      WHERE o.active=true AND (o.company_id IS NULL OR o.company_id=$2)
+     ON CONFLICT (object_id,role_id,company_id)
+     DO UPDATE SET ${updateValues.join(',')}`,
+    [roleId, company.id]
+  );
+
   const configuredEmail = String(env.BOOTSTRAP_TENANT_SUPERADMIN_EMAIL || env.BOOTSTRAP_SUPERADMIN_EMAIL || "").trim().toLowerCase();
   const domain = String(company.user_email_domain || "").trim().toLowerCase().replace(/^@/, "");
   const isDemoCompany = String(company.name || "").trim().toLowerCase() === "onepos demo";
