@@ -36,6 +36,14 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
 
   const lookup=async(e)=>{
     e.preventDefault()
+    if(settingsLoading){
+      setError('Product lookup providers are still loading. Please wait a moment and retry.')
+      return
+    }
+    if(providerMissing){
+      setError('Install and enable a Global Product Lookup provider before searching.')
+      return
+    }
     try{
       setLoading(true);setError('');setNotice('');setResult(null);setSearchResults([])
       if(lookupMode==='barcode'){
@@ -121,7 +129,7 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
         {lookupMode==='barcode'
           ?<label className="module-input-label"><span>Barcode</span><input inputMode="numeric" autoComplete="off" value={barcode} maxLength={20} onChange={e=>setBarcode(e.target.value)} placeholder="Scan or enter EAN, UPC or GTIN"/></label>
           :<label className="module-input-label"><span>Product search</span><input autoComplete="off" value={searchText} maxLength={120} onChange={e=>setSearchText(e.target.value)} placeholder="e.g. Nutella, Haribo, Coca-Cola"/></label>}
-        <button className="module-primary-button" type="submit" disabled={loading||providerMissing||(lookupMode==='barcode'?!barcode.trim():searchText.trim().length<2)}>{loading?<LoaderCircle size={14}/>:<Search size={14}/>} {loading?'Searching…':'Search worldwide'}</button>
+        <button className="module-primary-button" type="submit" disabled={loading||settingsLoading||providerMissing||(lookupMode==='barcode'?!barcode.trim():searchText.trim().length<2)}>{loading?<LoaderCircle size={14}/>:settingsLoading?<LoaderCircle size={14}/>:<Search size={14}/>} {loading?'Searching…':settingsLoading?'Loading providers…':'Search worldwide'}</button>
       </form>
       <div className="module-state" style={{paddingTop:8,paddingBottom:8}}>Worldwide scope — no UK or Europe-only restriction. Open Food Facts does not require an API key for read/search access.</div>
 
