@@ -3494,21 +3494,55 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return validationRuleError(rule, conditionFields.rows);
   }
 
-  router.post("/platform/rules/:ruleId/debug", ...manage, async (req, res) => {
+  async function runWorkflowDebugRequest(req, res, workflowId = null) {
     let client = null;
     let run = null;
     try {
-      const workflowResult = await db(
-        "SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",
-        [req.params.ruleId, req.user.companyId]
-      );
-      const workflow = workflowResult.rows[0];
-      if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
+      const definition = req.body?.definition && typeof req.body.definition === "object" ? req.body.definition : null;
+      let workflow = null;
+      if (definition) {
+        const resolvedObject = definition.objectId || definition.objectKey
+          ? await getObject(definition.objectId || definition.objectKey, req)
+          : null;
+        if ((definition.objectId || definition.objectKey) && !resolvedObject) {
+          return res.status(400).json({ success: false, message: "Debug object is not available" });
+        }
+        workflow = {
+          id: workflowId || null,
+          name: String(definition.name || "Unsaved workflow"),
+          object_id: resolvedObject?.id || null,
+          trigger_key: String(definition.triggerKey || "manual"),
+          conditions: Array.isArray(definition.conditions) ? definition.conditions : [],
+          action: definition.action || {},
+          version: Number(definition.version || 1),
+        };
+        const draftError = await checkRule(req, {
+          object_id: workflow.object_id,
+          name: workflow.name,
+          trigger_key: workflow.trigger_key,
+          conditions: workflow.conditions,
+          action: workflow.action,
+          active: false,
+          lifecycle_status: "DRAFT",
+          version: workflow.version,
+        });
+        if (draftError) return res.status(400).json({ success: false, message: `Debug cannot start: ${draftError}` });
+      } else {
+        if (!workflowId) return res.status(400).json({ success: false, message: "Debug requires a workflow definition" });
+        const workflowResult = await db(
+          "SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",
+          [workflowId, req.user.companyId]
+        );
+        workflow = workflowResult.rows[0] || null;
+        if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
+      }
+
       const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
       if (!actions.length) return res.status(422).json({ success: false, message: "Workflow contains no executable steps" });
 
       let object = null;
       let record = null;
+      let fields = [];
       if (workflow.object_id) {
         const objectResult = await db(
           "SELECT * FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) LIMIT 1",
@@ -3518,21 +3552,27 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (!object || !object.source_table || !isSafeIdentifier(object.source_table)) {
           return res.status(422).json({ success: false, message: "Workflow object is unavailable" });
         }
+        const fieldsResult = await db(
+          "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
+          [object.id, req.user.companyId]
+        );
+        fields = fieldsResult.rows || [];
         const clauses = [];
         const params = [];
         const requestedRecordId = req.body?.recordId ? String(req.body.recordId) : null;
         if (requestedRecordId) {
           if (!recordIdIsValid(requestedRecordId)) return res.status(400).json({ success: false, message: "Choose a valid record for Debug" });
           params.push(requestedRecordId);
-          clauses.push(`id=${params.length}`);
+          clauses.push(`id=$${params.length}`);
         }
         if (object.company_scoped !== false) {
           params.push(req.user.companyId);
-          clauses.push(`company_id=${params.length}`);
+          clauses.push(`company_id=$${params.length}`);
         }
-        if (object.store_scoped && req.user.storeId) {
+        if (object.store_scoped) {
+          if (!req.user.storeId) return res.status(409).json({ success: false, message: "Select a store before debugging this store-scoped workflow" });
           params.push(req.user.storeId);
-          clauses.push(`store_id=${params.length}`);
+          clauses.push(`store_id=$${params.length}`);
         }
         const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
         const hasCreatedAt = await db(
@@ -3552,7 +3592,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       run = await createWorkflowRun({
         db,
         companyId: req.user.companyId,
-        workflowId: workflow.id,
+        workflowId: workflow.id || null,
         workflowName: workflow.name,
         objectId: object?.id || null,
         recordId: record?.id || null,
@@ -3561,11 +3601,33 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         metadata: {
           debug: true,
           dryRun: true,
+          unsavedDefinition: Boolean(definition),
           rolledBack: false,
           actorUserId: req.user.id || null,
           recordSource: req.body?.recordId ? "selected" : object ? "latest" : "none",
         },
       });
+
+      if (record && Array.isArray(workflow.conditions) && workflow.conditions.length) {
+        const startMatched = evaluateCondition(
+          { match: workflow.action?.match || "all", conditions: workflow.conditions },
+          fields,
+          record,
+          null
+        );
+        if (!startMatched) {
+          const friendly = {
+            title: "This record does not meet the Start conditions",
+            whatHappened: "Debug stopped before the first step because the selected record does not match the workflow's entry conditions.",
+            howToFix: "Choose another record, or review the Start conditions if this record should enter the workflow.",
+          };
+          await db(
+            "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
+            [JSON.stringify({ debug: true, dryRun: true, rolledBack: true, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
+          );
+          return res.json({ success: true, data: { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: true, externalActionsSimulated: true } });
+        }
+      }
 
       client = await pool.connect();
       await client.query("BEGIN");
@@ -3580,6 +3642,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           pool,
           req,
           object,
+          fields,
           record,
           recordId: record?.id || null,
           companyId: req.user.companyId,
@@ -3607,7 +3670,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         [
           finalStatus,
           debugError ? String(debugError?.message || debugError).slice(0, 2000) : null,
-          JSON.stringify({ debug: true, dryRun: true, rolledBack: true, friendlyError: friendly }),
+          JSON.stringify({ debug: true, dryRun: true, rolledBack: true, startMatched: true, friendlyError: friendly }),
           run.id,
           req.user.companyId,
         ]
@@ -3648,7 +3711,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       console.error("Workflow debug error:", error);
       return res.status(error.status || 500).json({ success: false, message: error.message || "Unable to run workflow Debug" });
     }
-  });
+  }
+
+  router.post("/platform/rules/debug", ...manage, async (req, res) => runWorkflowDebugRequest(req, res, null));
+  router.post("/platform/rules/:ruleId/debug", ...manage, async (req, res) => runWorkflowDebugRequest(req, res, req.params.ruleId));
+
 
   router.post("/platform/rules", ...manage, async (req, res) => {
     try {
