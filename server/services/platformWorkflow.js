@@ -4078,22 +4078,39 @@ export function resolveWorkflowActionType(action) {
 
 async function assertWorkflowActionPermission(context, definition) {
   const req = context?.req;
-  if (!req?.user || !req.user.roleId) return;
+  const required = [...new Set((Array.isArray(definition.requiredPermissions) ? definition.requiredPermissions : []).filter(Boolean).map(String))];
+  if (!required.length) return;
+  if (!req?.user?.companyId || !req.user.roleId) {
+    throw new Error("Workflow action authorization requires an RBAC user and role");
+  }
   if (!context?.db || typeof context.db !== "function") {
     throw new Error("Workflow action authorization context is unavailable");
   }
-  const required = Array.isArray(definition.requiredPermissions) ? definition.requiredPermissions : [];
-  if (!required.length) return;
   const result = await context.db(
-    `SELECT 1
-     FROM role_permissions rp
-     JOIN permissions p ON p.id=rp.permission_id
-     WHERE rp.role_id=$1 AND p.code = ANY($2::text[])
-     LIMIT 1`,
-    [req.user.roleId, required]
+    `SELECT COUNT(DISTINCT p.code)::int AS granted
+       FROM role_permissions rp
+       JOIN permissions p ON p.id=rp.permission_id
+       JOIN roles r ON r.id=rp.role_id
+      WHERE rp.role_id=$1
+        AND (r.company_id IS NULL OR r.company_id=$2)
+        AND p.code = ANY($3::text[])`,
+    [req.user.roleId, req.user.companyId, required]
   );
-  if (!result.rows.length) {
-    throw new Error("You do not have permission to execute this workflow action");
+  const granted = Number(result.rows[0]?.granted || 0);
+  if (granted !== required.length) {
+    const available = await context.db(
+      `SELECT DISTINCT p.code
+         FROM role_permissions rp
+         JOIN permissions p ON p.id=rp.permission_id
+         JOIN roles r ON r.id=rp.role_id
+        WHERE rp.role_id=$1
+          AND (r.company_id IS NULL OR r.company_id=$2)
+          AND p.code = ANY($3::text[])`,
+      [req.user.roleId, req.user.companyId, required]
+    );
+    const owned = new Set((available.rows || []).map((row) => String(row.code)));
+    const missing = required.filter((code) => !owned.has(code));
+    throw new Error(`You do not have permission to execute this workflow action. Missing: ${missing.join(", ")}`);
   }
 }
 
@@ -4113,7 +4130,10 @@ const WORKFLOW_OBJECT_ACCESS = Object.freeze({
 
 async function assertSpecificWorkflowObjectPermission(context, targetObject, access) {
   const req = context?.req;
-  if (!access || !targetObject || !req?.user?.roleId || !req?.user?.companyId) return;
+  if (!access || !targetObject) return;
+  if (!req?.user?.companyId || !req?.user?.roleId) {
+    throw new Error("Workflow record access requires an RBAC user and role");
+  }
   const [roleGrant, permissionSets] = await Promise.all([
     context.db(
       `SELECT can_view,can_create,can_edit,can_delete
@@ -4147,7 +4167,10 @@ async function assertSpecificWorkflowObjectPermission(context, targetObject, acc
 async function assertWorkflowObjectPermission(context, actionType) {
   const access = WORKFLOW_OBJECT_ACCESS[actionType];
   const req = context?.req;
-  if (!access || !req?.user?.roleId || !req?.user?.companyId) return;
+  if (!access) return;
+  if (!req?.user?.companyId || !req?.user?.roleId) {
+    throw new Error("Workflow record access requires an RBAC user and role");
+  }
   const targetObject = await resolveWorkflowTargetObject({
     db: context.db,
     action: context.action || {},
