@@ -578,6 +578,8 @@ const WORKFLOW_VISUAL_CSS = `
 `;
 
 const actionOptions = [
+  { value: "CONSTANT", label: "Constant" },
+  { value: "FORMULA", label: "Formula" },
   { value: "ASSIGNMENT", label: "Assignment" },
   { value: "GET_RECORDS", label: "Get Records" },
   { value: "CREATE_RECORD", label: "Create Record" },
@@ -619,6 +621,11 @@ function makeStep(type = "CREATE_RECORD") {
       variableType: "text",
       operator: "set",
       value: "",
+      resourceName: "",
+      resourceType: "text",
+      resultType: "number",
+      expression: "",
+      formulaInputs: {},
       filters: [],
       match: "all",
       sortField: "",
@@ -654,6 +661,7 @@ function getActionLabel(type) {
 
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
+  if (["CONSTANT","FORMULA"].includes(key)) return "Resources";
   if (["CONDITION","WAIT","STOP","ASSIGNMENT"].includes(key)) return "Logic";
   if (key === "RUN_SUBFLOW") return "Workflows";
   if (["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
@@ -705,6 +713,17 @@ function workflowActionIssue(step, definition = null) {
       const label = String(key).replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ");
       return `Complete required field: ${label}.`;
     }
+  }
+  if (step.type === "CONSTANT") {
+    if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid constant name.";
+    if (!config.resourceType) return "Choose a constant type.";
+    if (config.value === undefined || config.value === "") return "Enter the constant value.";
+  }
+  if (step.type === "FORMULA") {
+    if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid formula name.";
+    if (!config.resultType) return "Choose a formula result type.";
+    if (!String(config.expression || "").trim()) return "Enter a formula expression.";
+    if (!config.formulaInputs || !Object.keys(config.formulaInputs).length) return "Add at least one formula input.";
   }
   if (step.type === "ASSIGNMENT") {
     if (!config.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.variableName))) return "Enter a valid variable name.";
@@ -846,7 +865,27 @@ function workflowStepResources(steps = [], currentIndex = 0) {
   steps.slice(0, currentIndex).forEach((step, index) => {
     const label = step.label || getActionLabel(step.type) || `Step ${index + 1}`;
     const prefix = `steps.${step.id}`;
-    if (step.type === "ASSIGNMENT" && step.config?.variableName) {
+    if (step.type === "CONSTANT" && step.config?.resourceName) {
+      if (!seenVariables.has(step.config.resourceName)) {
+        resources.push({
+          value: `variables.${step.config.resourceName}`,
+          label: `${step.config.resourceName} · Constant · ${step.config.resourceType || "text"}`,
+          type: step.config.resourceType || "constant",
+        });
+        seenVariables.add(step.config.resourceName);
+      }
+      resources.push({ value: `${prefix}.value`, label: `${label} → Value`, type: step.config.resourceType || "step output" });
+    } else if (step.type === "FORMULA" && step.config?.resourceName) {
+      if (!seenVariables.has(step.config.resourceName)) {
+        resources.push({
+          value: `variables.${step.config.resourceName}`,
+          label: `${step.config.resourceName} · Formula · ${step.config.resultType || "number"}`,
+          type: step.config.resultType || "formula",
+        });
+        seenVariables.add(step.config.resourceName);
+      }
+      resources.push({ value: `${prefix}.value`, label: `${label} → Result`, type: step.config.resultType || "step output" });
+    } else if (step.type === "ASSIGNMENT" && step.config?.variableName) {
       if (!seenVariables.has(step.config.variableName)) {
         resources.push({
           value: `variables.${step.config.variableName}`,
@@ -1066,6 +1105,58 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 
   const renderConfig = () => {
     switch (step.type) {
+      case "CONSTANT":
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Constant name</label>
+              <input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="e.g. vatRate" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Type</label>
+              <select className={inputClass} value={step.config?.resourceType || "text"} onChange={(event) => updateConfig({ resourceType: event.target.value, value: "" })}>
+                <option value="text">Text</option>
+                <option value="number">Number</option>
+                <option value="boolean">Boolean</option>
+                <option value="date">Date</option>
+                <option value="datetime">Date / Time</option>
+              </select>
+            </div>
+            <ResourceOrLiteralInput label="Fixed value" value={step.config?.value ?? ""} onChange={(value) => updateConfig({ value })} rootObjectKey={rootObjectKey} extraResources={[]} type={step.config?.resourceType || "text"} required />
+            <p className="text-[11px] text-slate-500">Constants are fixed for this workflow run and are exposed to later steps as Resources.</p>
+          </div>
+        );
+      case "FORMULA":
+        return (
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Formula name</label>
+                <input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="e.g. totalWithTax" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Result type</label>
+                <select className={inputClass} value={step.config?.resultType || "number"} onChange={(event) => updateConfig({ resultType: event.target.value })}>
+                  <option value="number">Number</option>
+                  <option value="text">Text</option>
+                  <option value="boolean">Boolean</option>
+                  <option value="date">Date</option>
+                  <option value="datetime">Date / Time</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Named inputs</label>
+              <MappingEditor value={step.config?.formulaInputs || {}} onChange={(formulaInputs) => updateConfig({ formulaInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Formula name" valueLabel="Map from resource" />
+              <p className="mt-1 text-[11px] text-slate-500">Use simple names such as amount, tax or customerCount. Those names are what you use in the formula below.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Formula</label>
+              <textarea className={inputClass} rows={4} value={step.config?.expression || ""} onChange={(event) => updateConfig({ expression: event.target.value })} placeholder="amount + tax" />
+              <p className="mt-1 text-[11px] text-slate-500">Supported: + − × ÷ %, comparisons, AND/OR, IF, COALESCE, CONCAT, ROUND, ABS, MIN and MAX. JavaScript is never executed.</p>
+            </div>
+          </div>
+        );
       case "ASSIGNMENT":
         return (
           <div className="space-y-3">
@@ -1489,7 +1580,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     });
   };
   const palette = registryOptions
-    .filter((option) => option.value !== "WHEN")
+    .filter((option) => option.value !== "WHEN" && !["CONSTANT","FORMULA"].includes(option.value))
     .map((option) => ({ ...option, category: option.category || workflowActionCategory(option.value) }))
     .filter((option) => !paletteSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || ""}`.toLowerCase().includes(paletteSearch.trim().toLowerCase()));
   const paletteGroups = palette.reduce((groups, option) => {
@@ -1505,6 +1596,16 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     { label: "Current Date / Time", detail: "The time this workflow step executes", type: "Global" },
   ];
   const stepResources = workflowStepResources(workflow.steps, workflow.steps.length);
+  const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA"].includes(step.type));
+  const visibleCanvasSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA"].includes(step.type));
+  const addResource = (type) => {
+    const resource = makeStep(type);
+    resource.label = type === "CONSTANT" ? "Constant" : "Formula";
+    const firstActionIndex = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA"].includes(step.type));
+    const insertAt = firstActionIndex < 0 ? workflow.steps.length : firstActionIndex;
+    setWorkflow((current) => ({ ...current, steps: [...current.steps.slice(0, insertAt), resource, ...current.steps.slice(insertAt)] }));
+    setSelectedId(resource.id);
+  };
   const resourceQuery = paletteSearch.trim().toLowerCase();
   const visibleGlobalResources = globalResources.filter((item) => !resourceQuery || `${item.label} ${item.detail} ${item.type}`.toLowerCase().includes(resourceQuery));
   const visibleStepResources = stepResources.filter((item) => !resourceQuery || `${item.label} ${item.type}`.toLowerCase().includes(resourceQuery));
@@ -1551,8 +1652,22 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </>
         ) : (
           <>
-            <p className="workflow-palette-help">These values can be selected anywhere the Properties panel offers Resource mode.</p>
+            <p className="workflow-palette-help">Create reusable constants and formulas here. They do not clutter the canvas.</p>
+            <div className="mb-2 grid grid-cols-2 gap-2">
+              <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-[10px] font-semibold text-blue-700" onClick={() => addResource("CONSTANT")}>+ Constant</button>
+              <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-[10px] font-semibold text-blue-700" onClick={() => addResource("FORMULA")}>+ Formula</button>
+            </div>
             <div className="workflow-palette-scroll">
+              {resourceSteps.length ? <div className="workflow-palette-group-title">Defined resources</div> : null}
+              {resourceSteps.map(({ step, index }) => (
+                <button key={step.id} type="button" className="workflow-palette-item" onClick={() => setSelectedId(step.id)}>
+                  <span className="workflow-palette-item-copy">
+                    <strong>{step.config?.resourceName || (step.type === "CONSTANT" ? "New Constant" : "New Formula")}</strong>
+                    <small>{step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}` : `Formula · ${step.config?.resultType || "number"}`}</small>
+                  </span>
+                </button>
+              ))}
+              <div className="workflow-palette-group-title">Flow context</div>
               <div className="workflow-palette-group-title">Flow context</div>
               {visibleGlobalResources.map((resource) => (
                 <div key={resource.label} className="workflow-palette-item">
@@ -1588,16 +1703,16 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}{workflow.conditions?.length ? ` · ${workflow.conditions.length} condition${workflow.conditions.length === 1 ? "" : "s"}` : ""}</span>
           </button>
           <div className="workflow-node-connector" />
-          {workflow.steps.map((step, index) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
+          {visibleCanvasSteps.map(({ step, index }) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
             <button type="button" className="workflow-node-delete" title="Remove step" aria-label={`Remove ${step.label || getActionLabel(step.type)}`} onClick={(event) => { event.stopPropagation(); removeStep(index); }}>×</button>
             <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""}`}>
               <span className="workflow-node-kind">{getActionLabel(step.type)}</span>
               <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
               {step.type === "CONDITION" ? <span className="workflow-node-note">Decision branches are evaluated from metadata conditions.</span> : null}
             </button>
-            {index < workflow.steps.length - 1 ? <div className="workflow-node-connector" /> : null}
+            {visibleCanvasSteps.findIndex((item) => item.index === index) < visibleCanvasSteps.length - 1 ? <div className="workflow-node-connector" /> : null}
           </div>)}
-          {!workflow.steps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => addFromPalette("CREATE_RECORD")}>+ Add first element</button> : null}
+          {!visibleCanvasSteps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => addFromPalette("CREATE_RECORD")}>+ Add first element</button> : null}
           <div className="mt-3 text-center text-xs text-slate-400">Drop elements here to append · drag nodes to reorder</div>
         </div>
       </main>
