@@ -992,18 +992,33 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
      * is valid and exactly one mapping exists, that single company is selected.
      */
     let actingCompanyId = null;
-    if (user.is_platform_developer === true) {
+    const oneEngineAuthority = user.role_id
+      ? await loginPool.query(
+          `SELECT 1
+             FROM role_permissions rp
+             JOIN permissions p ON p.id=rp.permission_id
+            WHERE rp.role_id=$1 AND p.code='oneengine.manage'
+            LIMIT 1`,
+          [user.role_id]
+        )
+      : { rows: [] };
+    const canActAcrossCompanies = oneEngineAuthority.rows.length > 0 || user.is_platform_developer === true;
+    if (canActAcrossCompanies) {
       stepStartedAt = Date.now();
-      const companyAccess = await pool.query(
-        `SELECT c.id
-           FROM companies c
-           JOIN platform_developer_company_access a ON a.company_id=c.id
-          WHERE a.developer_id=$1
-            AND a.active=true
-            AND c.active=true
-          ORDER BY c.name`,
-        [user.id]
-      );
+      const companyAccess = oneEngineAuthority.rows.length
+        ? await pool.query(
+            `SELECT id FROM companies WHERE active=true ORDER BY name`
+          )
+        : await pool.query(
+            `SELECT c.id
+               FROM companies c
+               JOIN platform_developer_company_access a ON a.company_id=c.id
+              WHERE a.developer_id=$1
+                AND a.active=true
+                AND c.active=true
+              ORDER BY c.name`,
+            [user.id]
+          );
       markLoginTiming("acting_company_lookup_ms", stepStartedAt);
       const authorisedCompanyIds = companyAccess.rows.map((row) => String(row.id));
       if (requestedActingCompanyId && authorisedCompanyIds.includes(requestedActingCompanyId)) {
