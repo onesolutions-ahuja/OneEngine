@@ -675,6 +675,8 @@ function makeStep(type = "CREATE_RECORD") {
       ifBranch: [],
       elseBranch: [],
       faultBranch: [],
+      faultMode: "FAIL",
+      retryCount: 1,
       durationSeconds: 60,
       reason: "",
       url: "",
@@ -1834,15 +1836,37 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             {renderConfig()}
             <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <summary className="cursor-pointer text-xs font-semibold text-slate-700">On Error</summary>
-              <div className="mt-3">
-                <BranchStepPicker
-                  label="Run these steps if this element fails"
-                  value={step.config?.faultBranch || []}
-                  onChange={(faultBranch) => updateConfig({ faultBranch })}
-                  steps={allSteps}
-                  currentIndex={index}
-                />
-                <p className="mt-2 text-[11px] text-slate-500">Recovery steps can use Fault resources such as Error message and How to fix. If no error path is configured, the workflow fails normally.</p>
+              <div className="mt-3 space-y-3">
+                <label className="block space-y-1 text-xs text-slate-600">
+                  <span>When this step fails</span>
+                  <select className={inputClass} value={step.config?.faultMode || "FAIL"} onChange={(event) => updateConfig({ faultMode: event.target.value })}>
+                    <option value="FAIL">Fail the workflow</option>
+                    <option value="CONTINUE">Continue to the next step</option>
+                    <option value="STOP">Stop the workflow without running later steps</option>
+                    <option value="ROUTE">Run an error path</option>
+                    <option value="RETRY">Retry, then use the error path or fail</option>
+                  </select>
+                </label>
+                {step.config?.faultMode === "RETRY" ? (
+                  <label className="block space-y-1 text-xs text-slate-600">
+                    <span>Retry attempts</span>
+                    <select className={inputClass} value={Number(step.config?.retryCount || 1)} onChange={(event) => updateConfig({ retryCount: Number(event.target.value) })}>
+                      <option value={1}>1 retry</option>
+                      <option value={2}>2 retries</option>
+                      <option value={3}>3 retries</option>
+                    </select>
+                  </label>
+                ) : null}
+                {["ROUTE","RETRY"].includes(step.config?.faultMode || "FAIL") ? (
+                  <BranchStepPicker
+                    label={step.config?.faultMode === "RETRY" ? "If retries still fail, run these steps" : "Run these steps if this element fails"}
+                    value={step.config?.faultBranch || []}
+                    onChange={(faultBranch) => updateConfig({ faultBranch })}
+                    steps={allSteps}
+                    currentIndex={index}
+                  />
+                ) : null}
+                <p className="text-[11px] text-slate-500">Recovery steps can use Fault resources such as Error message and How to fix. Retry is capped at three attempts and recorded in Run History.</p>
               </div>
             </details>
           </div>
