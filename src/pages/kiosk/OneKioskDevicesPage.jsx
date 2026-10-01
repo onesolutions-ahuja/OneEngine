@@ -188,6 +188,16 @@ export default function OneKioskDevicesPage() {
             <div className="kiosk-device-placeholder"><Monitor size={36}/><strong>Select a kiosk</strong><span>Device health and hardware settings will appear here.</span></div>
           ) : (
             <>
+              {selected.age_approval_requested_at ? (
+                <div className="kiosk-device-assistance">
+                  <div><strong>Age verification requested</strong><span>Customer is waiting at this kiosk · {new Date(selected.age_approval_requested_at).toLocaleTimeString()}</span></div>
+                  <button type="button" onClick={async () => {
+                    const response = await apiRequest(`/api/kiosk/devices/${selected.id}/age-approve`, { method: "POST", body: JSON.stringify({ minutes: 5 }) });
+                    if (!response?.success) throw new Error(response?.message || "Unable to approve age check");
+                    await load();
+                  }}>Approve after ID check</button>
+                </div>
+              ) : null}
               {selected.assistance_requested_at ? (
                 <div className="kiosk-device-assistance">
                   <div><strong>Customer needs help</strong><span>{selected.assistance_note || "Assistance requested"} · {new Date(selected.assistance_requested_at).toLocaleTimeString()}</span></div>
