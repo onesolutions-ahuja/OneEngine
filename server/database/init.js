@@ -934,6 +934,10 @@ async function initializeLegacyDatabase(pool) {
       active BOOLEAN NOT NULL DEFAULT TRUE,
       payment_terminal_id UUID,
       printer_hardware_id UUID,
+      printer_name VARCHAR(150),
+      printer_connection_type VARCHAR(50),
+      printer_connection_address VARCHAR(500),
+      printer_paper_width VARCHAR(20) NOT NULL DEFAULT '80mm',
       printer_required BOOLEAN NOT NULL DEFAULT FALSE,
       payment_required BOOLEAN NOT NULL DEFAULT TRUE,
       internet_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
@@ -948,6 +952,10 @@ async function initializeLegacyDatabase(pool) {
     );
     CREATE INDEX IF NOT EXISTS idx_kiosk_devices_store
       ON kiosk_devices(company_id, store_id, active);
+    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_name VARCHAR(150);
+    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_connection_type VARCHAR(50);
+    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_connection_address VARCHAR(500);
+    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_paper_width VARCHAR(20) NOT NULL DEFAULT '80mm';
 
     CREATE TABLE IF NOT EXISTS payment_terminals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
