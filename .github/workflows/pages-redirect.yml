@@ -1,0 +1,56 @@
+name: Redirect legacy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  redirect:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Create redirect site
+        shell: bash
+        run: |
+          mkdir -p redirect-site
+          cat > redirect-site/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta http-equiv="refresh" content="0;url=https://smart-theme.onrender.com/">
+            <title>Opening onePOS…</title>
+          </head>
+          <body>
+            <script>
+              window.location.replace(
+                'https://smart-theme.onrender.com/' + window.location.search + window.location.hash
+              );
+            </script>
+            <p>Opening the live onePOS frontend…</p>
+          </body>
+          </html>
+          EOF
+          cp redirect-site/index.html redirect-site/404.html
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: redirect-site
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
