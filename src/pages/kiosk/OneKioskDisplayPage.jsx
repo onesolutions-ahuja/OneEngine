@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { apiRequest } from "../../services/api.js";
+import { apiRequest, KIOSK_DISPLAY_TOKEN_STORAGE_KEY, lockToKioskDisplayMode } from "../../services/api.js";
 import "./oneKioskDisplay.css";
 
 const DISPLAY_FLOW_KEY = "onepos_kiosk_display_flow_id";
@@ -9,10 +9,47 @@ export default function OneKioskDisplayPage() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState("");
   const [updatedAt, setUpdatedAt] = useState(null);
+  const [displayReady, setDisplayReady] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
   const [flows, setFlows] = useState([]);
   const [flowId, setFlowId] = useState(() => {
     try { return localStorage.getItem(DISPLAY_FLOW_KEY) || ""; } catch { return ""; }
   });
+
+  const provisionDisplay = useCallback(async () => {
+    const existing = (() => {
+      try { return localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || ""; } catch { return ""; }
+    })();
+    if (existing) {
+      setDisplayReady(true);
+      return true;
+    }
+    setProvisioning(true);
+    try {
+      const response = await apiRequest("/api/kiosk/display-session", {
+        method: "POST",
+        body: JSON.stringify({ flowId: flowId || null }),
+      });
+      if (!response?.success || !response?.data?.modeToken) {
+        throw new Error(response?.message || "Unable to secure this collection display");
+      }
+      try {
+        localStorage.setItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY, response.data.modeToken);
+        if (response.data.flowId) {
+          localStorage.setItem(DISPLAY_FLOW_KEY, response.data.flowId);
+          setFlowId(response.data.flowId);
+        }
+      } catch {}
+      lockToKioskDisplayMode();
+      setDisplayReady(true);
+      return true;
+    } catch (reason) {
+      setError(reason?.message || "Unable to provision collection display");
+      return false;
+    } finally {
+      setProvisioning(false);
+    }
+  }, [flowId]);
 
   const load = useCallback(async () => {
     try {
@@ -60,6 +97,19 @@ export default function OneKioskDisplayPage() {
   );
   const preparing = useMemo(() => visibleOrders.filter((order) => activeStatuses.has(order.status)), [visibleOrders, activeStatuses]);
   const ready = useMemo(() => visibleOrders.filter((order) => readyStatuses.has(order.status)), [visibleOrders, readyStatuses]);
+
+  if (!displayReady) {
+    return (
+      <main className="one-kiosk-display one-kiosk-display-provision">
+        <section>
+          <span>OneKiosk</span>
+          <h1>{provisioning ? "Securing collection display…" : "Collection display setup"}</h1>
+          <p>{error || "Open this screen once while signed in as authorised staff. It will then run in read-only display mode."}</p>
+          {!provisioning ? <button type="button" onClick={provisionDisplay}>Start display</button> : null}
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="one-kiosk-display">
