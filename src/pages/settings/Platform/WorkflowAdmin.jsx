@@ -2454,6 +2454,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       RECOMMENDATIONS: { title: "You may also like", source: "CROSS_SELL", optional: true },
       FULFILMENT: { title: "Choose fulfilment", options: [{ key: "COLLECT", label: "Collect", canonicalType: "SELF_PICKUP", requires: [] }] },
       BASKET: { title: "Review your order", editable: true, promotions: true },
+      LOYALTY: { title: "Rewards", subtitle: "Enter phone or email, or continue as a guest.", optional: true },
       PAYMENT: { title: "Payment", methods: ["CARD"], actionLabel: "Pay now" },
       CONFIRMATION: { title: "Order confirmed", collectionNumber: true, receipt: ["PRINT","QR"], resetAfterSeconds: 30 },
     };
@@ -2938,7 +2939,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <p className="mt-1 max-w-3xl text-xs text-slate-600">This ordered screen flow is the customer journey used by kiosks assigned to this workflow. Reorder, add or remove screens here; no application code is required.</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","PAYMENT","CONFIRMATION"].map((type) => (
+                {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","LOYALTY","PAYMENT","CONFIRMATION"].map((type) => (
                   <button key={type} type="button" className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-blue-700" onClick={() => addKioskScreen(type)}>+ {type.replaceAll("_"," ")}</button>
                 ))}
               </div>
@@ -2999,7 +3000,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <div className="mt-4 grid gap-3 md:grid-cols-4">
                   <label className="text-xs font-medium text-slate-700">Type
                     <select className={inputClass} value={screen.type || "CATALOGUE"} onChange={(event) => updateKioskScreen(index,{ type:event.target.value })}>
-                      {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","PAYMENT","CONFIRMATION"].map((type) => <option key={type} value={type}>{type.replaceAll("_"," ")}</option>)}
+                      {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","LOYALTY","PAYMENT","CONFIRMATION"].map((type) => <option key={type} value={type}>{type.replaceAll("_"," ")}</option>)}
                     </select>
                   </label>
                   <label className="text-xs font-medium text-slate-700">Key
