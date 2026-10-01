@@ -2167,6 +2167,7 @@ async function startServer() {
                     scheduledPath: true,
                     scheduledPathId: payload.scheduledPathId || null,
                     scheduledPathLabel: payload.scheduledPathLabel || null,
+                    scheduledPathStepIds: payload.scheduledPathStepIds || [],
                     actorUserId: actorId,
                     sourceRunId: parentRun?.id || null,
                   },
@@ -2308,7 +2309,13 @@ async function startServer() {
                   )
                 : { rows: [] };
               const actor = actorResult.rows[0] || {};
-              const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
+              const allResumeActions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
+              const scheduledResumeIds = run.trigger_key === "SCHEDULED_PATH" && Array.isArray(run.metadata?.scheduledPathStepIds)
+                ? new Set(run.metadata.scheduledPathStepIds.map(String))
+                : null;
+              const actions = scheduledResumeIds
+                ? allResumeActions.filter((action) => scheduledResumeIds.has(String(action?.id || "")))
+                : allResumeActions;
               const req = {
                 user: {
                   id: actor.id || actorId || null,
@@ -2322,6 +2329,7 @@ async function startServer() {
               const workflowVariables = { variables: {}, steps: {} };
               const results = await executeWorkflowActions({
                 actions,
+                allActions: scheduledResumeIds ? allResumeActions : actions,
                 db,
                 pool,
                 req,
