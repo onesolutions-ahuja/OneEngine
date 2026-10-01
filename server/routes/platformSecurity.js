@@ -8,13 +8,13 @@ const MEMBER_TYPES = new Set(["USER", "ROLE", "GROUP"]);
 export default function createPlatformSecurityRouter({ authenticate, authorize, db }) {
   const router = express.Router();
 
-  async function hasPlatformManageAccess(userId) {
+  async function hasOneEngineManageAccess(userId) {
     const result = await db(
       `SELECT 1
          FROM users u
          JOIN role_permissions rp ON rp.role_id=u.role_id
          JOIN permissions p ON p.id=rp.permission_id
-        WHERE u.id=$1 AND u.active=true AND p.code='platform.manage'
+        WHERE u.id=$1 AND u.active=true AND p.code='oneengine.manage'
         LIMIT 1`,
       [userId]
     );
@@ -23,7 +23,7 @@ export default function createPlatformSecurityRouter({ authenticate, authorize, 
 
   async function resolveCompany(req, res, next) {
     try {
-      const platformManage = await hasPlatformManageAccess(req.user?.id);
+      const platformManage = await hasOneEngineManageAccess(req.user?.id);
       const legacyDeveloper = req.user?.isPlatformDeveloper === true || req.user?.is_platform_developer === true;
 
       if (!platformManage && !legacyDeveloper) {
@@ -49,7 +49,7 @@ export default function createPlatformSecurityRouter({ authenticate, authorize, 
   }
 
   function authorizeManage(req, res, next) {
-    return authorize("platform.manage")(req, res, next);
+    return authorize("oneengine.manage")(req, res, next);
   }
 
   const manage = [authenticate, resolveCompany, authorizeManage];
