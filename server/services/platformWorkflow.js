@@ -1849,6 +1849,77 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "ASSIGNMENT",
+    displayName: "Assignment",
+    description: "Create or update a typed workflow variable without writing to the database.",
+    schema: {
+      type: "object",
+      properties: {
+        variableName: { type: "string" },
+        variableType: { type: "string", enum: ["text","number","boolean","date","datetime","record","collection","object"] },
+        operator: { type: "string", enum: ["set","add","subtract","append"] },
+        value: { type: "string" },
+      },
+      required: ["variableName","variableType","operator"],
+    },
+    validation: (action) => {
+      if (!action?.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.variableName))) {
+        throw new Error("Assignment requires a valid variable name");
+      }
+      if (!["text","number","boolean","date","datetime","record","collection","object"].includes(String(action.variableType || ""))) {
+        throw new Error("Assignment requires a supported variable type");
+      }
+      if (!["set","add","subtract","append"].includes(String(action.operator || "set"))) {
+        throw new Error("Assignment requires a supported operator");
+      }
+      if (String(action.operator || "set") !== "set" && action.value === undefined) {
+        throw new Error("Assignment requires a value");
+      }
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const name = String(action.variableName);
+      const type = String(action.variableType || "text");
+      const operator = String(action.operator || "set");
+      const raw = resolveConfiguredResource(action.value, { record, previousRecord, req, object, workflowVariables });
+
+      const coerce = (value) => {
+        if (value == null) return value;
+        if (type === "number") {
+          const numeric = Number(value);
+          if (!Number.isFinite(numeric)) throw new Error(`Assignment variable "${name}" requires a numeric value`);
+          return numeric;
+        }
+        if (type === "boolean") {
+          if (typeof value === "boolean") return value;
+          if (["true","1",1].includes(value)) return true;
+          if (["false","0",0].includes(value)) return false;
+          throw new Error(`Assignment variable "${name}" requires a boolean value`);
+        }
+        if (type === "collection") return Array.isArray(value) ? value : (value == null ? [] : [value]);
+        if (type === "object" || type === "record") {
+          if (typeof value === "object") return value;
+          return value;
+        }
+        return value;
+      };
+
+      const incoming = coerce(raw);
+      const current = workflowVariables.variables[name];
+      let next = incoming;
+      if (operator === "add") next = Number(current || 0) + Number(incoming || 0);
+      else if (operator === "subtract") next = Number(current || 0) - Number(incoming || 0);
+      else if (operator === "append") {
+        const base = Array.isArray(current) ? current : (current == null ? [] : [current]);
+        next = [...base, ...(Array.isArray(incoming) ? incoming : [incoming])];
+      }
+      workflowVariables.variables[name] = next;
+      return { status: "completed", variableName: name, variableType: type, value: next };
+    },
+  },
+  {
     key: "GET_RECORDS",
     displayName: "Get Records",
     description: "Find records on a Platform object and expose the result to later workflow steps.",
@@ -3573,6 +3644,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
   const completed = [];
   const workflowVariables = {
     ...(context.workflowVariables || {}),
+    variables: { ...(context.workflowVariables?.variables || {}) },
     steps: { ...(context.workflowVariables?.steps || {}) },
   };
   const allActions = Array.isArray(context.allActions) ? context.allActions : actions;
