@@ -2684,13 +2684,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     };
   };
 
-  const saveWorkflow = async (lifecycleOverride = null, { keepOpen = false, silent = false } = {}) => {
+  const saveWorkflow = async (lifecycleOverride = null, { keepOpen = false, silent = false, forceNewVersion = false } = {}) => {
     const nextLifecycle = String(lifecycleOverride || workflow.lifecycleStatus || (workflow.active === true ? "ACTIVE" : "DRAFT")).toUpperCase();
     if (nextLifecycle === "ACTIVE" && reviewIssue) {
       onError?.(`Cannot activate workflow: ${reviewIssue}`);
       return null;
     }
-    const payload = buildWorkflowPayload(nextLifecycle);
+    const payload = { ...buildWorkflowPayload(nextLifecycle), ...(forceNewVersion ? { forceNewVersion: true } : {}) };
     try {
       const response = workflowId
         ? await apiRequest(`/api/platform/rules/${workflowId}`, { method: "PUT", body: JSON.stringify(payload) })
@@ -2703,7 +2703,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => item.id !== nextId)]);
       if (embedded) onSaved?.({ ...workflow, ...saved, id: nextId });
       else if (!keepOpen) setShowBuilder(false);
-      if (!silent) onMessage?.(nextLifecycle === "ACTIVE" ? "Workflow activated." : "Workflow draft saved.");
+      if (!silent) onMessage?.(forceNewVersion ? `Workflow saved as version ${saved.version || savedWorkflow.version}.` : nextLifecycle === "ACTIVE" ? "Workflow activated." : "Workflow draft saved.");
       return { id: nextId, workflow: savedWorkflow };
     } catch (error) {
       onError?.(error.message || "Unable to save workflow.");
@@ -3119,6 +3119,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>Tests</button>
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Versions</button>
           <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} title={workflowId ? "Create an immutable Draft checkpoint" : "Save this workflow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>Save as New Version</button>
           <button type="button" className="workflow-cancel-button" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>Cancel</button>
           <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save Draft</button>
           <button type="button" className="workflow-save-button" disabled={Boolean(reviewIssue)} title={reviewIssue || "Activate workflow"} onClick={() => saveWorkflow("ACTIVE")}>Activate</button>
