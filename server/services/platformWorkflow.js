@@ -4258,8 +4258,11 @@ export async function executeWorkflowActions({ actions, ...context }) {
           if (scheduledId) branchTargetIds.add(String(scheduledId));
         }
       }
-      for (const faultId of candidate.faultBranch || []) {
-        if (faultId) branchTargetIds.add(String(faultId));
+      const candidateFaultMode = String(candidate.faultMode || (Array.isArray(candidate.faultBranch) && candidate.faultBranch.length ? "ROUTE" : "FAIL")).toUpperCase();
+      if (["ROUTE","RETRY"].includes(candidateFaultMode)) {
+        for (const faultId of candidate.faultBranch || []) {
+          if (faultId) branchTargetIds.add(String(faultId));
+        }
       }
     }
   }
