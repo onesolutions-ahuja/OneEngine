@@ -2607,7 +2607,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           {debugResult ? (
             <div className={`mt-4 rounded-xl border p-4 ${debugResult.status === "FAILED" ? "border-red-200 bg-red-50" : debugResult.status === "NOT_STARTED" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
               <div className="flex items-center justify-between gap-3">
-                <strong className={debugResult.status === "FAILED" ? "text-red-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.status === "FAILED" ? "Test failed" : debugResult.status === "NOT_STARTED" ? "Test did not start" : "Test passed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : "Debug completed successfully")}</strong>
+                <strong className={debugResult.status === "FAILED" ? "text-red-800" : debugResult.status === "NOT_STARTED" ? "text-amber-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.status === "FAILED" ? "Test failed" : debugResult.status === "NOT_STARTED" ? "Test did not start" : "Test passed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : "Debug completed successfully")}</strong>
                 <span className="text-xs text-slate-500">No database changes were kept.</span>
               </div>
               {debugResult.status === "FAILED" ? (
