@@ -34,6 +34,7 @@ async function resolveStepAssignees({ db, request, step, record = {} }) {
   const config = cfg(step.assignment_config);
   let ids = [];
   if (type === "user" && config.userId) ids = [config.userId];
+  else if (type === "manager") { const manager=await db("SELECT manager_id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE",[request.submitted_by,request.company_id]); ids=manager.rows[0]?.manager_id?[manager.rows[0].manager_id]:[]; }
   else if (type === "submitter") ids = request.submitted_by ? [request.submitted_by] : [];
   else if (type === "record_user" && config.field) {
     const value = record?.[config.field];
@@ -110,11 +111,12 @@ export async function submitPlatformApproval({ db, object, fields, recordId, rec
     const steps = await db("SELECT * FROM platform_approval_steps WHERE process_id=$1 ORDER BY step_order", [process.id]);
     if (!steps.rows.length) return null;
 
+    const definitionSnapshot={process:{id:process.id,name:process.name,version:Number(process.version||1),conditions:process.conditions,config:cfg(process.config)},steps:steps.rows.map(step=>({id:step.id,step_order:step.step_order,label:step.label,role_id:step.role_id,config:cfg(step.config),assignment_type:step.assignment_type||"role",assignment_config:cfg(step.assignment_config)}))};
     const result = await db(
       `INSERT INTO platform_approval_requests
-        (process_id,object_id,record_id,company_id,current_step,submitted_by,locked)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [process.id, object.id, recordId, req.user.companyId, steps.rows[0].step_order, req.user.id || null, cfg(process.config).lockRecord !== false]
+        (process_id,object_id,record_id,company_id,current_step,submitted_by,locked,definition_snapshot,process_version)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9) RETURNING *`,
+      [process.id, object.id, recordId, req.user.companyId, steps.rows[0].step_order, req.user.id || null, cfg(process.config).lockRecord !== false, JSON.stringify(definitionSnapshot), Number(process.version||1)]
     );
     const request = result.rows[0];
     await createWorkItems({ db, request, step: steps.rows[0] });
@@ -177,7 +179,8 @@ export async function decidePlatformApproval({ db, requestId, decision, comment,
     return { status: 200, data: result.rows[0] };
   }
 
-  const next = await db("SELECT * FROM platform_approval_steps WHERE process_id=$1 AND step_order>$2 ORDER BY step_order LIMIT 1", [current.process_id, current.step_order]);
+  const snapshot=cfg(current.definition_snapshot); const snapshotNext=(snapshot.steps||[]).filter(step=>Number(step.step_order)>Number(current.step_order)).sort((a,b)=>a.step_order-b.step_order)[0];
+  const next = snapshotNext ? {rows:[snapshotNext]} : await db("SELECT * FROM platform_approval_steps WHERE process_id=$1 AND step_order>$2 ORDER BY step_order LIMIT 1", [current.process_id, current.step_order]);
   if (next.rows.length) {
     const result = await db("UPDATE platform_approval_requests SET current_step=$1 WHERE id=$2 RETURNING *", [next.rows[0].step_order, requestId]);
     await createWorkItems({ db, request: result.rows[0], step: next.rows[0] });
