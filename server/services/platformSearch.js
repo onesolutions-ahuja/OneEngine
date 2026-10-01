@@ -46,23 +46,14 @@ export async function searchPlatformRecords(db, req, query, { maxResults = MAX_R
   if (normalized.length < MIN_QUERY_LENGTH) return { query: normalized, results: [] };
   const objects = await searchableObjects(db, req);
   const results = [];
-  const oneEngineManage = req.user?.roleId
-    ? await db(
-        "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
-        [req.user.roleId]
-      )
-    : { rows: [] };
-  const canManageOneEngine = oneEngineManage.rows.length > 0;
-
   for (const object of objects) {
     if (results.length >= maxResults || !isSafeIdentifier(object.source_table)) break;
     try {
-      if (!canManageOneEngine) {
-        const system = systemObject(object);
-        const permission = system?.permission;
-        const access = permission
-          ? await db(
-            `SELECT 1 FROM role_permissions rp
+      const system = systemObject(object);
+      const permission = system?.permission;
+      const access = permission
+        ? await db(
+          `SELECT 1 FROM role_permissions rp
              JOIN roles r ON r.id=rp.role_id AND (r.company_id IS NULL OR r.company_id=$5)
              JOIN permissions p ON p.id=rp.permission_id
              WHERE rp.role_id=$1 AND p.code=$2
@@ -70,14 +61,13 @@ export async function searchPlatformRecords(db, req, query, { maxResults = MAX_R
              SELECT 1 FROM platform_object_permissions
              WHERE object_id=$3 AND role_id=$1 AND company_id=$4 AND can_view=true
              LIMIT 1`,
-            [req.user.roleId, permission, object.id, req.user.companyId, req.user.companyId]
-          )
-          : await db(
-            "SELECT 1 FROM platform_object_permissions WHERE object_id=$1 AND role_id=$2 AND company_id=$3 AND can_view=true",
-            [object.id, req.user.roleId, req.user.companyId]
-          );
-        if (!access.rows.length) continue;
-      }
+          [req.user.roleId, permission, object.id, req.user.companyId, req.user.companyId]
+        )
+        : await db(
+          "SELECT 1 FROM platform_object_permissions WHERE object_id=$1 AND role_id=$2 AND company_id=$3 AND can_view=true",
+          [object.id, req.user.roleId, req.user.companyId]
+        );
+      if (!access.rows.length) continue;
       const fieldResult = await db(
         `SELECT * FROM platform_fields
          WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)
