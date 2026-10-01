@@ -4673,8 +4673,10 @@ export async function executeWorkflowActions({ actions, ...context }) {
           branchExecution: true,
           executionScope: `${context.executionScope ? context.executionScope + ":" : ""}${item.id || globalIndex}:fault`,
         });
+        const faultWaiting = workflowResultsContainStatus(faultResults, "waiting");
+        const faultStopped = workflowResultsContainStatus(faultResults, "stopped");
         const handled = {
-          status: workflowResultsContainStatus(faultResults, "waiting") ? "waiting" : "fault_handled",
+          status: faultWaiting ? "waiting" : faultStopped ? "stopped" : "fault_handled",
           faultHandled: true,
           error: details,
           friendlyError,
@@ -4686,7 +4688,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
           await updateWorkflowStepRunStatus({
             db: traceDb,
             stepRunId: stepRun.id,
-            status: handled.status === "waiting" ? "WAITING" : "COMPLETED",
+            status: handled.status === "waiting" ? "WAITING" : handled.status === "stopped" ? "STOPPED" : "COMPLETED",
             errorText: details.message,
             metadata: {
               result: redact(handled),
@@ -4698,7 +4700,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
             },
           });
         }
-        if (handled.status === "waiting") break;
+        if (handled.status === "waiting" || handled.status === "stopped") break;
         continue;
       }
       const compensationFailures = await compensateCompletedSteps(completed, context, error);
