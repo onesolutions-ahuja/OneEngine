@@ -1,4 +1,4 @@
-import { hasOneEngineManagePermission } from "../services/authorization.js";
+import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "../services/platformPermissionSets.js";
 import { withDomainSave } from "../services/platformDomainRecords.js";
 import express from "express";
 import { DUPLICATE_EMAIL_MESSAGE, normalizeEmail } from "../services/userIdentity.js";
@@ -19,20 +19,23 @@ export default function createAdminRouter({
   bcrypt,
   savePlatformRecord = null,
   /*
-   * Administrative gate: Administrator/Admin/Owner roles AND a Platform
-   * Superadmin (the platform operator must be able to administer company-level
-   * surfaces even though its own role is not named "Administrator"). The rule
-   * is resolved once in server.js — this router only asks.
-   *
-   * Defaults to the company-admin check alone, so any existing caller or test
-   * that does not supply it keeps exactly today's behaviour.
+   * Administrative authority is supplied by the canonical permission-driven
+   * helper in server.js. No role name or identity is an authority source.
    */
-  hasCompanyAdminAccess = async (req) => canViewCompanyCustomers(req.user),
+  hasCompanyAdminAccess = async (req) => canViewCompanyCustomers(req.user, req),
 }) {
   const router = express.Router();
 
   async function hasOneEngineManage(req) {
-    return hasOneEngineManagePermission(db, req.user?.roleId);
+    if (!req.user?.id || !req.user?.companyId) return false;
+    const [roleResult, permissionSets] = await Promise.all([
+      req.user.roleId
+        ? db("SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1", [req.user.roleId])
+        : Promise.resolve({ rows: [] }),
+      loadEffectivePermissionSets(db, req.user, req),
+    ]);
+    return roleResult.rows.length > 0
+      || permissionSetAllowsSystemPermission(permissionSets, "oneengine.manage");
   }
 
   async function protectedRole(roleId, companyId) {
@@ -499,7 +502,7 @@ export default function createAdminRouter({
    * bcrypt hash is stored. Sending { clear: true } un-pairs the store
    * (existing device sessions simply run out when their short-lived mode
    * token expires — nothing else is affected).
-   * Admin/Owner only (canViewCompanyCustomers), like till management.
+   * Permission-gated company administration, like till management.
    */
   router.post("/admin/stores/:id/self-checkout-key", authenticate, async (req, res) => {
     if (!(await hasCompanyAdminAccess(req))) return res.status(403).json({ success: false, message: "Administrator permission required" });
