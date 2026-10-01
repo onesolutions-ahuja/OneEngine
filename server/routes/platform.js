@@ -4238,6 +4238,24 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.status(201).json({ success: true, data: result.rows[0] });
   });
 
+  router.post("/platform/rules/:ruleId/tests/:testId/run", ...manage, async (req, res) => {
+    const saved = await db("SELECT * FROM platform_workflow_tests WHERE id=$1 AND workflow_id=$2 AND company_id=$3 AND active=true LIMIT 1", [req.params.testId, req.params.ruleId, req.user.companyId]);
+    if (!saved.rows.length) return res.status(404).json({ success: false, message: "Saved test not found" });
+    const test = saved.rows[0];
+    const config = test.config && typeof test.config === "object" ? test.config : {};
+    req.body = { ...(req.body || {}), mode: "test", assertions: Array.isArray(config.assertions) ? config.assertions : [], ...(config.recordMode === "specific" && config.recordId ? { recordId: config.recordId } : {}) };
+    const originalJson = res.json.bind(res);
+    res.json = async (payload) => {
+      try {
+        if (payload?.success && payload?.data) {
+          await db("UPDATE platform_workflow_tests SET last_status=$1,last_run_id=$2,last_result=$3::jsonb,last_run_at=NOW(),updated_at=NOW() WHERE id=$4 AND workflow_id=$5 AND company_id=$6", [payload.data.testPassed === true ? "PASSED" : "FAILED", payload.data.run?.id || null, JSON.stringify({ status: payload.data.status || null, testPassed: payload.data.testPassed === true, assertionResult: payload.data.assertionResult || null }), test.id, req.params.ruleId, req.user.companyId]);
+        }
+      } catch (error) { console.error("Workflow saved test result persistence error:", error); }
+      return originalJson(payload);
+    };
+    return runWorkflowDebugRequest(req, res, req.params.ruleId);
+  });
+
   router.put("/platform/rules/:ruleId/tests/:testId", ...manage, async (req, res) => {
     const result = await db(
       `UPDATE platform_workflow_tests SET
