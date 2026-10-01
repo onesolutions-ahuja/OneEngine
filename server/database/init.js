@@ -447,7 +447,7 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   }
   if (email.length > 100) throw new Error("BOOTSTRAP_SUPERADMIN_EMAIL must be 100 characters or fewer");
 
-  const existing = await pool.query(
+  let existing = await pool.query(
     `SELECT id,username,email,company_id,role_id
        FROM users
       WHERE LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1)
@@ -455,6 +455,22 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
       LIMIT 1`,
     [email]
   );
+
+  // Safe bootstrap email migration: when the configured Superadmin email changes,
+  // reuse the existing tenant Superadmin identity instead of creating a duplicate.
+  if (!existing.rows[0]) {
+    existing = await pool.query(
+      `SELECT u.id,u.username,u.email,u.company_id,u.role_id
+         FROM users u
+         JOIN roles r ON r.id=u.role_id
+        WHERE u.company_id=$1
+          AND r.api_key='platform_superadmin'
+          AND u.active=true
+        ORDER BY u.created_at,u.id
+        LIMIT 1`,
+      [companyId]
+    );
+  }
 
   if (existing.rows[0]) {
     /*
