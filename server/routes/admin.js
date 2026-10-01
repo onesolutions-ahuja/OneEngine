@@ -1,3 +1,4 @@
+import { hasOneEngineManagePermission } from "../services/authorization.js";
 import { withDomainSave } from "../services/platformDomainRecords.js";
 import express from "express";
 import { DUPLICATE_EMAIL_MESSAGE, normalizeEmail } from "../services/userIdentity.js";
@@ -31,12 +32,7 @@ export default function createAdminRouter({
   const router = express.Router();
 
   async function hasOneEngineManage(req) {
-    if (!req.user?.roleId) return false;
-    const result = await db(
-      "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
-      [req.user.roleId]
-    );
-    return result.rows.length > 0;
+    return hasOneEngineManagePermission(db, req.user?.roleId);
   }
 
   async function protectedRole(roleId, companyId) {
