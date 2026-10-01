@@ -1162,6 +1162,45 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,
   {
+    key: "SEND_APPOINTMENT_CONFIRMATION",
+    displayName: "Appointments - Send Booking Confirmation",
+    description: "Send the confirmed appointment message back through the booking channel. Message text remains editable in Workflow Builder.",
+    validation: () => undefined,
+    async: false,
+    requiredPermissions: ["communications.send"],
+    executor: async ({ action, db, companyId, req, record }) => {
+      const tenantId=companyId||req?.user?.companyId;
+      const channel=String(record?.channel||action?.channel||"").toUpperCase();
+      const recipient=action?.recipient||record?.customerPhone||record?.sender||null;
+      if(!recipient) return {status:"skipped",reason:"No booking recipient"};
+      const startsAt=record?.startsAt||null;
+      const when=startsAt
+        ? new Date(startsAt).toLocaleString("en-GB",{timeZone:"Europe/London",dateStyle:"medium",timeStyle:"short"})
+        : "the selected time";
+      const defaultMessage=`Your ${record?.serviceName||"appointment"} appointment is booked for ${when}.`;
+      const message=String(action?.message||defaultMessage);
+      const type=channel==="WHATSAPP"?"SEND_WHATSAPP":channel==="SMS"?"SEND_SMS":null;
+      if(!type) return {status:"skipped",reason:`Booking channel ${channel||"UNKNOWN"} does not use mobile confirmation`};
+      const result=await executeRegisteredAction({
+        db,
+        companyId:tenantId,
+        userId:req?.user?.id||null,
+        req,
+        action:{
+          type,
+          recipient,
+          message,
+          templateContext:record||{},
+          conversationId:record?.conversationId||record?.state?.conversationId||null,
+          recordId:record?.appointmentId||null,
+        },
+      });
+      if(result?.status==="SUCCESS") return {status:"completed",channel,recipient,reference:result.reference||null};
+      if(result?.status==="UNAVAILABLE") return {status:"failed",channel,recipient,error:result.code||"PROVIDER_UNAVAILABLE"};
+      return {status:"failed",channel,recipient,error:result?.code||result?.error?.message||"Confirmation delivery failed"};
+    },
+  },
+  {
     key: "CREATE_APPOINTMENT_BOOKING_CASE",
     displayName: "Appointments - Create Booking Case",
     description: "Create an appointment booking case from an inbound Email, SMS or WhatsApp workflow.",
