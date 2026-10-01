@@ -30,11 +30,22 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
                 hc.last_test_result AS printer_last_test,
                 hc.last_tested_at AS printer_last_tested_at,
                 CASE
+                  WHEN kd.payment_terminal_id IS NULL THEN 'NOT_CONFIGURED'
+                  WHEN pt.active IS FALSE THEN 'OFFLINE'
+                  ELSE kd.payment_status
+                END AS effective_payment_status,
+                CASE
+                  WHEN NULLIF(kd.printer_name,'') IS NULL AND kd.printer_hardware_id IS NULL THEN 'NOT_CONFIGURED'
+                  WHEN hc.id IS NOT NULL AND hc.active IS FALSE THEN 'OFFLINE'
+                  ELSE kd.printer_status
+                END AS effective_printer_status,
+                CASE
+                  WHEN kd.active IS FALSE THEN 'OFFLINE'
                   WHEN kd.last_heartbeat_at IS NULL THEN 'OFFLINE'
                   WHEN kd.last_heartbeat_at < NOW() - INTERVAL '60 seconds' THEN 'OFFLINE'
                   WHEN kd.internet_status = 'OFFLINE' OR kd.server_status = 'OFFLINE' THEN 'OFFLINE'
-                  WHEN kd.payment_required AND kd.payment_status NOT IN ('READY','ONLINE') THEN 'DEGRADED'
-                  WHEN kd.printer_required AND kd.printer_status NOT IN ('READY','ONLINE') THEN 'DEGRADED'
+                  WHEN kd.payment_required AND (kd.payment_terminal_id IS NULL OR pt.active IS FALSE OR kd.payment_status NOT IN ('READY','ONLINE')) THEN 'DEGRADED'
+                  WHEN kd.printer_required AND ((NULLIF(kd.printer_name,'') IS NULL AND kd.printer_hardware_id IS NULL) OR (hc.id IS NOT NULL AND hc.active IS FALSE) OR kd.printer_status NOT IN ('READY','ONLINE')) THEN 'DEGRADED'
                   ELSE 'ONLINE'
                 END AS overall_status
            FROM kiosk_devices kd
