@@ -46,7 +46,7 @@ function DockItem({ item, mouseX, onActivate }) {
     const bounds = ref.current?.getBoundingClientRect() ?? { x: 0, width: 0 }
     return value - bounds.x - bounds.width / 2
   })
-  const widthTarget = useTransform(distance, [-150, 0, 150], [40, 100, 40])
+  const widthTarget = useTransform(distance, [-150, 0, 150], [40, 76, 40])
   const width = useSpring(widthTarget, { mass: 0.1, stiffness: 150, damping: 12 })
   return <motion.button ref={ref} type="button" className="dock-item" style={{ width }} onClick={onActivate} aria-label={item.label}>
     <span className="dock-icon-wrap">
