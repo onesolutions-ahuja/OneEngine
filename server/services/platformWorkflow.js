@@ -4474,8 +4474,12 @@ export async function executeWorkflowActions({ actions, ...context }) {
     try {
       const faultMode = String(item.faultMode || (Array.isArray(item.faultBranch) && item.faultBranch.length ? "ROUTE" : "FAIL")).toUpperCase();
       const maxRetries = faultMode === "RETRY" ? Math.max(1, Math.min(Number(item.retryCount || 1), 3)) : 0;
-      let result;
-      while (true) {
+      const actionType = resolveWorkflowActionType(item);
+      const pinnedDecisionResult = stepRun?.status === "WAITING" && actionType === "CONDITION" && stepRun.metadata?.result
+        ? { ...stepRun.metadata.result, status: "completed", resumed: true }
+        : null;
+      let result = pinnedDecisionResult;
+      while (!result) {
         try {
           result = await executeWorkflowAction({
             ...context,
@@ -4484,7 +4488,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
             action: item,
             stepRunId: stepRun?.id || null,
           });
-              break;
+          break;
         } catch (executionError) {
           if (retryAttempts >= maxRetries) throw executionError;
           retryAttempts += 1;
