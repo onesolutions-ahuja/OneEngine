@@ -389,8 +389,8 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         const engineRoleId = await ensureGlobalSystemProfile(client, {
           name: "OneEngine Manager",
           apiKey: "engine_manager",
-          description: "Cross-tenant OneEngine operator. Authority is granted through RBAC oneengine.manage.",
-          grantAllPermissions: false,
+          description: "Cross-tenant OneEngine operator with full OneEngine and application permissions.",
+          grantAllPermissions: true,
         });
         await client.query(
           `INSERT INTO role_permissions (role_id,permission_id)
@@ -464,6 +464,27 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
                (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active,must_change_password)
              VALUES (NULL,$1,$2,$2,$3,'OneEngine Manager',FALSE,TRUE,TRUE)`,
             [engineRoleId, engineEmail, sharedHash]
+          );
+        }
+      },
+    },
+    {
+      key: "0020_engine_manager_all_permissions",
+      version: "20",
+      name: "Grant all permissions to OneEngine Manager",
+      up: async client => {
+        const roles = await client.query(
+          `SELECT id FROM roles
+            WHERE company_id IS NULL
+              AND api_key IN ('engine_manager','oneengine_manager')
+            ORDER BY created_at,id`
+        );
+        for (const role of roles.rows) {
+          await client.query(
+            `INSERT INTO role_permissions (role_id,permission_id)
+             SELECT $1,p.id FROM permissions p
+             ON CONFLICT (role_id,permission_id) DO NOTHING`,
+            [role.id]
           );
         }
       },
@@ -689,8 +710,8 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     engineRoleId = await ensureGlobalSystemProfile(pool, {
       name: "OneEngine Manager",
       apiKey: "engine_manager",
-      description: "Cross-tenant OneEngine operator. Authority is granted through RBAC oneengine.manage.",
-      grantAllPermissions: false,
+      description: "Cross-tenant OneEngine operator with full OneEngine and application permissions.",
+      grantAllPermissions: true,
     });
     await pool.query(
       `INSERT INTO role_permissions (role_id,permission_id)
