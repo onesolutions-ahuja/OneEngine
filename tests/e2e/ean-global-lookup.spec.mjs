@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { loginIfConfigured, watchRuntimeFailures } from './helpers.mjs'
 
+// Live regression barcode: HARIBO Goldbears 160g.
 const EAN = process.env.ONEPOS_E2E_EAN || '5012035962142'
 
 test.beforeEach(async ({ page }) => {
