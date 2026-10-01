@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import JarvisOrb, { ORB_STATES } from '../jarvis/JarvisOrb'
 import JarvisPanel from '../jarvis/JarvisPanel'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 
 const dockAsset = (name) => `${import.meta.env.BASE_URL || '/'}icons/dock/${name}.svg`
 
@@ -57,8 +58,9 @@ function DockItem({ item, mouseX, onActivate }) {
   </motion.button>
 }
 
-export function Dock({ onItemOpen }) {
+export function Dock({ onItemOpen, collapsible = false }) {
   const mouseX = useMotionValue(Number.POSITIVE_INFINITY)
+  const [collapsed, setCollapsed] = useState(false)
   const [jarvesOpen, setJarvesOpen] = useState(false)
   const [jarvesActivity, setJarvesActivity] = useState(null)
   const jarvesRef = useRef(null)
@@ -73,8 +75,23 @@ export function Dock({ onItemOpen }) {
     jarvesRef.current?.focus()
   }
 
+  useEffect(() => {
+    if (!collapsible && collapsed) setCollapsed(false)
+  }, [collapsible, collapsed])
+
   return <>
-    <div className="dock-zone">
+    {collapsible ? (
+      <button
+        type="button"
+        className={`till-dock-toggle ${collapsed ? 'is-collapsed' : 'is-expanded'}`}
+        onClick={() => setCollapsed((value) => !value)}
+        aria-label={collapsed ? 'Show dock' : 'Hide dock'}
+        title={collapsed ? 'Show dock' : 'Hide dock'}
+      >
+        {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+    ) : null}
+    <div className={`dock-zone ${collapsible ? 'dock-zone--till' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
       <motion.div className="dock" onMouseMove={(event) => mouseX.set(event.clientX)} onMouseLeave={resetMagnification} aria-label="OneEngine dock">
         <div className="dock-magnify-zone dock-desktop-items" onTouchStart={trackTouch} onTouchMove={trackTouch} onTouchEnd={resetMagnification} onTouchCancel={resetMagnification}>
           {dockItems.map((item) => <DockItem key={item.id} item={item} mouseX={mouseX} onActivate={() => onItemOpen?.(item.id)} />)}
