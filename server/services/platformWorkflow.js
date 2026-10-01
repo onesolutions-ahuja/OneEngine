@@ -1,4 +1,5 @@
 import { evaluateCondition } from "./platformConditions.js";
+import { evaluateWorkflowFormula } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
 import { executeRegisteredAction } from "./platformActions.js";
 import { executeInventoryPlatformAction } from "./inventoryPlatform.js";
@@ -1846,6 +1847,91 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         throw new Error("Customer credit statement executor is unavailable");
       }
       return creditActionExecutor({ ...context, action });
+    },
+  },
+  {
+    key: "CONSTANT",
+    displayName: "Constant",
+    description: "Expose a typed fixed value as a reusable workflow resource.",
+    schema: {
+      type: "object",
+      properties: {
+        resourceName: { type: "string" },
+        resourceType: { type: "string", enum: ["text","number","boolean","date","datetime"] },
+        value: { type: "string" },
+      },
+      required: ["resourceName","resourceType"],
+    },
+    validation: (action) => {
+      if (!action?.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.resourceName))) {
+        throw new Error("Constant requires a valid resource name");
+      }
+      if (!["text","number","boolean","date","datetime"].includes(String(action.resourceType || ""))) {
+        throw new Error("Constant requires a supported resource type");
+      }
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const name = String(action.resourceName);
+      const type = String(action.resourceType || "text");
+      let value = action.value;
+      if (type === "number") {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) throw new Error(`Constant "${name}" requires a numeric value`);
+        value = numeric;
+      } else if (type === "boolean") {
+        if (typeof value !== "boolean") value = String(value).toLowerCase() === "true";
+      }
+      workflowVariables.variables[name] = value;
+      return { status: "completed", resourceName: name, resourceType: type, value };
+    },
+  },
+  {
+    key: "FORMULA",
+    displayName: "Formula",
+    description: "Calculate a reusable workflow resource with the safe formula engine.",
+    schema: {
+      type: "object",
+      properties: {
+        resourceName: { type: "string" },
+        resultType: { type: "string", enum: ["text","number","boolean","date","datetime"] },
+        expression: { type: "string" },
+        inputs: { type: "object" },
+      },
+      required: ["resourceName","resultType","expression","inputs"],
+    },
+    validation: (action) => {
+      if (!action?.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.resourceName))) {
+        throw new Error("Formula requires a valid resource name");
+      }
+      if (!["text","number","boolean","date","datetime"].includes(String(action.resultType || ""))) {
+        throw new Error("Formula requires a supported result type");
+      }
+      if (typeof action.expression !== "string" || !action.expression.trim()) throw new Error("Formula requires an expression");
+      if (!action.inputs || typeof action.inputs !== "object" || Array.isArray(action.inputs)) throw new Error("Formula requires named inputs");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const resolvedInputs = Object.fromEntries(Object.entries(action.inputs || {}).map(([name, binding]) => [
+        name,
+        resolveConfiguredResource(binding, { record, previousRecord, req, object, workflowVariables }),
+      ]));
+      let value = evaluateWorkflowFormula(action.expression, resolvedInputs);
+      if (action.resultType === "number" && value != null) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) throw new Error(`Formula "${action.resourceName}" did not return a number`);
+        value = numeric;
+      }
+      if (action.resultType === "boolean" && value != null && typeof value !== "boolean") {
+        throw new Error(`Formula "${action.resourceName}" did not return a boolean`);
+      }
+      if (action.resultType === "text" && value != null) value = String(value);
+      workflowVariables.variables[String(action.resourceName)] = value;
+      return { status: "completed", resourceName: String(action.resourceName), resourceType: String(action.resultType), value, inputs: resolvedInputs };
     },
   },
   {
