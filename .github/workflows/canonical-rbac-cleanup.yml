@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/canonical-rbac-cleanup.yml'
+      - 'scripts/canonical-rbac-cleanup.py'
   workflow_dispatch:
 
 permissions:
