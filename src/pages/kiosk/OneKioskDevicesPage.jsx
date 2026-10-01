@@ -19,6 +19,7 @@ function StatusPill({ status }) {
 export default function OneKioskDevicesPage() {
   const [devices, setDevices] = useState([]);
   const [terminals, setTerminals] = useState([]);
+  const [flows, setFlows] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,19 +30,22 @@ export default function OneKioskDevicesPage() {
     setLoading(true);
     setError("");
     try {
-      const [deviceResponse, terminalResponse] = await Promise.all([
+      const [deviceResponse, terminalResponse, flowResponse] = await Promise.all([
         apiRequest("/api/kiosk/devices"),
         apiRequest("/api/payment-terminals").catch(() => ({ data: [] })),
+        apiRequest("/api/kiosk/flows").catch(() => ({ data: [] })),
       ]);
       if (!deviceResponse?.success) throw new Error(deviceResponse?.message || "Unable to load kiosk devices");
       const rows = Array.isArray(deviceResponse.data) ? deviceResponse.data : [];
       setDevices(rows);
       setTerminals(Array.isArray(terminalResponse?.data) ? terminalResponse.data : []);
+      setFlows(Array.isArray(flowResponse?.data) ? flowResponse.data : []);
       const nextId = selectedId && rows.some((row) => row.id === selectedId) ? selectedId : rows[0]?.id || "";
       setSelectedId(nextId);
       const selected = rows.find((row) => row.id === nextId);
       if (selected) setDraft({
         name: selected.name || "OneKiosk",
+        workflowId: selected.workflow_id || "",
         active: selected.active !== false,
         paymentTerminalId: selected.payment_terminal_id || "",
         paymentRequired: selected.payment_required !== false,
@@ -67,6 +71,7 @@ export default function OneKioskDevicesPage() {
     setSelectedId(device.id);
     setDraft({
       name: device.name || "OneKiosk",
+      workflowId: device.workflow_id || "",
       active: device.active !== false,
       paymentTerminalId: device.payment_terminal_id || "",
       paymentRequired: device.payment_required !== false,
@@ -87,6 +92,7 @@ export default function OneKioskDevicesPage() {
         method: "PUT",
         body: JSON.stringify({
           ...draft,
+          workflowId: draft.workflowId || null,
           paymentTerminalId: draft.paymentTerminalId || null,
         }),
       });
@@ -155,6 +161,21 @@ export default function OneKioskDevicesPage() {
               <div className="kiosk-device-section">
                 <h3>Device</h3>
                 <label><span>Name</span><input value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}/></label>
+                <label><span>Experience flow</span>
+                  <select value={draft.workflowId} onChange={(e) => setDraft((d) => ({ ...d, workflowId: e.target.value }))}>
+                    <option value="">Use package default flow</option>
+                    {flows.map((flow) => (
+                      <option key={flow.id} value={flow.id}>
+                        {flow.name}{flow.user_modified ? " · customised" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="kiosk-device-current">
+                  <span>Journey source</span>
+                  <strong>{flows.find((flow) => flow.id === draft.workflowId)?.name || "Package default"}</strong>
+                  <small>Duplicate or edit this workflow in Developer mode to change the kiosk experience without code changes.</small>
+                </div>
                 <label className="kiosk-device-toggle"><span><strong>Active</strong><small>Disable this kiosk without deleting its configuration.</small></span><input type="checkbox" checked={draft.active} onChange={(e) => setDraft((d) => ({ ...d, active: e.target.checked }))}/></label>
               </div>
 
