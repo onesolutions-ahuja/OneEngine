@@ -12,11 +12,11 @@ globalThis.CustomEvent = class { constructor(type, options) { this.type = type; 
 globalThis.window = { location: { origin: 'https://app.test', hostname: 'app.test' }, dispatchEvent() {}, setTimeout, clearTimeout }
 globalThis.testRoute = { app: 'till' }
 let developerSource = await readFile(new URL('../src/services/developerContext.js', import.meta.url), 'utf8')
-developerSource = developerSource.replace(/import .*\n/, 'const readRoute = () => globalThis.testRoute\n')
+developerSource = developerSource.replace(/import .*\r?\n/, 'const readRoute = () => globalThis.testRoute\n')
 const developer = await import(`data:text/javascript;base64,${Buffer.from(developerSource).toString('base64')}`)
 globalThis.developerMetadataHeaders = developer.developerMetadataHeaders
 let source = await readFile(new URL('../src/services/api.js', import.meta.url), 'utf8')
-source = source.replace(/^import .*$/gm, '').replace('import.meta.env.VITE_API_BASE', "'https://api.test'")
+source = source.replace(/\r\n/g, '\n').replace(/^import .*$/gm, '').replace('import.meta.env.VITE_API_BASE', "'https://api.test'")
 source = `const developerMetadataHeaders = globalThis.developerMetadataHeaders; const clearLazyCache = async () => {}; const validateTrustedRuntime = () => ({}); const isPrivilegedMutation = () => false; const resolveTrustedCapability = () => null; const trustedRuntimeHeaders = () => ({});\n${source}`
 const api = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 const requests = []
