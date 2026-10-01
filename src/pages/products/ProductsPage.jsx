@@ -21,6 +21,17 @@ function fieldValue(product,key){
   return product?.[key] ?? product?.[key.replace(/_([a-z])/g,(_,c)=>c.toUpperCase())] ?? ''
 }
 
+function pairsToText(value={}){
+  return Object.entries(value||{}).map(([key,val])=>`${key}: ${val}`).join('\n')
+}
+function textToPairs(value=''){
+  return Object.fromEntries(String(value||'').split(/\r?\n/).map(line=>{
+    const index=line.indexOf(':')
+    if(index<1)return null
+    return [line.slice(0,index).trim(),line.slice(index+1).trim()]
+  }).filter(Boolean).filter(([key,val])=>key&&val))
+}
+
 export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts }) {
   const [products,setProducts]=useState([])
   const [categories,setCategories]=useState([])
@@ -189,6 +200,7 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
       product={editor.product}
       preset={editor.preset}
       categories={categories}
+      products={products}
       onClose={()=>setEditor(null)}
       onSaved={async()=>{setEditor(null);await load(true)}}
     />:null}
@@ -235,7 +247,7 @@ export default function ProductsPage({ onOpenCategories, onOpenGlobalProducts })
   </section>
 }
 
-export function ProductEditor({mode,product,preset,categories,onClose,onSaved}){
+export function ProductEditor({mode,product,preset,categories,products=[],onClose,onSaved}){
   const [values,setValues]=useState(()=>({
     name:product?.name||preset?.name||'',
     sku:product?.sku||'',
@@ -255,6 +267,16 @@ export function ProductEditor({mode,product,preset,categories,onClose,onSaved}){
   }))
   const [configuration,setConfiguration]=useState(null)
   const [platform,setPlatform]=useState({customFields:{},recordTypeId:null})
+  const [kioskBase,setKioskBase]=useState({})
+  const [kiosk,setKiosk]=useState({
+    specifications:'',
+    nutrition:'',
+    allergens:'',
+    warranty:'',
+    crossSell:[],
+    upsell:[],
+    accessory:[],
+  })
   const [saving,setSaving]=useState(false)
   const [error,setError]=useState('')
 
@@ -269,6 +291,29 @@ export function ProductEditor({mode,product,preset,categories,onClose,onSaved}){
         const defaults=!product?.id?(data.recordTypes||[]).find(t=>t.id===selected)?.default_values||{}:{}
         setPlatform({customFields:{...(data.customFields||{}),...defaults},recordTypeId:selected})
       }).catch(err=>live&&setError(err?.message||'Unable to load configured Product fields'))
+    return()=>{live=false}
+  },[product?.id])
+
+  useEffect(()=>{
+    if(!product?.id)return
+    let live=true
+    apiRequest(`/api/products/${encodeURIComponent(product.id)}/kiosk-metadata`)
+      .then(response=>{
+        if(!live)return
+        const data=response?.data||{}
+        const recommendations=data.recommendations||{}
+        setKioskBase(data)
+        setKiosk({
+          specifications:pairsToText(data.specifications||{}),
+          nutrition:pairsToText(data.nutrition||{}),
+          allergens:Array.isArray(data.allergens)?data.allergens.join(', '):'',
+          warranty:typeof data.warranty==='string'?data.warranty:'',
+          crossSell:Array.isArray(recommendations.CROSS_SELL)?recommendations.CROSS_SELL:[],
+          upsell:Array.isArray(recommendations.UPSELL)?recommendations.UPSELL:[],
+          accessory:Array.isArray(recommendations.ACCESSORY)?recommendations.ACCESSORY:[],
+        })
+      })
+      .catch(()=>{})
     return()=>{live=false}
   },[product?.id])
 
@@ -302,6 +347,27 @@ export function ProductEditor({mode,product,preset,categories,onClose,onSaved}){
         method:product?.id?'PUT':'POST',body:JSON.stringify(payload)
       })
       if(!response?.success)throw new Error(response?.message||'Unable to save product')
+      const savedId=response?.data?.id||product?.id
+      if(savedId){
+        const metadata={
+          ...kioskBase,
+          specifications:textToPairs(kiosk.specifications),
+          nutrition:textToPairs(kiosk.nutrition),
+          allergens:String(kiosk.allergens||'').split(',').map(value=>value.trim()).filter(Boolean),
+          warranty:String(kiosk.warranty||'').trim(),
+          recommendations:{
+            ...(kioskBase.recommendations||{}),
+            CROSS_SELL:kiosk.crossSell||[],
+            UPSELL:kiosk.upsell||[],
+            ACCESSORY:kiosk.accessory||[],
+          },
+        }
+        const kioskResponse=await apiRequest(`/api/products/${encodeURIComponent(savedId)}/kiosk-metadata`,{
+          method:'PUT',
+          body:JSON.stringify({metadata}),
+        })
+        if(!kioskResponse?.success)throw new Error(kioskResponse?.message||'Product saved but OneKiosk data could not be saved')
+      }
       await onSaved?.(response.data)
     }catch(err){setError(err?.message||'Unable to save product')}
     finally{setSaving(false)}
@@ -332,6 +398,22 @@ export function ProductEditor({mode,product,preset,categories,onClose,onSaved}){
         </div>
 
         {configuration?.recordTypes?.length?<label className="module-input-label product-editor-full"><span>Record type</span><select value={platform.recordTypeId||''} onChange={e=>setPlatform(p=>({...p,recordTypeId:e.target.value||null}))}><option value="">Default</option>{configuration.recordTypes.map(t=><option key={t.id} value={t.id}>{t.label||t.name}</option>)}</select></label>:null}
+
+        <div className="product-extension-fields product-editor-full">
+          <h3>OneKiosk experience data</h3>
+          <p className="text-xs text-slate-500">These fields appear only when the kiosk workflow enables the matching customer experience.</p>
+          <div className="product-editor-grid">
+            <label className="module-textarea-label product-editor-full"><span>Specifications · one per line as Label: Value</span><textarea rows={5} value={kiosk.specifications} onChange={e=>setKiosk(v=>({...v,specifications:e.target.value}))} placeholder={'Screen: 6.7 inch\nStorage: 256GB\nCamera: 50MP'}/></label>
+            <label className="module-textarea-label product-editor-full"><span>Nutrition · one per line as Label: Value</span><textarea rows={4} value={kiosk.nutrition} onChange={e=>setKiosk(v=>({...v,nutrition:e.target.value}))} placeholder={'Calories: 520 kcal\nProtein: 24g'}/></label>
+            <label className="module-input-label"><span>Allergens · comma separated</span><input value={kiosk.allergens} onChange={e=>setKiosk(v=>({...v,allergens:e.target.value}))} placeholder="Milk, Wheat, Sesame"/></label>
+            <label className="module-input-label"><span>Warranty / service text</span><input value={kiosk.warranty} onChange={e=>setKiosk(v=>({...v,warranty:e.target.value}))} placeholder="2 year manufacturer warranty"/></label>
+            {[
+              ['crossSell','Cross-sell products'],
+              ['upsell','Upsell products'],
+              ['accessory','Accessory / protection products'],
+            ].map(([key,label])=><label key={key} className="module-input-label"><span>{label}</span><select multiple size={5} value={kiosk[key]||[]} onChange={e=>setKiosk(v=>({...v,[key]:Array.from(e.target.selectedOptions).map(option=>option.value)}))}>{products.filter(row=>String(row.id)!==String(product?.id||'')).map(row=><option key={row.id} value={row.id}>{row.name}{row.sku?` · ${row.sku}`:''}</option>)}</select></label>)}
+          </div>
+        </div>
 
         {extensionFields.length?<div className="product-extension-fields product-editor-full"><h3>Configured fields</h3>{extensionFields.map(field=><ExtensionField key={field.id||field.api_name} field={field} value={platform.customFields?.[field.api_name]} onChange={value=>setPlatform(p=>({...p,customFields:{...p.customFields,[field.api_name]:value}}))}/>)}</div>:null}
       </div>
