@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2, ArrowLeft, Accessibility, Languages, HelpCircle, QrCode, GitCompareArrows } from "lucide-react";
+import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2, ArrowLeft, Accessibility, Languages, HelpCircle, QrCode, GitCompareArrows, Volume2, LogOut } from "lucide-react";
 import { apiRequest, KIOSK_TOKEN_STORAGE_KEY, lockToKioskMode } from "../../services/api.js";
 import "./oneKiosk.css";
 
@@ -973,6 +973,34 @@ export default function OneKioskPage({ publicMode = false }) {
     }
   };
 
+  const speakCurrentScreen = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      setError("Spoken guidance is not supported on this device.");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const text = [
+      translate(currentScreen?.title),
+      translate(currentScreen?.subtitle),
+      basket.length ? `Your basket has ${itemCount} ${itemCount === 1 ? "item" : "items"}. Total ${money(total, currency)}.` : "",
+      error || "",
+    ].filter(Boolean).join(" ");
+    const utterance = new SpeechSynthesisUtterance(text || "OneKiosk");
+    utterance.lang = language || "en";
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const exitKioskMode = () => {
+    if (!window.confirm("Exit customer kiosk mode and return to staff login?")) return;
+    try {
+      window.speechSynthesis?.cancel?.();
+      localStorage.removeItem(KIOSK_TOKEN_STORAGE_KEY);
+      sessionStorage.removeItem("onepos.lastRoute");
+    } catch {}
+    const base = String(import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+    window.location.assign(base || "/");
+  };
+
   const printReceipt = async () => {
     if (demoMode) {
       window.print();
@@ -1171,6 +1199,9 @@ export default function OneKioskPage({ publicMode = false }) {
               const index = Math.max(0, availableLanguages.findIndex((item) => item.key === language));
               setLanguage(availableLanguages[(index + 1) % availableLanguages.length]?.key || "en");
             }}><Languages size={19}/><span>{availableLanguages.find((item) => item.key === language)?.label || language}</span></button>
+          ) : null}
+          {featureFlags.audio ? (
+            <button type="button" className="one-kiosk-tool" onClick={speakCurrentScreen}><Volume2 size={19}/><span>Read aloud</span></button>
           ) : null}
           {featureFlags.accessibility ? (
             <button type="button" className="one-kiosk-tool" onClick={() => {
@@ -1497,6 +1528,8 @@ export default function OneKioskPage({ publicMode = false }) {
           </div>
         </div>
       ) : null}
+
+      {publicMode ? <button type="button" className="one-kiosk-staff-exit" onClick={exitKioskMode} aria-label="Exit kiosk mode"><LogOut size={16}/><span>Staff</span></button> : null}
 
       {featureFlags.assistance ? <button type="button" className="one-kiosk-help" onClick={requestAssistance}><HelpCircle size={20}/> Need help?</button> : null}
 
