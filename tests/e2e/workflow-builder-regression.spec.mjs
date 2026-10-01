@@ -30,6 +30,41 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(page.getByText(/database changes are rolled back/i)).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).first().click();
 
+  // Persist a harmless manual workflow so the regression exercises the real
+  // version/test APIs rather than only checking their disabled pre-save state.
+  const qaWorkflowName = `Workflow Builder E2E ${Date.now()}`;
+  await page.getByPlaceholder("Workflow name").fill(qaWorkflowName);
+  const initialTriggerSelect = page.locator(".workflow-builder-field").filter({ hasText: "Trigger" }).locator("select");
+  await initialTriggerSelect.selectOption("manual");
+  await page.getByRole("button", { name: "Stop", exact: true }).first().click();
+  await page.getByRole("button", { name: "Save Draft", exact: true }).click();
+
+  const savedRow = page.locator("div").filter({ hasText: qaWorkflowName }).filter({ has: page.getByRole("button", { name: "Edit", exact: true }) }).last();
+  await expect(savedRow).toBeVisible();
+  await savedRow.getByRole("button", { name: "Edit", exact: true }).click();
+
+  await expect(page.getByRole("button", { name: "Tests", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Versions", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save as New Version", exact: true })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Versions", exact: true }).click();
+  await expect(page.getByText("Version History", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Version \d+$/).first()).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).first().click();
+
+  await page.getByRole("button", { name: "Tests", exact: true }).click();
+  await expect(page.getByText("Saved Tests", { exact: true })).toBeVisible();
+  const qaTestName = `Manual workflow completes ${Date.now()}`;
+  await page.getByPlaceholder(/Test name/i).fill(qaTestName);
+  await page.getByRole("button", { name: "Save Test", exact: true }).click();
+  const savedTest = page.locator("div").filter({ hasText: qaTestName }).filter({ has: page.getByRole("button", { name: "Run", exact: true }) }).last();
+  await expect(savedTest).toBeVisible();
+  await savedTest.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByText("Test passed", { exact: true })).toBeVisible();
+  await expect(page.getByText(/No database changes were kept/i)).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).first().click();
+  await page.getByRole("button", { name: "Tests", exact: true }).click();
+
   // Record-triggered Start configuration exposes Salesforce-style transition
   // semantics without requiring Changed operators on every individual field.
   const triggerSelect = page.locator(".workflow-builder-field").filter({ hasText: "Trigger" }).locator("select");
