@@ -30,10 +30,10 @@ export default function createAdminRouter({
 }) {
   const router = express.Router();
 
-  async function hasPlatformManage(req) {
+  async function hasOneEngineManage(req) {
     if (!req.user?.roleId) return false;
     const result = await db(
-      "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='platform.manage' LIMIT 1",
+      "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
       [req.user.roleId]
     );
     return result.rows.length > 0;
@@ -59,20 +59,20 @@ export default function createAdminRouter({
     return result.rows[0] || null;
   }
 
-  async function requirePlatformForProtectedRole(req, roleId) {
+  async function requireOneEngineForProtectedRole(req, roleId) {
     const role = await protectedRole(roleId, req.user.companyId);
     if (!role) return { ok: false, status: 404, message: "Role not found" };
-    if (role.managed_by_platform && !(await hasPlatformManage(req))) {
-      return { ok: false, status: 403, message: "This system-managed role can only be changed by Platform Management" };
+    if (role.managed_by_platform && !(await hasOneEngineManage(req))) {
+      return { ok: false, status: 403, message: "This system-managed role can only be changed by OneEngine Manager" };
     }
     return { ok: true, role };
   }
 
-  async function requirePlatformForProtectedUser(req, userId) {
+  async function requireOneEngineForProtectedUser(req, userId) {
     const user = await protectedUser(userId, req.user.companyId);
     if (!user) return { ok: false, status: 404, message: "User not found" };
-    if (user.managed_by_platform && !(await hasPlatformManage(req))) {
-      return { ok: false, status: 403, message: "This system-managed support account can only be changed by Platform Management" };
+    if (user.managed_by_platform && !(await hasOneEngineManage(req))) {
+      return { ok: false, status: 403, message: "This system-managed support account can only be changed by OneEngine Manager" };
     }
     return { ok: true, user };
   }
@@ -269,7 +269,7 @@ export default function createAdminRouter({
 
   router.put("/admin/roles/:roleId/object-permissions", authenticate, authorize("role.manage"), async (req, res) => {
     if (!Array.isArray(req.body?.permissions)) return res.status(400).json({ success: false, message: "permissions must be an array" });
-    const roleAccess = await requirePlatformForProtectedRole(req, req.params.roleId);
+    const roleAccess = await requireOneEngineForProtectedRole(req, req.params.roleId);
     if (!roleAccess.ok) return res.status(roleAccess.status).json({ success: false, message: roleAccess.message });
     const client = pool ? await pool.connect() : null;
     if (!client) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
@@ -325,9 +325,9 @@ export default function createAdminRouter({
       await client.query("BEGIN");
       const roleCheck = await client.query("SELECT id,managed_by_platform FROM roles WHERE id=$1 AND company_id=$2", [req.params.roleId, req.user.companyId]);
       if (!roleCheck.rows.length) { await client.query("ROLLBACK"); return res.status(404).json({ success: false, message: "Role not found" }); }
-      if (roleCheck.rows[0].managed_by_platform && !(await hasPlatformManage(req))) {
+      if (roleCheck.rows[0].managed_by_platform && !(await hasOneEngineManage(req))) {
         await client.query("ROLLBACK");
-        return res.status(403).json({ success: false, message: "This system-managed role can only be changed by Platform Management" });
+        return res.status(403).json({ success: false, message: "This system-managed role can only be changed by OneEngine Manager" });
       }
       await client.query("DELETE FROM role_permissions WHERE role_id=$1", [req.params.roleId]);
       const codes = req.body.permissions;
@@ -389,8 +389,8 @@ export default function createAdminRouter({
       const check = await db("SELECT name,api_key,description,is_system_role,managed_by_platform,parent_role_id FROM roles WHERE id=$1 AND company_id=$2", [req.params.roleId, req.user.companyId]);
       if (!check.rows.length) return res.status(404).json({ success: false, message: "Role not found" });
       const existing = check.rows[0];
-      if (existing.managed_by_platform && !(await hasPlatformManage(req))) {
-        return res.status(403).json({ success: false, message: "This system-managed role can only be changed by Platform Management" });
+      if (existing.managed_by_platform && !(await hasOneEngineManage(req))) {
+        return res.status(403).json({ success: false, message: "This system-managed role can only be changed by OneEngine Manager" });
       }
       const parentRoleId = req.body.parentRoleId === undefined ? existing.parent_role_id : (req.body.parentRoleId || null);
       if (!await validRoleParent(parentRoleId, req.user.companyId, req.params.roleId)) {
@@ -423,9 +423,9 @@ export default function createAdminRouter({
       const check = await client.query("SELECT id, name, is_system_role, managed_by_platform FROM roles WHERE id=$1 AND company_id=$2 FOR UPDATE", [req.params.roleId, req.user.companyId]);
       if (!check.rows.length) { await client.query("ROLLBACK"); return res.status(404).json({ success: false, message: "Role not found" }); }
       const role = check.rows[0];
-      if (role.managed_by_platform && !(await hasPlatformManage(req))) {
+      if (role.managed_by_platform && !(await hasOneEngineManage(req))) {
         await client.query("ROLLBACK");
-        return res.status(403).json({ success: false, message: "This system-managed role can only be changed by Platform Management" });
+        return res.status(403).json({ success: false, message: "This system-managed role can only be changed by OneEngine Manager" });
       }
       const activate = req.body.active !== false;
       if (!activate) {
@@ -566,10 +566,10 @@ export default function createAdminRouter({
    */
   router.put("/admin/users/:id", authenticate, authorize("user.edit"), async (req, res) => {
     try {
-      const existingAccess = await requirePlatformForProtectedUser(req, req.params.id);
+      const existingAccess = await requireOneEngineForProtectedUser(req, req.params.id);
       if (!existingAccess.ok) return res.status(existingAccess.status).json({ success: false, message: existingAccess.message });
       if (req.body.roleId) {
-        const targetRoleAccess = await requirePlatformForProtectedRole(req, req.body.roleId);
+        const targetRoleAccess = await requireOneEngineForProtectedRole(req, req.body.roleId);
         if (!targetRoleAccess.ok) return res.status(targetRoleAccess.status).json({ success: false, message: targetRoleAccess.message });
       }
       const assignment = await db(
@@ -600,7 +600,7 @@ export default function createAdminRouter({
    */
   router.post("/admin/users/:id/reset-password", authenticate, authorize("user.manage"), async (req, res) => {
     try {
-      const existingAccess = await requirePlatformForProtectedUser(req, req.params.id);
+      const existingAccess = await requireOneEngineForProtectedUser(req, req.params.id);
       if (!existingAccess.ok) return res.status(existingAccess.status).json({ success: false, message: existingAccess.message });
       const { newPassword, confirmPassword } = req.body || {};
       if (!newPassword || !confirmPassword) return res.status(400).json({ success: false, message: "New password and confirmation are required" });
@@ -622,7 +622,7 @@ export default function createAdminRouter({
    */
   router.delete("/admin/users/:id", authenticate, authorize("user.delete"), async (req, res) => {
     try {
-      const existingAccess = await requirePlatformForProtectedUser(req, req.params.id);
+      const existingAccess = await requireOneEngineForProtectedUser(req, req.params.id);
       if (!existingAccess.ok) return res.status(existingAccess.status).json({ success: false, message: existingAccess.message });
       const result = await db(
         `UPDATE users SET active = false, updated_at = NOW() WHERE id = $1 AND company_id = $2 RETURNING id`,
