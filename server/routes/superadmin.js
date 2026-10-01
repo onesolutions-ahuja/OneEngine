@@ -1,4 +1,4 @@
-import { hasOneEngineManagePermission } from "../services/authorization.js";
+import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "../services/platformPermissionSets.js";
 import express from "express";
 import bcrypt from "bcryptjs";
 import { getCompanyEntitlements, mergeEntitlements, normaliseEntitlements } from "../services/licensing.js";
@@ -54,16 +54,18 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
   const writeAudit = createAuditWriter({ db });
   const requireOneEngineManage = async (req, res, next) => {
     try {
-      const result = await db(
-        `SELECT 1
-           FROM users u
-           JOIN role_permissions rp ON rp.role_id=u.role_id
-           JOIN permissions p ON p.id=rp.permission_id
-          WHERE u.id=$1 AND u.active=true AND p.code='oneengine.manage'
-          LIMIT 1`,
-        [req.user?.id]
-      );
-      if (!result.rows.length) return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
+      if (!req.user?.id || !req.user?.companyId) {
+        return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
+      }
+      const [roleResult, permissionSets] = await Promise.all([
+        req.user.roleId
+          ? db("SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1", [req.user.roleId])
+          : Promise.resolve({ rows: [] }),
+        loadEffectivePermissionSets(db, req.user, req),
+      ]);
+      const allowed = roleResult.rows.length > 0
+        || permissionSetAllowsSystemPermission(permissionSets, "oneengine.manage");
+      if (!allowed) return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
       return next();
     } catch (error) {
       console.error("OneEngine authorization error:", error);
