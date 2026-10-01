@@ -17,7 +17,7 @@ const WORKFLOW_VISUAL_CSS = `
   }
   .workflow-builder-header {
     display: grid;
-    grid-template-columns: minmax(180px, .95fr) minmax(170px, .8fr) minmax(150px, .72fr) auto;
+    grid-template-columns: auto minmax(180px, .95fr) minmax(170px, .8fr) minmax(150px, .72fr) auto;
     gap: 10px;
     align-items: end;
     padding: 12px;
@@ -511,7 +511,7 @@ const WORKFLOW_VISUAL_CSS = `
     .workflow-visual-shell.palette-collapsed { grid-template-columns: minmax(360px, 1fr) 300px; }
     .workflow-visual-shell.properties-collapsed { grid-template-columns: 210px minmax(360px, 1fr); }
     .workflow-builder-header {
-      grid-template-columns: minmax(170px, .9fr) minmax(160px, .75fr) minmax(145px, .7fr) auto;
+      grid-template-columns: auto minmax(170px, .9fr) minmax(160px, .75fr) minmax(145px, .7fr) auto;
     }
   }
   @media (max-width: 1050px) {
