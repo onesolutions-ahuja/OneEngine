@@ -1222,7 +1222,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       const code = systemObjectRbacPermission(object, action);
       return code && rolePermissions.includes(code);
     });
-    const canManageOneEngine = permissions.includes("oneengine.manage");
+    const canManageOneEngine = systemPermissions.includes("oneengine.manage");
     const source = canManageOneEngine ? "oneengine_permission"
       : result.rows[0] ? "role_override"
         : setGranted ? "permission_set"
@@ -5622,7 +5622,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const [fieldResult, listViewResult, recordTypeResult, relationshipResult, layoutResult, buttonResult] = await Promise.all([
         db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,api_name", [object.id, req.user.companyId]),
         db("SELECT * FROM platform_list_views WHERE object_id=$1 AND company_id=$2 AND active=true ORDER BY is_default DESC,label", [object.id, req.user.companyId]),
-        db("SELECT * FROM platform_record_types WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY is_default DESC,name", [object.id, req.user.companyId]),
+        db("SELECT * FROM platform_record_types WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY is_default DESC,label", [object.id, req.user.companyId]),
         db(`SELECT r.*,p.object_key AS parent_object_key,p.label AS parent_object_label,c.object_key AS child_object_key,c.label AS child_object_label,
                    f.api_name AS child_field_api_name
               FROM platform_relationships r
