@@ -1962,25 +1962,6 @@ async function startServer() {
     });
     console.log(`onePOS running on port ${PORT}`);
 
-    // The metadata bootstrap is expensive and used to run on every Render restart,
-    // including frontend-only commits. Persist a fingerprint of the source files
-    // that actually define platform/package metadata and skip the heavy pass when
-    // nothing relevant changed. The marker is written only after a successful run.
-    const bootstrapState = await platformBootstrapIsCurrent();
-    if (!bootstrapState.current) {
-      console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
-      await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-      await initializeStandardObjectEcosystem(pool);
-      await markPlatformBootstrapCurrent(bootstrapState.fingerprint);
-    } else {
-      console.log("onePOS: platform bootstrap metadata unchanged; skipping heavy bootstrap");
-    }
-
-    // Identity/profile synchronization remains cheap and intentionally runs on
-    // every start so environment-driven bootstrap credentials can still change.
-    await bootstrapInitialSuperadmin(pool);
-    console.log("onePOS: platform bootstrap ready");
-
     // Reconcile SMSGate inbound webhooks after the HTTP listener is live. This
     // is idempotent: existing callbacks are reused, while missing callbacks
     // are created. Signing keys stay encrypted in integration credentials.
@@ -2032,6 +2013,26 @@ async function startServer() {
         console.error("onePOS: SMSGate inbound webhook reconciliation failed:", error?.message || error);
       }
     }, 1500).unref?.();
+
+
+    // The metadata bootstrap is expensive and used to run on every Render restart,
+    // including frontend-only commits. Persist a fingerprint of the source files
+    // that actually define platform/package metadata and skip the heavy pass when
+    // nothing relevant changed. The marker is written only after a successful run.
+    const bootstrapState = await platformBootstrapIsCurrent();
+    if (!bootstrapState.current) {
+      console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
+      await initializePlatformMetadata(pool, { includeOperationalObjects: true });
+      await initializeStandardObjectEcosystem(pool);
+      await markPlatformBootstrapCurrent(bootstrapState.fingerprint);
+    } else {
+      console.log("onePOS: platform bootstrap metadata unchanged; skipping heavy bootstrap");
+    }
+
+    // Identity/profile synchronization remains cheap and intentionally runs on
+    // every start so environment-driven bootstrap credentials can still change.
+    await bootstrapInitialSuperadmin(pool);
+    console.log("onePOS: platform bootstrap ready");
 
     let draining = false;
     const workerEnabled = process.env.PLATFORM_JOB_WORKER !== "false";
