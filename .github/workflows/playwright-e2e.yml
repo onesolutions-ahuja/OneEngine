@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 25
     env:
       ONEPOS_E2E_BASE_URL: https://smart-theme.onrender.com/
+      ONEPOS_E2E_API_BASE_URL: https://onepos.onrender.com/
       ONEPOS_E2E_USERNAME: ${{ secrets.ONEPOS_E2E_USERNAME }}
       ONEPOS_E2E_PASSWORD: ${{ secrets.ONEPOS_E2E_PASSWORD }}
     steps:
@@ -54,17 +55,17 @@ jobs:
         run: |
           set -euo pipefail
           PAYLOAD="$(jq -n --arg username "$ONEPOS_E2E_USERNAME" --arg password "$ONEPOS_E2E_PASSWORD" '{username:$username,password:$password,actingCompanyId:null}')"
-          LOGIN_URL="${ONEPOS_E2E_BASE_URL%/}/api/auth/login"
+          LOGIN_URL="${ONEPOS_E2E_API_BASE_URL%/}/api/auth/login"
           STATUS="$(curl -sS -o /tmp/onepos-e2e-login.json -w '%{http_code}' \
             -H 'Content-Type: application/json' \
             -d "$PAYLOAD" \
             "$LOGIN_URL")"
           if [ "$STATUS" != "200" ] || [ "$(jq -r '.success // false' /tmp/onepos-e2e-login.json)" != "true" ]; then
             MESSAGE="$(jq -r '.message // "authentication rejected"' /tmp/onepos-e2e-login.json 2>/dev/null || echo 'authentication rejected')"
-            echo "::error::E2E login failed against tested deployment (HTTP $STATUS): $MESSAGE"
+            echo "::error::E2E login failed against API deployment (HTTP $STATUS): $MESSAGE"
             exit 1
           fi
-          echo "E2E credential check passed against tested deployment."
+          echo "E2E credential check passed against API deployment."
 
       - name: Run Playwright QA
         run: npx playwright test --project=desktop-chromium
