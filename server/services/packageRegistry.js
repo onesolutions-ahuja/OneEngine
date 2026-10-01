@@ -374,6 +374,35 @@ export function packageDefinition(entry) {
                 profile: "RESTAURANT",
                 startScreen: "catalogue",
                 theme: { density: "touch", productCard: "image", accentRole: "primary" },
+                languages: [{ key: "en", label: "English" }, { key: "es", label: "Español" }, { key: "fr", label: "Français" }],
+                translations: {
+                  es: {
+                    "screen.catalogue.title": "¿Qué te gustaría?",
+                    "screen.upsell.title": "Hazlo a tu gusto",
+                    "screen.fulfilment.title": "¿Cómo lo quieres?",
+                    "fulfilment.EAT_IN": "Comer aquí",
+                    "fulfilment.TAKEAWAY": "Para llevar",
+                    "fulfilment.COLLECT": "Recoger",
+                    "screen.loyalty.title": "Recompensas",
+                    "screen.payment.title": "Pago",
+                    "screen.confirmation.title": "Gracias",
+                    "confirmation.collectionLabel": "Tu número de recogida",
+                    "confirmation.doneLabel": "Nuevo pedido"
+                  },
+                  fr: {
+                    "screen.catalogue.title": "Que souhaitez-vous ?",
+                    "screen.upsell.title": "Personnalisez votre commande",
+                    "screen.fulfilment.title": "Comment souhaitez-vous votre commande ?",
+                    "fulfilment.EAT_IN": "Sur place",
+                    "fulfilment.TAKEAWAY": "À emporter",
+                    "fulfilment.COLLECT": "Retrait",
+                    "screen.loyalty.title": "Récompenses",
+                    "screen.payment.title": "Paiement",
+                    "screen.confirmation.title": "Merci",
+                    "confirmation.collectionLabel": "Votre numéro de retrait",
+                    "confirmation.doneLabel": "Nouvelle commande"
+                  }
+                },
                 orderDisplay: {
                   title: "Order collection",
                   activeLabel: "Preparing",
@@ -427,6 +456,35 @@ export function packageDefinition(entry) {
                 profile: "RETAIL",
                 startScreen: "catalogue",
                 theme: { density: "touch", productCard: "image_specs", accentRole: "primary" },
+                languages: [{ key: "en", label: "English" }, { key: "es", label: "Español" }, { key: "fr", label: "Français" }],
+                translations: {
+                  es: {
+                    "screen.catalogue.title": "Encuentra tu producto",
+                    "screen.extras.title": "Accesorios y protección",
+                    "screen.fulfilment.title": "Elige la entrega",
+                    "fulfilment.COLLECT": "Recoger aquí",
+                    "fulfilment.OTHER_STORE": "Recoger en otra tienda",
+                    "fulfilment.DELIVERY": "Entrega a domicilio",
+                    "screen.loyalty.title": "Tus datos",
+                    "screen.payment.title": "Pago",
+                    "screen.confirmation.title": "Pedido confirmado",
+                    "confirmation.collectionLabel": "Número de pedido / recogida",
+                    "confirmation.doneLabel": "Hacer otro pedido"
+                  },
+                  fr: {
+                    "screen.catalogue.title": "Trouvez votre produit",
+                    "screen.extras.title": "Accessoires et protection",
+                    "screen.fulfilment.title": "Choisissez la livraison",
+                    "fulfilment.COLLECT": "Retrait ici",
+                    "fulfilment.OTHER_STORE": "Retrait dans un autre magasin",
+                    "fulfilment.DELIVERY": "Livraison à domicile",
+                    "screen.loyalty.title": "Vos coordonnées",
+                    "screen.payment.title": "Paiement",
+                    "screen.confirmation.title": "Commande confirmée",
+                    "confirmation.collectionLabel": "Numéro de commande / retrait",
+                    "confirmation.doneLabel": "Nouvelle commande"
+                  }
+                },
                 orderDisplay: {
                   title: "Collection status",
                   activeLabel: "Processing",
