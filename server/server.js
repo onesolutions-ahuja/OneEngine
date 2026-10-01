@@ -1985,15 +1985,15 @@ async function startServer() {
             try { return decryptCredentials(row.credentials_encrypted) || {}; }
             catch { return {}; }
           })();
-          const signingKey = String(secrets.webhookSigningKey || "").trim() || randomBytes(32).toString("hex");
-          const webhookUrl = `${String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || "https://onepos.onrender.com").replace(/\/$/, "")}/api/smsgate/webhook/${row.id}`;
+          const webhookToken = String(secrets.webhookToken || "").trim() || randomBytes(32).toString("hex");
+          const webhookUrl = `${String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || "https://onepos.onrender.com").replace(/\/$/, "")}/api/smsgate/webhook/${row.id}/${webhookToken}`;
 
           const webhook = await configureSmsGateInboundWebhook(
             { ...configuration, ...secrets },
-            { webhookUrl, signingKey }
+            { webhookUrl }
           );
 
-          const nextSecrets = { ...secrets, webhookSigningKey: signingKey };
+          const nextSecrets = { ...secrets, webhookToken };
           await pool.query(
             `UPDATE integration_connections
                 SET credentials_encrypted=$1,
