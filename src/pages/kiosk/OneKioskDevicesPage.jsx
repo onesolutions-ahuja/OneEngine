@@ -108,7 +108,11 @@ export default function OneKioskDevicesPage() {
           <p>Monitor every kiosk and manage its own payment terminal, printer and connectivity settings.</p>
         </div>
         <div className="kiosk-devices-header-actions">
-          <button type="button" onClick={() => { window.location.hash = "/app/kiosk"; }}><Monitor size={17}/> Open kiosk</button>
+          <button type="button" onClick={() => {
+            const currentPath = window.location.pathname;
+            const base = currentPath.includes("/app/") ? currentPath.slice(0, currentPath.indexOf("/app/")) : "";
+            window.location.assign(`${base}/app/kiosk`);
+          }}><Monitor size={17}/> Open kiosk</button>
           <button type="button" onClick={load} disabled={loading}><RefreshCw size={17}/> Refresh</button>
         </div>
       </header>
