@@ -11,6 +11,7 @@ on:
       - "server/routes/platform.js"
       - "server/routes/platformSchedules.js"
       - "server/services/platformWorkflow.js"
+      - "server/services/systemWorkflowRuntime.js"
       - "server/services/platformSchedules.js"
       - "server/services/platformFormula.js"
       - "server/services/platformRecordPaths.js"
@@ -38,6 +39,12 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Build and audit Workflow Builder
+        run: |
+          npm run audit:trusted
+          npm run audit:apps
+          npm run audit:workflow-coverage
+          npm run build
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Wait for deployed frontend and API
