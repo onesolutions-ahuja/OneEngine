@@ -95,16 +95,6 @@ export function appIconUrl(item) {
   const brand = BRAND_ICON_MATCHES.find(([pattern]) => pattern.test(brandText))
   if (brand) return localAppIcon(brand[1])
 
-  const explicit = item?.icon_url || item?.logo_url || item?.icon
-    || manifest.iconUrl || manifest.icon_url || manifest.logoUrl || manifest.logo_url || manifest.icon
-    || provider.iconUrl || provider.logoUrl
-  if (typeof explicit === 'string' && explicit.trim()) {
-    const value = explicit.trim()
-    if (/^https?:\/\//i.test(value)) return value
-    if (value.startsWith('/icons/apps/')) return `${import.meta.env.BASE_URL || '/'}${value.replace(/^\//, '')}`
-    return apiUrl(value.startsWith('/') ? value : `/${value}`)
-  }
-
   const keys = [
     item?.icon_asset_key, item?.iconAssetKey, manifest.iconAssetKey, manifest.icon_asset_key,
     provider.providerKey, provider.provider_key, item?.package_key,
@@ -114,6 +104,16 @@ export function appIconUrl(item) {
     const normalized = String(key).trim().toLowerCase().replace(/[\s-]+/g, '_')
     const alias = ICON_ALIASES[normalized]
     if (alias) return localAppIcon(alias)
+  }
+
+  const explicit = item?.icon_url || item?.logo_url || item?.icon
+    || manifest.iconUrl || manifest.icon_url || manifest.logoUrl || manifest.logo_url || manifest.icon
+    || provider.iconUrl || provider.logoUrl
+  if (typeof explicit === 'string' && explicit.trim()) {
+    const value = explicit.trim()
+    if (/^https?:\/\//i.test(value)) return value
+    if (value.startsWith('/icons/apps/')) return `${import.meta.env.BASE_URL || '/'}${value.replace(/^\//, '')}`
+    return apiUrl(value.startsWith('/') ? value : `/${value}`)
   }
   return localAppIcon('default-app')
 }
@@ -173,5 +173,8 @@ export function resolveAppOpenRoute(item) {
 }
 
 export function marketplaceSearchText(item) {
-  return `${item?.name || ''} ${item?.package_key || ''} ${item?.category || ''} ${item?.publisher || ''}`.toLowerCase()
+  const manifest = item?.manifest || {}
+  const capabilities = Array.isArray(manifest.capabilities) ? manifest.capabilities.join(' ') : ''
+  const dependencies = Array.isArray(manifest.dependencies) ? manifest.dependencies.map((value) => typeof value === 'string' ? value : value?.packageKey || value?.package_key || '').join(' ') : ''
+  return `${item?.name || ''} ${item?.package_key || ''} ${item?.category || ''} ${item?.publisher || ''} ${item?.description || ''} ${capabilities} ${dependencies}`.toLowerCase()
 }
