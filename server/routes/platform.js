@@ -3645,6 +3645,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const stepId = entry?.result?.stepId || entry?.stepId || null;
         if (stepId) resultByStep.set(String(stepId), entry.result);
         if (entry?.result?.branch?.results) flatten(entry.result.branch.results);
+        if (entry?.result?.faultBranch?.results) flatten(entry.result.faultBranch.results);
         for (const iteration of entry?.result?.iterations || []) flatten(iteration?.results || []);
       }
     };
@@ -3882,11 +3883,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         db("SELECT * FROM platform_workflow_step_runs WHERE run_id=$1 ORDER BY step_order,created_at,id", [run.id]),
       ]);
       const handledFaults = (stepResult.rows || [])
-        .filter((step) => String(step.status || "").toUpperCase() === "FAILED")
+        .filter((step) => step.metadata?.result?.faultHandled === true)
         .map((step) => ({
           stepId: String(step.step_identifier || "").split("@")[0],
           actionType: step.action_type || null,
-          error: step.metadata?.friendlyError || (step.error_text ? { title: "This step failed but its error path handled the failure", whatHappened: step.error_text } : null),
+          mode: step.metadata?.result?.mode || null,
+          error: step.metadata?.friendlyError || step.metadata?.result?.friendlyError || (step.error_text ? { title: "This step failed but its error path handled the failure", whatHappened: step.error_text } : null),
         }));
       const debugData = {
         status: finalStatus,
