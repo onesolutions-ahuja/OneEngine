@@ -387,7 +387,9 @@
 
 .till-theme-page {
   position: fixed;
-  inset: 28px 0 74px;
+  /* Till is a full-height operational surface. The dock floats above it,
+     so reserving 74px here created a dead strip across the entire bottom. */
+  inset: 28px 0 0;
   z-index: 5;
   padding: 0;
   overflow: hidden;
