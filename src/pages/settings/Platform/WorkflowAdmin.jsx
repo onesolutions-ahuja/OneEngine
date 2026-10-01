@@ -1356,6 +1356,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [paletteSearch, setPaletteSearch] = useState("");
+  const [paletteTab, setPaletteTab] = useState("elements");
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -1407,41 +1408,83 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     groups[category].push(option);
     return groups;
   }, {});
+  const globalResources = [
+    { label: "Current Record", detail: "The record that started this workflow", type: "Record" },
+    { label: "Previous Record", detail: "Values before the triggering update", type: "Record" },
+    { label: "Current User", detail: "The user whose context runs the workflow", type: "Global" },
+    { label: "Current Date / Time", detail: "The time this workflow step executes", type: "Global" },
+  ];
+  const stepResources = workflowStepResources(workflow.steps, workflow.steps.length);
+  const resourceQuery = paletteSearch.trim().toLowerCase();
+  const visibleGlobalResources = globalResources.filter((item) => !resourceQuery || `${item.label} ${item.detail} ${item.type}`.toLowerCase().includes(resourceQuery));
+  const visibleStepResources = stepResources.filter((item) => !resourceQuery || `${item.label} ${item.type}`.toLowerCase().includes(resourceQuery));
   return (
     <div className={`workflow-visual-shell ${!paletteOpen ? "palette-collapsed" : ""} ${!propertiesOpen ? "properties-collapsed" : ""}`}>
       {paletteOpen ? <aside className="workflow-node-palette">
         <div className="workflow-palette-head">
-          <div className="workflow-palette-title">Elements</div>
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${paletteTab === "elements" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setPaletteTab("elements")}>Elements</button>
+            <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${paletteTab === "resources" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setPaletteTab("resources")}>Resources</button>
+          </div>
         </div>
         <div className="workflow-palette-search">
           <span>⌕</span>
-          <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder="Search elements..." aria-label="Search workflow elements" />
+          <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder={paletteTab === "elements" ? "Search elements..." : "Search resources..."} aria-label={paletteTab === "elements" ? "Search workflow elements" : "Search workflow resources"} />
         </div>
-        <p className="workflow-palette-help">Drag or click an element to add it to the flow.</p>
-        <div className="workflow-palette-scroll">
-          {Object.entries(paletteGroups).map(([category, options]) => (
-            <div key={category}>
-              <div className="workflow-palette-group-title">{category}</div>
-              {options.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  draggable
-                  title={option.description || option.label}
-                  onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)}
-                  onClick={() => addFromPalette(option.value)}
-                  className="workflow-palette-item"
-                >
-                  <span className="workflow-palette-item-copy">
-                    <strong>{option.label}</strong>
-                    {option.description ? <small>{option.description}</small> : null}
-                  </span>
-                </button>
+        {paletteTab === "elements" ? (
+          <>
+            <p className="workflow-palette-help">Drag or click an element to add it to the flow.</p>
+            <div className="workflow-palette-scroll">
+              {Object.entries(paletteGroups).map(([category, options]) => (
+                <div key={category}>
+                  <div className="workflow-palette-group-title">{category}</div>
+                  {options.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      draggable
+                      title={option.description || option.label}
+                      onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)}
+                      onClick={() => addFromPalette(option.value)}
+                      className="workflow-palette-item"
+                    >
+                      <span className="workflow-palette-item-copy">
+                        <strong>{option.label}</strong>
+                        {option.description ? <small>{option.description}</small> : null}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               ))}
+              {!palette.length ? <div className="workflow-palette-empty">No matching elements</div> : null}
             </div>
-          ))}
-          {!palette.length ? <div className="workflow-palette-empty">No matching elements</div> : null}
-        </div>
+          </>
+        ) : (
+          <>
+            <p className="workflow-palette-help">These values can be selected anywhere the Properties panel offers Resource mode.</p>
+            <div className="workflow-palette-scroll">
+              <div className="workflow-palette-group-title">Flow context</div>
+              {visibleGlobalResources.map((resource) => (
+                <div key={resource.label} className="workflow-palette-item">
+                  <span className="workflow-palette-item-copy">
+                    <strong>{resource.label}</strong>
+                    <small>{resource.detail}</small>
+                  </span>
+                </div>
+              ))}
+              <div className="workflow-palette-group-title">Step outputs</div>
+              {visibleStepResources.map((resource) => (
+                <div key={resource.value} className="workflow-palette-item">
+                  <span className="workflow-palette-item-copy">
+                    <strong>{resource.label}</strong>
+                    <small>{resource.type}</small>
+                  </span>
+                </div>
+              ))}
+              {!visibleGlobalResources.length && !visibleStepResources.length ? <div className="workflow-palette-empty">No matching resources</div> : null}
+            </div>
+          </>
+        )}
       </aside> : null}
       <main className="workflow-canvas-surface" onDragOver={(e) => e.preventDefault()} onDrop={(e) => dropAt(e, workflow.steps.length)}>
         <div className="workflow-canvas-toolbar">
