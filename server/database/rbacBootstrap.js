@@ -66,6 +66,20 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   const name = String(env.BOOTSTRAP_TENANT_SUPERADMIN_NAME || env.BOOTSTRAP_SUPERADMIN_NAME || `${company.name} Superadmin`).trim();
 
   let user = await pool.query(`SELECT id,password_hash,company_id FROM users WHERE company_id=$1 AND (LOWER(username)=LOWER($2) OR LOWER(email)=LOWER($2)) ORDER BY created_at,id LIMIT 1`, [company.id,email]);
+  if (!user.rows[0] && isDemoCompany) {
+    // Recover the legacy demo identity in the same tenant. This is deliberately
+    // tenant-scoped: there is no central/global superadmin identity.
+    user = await pool.query(
+      `SELECT id,password_hash,company_id
+         FROM users
+        WHERE company_id=$1
+          AND active=TRUE
+          AND (LOWER(COALESCE(username,'')) IN ('superadmin','superadmin@local','superadmin@onepos.local')
+            OR LOWER(COALESCE(email,'')) IN ('superadmin@local','superadmin@onepos.local'))
+        ORDER BY created_at,id LIMIT 1`,
+      [company.id]
+    );
+  }
   if (!user.rows[0]) {
     user = await pool.query(`SELECT id,password_hash,company_id FROM users WHERE company_id IS NULL AND (LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1)) ORDER BY created_at,id LIMIT 1`, [email]);
   }
@@ -74,8 +88,9 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   }
 
   if (user.rows[0]) {
-    const hash = password ? await bcrypt.hash(password,12) : user.rows[0].password_hash;
-    await pool.query(`UPDATE users SET company_id=$1,role_id=$2,username=$3,email=$3,full_name=$4,password_hash=$5,active=TRUE,updated_at=NOW() WHERE id=$6`, [company.id,roleId,email,name,hash,user.rows[0].id]);
+    // Bootstrap reconciles identity/RBAC only. Never rotate an existing user's
+    // password during deploy: doing so desynchronises browser/E2E credentials.
+    await pool.query(`UPDATE users SET company_id=$1,role_id=$2,username=$3,email=$3,full_name=$4,active=TRUE,updated_at=NOW() WHERE id=$5`, [company.id,roleId,email,name,user.rows[0].id]);
   } else {
     if (!password) throw new Error("BOOTSTRAP_SUPERADMIN_PASSWORD is required to create the company Superadmin");
     const hash = await bcrypt.hash(password,12);
