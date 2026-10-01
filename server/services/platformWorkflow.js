@@ -2841,8 +2841,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ action, db, companyId, req, record, previousRecord, object, fields, workflowVariables = {}, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
+    executor: async ({ action, db, traceDb = null, debugMode = false, companyId, req, record, previousRecord, object, fields, workflowVariables = {}, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
       const workflowKey = action.workflowId || action.subflowId || action.workflow?.id || action.workflow?.key || "inline-subflow";
+      const runDb = debugMode && traceDb && typeof traceDb === "function" ? traceDb : db;
       const stack = Array.isArray(workflowStack) ? workflowStack.slice() : [];
       if (stack.includes(workflowKey)) {
         throw new Error(`Workflow recursion detected for subflow "${workflowKey}"`);
@@ -2894,14 +2895,14 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const mergedRecord = { ...(record || {}), ...mappedInputs };
       const outputContract = Array.isArray(definition.action?.outputContract) ? definition.action.outputContract : Array.isArray(definition.outputContract) ? definition.outputContract : [];
 
-      if (stepRunId && db && typeof db === "function") {
-        const parentStepResult = await db(
+      if (stepRunId && runDb && typeof runDb === "function") {
+        const parentStepResult = await runDb(
           "SELECT child_run_id FROM platform_workflow_step_runs WHERE id=$1 LIMIT 1",
           [stepRunId]
         );
         const existingChildRunId = parentStepResult.rows[0]?.child_run_id || null;
         if (existingChildRunId) {
-          const existingChildResult = await db(
+          const existingChildResult = await runDb(
             "SELECT * FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1",
             [existingChildRunId, targetCompanyId || runtimeCompanyId]
           );
@@ -2936,9 +2937,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
 
       const childWorkflowVariables = { variables: { ...mappedInputs }, steps: {} };
-      const childRun = db && typeof db === "function"
+      const childRun = runDb && typeof runDb === "function"
         ? await createWorkflowRun({
-            db,
+            db: runDb,
             companyId: targetCompanyId || runtimeCompanyId,
             workflowId: workflowKey,
             workflowName: definition.name || action.workflowName || "Subflow",
@@ -2950,9 +2951,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             metadata: { parentWorkflow: workflowKey, inputMappings: mappings },
           })
         : null;
-      const childStep = childRun && db && typeof db === "function"
+      const childStep = childRun && runDb && typeof runDb === "function"
         ? await createWorkflowStepRun({
-            db,
+            db: runDb,
             runId: childRun.id,
             stepIdentifier: `subflow:${workflowKey}`,
             stepOrder: 0,
@@ -2975,6 +2976,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         runId: childRun?.id || runId || null,
         stepRunId: childStep?.id || stepRunId || null,
         workflowVariables: childWorkflowVariables,
+        traceDb,
+        debugMode,
+        ...context,
       });
       const childWaiting = workflowResultsContainStatus(childResult, "waiting");
       const outputs = {};
@@ -2990,22 +2994,22 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       const childFailed = childResult.some((item) => item.result?.status === "failed");
       const childStatus = childFailed ? "FAILED" : childWaiting ? "WAITING" : "COMPLETED";
-      if (childRun && db && typeof db === "function") {
-        await db(
+      if (childRun && runDb && typeof runDb === "function") {
+        await runDb(
           `UPDATE platform_workflow_runs SET status=$1, completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END, metadata=COALESCE(metadata,'{}'::jsonb) || $2::jsonb, updated_at=NOW() WHERE id=$3`,
           [childStatus, JSON.stringify({ childResults: childResult, ...(childWaiting ? {} : { finalVariables: childWorkflowVariables, outputs }) }), childRun.id]
         );
       }
       if (stepRunId) {
         await updateWorkflowStepRunStatus({
-          db,
+          db: runDb,
           stepRunId,
           status: childStatus,
           errorText: childResult.find((item) => item.result?.error)?.result?.error || null,
           metadata: { childRunId: childRun?.id || null, childResults: childResult },
         });
         if (childRun?.id) {
-          await db("UPDATE platform_workflow_step_runs SET child_run_id=$1,updated_at=NOW() WHERE id=$2", [childRun.id, stepRunId]);
+          await runDb("UPDATE platform_workflow_step_runs SET child_run_id=$1,updated_at=NOW() WHERE id=$2", [childRun.id, stepRunId]);
         }
       }
       return {
@@ -4106,7 +4110,7 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "CONSTANT","FORMULA","ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
-  "BULK_UPDATE_RECORDS","SCHEDULE_PATH","STOP",
+  "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","STOP",
 ]);
 
 export function friendlyWorkflowError(error, actionType = "") {
