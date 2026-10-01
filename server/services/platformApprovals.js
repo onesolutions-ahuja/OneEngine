@@ -29,46 +29,61 @@ async function runOutcomeActions({ db, request, process, actions, req, event }) 
   });
 }
 
-async function resolveRoleAssignee({ db, companyId, roleId, submittedBy }) {
-  const result = await db(
-    `SELECT u.id,u.username,u.email,r.name AS role_name
-       FROM users u JOIN roles r ON r.id=u.role_id
-      WHERE u.company_id=$1 AND u.role_id=$2 AND u.active=TRUE
-        AND ($3::uuid IS NULL OR u.id<>$3)
-      ORDER BY u.created_at,u.id LIMIT 1`,
-    [companyId, roleId, submittedBy || null]
-  );
-  return result.rows[0] || null;
+async function resolveStepAssignees({ db, request, step, record = {} }) {
+  const type = String(step.assignment_type || "role").toLowerCase();
+  const config = cfg(step.assignment_config);
+  let ids = [];
+  if (type === "user" && config.userId) ids = [config.userId];
+  else if (type === "submitter") ids = request.submitted_by ? [request.submitted_by] : [];
+  else if (type === "record_user" && config.field) {
+    const value = record?.[config.field];
+    ids = value ? [value] : [];
+  } else if (type === "group" && config.groupId) {
+    const members = await db(`SELECT u.id FROM platform_approval_group_members gm JOIN users u ON u.id=gm.user_id WHERE gm.group_id=$1 AND u.company_id=$2 AND u.active=TRUE ORDER BY u.created_at,u.id`, [config.groupId, request.company_id]);
+    ids = members.rows.map(row => row.id);
+  } else {
+    const users = await db(`SELECT u.id FROM users u WHERE u.company_id=$1 AND u.role_id=$2 AND u.active=TRUE AND ($3::uuid IS NULL OR u.id<>$3) ORDER BY u.created_at,u.id`, [request.company_id, step.role_id, request.submitted_by || null]);
+    ids = users.rows.map(row => row.id);
+  }
+  if (!ids.length) return [];
+  const delegated = [];
+  for (const id of ids) {
+    const d = await db(`SELECT delegate_user_id FROM platform_approval_delegations WHERE company_id=$1 AND user_id=$2 AND active=TRUE AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>=NOW()) ORDER BY created_at DESC LIMIT 1`, [request.company_id,id]);
+    delegated.push(d.rows[0]?.delegate_user_id || id);
+  }
+  return [...new Set(delegated.map(String))];
 }
 
-async function createWorkItem({ db, request, step }) {
-  const assignee = await resolveRoleAssignee({
-    db,
-    companyId: request.company_id,
-    roleId: step.role_id,
-    submittedBy: request.submitted_by,
-  });
-  const stepConfig = cfg(step.config);
-  const dueHours = Number(stepConfig.dueHours || stepConfig.due_hours || 0);
-  const result = await db(
-    `INSERT INTO platform_approval_work_items
-       (request_id,step_id,step_order,company_id,role_id,assigned_to,status,due_at)
-     VALUES($1,$2,$3,$4,$5,$6,'pending',
-       CASE WHEN $7::numeric>0 THEN NOW()+($7::text||' hours')::interval ELSE NULL END)
-     ON CONFLICT (request_id,step_order) DO UPDATE SET
-       role_id=EXCLUDED.role_id,
-       assigned_to=COALESCE(platform_approval_work_items.assigned_to,EXCLUDED.assigned_to),
-       status=CASE WHEN platform_approval_work_items.status='waiting' THEN 'pending' ELSE platform_approval_work_items.status END
-     RETURNING *`,
-    [request.id, step.id, step.step_order, request.company_id, step.role_id, assignee?.id || null, dueHours]
-  );
-  return result.rows[0];
+async function loadApprovalRecord({ db, request }) {
+  const object = await db("SELECT source_table FROM platform_objects WHERE id=$1 AND company_id=$2", [request.object_id,request.company_id]);
+  const table=object.rows[0]?.source_table;
+  if (!table || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(table)) return {};
+  const found=await db(`SELECT * FROM "${table}" WHERE id=$1 AND company_id=$2 LIMIT 1`,[request.record_id,request.company_id]).catch(()=>({rows:[]}));
+  return found.rows[0]||{};
 }
 
+async function createWorkItems({ db, request, step }) {
+  const record=await loadApprovalRecord({db,request});
+  const assignees=await resolveStepAssignees({db,request,step,record});
+  const stepConfig=cfg(step.config);
+  const dueHours=Number(stepConfig.dueHours||stepConfig.due_hours||0);
+  const targets=assignees.length?assignees:[null];
+  const rows=[];
+  for(const assigneeId of targets) {
+    const result=await db(
+      `INSERT INTO platform_approval_work_items(request_id,step_id,step_order,company_id,role_id,assigned_to,status,due_at)
+       VALUES($1,$2,$3,$4,$5,$6,'pending',CASE WHEN $7::numeric>0 THEN NOW()+($7::text||' hours')::interval ELSE NULL END)
+       ON CONFLICT DO NOTHING RETURNING *`,
+      [request.id,step.id,step.step_order,request.company_id,step.role_id,assigneeId,dueHours]
+    );
+    if(result.rows[0]) rows.push(result.rows[0]);
+  }
+  return rows;
+}
 async function currentRequest({ db, requestId, companyId }) {
   const result = await db(
     `SELECT r.*,p.config AS process_config,p.name AS process_name,
-            s.id AS step_id,s.role_id,s.step_order,s.label AS step_label,s.config AS step_config
+            s.id AS step_id,s.role_id,s.step_order,s.label AS step_label,s.config AS step_config,s.assignment_type,s.assignment_config
        FROM platform_approval_requests r
        JOIN platform_approval_processes p ON p.id=r.process_id
        JOIN platform_approval_steps s ON s.process_id=r.process_id AND s.step_order=r.current_step
@@ -102,7 +117,7 @@ export async function submitPlatformApproval({ db, object, fields, recordId, rec
       [process.id, object.id, recordId, req.user.companyId, steps.rows[0].step_order, req.user.id || null, cfg(process.config).lockRecord !== false]
     );
     const request = result.rows[0];
-    await createWorkItem({ db, request, step: steps.rows[0] });
+    await createWorkItems({ db, request, step: steps.rows[0] });
     await db(
       "INSERT INTO platform_approval_events(request_id,company_id,event_type,actor_user_id,metadata) VALUES($1,$2,'submitted',$3,$4::jsonb)",
       [request.id, request.company_id, req.user.id || null, JSON.stringify({ step: steps.rows[0].step_order })]
@@ -126,18 +141,14 @@ export async function decidePlatformApproval({ db, requestId, decision, comment,
     return { status: 400, message: "A rejection reason is required" };
   }
 
-  const work = await db(
-    "SELECT * FROM platform_approval_work_items WHERE request_id=$1 AND step_order=$2 AND status='pending' LIMIT 1",
-    [requestId, current.step_order]
-  );
-  const item = work.rows[0];
-  if (!item) return { status: 409, message: "The current approval work item is unavailable" };
-  const assignedToUser = item.assigned_to && String(item.assigned_to) === String(req.user.id);
-  const eligibleUnassigned = !item.assigned_to && String(item.role_id) === String(req.user.roleId);
-  if (!assignedToUser && !eligibleUnassigned) return { status: 403, message: "This approval is assigned to another approver" };
+  const work = await db("SELECT * FROM platform_approval_work_items WHERE request_id=$1 AND step_order=$2 AND status='pending' AND (assigned_to=$3 OR (assigned_to IS NULL AND role_id=$4)) ORDER BY created_at LIMIT 1",[requestId,current.step_order,req.user.id||null,req.user.roleId||null]);
+  const item=work.rows[0];
+  if(!item) return {status:403,message:"This approval is assigned to another approver"};
 
-  const prior = await db("SELECT id FROM platform_approval_actions WHERE request_id=$1 AND step_order=$2 LIMIT 1", [requestId, current.step_order]);
-  if (prior.rows.length) return { status: 409, message: "This approval step has already been decided" };
+  const stepConfig=cfg(current.step_config);
+  const approvalRule=String(stepConfig.approvalRule||"FIRST_RESPONSE").toUpperCase();
+  const prior = await db("SELECT id FROM platform_approval_actions WHERE request_id=$1 AND step_order=$2 AND actor_user_id=$3 LIMIT 1",[requestId,current.step_order,req.user.id||null]);
+  if(prior.rows.length) return {status:409,message:"You have already decided this approval step"};
 
   await db(
     "INSERT INTO platform_approval_actions (request_id,step_order,actor_user_id,decision,comment) VALUES ($1,$2,$3,$4,$5)",
@@ -148,7 +159,17 @@ export async function decidePlatformApproval({ db, requestId, decision, comment,
     [req.user.id || null, decision === "approve" ? "approved" : "rejected", decision, String(comment || "").trim() || null, item.id]
   );
 
-  const process = { id: current.process_id, config: processConfig };
+  const process={id:current.process_id,config:processConfig};
+  if(decision==="approve" && approvalRule==="UNANIMOUS") {
+    const remaining=await db("SELECT id FROM platform_approval_work_items WHERE request_id=$1 AND step_order=$2 AND status='pending'",[requestId,current.step_order]);
+    if(remaining.rows.length) {
+      await db("INSERT INTO platform_approval_events(request_id,company_id,event_type,actor_user_id,metadata) VALUES($1,$2,'approver_approved',$3,$4::jsonb)",[requestId,current.company_id,req.user.id||null,JSON.stringify({remaining:remaining.rows.length})]);
+      return {status:200,data:{...current,waitingFor:remaining.rows.length}};
+    }
+  }
+  if(decision==="reject" || (decision==="approve" && approvalRule==="FIRST_RESPONSE")) {
+    await db("UPDATE platform_approval_work_items SET status='cancelled',completed_at=NOW() WHERE request_id=$1 AND step_order=$2 AND status='pending'",[requestId,current.step_order]);
+  }
   if (decision === "reject") {
     const result = await db("UPDATE platform_approval_requests SET status='rejected',locked=false,resolved_at=NOW() WHERE id=$1 RETURNING *", [requestId]);
     await db("INSERT INTO platform_approval_events(request_id,company_id,event_type,actor_user_id,metadata) VALUES($1,$2,'rejected',$3,$4::jsonb)", [requestId,current.company_id,req.user.id||null,JSON.stringify({comment:String(comment||"").trim()||null})]);
@@ -159,7 +180,7 @@ export async function decidePlatformApproval({ db, requestId, decision, comment,
   const next = await db("SELECT * FROM platform_approval_steps WHERE process_id=$1 AND step_order>$2 ORDER BY step_order LIMIT 1", [current.process_id, current.step_order]);
   if (next.rows.length) {
     const result = await db("UPDATE platform_approval_requests SET current_step=$1 WHERE id=$2 RETURNING *", [next.rows[0].step_order, requestId]);
-    await createWorkItem({ db, request: result.rows[0], step: next.rows[0] });
+    await createWorkItems({ db, request: result.rows[0], step: next.rows[0] });
     await db("INSERT INTO platform_approval_events(request_id,company_id,event_type,actor_user_id,metadata) VALUES($1,$2,'step_approved',$3,$4::jsonb)", [requestId,current.company_id,req.user.id||null,JSON.stringify({fromStep:current.step_order,toStep:next.rows[0].step_order})]);
     return { status: 200, data: result.rows[0] };
   }
