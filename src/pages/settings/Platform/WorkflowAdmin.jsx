@@ -2291,13 +2291,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const saveWorkflow = async (lifecycleOverride = null, { keepOpen = false, silent = false } = {}) => {
+  const buildWorkflowPayload = (lifecycleOverride = null) => {
     const nextLifecycle = String(lifecycleOverride || workflow.lifecycleStatus || (workflow.active === true ? "ACTIVE" : "DRAFT")).toUpperCase();
-    if (nextLifecycle === "ACTIVE" && reviewIssue) {
-      onError?.(`Cannot activate workflow: ${reviewIssue}`);
-      return null;
-    }
-    const payload = {
+    return {
       objectId: workflow.objectId || null,
       objectKey: workflow.objectKey || workflow.object || null,
       name: workflow.name,
@@ -2331,6 +2327,15 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         }),
       },
     };
+  };
+
+  const saveWorkflow = async (lifecycleOverride = null, { keepOpen = false, silent = false } = {}) => {
+    const nextLifecycle = String(lifecycleOverride || workflow.lifecycleStatus || (workflow.active === true ? "ACTIVE" : "DRAFT")).toUpperCase();
+    if (nextLifecycle === "ACTIVE" && reviewIssue) {
+      onError?.(`Cannot activate workflow: ${reviewIssue}`);
+      return null;
+    }
+    const payload = buildWorkflowPayload(nextLifecycle);
     try {
       const response = workflowId
         ? await apiRequest(`/api/platform/rules/${workflowId}`, { method: "PUT", body: JSON.stringify(payload) })
@@ -2377,13 +2382,14 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     setDebugRunning(true);
     setDebugResult(null);
     try {
-      let targetId = workflowId;
-      const saved = await saveWorkflow("DRAFT", { keepOpen: true, silent: true });
-      if (!saved?.id) return;
-      targetId = saved.id;
-      const response = await apiRequest(`/api/platform/rules/${targetId}/debug`, {
+      const definition = buildWorkflowPayload("DRAFT");
+      const endpoint = workflowId ? `/api/platform/rules/${workflowId}/debug` : "/api/platform/rules/debug";
+      const response = await apiRequest(endpoint, {
         method: "POST",
-        body: JSON.stringify(debugRecordMode === "specific" && debugRecordId.trim() ? { recordId: debugRecordId.trim() } : {}),
+        body: JSON.stringify({
+          definition,
+          ...(debugRecordMode === "specific" && debugRecordId.trim() ? { recordId: debugRecordId.trim() } : {}),
+        }),
       });
       setDebugResult(response?.data || null);
     } catch (error) {
