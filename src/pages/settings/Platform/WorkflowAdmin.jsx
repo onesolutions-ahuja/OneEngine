@@ -2005,6 +2005,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     active: initialWorkflow.active !== false,
     conditions: initialWorkflow.conditions || [],
     match: initialWorkflow.action?.match || initialWorkflow.match || "all",
+    actionMetadata: {
+      flowType: initialWorkflow.action?.flowType || null,
+      templateKey: initialWorkflow.action?.templateKey || null,
+      defaultForNewDevices: initialWorkflow.action?.defaultForNewDevices === true,
+      ui: initialWorkflow.action?.ui || null,
+    },
     steps: (initialWorkflow.steps || initialWorkflow.action?.actions || []).map((step) => ({
       ...makeStep(step.type || step.key || "CREATE_RECORD"),
       ...step,
@@ -2184,6 +2190,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           capabilityType: rule.action.capabilityType || null,
           capabilityKey: rule.action.capabilityKey || null,
           match: rule.action.match || "all",
+          actionMetadata: {
+            flowType: rule.action?.flowType || null,
+            templateKey: rule.action?.templateKey || null,
+            defaultForNewDevices: rule.action?.defaultForNewDevices === true,
+            ui: rule.action?.ui || null,
+          },
           lifecycleStatus: rule.lifecycle_status || (rule.active === false ? "INACTIVE" : "ACTIVE"),
           version: Number(rule.version || 1),
           steps: (rule.action.actions || []).map((action) => {
@@ -2331,6 +2343,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           capabilityKey: workflow.capabilityKey || null,
           scope: workflow.scope || "system",
         } : {}),
+        ...(workflow.actionMetadata?.flowType ? { flowType: workflow.actionMetadata.flowType } : {}),
+        ...(workflow.actionMetadata?.templateKey ? { templateKey: workflow.actionMetadata.templateKey } : {}),
+        ...(workflow.actionMetadata?.defaultForNewDevices ? { defaultForNewDevices: true } : {}),
+        ...(workflow.actionMetadata?.ui ? { ui: workflow.actionMetadata.ui } : {}),
         match: workflow.match || "all",
         actions: workflow.steps.filter((step) => step.enabled !== false).map((step) => {
           const config = { ...(step.config || {}) };
@@ -2508,6 +2524,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                         capabilityKey: item.capabilityKey || null,
                         scope: item.scope || "system",
                       } : {}),
+                      ...(item.actionMetadata?.flowType ? { flowType: item.actionMetadata.flowType } : {}),
+                      ...(item.actionMetadata?.templateKey ? { templateKey: item.actionMetadata.templateKey } : {}),
+                      ...(item.actionMetadata?.defaultForNewDevices ? { defaultForNewDevices: true } : {}),
+                      ...(item.actionMetadata?.ui ? { ui: item.actionMetadata.ui } : {}),
                       match: item.match || "all",
                       actions: (item.steps || []).filter((step) => step.enabled !== false).map((step) => ({
                         id: step.id,
