@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
-import { compileFormulas, formulaPreviewDependencies } from "../../../../services/platformFormula.js";
+import { compileFormulas, formulaPreviewDependencies } from "../../../../server/services/platformFormula.js";
 import { toSafeApiName, withGeneratedApiName } from "./safeApiName.js";
 
 const FIELD_TYPES = [
