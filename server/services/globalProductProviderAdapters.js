@@ -81,29 +81,40 @@ async function requestJson(fetchImpl, url, { headers, timeoutMs }) {
       response = await fetchImpl(url, { method: "GET", headers, signal: controller.signal });
     } catch (error) {
       if (controller.signal.aborted || error?.name === "AbortError") {
-        throw new ProductProviderError("Product provider request timed out", { code: "TIMEOUT" });
+        throw new ProductProviderError("The provider did not respond before the timeout.", { code: "TIMEOUT" });
       }
-      throw new ProductProviderError("Product provider is unavailable", { code: "PROVIDER_UNAVAILABLE" });
+      throw new ProductProviderError("The provider could not be reached.", { code: "PROVIDER_UNAVAILABLE" });
     }
 
     if (response.status === 404) return null;
+
+    let errorPayload = null;
+    if (!response.ok) {
+      try { errorPayload = await response.clone().json(); } catch {}
+    }
+    const upstreamCode = String(errorPayload?.error?.code || errorPayload?.code || "").trim();
+    const upstreamMessage = String(errorPayload?.error?.message || errorPayload?.message || "").trim();
+
     if (response.status === 401 || response.status === 403) {
-      throw new ProductProviderError("Product provider credentials were rejected", {
-        code: "INVALID_CREDENTIALS", status: response.status, retryable: false,
+      throw new ProductProviderError(upstreamMessage || "The provider rejected the configured API credentials.", {
+        code: upstreamCode || "INVALID_CREDENTIALS", status: response.status, retryable: false,
       });
     }
     if (response.status === 429) {
-      throw new ProductProviderError("Product provider rate limit reached", { code: "RATE_LIMITED", status: 429 });
+      const quota = /usage|quota|limit/i.test(upstreamCode) ? upstreamCode : "RATE_LIMITED";
+      throw new ProductProviderError(upstreamMessage || "The provider API usage or rate limit has been reached.", {
+        code: quota, status: 429,
+      });
     }
     if (!response.ok) {
-      throw new ProductProviderError("Product provider returned an error", {
-        code: "PROVIDER_ERROR", status: response.status, retryable: response.status >= 500,
+      throw new ProductProviderError(upstreamMessage || `The provider returned HTTP ${response.status}.`, {
+        code: upstreamCode || "PROVIDER_ERROR", status: response.status, retryable: response.status >= 500,
       });
     }
     try {
       return await response.json();
     } catch {
-      throw new ProductProviderError("Product provider returned invalid data", {
+      throw new ProductProviderError("The provider returned data that OneEngine could not read.", {
         code: "INVALID_RESPONSE", status: response.status,
       });
     }
@@ -199,6 +210,112 @@ export function createOpenFoodFactsAdapter({ fetchImpl = globalThis.fetch } = {}
     async testConnection({ config = {} } = {}) {
       const result = await this.lookup({ barcode: "737628064502", config });
       return { connected: true, sampleFound: result.status === "found", scope: "worldwide" };
+    },
+  };
+}
+
+export function createUpcItemDbAdapter({ fetchImpl = globalThis.fetch } = {}) {
+  const baseFor = (config) => {
+    const base = new URL(config.baseUrl || "https://api.upcitemdb.com");
+    if (base.protocol !== "https:" || !(base.hostname === "upcitemdb.com" || base.hostname.endsWith(".upcitemdb.com"))) {
+      throw new ProductProviderError("Configured UPCitemdb URL is not permitted", { code: "INVALID_PROVIDER_URL", retryable: false });
+    }
+    return base.origin;
+  };
+  const headersFor = (apiKey) => ({
+    Accept: "application/json",
+    ...(apiKey ? { user_key: String(apiKey).trim(), key_type: "3scale" } : {}),
+  });
+  const endpointFor = (config, apiKey, kind) => {
+    if (kind === "search") return apiKey ? (config.paidSearchEndpoint || "/prod/v1/search") : (config.searchEndpoint || "/prod/trial/search");
+    return apiKey ? (config.paidLookupEndpoint || "/prod/v1/lookup") : (config.lookupEndpoint || "/prod/trial/lookup");
+  };
+  return {
+    async lookup({ barcode: input, config = {}, apiKey = null }) {
+      const barcode = normalizeProductBarcode(input);
+      const url = new URL(endpointFor(config, apiKey, "lookup"), baseFor(config));
+      url.searchParams.set("upc", barcode);
+      const payload = await requestJson(fetchImpl, url.toString(), {
+        timeoutMs: Number(config.timeoutMs) || 7000,
+        headers: headersFor(apiKey),
+      });
+      const item = Array.isArray(payload?.items) ? payload.items[0] : null;
+      if (!payload || !item) return { status: "not_found" };
+      const product = normalizeExternalProduct(item, {
+        provider: "upcitemdb", barcode, referenceId: item.ean || item.upc || item.gtin, fieldMappings: config.fieldMappings,
+      });
+      return product ? { status: "found", product } : { status: "not_found" };
+    },
+    async search({ query: input, config = {}, apiKey = null, page = 1, pageSize = 20 } = {}) {
+      const query = String(input || "").trim().replace(/\s+/g, " ");
+      if (query.length < 2 || query.length > 120) {
+        throw new ProductProviderError("Search text must be between 2 and 120 characters", { code: "INVALID_SEARCH", retryable: false });
+      }
+      const url = new URL(endpointFor(config, apiKey, "search"), baseFor(config));
+      url.searchParams.set("s", query);
+      url.searchParams.set("type", "product");
+      url.searchParams.set("match_mode", "0");
+      url.searchParams.set("offset", String(Math.max(0, (Math.max(1, Number(page) || 1) - 1) * Math.min(10, Number(pageSize) || 10))));
+      const payload = await requestJson(fetchImpl, url.toString(), {
+        timeoutMs: Number(config.timeoutMs) || 7000,
+        headers: headersFor(apiKey),
+      });
+      const products = (Array.isArray(payload?.items) ? payload.items : []).map((item) => {
+        try {
+          return normalizeExternalProduct(item, {
+            provider: "upcitemdb",
+            barcode: item?.ean || item?.upc || item?.gtin,
+            referenceId: item?.ean || item?.upc || item?.gtin,
+            fieldMappings: config.fieldMappings,
+          });
+        } catch { return null; }
+      }).filter(Boolean);
+      return {
+        status: products.length ? "found" : "not_found",
+        products,
+        count: Number(payload?.total) || products.length,
+        page: Math.max(1, Number(page) || 1),
+        pageSize: Math.min(10, Number(pageSize) || 10),
+      };
+    },
+    async testConnection({ config = {}, apiKey = null } = {}) {
+      const result = await this.lookup({ barcode: "4006381333931", config, apiKey });
+      return { connected: true, sampleFound: result.status === "found", planMode: apiKey ? "paid-key" : "free" };
+    },
+  };
+}
+
+export function createBarcodeNestAdapter({ fetchImpl = globalThis.fetch } = {}) {
+  return {
+    async lookup({ barcode: input, config = {}, apiKey }) {
+      const barcode = normalizeProductBarcode(input);
+      if (!apiKey || !String(apiKey).trim()) {
+        throw new ProductProviderError("BarcodeNest API key is not configured.", { code: "NOT_CONFIGURED", retryable: false });
+      }
+      const url = providerUrl(config.baseUrl || "https://api.barcodenest.com", config.lookupEndpoint || "/v1/products/{barcode}", barcode, "barcodenest.com");
+      const payload = await requestJson(fetchImpl, url, {
+        timeoutMs: Number(config.timeoutMs) || 7000,
+        headers: { Accept: "application/json", "X-API-Key": String(apiKey).trim() },
+      });
+      if (!payload || payload.found === false || !payload.product) return { status: "not_found" };
+      const sourceProduct = {
+        ...payload.product,
+        barcode: payload.barcode || barcode,
+      };
+      const product = normalizeExternalProduct(sourceProduct, {
+        provider: "barcode_nest",
+        barcode,
+        referenceId: payload?.source?.source_id || payload.barcode,
+        fieldMappings: config.fieldMappings,
+      });
+      return product ? { status: "found", product } : { status: "not_found" };
+    },
+    async testConnection({ config = {}, apiKey } = {}) {
+      if (!apiKey || !String(apiKey).trim()) {
+        throw new ProductProviderError("BarcodeNest API key is not configured.", { code: "NOT_CONFIGURED", retryable: false });
+      }
+      const result = await this.lookup({ barcode: "3017620422003", config, apiKey });
+      return { connected: true, sampleFound: result.status === "found" };
     },
   };
 }
