@@ -4564,7 +4564,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if(!request) return res.status(422).json({success:false,message:"This record does not meet an active approval process's entry criteria"});
       if(req.body?.comment) await db("UPDATE platform_approval_requests SET submission_comment=$1 WHERE id=$2",[String(req.body.comment).trim(),request.id]);
       res.json({success:true,data:request});
-    } catch(error) { console.error("Manual approval submission error:",error); res.status(500).json({success:false,message:"Unable to submit this record for approval"}); }
+    } catch(error) { console.error("Manual approval submission error:",error); const known=error?.code==="APPROVAL_ASSIGNEE_REQUIRED"; res.status(known?422:500).json({success:false,message:known?error.message:"Unable to submit this record for approval"}); }
   });
 
   router.post("/platform/approval-requests/:requestId/decision", authenticate, async (req, res) => {
