@@ -37,13 +37,12 @@ CREATE TABLE IF NOT EXISTS licences (
     CHECK (expires_at IS NULL OR starts_at IS NULL OR expires_at >= starts_at)
 );
 
-ALTER TABLE licences ADD COLUMN IF NOT EXISTS monthly_price NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (monthly_price >= 0);
-ALTER TABLE licences ADD COLUMN IF NOT EXISTS billing_period VARCHAR(20) NOT NULL DEFAULT 'MONTHLY';
-ALTER TABLE licences ADD COLUMN IF NOT EXISTS seat_limit INTEGER;
-ALTER TABLE licences ADD COLUMN IF NOT EXISTS user_limit INTEGER;
-ALTER TABLE licences ADD COLUMN IF NOT EXISTS duration_days INTEGER;
-ALTER TABLE licences ADD COLUMN IF NOT EXISTS is_trial BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE licences ADD COLUMN IF NOT EXISTS trial_duration_days INTEGER;
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS licence_entitlements (
     licence_id UUID NOT NULL REFERENCES licences(id) ON DELETE CASCADE,
@@ -186,23 +185,23 @@ CREATE TABLE IF NOT EXISTS company_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS id UUID;
+
 UPDATE company_settings SET id=gen_random_uuid() WHERE id IS NULL;
 ALTER TABLE company_settings ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE company_settings ALTER COLUMN id SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_company_settings_id ON company_settings(id);
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_enabled BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_slug VARCHAR(100);
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_name VARCHAR(200);
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_store_id UUID REFERENCES stores(id) ON DELETE SET NULL;
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_price_list_id UUID;
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_pickup_enabled BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_delivery_enabled BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_own_delivery_enabled BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_minimum_order NUMERIC(12,2) NOT NULL DEFAULT 0;
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_delivery_fee NUMERIC(12,2) NOT NULL DEFAULT 0;
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_guest_checkout BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS client_web_shop_sandbox_payments_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+
+
+
+
+
+
+
+
+
+
+
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_company_settings_client_web_shop_slug
     ON company_settings(LOWER(client_web_shop_slug)) WHERE client_web_shop_slug IS NOT NULL;
 
@@ -321,12 +320,12 @@ CREATE TABLE IF NOT EXISTS role_permissions (
     permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
     PRIMARY KEY (role_id, permission_id)
 );
-ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS id UUID;
+
 UPDATE role_permissions SET id=gen_random_uuid() WHERE id IS NULL;
 ALTER TABLE role_permissions ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE role_permissions ALTER COLUMN id SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_role_permissions_id ON role_permissions(id);
-ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+
 UPDATE role_permissions rp SET company_id=r.company_id FROM roles r WHERE rp.role_id=r.id AND rp.company_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_role_permissions_company ON role_permissions(company_id);
 
@@ -354,7 +353,6 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE users ADD COLUMN IF NOT EXISTS is_platform_developer BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS platform_developer_company_access (
     developer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -395,8 +393,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 );
 
 ALTER TABLE terminals ADD COLUMN IF NOT EXISTS app_profile VARCHAR(30) NOT NULL DEFAULT 'admin';
-ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS default_landing_page VARCHAR(40) NOT NULL DEFAULT 'dashboard';
-ALTER TABLE roles ADD COLUMN IF NOT EXISTS default_landing_page VARCHAR(40);
+
 
 CREATE INDEX IF NOT EXISTS idx_user_stores_store
 ON user_stores(store_id, active);
@@ -451,10 +448,10 @@ CREATE TABLE IF NOT EXISTS dashboards (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(company_id, api_key)
 );
-ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS api_key VARCHAR(100) NOT NULL DEFAULT 'dashboard';
-ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS run_as_mode VARCHAR(20) NOT NULL DEFAULT 'VIEWER';
-ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS access JSONB NOT NULL DEFAULT '[]'::jsonb;
-ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS default_assignments JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+
+
+
 CREATE INDEX IF NOT EXISTS idx_dashboards_company_api_key ON dashboards(company_id,api_key);
 CREATE INDEX IF NOT EXISTS idx_dashboards_company_active ON dashboards(company_id, archived_at, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dashboards_company_name ON dashboards(company_id, lower(name)) WHERE archived_at IS NULL;
@@ -566,18 +563,17 @@ CREATE TABLE IF NOT EXISTS products (
 -- Product image (data URL or remote URL), set from the Product Master form
 -- or pre-filled from the global catalogue. Additive; NULL = no image.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT NULL;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_published BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_publish_start TIMESTAMPTZ;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_publish_end TIMESTAMPTZ;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_featured BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_category_override UUID;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_sort_order INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_title_override VARCHAR(255);
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_description_override TEXT;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_image_override TEXT;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_delivery_eligible BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_pickup_eligible BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS web_shop_price_override NUMERIC(12,2);
+
+
+
+
+
+
+
+
+
+
+
 
 CREATE INDEX IF NOT EXISTS idx_products_company
 ON products(company_id);
@@ -778,8 +774,7 @@ ON inventory_batches(company_id, product_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_batches_expiry
 ON inventory_batches(company_id, store_id, expiry_date);
 
-ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS batch_id UUID;
-ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS transaction_id UUID;
+
 
 -- ------------------------------------------------------------
 -- STOCK TRANSFERS — moving stock between a company's own stores.
@@ -1031,8 +1026,8 @@ CREATE TABLE IF NOT EXISTS supplier_ledger_entries (
 
 CREATE INDEX IF NOT EXISTS idx_supplier_ledger_account
 ON supplier_ledger_entries(company_id, supplier_id, created_at, id);
-ALTER TABLE supplier_ledger_entries ADD COLUMN IF NOT EXISTS reference VARCHAR(100);
-ALTER TABLE supplier_ledger_entries ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100);
+
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_supplier_ledger_idempotency
 ON supplier_ledger_entries(company_id, idempotency_key)
 WHERE idempotency_key IS NOT NULL;
@@ -1605,16 +1600,16 @@ CREATE TABLE IF NOT EXISTS payments (
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+
 ALTER TABLE payments ALTER COLUMN sale_id DROP NOT NULL;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE SET NULL;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE SET NULL;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS transaction_id UUID REFERENCES sales(id) ON DELETE SET NULL;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS direction VARCHAR(20) NOT NULL DEFAULT 'IN';
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS reference VARCHAR(100);
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS online_order_id UUID;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(200);
+
+
+
+
+
+
+
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_company_idempotency
     ON payments(company_id,idempotency_key) WHERE idempotency_key IS NOT NULL;
 
@@ -2179,21 +2174,19 @@ CREATE TABLE IF NOT EXISTS online_orders (
     CONSTRAINT online_orders_platform_external_unique UNIQUE (company_id, platform, external_order_id)
 );
 
-ALTER TABLE online_orders
-    ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE SET NULL;
-ALTER TABLE online_orders
-    ADD COLUMN IF NOT EXISTS customer_data JSONB;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS public_tracking_token_hash VARCHAR(64);
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS public_tracking_token_ciphertext TEXT;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS public_tracking_token_expires_at TIMESTAMPTZ;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_driver_id UUID REFERENCES users(id) ON DELETE SET NULL;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_assigned_at TIMESTAMPTZ;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_route_order INTEGER;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_status_note TEXT;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS out_for_delivery_at TIMESTAMPTZ;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS failed_delivery_at TIMESTAMPTZ;
-ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ;
+
+
+
+
+
+
+
+
+
+
+
+
+
 ALTER TABLE online_orders DROP CONSTRAINT IF EXISTS online_orders_status_check;
 ALTER TABLE online_orders ADD CONSTRAINT online_orders_status_check CHECK (
     status IN ('RECEIVED', 'ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'DRIVER_ACCEPTED', 'COLLECTED', 'OUT_FOR_DELIVERY', 'COMPLETED', 'FAILED_DELIVERY', 'RETURNED', 'REJECTED', 'CANCELLED')
@@ -2246,8 +2239,6 @@ CREATE INDEX IF NOT EXISTS idx_payments_online_order ON payments(company_id,onli
  * the database-level guarantee that completing an order can never create a
  * second sale, no matter how completion is retried.
  */
-ALTER TABLE sales
-    ADD COLUMN IF NOT EXISTS online_order_id UUID;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_online_order
 ON sales(online_order_id);
@@ -2525,20 +2516,6 @@ CREATE TABLE IF NOT EXISTS integration_connections (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE integration_connections
-    ADD COLUMN IF NOT EXISTS provider_account_id VARCHAR(255),
-    ADD COLUMN IF NOT EXISTS connector_package_key VARCHAR(100),
-    ADD COLUMN IF NOT EXISTS till_id UUID REFERENCES terminals(id) ON DELETE SET NULL,
-    ADD COLUMN IF NOT EXISTS connector_configuration JSONB NOT NULL DEFAULT '{}'::jsonb,
-    ADD COLUMN IF NOT EXISTS connector_capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
-    ADD COLUMN IF NOT EXISTS fallback_order INTEGER NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS last_test_at TIMESTAMPTZ,
-    ADD COLUMN IF NOT EXISTS last_test_result JSONB NOT NULL DEFAULT '{}'::jsonb,
-    ADD COLUMN IF NOT EXISTS connection_status VARCHAR(20) NOT NULL DEFAULT 'NOT_CONNECTED',
-    ADD COLUMN IF NOT EXISTS last_connected_at TIMESTAMPTZ,
-    ADD COLUMN IF NOT EXISTS last_error TEXT,
-    ADD COLUMN IF NOT EXISTS oauth_state_hash VARCHAR(64),
-    ADD COLUMN IF NOT EXISTS oauth_state_expires_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_integration_connections_company
 ON integration_connections(company_id);
@@ -2719,7 +2696,7 @@ CREATE TABLE IF NOT EXISTS platform_modules (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE platform_modules ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+
 CREATE TABLE IF NOT EXISTS platform_module_access (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     module_id UUID NOT NULL REFERENCES platform_modules(id) ON DELETE CASCADE,
@@ -2766,8 +2743,7 @@ CREATE TABLE IF NOT EXISTS company_package_installations (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (company_id, package_id)
 );
-ALTER TABLE company_package_installations
-    ADD COLUMN IF NOT EXISTS selected_features JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 CREATE INDEX IF NOT EXISTS idx_company_package_installations_company
     ON company_package_installations(company_id, status);
 CREATE TABLE IF NOT EXISTS package_installation_versions (
@@ -2816,12 +2792,12 @@ CREATE TABLE IF NOT EXISTS platform_objects (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS api_name VARCHAR(100);
-ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+
 UPDATE platform_objects SET api_name=object_key WHERE api_name IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_objects_company_api_name
   ON platform_objects(company_id, api_name) WHERE company_id IS NOT NULL;
-ALTER TABLE platform_objects ADD COLUMN IF NOT EXISTS package_id UUID REFERENCES package_registry(id) ON DELETE SET NULL;
+
 CREATE INDEX IF NOT EXISTS idx_platform_objects_package ON platform_objects(package_id);
 
 CREATE TABLE IF NOT EXISTS platform_fields (
@@ -3001,8 +2977,8 @@ CREATE TABLE IF NOT EXISTS platform_layouts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS layout_key VARCHAR(100) NOT NULL DEFAULT '';
-ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS record_type_id UUID REFERENCES platform_record_types(id) ON DELETE CASCADE;
+
+
 ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_layouts_object_page_key
@@ -3122,9 +3098,9 @@ CREATE TABLE IF NOT EXISTS platform_rules (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE platform_rules ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id) ON DELETE SET NULL;
-ALTER TABLE platform_rules ADD COLUMN IF NOT EXISTS lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT';
-ALTER TABLE platform_rules ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+
+
+
 ALTER TABLE platform_rules ALTER COLUMN lifecycle_status SET DEFAULT 'DRAFT';
 ALTER TABLE platform_rules ALTER COLUMN version SET DEFAULT 1;
 CREATE INDEX IF NOT EXISTS idx_platform_rules_lifecycle
@@ -3193,9 +3169,8 @@ CREATE TABLE IF NOT EXISTS platform_notifications (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE platform_notifications ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(20) NOT NULL DEFAULT 'DELIVERED';
-ALTER TABLE platform_notifications ADD COLUMN IF NOT EXISTS event_id UUID;
-ALTER TABLE platform_notifications ADD COLUMN IF NOT EXISTS subscription_id UUID;
+
+
 
 CREATE INDEX IF NOT EXISTS idx_platform_notifications_company
 ON platform_notifications(company_id, created_at DESC);
@@ -3559,7 +3534,7 @@ CREATE TABLE IF NOT EXISTS licence_packages (
     version_range VARCHAR(80),
     PRIMARY KEY(licence_id, package_id)
 );
-ALTER TABLE licence_packages ADD COLUMN IF NOT EXISTS entitlement_type VARCHAR(20) NOT NULL DEFAULT 'COMMERCIAL';
+
 UPDATE licence_packages SET entitlement_type='OPTIONAL' WHERE optional=true AND entitlement_type='COMMERCIAL';
 CREATE TABLE IF NOT EXISTS licence_bundles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
