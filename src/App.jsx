@@ -2204,7 +2204,6 @@ function Desktop({ onLock, onSignOut }) {
                   sessionStorage.setItem('onepos_user', JSON.stringify({ ...currentUser, storeId: nextStoreId || null }))
                 }}
               >
-                {availableStores.length > 1 ? <option value="">Select store</option> : null}
                 {availableStores.map((store) => (
                   <option key={store.id} value={store.id}>{store.name || store.code || 'Store'}</option>
                 ))}
