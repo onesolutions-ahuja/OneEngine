@@ -135,3 +135,58 @@ export function createSmsGateDriver() {
     },
   };
 }
+
+
+export async function configureSmsGateInboundWebhook(configuration = {}, { webhookUrl, signingKey } = {}) {
+  const url = String(webhookUrl || "").trim();
+  const key = String(signingKey || "").trim();
+  if (!url || !/^https:\/\//i.test(url)) {
+    throw Object.assign(new Error("A public HTTPS SMSGate webhook URL is required"), { code: "INVALID_WEBHOOK_URL" });
+  }
+  if (!key) {
+    throw Object.assign(new Error("SMSGate webhook signing key is required"), { code: "INVALID_WEBHOOK_KEY" });
+  }
+
+  // SMSGate's signing key is write-only. Keep the same generated secret in
+  // OneEngine credentials and push it to the provider before registering the
+  // callback so inbound requests can be verified immediately.
+  await request(configuration, "/3rdparty/v1/settings", {
+    method: "PATCH",
+    body: { webhooks: { signing_key: key } },
+  });
+
+  const current = await request(configuration, "/3rdparty/v1/webhooks");
+  const webhooks = Array.isArray(current)
+    ? current
+    : Array.isArray(current?.data)
+      ? current.data
+      : Array.isArray(current?.webhooks)
+        ? current.webhooks
+        : [];
+
+  const existing = webhooks.find((hook) =>
+    String(hook?.url || "").replace(/\/+$/, "") === url.replace(/\/+$/, "")
+      && String(hook?.event || "").toLowerCase() === "sms:received"
+  );
+
+  if (existing) {
+    return {
+      configured: true,
+      created: false,
+      webhookId: existing.id || existing.webhookId || null,
+      webhookUrl: url,
+      event: "sms:received",
+    };
+  }
+
+  const payload = { url, event: "sms:received" };
+  if (configuration.deviceId) payload.device_id = String(configuration.deviceId);
+  const created = await request(configuration, "/3rdparty/v1/webhooks", { method: "POST", body: payload });
+  return {
+    configured: true,
+    created: true,
+    webhookId: created?.id || created?.webhookId || null,
+    webhookUrl: url,
+    event: "sms:received",
+  };
+}
