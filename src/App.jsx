@@ -2417,7 +2417,7 @@ function Desktop({ onLock, onSignOut }) {
       </Suspense>
       </LazyLoadBoundary>
 
-      <Dock onItemOpen={openItem} />
+      <Dock onItemOpen={openItem} collapsible={activeApp === 'till'} />
     </main>
   )
 }
