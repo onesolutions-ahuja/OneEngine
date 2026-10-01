@@ -378,10 +378,13 @@ export function packageDefinition(entry) {
                   { key: "catalogue", type: "CATALOGUE", title: "What would you like?", search: true, categories: true, productAction: "OPEN_DETAIL", next: "product" },
                   { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, modifiers: true, nutrition: true, allergens: true, next: "upsell" },
                   { key: "upsell", type: "RECOMMENDATIONS", source: "CROSS_SELL", title: "Make it yours", optional: true, next: "fulfilment" },
-                  { key: "fulfilment", type: "FULFILMENT", title: "How would you like it?", defaultOption: "EAT_IN", next: "basket", options: [
+                  { key: "fulfilment", type: "FULFILMENT", title: "How would you like it?", defaultOption: "EAT_IN", next: "service_details", options: [
                     { key: "EAT_IN", label: "Eat in", canonicalType: "SELF_PICKUP" },
                     { key: "TAKEAWAY", label: "Takeaway", canonicalType: "SELF_PICKUP" },
                     { key: "COLLECT", label: "Collect", canonicalType: "SELF_PICKUP" }
+                  ] },
+                  { key: "service_details", type: "FORM", title: "Order details", optional: true, next: "basket", showWhen: { path: "fulfilmentType", operator: "equals", value: "EAT_IN" }, fields: [
+                    { key: "tableNumber", label: "Table number", type: "text", required: false, placeholder: "Optional table number" }
                   ] },
                   { key: "basket", type: "BASKET", editable: true, promotions: true, next: "loyalty" },
                   { key: "loyalty", type: "LOYALTY", title: "Rewards", subtitle: "Scan or enter your details to collect rewards, or continue as a guest.", optional: true, next: "payment" },
@@ -419,11 +422,16 @@ export function packageDefinition(entry) {
                   { key: "catalogue", type: "CATALOGUE", title: "Find your product", search: true, categories: true, productAction: "OPEN_DETAIL", next: "product" },
                   { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true, next: "extras" },
                   { key: "extras", type: "RECOMMENDATIONS", source: "ACCESSORY", title: "Accessories & protection", warranty: true, optional: true, next: "fulfilment" },
-                  { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", defaultOption: "COLLECT", next: "basket", options: [
+                  { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", defaultOption: "COLLECT", next: "service_details", options: [
                     { key: "COLLECT", label: "Collect here", canonicalType: "SELF_PICKUP", requires: [] },
                     { key: "OTHER_STORE", label: "Collect another store", canonicalType: "SELF_PICKUP", requires: ["STORE"] },
                     { key: "DELIVERY", label: "Home delivery", canonicalType: "DELIVERY", requires: ["ADDRESS","CONTACT"] }
                   ], stockPromise: true },
+                  { key: "service_details", type: "FORM", title: "Extra order details", optional: true, next: "basket", fields: [
+                    { key: "preferredSlot", label: "Preferred collection / delivery slot", type: "select", required: false, options: ["As soon as possible","Morning","Afternoon","Evening"] },
+                    { key: "installationRequired", label: "Installation service", type: "select", required: false, options: ["No installation","Installation required"] },
+                    { key: "notes", label: "Order notes", type: "textarea", required: false, placeholder: "Optional instructions" }
+                  ] },
                   { key: "basket", type: "BASKET", editable: true, promotions: true, next: "loyalty" },
                   { key: "loyalty", type: "LOYALTY", title: "Your details", subtitle: "Enter your phone number or email for rewards and order updates, or continue as a guest.", optional: true, next: "payment" },
                   { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & order", next: "confirmation" },
