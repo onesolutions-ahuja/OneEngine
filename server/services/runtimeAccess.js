@@ -24,12 +24,11 @@ export function destinationFor(value) {
 
 export const isValidLandingPage = (value) => Boolean(destinationFor(value));
 
-export function canAccessDestination(value, { enabledModules = new Set(), permissions = [], isAdmin = false } = {}) {
+export function canAccessDestination(value, { enabledModules = new Set(), permissions = [] } = {}) {
   const destination = destinationFor(value);
   if (!destination) return false;
   /* Company module activation applies to every caller. */
   if (destination.moduleKey && !enabledModules.has(destination.moduleKey)) return false;
-  if (isAdmin === true) return true;
   return (destination.requiresAnyPermission ? permissions.length > 0 : true)
     && (!destination.permission || permissions.includes(destination.permission));
 }
@@ -42,19 +41,18 @@ export function resolveLandingPage({
   deviceProfile = DEVICE_PROFILES.ADMIN,
   enabledModules = new Set(),
   permissions = [],
-  isAdmin = false,
 } = {}) {
   const profile = normalizeDeviceProfile(deviceProfile);
   const profileFallback = profileDefault || (profile === DEVICE_PROFILES.TILL ? "pos" : "dashboard");
   const candidates = [userOverride, roleDefault, profileFallback, companyDefault, "dashboard", "pos"];
-  const selected = candidates.find((candidate) => canAccessDestination(candidate, { enabledModules, permissions, isAdmin }));
+  const selected = candidates.find((candidate) => canAccessDestination(candidate, { enabledModules, permissions }));
   return destinationFor(selected)?.path || null;
 }
 
-export function permittedCatalogEntries({ enabledModules = new Set(), permissions = [], isAdmin = false } = {}) {
+export function permittedCatalogEntries({ enabledModules = new Set(), permissions = [] } = {}) {
   return internalAppCatalog.filter((entry) =>
     enabledModules.has(entry.key)
-    && (isAdmin === true || entry.permissions.some((permission) => permissions.includes(permission)))
+    && entry.permissions.some((permission) => permissions.includes(permission))
   );
 }
 
