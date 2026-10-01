@@ -85,3 +85,39 @@
 .one-kiosk-modifier-list{display:flex;flex-wrap:wrap;gap:8px}.one-kiosk-modifier-list button{border:1px solid #dfe4eb;background:white;border-radius:999px;padding:9px 12px;font-weight:700}
 .one-kiosk-product-modal-footer{margin-top:auto;display:grid;grid-template-columns:auto minmax(180px,1fr);align-items:center;gap:18px;padding-top:16px}.one-kiosk-product-modal-footer>strong{font-size:28px}
 @media(max-width:760px){.one-kiosk-product-modal{padding:10px}.one-kiosk-product-modal-card{grid-template-columns:1fr;border-radius:20px}.one-kiosk-product-modal-image{min-height:240px;max-height:36vh}.one-kiosk-product-modal-copy{padding:20px}.one-kiosk-product-modal-footer{grid-template-columns:1fr}.one-kiosk-product-modal-footer>strong{text-align:center}}
+
+.one-kiosk-header-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.one-kiosk-tool{min-height:44px;border:1px solid #dfe4eb;background:#fff;border-radius:13px;padding:0 12px;display:flex;align-items:center;gap:7px;font-weight:750;color:#344054}
+.one-kiosk-stage{min-height:570px;display:flex;flex-direction:column;gap:18px}
+.one-kiosk-stage-narrow{max-width:760px;margin:0 auto;padding:14px 4px}
+.one-kiosk-stage-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.one-kiosk-stage-head button,.one-kiosk-secondary,.one-kiosk-stage-actions>button:not(.one-kiosk-pay){border:1px solid #dfe4eb;background:white;border-radius:12px;padding:11px 14px;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:750;color:#344054}
+.one-kiosk-stage-next{align-self:flex-end;min-width:220px}
+.one-kiosk-stage-actions{display:grid;grid-template-columns:1fr 1.5fr;gap:12px;margin-top:auto}
+.one-kiosk-payment-stage{max-width:620px;margin:auto;text-align:center;align-items:center;justify-content:center}
+.one-kiosk-payment-stage h2{font-size:clamp(30px,4vw,46px);margin:0;letter-spacing:-.04em}
+.one-kiosk-payment-stage p{max-width:470px;color:#667085;font-size:17px}
+.one-kiosk-payment-stage .one-kiosk-total{width:min(100%,480px)}
+.one-kiosk-review-lines{display:grid;gap:10px}
+.one-kiosk-review-lines>div{display:flex;justify-content:space-between;align-items:center;gap:18px;border:1px solid #e8ecf1;border-radius:15px;padding:14px 16px;background:#fff}
+.one-kiosk-review-lines>div>div{display:grid;gap:3px}.one-kiosk-review-lines small{color:#7b8492}
+.one-kiosk-cart-continue{width:100%;min-height:46px;border:0;border-radius:13px;background:#111827;color:#fff;font-weight:800;margin:10px 0}
+.one-kiosk-fulfilment-detail{display:grid;gap:10px;margin:12px 0;padding:14px;border:1px solid #e5e9ef;border-radius:15px;background:#fafbfc}
+.one-kiosk-store-list{display:grid;gap:8px}.one-kiosk-store-list button{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;border:1px solid #dfe4eb;border-radius:12px;padding:12px;background:#fff}.one-kiosk-store-list button.is-active{border-color:#111827;box-shadow:0 0 0 2px rgba(17,24,39,.08)}.one-kiosk-store-list button:disabled{opacity:.48}
+.one-kiosk-store-list button span,.one-kiosk-store-list button small{display:block}.one-kiosk-store-list small{color:#7b8492}
+.one-kiosk-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.one-kiosk-form-grid .wide{grid-column:1/-1}.one-kiosk-form-grid input{min-height:46px;border:1px solid #dfe4eb;border-radius:11px;padding:0 12px;font-size:15px}
+.one-kiosk-savings{border-radius:11px;background:#ecfdf3;color:#047857;padding:9px 12px;font-weight:800;text-align:center}
+.one-kiosk-idle-overlay{position:fixed;inset:0;z-index:1300;background:rgba(15,23,42,.62);backdrop-filter:blur(7px);display:grid;place-items:center;padding:20px}.one-kiosk-idle-overlay>div{width:min(480px,92vw);background:#fff;border-radius:24px;padding:28px;display:grid;gap:12px;text-align:center;box-shadow:0 35px 90px rgba(15,23,42,.3)}.one-kiosk-idle-overlay strong{font-size:28px}.one-kiosk-idle-overlay span{color:#667085}.one-kiosk-idle-overlay button{border:0;background:#111827;color:#fff;border-radius:13px;padding:13px;font-weight:800}
+.one-kiosk-help{position:fixed;z-index:800;left:22px;bottom:22px;border:0;border-radius:999px;background:#111827;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:8px;font-weight:800;box-shadow:0 14px 36px rgba(15,23,42,.22)}
+.one-kiosk-attract{min-height:100vh!important;padding:24px;display:grid!important;place-items:center;background:radial-gradient(circle at 50% 30%,#fff 0,#eef2f7 58%,#e3e8ef 100%)}
+.one-kiosk-attract section{text-align:center;display:grid;gap:14px;width:min(660px,90vw)}.one-kiosk-attract h1{font-size:clamp(54px,8vw,96px);letter-spacing:-.055em;margin:0}.one-kiosk-attract p{font-size:clamp(18px,2vw,26px);color:#667085;margin:0 0 14px}
+.one-kiosk-confirmation-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}.one-kiosk-confirmation-actions>button:not(.one-kiosk-pay){border:1px solid #dfe4eb;border-radius:12px;background:#fff;padding:11px 14px;font-weight:750;display:flex;align-items:center;gap:7px}
+.one-kiosk-receipt-qr{display:grid;justify-items:center;gap:6px}.one-kiosk-receipt-qr img{width:min(230px,62vw);height:auto;border-radius:12px;border:1px solid #e6e9ef}.one-kiosk-receipt-qr small{color:#667085}
+.one-kiosk-idle-warning{padding:8px 10px;border-radius:10px;background:#fff7ed;color:#9a3412;font-weight:700}
+.one-kiosk.is-large-text{font-size:118%}.one-kiosk.is-large-text button,.one-kiosk.is-large-text input{font-size:1em}.one-kiosk.is-large-text .one-kiosk-product-copy strong{font-size:1.12em}
+.one-kiosk.is-high-contrast{background:#000;color:#fff}.one-kiosk.is-high-contrast .one-kiosk-catalogue,.one-kiosk.is-high-contrast .one-kiosk-cart,.one-kiosk.is-high-contrast .one-kiosk-product,.one-kiosk.is-high-contrast .one-kiosk-tool{background:#111;color:#fff;border-color:#fff}.one-kiosk.is-high-contrast .one-kiosk-header p,.one-kiosk.is-high-contrast small{color:#fff}
+.one-kiosk.is-reach .one-kiosk-header{min-height:20vh;align-items:flex-end}.one-kiosk.is-reach .one-kiosk-shell{align-items:end;min-height:72vh}.one-kiosk.is-reach .one-kiosk-catalogue,.one-kiosk.is-reach .one-kiosk-cart{max-height:68vh;overflow:auto}
+.one-kiosk-option-group{display:grid;gap:9px}.one-kiosk-option-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.one-kiosk-option-title small{color:#7b8492}.one-kiosk-choice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}.one-kiosk-choice-grid button{border:1px solid #dfe4eb;background:#fff;border-radius:12px;padding:11px;text-align:left;display:grid;gap:4px}.one-kiosk-choice-grid button.is-active{border-color:#111827;box-shadow:0 0 0 2px rgba(17,24,39,.08)}.one-kiosk-choice-grid button:disabled{opacity:.45}.one-kiosk-choice-grid small{color:#667085}
+.one-kiosk-allergens,.one-kiosk-warranty{border-radius:12px;padding:12px 14px;background:#fff7ed;color:#9a3412;display:grid;gap:4px}
+@media(max-width:740px){.one-kiosk-header-actions{justify-content:flex-start}.one-kiosk-tool span{display:none}.one-kiosk-stage-actions{grid-template-columns:1fr}.one-kiosk-form-grid{grid-template-columns:1fr}.one-kiosk-form-grid .wide{grid-column:auto}.one-kiosk-help{left:12px;bottom:12px}}
+@media print{.one-kiosk-confirmation-actions,.one-kiosk-help,.one-kiosk-demo-ribbon{display:none!important}.one-kiosk-confirmation{background:#fff!important}.one-kiosk-confirmation-card{box-shadow:none!important;border:0!important}}
