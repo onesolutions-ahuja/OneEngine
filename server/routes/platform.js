@@ -3656,6 +3656,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (stepId) resultByStep.set(String(stepId), entry.result);
         if (entry?.result?.branch?.results) flatten(entry.result.branch.results);
         if (entry?.result?.faultBranch?.results) flatten(entry.result.faultBranch.results);
+        if (entry?.result?.scheduledBranch?.results) flatten(entry.result.scheduledBranch.results);
         for (const iteration of entry?.result?.iterations || []) flatten(iteration?.results || []);
       }
     };
