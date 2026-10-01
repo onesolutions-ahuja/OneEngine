@@ -4427,7 +4427,6 @@ export async function executeWorkflowActions({ actions, ...context }) {
         },
       });
       if (waiting || stopped) break;
-      completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
       continue;
     }
 
@@ -4436,7 +4435,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
       restoreWorkflowRuntimeState(priorResult, workflowVariables, item.id || `step-${globalIndex + 1}`, resolveWorkflowActionType(item));
-      completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
+      if (priorResult?.faultHandled !== true) completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
       continue;
     }
     if (stepRun?.status === "WAITING" && !["LOOP","CONDITION","RUN_SUBFLOW"].includes(resolveWorkflowActionType(item))) {
@@ -4605,7 +4604,6 @@ export async function executeWorkflowActions({ actions, ...context }) {
             metadata: { result: redact(handled), error: details, friendlyError, retryAttempts, faultPending: false },
           });
         }
-        completed.push({ action: item, stepRunId: stepRun?.id || null, index: globalIndex });
         continue;
       }
       if (faultMode === "STOP") {
@@ -4676,7 +4674,6 @@ export async function executeWorkflowActions({ actions, ...context }) {
           });
         }
         if (handled.status === "waiting") break;
-        completed.push({ action: item, stepRunId: stepRun?.id || null, index: globalIndex });
         continue;
       }
       const compensationFailures = await compensateCompletedSteps(completed, context, error);
