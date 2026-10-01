@@ -2595,7 +2595,7 @@ async function startServer() {
             }
             if (job.kind === "PLATFORM_SCHEDULED_WORKFLOW") {
               const workflowResult = await db(
-                `SELECT id,name,object_id,action FROM platform_rules
+                `SELECT id,name,object_id,action,version,active_version FROM platform_rules
                  WHERE id=$1 AND company_id=$2 AND active=TRUE LIMIT 1`,
                 [payload.workflowId, payload.companyId || job.company_id]
               );
@@ -2629,6 +2629,7 @@ async function startServer() {
                   companyId,
                   workflowId: workflow.id,
                   workflowName: workflow.name,
+                  workflowVersion: Number(workflow.active_version || workflow.version || 1),
                   objectId: workflow.object_id,
                   recordId: null,
                   triggerKey: "SCHEDULED",
@@ -2652,6 +2653,7 @@ async function startServer() {
                   record: null,
                   recordId: null,
                   runId: run?.id || null,
+                  workflowVersion: Number(workflow.active_version || workflow.version || 1),
                   trigger: "scheduled",
                 });
                 await db(
@@ -2713,6 +2715,7 @@ async function startServer() {
                   companyId: job.company_id,
                   workflowId: workflow.id,
                   workflowName: workflow.name,
+                  workflowVersion: Number(workflow.active_version || workflow.version || 1),
                   objectId: workflow.object_id || payload.objectId || null,
                   recordId: payload.recordId || null,
                   triggerKey: payload.eventType || workflow.trigger_key,
@@ -2739,6 +2742,7 @@ async function startServer() {
                   record: payload.record || null,
                   recordId: payload.recordId || null,
                   runId: run?.id || null,
+                  workflowVersion: Number(workflow.active_version || workflow.version || 1),
                   trigger: payload.eventType || workflow.trigger_key,
                   writeAudit,
                   createInventoryMovement,
