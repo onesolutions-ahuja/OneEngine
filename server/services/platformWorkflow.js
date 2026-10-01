@@ -4305,7 +4305,7 @@ export function restoreWorkflowRuntimeState(result, workflowVariables, stepId = 
   }
 }
 
-function workflowResultsContainStatus(entries = [], status = "waiting") {
+export function workflowResultsContainStatus(entries = [], status = "waiting") {
   return (Array.isArray(entries) ? entries : []).some((entry) => {
     if (String(entry?.result?.status || "").toLowerCase() === String(status).toLowerCase()) return true;
     if (workflowResultsContainStatus(entry?.result?.branch?.results || [], status)) return true;
