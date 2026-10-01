@@ -103,6 +103,18 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(page.getByRole("button", { name: "+ Input", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "+ Output", exact: true })).toBeVisible();
 
+  // Core collection/data/logic elements added for Salesforce-style flows remain
+  // available as normal no-code elements.
+  await page.getByRole("button", { name: "Elements", exact: true }).click();
+  for (const elementName of ["Assignment", "Loop", "Get Records", "Bulk Update Records"]) {
+    await expect(page.getByRole("button", { name: elementName, exact: true }).first()).toBeVisible();
+  }
+
+  // The canvas ships dedicated status classes used by Debug/Test to make the
+  // path understandable to non-developers (green success, red failure).
+  await expect(page.locator("style").filter({ hasText: "is-debug-failed" })).toHaveCount(1);
+  await expect(page.locator("style").filter({ hasText: "is-debug-completed" })).toHaveCount(1);
+
   // Resource Manager remains separate from canvas elements.
   await page.getByRole("button", { name: "Resources", exact: true }).click();
   await expect(page.getByRole("button", { name: "+ Constant", exact: true })).toBeVisible();
