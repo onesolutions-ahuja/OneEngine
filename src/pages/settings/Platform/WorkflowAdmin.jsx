@@ -2256,23 +2256,6 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [workflow, setWorkflow] = useState(() => {
     if (normalizedInitialWorkflow) return normalizedInitialWorkflow;
     return {
-            ...parsed,
-            steps: parsed.steps.map((step) => ({
-              ...makeStep(step.type || "CREATE_RECORD"),
-              ...step,
-              config: {
-                ...(makeStep(step.type || "CREATE_RECORD").config),
-                ...(step.config || {}),
-              },
-            })),
-          };
-        }
-      }
-    } catch {
-      // no-op: fall back to a fresh draft
-    }
-
-    return {
       name: scopeKey === "whatsapp_assistant" ? "WhatsApp Assistant Workflow" : "",
       object: "",
       trigger: scopeKey === "whatsapp_assistant" ? "whatsapp_message_received" : "manual",
