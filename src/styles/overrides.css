@@ -3051,3 +3051,82 @@
 @media(max-width:760px){
   .topbar-store-context select{max-width:110px}
 }
+
+
+/* 2026-10-01 dock icon refresh — consistent branded SVGs + visible hover names */
+.dock-item .dock-icon-wrap {
+  align-items: flex-end;
+}
+
+.dock-image--app {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 9px rgba(16, 35, 76, .18));
+  transition: filter 160ms ease;
+}
+
+.dock-item:hover .dock-image--app,
+.dock-item:focus-visible .dock-image--app {
+  filter: drop-shadow(0 7px 13px rgba(16, 35, 76, .28));
+}
+
+.dock-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 4;
+  transform: translate(-50%, 5px) scale(.97);
+  padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,.46);
+  border-radius: 7px;
+  color: #fff;
+  background: rgba(31, 35, 43, .88);
+  box-shadow: 0 7px 20px rgba(0,0,0,.20);
+  backdrop-filter: blur(14px) saturate(1.15);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: .005em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 110ms ease, transform 140ms ease;
+}
+
+.dock-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -4px) rotate(45deg);
+  background: rgba(31, 35, 43, .88);
+}
+
+.dock-item:hover .dock-tooltip,
+.dock-item:focus-visible .dock-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.dock-item:focus-visible {
+  outline: none;
+}
+
+.dock-item:focus-visible .dock-icon-wrap {
+  border-radius: 14px;
+  box-shadow: 0 0 0 3px rgba(10,132,255,.28);
+}
+
+@media (max-width: 680px) {
+  .dock-tooltip {
+    display: none;
+  }
+
+  .dock-mobile-item .dock-image--app {
+    width: 42px;
+    height: 42px;
+  }
+}
