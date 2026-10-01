@@ -2100,6 +2100,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         clauses.push(`store_id=${params.length}`);
       }
       const result = await db(`UPDATE "${targetObject.source_table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
+      for (const updated of result.rows || []) {
+        try {
+          await publishPlatformEvent({
+            db,
+            companyId: req?.user?.companyId || companyId,
+            eventType: "platform.object.record.updated",
+            payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated },
+            actorUserId: req?.user?.id || null,
+          });
+        } catch (error) {
+          console.error("Platform workflow bulk-update event publication error:", error);
+        }
+      }
       return { status: "completed", updated: result.rows || [], count: result.rows?.length || 0, requestedCount: ids.length };
     },
   },
