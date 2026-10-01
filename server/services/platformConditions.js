@@ -74,7 +74,7 @@ function normalize(value, field) {
   return String(value);
 }
 
-function validateCondition(condition, fields, context) {
+function validateCondition(condition, fields, context, options = {}) {
   if (!condition || typeof condition !== "object" || Array.isArray(condition)) {
     fail(`${context} must be an object`);
   }
@@ -107,20 +107,20 @@ function validateCondition(condition, fields, context) {
     if (!condition.value || typeof condition.value !== "object" || Array.isArray(condition.value)) {
       fail(`${context} changed_from_to requires from and to values`);
     }
-    normalize(condition.value.from, field);
-    normalize(condition.value.to, field);
+    if (!options.allowResources || !(typeof condition.value.from === "string" && (/^(?:\$|steps\.|variables\.)/.test(condition.value.from)))) normalize(condition.value.from, field);
+    if (!options.allowResources || !(typeof condition.value.to === "string" && (/^(?:\$|steps\.|variables\.)/.test(condition.value.to)))) normalize(condition.value.to, field);
     return field;
   }
   if (!["is_empty", "is_not_empty"].includes(condition.operator)) {
     if (condition.value === undefined || Array.isArray(condition.value) || typeof condition.value === "object") {
       fail(`${context} must use a simple comparison value`);
     }
-    normalize(condition.value, field);
+    if (!options.allowResources || !(typeof condition.value === "string" && (/^(?:\$|steps\.|variables\.)/.test(condition.value)))) normalize(condition.value, field);
   }
   return field;
 }
 
-export function validateConditionConfig(config, fields, name) {
+export function validateConditionConfig(config, fields, name, options = {}) {
   if (config === undefined || config === null) return;
   if (!config || typeof config !== "object" || Array.isArray(config)) {
     fail(`${name} must be an object`);
@@ -130,7 +130,7 @@ export function validateConditionConfig(config, fields, name) {
   if (!Array.isArray(config.conditions) || config.conditions.length < 1 || config.conditions.length > 20) {
     fail(`${name}.conditions must contain between 1 and 20 conditions`);
   }
-  config.conditions.forEach((condition) => validateCondition(condition, fields, name));
+  config.conditions.forEach((condition) => validateCondition(condition, fields, name, options));
 }
 
 function matches(condition, fields, record, previousRecord) {
