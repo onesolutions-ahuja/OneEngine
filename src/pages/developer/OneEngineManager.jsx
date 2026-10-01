@@ -82,7 +82,7 @@ export default function OneEngineManager(){
     if(active==='email')return <DeliverySettingsPage key={key} channel="email"/>
     if(active==='sms')return <DeliverySettingsPage key={key} channel="sms"/>
     if(active==='whatsapp')return <WhatsAppAssistantSettings key={key}/>
-    if(active==='licensing')return <div className="superadmin-theme"><LicensingAdmin key={key}/></div>
+    if(active==='licensing')return <div className="superadmin-theme"><LicensingAdmin key={key} companyId={selected} lockCompany/></div>
     if(active==='releases')return <div className="superadmin-theme"><AppReleasesAdmin key={key}/></div>
     return null
   }
