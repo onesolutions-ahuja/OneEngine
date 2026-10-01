@@ -2227,6 +2227,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [debugRecordMode, setDebugRecordMode] = useState("latest");
   const [debugRecordId, setDebugRecordId] = useState("");
   const [debugResult, setDebugResult] = useState(null);
+  const [testsOpen, setTestsOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [savedTests, setSavedTests] = useState([]);
+  const [workflowVersions, setWorkflowVersions] = useState([]);
+  const [testDraft, setTestDraft] = useState({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
+  const [testBusyId, setTestBusyId] = useState(null);
+  const [versionsBusy, setVersionsBusy] = useState(false);
 
 
   useEffect(() => {
@@ -2629,6 +2636,173 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     }
     return trace;
   })();
+
+  const loadSavedTests = async () => {
+    if (!workflowId) { setSavedTests([]); return; }
+    try {
+      const response = await apiRequest(`/api/platform/rules/${workflowId}/tests`);
+      setSavedTests(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      onError?.(error.message || "Unable to load workflow tests.");
+    }
+  };
+
+  const loadWorkflowVersions = async () => {
+    if (!workflowId) { setWorkflowVersions([]); return; }
+    try {
+      setVersionsBusy(true);
+      const response = await apiRequest(`/api/platform/rules/${workflowId}/versions`);
+      setWorkflowVersions(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      onError?.(error.message || "Unable to load workflow versions.");
+    } finally {
+      setVersionsBusy(false);
+    }
+  };
+
+  const assertionLabel = (assertion) => {
+    if (assertion.type === "RUN_STATUS") return `Workflow status is ${assertion.expected || "COMPLETED"}`;
+    const step = workflow.steps.find((item) => String(item.id) === String(assertion.stepId || ""));
+    if (assertion.type === "STEP_STATUS") return `${step?.label || "Step"} status is ${assertion.expected || "COMPLETED"}`;
+    if (assertion.type === "DECISION_OUTCOME") return `${step?.label || "Decision"} outcome is ${assertion.expected || "selected outcome"}`;
+    if (assertion.type === "RESOURCE_EQUALS") return `${assertion.resource || "Resource"} equals expected value`;
+    return assertion.label || "Assertion";
+  };
+
+  const saveTestCase = async () => {
+    if (!workflowId) {
+      const saved = await saveWorkflow("DRAFT", { keepOpen: true, silent: true });
+      if (!saved?.id) return;
+    }
+    if (!testDraft.name.trim()) { onError?.("Enter a test name."); return; }
+    const id = workflowId || null;
+    if (!id) return;
+    try {
+      setTestBusyId("new");
+      await apiRequest(`/api/platform/rules/${id}/tests`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: testDraft.name.trim(),
+          config: {
+            recordMode: testDraft.recordMode,
+            recordId: testDraft.recordMode === "specific" ? testDraft.recordId.trim() : "",
+            assertions: testDraft.assertions || [],
+          },
+        }),
+      });
+      setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
+      await loadSavedTests();
+      onMessage?.("Workflow test saved.");
+    } catch (error) {
+      onError?.(error.message || "Unable to save workflow test.");
+    } finally {
+      setTestBusyId(null);
+    }
+  };
+
+  const runSavedTest = async (test) => {
+    if (!workflowId) return;
+    try {
+      setTestBusyId(test.id);
+      setDebugMode("test");
+      setDebugOpen(true);
+      const definition = buildWorkflowPayload("DRAFT");
+      const response = await apiRequest(`/api/platform/rules/${workflowId}/debug`, {
+        method: "POST",
+        body: JSON.stringify({
+          definition,
+          mode: "test",
+          assertions: test.config?.assertions || [],
+          ...(test.config?.recordMode === "specific" && test.config?.recordId ? { recordId: test.config.recordId } : {}),
+        }),
+      });
+      const result = response?.data || null;
+      setDebugResult(result);
+      await apiRequest(`/api/platform/rules/${workflowId}/tests/${test.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          lastStatus: result?.testPassed === true ? "PASSED" : "FAILED",
+          lastRunId: result?.run?.id || null,
+          lastResult: {
+            status: result?.status || null,
+            testPassed: result?.testPassed === true,
+            assertionResult: result?.assertionResult || null,
+          },
+        }),
+      });
+      await loadSavedTests();
+    } catch (error) {
+      onError?.(error.message || "Unable to run saved workflow test.");
+    } finally {
+      setTestBusyId(null);
+    }
+  };
+
+  const deleteSavedTest = async (testId) => {
+    if (!workflowId) return;
+    try {
+      await apiRequest(`/api/platform/rules/${workflowId}/tests/${testId}`, { method: "DELETE" });
+      await loadSavedTests();
+    } catch (error) {
+      onError?.(error.message || "Unable to remove workflow test.");
+    }
+  };
+
+  const restoreWorkflowVersion = async (version) => {
+    if (!workflowId) return;
+    try {
+      setVersionsBusy(true);
+      await apiRequest(`/api/platform/rules/${workflowId}/versions/${version}/restore`, { method: "POST" });
+      const response = await apiRequest("/api/platform/rules");
+      const rule = (Array.isArray(response?.data) ? response.data : []).find((item) => String(item.id) === String(workflowId));
+      if (!rule) throw new Error("Restored workflow could not be reloaded");
+      const restored = {
+        ...rule,
+        id: rule.id,
+        name: rule.name,
+        object: rule.object_key || rule.object || "",
+        objectId: rule.object_id || null,
+        objectKey: rule.object_key || "",
+        trigger: rule.trigger_key,
+        active: false,
+        scope: rule.action?.scope || null,
+        inputContract: rule.action?.inputContract || [],
+        outputContract: rule.action?.outputContract || [],
+        match: rule.action?.match || "all",
+        lifecycleStatus: "DRAFT",
+        version: Number(rule.version || 1),
+        actionMetadata: {
+          flowType: rule.action?.flowType || null,
+          templateKey: rule.action?.templateKey || null,
+          defaultForNewDevices: rule.action?.defaultForNewDevices === true,
+          ui: rule.action?.ui || null,
+        },
+        conditions: rule.conditions || [],
+        steps: (rule.action?.actions || []).map((action) => {
+          const base = makeStep(action.type || action.key);
+          return {
+            ...base,
+            id: action.id || base.id,
+            label: action.label || getActionLabel(action.type || action.key),
+            type: action.type || action.key,
+            config: {
+              ...base.config,
+              ...action,
+              ...(action.type === "FORMULA" ? { formulaInputs: action.formulaInputs || action.inputs || {} } : {}),
+            },
+          };
+        }),
+      };
+      setWorkflow(restored);
+      setSavedWorkflows((current) => [restored, ...current.filter((item) => String(item.id) !== String(workflowId))]);
+      await loadWorkflowVersions();
+      onMessage?.(`Version ${version} restored as new draft version ${restored.version}.`);
+    } catch (error) {
+      onError?.(error.message || "Unable to restore workflow version.");
+    } finally {
+      setVersionsBusy(false);
+    }
+  };
 
   const runDebug = async () => {
     if (reviewIssue) {
