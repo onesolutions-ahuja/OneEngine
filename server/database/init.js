@@ -751,6 +751,25 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "29",
       name: "Backfill immutable workflow version baseline",
       up: async client => {
+        // This table was added to the legacy compatibility bootstrap after some
+        // databases had already recorded migration 0003 as applied. Create it
+        // here as part of the first migration that depends on it so upgrades
+        // from those databases are deterministic.
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS platform_workflow_versions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            workflow_id UUID NOT NULL REFERENCES platform_rules(id) ON DELETE CASCADE,
+            version INTEGER NOT NULL,
+            definition JSONB NOT NULL,
+            lifecycle_status VARCHAR(20),
+            created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(company_id, workflow_id, version)
+          );
+          CREATE INDEX IF NOT EXISTS idx_platform_workflow_versions_lookup
+            ON platform_workflow_versions(company_id, workflow_id, version DESC);
+        `);
         await client.query(
           `INSERT INTO platform_workflow_versions
              (company_id,workflow_id,version,definition,lifecycle_status,created_by,created_at)
