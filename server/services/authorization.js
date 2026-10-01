@@ -16,7 +16,7 @@ export function permissionAllows({ permissions = [], requiredPermissions = [] } 
 
 export const MODULE_ACCESS_REASONS = Object.freeze({
   ALLOWED: "entitled",
-  ALLOWED_PLATFORM_MANAGEMENT: "platform_management",
+  ALLOWED_ONEENGINE_MANAGEMENT: "oneengine_management",
   COMPANY_DISABLED: "company_disabled",
   NOT_PERMITTED: "not_permitted",
   PACKAGE_NOT_INSTALLED: "package_not_installed",
@@ -26,7 +26,7 @@ export const MODULE_ACCESS_REASONS = Object.freeze({
 /**
  * Decide whether one runtime module is reachable by the caller.
  *
- * canManagePlatform means the caller holds the platform.manage permission.
+ * canManageOneEngine means the caller holds the oneengine.manage permission.
  * It is not an identity flag.
  */
 export function moduleRuntimeAccess({
@@ -34,7 +34,7 @@ export function moduleRuntimeAccess({
   packageInstalled = false,
   licensed = false,
   permitted = false,
-  canManagePlatform = false,
+  canManageOneEngine = false,
 } = {}) {
   if (enabledByCompany === false) {
     return { allowed: false, reason: MODULE_ACCESS_REASONS.COMPANY_DISABLED };
@@ -42,13 +42,13 @@ export function moduleRuntimeAccess({
   if (permitted !== true) {
     return { allowed: false, reason: MODULE_ACCESS_REASONS.NOT_PERMITTED };
   }
-  if (canManagePlatform === true) {
+  if (canManageOneEngine === true) {
     return {
       allowed: true,
       reason:
         packageInstalled && licensed
           ? MODULE_ACCESS_REASONS.ALLOWED
-          : MODULE_ACCESS_REASONS.ALLOWED_PLATFORM_MANAGEMENT,
+          : MODULE_ACCESS_REASONS.ALLOWED_ONEENGINE_MANAGEMENT,
     };
   }
   if (!packageInstalled) {
