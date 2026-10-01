@@ -59,6 +59,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await page.getByRole("button", { name: "Save Test", exact: true }).click();
   const savedTest = page.locator("div").filter({ hasText: qaTestName }).filter({ has: page.getByRole("button", { name: "Run", exact: true }) }).last();
   await expect(savedTest).toBeVisible();
+  await expect(savedTest.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
   await savedTest.getByRole("button", { name: "Run", exact: true }).click();
   const debugPanel = page.locator("div").filter({ hasText: "Debug / Test workflow" }).filter({ hasText: "No database changes were kept" }).last();
   await expect(debugPanel.getByText("Test passed", { exact: true })).toBeVisible();
