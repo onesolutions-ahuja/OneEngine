@@ -106,7 +106,7 @@ export async function submitPlatformApproval({ db, object, fields, recordId, rec
       "SELECT * FROM platform_approval_processes WHERE object_id=$1 AND company_id=$2 AND active=true ORDER BY id",
       [object.id, req.user.companyId]
     );
-    const process = processes.rows.find((candidate) => (manual || cfg(candidate.config).submissionMode !== "MANUAL") && evaluateCondition(candidate.conditions, fields, record));
+    const process = processes.rows.find((candidate) => (manual ? cfg(candidate.config).submissionMode === "MANUAL" : cfg(candidate.config).submissionMode !== "MANUAL") && evaluateCondition(candidate.conditions, fields, record));
     if (!process) return null;
     const existing = await db(
       "SELECT * FROM platform_approval_requests WHERE process_id=$1 AND record_id=$2 AND company_id=$3 AND status='pending' LIMIT 1",
