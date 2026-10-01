@@ -238,10 +238,17 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
     if (!deviceKey) return res.status(400).json({ success: false, message: "Kiosk device key is required" });
     try {
       const deviceResult = await db(
-        `SELECT kd.id,kd.device_key,kd.name,kd.workflow_id,
+        `SELECT kd.id,kd.device_key,kd.name,kd.workflow_id,kd.payment_connector_id,
+                pc.name AS payment_connector_name,pc.connector_package_key,
+                pc.enabled AS payment_connector_enabled,pc.connection_status AS payment_connector_status,
+                pc.last_error AS payment_connector_error,pc.last_connected_at AS payment_connector_last_connected_at,
+                pc.till_id AS payment_connector_till_id,
                 pr.id AS flow_id,pr.name AS flow_name,pr.version AS flow_version,
                 pr.action AS flow_action,pr.lifecycle_status AS flow_status
            FROM kiosk_devices kd
+           LEFT JOIN integration_connections pc
+             ON pc.id=kd.payment_connector_id
+            AND pc.company_id=kd.company_id
            LEFT JOIN platform_rules pr
              ON pr.id=kd.workflow_id
             AND pr.company_id=kd.company_id
@@ -280,6 +287,19 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
         success: true,
         data: {
           device: { id: device.id, deviceKey: device.device_key, name: device.name },
+          payment: {
+            connectorInstanceId: device.payment_connector_id || null,
+            name: device.payment_connector_name || null,
+            packageKey: device.connector_package_key || null,
+            status: device.payment_connector_enabled !== true
+              ? "NOT_CONFIGURED"
+              : device.payment_connector_status === "CONNECTED"
+                ? "READY"
+                : device.payment_connector_status || "UNKNOWN",
+            error: device.payment_connector_error || null,
+            lastConnectedAt: device.payment_connector_last_connected_at || null,
+            tillId: device.payment_connector_till_id || null,
+          },
           flow: {
             id: flow.flow_id,
             name: flow.flow_name,
