@@ -64,8 +64,18 @@ export function resolveRecordPathValue(record, path, rootObjectKey = null) {
   return value;
 }
 
-function resolveContextPathValue(path, { record, rootObjectKey, variables } = {}) {
-  const normalized = normalizeRecordPath(path);
+function resolveContextPathValue(path, { record, previousRecord, user, rootObjectKey, variables, now = new Date() } = {}) {
+  const raw = String(path || "").trim();
+  if (!raw) return undefined;
+  if (raw === "$now") return now instanceof Date ? now.toISOString() : now;
+  if (raw === "$record") return record || null;
+  if (raw.startsWith("$record.")) return resolveRecordPathValue(record, raw.slice("$record.".length), null);
+  if (raw === "$previous") return previousRecord || null;
+  if (raw.startsWith("$previous.")) return resolveRecordPathValue(previousRecord, raw.slice("$previous.".length), null);
+  if (raw === "$user") return user || null;
+  if (raw.startsWith("$user.")) return resolveRecordPathValue(user, raw.slice("$user.".length), null);
+
+  const normalized = normalizeRecordPath(raw);
   if (!normalized) return undefined;
   if (normalized === "steps" || normalized.startsWith("steps.")) {
     return resolveRecordPathValue(variables || {}, normalized, null);
@@ -77,9 +87,16 @@ function resolveContextPathValue(path, { record, rootObjectKey, variables } = {}
   return resolveRecordPathValue(record, normalized, rootObjectKey);
 }
 
-export function resolveBindingValue(binding, { record, rootObjectKey, variables } = {}) {
+export function resolveBindingValue(binding, context = {}) {
+  if (typeof binding === "string" && binding.startsWith("$")) {
+    return resolveContextPathValue(binding, context);
+  }
   if (!binding || typeof binding !== "object" || Array.isArray(binding) || !binding.path) return binding;
-  return resolveContextPathValue(binding.path, { record, rootObjectKey, variables });
+  return resolveContextPathValue(binding.path, context);
+}
+
+export function resolveWorkflowResource(path, context = {}) {
+  return resolveContextPathValue(path, context);
 }
 
 export function resolveBindingTree(value, context = {}) {
