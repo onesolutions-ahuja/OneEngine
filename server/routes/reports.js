@@ -661,6 +661,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
           INNER JOIN stock_return_items sri ON sri.return_id = sr.id
           INNER JOIN sale_items si2 ON si2.id = sri.sale_item_id
           INNER JOIN products p ON p.id = si2.product_id
+          INNER JOIN companies c ON c.id = sr.company_id
           WHERE ${returnClauses.join(" AND ")}
         )
         SELECT sold.*, returned.* FROM sold, returned
@@ -697,6 +698,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
           INNER JOIN stock_return_items sri ON sri.return_id = sr.id
           INNER JOIN sale_items si2 ON si2.id = sri.sale_item_id
           INNER JOIN products p ON p.id = si2.product_id
+          INNER JOIN companies c ON c.id = sr.company_id
           WHERE ${returnClauses.join(" AND ")}
           GROUP BY si2.product_id
         )
@@ -748,6 +750,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
           INNER JOIN stock_return_items sri ON sri.return_id = sr.id
           INNER JOIN sale_items si2 ON si2.id = sri.sale_item_id
           INNER JOIN products p ON p.id = si2.product_id
+          INNER JOIN companies c ON c.id = sr.company_id
           WHERE ${returnClauses.join(" AND ")}
           GROUP BY sr.created_by
         )
