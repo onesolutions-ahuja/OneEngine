@@ -79,7 +79,6 @@ export default function useOnlineOrderMetadata() {
         if (order.status === "PREPARING") {
           return [
             { button_key: "one_kiosk_ready", label: "Mark Ready", variant: "secondary", config: { uiAction: "ready" } },
-            { button_key: "one_kiosk_cancel", label: "Cancel", variant: "danger", config: { uiAction: "cancel" } },
           ];
         }
         if (order.status === "READY" || order.status === "READY_FOR_PICKUP") {
