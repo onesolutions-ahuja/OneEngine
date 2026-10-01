@@ -105,6 +105,7 @@ function money(value, currency = "GBP") {
 
 export default function OneKioskPage({ publicMode = false }) {
   const demoMode = useMemo(() => new URLSearchParams(window.location.search).get("demo") === "1", []);
+  const demoFlowKey = useMemo(() => new URLSearchParams(window.location.search).get("flow") || "", []);
   const [products, setProducts] = useState(demoMode ? DEMO_PRODUCTS : []);
   const [currency, setCurrency] = useState("GBP");
   const [loading, setLoading] = useState(true);
@@ -175,7 +176,14 @@ export default function OneKioskPage({ publicMode = false }) {
       apiRequest("/api/kiosk/flows")
         .then((response) => {
           const flows = Array.isArray(response?.data) ? response.data : [];
-          const selected = flows.find((flow) => flow?.action?.defaultForNewDevices === true) || flows[0];
+          const requested = String(demoFlowKey || "").trim().toLowerCase();
+          const selected = (requested
+            ? flows.find((flow) => String(flow?.action?.templateKey || "").toLowerCase() === requested)
+              || flows.find((flow) => String(flow?.action?.ui?.profile || "").toLowerCase() === requested)
+              || flows.find((flow) => String(flow?.name || "").toLowerCase().includes(requested))
+            : null)
+            || flows.find((flow) => flow?.action?.defaultForNewDevices === true)
+            || flows[0];
           if (selected?.action?.ui) {
             setExperienceUi(selected.action.ui);
             setExperienceFlow({ id: selected.id, name: selected.name, version: selected.version, templateKey: selected.action?.templateKey || null });
@@ -212,7 +220,7 @@ export default function OneKioskPage({ publicMode = false }) {
         if (live) setLoading(false);
       });
     return () => { live = false; };
-  }, [demoMode, publicMode]);
+  }, [demoMode, demoFlowKey, publicMode]);
 
   const loadExperience = async (deviceKey) => {
     const response = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(deviceKey)}`, {
