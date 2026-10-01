@@ -1,18 +1,24 @@
 import { decryptCredentials } from "./integrationCredentials.js";
 import { getCompanyEntitlements, isPackageLicensed } from "./licensing.js";
 import {
+  createBarcodeNestAdapter,
   createGoUpcAdapter,
   createOpenFoodFactsAdapter,
+  createUpcItemDbAdapter,
   normalizeProductBarcode,
   ProductProviderError,
 } from "./globalProductProviderAdapters.js";
 
 const PROVIDER_ADAPTERS = Object.freeze({
   open_food_facts: createOpenFoodFactsAdapter,
+  upcitemdb: createUpcItemDbAdapter,
+  barcode_nest: createBarcodeNestAdapter,
   go_upc: createGoUpcAdapter,
 });
 const CONFIG_KEYS = Object.freeze({
   open_food_facts: "global_product_lookup_open_food_facts",
+  upcitemdb: "global_product_lookup_upcitemdb",
+  barcode_nest: "global_product_lookup_barcode_nest",
   go_upc: "global_product_lookup_go_upc",
 });
 const DEFAULT_CONFIG = Object.freeze({
@@ -49,7 +55,7 @@ export async function discoverGlobalProductProviders({ db, companyId }) {
        LEFT JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=$1
       WHERE p.active=true AND p.package_key=ANY($2::text[])
       ORDER BY p.name`,
-    [companyId, Object.keys(CONFIG_KEYS).map((key) => key === "open_food_facts" ? "open_food_facts" : "go_upc")]
+    [companyId, Object.keys(CONFIG_KEYS)]
   );
   const entitlements = await getCompanyEntitlements(db, companyId);
   const configsResult = await db(
@@ -94,6 +100,18 @@ export async function discoverGlobalProductProviders({ db, companyId }) {
 
   providers.sort((left, right) => left.settings.priority - right.settings.priority || left.displayName.localeCompare(right.displayName));
   return providers;
+}
+
+async function providerCredentials(db, companyId, provider) {
+  if (!provider?.metadata || !["bearer","x-api-key","optional_user_key"].includes(provider.metadata.authType)) return null;
+  const result = await db(
+    `SELECT credentials_encrypted FROM integration_connections
+      WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND enabled=true AND store_id IS NULL
+      ORDER BY updated_at DESC LIMIT 1`,
+    [companyId, provider.providerKey]
+  );
+  try { return decryptCredentials(result.rows?.[0]?.credentials_encrypted); }
+  catch { return null; }
 }
 
 export function createGlobalProductLookupService({ fetchImpl = globalThis.fetch, now = Date.now } = {}) {
@@ -142,18 +160,7 @@ export function createGlobalProductLookupService({ fetchImpl = globalThis.fetch,
     const providerErrors = [];
     for (const provider of providers) {
       triedProviders.push(provider.providerKey);
-      let credentials = null;
-      if (provider.providerKey === "go_upc") {
-        const result = await db(
-          `SELECT id,credentials_encrypted FROM integration_connections
-            WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND enabled=true
-              AND store_id IS NULL
-            ORDER BY updated_at DESC LIMIT 1`,
-          [companyId, "go_upc"]
-        );
-        try { credentials = decryptCredentials(result.rows?.[0]?.credentials_encrypted); }
-        catch { credentials = null; }
-      }
+      const credentials = await providerCredentials(db, companyId, provider);
       try {
         const result = await fetchForProvider({ provider, barcode, companyId, credentials });
         if (result.status === "found") {
@@ -161,7 +168,7 @@ export function createGlobalProductLookupService({ fetchImpl = globalThis.fetch,
         }
         if (!provider.settings.fallbackEnabled) break;
       } catch (error) {
-        providerErrors.push({ provider: provider.providerKey, code: error?.code || "PROVIDER_ERROR" });
+        providerErrors.push({ provider: provider.providerKey, code: error?.code || "PROVIDER_ERROR", message: error?.message || "Provider request failed" });
         if (!provider.settings.fallbackEnabled) break;
       }
     }
@@ -175,7 +182,7 @@ export function createGlobalProductLookupService({ fetchImpl = globalThis.fetch,
     };
   }
 
-  async function search({ db, companyId, query: input, reqCompanyId = null, page = 1, pageSize = 20 }) {
+  async function search({ db, companyId, query: input, reqCompanyId = null, providerKey = null, page = 1, pageSize = 20 }) {
     if (!companyId || (reqCompanyId && String(reqCompanyId) !== String(companyId))) {
       throw new ProductProviderError("Product lookup company context is invalid", { code: "INVALID_COMPANY", retryable: false });
     }
@@ -185,7 +192,7 @@ export function createGlobalProductLookupService({ fetchImpl = globalThis.fetch,
     }
 
     const providers = (await discoverGlobalProductProviders({ db, companyId }))
-      .filter((provider) => provider.settings.enabled);
+      .filter((provider) => provider.settings.enabled && (!providerKey || provider.providerKey === providerKey));
     const triedProviders = [];
     const providerErrors = [];
 
@@ -194,10 +201,12 @@ export function createGlobalProductLookupService({ fetchImpl = globalThis.fetch,
       if (typeof adapter.search !== "function") continue;
       triedProviders.push(provider.providerKey);
       try {
+        const credentials = await providerCredentials(db, companyId, provider);
         const result = await adapter.search({
           query,
           page,
           pageSize,
+          apiKey: credentials?.apiKey,
           config: {
             ...provider.metadata,
             ...provider.settings,
@@ -239,17 +248,7 @@ export async function testGlobalProductProvider({ db, companyId, providerKey, fe
   if (!provider) {
     return { success: false, code: "NOT_AVAILABLE", message: "Provider app must be installed, enabled and licensed before it can be tested" };
   }
-  let credentials = null;
-  if (providerKey === "go_upc") {
-    const result = await db(
-      `SELECT credentials_encrypted FROM integration_connections
-        WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND enabled=true AND store_id IS NULL
-        ORDER BY updated_at DESC LIMIT 1`,
-      [companyId, "go_upc"]
-    );
-    try { credentials = decryptCredentials(result.rows?.[0]?.credentials_encrypted); }
-    catch { credentials = null; }
-  }
+  const credentials = await providerCredentials(db, companyId, provider);
   try {
     const adapter = PROVIDER_ADAPTERS[providerKey]({ fetchImpl });
     const result = await adapter.testConnection({
@@ -261,7 +260,7 @@ export async function testGlobalProductProvider({ db, companyId, providerKey, fe
     return {
       success: false,
       code: error?.code || "PROVIDER_ERROR",
-      message: "Unable to verify the product lookup provider. Review its settings and retry.",
+      message: error?.message || "Unable to verify the product lookup provider. Review its settings and retry.",
     };
   }
 }
