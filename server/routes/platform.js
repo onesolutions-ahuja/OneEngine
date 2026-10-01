@@ -2647,7 +2647,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
    */
   router.get("/platform/runtime/navigation-targets", authenticate, async (req, res) => {
     try {
-      const [permissionResult, entitlementResult] = await Promise.all([
+      const [permissionResult, permissionSets, entitlementResult] = await Promise.all([
         db(
           `SELECT p.code
            FROM role_permissions rp
@@ -2655,9 +2655,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
            WHERE rp.role_id=$1`,
           [req.user.roleId]
         ),
+        loadEffectivePermissionSets(db, req.user, req),
         getCompanyEntitlements(db, req.user.companyId),
       ]);
-      const permissions = permissionResult.rows.map((row) => row.code);
+      const permissions = [...new Set([
+        ...permissionResult.rows.map((row) => row.code),
+        ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+      ])];
       const navigation = await loadObjectNavigation(req, { permissions, entitlements: entitlementResult });
       const pagesResult = await db(
         "SELECT page_key, label FROM platform_pages WHERE company_id=$1 AND active=true ORDER BY label",
@@ -4762,7 +4766,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   }
 
   router.get("/platform/runtime/app-catalog", authenticate, async (req, res) => {
-    const [permissionResult, moduleResult, entitlementResult] = await Promise.all([
+    const [permissionResult, permissionSets, moduleResult, entitlementResult] = await Promise.all([
       db(
         `SELECT p.code
          FROM role_permissions rp
@@ -4770,6 +4774,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
          WHERE rp.role_id=$1`,
         [req.user.roleId]
       ),
+      loadEffectivePermissionSets(db, req.user, req),
       db(
         `SELECT m.*, access.enabled AS company_enabled
                 , p.package_key, p.manifest AS package_manifest
@@ -4792,7 +4797,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       ),
       getCompanyEntitlements(db, req.user.companyId),
     ]);
-    const permissions = permissionResult.rows.map((row) => row.code);
+    const permissions = [...new Set([
+      ...permissionResult.rows.map((row) => row.code),
+      ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+    ])];
     const byKey = new Map(internalAppCatalog.map((entry) => [entry.key, entry]));
     const data = moduleResult.rows
       .map((module) => ({ ...byKey.get(module.module_key), ...module }))
@@ -4849,7 +4857,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
        * load Object fields/layouts/workflows: opening Settings must never wait
        * on full platform metadata.
        */
-      const [permissionResult, hostedObjectsResult] = await Promise.all([
+      const [permissionResult, permissionSets, hostedObjectsResult] = await Promise.all([
         db(
           `SELECT p.code
              FROM role_permissions rp
@@ -4857,6 +4865,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             WHERE rp.role_id=$1`,
           [req.user.roleId]
         ),
+        loadEffectivePermissionSets(db, req.user, req),
         db(
           `SELECT id,object_key,label,config
              FROM platform_objects
@@ -4867,7 +4876,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           [req.user.companyId]
         ),
       ]);
-      const permissions = permissionResult.rows.map((row) => row.code);
+      const permissions = [...new Set([
+        ...permissionResult.rows.map((row) => row.code),
+        ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+      ])];
       // Settings navigation is RBAC/install metadata only. Licence validity is
       // enforced by the licensed action at runtime, never by shell bootstrap.
       const catalog = buildSettingsCatalog({ permissions });
