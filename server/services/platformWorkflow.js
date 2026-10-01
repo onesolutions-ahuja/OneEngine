@@ -989,7 +989,13 @@ export async function hasConfiguredCommunicationProvider({ db, companyId, provid
 export async function updateWorkflowStepRunStatus({ db, stepRunId, status, errorText = null, metadata = {} }) {
   if (!db || typeof db !== "function" || !stepRunId) return null;
   const row = await db(
-    `UPDATE platform_workflow_step_runs SET status=$1, completed_at=COALESCE(completed_at, NOW()), error_text=$2, metadata=COALESCE(metadata,'{}'::jsonb) || $3::jsonb, updated_at=NOW() WHERE id=$4 RETURNING *`,
+    `UPDATE platform_workflow_step_runs
+        SET status=$1,
+            completed_at=CASE WHEN UPPER($1) IN ('PENDING','RUNNING','WAITING') THEN NULL ELSE COALESCE(completed_at, NOW()) END,
+            error_text=$2,
+            metadata=COALESCE(metadata,'{}'::jsonb) || $3::jsonb,
+            updated_at=NOW()
+      WHERE id=$4 RETURNING *`,
     [String(status || "FAILED").toUpperCase(), errorText || null, JSON.stringify(metadata || {}), stepRunId]
   );
   return row.rows[0] || null;
@@ -4344,6 +4350,60 @@ export async function executeWorkflowActions({ actions, ...context }) {
       });
     }
 
+    if (stepRun?.status === "WAITING" && stepRun.metadata?.faultPending === true) {
+      const storedError = stepRun.metadata?.error || { message: stepRun.error_text || "Workflow step failed" };
+      const storedFriendly = stepRun.metadata?.friendlyError || friendlyWorkflowError(storedError, resolveWorkflowActionType(item));
+      const faultIds = Array.isArray(stepRun.metadata?.faultBranchStepIds)
+        ? stepRun.metadata.faultBranchStepIds.map(String)
+        : (Array.isArray(item.faultBranch) ? item.faultBranch.map(String) : []);
+      workflowVariables.variables.fault = {
+        stepId: item.id || `step-${globalIndex + 1}`,
+        actionType: resolveWorkflowActionType(item),
+        message: storedError.message || stepRun.error_text || "Workflow step failed",
+        title: storedFriendly.title,
+        howToFix: storedFriendly.howToFix,
+      };
+      const faultActions = faultIds
+        .map((id) => actionById.get(String(id)))
+        .filter(Boolean)
+        .sort((a, b) => allActions.indexOf(a) - allActions.indexOf(b));
+      const faultResults = await executeWorkflowActions({
+        actions: faultActions,
+        ...context,
+        workflowVariables,
+        allActions,
+        branchExecution: true,
+        executionScope: `${context.executionScope ? context.executionScope + ":" : ""}${item.id || globalIndex}:fault`,
+      });
+      const waiting = workflowResultsContainStatus(faultResults, "waiting");
+      const stopped = workflowResultsContainStatus(faultResults, "stopped");
+      const handled = {
+        status: waiting ? "waiting" : stopped ? "stopped" : "fault_handled",
+        faultHandled: true,
+        error: storedError,
+        friendlyError: storedFriendly,
+        faultBranch: { stepIds: faultIds, results: faultResults },
+      };
+      workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
+      results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun.id, resumedFaultPath: true });
+      await updateWorkflowStepRunStatus({
+        db: traceDb,
+        stepRunId: stepRun.id,
+        status: waiting ? "WAITING" : stopped ? "STOPPED" : "COMPLETED",
+        errorText: storedError.message || stepRun.error_text || null,
+        metadata: {
+          result: redact(handled),
+          error: storedError,
+          friendlyError: storedFriendly,
+          faultPending: waiting,
+          faultBranchStepIds: faultIds,
+        },
+      });
+      if (waiting || stopped) break;
+      completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
+      continue;
+    }
+
     if (stepRun?.status === "COMPLETED") {
       const priorResult = stepRun.metadata?.result || { status: "completed", idempotentReplay: true };
       results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
@@ -4455,6 +4515,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
             results: branchResults,
           };
           branchPaused = workflowResultsContainStatus(branchResults, "waiting");
+          if (branchPaused) result.status = "waiting";
         } else {
           result.branch = { outcome: outcomeName, outcomeId: result.outcomeId ?? null, stepIds: [], results: [] };
         }
@@ -4513,6 +4574,16 @@ export async function executeWorkflowActions({ actions, ...context }) {
         };
         workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
         results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
+        if (stepRun?.id) {
+          await updateWorkflowStepRunStatus({
+            db: traceDb,
+            stepRunId: stepRun.id,
+            status: "COMPLETED",
+            errorText: details.message,
+            metadata: { result: redact(handled), error: details, friendlyError, retryAttempts, faultPending: false },
+          });
+        }
+        completed.push({ action: item, stepRunId: stepRun?.id || null, index: globalIndex });
         continue;
       }
       if (faultMode === "STOP") {
@@ -4526,6 +4597,15 @@ export async function executeWorkflowActions({ actions, ...context }) {
         };
         workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
         results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
+        if (stepRun?.id) {
+          await updateWorkflowStepRunStatus({
+            db: traceDb,
+            stepRunId: stepRun.id,
+            status: "STOPPED",
+            errorText: details.message,
+            metadata: { result: redact(handled), error: details, friendlyError, retryAttempts, faultPending: false },
+          });
+        }
         break;
       }
       if ((faultMode === "ROUTE" || faultMode === "RETRY") && faultIds.length) {
@@ -4557,7 +4637,24 @@ export async function executeWorkflowActions({ actions, ...context }) {
         };
         workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
         results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
+        if (stepRun?.id) {
+          await updateWorkflowStepRunStatus({
+            db: traceDb,
+            stepRunId: stepRun.id,
+            status: handled.status === "waiting" ? "WAITING" : "COMPLETED",
+            errorText: details.message,
+            metadata: {
+              result: redact(handled),
+              error: details,
+              friendlyError,
+              retryAttempts,
+              faultPending: handled.status === "waiting",
+              faultBranchStepIds: faultIds,
+            },
+          });
+        }
         if (handled.status === "waiting") break;
+        completed.push({ action: item, stepRunId: stepRun?.id || null, index: globalIndex });
         continue;
       }
       const compensationFailures = await compensateCompletedSteps(completed, context, error);
