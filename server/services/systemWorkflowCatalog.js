@@ -90,7 +90,7 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
 
   const definitions = systemWorkflowDefinitions();
   const existingResult = await db(
-    `SELECT id, action, user_modified
+    `SELECT id,name,object_id,trigger_key,conditions,action,version,active_version,lifecycle_status,created_by,user_modified
        FROM platform_rules
       WHERE company_id=$1
         AND action->>'systemGenerated'='true'
@@ -105,7 +105,7 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
   // repair untouched rows created by older catalogue versions.
   await db(
     `UPDATE platform_rules
-        SET active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW()
+        SET active=TRUE,lifecycle_status='ACTIVE',active_version=COALESCE(active_version,version,1),updated_at=NOW()
       WHERE company_id=$1
         AND action->>'systemGenerated'='true'
         AND COALESCE(user_modified,FALSE)=FALSE
@@ -118,9 +118,9 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
     if (existing.has(definition.systemKey)) continue;
     await db(
       `INSERT INTO platform_rules
-         (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,company_id,created_by,managed,package_required,user_modified)
+         (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,active_version,company_id,created_by,managed,package_required,user_modified)
        VALUES
-         (NULL,$1,$2,'[]'::jsonb,$3::jsonb,TRUE,'ACTIVE',1,$4,$5,TRUE,FALSE,FALSE)`,
+         (NULL,$1,$2,'[]'::jsonb,$3::jsonb,TRUE,'ACTIVE',1,1,$4,$5,TRUE,FALSE,FALSE)`,
       [
         definition.name,
         definition.triggerKey,
@@ -131,6 +131,29 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
     );
     created += 1;
   }
+
+  await db(
+    `INSERT INTO platform_workflow_versions
+       (company_id,workflow_id,version,definition,lifecycle_status,created_by)
+     SELECT r.company_id,r.id,COALESCE(r.active_version,r.version,1),
+            jsonb_build_object(
+              'object_id',r.object_id,
+              'name',r.name,
+              'trigger_key',r.trigger_key,
+              'conditions',r.conditions,
+              'action',r.action,
+              'active',r.active,
+              'lifecycle_status',r.lifecycle_status,
+              'version',COALESCE(r.active_version,r.version,1)
+            ),
+            r.lifecycle_status,r.created_by
+       FROM platform_rules r
+      WHERE r.company_id=$1
+        AND r.action->>'systemGenerated'='true'
+        AND r.action->>'systemKey' IS NOT NULL
+     ON CONFLICT (company_id,workflow_id,version) DO NOTHING`,
+    [companyId]
+  );
 
   return {
     created,
