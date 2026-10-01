@@ -836,13 +836,36 @@ export default function OneKioskPage({ publicMode = false }) {
     if (publicMode) setAttractMode(true);
   };
 
+  const stageType = currentScreen?.type || "CATALOGUE";
+  const receiptMethods = Array.isArray(confirmationScreen.receipt) ? confirmationScreen.receipt : [];
+  const rootClasses = [
+    "one-kiosk",
+    demoMode ? "is-demo" : "",
+    accessMode === "LARGE_TEXT" ? "is-large-text" : "",
+    accessMode === "REACH" ? "is-reach" : "",
+    accessMode === "HIGH_CONTRAST" ? "is-high-contrast" : "",
+  ].filter(Boolean).join(" ");
+
   if (loading) {
     return <div className="one-kiosk one-kiosk-state">Loading OneKiosk…</div>;
   }
 
+  if (attractMode && publicMode && !confirmation) {
+    return (
+      <main className={`${rootClasses} one-kiosk-attract`} onClick={() => { setAttractMode(false); setLastInteractionAt(Date.now()); }}>
+        <section>
+          <span className="one-kiosk-eyebrow">{experienceFlow?.name || "OneKiosk"}</span>
+          <h1>{translate(experienceUi?.attractTitle) || "Touch to start"}</h1>
+          <p>{translate(experienceUi?.attractSubtitle) || "Browse, order and pay here."}</p>
+          <button type="button" className="one-kiosk-pay">Start order</button>
+        </section>
+      </main>
+    );
+  }
+
   if (confirmation) {
     return (
-      <main className="one-kiosk one-kiosk-confirmation">
+      <main className={`${rootClasses} one-kiosk-confirmation`}>
         <section className="one-kiosk-confirmation-card">
           <div className="one-kiosk-success-icon"><CheckCircle2 size={52} /></div>
           <span className="one-kiosk-eyebrow">{confirmationScreen.eyebrow || "Payment complete"}</span>
@@ -856,25 +879,50 @@ export default function OneKioskPage({ publicMode = false }) {
             <div><span>Total paid</span><strong>{money(confirmation.total, currency)}</strong></div>
             <div><span>Receipt</span><strong>{confirmation.receiptNumber || "Created"}</strong></div>
           </div>
-          <p className="one-kiosk-collection-help">{confirmationScreen.helpText || "Keep this reference for your order."}</p>
-          <button type="button" className="one-kiosk-pay" onClick={startNewOrder}>{confirmationScreen.doneLabel || "Start a new order"}</button>
+          <p className="one-kiosk-collection-help">{translate(confirmationScreen.helpText) || "Keep this reference for your order."}</p>
+          {receiptQr?.qrcodeUrl ? (
+            <div className="one-kiosk-receipt-qr">
+              <img src={receiptQr.qrcodeUrl} alt="Receipt QR" />
+              <small>{receiptQr.expiresAt ? `Available until ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : "Scan for your receipt"}</small>
+            </div>
+          ) : null}
+          <div className="one-kiosk-confirmation-actions">
+            {receiptMethods.includes("QR") ? <button type="button" onClick={generateReceiptQr}><QrCode size={18}/> Receipt QR</button> : null}
+            {receiptMethods.includes("PRINT") ? <button type="button" onClick={() => window.print()}>Print receipt</button> : null}
+            <button type="button" className="one-kiosk-pay" onClick={startNewOrder}>{translate(confirmationScreen.doneLabel) || "Start a new order"}</button>
+          </div>
+          {idleWarning ? <div className="one-kiosk-idle-warning">This screen will reset shortly.</div> : null}
         </section>
       </main>
     );
   }
 
   return (
-    <main className={`one-kiosk${demoMode ? " is-demo" : ""}`}>
+    <main className={rootClasses}>
       {demoMode ? <div className="one-kiosk-demo-ribbon">Demo catalogue · no live sale or payment is created</div> : null}
       <header className="one-kiosk-header">
         <div>
           <span className="one-kiosk-eyebrow">{experienceFlow?.name || "OneKiosk"}</span>
-          <h1>{catalogueScreen.title || "OneKiosk"}</h1>
-          <p>{catalogueScreen.subtitle || "Select what you need and continue through the configured journey."}</p>
+          <h1>{translate(currentScreen?.title) || translate(catalogueScreen.title) || "OneKiosk"}</h1>
+          <p>{translate(currentScreen?.subtitle) || translate(catalogueScreen.subtitle) || "Select what you need and continue through the configured journey."}</p>
         </div>
-        <div className="one-kiosk-basket-badge" aria-label={`${itemCount} items in basket`}>
+        <div className="one-kiosk-header-actions">
+          {featureFlags.language ? (
+            <button type="button" className="one-kiosk-tool" onClick={() => {
+              const index = Math.max(0, availableLanguages.findIndex((item) => item.key === language));
+              setLanguage(availableLanguages[(index + 1) % availableLanguages.length]?.key || "en");
+            }}><Languages size={19}/><span>{availableLanguages.find((item) => item.key === language)?.label || language}</span></button>
+          ) : null}
+          {featureFlags.accessibility ? (
+            <button type="button" className="one-kiosk-tool" onClick={() => {
+              const modes = ["DEFAULT","LARGE_TEXT","REACH","HIGH_CONTRAST"];
+              setAccessMode(modes[(modes.indexOf(accessMode) + 1) % modes.length]);
+            }}><Accessibility size={19}/><span>{accessMode === "DEFAULT" ? "Accessibility" : accessMode.replaceAll("_"," ")}</span></button>
+          ) : null}
+          <div className="one-kiosk-basket-badge" aria-label={`${itemCount} items in basket`}>
           <ShoppingBag size={22} />
           <strong>{itemCount}</strong>
+          </div>
         </div>
       </header>
 
@@ -887,6 +935,7 @@ export default function OneKioskPage({ publicMode = false }) {
 
       <div className="one-kiosk-shell">
         <section className="one-kiosk-catalogue">
+          {stageType === "CATALOGUE" || stageType === "PRODUCT_DETAIL" ? <>
           <div className="one-kiosk-toolbar">
             {catalogueScreen.search !== false ? (
               <label className="one-kiosk-search">
@@ -925,6 +974,107 @@ export default function OneKioskPage({ publicMode = false }) {
             ))}
             {!visibleProducts.length ? <div className="one-kiosk-empty">No products match this selection.</div> : null}
           </div>
+          </> : null}
+
+          {stageType === "RECOMMENDATIONS" ? (
+            <div className="one-kiosk-stage">
+              <div className="one-kiosk-stage-head">
+                <button type="button" onClick={() => goToScreen("CATALOGUE")}><ArrowLeft size={18}/> Keep browsing</button>
+                <span>{recommendationProducts.length ? `${recommendationProducts.length} suggestions` : "No suggestions needed"}</span>
+              </div>
+              {recommendationProducts.length ? (
+                <div className="one-kiosk-grid">
+                  {recommendationProducts.map((product) => (
+                    <button key={product.id} type="button" className="one-kiosk-product" onClick={() => handleProductAction(product)}>
+                      <div className="one-kiosk-product-image">
+                        {product.image_url || product.imageUrl ? <img src={product.image_url || product.imageUrl} alt="" /> : <span>{String(product.name || "?").slice(0,1)}</span>}
+                      </div>
+                      <div className="one-kiosk-product-copy"><strong>{product.name}</strong><small>{product.description || product.categoryLabel}</small><span>{money(product.price,currency)}</span></div>
+                    </button>
+                  ))}
+                </div>
+              ) : <div className="one-kiosk-empty">Your order is ready to continue.</div>}
+              <button type="button" className="one-kiosk-pay one-kiosk-stage-next" onClick={() => {
+                const next = nextScreenFrom(recommendationsScreen, "FULFILMENT");
+                if (next?.key) setCurrentScreenKey(next.key);
+              }}>Continue</button>
+            </div>
+          ) : null}
+
+          {stageType === "FULFILMENT" ? (
+            <div className="one-kiosk-stage one-kiosk-stage-narrow">
+              <div className="one-kiosk-fulfilment">
+                <span>{translate(fulfilmentScreen.title) || "Choose fulfilment"}</span>
+                <div>{fulfilmentOptions.map((option) => (
+                  <button type="button" key={option.key} className={fulfilmentType === option.key ? "is-active" : ""} onClick={() => setFulfilmentType(option.key)}>
+                    {translate(option.label) || option.key}
+                  </button>
+                ))}</div>
+              </div>
+              {fulfilmentRequirements.includes("STORE") ? (
+                <div className="one-kiosk-fulfilment-detail">
+                  <strong>Choose collection store</strong>
+                  <div className="one-kiosk-store-list">{storeAvailability.map((store) => (
+                    <button type="button" key={store.id} disabled={!store.canFulfil} className={String(fulfilmentDetails.storeId)===String(store.id)?"is-active":""} onClick={() => setFulfilmentDetails((d)=>({...d,storeId:store.id}))}>
+                      <span>{store.name}{store.current ? " · This store" : ""}</span><small>{store.canFulfil ? "Available for this order" : "Not enough stock"}</small>
+                    </button>
+                  ))}</div>
+                </div>
+              ) : null}
+              {fulfilmentRequirements.includes("ADDRESS") ? (
+                <div className="one-kiosk-fulfilment-detail">
+                  <strong>Delivery details</strong>
+                  <div className="one-kiosk-form-grid">
+                    <input value={fulfilmentDetails.name} onChange={(e)=>setFulfilmentDetails((d)=>({...d,name:e.target.value}))} placeholder="Name"/>
+                    <input value={fulfilmentDetails.phone} onChange={(e)=>setFulfilmentDetails((d)=>({...d,phone:e.target.value}))} placeholder="Mobile number"/>
+                    <input className="wide" value={fulfilmentDetails.email} onChange={(e)=>setFulfilmentDetails((d)=>({...d,email:e.target.value}))} placeholder="Email address"/>
+                    <input className="wide" value={fulfilmentDetails.address1} onChange={(e)=>setFulfilmentDetails((d)=>({...d,address1:e.target.value}))} placeholder="Address line 1"/>
+                    <input className="wide" value={fulfilmentDetails.address2} onChange={(e)=>setFulfilmentDetails((d)=>({...d,address2:e.target.value}))} placeholder="Address line 2 (optional)"/>
+                    <input value={fulfilmentDetails.city} onChange={(e)=>setFulfilmentDetails((d)=>({...d,city:e.target.value}))} placeholder="Town / city"/>
+                    <input value={fulfilmentDetails.postcode} onChange={(e)=>setFulfilmentDetails((d)=>({...d,postcode:e.target.value}))} placeholder="Postcode"/>
+                  </div>
+                </div>
+              ) : null}
+              <button type="button" className="one-kiosk-pay one-kiosk-stage-next" disabled={!basket.length} onClick={() => {
+                try {
+                  validateFulfilmentDetails();
+                  const next = nextScreenFrom(fulfilmentScreen, "BASKET");
+                  if (next?.key) setCurrentScreenKey(next.key);
+                } catch (reason) { setError(reason?.message || "Complete fulfilment details"); }
+              }}>Continue</button>
+            </div>
+          ) : null}
+
+          {stageType === "BASKET" ? (
+            <div className="one-kiosk-stage one-kiosk-stage-narrow">
+              <div className="one-kiosk-review-lines">
+                {basket.map((line) => <div key={line.lineKey || line.id}><div><strong>{line.name}</strong><small>{line.modifiers?.map((item)=>item.name).join(" · ")}</small></div><span>{line.quantity} × {money(line.price,currency)}</span></div>)}
+              </div>
+              {Number(quote?.savings || 0) > 0 ? <div className="one-kiosk-savings">Offer savings {money(quote.savings,currency)}</div> : null}
+              <div className="one-kiosk-total"><span>Total</span><strong>{money(total,currency)}</strong></div>
+              <div className="one-kiosk-stage-actions">
+                <button type="button" onClick={() => goToScreen("CATALOGUE")}>Add more items</button>
+                <button type="button" className="one-kiosk-pay" disabled={!basket.length || quoteLoading} onClick={() => {
+                  const next = nextScreenFrom(basketScreen, "PAYMENT");
+                  if (next?.key) setCurrentScreenKey(next.key);
+                }}>Continue to payment</button>
+              </div>
+            </div>
+          ) : null}
+
+          {stageType === "PAYMENT" ? (
+            <div className="one-kiosk-stage one-kiosk-payment-stage">
+              <CreditCard size={48}/>
+              <h2>{translate(paymentScreen.title) || "Pay by card"}</h2>
+              <p>{translate(paymentScreen.subtitle) || "Follow the instructions on the card machine."}</p>
+              <div className="one-kiosk-total"><span>Total to pay</span><strong>{money(total,currency)}</strong></div>
+              <button type="button" className="one-kiosk-pay" disabled={!basket.length || paying || quoteLoading} onClick={payAndCollect}>
+                <CreditCard size={20}/>{paying ? "Processing…" : paidSale ? "Finish order" : (translate(paymentScreen.actionLabel) || "Pay now")}
+              </button>
+              <button type="button" className="one-kiosk-secondary" disabled={paying || Boolean(paidSale)} onClick={() => goToScreen("BASKET")}>Back to order</button>
+              <small className="one-kiosk-payment-note">{demoMode ? "Demo payment completes on-screen without charging a card." : `Using ${paymentRuntime?.name || "the assigned card machine"}.`}</small>
+            </div>
+          ) : null}
         </section>
 
         <aside className="one-kiosk-cart">
@@ -964,58 +1114,11 @@ export default function OneKioskPage({ publicMode = false }) {
             ) : null}
           </div>
 
-          {fulfilmentOptions.length ? (
-            <div className="one-kiosk-fulfilment">
-              <span>{fulfilmentScreen.title || "Choose fulfilment"}</span>
-              <div>
-                {fulfilmentOptions.map((option) => (
-                  <button
-                    type="button"
-                    key={option.key}
-                    disabled={Boolean(paidSale)}
-                    className={fulfilmentType === option.key ? "is-active" : ""}
-                    onClick={() => setFulfilmentType(option.key)}
-                  >
-                    {option.label || option.key}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {fulfilmentRequirements.includes("STORE") ? (
-            <div className="one-kiosk-fulfilment-detail">
-              <strong>Choose collection store</strong>
-              <div className="one-kiosk-store-list">
-                {storeAvailability.map((store) => (
-                  <button
-                    type="button"
-                    key={store.id}
-                    disabled={!store.canFulfil}
-                    className={String(fulfilmentDetails.storeId) === String(store.id) ? "is-active" : ""}
-                    onClick={() => setFulfilmentDetails((details) => ({ ...details, storeId: store.id }))}
-                  >
-                    <span>{store.name}{store.current ? " · This store" : ""}</span>
-                    <small>{store.canFulfil ? "Available for this order" : "Not enough stock"}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {fulfilmentRequirements.includes("ADDRESS") ? (
-            <div className="one-kiosk-fulfilment-detail">
-              <strong>Delivery details</strong>
-              <div className="one-kiosk-form-grid">
-                <input value={fulfilmentDetails.name} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, name: e.target.value }))} placeholder="Name" />
-                <input value={fulfilmentDetails.phone} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, phone: e.target.value }))} placeholder="Mobile number" />
-                <input className="wide" value={fulfilmentDetails.email} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, email: e.target.value }))} placeholder="Email address" />
-                <input className="wide" value={fulfilmentDetails.address1} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, address1: e.target.value }))} placeholder="Address line 1" />
-                <input className="wide" value={fulfilmentDetails.address2} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, address2: e.target.value }))} placeholder="Address line 2 (optional)" />
-                <input value={fulfilmentDetails.city} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, city: e.target.value }))} placeholder="Town / city" />
-                <input value={fulfilmentDetails.postcode} onChange={(e) => setFulfilmentDetails((d) => ({ ...d, postcode: e.target.value }))} placeholder="Postcode" />
-              </div>
-            </div>
+          {stageType === "CATALOGUE" || stageType === "PRODUCT_DETAIL" || stageType === "RECOMMENDATIONS" ? (
+            <button type="button" className="one-kiosk-cart-continue" disabled={!basket.length} onClick={() => {
+              const target = screenSequence.find((screen) => screen.type === "FULFILMENT") || screenSequence.find((screen) => screen.type === "BASKET") || screenSequence.find((screen) => screen.type === "PAYMENT");
+              if (target?.key) setCurrentScreenKey(target.key);
+            }}>Review order</button>
           ) : null}
 
           <div className="one-kiosk-total">
@@ -1024,18 +1127,17 @@ export default function OneKioskPage({ publicMode = false }) {
           </div>
           {Number(quote?.savings || 0) > 0 ? <div className="one-kiosk-savings">You save {money(quote.savings, currency)}</div> : null}
 
-          <button
-            type="button"
-            className="one-kiosk-pay"
-            disabled={!basket.length || paying || quoteLoading}
-            onClick={payAndCollect}
-          >
-            <CreditCard size={20} />
-            {paying ? "Processing…" : paidSale ? "Finish order" : (paymentScreen.actionLabel || "Continue")}
-          </button>
-          <small className="one-kiosk-payment-note">{demoMode ? "Demo payment completes on-screen without charging a card." : "Card payment is processed through the payment terminal configured for this store/kiosk."}</small>
+          <small className="one-kiosk-payment-note">{stageType === "PAYMENT" ? "Complete payment in the main panel." : "Your basket stays with you through each step."}</small>
         </aside>
       </div>
+
+      {idleWarning ? (
+        <div className="one-kiosk-idle-overlay">
+          <div><strong>Are you still there?</strong><span>Your order will reset shortly for privacy.</span><button type="button" onClick={() => { setLastInteractionAt(Date.now()); setIdleWarning(false); }}>Continue order</button></div>
+        </div>
+      ) : null}
+
+      {featureFlags.assistance ? <button type="button" className="one-kiosk-help" onClick={() => setError("A member of staff can assist you at this kiosk.")}><HelpCircle size={20}/> Need help?</button> : null}
 
       {selectedProduct ? (
         <div className="one-kiosk-product-modal" role="dialog" aria-modal="true" aria-label={selectedProduct.name}>
