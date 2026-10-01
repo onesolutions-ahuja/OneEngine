@@ -474,10 +474,15 @@ export default function createKioskRouter({
       const digits = query.replace(/[^0-9]/g, "");
       const result = await db(
         `SELECT c.id,c.name,c.email,c.phone,
-                COALESCE(lb.balance,0) AS loyalty_balance
+                COALESCE(lb.balance,0) AS loyalty_balance,
+                COALESCE(cs.loyalty_enabled,FALSE) AS loyalty_enabled,
+                cs.loyalty_redeem_value_per_point,
+                cs.loyalty_min_points_redeem
            FROM customers c
            LEFT JOIN customer_loyalty_balances lb
              ON lb.company_id=c.company_id AND lb.customer_id=c.id
+           LEFT JOIN company_settings cs
+             ON cs.company_id=c.company_id
           WHERE c.company_id=$1 AND c.active=TRUE
             AND (
               LOWER(COALESCE(c.email,''))=LOWER($2)
