@@ -348,6 +348,19 @@ export default function createSalesRouter({
           });
         }
 
+        let inventoryStoreId = req.user.storeId;
+        if (kioskContext && req.body?.kioskFulfilmentStoreId) {
+          const fulfilmentStore = await db(
+            "SELECT id FROM stores WHERE id=$1 AND company_id=$2 AND active=TRUE",
+            [req.body.kioskFulfilmentStoreId, req.user.companyId]
+          );
+          if (!fulfilmentStore.rows.length) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ success: false, message: "Selected fulfilment store is unavailable" });
+          }
+          inventoryStoreId = fulfilmentStore.rows[0].id;
+        }
+
         /*
          * T10D: a Self-Checkout session may only pay by card. The payment
          * contract, sale engine and inventory path are the same as the
@@ -668,6 +681,14 @@ export default function createSalesRouter({
           }
 
           const p = product.rows[0];
+          if (kioskContext && p.track_stock) {
+            const storeStock = await client.query(
+              `SELECT quantity FROM product_store_stock
+                WHERE company_id=$1 AND store_id=$2 AND product_id=$3`,
+              [req.user.companyId, inventoryStoreId, item.productId]
+            );
+            p.stock_quantity = Number(storeStock.rows[0]?.quantity || 0);
+          }
           const kind = await client.query(
             `SELECT product_kind FROM products
              WHERE id = $1 AND company_id = $2 AND active = true`,
@@ -1196,7 +1217,7 @@ export default function createSalesRouter({
             const movement = await createInventoryMovement(client, {
               companyId: req.user.companyId,
               productId: stockLine.productId,
-              storeId: req.user.storeId,
+              storeId: inventoryStoreId,
               movementType: "SALE",
               quantityChange: -stockLine.quantity,
               referenceType: "SALE",
@@ -1218,7 +1239,7 @@ export default function createSalesRouter({
             if (p.batch_tracking && stockLine.productId === item.productId) {
               await allocateBatchConsumption(client, {
                 companyId: req.user.companyId,
-                storeId: req.user.storeId,
+                storeId: inventoryStoreId,
                 productId: item.productId,
                 quantity: stockLine.quantity,
                 mode: "fefo",
