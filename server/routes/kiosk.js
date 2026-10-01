@@ -645,7 +645,7 @@ export default function createKioskRouter({
     try {
       const numeric = Number(query.replace(/[^0-9.]/g, ""));
       const result = await db(
-        `SELECT o.id,o.external_order_id,o.external_reference,o.status,o.fulfilment_type,o.created_at,o.updated_at,
+        `SELECT o.id,o.external_order_id,o.external_reference,o.status,o.fulfilment_type,o.currency,o.created_at,o.updated_at,
                 o.store_id,o.platform_data,
                 s.id AS sale_id,s.receipt_number,s.total,s.created_at AS sale_created_at,
                 kd.id AS kiosk_device_id,kd.name AS kiosk_name,kd.device_key
