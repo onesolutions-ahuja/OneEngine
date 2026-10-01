@@ -155,6 +155,7 @@ export function packageDefinition(entry) {
   };
   const packageNames = {
     retail_pos: "OneSales",
+    one_kiosk: "OneKiosk",
     products: "Product Core",
     inventory: "OneInventory",
     batch_expiry: "OneBatchExpiry",
@@ -193,6 +194,7 @@ export function packageDefinition(entry) {
   };
   const packageDescriptions = {
     retail_pos: "Sales, payments, returns and order processing.",
+    one_kiosk: "Customer self-service ordering, payment handoff and collection-number workflow across food, retail and service environments.",
     products: "Technical foundation for the canonical Product and Category objects.",
     inventory: "Stock, replenishment and inventory movements.",
     batch_expiry: "Batch stock, expiry tracking and FEFO inventory controls.",
@@ -233,7 +235,7 @@ export function packageDefinition(entry) {
     paypal_qr: "Metadata-driven PayPal QR payment connector for transaction-specific checkout and verification.",
   };
   const entitlementKeys = {
-    retail_pos: "pos", products: "pos", inventory: "inventory", batch_expiry: "batch_expiry",
+    retail_pos: "pos", one_kiosk: "one_kiosk", products: "pos", inventory: "inventory", batch_expiry: "batch_expiry",
     hospitality: "hospitality", kds: "kds", customer_credit: "credit_control", suppliers: "purchasing", customers: "customers", staff: "staff",
     reports: "reports", online_orders: "online_orders", integrations: "integrations",
     email_connector: "communications.email", sms_connector: "communications.sms",
@@ -248,6 +250,7 @@ export function packageDefinition(entry) {
   };
   const dependencies = {
     retail_pos: ["products"],
+    one_kiosk: ["products", "online_orders", "retail_pos"],
     inventory: ["products"],
     batch_expiry: ["inventory", "products"],
     client_web_shop: ["products", "inventory", "online_orders", "retail_pos", "customers"],
