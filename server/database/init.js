@@ -1000,12 +1000,6 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_hardware_configurations_store
     ON hardware_configurations(company_id, store_id);
     ALTER TABLE kiosk_devices
-      DROP CONSTRAINT IF EXISTS kiosk_devices_workflow_id_fkey;
-    ALTER TABLE kiosk_devices
-      ADD CONSTRAINT kiosk_devices_workflow_id_fkey
-      FOREIGN KEY (workflow_id) REFERENCES platform_rules(id) ON DELETE SET NULL;
-
-    ALTER TABLE kiosk_devices
       DROP CONSTRAINT IF EXISTS kiosk_devices_payment_terminal_id_fkey;
     ALTER TABLE kiosk_devices
       ADD CONSTRAINT kiosk_devices_payment_terminal_id_fkey
