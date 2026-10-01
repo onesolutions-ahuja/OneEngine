@@ -2829,6 +2829,51 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       </div>
 
+      <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-800">Subflow interface</summary>
+        <p className="mt-2 text-xs text-slate-500">Optional. Declare typed inputs and outputs when this workflow should be reusable from Run Subflow. Normal trigger-based workflows can leave this empty.</p>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <strong className="text-xs text-slate-700">Inputs</strong>
+              <button type="button" className="text-xs text-blue-700" onClick={() => setWorkflow((current) => ({ ...current, inputContract: [...(current.inputContract || []), { name: `input_${(current.inputContract || []).length + 1}`, label: "Input", type: "text", required: false }] }))}>+ Input</button>
+            </div>
+            {(workflow.inputContract || []).map((input, inputIndex) => (
+              <div key={`${input.name}-${inputIndex}`} className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 md:grid-cols-[1fr_1fr_.8fr_auto_auto]">
+                <input className={inputClass} value={input.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, inputContract: (current.inputContract || []).map((item, index) => index === inputIndex ? { ...item, name: event.target.value.replace(/[^A-Za-z0-9_]/g, "") } : item) }))} placeholder="api_name" />
+                <input className={inputClass} value={input.label || ""} onChange={(event) => setWorkflow((current) => ({ ...current, inputContract: (current.inputContract || []).map((item, index) => index === inputIndex ? { ...item, label: event.target.value } : item) }))} placeholder="Label" />
+                <select className={inputClass} value={input.type || "text"} onChange={(event) => setWorkflow((current) => ({ ...current, inputContract: (current.inputContract || []).map((item, index) => index === inputIndex ? { ...item, type: event.target.value } : item) }))}>
+                  {["text","number","boolean","date","datetime","record","collection","object"].map((type) => <option key={type} value={type}>{type}</option>)}
+                </select>
+                <label className="flex items-center gap-1 text-[11px] text-slate-600"><input type="checkbox" checked={input.required === true} onChange={(event) => setWorkflow((current) => ({ ...current, inputContract: (current.inputContract || []).map((item, index) => index === inputIndex ? { ...item, required: event.target.checked } : item) }))} /> Required</label>
+                <button type="button" className="text-xs text-red-600" onClick={() => setWorkflow((current) => ({ ...current, inputContract: (current.inputContract || []).filter((_, index) => index !== inputIndex) }))}>Remove</button>
+              </div>
+            ))}
+            {!(workflow.inputContract || []).length ? <div className="text-[11px] text-slate-500">No declared inputs.</div> : null}
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <strong className="text-xs text-slate-700">Outputs</strong>
+              <button type="button" className="text-xs text-blue-700" onClick={() => setWorkflow((current) => ({ ...current, outputContract: [...(current.outputContract || []), { name: `output_${(current.outputContract || []).length + 1}`, label: "Output", type: "text", source: "", required: false }] }))}>+ Output</button>
+            </div>
+            {(workflow.outputContract || []).map((output, outputIndex) => (
+              <div key={`${output.name}-${outputIndex}`} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="grid gap-2 md:grid-cols-[1fr_1fr_.8fr_auto]">
+                  <input className={inputClass} value={output.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, outputContract: (current.outputContract || []).map((item, index) => index === outputIndex ? { ...item, name: event.target.value.replace(/[^A-Za-z0-9_]/g, "") } : item) }))} placeholder="api_name" />
+                  <input className={inputClass} value={output.label || ""} onChange={(event) => setWorkflow((current) => ({ ...current, outputContract: (current.outputContract || []).map((item, index) => index === outputIndex ? { ...item, label: event.target.value } : item) }))} placeholder="Label" />
+                  <select className={inputClass} value={output.type || "text"} onChange={(event) => setWorkflow((current) => ({ ...current, outputContract: (current.outputContract || []).map((item, index) => index === outputIndex ? { ...item, type: event.target.value } : item) }))}>
+                    {["text","number","boolean","date","datetime","record","collection","object"].map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                  <button type="button" className="text-xs text-red-600" onClick={() => setWorkflow((current) => ({ ...current, outputContract: (current.outputContract || []).filter((_, index) => index !== outputIndex) }))}>Remove</button>
+                </div>
+                <MetadataResourcePicker objectKey={workflow.object || ""} extraResources={workflowStepResources(workflow.steps, workflow.steps.length)} label="Output Resource" value={output.source || ""} onChange={(source) => setWorkflow((current) => ({ ...current, outputContract: (current.outputContract || []).map((item, index) => index === outputIndex ? { ...item, source } : item) }))} />
+              </div>
+            ))}
+            {!(workflow.outputContract || []).length ? <div className="text-[11px] text-slate-500">No declared outputs.</div> : null}
+          </div>
+        </div>
+      </details>
+
       {debugOpen ? (
         <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
