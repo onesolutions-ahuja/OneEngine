@@ -3,6 +3,22 @@ import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2 } fr
 import { apiRequest } from "../../services/api.js";
 import "./oneKiosk.css";
 
+const ONE_KIOSK_DEVICE_KEY = "onepos_one_kiosk_device_key";
+
+function kioskDeviceKey() {
+  try {
+    const existing = localStorage.getItem(ONE_KIOSK_DEVICE_KEY);
+    if (existing) return existing;
+    const next = typeof crypto?.randomUUID === "function"
+      ? `kiosk-${crypto.randomUUID()}`
+      : `kiosk-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(ONE_KIOSK_DEVICE_KEY, next);
+    return next;
+  } catch {
+    return `kiosk-session-${Date.now()}`;
+  }
+}
+
 const DEMO_PRODUCTS = [
   {
     id: "demo-classic-beef",
@@ -107,6 +123,7 @@ export default function OneKioskPage() {
   const [paying, setPaying] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
   const [paidSale, setPaidSale] = useState(null);
+  const [deviceState, setDeviceState] = useState(null);
 
   useEffect(() => {
     if (demoMode) {
@@ -139,6 +156,101 @@ export default function OneKioskPage() {
         if (live) setLoading(false);
       });
     return () => { live = false; };
+  }, [demoMode]);
+
+  useEffect(() => {
+    if (demoMode) return undefined;
+    let live = true;
+    let timer = null;
+    const key = kioskDeviceKey();
+
+    const sendHeartbeat = async (device) => {
+      if (!device?.id || !live) return;
+      const internetStatus = navigator.onLine ? "ONLINE" : "OFFLINE";
+      let serverStatus = "OFFLINE";
+      let paymentStatus = "UNKNOWN";
+      let printerStatus = "UNKNOWN";
+      let serverMessage = "";
+      let paymentMessage = "";
+      let printerMessage = "";
+
+      try {
+        const health = await apiRequest("/api/health", { timeoutMs: 6000, retryGet: false });
+        serverStatus = health?.success === false ? "DEGRADED" : "ONLINE";
+        serverMessage = health?.message || "";
+      } catch (reason) {
+        serverStatus = "OFFLINE";
+        serverMessage = reason?.message || "Server unavailable";
+      }
+
+      try {
+        const payment = await apiRequest("/api/connector-capabilities/payment.sale", { timeoutMs: 6000, retryGet: false });
+        paymentStatus = payment?.data?.available === true ? "READY" : "NOT_CONFIGURED";
+        paymentMessage = payment?.message || payment?.data?.message || "";
+      } catch (reason) {
+        paymentStatus = serverStatus === "OFFLINE" ? "UNKNOWN" : "ERROR";
+        paymentMessage = reason?.message || "Payment status unavailable";
+      }
+
+      try {
+        const printer = await apiRequest("/api/connector-capabilities/printer.status", { timeoutMs: 6000, retryGet: false });
+        printerStatus = printer?.data?.available === true ? "READY" : "NOT_CONFIGURED";
+        printerMessage = printer?.message || printer?.data?.message || "";
+      } catch (reason) {
+        printerStatus = serverStatus === "OFFLINE" ? "UNKNOWN" : "ERROR";
+        printerMessage = reason?.message || "Printer status unavailable";
+      }
+
+      try {
+        const heartbeat = await apiRequest(`/api/kiosk/devices/${device.id}/heartbeat`, {
+          method: "POST",
+          body: JSON.stringify({
+            internetStatus,
+            serverStatus,
+            paymentStatus,
+            printerStatus,
+            details: {
+              userAgent: navigator.userAgent,
+              online: navigator.onLine,
+              serverMessage,
+              paymentMessage,
+              printerMessage,
+              screen: { width: window.screen?.width || null, height: window.screen?.height || null },
+            },
+          }),
+        });
+        if (live && heartbeat?.data) setDeviceState(heartbeat.data);
+      } catch {}
+    };
+
+    const register = async () => {
+      try {
+        const response = await apiRequest("/api/kiosk/devices/register", {
+          method: "POST",
+          body: JSON.stringify({
+            deviceKey: key,
+            name: `OneKiosk ${key.slice(-6).toUpperCase()}`,
+          }),
+        });
+        if (!response?.success || !response?.data) return;
+        if (live) setDeviceState(response.data);
+        await sendHeartbeat(response.data);
+        timer = window.setInterval(() => void sendHeartbeat(response.data), 20000);
+      } catch {}
+    };
+
+    void register();
+    const onlineListener = () => {
+      if (deviceState?.id) void sendHeartbeat(deviceState);
+    };
+    window.addEventListener("online", onlineListener);
+    window.addEventListener("offline", onlineListener);
+    return () => {
+      live = false;
+      if (timer) window.clearInterval(timer);
+      window.removeEventListener("online", onlineListener);
+      window.removeEventListener("offline", onlineListener);
+    };
   }, [demoMode]);
 
   const categories = useMemo(
