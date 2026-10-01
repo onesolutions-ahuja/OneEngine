@@ -279,7 +279,9 @@ async function activeFieldReferences(db, field, companyId) {
 async function objectDeactivationBlockers(db, object, companyId) {
   const blockers = [];
   if (object.source_table && isSafeIdentifier(object.source_table)) {
-    const records = await db(`SELECT COUNT(*)::int AS count FROM "${object.source_table}" WHERE company_id=$1`, [companyId]);
+    const records = object.company_scoped
+      ? await db(`SELECT COUNT(*)::int AS count FROM "${object.source_table}" WHERE company_id=$1`, [companyId])
+      : await db(`SELECT COUNT(*)::int AS count FROM "${object.source_table}"`);
     if (Number(records.rows[0]?.count || 0) > 0) blockers.push("records");
   }
   const metadata = await db(
@@ -311,10 +313,12 @@ async function fieldStoredValueCount(db, field, companyId) {
     return Number(result.rows[0]?.count || 0);
   }
   if (field.source_table && field.source_column && isSafeIdentifier(field.source_table) && isSafeIdentifier(field.source_column)) {
-    const result = await db(
-      `SELECT COUNT(*)::int AS count FROM "${field.source_table}" WHERE company_id=$1 AND "${field.source_column}" IS NOT NULL`,
-      [companyId]
-    );
+    const result = field.object_company_scoped === false
+      ? await db(`SELECT COUNT(*)::int AS count FROM "${field.source_table}" WHERE "${field.source_column}" IS NOT NULL`)
+      : await db(
+          `SELECT COUNT(*)::int AS count FROM "${field.source_table}" WHERE company_id=$1 AND "${field.source_column}" IS NOT NULL`,
+          [companyId]
+        );
     return Number(result.rows[0]?.count || 0);
   }
   return 0;
@@ -606,6 +610,23 @@ function validAssignmentDates(body) {
 
 export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, canViewCompanyCustomers = async () => false }) {
   const router = express.Router();
+
+  // Express 4 does not forward rejected async route promises to error
+  // middleware. Wrap async handlers at registration time so a failed query or
+  // runtime check returns a controlled response instead of becoming an
+  // unhandled rejection and leaving the browser request hanging.
+  for (const method of ["get", "post", "put", "patch", "delete"]) {
+    const register = router[method].bind(router);
+    router[method] = (path, ...handlers) => register(
+      path,
+      ...handlers.map((handler) => {
+        if (typeof handler !== "function" || handler.constructor?.name !== "AsyncFunction") return handler;
+        return function platformAsyncHandler(req, res, next) {
+          return Promise.resolve(handler(req, res, next)).catch(next);
+        };
+      })
+    );
+  }
   async function resolveActingCompany(req, res, next) {
     try {
       const oneEngineManager = await hasOneEngineManageAccess(req.user?.id);
@@ -1681,7 +1702,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   });
 
   router.put("/platform/fields/:fieldId", ...manage, async (req, res) => {
-    const result = await db("SELECT f.*, o.company_id AS object_company_id, o.source_table, o.object_key FROM platform_fields f JOIN platform_objects o ON o.id=f.object_id WHERE f.id=$1 AND (f.company_id IS NULL OR f.company_id=$2) AND (o.company_id IS NULL OR o.company_id=$2)", [req.params.fieldId, req.user.companyId]);
+    const result = await db("SELECT f.*, o.company_id AS object_company_id, o.company_scoped AS object_company_scoped, o.source_table, o.object_key FROM platform_fields f JOIN platform_objects o ON o.id=f.object_id WHERE f.id=$1 AND (f.company_id IS NULL OR f.company_id=$2) AND (o.company_id IS NULL OR o.company_id=$2)", [req.params.fieldId, req.user.companyId]);
     const field = result.rows[0];
     if (!field || (field.company_id === null && !await canManageGlobal(db, req))) return res.status(404).json({ success: false, message: "Field not found or not editable" });
     if (systemObject(field) && !field.company_id) return res.status(409).json({ success: false, message: "System field definitions are protected; use field security and layouts" });
@@ -1732,7 +1753,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.delete("/platform/fields/:fieldId", ...manage, async (req, res) => {
     try {
-    const existing = await db("SELECT f.*, o.company_id AS object_company_id, o.source_table, o.object_key FROM platform_fields f JOIN platform_objects o ON o.id=f.object_id WHERE f.id=$1 AND (f.company_id IS NULL OR f.company_id=$2) AND (o.company_id IS NULL OR o.company_id=$2)", [req.params.fieldId, req.user.companyId]);
+    const existing = await db("SELECT f.*, o.company_id AS object_company_id, o.company_scoped AS object_company_scoped, o.source_table, o.object_key FROM platform_fields f JOIN platform_objects o ON o.id=f.object_id WHERE f.id=$1 AND (f.company_id IS NULL OR f.company_id=$2) AND (o.company_id IS NULL OR o.company_id=$2)", [req.params.fieldId, req.user.companyId]);
     const field = existing.rows[0];
     if (!field || (field.company_id === null && !await canManageGlobal(db, req))) return res.status(404).json({ success: false, message: "Field not found or not editable" });
     if (systemObject(field) && !field.company_id) return res.status(409).json({ success: false, message: "System fields cannot be deleted" });
@@ -2212,8 +2233,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const field = fieldByApiName.get(String(condition?.field || ""));
         if (!field) return res.status(400).json({ success: false, message: `Collection conditions reference unavailable field "${condition?.field || "?"}"` });
         const column = platformFieldSql(field, object);
-        if (condition.operator === "is_empty" || condition.operator === "is_not_empty") {
-          clauses.push(`(${column} IS ${condition.operator === "is_empty" ? "" : "NOT "}NULL${field.source_column ? ` OR CAST(${column} AS TEXT) = ''` : ""})`);
+        if (condition.operator === "is_empty") {
+          clauses.push(field.source_column
+            ? `(${column} IS NULL OR CAST(${column} AS TEXT) = '')`
+            : `(${column} IS NULL)`);
+          continue;
+        }
+        if (condition.operator === "is_not_empty") {
+          clauses.push(field.source_column
+            ? `(${column} IS NOT NULL AND CAST(${column} AS TEXT) <> '')`
+            : `(${column} IS NOT NULL)`);
           continue;
         }
         const value = condition.value;
@@ -2232,10 +2261,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
       /* "any" wraps ONLY the condition clauses (already appended); scope
          clauses appended after this point stay AND-ed as mandatory. */
-      const conditionClauseCount = clauses.length - (object.company_scoped ? 1 : 0) - (object.store_scoped ? 1 : 0);
-      let conditionClauses = clauses.splice(0, conditionClauseCount);
-      if (conditionClauseCount > 0 && conditionMatch === "any") conditionClauses = [`(${conditionClauses.join(" OR ")})`];
-      clauses.unshift(...conditionClauses);
+      const scopeClauseCount = (object.company_scoped ? 1 : 0) + (object.store_scoped ? 1 : 0);
+      const conditionClauseCount = clauses.length - scopeClauseCount;
+      let conditionClauses = conditionClauseCount > 0 ? clauses.splice(scopeClauseCount, conditionClauseCount) : [];
+      if (conditionClauses.length && conditionMatch === "any") conditionClauses = [`(${conditionClauses.join(" OR ")})`];
+      clauses.push(...conditionClauses);
       if (["customers"].includes(object.source_table) && !req.platformCompanyCustomers) {
         /* Mirror the appendSystemReadScope customer-store rule for record feeds. */
         if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
@@ -2252,7 +2282,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (!field) return res.status(400).json({ success: false, message: `Collection sort references unavailable field "${entry?.field || "?"}"` });
         orderParts.push(`${platformFieldSql(field, object)} ${entry.direction === "asc" ? "ASC" : "DESC"}`);
       }
-      if (!orderParts.length) orderParts.push("created_at DESC NULLS LAST");
+      if (!orderParts.length) orderParts.push("id ASC");
 
       const limit = boundedInteger(collection.maxRecords ?? collection.maxRecords ?? 10, 10, 50);
       const requestedFields = Array.isArray(collection.fields) ? collection.fields.map(String).filter((name) => fieldByApiName.has(name)) : [];
@@ -3937,7 +3967,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   router.get("/platform/modules/:moduleId", ...manage, async (req, res) => {
     const result = await db("SELECT * FROM platform_modules WHERE id=$1", [req.params.moduleId]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Module not found" });
-    const objects = await db("SELECT * FROM platform_objects WHERE module_id=$1 AND active=true ORDER BY label", [req.params.moduleId]);
+    const objects = await db(
+      "SELECT * FROM platform_objects WHERE module_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY label",
+      [req.params.moduleId, req.user.companyId]
+    );
     res.json({ success: true, data: { ...result.rows[0], objects: objects.rows } });
   });
 
@@ -5849,7 +5882,9 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const dataParams = [...params, pageSize, offset];
       const sort = listView && listView.sort && typeof listView.sort === "object" ? normalizeListViewSort(listView.sort) : { field: null, direction: "asc" };
       const sortField = sort.field ? fieldByApiName.get(sort.field) : null;
-      const orderClause = sortField ? ` ORDER BY ${platformFieldSql(sortField, object)} ${sort.direction === "desc" ? "DESC" : "ASC"}` : ["inventory", "purchase_receipt"].includes(object.object_key) ? ` ORDER BY id` : ` ORDER BY created_at DESC NULLS LAST`;
+      const orderClause = sortField
+        ? ` ORDER BY ${platformFieldSql(sortField, object)} ${sort.direction === "desc" ? "DESC" : "ASC"}`
+        : ` ORDER BY id ASC`;
       const result = await db(`SELECT ${["id", ...columns].join(", ")} FROM "${object.source_table}"${where}${orderClause} LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`, dataParams);
       const associations = await loadRecordTypeAssociations(object, result.rows.map((record) => record.id), req);
       const typeByRecord = new Map(associations.rows.map((row) => [String(row.record_id), row.record_type_id]));
@@ -6047,6 +6082,16 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       params
     );
     res.json({ success: true, data: result.rows });
+  });
+
+  router.use((error, req, res, next) => {
+    if (res.headersSent) return next(error);
+    const status = Number.isInteger(error?.status) && error.status >= 400 && error.status < 600 ? error.status : 500;
+    console.error("Platform route error:", error);
+    return res.status(status).json({
+      success: false,
+      message: status >= 500 ? "Platform request failed" : (error?.message || "Platform request failed"),
+    });
   });
 
   return router;
