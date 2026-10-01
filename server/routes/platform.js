@@ -3690,7 +3690,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
       if (!actions.length) return res.status(422).json({ success: false, message: "Workflow contains no executable steps" });
-      const executionMode = String(req.body?.mode || "debug").toLowerCase() === "test" ? "TEST" : "DEBUG";
+
 
       let object = null;
       let record = null;
