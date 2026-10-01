@@ -1,19 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Bell,
-  ChevronRight,
-  AppWindow,
-  BarChart3,
-  LayoutDashboard,
-  LayoutGrid,
-  ListChecks,
-  UserCheck,
-  Rocket,
-  ShieldCheck,
-  Search,
-  Workflow,
+  Bell, Building2, ChevronRight, AppWindow, BarChart3, LayoutDashboard,
+  LayoutGrid, ListChecks, UserCheck, Rocket, Search, Workflow,
 } from 'lucide-react'
-import { getStoredUser } from '../../services/api'
+import { apiRequest, getActingCompanyId, getStoredUser, setActingCompanyId } from '../../services/api'
+import { clearSettingsContextCache } from '../../services/settings'
 import OneBuilder from '../settings/OneBuilder'
 import ObjectsSettingsPane from '../settings/ObjectsSettingsPane'
 import WorkflowRunsAdmin from '../settings/Platform/WorkflowRunsAdmin'
@@ -22,7 +13,6 @@ import PlatformAppsAdmin from '../settings/Platform/PlatformAppsAdmin'
 import DeploymentAdmin from '../settings/Platform/DeploymentAdmin'
 import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSubscriptionsAdmin'
 import ValueSetList from '../settings/Platform/ValueSetList'
-import OneEngineManager from './OneEngineManager'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
@@ -33,7 +23,6 @@ const DEVELOPER_ITEMS = [
   { key: 'report-builder', label: 'Report Builder', icon: BarChart3 },
   { key: 'workflow-runs', label: 'Workflow Runs', icon: Workflow },
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
-  { key: 'oneengine-manager', label: 'OneEngine Manager', icon: ShieldCheck },
   { key: 'platform-apps', label: 'OneEngine Apps', icon: LayoutGrid },
   { key: 'deployments', label: 'Deployments', icon: Rocket },
   { key: 'notifications', label: 'Notifications', icon: Bell },
@@ -42,27 +31,73 @@ const DEVELOPER_ITEMS = [
 
 function normalizeSection(value) {
   const raw = String(value || '').trim().toLowerCase()
-  const key = raw === 'platform' ? 'oneengine-manager' : raw
-  return DEVELOPER_ITEMS.some((item) => item.key === key) ? key : 'objects'
+  return DEVELOPER_ITEMS.some((item) => item.key === raw) ? raw : 'objects'
 }
 
 export default function OneDeveloperPage({ initialSection = 'objects', onSectionChange }) {
   const [active, setActive] = useState(() => normalizeSection(initialSection))
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
+  const [clients, setClients] = useState([])
+  const [clientQuery, setClientQuery] = useState('')
+  const [selectedClient, setSelectedClient] = useState(() => getActingCompanyId() || '')
+  const [canManageEngine, setCanManageEngine] = useState(false)
+  const [clientsLoading, setClientsLoading] = useState(true)
+
+  useEffect(() => { setActive(normalizeSection(initialSection)) }, [initialSection])
 
   useEffect(() => {
-    setActive(normalizeSection(initialSection))
-  }, [initialSection])
+    let alive = true
+    ;(async () => {
+      try {
+        setClientsLoading(true)
+        const response = await apiRequest('/api/platform/developer/companies')
+        if (!alive) return
+        const rows = Array.isArray(response?.data) ? response.data : []
+        setCanManageEngine(true)
+        setClients(rows)
+        const current = getActingCompanyId()
+        const valid = rows.some((row) => String(row.id) === String(current))
+        if (!valid && rows[0]) {
+          await apiRequest('/api/platform/developer/acting-company', {
+            method: 'PUT',
+            body: JSON.stringify({ actingCompanyId: rows[0].id }),
+          })
+          setActingCompanyId(rows[0].id)
+          clearSettingsContextCache()
+          setSelectedClient(String(rows[0].id))
+        } else if (valid) {
+          setSelectedClient(String(current))
+        }
+      } catch (e) {
+        if (!alive) return
+        if (e?.status === 403) {
+          setCanManageEngine(false)
+          setClients([])
+        } else {
+          setError(e?.message || 'Unable to load client context')
+        }
+      } finally {
+        if (alive) setClientsLoading(false)
+      }
+    })()
+    return () => { alive = false }
+  }, [])
+
   const user = getStoredUser() || {}
   const profileName = user?.name || user?.full_name || user?.username || 'User'
-  const profileRole = user?.isSuperadmin || user?.is_superadmin ? 'Superadmin' : (user?.role || 'Developer')
+  const profileRole = user?.role || 'Developer'
   const initial = profileName.trim().charAt(0).toUpperCase() || 'U'
 
   const visibleItems = useMemo(() => {
     const q = query.trim().toLowerCase()
     return q ? DEVELOPER_ITEMS.filter((item) => item.label.toLowerCase().includes(q)) : DEVELOPER_ITEMS
   }, [query])
+
+  const visibleClients = useMemo(() => {
+    const q = clientQuery.trim().toLowerCase()
+    return clients.filter((client) => !q || String(client.name || '').toLowerCase().includes(q))
+  }, [clients, clientQuery])
 
   const current = DEVELOPER_ITEMS.find((item) => item.key === active) || DEVELOPER_ITEMS[0]
 
@@ -72,8 +107,45 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
     onSectionChange?.(key)
   }
 
+  const chooseClient = async (id) => {
+    if (!id || String(id) === String(selectedClient)) return
+    try {
+      setError('')
+      await apiRequest('/api/platform/developer/acting-company', {
+        method: 'PUT',
+        body: JSON.stringify({ actingCompanyId: id }),
+      })
+      setActingCompanyId(id)
+      clearSettingsContextCache()
+      setSelectedClient(String(id))
+    } catch (e) {
+      setError(e?.message || 'Unable to select client')
+    }
+  }
+
+  const contentKey = canManageEngine ? `${current.key}:${selectedClient}` : current.key
+
   return (
     <section className="settings-page onedeveloper-page">
+      {canManageEngine ? (
+        <aside className="oneengine-client-pane">
+          <div className="oneengine-pane-title"><Building2 size={16}/> Clients</div>
+          <label className="settings-search">
+            <Search size={15}/>
+            <input value={clientQuery} onChange={(event) => setClientQuery(event.target.value)} placeholder="Search clients" />
+          </label>
+          {clientsLoading ? <div className="settings-state-card">Loading clients…</div> : null}
+          <div className="oneengine-client-list">
+            {visibleClients.map((client) => (
+              <button key={client.id} type="button" className={String(client.id) === String(selectedClient) ? 'is-active' : ''} onClick={() => chooseClient(client.id)}>
+                <span><strong>{client.name}</strong><small>{String(client.id).slice(0, 8)}</small></span>
+                <ChevronRight size={14}/>
+              </button>
+            ))}
+          </div>
+        </aside>
+      ) : null}
+
       <aside className="settings-sidebar">
         <div className="settings-window-title">OneDeveloper</div>
         <label className="settings-search">
@@ -90,12 +162,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
             {visibleItems.map((item) => {
               const Icon = item.icon
               return (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`settings-nav-item ${current.key === item.key ? 'is-active' : ''}`}
-                  onClick={() => select(item.key)}
-                >
+                <button key={item.key} type="button" className={`settings-nav-item ${current.key === item.key ? 'is-active' : ''}`} onClick={() => select(item.key)}>
                   <span className="settings-nav-icon settings-nav-icon--cyan"><Icon size={16}/></span>
                   <span>{item.label}</span>
                   <ChevronRight size={14} className="settings-chevron"/>
@@ -106,37 +173,23 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
         </div>
       </aside>
 
-      <div className="settings-content">
+      <div className="settings-content" key={contentKey}>
         <div className="settings-content-header"><h2>{current.label}</h2></div>
         <div className="settings-content-body">
           {error ? <div className="settings-error">{error}</div> : null}
-          {current.key === 'objects' ? (
-            <ObjectsSettingsPane />
-          ) : current.key === 'workflow-builder' ? (
-            <OneBuilder initialTab="workflow" singleBuilder />
-          ) : current.key === 'approval-builder' ? (
-            <OneBuilder initialTab="approval" singleBuilder />
-          ) : current.key === 'page-builder' ? (
-            <OneBuilder initialTab="page" singleBuilder />
-          ) : current.key === 'dashboard-builder' ? (
-            <OneBuilder initialTab="dashboard" singleBuilder />
-          ) : current.key === 'report-builder' ? (
-            <OneBuilder initialTab="report" singleBuilder />
-          ) : current.key === 'workflow-runs' ? (
-            <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-          ) : current.key === 'work-items' ? (
-            <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-          ) : current.key === 'oneengine-manager' ? (
-            <OneEngineManager />
-          ) : current.key === 'platform-apps' ? (
-            <PlatformAppsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-          ) : current.key === 'deployments' ? (
-            <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-          ) : current.key === 'notifications' ? (
-            <NotificationSubscriptionsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-          ) : current.key === 'value-sets' ? (
-            <ValueSetList onMessage={() => {}} onError={(value) => setError(value || '')} />
-          ) : null}
+          {current.key === 'objects' ? <ObjectsSettingsPane />
+            : current.key === 'workflow-builder' ? <OneBuilder initialTab="workflow" singleBuilder />
+            : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
+            : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
+            : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
+            : current.key === 'report-builder' ? <OneBuilder initialTab="report" singleBuilder />
+            : current.key === 'workflow-runs' ? <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : current.key === 'work-items' ? <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : current.key === 'platform-apps' ? <PlatformAppsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : current.key === 'deployments' ? <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : current.key === 'notifications' ? <NotificationSubscriptionsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : current.key === 'value-sets' ? <ValueSetList onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : null}
         </div>
       </div>
     </section>
