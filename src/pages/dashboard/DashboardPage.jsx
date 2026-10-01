@@ -3,6 +3,7 @@ import { CalendarDays, Pencil, RefreshCw } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 
 const DATE_RANGES = [
+  ['all_time', 'All time'],
   ['today', 'Today'],
   ['yesterday', 'Yesterday'],
   ['this_week', 'This week'],
