@@ -3,199 +3,406 @@ import { apiRequest } from "../../../services/api.js";
 import PlatformFieldPicker from "./PlatformFieldPicker.jsx";
 import MetadataResourcePicker from "./MetadataResourcePicker.jsx";
 
-const inputClass = "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none";
+const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 shadow-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100";
 
 const WORKFLOW_VISUAL_CSS = `
+  .workflow-builder-page {
+    --wf-border: rgba(15, 23, 42, .09);
+    --wf-muted: #64748b;
+    --wf-text: #172033;
+    --wf-blue: #0a84ff;
+    --wf-surface: #ffffff;
+    --wf-canvas: #fbfdff;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .workflow-builder-header {
+    display: grid;
+    grid-template-columns: minmax(180px, .95fr) minmax(170px, .8fr) minmax(150px, .72fr) auto;
+    gap: 10px;
+    align-items: end;
+    padding: 12px;
+    border: 1px solid var(--wf-border);
+    border-radius: 14px;
+    background: rgba(255,255,255,.98);
+    box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  .workflow-builder-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 4px;
+  }
+  .workflow-builder-heading h2 {
+    margin: 0;
+    color: #13213a;
+    font-size: 21px;
+    line-height: 1.1;
+    font-weight: 760;
+    letter-spacing: -.025em;
+    white-space: nowrap;
+  }
+  .workflow-builder-field label {
+    display: block;
+    margin: 0 0 5px;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: .015em;
+    text-transform: none;
+  }
+  .workflow-builder-field input,
+  .workflow-builder-field select {
+    min-height: 38px;
+  }
+  .workflow-builder-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .workflow-save-button {
+    min-height: 38px;
+    border: 0;
+    border-radius: 9px;
+    padding: 0 16px;
+    background: #0a84ff;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 5px 14px rgba(10,132,255,.18);
+    cursor: pointer;
+  }
+  .workflow-cancel-button {
+    min-height: 38px;
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+    padding: 0 11px;
+    background: #fff;
+    color: #64748b;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .workflow-ready-dot {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #22c55e;
+    box-shadow: 0 0 0 4px rgba(34,197,94,.10);
+  }
+  .workflow-ready-dot.has-issue {
+    background: #ef4444;
+    box-shadow: 0 0 0 4px rgba(239,68,68,.10);
+  }
+
   .workflow-visual-shell {
     display: grid;
-    grid-template-columns: 170px minmax(0, 1fr) 270px;
-    gap: 8px;
-    min-height: calc(100vh - 250px);
+    grid-template-columns: 238px minmax(390px, 1fr) 336px;
+    gap: 10px;
+    min-height: calc(100vh - 198px);
     width: 100%;
     min-width: 0;
     align-items: stretch;
   }
   .workflow-node-palette,
-  .workflow-properties-panel {
+  .workflow-properties-panel,
+  .workflow-canvas-surface {
     min-width: 0;
-    border: 1px solid rgba(15,23,42,.10);
+    border: 1px solid var(--wf-border);
     border-radius: 14px;
     background: #fff;
-    box-shadow: 0 1px 3px rgba(15,23,42,.06);
-    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(15,23,42,.05);
   }
   .workflow-node-palette {
-    padding: 9px;
+    padding: 12px 10px 10px;
+    overflow: hidden;
+  }
+  .workflow-palette-head,
+  .workflow-properties-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .workflow-properties-title,
+  .workflow-palette-title {
+    margin: 0;
+    color: #172033;
+    font-size: 14px;
+    font-weight: 760;
+  }
+  .workflow-palette-search {
+    position: relative;
+    margin-bottom: 10px;
+  }
+  .workflow-palette-search span {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 13px;
+    pointer-events: none;
+  }
+  .workflow-palette-search input {
+    width: 100%;
+    min-height: 37px;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+    background: #fff;
+    padding: 7px 9px 7px 30px;
+    color: #334155;
+    font: inherit;
+    font-size: 12px;
+    outline: none;
+  }
+  .workflow-palette-search input:focus {
+    border-color: rgba(10,132,255,.45);
+    box-shadow: 0 0 0 3px rgba(10,132,255,.08);
+  }
+  .workflow-palette-help {
+    margin: -2px 0 9px;
+    color: #94a3b8;
+    font-size: 9px;
+    line-height: 1.35;
   }
   .workflow-palette-scroll {
     max-height: calc(100vh - 330px);
     overflow: auto;
     padding-right: 3px;
   }
+  .workflow-palette-empty {
+    padding: 18px 8px;
+    color: #94a3b8;
+    font-size: 11px;
+    text-align: center;
+  }
   .workflow-palette-item {
     display: flex;
     width: 100%;
     align-items: center;
-    min-height: 36px;
-    margin-bottom: 5px;
+    gap: 8px;
+    min-height: 38px;
+    margin-bottom: 6px;
     padding: 7px 9px;
-    border: 1px solid rgba(15,23,42,.08);
+    border: 1px solid #e7edf4;
     border-radius: 9px;
     background: #fff;
     color: #334155;
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 560;
     text-align: left;
     cursor: grab;
-    transition: background .14s ease, border-color .14s ease, transform .14s ease;
+    transition: background .14s ease, border-color .14s ease, transform .14s ease, box-shadow .14s ease;
+  }
+  .workflow-palette-item::before {
+    content: "⋮⋮";
+    flex: 0 0 auto;
+    color: #b1bdcc;
+    font-size: 10px;
+    letter-spacing: -2px;
+  }
+  .workflow-palette-item::after {
+    content: "";
+    order: -1;
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 2px;
+    background: #0a84ff;
+    box-shadow: 0 0 0 4px rgba(10,132,255,.08);
   }
   .workflow-palette-item:hover {
-    background: #f7faff;
-    border-color: rgba(10,132,255,.32);
+    background: #f8fbff;
+    border-color: rgba(10,132,255,.28);
+    box-shadow: 0 4px 12px rgba(15,23,42,.05);
     transform: translateY(-1px);
   }
+
   .workflow-canvas-surface {
     position: relative;
-    min-width: 0;
-    min-height: calc(100vh - 250px);
-    max-height: calc(100vh - 190px);
+    min-height: calc(100vh - 198px);
+    max-height: calc(100vh - 156px);
     overflow: auto;
-    padding: 18px;
-    border: 1px solid rgba(15,23,42,.10);
-    border-radius: 14px;
-    background-color: #f8fafc;
-    background-image: radial-gradient(circle, rgba(100,116,139,.23) 1px, transparent 1px);
+    padding: 16px 18px 30px;
+    background-color: var(--wf-canvas);
+    background-image: radial-gradient(circle, rgba(148,163,184,.30) 1px, transparent 1px);
     background-size: 18px 18px;
-    box-shadow: inset 0 1px 5px rgba(15,23,42,.05);
+    box-shadow: inset 0 1px 4px rgba(15,23,42,.025);
+  }
+  .workflow-canvas-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+    margin: -5px -7px 14px;
+    pointer-events: none;
+  }
+  .workflow-canvas-toolbar button {
+    height: 30px;
+    padding: 0 9px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: rgba(255,255,255,.94);
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 650;
+    box-shadow: 0 2px 8px rgba(15,23,42,.05);
+    cursor: pointer;
+    pointer-events: auto;
   }
   .workflow-canvas-lane {
-    width: min(100%, 760px);
-    margin: 0 auto;
+    width: min(100%, 560px);
+    margin: 78px auto 0;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
   .workflow-start-node {
-    border: 1px solid #a7f3d0;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    column-gap: 10px;
+    align-items: center;
+    min-width: 220px;
+    max-width: 360px;
+    border: 1.5px solid #50d68b;
+    border-radius: 18px;
+    background: linear-gradient(180deg,#f6fff9 0%,#effcf4 100%);
+    padding: 10px 14px;
+    color: #14532d;
+    box-shadow: 0 8px 22px rgba(34,197,94,.08);
+  }
+  .workflow-start-icon {
+    grid-row: 1 / 3;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
     border-radius: 999px;
-    background: #ecfdf5;
-    padding: 9px 18px;
-    color: #065f46;
-    font-size: 12px;
-    font-weight: 700;
-    box-shadow: 0 4px 12px rgba(5,150,105,.08);
+    background: #22b95f;
+    color: #fff;
+    font-size: 14px;
+    box-shadow: 0 4px 10px rgba(34,185,95,.20);
+  }
+  .workflow-start-title {
+    color: #173c2a;
+    font-size: 13px;
+    font-weight: 760;
+    line-height: 1.1;
+  }
+  .workflow-start-note {
+    margin-top: 3px;
+    color: #34a167;
+    font-size: 10px;
+    font-weight: 540;
   }
   .workflow-node-connector {
+    position: relative;
     width: 2px;
-    height: 28px;
-    background: #cbd5e1;
+    height: 42px;
+    background: #93a7bf;
+  }
+  .workflow-node-connector::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    transform: translateX(-50%);
+    border: 1.5px solid #7d93ad;
+    border-radius: 999px;
+    background: #fff;
+  }
+  .workflow-node-connector::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -1px;
+    width: 7px;
+    height: 7px;
+    transform: translateX(-50%) rotate(45deg);
+    border-right: 1.5px solid #7d93ad;
+    border-bottom: 1.5px solid #7d93ad;
   }
   .workflow-node-wrap {
-    width: 100%;
+    position: relative;
+    width: min(100%, 360px);
     display: flex;
     flex-direction: column;
     align-items: center;
   }
   .workflow-node-card {
+    position: relative;
     width: 100%;
-    min-height: 58px;
-    padding: 10px 12px;
-    border: 1px solid #dbe3ee;
-    border-radius: 14px;
-    background: rgba(255,255,255,.98);
+    min-height: 70px;
+    padding: 12px 38px 12px 58px;
+    border: 1px solid #dbe6f2;
+    border-radius: 16px;
+    background: rgba(255,255,255,.99);
     color: #1e293b;
     text-align: left;
-    box-shadow: 0 6px 18px rgba(15,23,42,.06);
+    box-shadow: 0 8px 24px rgba(15,23,42,.055);
     cursor: pointer;
     transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
   }
+  .workflow-node-card::before {
+    content: "◇";
+    position: absolute;
+    left: 13px;
+    top: 50%;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    transform: translateY(-50%);
+    border-radius: 9px;
+    background: #0a84ff;
+    color: #fff;
+    font-size: 17px;
+    font-weight: 800;
+    box-shadow: 0 5px 12px rgba(10,132,255,.18);
+  }
   .workflow-node-card:hover {
     transform: translateY(-1px);
-    border-color: #b8c8dc;
-    box-shadow: 0 9px 22px rgba(15,23,42,.09);
+    border-color: #9bbce0;
+    box-shadow: 0 12px 27px rgba(15,23,42,.08);
   }
   .workflow-node-card.is-selected {
     border-color: #0a84ff;
-    box-shadow: 0 0 0 3px rgba(10,132,255,.12), 0 9px 22px rgba(15,23,42,.09);
+    box-shadow: 0 0 0 2px rgba(10,132,255,.10), 0 12px 27px rgba(15,23,42,.08);
   }
   .workflow-node-card.is-disabled { opacity: .5; }
   .workflow-node-kind {
     display: block;
-    margin-bottom: 3px;
+    margin-bottom: 4px;
     color: #7c8aa0;
-    font-size: 9px;
-    font-weight: 750;
-    letter-spacing: .055em;
+    font-size: 8px;
+    font-weight: 760;
+    letter-spacing: .065em;
     text-transform: uppercase;
   }
   .workflow-node-title {
     display: block;
     color: #172033;
-    font-size: 13px;
-    font-weight: 720;
+    font-size: 12px;
+    font-weight: 760;
+    line-height: 1.25;
   }
   .workflow-node-note {
     display: block;
-    margin-top: 6px;
+    margin-top: 5px;
     color: #64748b;
-    font-size: 10px;
-  }
-  .workflow-properties-panel {
-    padding: 9px;
-    overflow: auto;
-    max-height: calc(100vh - 190px);
-  }
-  .workflow-properties-title,
-  .workflow-palette-title {
-    margin-bottom: 4px;
-    color: #172033;
-    font-size: 12px;
-    font-weight: 750;
-  }
-  .workflow-palette-help {
-    margin: 0 0 10px;
-    color: #718096;
-    font-size: 10px;
-    line-height: 1.35;
-  }
-
-  .workflow-visual-shell.palette-collapsed {
-    grid-template-columns: minmax(0, 1fr) 270px;
-  }
-  .workflow-visual-shell.properties-collapsed {
-    grid-template-columns: 170px minmax(0, 1fr);
-  }
-  .workflow-visual-shell.palette-collapsed.properties-collapsed {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .workflow-canvas-toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 4;
-    margin: -8px -8px 10px;
-    padding: 5px 8px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 5px;
-    background: rgba(248,250,252,.88);
-    backdrop-filter: blur(10px);
-  }
-  .workflow-canvas-toolbar button {
-    height: 26px;
-    padding: 0 8px;
-    border: 1px solid rgba(15,23,42,.10);
-    border-radius: 7px;
-    background: rgba(255,255,255,.9);
-    color: #475569;
-    font-size: 10px;
-    cursor: pointer;
-  }
-  .workflow-node-wrap {
-    position: relative;
+    font-size: 9px;
   }
   .workflow-node-delete {
     position: absolute;
-    top: 7px;
-    right: 7px;
+    top: 8px;
+    right: 9px;
     z-index: 3;
     width: 24px;
     height: 24px;
@@ -204,7 +411,7 @@ const WORKFLOW_VISUAL_CSS = `
     border-radius: 7px;
     background: transparent;
     color: #94a3b8;
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1;
     cursor: pointer;
   }
@@ -213,31 +420,130 @@ const WORKFLOW_VISUAL_CSS = `
     color: #b91c1c;
   }
 
-  @media (max-width: 1250px) {
+  .workflow-properties-panel {
+    padding: 11px;
+    overflow: auto;
+    max-height: calc(100vh - 156px);
+  }
+  .workflow-properties-tabs {
+    display: flex;
+    gap: 22px;
+    align-items: center;
+    min-height: 32px;
+    border-bottom: 1px solid #eef2f7;
+    margin: -2px -2px 10px;
+    padding: 0 7px;
+  }
+  .workflow-properties-tab {
+    position: relative;
+    padding: 0 0 9px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .workflow-properties-tab.is-active {
+    color: #0a84ff;
+  }
+  .workflow-properties-tab.is-active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px;
+    background: #0a84ff;
+  }
+  .workflow-properties-panel > .rounded-xl {
+    border: 0 !important;
+    border-radius: 10px !important;
+    padding: 4px !important;
+    box-shadow: none !important;
+  }
+  .workflow-properties-panel label {
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    color: #64748b !important;
+    font-size: 10px !important;
+    font-weight: 650 !important;
+  }
+  .workflow-properties-panel .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: .7rem;
+  }
+  .workflow-properties-panel .bg-slate-50 {
+    background: #f8fafc !important;
+  }
+  .workflow-properties-panel .border-slate-200 {
+    border-color: #e8edf3 !important;
+  }
+  .workflow-properties-panel textarea,
+  .workflow-properties-panel input,
+  .workflow-properties-panel select {
+    font-size: 11px;
+  }
+  .workflow-properties-panel button {
+    font-size: 10px;
+  }
+  .workflow-properties-panel .text-sm {
+    font-size: 11px !important;
+  }
+  .workflow-properties-panel .text-xs {
+    font-size: 9px !important;
+  }
+
+  .workflow-visual-shell.palette-collapsed {
+    grid-template-columns: minmax(390px, 1fr) 336px;
+  }
+  .workflow-visual-shell.properties-collapsed {
+    grid-template-columns: 238px minmax(390px, 1fr);
+  }
+  .workflow-visual-shell.palette-collapsed.properties-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workflow-review-compact {
+    display: none;
+  }
+
+  @media (max-width: 1350px) {
     .workflow-visual-shell {
-      grid-template-columns: 150px minmax(0, 1fr) 240px;
+      grid-template-columns: 210px minmax(360px, 1fr) 300px;
+    }
+    .workflow-visual-shell.palette-collapsed { grid-template-columns: minmax(360px, 1fr) 300px; }
+    .workflow-visual-shell.properties-collapsed { grid-template-columns: 210px minmax(360px, 1fr); }
+    .workflow-builder-header {
+      grid-template-columns: minmax(170px, .9fr) minmax(160px, .75fr) minmax(145px, .7fr) auto;
     }
   }
-  @media (max-width: 980px) {
+  @media (max-width: 1050px) {
+    .workflow-builder-header {
+      grid-template-columns: 1fr 1fr;
+    }
+    .workflow-builder-heading {
+      grid-column: 1 / -1;
+    }
     .workflow-visual-shell {
-      grid-template-columns: 190px minmax(0, 1fr);
+      grid-template-columns: 200px minmax(0, 1fr);
     }
     .workflow-properties-panel {
       grid-column: 1 / -1;
       max-height: none;
     }
   }
-  @media (max-width: 720px) {
+  @media (max-width: 760px) {
+    .workflow-builder-header,
     .workflow-visual-shell {
       grid-template-columns: 1fr;
     }
+    .workflow-builder-actions {
+      justify-content: stretch;
+    }
+    .workflow-save-button { flex: 1; }
     .workflow-node-palette,
     .workflow-properties-panel {
-      max-height: 300px;
+      max-height: 360px;
     }
     .workflow-canvas-surface {
-      min-height: 520px;
-      padding: 18px;
+      min-height: 560px;
     }
   }
 `;
@@ -704,6 +1010,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [selectedId, setSelectedId] = useState(workflow.steps?.[0]?.id || null);
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
+  const [paletteSearch, setPaletteSearch] = useState("");
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -742,14 +1049,21 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       return { ...current, steps: next };
     });
   };
-  const palette = registryOptions.filter((option) => option.value !== "WHEN");
+  const palette = registryOptions.filter((option) => option.value !== "WHEN").filter((option) => !paletteSearch.trim() || String(option.label || option.value).toLowerCase().includes(paletteSearch.trim().toLowerCase()));
   return (
     <div className={`workflow-visual-shell ${!paletteOpen ? "palette-collapsed" : ""} ${!propertiesOpen ? "properties-collapsed" : ""}`}>
       {paletteOpen ? <aside className="workflow-node-palette">
-        <div className="workflow-palette-title">Elements</div>
-        <p className="workflow-palette-help">Drag an element onto the flow. Registered actions appear automatically.</p>
+        <div className="workflow-palette-head">
+          <div className="workflow-palette-title">Elements</div>
+        </div>
+        <div className="workflow-palette-search">
+          <span>⌕</span>
+          <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder="Search elements..." aria-label="Search workflow elements" />
+        </div>
+        <p className="workflow-palette-help">Drag or click an element to add it to the flow.</p>
         <div className="workflow-palette-scroll">
           {palette.map((option) => <button key={option.value} type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)} onClick={() => addFromPalette(option.value)} className="workflow-palette-item">{option.label}</button>)}
+          {!palette.length ? <div className="workflow-palette-empty">No matching elements</div> : null}
         </div>
       </aside> : null}
       <main className="workflow-canvas-surface" onDragOver={(e) => e.preventDefault()} onDrop={(e) => dropAt(e, workflow.steps.length)}>
@@ -758,7 +1072,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide properties" : "Show properties"}</button>
         </div>
         <div className="workflow-canvas-lane">
-          <div className="workflow-start-node">Start · {getTriggerLabel(workflow.trigger)}</div>
+          <div className="workflow-start-node">
+            <span className="workflow-start-icon">▶</span>
+            <span className="workflow-start-title">Start</span>
+            <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}</span>
+          </div>
           <div className="workflow-node-connector" />
           {workflow.steps.map((step, index) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
             <button type="button" className="workflow-node-delete" title="Remove step" aria-label={`Remove ${step.label || getActionLabel(step.type)}`} onClick={(event) => { event.stopPropagation(); removeStep(index); }}>×</button>
@@ -774,7 +1092,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
       </main>
       {propertiesOpen ? <aside className="workflow-properties-panel">
-        <div className="workflow-properties-title">Properties</div>
+        <div className="workflow-properties-tabs">
+          <span className="workflow-properties-tab is-active">Properties</span>
+          <span className="workflow-properties-tab">Node Settings</span>
+        </div>
         {selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} /> : <p className="text-sm text-slate-500">Select a flow element to configure it.</p>}
       </aside> : null}
     </div>
@@ -1187,51 +1508,51 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   }
 
   return (
-    <div className="space-y-4">
+    <div className="workflow-builder-page space-y-3">
       <style>{WORKFLOW_VISUAL_CSS}</style>
-      <FlowGuide steps={guideSteps} current={guideStep} onSelect={navigateGuide} />
-      <div id="workflow-trigger-section" className="rounded-xl border border-slate-200 bg-white p-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex-1">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Workflow name</label>
-            <input className={inputClass} value={workflow.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, name: event.target.value }))} placeholder="Workflow name" />
-          </div>
-          <div className="min-w-[220px]">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Trigger object</label>
-            <PlatformFieldPicker
-              scopeKey={scopeKey}
-              includeObjectSelector
-              objectOnly
-              selectedObjectKey={workflow.object || ""}
-              onObjectChange={(object) => setWorkflow((current) => ({ ...current, object }))}
-            />
-          </div>
-          <div className="min-w-[180px]">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Trigger</label>
-            <select className={inputClass} value={workflow.trigger || "after_update"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
-              {scopeKey === "whatsapp_assistant" ? <option value="whatsapp_message_received">WhatsApp message received</option> : null}
-              {workflow.systemGenerated ? <option value="system_function">System function</option> : null}
-              {workflow.systemGenerated ? <option value="system_action">System action</option> : null}
-              {workflow.systemGenerated ? <option value="system_job">System job trigger</option> : null}
-              <option value="after_create">Record created</option>
-              <option value="after_update">Record updated</option>
-              <option value="after_save">Created or updated</option>
-              <option value="manual">Manual trigger</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button type="button" className="rounded border border-slate-200 px-4 py-2 text-sm text-slate-600" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>Cancel</button>
-            <button type="button" className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={saveWorkflow}>Save workflow</button>
-          </div>
+      <div id="workflow-trigger-section" className="workflow-builder-header">
+        <div className="workflow-builder-heading">
+          <span className={`workflow-ready-dot ${reviewIssue ? "has-issue" : ""}`} title={reviewIssue || "Workflow ready"} />
+          <h2>Workflow Builder</h2>
+        </div>
+        <div className="workflow-builder-field">
+          <label>Workflow name</label>
+          <input className={inputClass} value={workflow.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, name: event.target.value }))} placeholder="Workflow name" />
+        </div>
+        <div className="workflow-builder-field">
+          <label>Trigger object</label>
+          <PlatformFieldPicker
+            scopeKey={scopeKey}
+            includeObjectSelector
+            objectOnly
+            selectedObjectKey={workflow.object || ""}
+            onObjectChange={(object) => setWorkflow((current) => ({ ...current, object }))}
+          />
+        </div>
+        <div className="workflow-builder-field">
+          <label>Trigger</label>
+          <select className={inputClass} value={workflow.trigger || "after_update"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
+            {scopeKey === "whatsapp_assistant" ? <option value="whatsapp_message_received">WhatsApp message received</option> : null}
+            {workflow.systemGenerated ? <option value="system_function">System function</option> : null}
+            {workflow.systemGenerated ? <option value="system_action">System action</option> : null}
+            {workflow.systemGenerated ? <option value="system_job">System job trigger</option> : null}
+            <option value="after_create">Record created</option>
+            <option value="after_update">Record updated</option>
+            <option value="after_save">Created or updated</option>
+            <option value="manual">Manual trigger</option>
+          </select>
+        </div>
+        <div className="workflow-builder-actions">
+          <button type="button" className="workflow-cancel-button" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>Cancel</button>
+          <button type="button" className="workflow-save-button" onClick={saveWorkflow}>▣&nbsp;&nbsp;Save workflow</button>
         </div>
       </div>
 
       <div id="workflow-canvas-section">
         <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} />
       </div>
-      <div id="workflow-review-section" className={`rounded-xl border p-2 text-sm ${reviewIssue ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-        <strong>{reviewIssue ? "Flow needs attention" : "Flow is ready"}</strong>
-        <span className="ml-2">{reviewIssue || "Trigger, conditions and actions are valid."}</span>
+      <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
+        {reviewIssue || "Trigger, conditions and actions are valid."}
       </div>
     </div>
   );
