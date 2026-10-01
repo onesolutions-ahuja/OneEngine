@@ -154,7 +154,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
 
         /*
          * Superadmin remains ordinary RBAC: it has no identity bypass.
-         * Its platform-managed role is simply seeded with every permission.
+         * Its OneEngine-managed role is simply seeded with every permission.
          * Synchronize here before the HTTP listener opens so an existing
          * Superadmin cannot log in during heavy metadata bootstrap with a
          * partially populated permission matrix.
@@ -199,8 +199,41 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
              ADD CONSTRAINT company_package_entitlement_sources_source_type_check
              CHECK (source_type IN (
                'DIRECT_LICENCE','DIRECT_INSTALL','BUNDLE','TIER','REQUIRED_DEPENDENCY',
-               'OPTIONAL_DEPENDENCY','PLATFORM_DEFAULT','SUPERADMIN_ASSIGNMENT'
+               'OPTIONAL_DEPENDENCY','PLATFORM_DEFAULT','ONEENGINE_DEFAULT','SUPERADMIN_ASSIGNMENT'
              ))`
+        );
+      },
+    },
+    {
+      key: "0015_oneengine_manager_permission",
+      version: "15",
+      name: "Migrate Platform Manager permission to OneEngine Manager",
+      up: async client => {
+        await client.query(
+          `INSERT INTO permissions (code,name,description)
+           VALUES ('oneengine.manage','Manage OneEngine','Manage OneEngine-wide settings, tenants, licences and releases')
+           ON CONFLICT (code) DO UPDATE
+             SET name=EXCLUDED.name,
+                 description=EXCLUDED.description`
+        );
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id,company_id)
+           SELECT rp.role_id,p_new.id,rp.company_id
+             FROM role_permissions rp
+             JOIN permissions p_old ON p_old.id=rp.permission_id AND p_old.code='platform.manage'
+             JOIN permissions p_new ON p_new.code='oneengine.manage'
+           ON CONFLICT (role_id,permission_id)
+           DO UPDATE SET company_id=COALESCE(EXCLUDED.company_id,role_permissions.company_id)`
+        );
+        await client.query(
+          `UPDATE roles
+              SET name='OneEngine Manager',
+                  api_key=CASE WHEN company_id IS NULL THEN 'oneengine_manager' ELSE api_key END,
+                  description=CASE WHEN company_id IS NULL
+                    THEN 'Manage OneEngine across explicitly authorised tenants through RBAC'
+                    ELSE description END
+            WHERE company_id IS NULL
+              AND (api_key='platform_developer' OR name='Platform Developer')`
         );
       },
     },
@@ -210,7 +243,8 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
   console.log("onePOS: database ready");
 }
 
-export const PLATFORM_MANAGE_PERMISSION = "platform.manage";
+export const ONEENGINE_MANAGE_PERMISSION = "oneengine.manage";
+export const PLATFORM_MANAGE_PERMISSION = ONEENGINE_MANAGE_PERMISSION; // compatibility export during migration
 
 export async function ensureGlobalSystemProfile(pool, {
   name,
@@ -225,7 +259,7 @@ export async function ensureGlobalSystemProfile(pool, {
     `INSERT INTO permissions (code,name,description)
      VALUES ($1,$2,$3)
      ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description`,
-    [PLATFORM_MANAGE_PERMISSION, "Manage Platform", "Access platform-level administration through RBAC"]
+    [ONEENGINE_MANAGE_PERMISSION, "Manage OneEngine", "Access OneEngine-wide administration through RBAC"]
   );
 
   let role = await pool.query(
@@ -3331,7 +3365,7 @@ ON secure_invoice_links(company_id, created_at DESC);
     if (!platformRoleId) {
       const insertedPlatformRole = await pool.query(
         `INSERT INTO roles (company_id,name,description,is_system_role)
-         VALUES (NULL,'Platform Developer','Manage platform metadata across authorised companies',TRUE)
+         VALUES (NULL,'Platform Developer','Manage OneEngine metadata across authorised companies',TRUE)
          RETURNING id`
       );
       platformRoleId = insertedPlatformRole?.rows?.[0]?.id || null;
