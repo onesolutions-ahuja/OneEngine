@@ -49,6 +49,10 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   useEffect(()=>{void load()},[])
   useEffect(()=>{if(Array.isArray(initialPackages)&&initialPackages.length){setPackages(initialPackages);writeMarketplaceCache(initialPackages)}},[initialPackages])
   useEffect(()=>{setSelectedKey(String(initialSelectedPackageKey||''))},[initialSelectedPackageKey])
+  useEffect(()=>{
+    if(!shown.length){if(selectedKey)setSelectedKey('');return}
+    if(!shown.some(item=>item.package_key===selectedKey))setSelectedKey(shown[0].package_key)
+  },[shown,selectedKey])
 
   const hasPending=packages.some(item=>['QUEUED','UPDATING'].includes(String(item.company_installation?.update_status||'').toUpperCase()))
   useEffect(()=>{
