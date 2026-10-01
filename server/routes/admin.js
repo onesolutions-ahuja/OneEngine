@@ -492,7 +492,7 @@ export default function createAdminRouter({
    * token expires — nothing else is affected).
    * Permission-gated company administration, like till management.
    */
-  router.post("/admin/stores/:id/self-checkout-key", authenticate, async (req, res) => {
+  router.post("/admin/stores/:id/self-checkout-key", authenticate, authorize("store.edit"), async (req, res) => {
     if (!(await hasCompanyAdminAccess(req))) return res.status(403).json({ success: false, message: "Administrator permission required" });
     try {
       const store = await db("SELECT id FROM stores WHERE id = $1 AND company_id = $2", [req.params.id, req.user.companyId]);
@@ -518,7 +518,7 @@ export default function createAdminRouter({
   /*
    * PUT /api/admin/tills/:id
    */
-  router.put("/admin/tills/:id", authenticate, async (req, res) => {
+  router.put("/admin/tills/:id", authenticate, authorize("store.edit"), async (req, res) => {
     if (!(await hasCompanyAdminAccess(req))) return res.status(403).json({ success: false, message: "Administrator permission required" });
     try { const result = await db("UPDATE terminals t SET name=$1, terminal_number=$2, device_identifier=$3, active=$4 FROM stores s WHERE t.id=$5 AND t.store_id=s.id AND s.company_id=$6 RETURNING t.id,t.name,t.terminal_number,t.device_identifier,t.active", [req.body.name, req.body.terminalNumber || null, req.body.deviceIdentifier || null, req.body.active !== false, req.params.id, req.user.companyId]); if (!result.rows.length) return res.status(404).json({ success: false, message: "Till not found" }); res.json({ success: true, data: result.rows[0] }); } catch (error) { res.status(500).json({ success: false, message: "Unable to update till" }); }
   });
@@ -662,7 +662,7 @@ export default function createAdminRouter({
   /* GET /api/admin/stores/:id/stats
    * Returns today's sales, transaction count and low-stock item count for a store.
    */
-  router.get('/admin/stores/:id/stats', authenticate, async (req, res) => {
+  router.get('/admin/stores/:id/stats', authenticate, authorize("store.view"), async (req, res) => {
     if (!(await hasCompanyAdminAccess(req))) return res.status(403).json({ success: false, message: "Administrator permission required" });
     try {
       const storeCheck = await db('SELECT 1 FROM stores WHERE id=$1 AND company_id=$2', [req.params.id, req.user.companyId]);
