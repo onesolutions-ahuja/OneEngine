@@ -108,7 +108,14 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
         <div className="lock-time">{time}</div>
 
         <form className="login-glass-card" onSubmit={submit}>
-          <div className="profile-avatar login-avatar">{initial}</div>
+          <div className="profile-avatar login-avatar" aria-label={sessionMode ? `${displayName} profile` : 'onePOS'}>
+            {sessionMode ? initial : (
+              <svg className="login-brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7.35 3.15c-2.3 0-4.2 1.88-4.2 4.2v9.3c0 2.32 1.9 4.2 4.2 4.2h9.3c2.32 0 4.2-1.88 4.2-4.2v-9.3c0-2.32-1.88-4.2-4.2-4.2h-9.3Z" fill="currentColor"/>
+                <path d="M9.5 7.9 16.3 12 9.5 16.1V7.9Z" fill="white"/>
+              </svg>
+            )}
+          </div>
 
           {sessionMode ? (
             <>
