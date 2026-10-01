@@ -2347,6 +2347,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [compareVersionId, setCompareVersionId] = useState(null);
   const [testDraft, setTestDraft] = useState({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
   const [testBusyId, setTestBusyId] = useState(null);
+  const [editingTestId, setEditingTestId] = useState(null);
   const [versionsBusy, setVersionsBusy] = useState(false);
   const [objectFieldCatalog, setObjectFieldCatalog] = useState({});
 
@@ -2875,26 +2876,50 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     }
     if (!testDraft.name.trim()) { onError?.("Enter a test name."); return; }
     try {
-      setTestBusyId("new");
-      await apiRequest(`/api/platform/rules/${id}/tests`, {
-        method: "POST",
-        body: JSON.stringify({
-          name: testDraft.name.trim(),
-          config: {
-            recordMode: testDraft.recordMode,
-            recordId: testDraft.recordMode === "specific" ? testDraft.recordId.trim() : "",
-            assertions: testDraft.assertions || [],
-          },
-        }),
-      });
+      setTestBusyId(editingTestId || "new");
+      const config = {
+        recordMode: testDraft.recordMode,
+        recordId: testDraft.recordMode === "specific" ? testDraft.recordId.trim() : "",
+        assertions: testDraft.assertions || [],
+      };
+      if (editingTestId) {
+        await apiRequest(`/api/platform/rules/${id}/tests/${editingTestId}`, {
+          method: "PUT",
+          body: JSON.stringify({ name: testDraft.name.trim(), config }),
+        });
+      } else {
+        await apiRequest(`/api/platform/rules/${id}/tests`, {
+          method: "POST",
+          body: JSON.stringify({ name: testDraft.name.trim(), config }),
+        });
+      }
+      setEditingTestId(null);
       setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
       await loadSavedTests(id);
-      onMessage?.("Workflow test saved.");
+      onMessage?.(editingTestId ? "Workflow test updated." : "Workflow test saved.");
     } catch (error) {
       onError?.(error.message || "Unable to save workflow test.");
     } finally {
       setTestBusyId(null);
     }
+  };
+
+  const editSavedTest = (test) => {
+    const config = test?.config && typeof test.config === "object" ? test.config : {};
+    setEditingTestId(test.id);
+    setTestDraft({
+      name: test.name || "",
+      recordMode: config.recordMode === "specific" ? "specific" : "latest",
+      recordId: config.recordId || "",
+      assertions: Array.isArray(config.assertions) && config.assertions.length
+        ? config.assertions.map((assertion) => ({ ...assertion }))
+        : [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }],
+    });
+  };
+
+  const cancelTestEdit = () => {
+    setEditingTestId(null);
+    setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
   };
 
   const runSavedTest = async (test) => {
@@ -3284,7 +3309,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 );
               })}
             </div>
-            <div className="flex justify-end"><button type="button" className="workflow-save-button" disabled={testBusyId === "new"} onClick={saveTestCase}>{testBusyId === "new" ? "Saving…" : "Save Test"}</button></div>
+            <div className="flex justify-end gap-2">{editingTestId ? <button type="button" className="workflow-cancel-button" onClick={cancelTestEdit}>Cancel edit</button> : null}<button type="button" className="workflow-save-button" disabled={Boolean(testBusyId)} onClick={saveTestCase}>{testBusyId ? "Saving…" : editingTestId ? "Update Test" : "Save Test"}</button></div>
           </div>
           <div className="mt-4 space-y-2">
             {savedTests.map((test) => (
@@ -3295,7 +3320,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 </div>
                 <div className="flex gap-2">
                   <button type="button" className="workflow-cancel-button" disabled={testBusyId === test.id} onClick={() => runSavedTest(test)}>{testBusyId === test.id ? "Running…" : "Run"}</button>
-                  <button type="button" className="workflow-cancel-button" onClick={() => deleteSavedTest(test.id)}>Delete</button>
+                  <button type="button" className="workflow-cancel-button" disabled={Boolean(testBusyId)} onClick={() => editSavedTest(test)}>Edit</button>
+                  <button type="button" className="workflow-cancel-button" disabled={Boolean(testBusyId)} onClick={() => deleteSavedTest(test.id)}>Delete</button>
                 </div>
               </div>
             ))}
