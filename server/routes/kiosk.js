@@ -1,5 +1,8 @@
 import express from "express";
+import jwt from "jsonwebtoken";
 import { resolvePrice } from "../services/pricingEngine.js";
+
+const KIOSK_MODE_TTL = process.env.KIOSK_MODE_TTL || "12h";
 
 /*
  * OneKiosk fulfilment bridge.
@@ -8,13 +11,70 @@ import { resolvePrice } from "../services/pricingEngine.js";
  * successful kiosk sale, this route creates a provider-neutral fulfilment
  * record from the committed sale WITHOUT reserving/deducting stock again.
  */
-export default function createKioskRouter({ authenticate, authorize, db, pool, writeAudit }) {
+export default function createKioskRouter({
+  authenticate,
+  authorize,
+  db,
+  pool,
+  writeAudit,
+  jwtSecret = process.env.JWT_SECRET,
+  modeTtl = KIOSK_MODE_TTL,
+}) {
   const router = express.Router();
 
   const normaliseHealth = (value) => {
     const key = String(value || "UNKNOWN").trim().toUpperCase();
     return ["ONLINE","OFFLINE","DEGRADED","READY","ERROR","NOT_CONFIGURED","UNKNOWN"].includes(key) ? key : "UNKNOWN";
   };
+
+  router.post("/kiosk/device-session", authenticate, authorize("sale.create"), async (req, res) => {
+    const deviceKey = String(req.body?.deviceKey || "").trim();
+    if (!deviceKey) return res.status(400).json({ success: false, message: "Kiosk device key is required" });
+    try {
+      const result = await db(
+        `SELECT kd.id,kd.company_id,kd.store_id,kd.device_key,kd.name,kd.payment_connector_id,
+                ic.till_id
+           FROM kiosk_devices kd
+           LEFT JOIN integration_connections ic
+             ON ic.id=kd.payment_connector_id AND ic.company_id=kd.company_id
+          WHERE kd.company_id=$1 AND kd.store_id=$2 AND kd.device_key=$3 AND kd.active=TRUE
+          LIMIT 1`,
+        [req.user.companyId, req.user.storeId, deviceKey]
+      );
+      const device = result.rows[0];
+      if (!device) return res.status(404).json({ success: false, message: "Kiosk device is not registered or is disabled" });
+      const modeToken = jwt.sign(
+        {
+          id: req.user.id,
+          companyId: req.user.companyId,
+          storeId: req.user.storeId,
+          roleId: req.user.roleId,
+          username: req.user.username,
+          mode: "kiosk",
+          kioskDeviceId: device.id,
+          kioskDeviceKey: device.device_key,
+          tillId: device.till_id || null,
+        },
+        jwtSecret,
+        { expiresIn: modeTtl }
+      );
+      await writeAudit?.(req.user.companyId, req.user.id, "KIOSK_DEVICE_SESSION_STARTED", "kiosk_device", device.id, {
+        storeId: req.user.storeId,
+        tillId: device.till_id || null,
+      });
+      res.status(201).json({
+        success: true,
+        data: {
+          modeToken,
+          device: { id: device.id, key: device.device_key, name: device.name },
+          mode: "kiosk",
+        },
+      });
+    } catch (error) {
+      console.error("Start kiosk device session error:", error);
+      res.status(500).json({ success: false, message: "Unable to start kiosk device session" });
+    }
+  });
 
   router.get("/kiosk/catalogue", authenticate, async (req, res) => {
     try {
@@ -236,6 +296,9 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
   router.get("/kiosk/runtime", authenticate, async (req, res) => {
     const deviceKey = String(req.query?.deviceKey || "").trim();
     if (!deviceKey) return res.status(400).json({ success: false, message: "Kiosk device key is required" });
+    if (req.user?.mode === "kiosk" && String(req.user.kioskDeviceKey || "") !== deviceKey) {
+      return res.status(403).json({ success: false, message: "This kiosk session belongs to another device" });
+    }
     try {
       const deviceResult = await db(
         `SELECT kd.id,kd.device_key,kd.name,kd.workflow_id,kd.payment_connector_id,
@@ -534,6 +597,9 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
   });
 
   router.post("/kiosk/devices/:id/heartbeat", authenticate, async (req, res) => {
+    if (req.user?.mode === "kiosk" && String(req.user.kioskDeviceId || "") !== String(req.params.id)) {
+      return res.status(403).json({ success: false, message: "This kiosk session belongs to another device" });
+    }
     const internetStatus = normaliseHealth(req.body?.internetStatus);
     const serverStatus = normaliseHealth(req.body?.serverStatus);
     const paymentStatus = normaliseHealth(req.body?.paymentStatus);
@@ -800,4 +866,41 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
   });
 
   return router;
+}
+
+
+export function createKioskModeGate() {
+  return function kioskModeGate(req, res, next) {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) return next();
+
+    let payload;
+    try {
+      payload = jwt.decode(header.substring(7));
+    } catch {
+      return next();
+    }
+    if (payload?.mode !== "kiosk") return next();
+
+    const path = String(req.originalUrl || req.url || "").split("?")[0];
+    const method = String(req.method || "GET").toUpperCase();
+
+    const allowed =
+      (method === "GET" && path === "/api/health") ||
+      (method === "GET" && path === "/api/settings") ||
+      (method === "GET" && path === "/api/kiosk/runtime") ||
+      (method === "GET" && path === "/api/kiosk/catalogue") ||
+      (method === "GET" && /^\/api\/kiosk\/products\/[^/]+\/options$/.test(path)) ||
+      (method === "POST" && path === "/api/kiosk/quote") ||
+      (method === "POST" && path === "/api/kiosk/orders/from-sale") ||
+      (method === "POST" && /^\/api\/kiosk\/devices\/[^/]+\/heartbeat$/.test(path)) ||
+      (method === "POST" && path === "/api/sales") ||
+      (["POST","DELETE"].includes(method) && /^\/api\/sales\/[^/]+\/receipt-qr$/.test(path));
+
+    if (allowed) return next();
+    return res.status(403).json({
+      success: false,
+      message: "Not available in OneKiosk customer mode",
+    });
+  };
 }
