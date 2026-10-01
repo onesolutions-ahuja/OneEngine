@@ -9,6 +9,7 @@ export const ACTING_COMPANY_STORAGE_KEY = 'onepos_developer_target_company_id'
 export const SESSION_PERMISSIONS_STORAGE_KEY = 'onepos_session_permissions'
 export const ACTIVE_STORE_STORAGE_KEY = 'onepos_active_store_id'
 export const AVAILABLE_STORES_STORAGE_KEY = 'onepos_available_stores'
+export const KIOSK_TOKEN_STORAGE_KEY = 'onepos_kiosk_token'
 
 export function getActingCompanyId() {
   try { return sessionStorage.getItem(ACTING_COMPANY_STORAGE_KEY) || '' } catch { return '' }
@@ -175,7 +176,9 @@ export async function apiFetch(path, options = {}) {
       code: 'TRUSTED_RUNTIME_REQUIRED',
     })
   }
-  const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
+  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
+  const token = kioskToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   return fetch(apiUrl(path), {
     ...options,
     headers: {
@@ -238,7 +241,9 @@ export async function apiRequest(path, options = {}) {
     retryGet = true,
     ...fetchOptions
   } = options
-  const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
+  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
+  const token = kioskToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   const maxAttempts = method === 'GET' && retryGet ? 2 : 1
   let lastError = null
 
