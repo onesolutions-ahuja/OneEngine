@@ -2088,6 +2088,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     active: initialWorkflow.active !== false,
     conditions: initialWorkflow.conditions || [],
     match: initialWorkflow.action?.match || initialWorkflow.match || "all",
+    scope: initialWorkflow.scope || initialWorkflow.action?.scope || null,
     actionMetadata: {
       flowType: initialWorkflow.action?.flowType || null,
       templateKey: initialWorkflow.action?.templateKey || null,
@@ -2358,6 +2359,72 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     }));
   };
 
+  const isKioskExperience = String(workflow.actionMetadata?.flowType || "").toUpperCase() === "KIOSK_EXPERIENCE";
+  const kioskUi = workflow.actionMetadata?.ui && typeof workflow.actionMetadata.ui === "object"
+    ? workflow.actionMetadata.ui
+    : { schemaVersion: 1, startScreen: "catalogue", screens: [], features: {} };
+
+  const updateKioskUi = (patch) => setWorkflow((current) => ({
+    ...current,
+    actionMetadata: {
+      ...(current.actionMetadata || {}),
+      flowType: "KIOSK_EXPERIENCE",
+      ui: { ...(current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} }), ...patch },
+    },
+  }));
+
+  const updateKioskScreen = (index, patch) => setWorkflow((current) => {
+    const ui = current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} };
+    const screens = [...(ui.screens || [])];
+    screens[index] = { ...screens[index], ...patch };
+    return { ...current, actionMetadata: { ...(current.actionMetadata || {}), ui: { ...ui, screens } } };
+  });
+
+  const moveKioskScreen = (index, direction) => setWorkflow((current) => {
+    const ui = current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} };
+    const screens = [...(ui.screens || [])];
+    const target = index + direction;
+    if (target < 0 || target >= screens.length) return current;
+    [screens[index], screens[target]] = [screens[target], screens[index]];
+    return { ...current, actionMetadata: { ...(current.actionMetadata || {}), ui: { ...ui, screens } } };
+  });
+
+  const removeKioskScreen = (index) => setWorkflow((current) => {
+    const ui = current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} };
+    const screens = (ui.screens || []).filter((_, screenIndex) => screenIndex !== index);
+    const startScreen = screens.some((screen) => screen.key === ui.startScreen) ? ui.startScreen : (screens[0]?.key || "");
+    return { ...current, actionMetadata: { ...(current.actionMetadata || {}), ui: { ...ui, screens, startScreen } } };
+  });
+
+  const addKioskScreen = (type) => setWorkflow((current) => {
+    const ui = current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} };
+    const keyBase = String(type || "screen").toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    let key = keyBase;
+    let suffix = 2;
+    while ((ui.screens || []).some((screen) => screen.key === key)) key = `${keyBase}_${suffix++}`;
+    const defaults = {
+      CATALOGUE: { title: "Browse products", search: true, categories: true, productAction: "OPEN_DETAIL" },
+      PRODUCT_DETAIL: { title: "Product", description: true, variants: true, modifiers: true },
+      RECOMMENDATIONS: { title: "You may also like", source: "CROSS_SELL", optional: true },
+      FULFILMENT: { title: "Choose fulfilment", options: [{ key: "COLLECT", label: "Collect", canonicalType: "SELF_PICKUP", requires: [] }] },
+      BASKET: { title: "Review your order", editable: true, promotions: true },
+      PAYMENT: { title: "Payment", methods: ["CARD"], actionLabel: "Pay now" },
+      CONFIRMATION: { title: "Order confirmed", collectionNumber: true, receipt: ["PRINT","QR"], resetAfterSeconds: 30 },
+    };
+    const nextScreen = { key, type, ...(defaults[type] || { title: type }) };
+    const screens = [...(ui.screens || []), nextScreen];
+    return {
+      ...current,
+      actionMetadata: {
+        ...(current.actionMetadata || {}),
+        flowType: "KIOSK_EXPERIENCE",
+        ui: { ...ui, screens, startScreen: ui.startScreen || screens[0]?.key || key },
+      },
+    };
+  });
+
+  const updateKioskFeature = (key, value) => updateKioskUi({ features: { ...(kioskUi.features || {}), [key]: value } });
+
   const enabledSteps = (workflow.steps || []).filter((step) => step.enabled !== false);
   const conditionSteps = enabledSteps.filter((step) => step.type === "CONDITION");
   const actionSteps = enabledSteps.filter((step) => step.type !== "CONDITION");
@@ -2379,11 +2446,22 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     .map((step) => step.type === "ASSIGNMENT" ? step.config?.variableName : ["CONSTANT","FORMULA"].includes(step.type) ? step.config?.resourceName : null)
     .filter(Boolean);
   const duplicateResourceName = resourceNames.find((name, index) => resourceNames.indexOf(name) !== index) || null;
-  const actionsIssue = duplicateResourceName
-    ? `Resource name "${duplicateResourceName}" is used more than once.`
-    : !actionSteps.length
-    ? "Add at least one action."
-    : actionIssues[0] || "";
+  const kioskScreenIssue = isKioskExperience
+    ? !(Array.isArray(kioskUi.screens) && kioskUi.screens.length)
+      ? "Add at least one kiosk screen."
+      : !kioskUi.startScreen || !(kioskUi.screens || []).some((screen) => screen.key === kioskUi.startScreen)
+        ? "Choose a valid kiosk start screen."
+        : (kioskUi.screens || []).some((screen) => !screen.key || !screen.type)
+          ? "Every kiosk screen needs a key and type."
+          : ""
+    : "";
+  const actionsIssue = isKioskExperience
+    ? kioskScreenIssue
+    : duplicateResourceName
+      ? `Resource name "${duplicateResourceName}" is used more than once.`
+      : !actionSteps.length
+        ? "Add at least one action."
+        : actionIssues[0] || "";
   const reviewIssue = triggerIssue || entryConditionIssue || conditionIssue || actionsIssue || (!workflow.name ? "Enter a workflow name." : "");
   const guideSteps = [
     { key: "trigger", label: "Trigger", status: triggerIssue ? "error" : "complete", message: triggerIssue },
@@ -2418,7 +2496,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       active: nextLifecycle === "ACTIVE",
       action: {
         type: "workflow",
-        ...(scopeKey ? { scope: scopeKey } : {}),
+        ...(scopeKey ? { scope: scopeKey } : workflow.scope ? { scope: workflow.scope } : {}),
         ...(workflow.systemGenerated ? {
           systemGenerated: true,
           systemKey: workflow.systemKey || null,
@@ -2599,7 +2677,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                     version: Number(item.version || 1),
                     action: {
                       type: "workflow",
-                      ...(scopeKey ? { scope: scopeKey } : {}),
+                      ...(scopeKey ? { scope: scopeKey } : item.scope ? { scope: item.scope } : {}),
                       ...(item.systemGenerated ? {
                         systemGenerated: true,
                         systemKey: item.systemKey || null,
