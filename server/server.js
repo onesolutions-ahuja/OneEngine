@@ -1711,10 +1711,9 @@ app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCo
 | Attendance sessions are recorded against the EXISTING users / companies /
 | stores (no separate employee identity). Clock in/out times and worked
 | duration are always set server-side (NOW() + timestamp arithmetic) — the
-| client never supplies them. Management visibility is gated by the
-| attendance.view permission with the same admin/owner bypass everywhere
-| else uses; records are company-scoped and store-restricted through the
-| existing canViewCompanyCustomers / canAccessStore helpers.
+| client never supplies them. Management visibility is permission-driven;
+| records are company-scoped and store-restricted through the canonical
+| canViewCompanyCustomers / canAccessStore helpers.
 */
 app.use(
   "/api",
