@@ -965,6 +965,7 @@ export function createKioskModeGate() {
       (method === "GET" && path === "/api/kiosk/catalogue") ||
       (method === "GET" && /^\/api\/kiosk\/products\/[^/]+\/options$/.test(path)) ||
       (method === "POST" && path === "/api/kiosk/quote") ||
+      (method === "POST" && path === "/api/kiosk/availability") ||
       (method === "POST" && path === "/api/kiosk/orders/from-sale") ||
       (method === "POST" && /^\/api\/kiosk\/devices\/[^/]+\/heartbeat$/.test(path)) ||
       (method === "POST" && path === "/api/sales") ||
