@@ -124,6 +124,9 @@ export default function OneKioskPage() {
   const [confirmation, setConfirmation] = useState(null);
   const [paidSale, setPaidSale] = useState(null);
   const [deviceState, setDeviceState] = useState(null);
+  const [experienceUi, setExperienceUi] = useState(null);
+  const [experienceFlow, setExperienceFlow] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   useEffect(() => {
     if (demoMode) {
@@ -157,6 +160,19 @@ export default function OneKioskPage() {
       });
     return () => { live = false; };
   }, [demoMode]);
+
+  const loadExperience = async (deviceKey) => {
+    const response = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(deviceKey)}`, {
+      timeoutMs: 8000,
+      retryGet: true,
+    });
+    if (!response?.success || !response?.data?.ui) {
+      throw new Error(response?.message || "No OneKiosk experience flow is assigned");
+    }
+    setExperienceUi(response.data.ui);
+    setExperienceFlow(response.data.flow || null);
+    return response.data;
+  };
 
   useEffect(() => {
     if (demoMode) return undefined;
@@ -234,6 +250,11 @@ export default function OneKioskPage() {
         });
         if (!response?.success || !response?.data) return;
         if (live) setDeviceState(response.data);
+        try {
+          await loadExperience(key);
+        } catch (reason) {
+          if (live) setError(reason?.message || "Unable to load kiosk experience flow");
+        }
         await sendHeartbeat(response.data);
         timer = window.setInterval(() => void sendHeartbeat(response.data), 20000);
       } catch {}
@@ -252,6 +273,22 @@ export default function OneKioskPage() {
       window.removeEventListener("offline", onlineListener);
     };
   }, [demoMode]);
+
+  const screensByType = useMemo(() => {
+    const map = {};
+    for (const screen of Array.isArray(experienceUi?.screens) ? experienceUi.screens : []) {
+      if (screen?.type) map[screen.type] = screen;
+    }
+    return map;
+  }, [experienceUi]);
+
+  const catalogueScreen = screensByType.CATALOGUE || {};
+  const productScreen = screensByType.PRODUCT_DETAIL || {};
+  const fulfilmentScreen = screensByType.FULFILMENT || {};
+  const paymentScreen = screensByType.PAYMENT || {};
+  const confirmationScreen = screensByType.CONFIRMATION || {};
+  const fulfilmentOptions = Array.isArray(fulfilmentScreen.options) ? fulfilmentScreen.options : [];
+  const featureFlags = experienceUi?.features || {};
 
   const categories = useMemo(
     () => ["All", ...new Set(products.map((product) => product.categoryLabel).filter(Boolean))],
@@ -272,7 +309,7 @@ export default function OneKioskPage() {
   const total = basket.reduce((sum, line) => sum + Number(line.price || 0) * Number(line.quantity || 0), 0);
   const itemCount = basket.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
 
-  const add = (product) => {
+  const addToBasket = (product) => {
     setBasket((current) => {
       const existing = current.find((line) => line.id === product.id);
       if (existing) {
@@ -280,6 +317,15 @@ export default function OneKioskPage() {
       }
       return [...current, { ...product, quantity: 1 }];
     });
+    setSelectedProduct(null);
+  };
+
+  const handleProductAction = (product) => {
+    if (catalogueScreen.productAction === "OPEN_DETAIL" && Object.keys(productScreen).length) {
+      setSelectedProduct(product);
+      return;
+    }
+    addToBasket(product);
   };
 
   const changeQuantity = (productId, delta) => {
@@ -407,9 +453,9 @@ export default function OneKioskPage() {
       {demoMode ? <div className="one-kiosk-demo-ribbon">Demo catalogue · no live sale or payment is created</div> : null}
       <header className="one-kiosk-header">
         <div>
-          <span className="one-kiosk-eyebrow">Self-service ordering</span>
-          <h1>OneKiosk</h1>
-          <p>Select what you need, choose how you want to collect it, then pay.</p>
+          <span className="one-kiosk-eyebrow">{experienceFlow?.name || "OneKiosk"}</span>
+          <h1>{catalogueScreen.title || "OneKiosk"}</h1>
+          <p>{catalogueScreen.subtitle || "Select what you need and continue through the configured journey."}</p>
         </div>
         <div className="one-kiosk-basket-badge" aria-label={`${itemCount} items in basket`}>
           <ShoppingBag size={22} />
@@ -427,11 +473,13 @@ export default function OneKioskPage() {
       <div className="one-kiosk-shell">
         <section className="one-kiosk-catalogue">
           <div className="one-kiosk-toolbar">
-            <label className="one-kiosk-search">
-              <Search size={20} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search products" />
-            </label>
-            <div className="one-kiosk-categories" role="tablist" aria-label="Product categories">
+            {catalogueScreen.search !== false ? (
+              <label className="one-kiosk-search">
+                <Search size={20} />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={catalogueScreen.searchPlaceholder || "Search products"} />
+              </label>
+            ) : null}
+            {catalogueScreen.categories !== false ? <div className="one-kiosk-categories" role="tablist" aria-label="Product categories">
               {categories.map((item) => (
                 <button
                   key={item}
@@ -442,12 +490,12 @@ export default function OneKioskPage() {
                   {item}
                 </button>
               ))}
-            </div>
+            </div> : null}
           </div>
 
           <div className="one-kiosk-grid">
             {visibleProducts.map((product) => (
-              <button key={product.id} type="button" className="one-kiosk-product" onClick={() => add(product)}>
+              <button key={product.id} type="button" className="one-kiosk-product" onClick={() => handleProductAction(product)}>
                 <div className="one-kiosk-product-image">
                   {product.image_url || product.imageUrl
                     ? <img src={product.image_url || product.imageUrl} alt="" />
@@ -500,27 +548,24 @@ export default function OneKioskPage() {
             ) : null}
           </div>
 
-          <div className="one-kiosk-fulfilment">
-            <span>How would you like it?</span>
-            <div>
-              {[
-                ["COLLECT", "Collect"],
-                ["TAKEAWAY", "Takeaway"],
-                ["EAT_IN", "Eat in"],
-                ["COUNTER_SERVICE", "Counter"],
-              ].map(([value, label]) => (
-                <button
-                  type="button"
-                  key={value}
-                  disabled={Boolean(paidSale)}
-                  className={fulfilmentType === value ? "is-active" : ""}
-                  onClick={() => setFulfilmentType(value)}
-                >
-                  {label}
-                </button>
-              ))}
+          {fulfilmentOptions.length ? (
+            <div className="one-kiosk-fulfilment">
+              <span>{fulfilmentScreen.title || "Choose fulfilment"}</span>
+              <div>
+                {fulfilmentOptions.map((option) => (
+                  <button
+                    type="button"
+                    key={option.key}
+                    disabled={Boolean(paidSale)}
+                    className={fulfilmentType === option.key ? "is-active" : ""}
+                    onClick={() => setFulfilmentType(option.key)}
+                  >
+                    {option.label || option.key}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="one-kiosk-total">
             <span>Total</span>
@@ -534,11 +579,46 @@ export default function OneKioskPage() {
             onClick={payAndCollect}
           >
             <CreditCard size={20} />
-            {paying ? "Processing…" : paidSale ? "Finish order" : "Pay & collect"}
+            {paying ? "Processing…" : paidSale ? "Finish order" : (paymentScreen.actionLabel || "Continue")}
           </button>
           <small className="one-kiosk-payment-note">{demoMode ? "Demo payment completes on-screen without charging a card." : "Card payment is processed through the payment terminal configured for this store/kiosk."}</small>
         </aside>
       </div>
+
+      {selectedProduct ? (
+        <div className="one-kiosk-product-modal" role="dialog" aria-modal="true" aria-label={selectedProduct.name}>
+          <div className="one-kiosk-product-modal-card">
+            <button type="button" className="one-kiosk-modal-close" onClick={() => setSelectedProduct(null)}>×</button>
+            <div className="one-kiosk-product-modal-image">
+              {selectedProduct.image_url || selectedProduct.imageUrl
+                ? <img src={selectedProduct.image_url || selectedProduct.imageUrl} alt="" />
+                : <span>{String(selectedProduct.name || "?").slice(0, 1).toUpperCase()}</span>}
+            </div>
+            <div className="one-kiosk-product-modal-copy">
+              <span className="one-kiosk-eyebrow">{selectedProduct.categoryLabel || "Product"}</span>
+              <h2>{selectedProduct.name}</h2>
+              {productScreen.description !== false && selectedProduct.description ? <p>{selectedProduct.description}</p> : null}
+              {productScreen.specifications && selectedProduct.specifications ? (
+                <div className="one-kiosk-specs">
+                  {Object.entries(selectedProduct.specifications).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value)}</strong></div>)}
+                </div>
+              ) : null}
+              {productScreen.stockPromise && selectedProduct.stock_message ? <div className="one-kiosk-stock-promise">{selectedProduct.stock_message}</div> : null}
+              {productScreen.modifiers && Array.isArray(selectedProduct.modifiers) && selectedProduct.modifiers.length ? (
+                <div className="one-kiosk-modifier-list">
+                  {selectedProduct.modifiers.map((modifier) => <button key={modifier.key || modifier.name} type="button">{modifier.label || modifier.name}</button>)}
+                </div>
+              ) : null}
+              <div className="one-kiosk-product-modal-footer">
+                <strong>{money(selectedProduct.price, currency)}</strong>
+                <button type="button" className="one-kiosk-pay" onClick={() => addToBasket(selectedProduct)}>
+                  {productScreen.addLabel || "Add to order"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
