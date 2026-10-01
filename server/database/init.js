@@ -386,6 +386,36 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         `);
       },
     },
+    {
+      key: "0022_verify_oneassistant_confirmation_workflow",
+      version: "22",
+      name: "Verify editable OneAssistant appointment confirmation workflow",
+      up: async client => {
+        await client.query(`
+          INSERT INTO platform_rules
+            (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,company_id,created_by)
+          SELECT NULL,'OneAssistant · Appointment Confirmed','appointment.confirmed','[]'::jsonb,
+            '{"type":"workflow","scope":"oneassistant","actions":[{"id":"send-confirmation","type":"SEND_APPOINTMENT_CONFIRMATION"}]}'::jsonb,
+            TRUE,'ACTIVE',1,c.id,NULL
+          FROM companies c
+          WHERE c.active=TRUE
+            AND NOT EXISTS (
+              SELECT 1 FROM platform_rules r
+               WHERE r.company_id=c.id
+                 AND r.trigger_key='appointment.confirmed'
+                 AND r.action::text LIKE '%SEND_APPOINTMENT_CONFIRMATION%'
+            )
+        `);
+        const verified = await client.query(`
+          SELECT COUNT(*)::int AS count
+          FROM platform_rules
+          WHERE trigger_key='appointment.confirmed'
+            AND active=TRUE
+            AND action::text LIKE '%SEND_APPOINTMENT_CONFIRMATION%'
+        `);
+        console.log(`onePOS: OneAssistant editable confirmation workflows ready: ${verified.rows[0]?.count || 0}`);
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
