@@ -416,13 +416,51 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log(`onePOS: OneAssistant editable confirmation workflows ready: ${verified.rows[0]?.count || 0}`);
       },
     },
+    {
+      key: "0023_remove_legacy_authority_identity",
+      version: "23",
+      name: "Remove legacy identity and platform permission authority",
+      up: async client => {
+        await client.query(
+          `INSERT INTO permissions (code,name,description)
+           VALUES ('oneengine.manage','Manage OneEngine','Manage OneEngine-wide settings, tenants, licences and releases')
+           ON CONFLICT (code) DO NOTHING`
+        );
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT rp.role_id,p_new.id
+             FROM role_permissions rp
+             JOIN permissions p_old ON p_old.id=rp.permission_id AND p_old.code='platform.manage'
+             JOIN permissions p_new ON p_new.code='oneengine.manage'
+           ON CONFLICT (role_id,permission_id) DO NOTHING`
+        );
+        await client.query(
+          `UPDATE platform_permission_sets
+              SET system_permissions = (
+                SELECT COALESCE(jsonb_agg(DISTINCT value), '[]'::jsonb)
+                  FROM jsonb_array_elements_text(
+                    COALESCE(system_permissions,'[]'::jsonb) || '["oneengine.manage"]'::jsonb
+                  ) AS item(value)
+                 WHERE value <> 'platform.manage'
+              )
+            WHERE COALESCE(system_permissions,'[]'::jsonb) ? 'platform.manage'`
+        );
+        await client.query(
+          `DELETE FROM role_permissions
+            WHERE permission_id IN (SELECT id FROM permissions WHERE code='platform.manage')`
+        );
+        await client.query(`DELETE FROM permissions WHERE code='platform.manage'`);
+        await client.query(`DROP TABLE IF EXISTS platform_developer_company_access`);
+        await client.query(`ALTER TABLE users DROP COLUMN IF EXISTS is_platform_developer`);
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
   console.log("onePOS: database ready");
 }
 
-export { ONEENGINE_MANAGE_PERMISSION, PLATFORM_MANAGE_PERMISSION } from "./rbacBootstrap.js";
+export { ONEENGINE_MANAGE_PERMISSION } from "./rbacBootstrap.js";
 import { bootstrapInitialSuperadmin as canonicalBootstrapInitialSuperadmin } from "./rbacBootstrap.js";
 
 /** @deprecated Global identities are forbidden; retained only for source compatibility. */
@@ -735,17 +773,7 @@ async function initializeLegacyDatabase(pool) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     ALTER TABLE users ALTER COLUMN company_id DROP NOT NULL;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_platform_developer BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
-    CREATE TABLE IF NOT EXISTS platform_developer_company_access (
-      developer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-      granted_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      active BOOLEAN NOT NULL DEFAULT TRUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (developer_id, company_id)
-    );
-
     CREATE TABLE IF NOT EXISTS user_stores (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2540,7 +2568,6 @@ async function initializeLegacyDatabase(pool) {
     ["payment.manage", "Manage Payments"],
     ["integration.manage", "Manage Integrations"],
     ["settings.manage", "Manage Settings"],
-    ["platform.manage", "Manage Platform Metadata"],
     /* T10V - accounting integration export (push sales through the T9A connections). */
     ["accounting.export", "Export to Accounting"],
     ["online_orders.view", "View Online Orders"],
