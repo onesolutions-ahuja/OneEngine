@@ -2020,6 +2020,90 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "LOOP",
+    displayName: "Loop",
+    description: "Run selected workflow steps once for each item in a collection.",
+    schema: {
+      type: "object",
+      properties: {
+        collection: { type: "string" },
+        itemVariable: { type: "string" },
+        bodyBranch: { type: "array" },
+      },
+      required: ["collection","itemVariable","bodyBranch"],
+    },
+    validation: (action) => {
+      if (!action?.collection) throw new Error("Loop requires a collection resource");
+      if (!action?.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.itemVariable))) {
+        throw new Error("Loop requires a valid current item variable name");
+      }
+      if (!Array.isArray(action.bodyBranch) || !action.bodyBranch.length) throw new Error("Loop requires at least one body step");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      const collection = resolveConfiguredResource(action.collection, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+      if (!Array.isArray(collection)) throw new Error("Loop collection must resolve to a collection");
+      if (collection.length > 500) throw new Error("Loop collection exceeds the maximum of 500 items");
+      return {
+        status: "completed",
+        itemVariable: String(action.itemVariable),
+        count: collection.length,
+        collection,
+      };
+    },
+  },
+  {
+    key: "BULK_UPDATE_RECORDS",
+    displayName: "Bulk Update Records",
+    description: "Update a collection of records in one workflow data operation.",
+    schema: {
+      type: "object",
+      properties: {
+        objectKey: { type: "string" },
+        recordIds: { type: "string" },
+        fieldValues: { type: "object" },
+      },
+      required: ["objectKey","recordIds","fieldValues"],
+    },
+    validation: (action) => {
+      if (!action?.objectKey && !action?.objectId && !action?.object) throw new Error("Bulk Update Records requires an object");
+      if (!action?.recordIds) throw new Error("Bulk Update Records requires a record collection");
+      if (!action?.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) throw new Error("Bulk Update Records requires field values");
+    },
+    async: false,
+    requiredPermissions: ["records.update"],
+    executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables }) => {
+      const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const rawCollection = resolveConfiguredResource(action.recordIds, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+      if (!Array.isArray(rawCollection)) throw new Error("Bulk Update Records collection must resolve to a collection");
+      const ids = [...new Set(rawCollection.map((item) => {
+        if (item && typeof item === "object") return item.id || item.recordId || null;
+        return item;
+      }).filter(Boolean).map(String))];
+      if (!ids.length) return { status: "completed", updated: [], count: 0 };
+      if (ids.length > 500) throw new Error("Bulk Update Records exceeds the maximum of 500 records");
+      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      const entries = Object.entries(resolvedFieldValues || {});
+      if (!entries.length) return { status: "completed", updated: [], count: 0 };
+      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, fields, entries });
+      const params = entries.map(([, value]) => value);
+      const sets = mappedFields.map((field, index) => `"${field.source_column}"=${index + 1}`).join(", ");
+      params.push(ids);
+      const clauses = [`id::text = ANY(${params.length}::text[])`];
+      if (targetObject.company_scoped) {
+        params.push(req?.user?.companyId || companyId || null);
+        clauses.push(`company_id=${params.length}`);
+      }
+      if (targetObject.store_scoped && req?.user?.storeId) {
+        params.push(req.user.storeId);
+        clauses.push(`store_id=${params.length}`);
+      }
+      const result = await db(`UPDATE "${targetObject.source_table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
+      return { status: "completed", updated: result.rows || [], count: result.rows?.length || 0, requestedCount: ids.length };
+    },
+  },
+  {
     key: "GET_RECORDS",
     displayName: "Get Records",
     description: "Find records on a Platform object and expose the result to later workflow steps.",
@@ -3752,9 +3836,16 @@ export async function executeWorkflowActions({ actions, ...context }) {
   const branchTargetIds = new Set();
   if (context.branchExecution !== true) {
     for (const candidate of allActions) {
-      if (resolveWorkflowActionType(candidate) !== "CONDITION") continue;
-      for (const branchId of [...(candidate.ifBranch || []), ...(candidate.elseBranch || [])]) {
-        if (branchId) branchTargetIds.add(String(branchId));
+      const candidateType = resolveWorkflowActionType(candidate);
+      if (candidateType === "CONDITION") {
+        for (const branchId of [...(candidate.ifBranch || []), ...(candidate.elseBranch || [])]) {
+          if (branchId) branchTargetIds.add(String(branchId));
+        }
+      }
+      if (candidateType === "LOOP") {
+        for (const bodyId of candidate.bodyBranch || []) {
+          if (bodyId) branchTargetIds.add(String(bodyId));
+        }
       }
     }
   }
@@ -3772,7 +3863,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       stepRun = await getOrCreateWorkflowStepRun({
         db: context.db,
         runId: context.runId,
-        stepIdentifier: item.id || `step-${globalIndex + 1}`,
+        stepIdentifier: (item.id || `step-${globalIndex + 1}`) + (context.executionScope ? `@${context.executionScope}` : ""),
         stepOrder: globalIndex + 1,
         actionType: resolveWorkflowActionType(item),
       });
@@ -3808,6 +3899,39 @@ export async function executeWorkflowActions({ actions, ...context }) {
       });
 
       let branchPaused = false;
+      if (resolveWorkflowActionType(item) === "LOOP") {
+        const bodyIds = Array.isArray(item.bodyBranch) ? item.bodyBranch : [];
+        const bodyActions = bodyIds
+          .map((id) => actionById.get(String(id)))
+          .filter(Boolean)
+          .sort((a, b) => allActions.indexOf(a) - allActions.indexOf(b));
+        const collection = Array.isArray(result?.collection) ? result.collection : [];
+        const itemVariable = String(item.itemVariable || result?.itemVariable || "currentItem");
+        const iterations = [];
+        const hadPrevious = Object.prototype.hasOwnProperty.call(workflowVariables.variables, itemVariable);
+        const previousValue = workflowVariables.variables[itemVariable];
+        for (let loopIndex = 0; loopIndex < collection.length; loopIndex += 1) {
+          workflowVariables.variables[itemVariable] = collection[loopIndex];
+          const iterationResults = await executeWorkflowActions({
+            actions: bodyActions,
+            ...context,
+            workflowVariables,
+            allActions,
+            branchExecution: true,
+            executionScope: `${context.executionScope ? context.executionScope + ":" : ""}${item.id || globalIndex}:loop:${loopIndex}`,
+          });
+          iterations.push({ index: loopIndex, results: iterationResults });
+          if (iterationResults.some((entry) => entry?.result?.status === "waiting")) {
+            throw new Error("Wait is not supported inside a Loop body yet. Move the Wait after the Loop.");
+          }
+          if (iterationResults.some((entry) => entry?.result?.status === "stopped")) break;
+        }
+        if (hadPrevious) workflowVariables.variables[itemVariable] = previousValue;
+        else delete workflowVariables.variables[itemVariable];
+        result.iterations = iterations;
+        result.bodyStepIds = bodyIds;
+        result.collection = undefined;
+      }
       if (resolveWorkflowActionType(item) === "CONDITION" && typeof result?.matched === "boolean") {
         const selectedIds = result.matched ? (item.ifBranch || []) : (item.elseBranch || []);
         const selectedActions = selectedIds
