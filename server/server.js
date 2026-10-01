@@ -2374,7 +2374,7 @@ async function startServer() {
                 let where = "id=$1";
                 if (object.company_scoped !== false) {
                   params.push(job.company_id);
-                  where += ` AND company_id=${params.length}`;
+                  where += ` AND company_id=$${params.length}`;
                 }
                 const recordResult = await db(`SELECT * FROM "${table}" WHERE ${where} LIMIT 1`, params);
                 record = recordResult.rows[0] || null;
