@@ -1935,8 +1935,8 @@ async function runOneTimeTestTenantCleanup() {
     await client.query("BEGIN");
 
     const keepCheck = await client.query(
-      "SELECT id, name FROM companies WHERE name = ANY($1::text[]) ORDER BY name",
-      [keepNames]
+      "SELECT id, name FROM companies WHERE name IN ($1,$2,$3,$4,$5) ORDER BY name",
+      keepNames
     );
     if (keepCheck.rowCount !== keepNames.length) {
       throw new Error(`Tenant cleanup aborted: expected ${keepNames.length} preserved companies, found ${keepCheck.rowCount}`);
@@ -1948,27 +1948,27 @@ async function runOneTimeTestTenantCleanup() {
       `DELETE FROM hospitality_bill_sales h
          USING sales s
          WHERE h.sale_id = s.id
-           AND s.company_id NOT IN (SELECT id FROM companies WHERE name = ANY($1::text[]))`,
-      [keepNames]
+           AND s.company_id NOT IN (SELECT id FROM companies WHERE name IN ($1,$2,$3,$4,$5))`,
+      keepNames
     );
     await client.query(
       `DELETE FROM refunds r
          USING sales s
          WHERE r.sale_id = s.id
-           AND s.company_id NOT IN (SELECT id FROM companies WHERE name = ANY($1::text[]))`,
-      [keepNames]
+           AND s.company_id NOT IN (SELECT id FROM companies WHERE name IN ($1,$2,$3,$4,$5))`,
+      keepNames
     );
     await client.query(
-      "DELETE FROM sales WHERE company_id NOT IN (SELECT id FROM companies WHERE name = ANY($1::text[]))",
-      [keepNames]
+      "DELETE FROM sales WHERE company_id NOT IN (SELECT id FROM companies WHERE name IN ($1,$2,$3,$4,$5))",
+      keepNames
     );
     await client.query(
-      "DELETE FROM audit_logs WHERE company_id NOT IN (SELECT id FROM companies WHERE name = ANY($1::text[]))",
-      [keepNames]
+      "DELETE FROM audit_logs WHERE company_id NOT IN (SELECT id FROM companies WHERE name IN ($1,$2,$3,$4,$5))",
+      keepNames
     );
     const deleted = await client.query(
-      "DELETE FROM companies WHERE name <> ALL($1::text[]) RETURNING name",
-      [keepNames]
+      "DELETE FROM companies WHERE name NOT IN ($1,$2,$3,$4,$5) RETURNING name",
+      keepNames
     );
 
     const after = await client.query("SELECT COUNT(*)::int AS count FROM companies");
