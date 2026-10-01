@@ -6,6 +6,8 @@ const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://onepos
 export const SERVER_ADDRESS_STORAGE_KEY = 'onepos_server_address'
 export const ACTING_COMPANY_STORAGE_KEY = 'onepos_acting_company_id'
 export const SESSION_PERMISSIONS_STORAGE_KEY = 'onepos_session_permissions'
+export const ACTIVE_STORE_STORAGE_KEY = 'onepos_active_store_id'
+export const AVAILABLE_STORES_STORAGE_KEY = 'onepos_available_stores'
 
 export function getActingCompanyId() {
   try { return localStorage.getItem(ACTING_COMPANY_STORAGE_KEY) || '' } catch { return '' }
@@ -17,6 +19,48 @@ export function setActingCompanyId(companyId) {
     else localStorage.removeItem(ACTING_COMPANY_STORAGE_KEY)
   } catch {}
 }
+
+export function getActiveStoreId() {
+  try { return localStorage.getItem(ACTIVE_STORE_STORAGE_KEY) || '' } catch { return '' }
+}
+
+export function setActiveStoreId(storeId) {
+  try {
+    if (storeId) localStorage.setItem(ACTIVE_STORE_STORAGE_KEY, String(storeId))
+    else localStorage.removeItem(ACTIVE_STORE_STORAGE_KEY)
+  } catch {}
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('onepos:store-context-changed', { detail: { storeId: storeId || '' } }))
+  }
+}
+
+export function getAvailableStores() {
+  try {
+    const rows = JSON.parse(sessionStorage.getItem(AVAILABLE_STORES_STORAGE_KEY) || '[]')
+    return Array.isArray(rows) ? rows : []
+  } catch {
+    return []
+  }
+}
+
+export async function ensureActiveStoreContext() {
+  const response = await apiRequest('/api/auth/me/stores', { timeoutMs: 12000, retryGet: true })
+  const stores = Array.isArray(response?.data) ? response.data : []
+  sessionStorage.setItem(AVAILABLE_STORES_STORAGE_KEY, JSON.stringify(stores))
+
+  const remembered = getActiveStoreId()
+  const rememberedAllowed = stores.some((store) => String(store.id) === String(remembered))
+  const primary = stores.find((store) => store.is_primary === true)
+  const selected = rememberedAllowed
+    ? remembered
+    : stores.length === 1
+      ? stores[0].id
+      : primary?.id || ''
+
+  setActiveStoreId(selected || '')
+  return { stores, activeStoreId: selected || '' }
+}
+
 
 export function getStoredSessionPermissions() {
   try {
@@ -111,6 +155,7 @@ export async function apiFetch(path, options = {}) {
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(getActingCompanyId() ? { 'X-Acting-Company-Id': getActingCompanyId() } : {}),
+      ...(getActiveStoreId() ? { 'X-Store-Id': getActiveStoreId() } : {}),
       ...(options.headers || {}),
     },
   })
@@ -230,6 +275,7 @@ export async function login(username, password) {
   sessionStorage.removeItem('onepos_user')
   sessionStorage.removeItem('onepos.settings.context.v2')
   sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
+  sessionStorage.removeItem(AVAILABLE_STORES_STORAGE_KEY)
   void clearLazyCache()
   localStorage.removeItem('onepos_token')
   localStorage.removeItem('onepos_user')
@@ -277,25 +323,33 @@ export async function login(username, password) {
   if (boundCompanyId && !resolvedUser?.companyId) {
     resolvedUser = { ...resolvedUser, companyId: boundCompanyId }
   }
-  if (resolvedUser?.isPlatformDeveloper === true) {
-    /*
-     * The login endpoint validates and resolves the optional acting company in
-     * the same request. Do not block sign-in with follow-up company discovery
-     * and validation HTTP calls.
-     */
-    const companyId = String(data?.actingCompanyId || '')
-    setActingCompanyId(companyId)
-    if (companyId) resolvedUser = { ...resolvedUser, companyId }
+  const actingCompanyId = String(data?.actingCompanyId || '')
+  if (actingCompanyId) {
+    setActingCompanyId(actingCompanyId)
+    resolvedUser = { ...resolvedUser, companyId: actingCompanyId }
+  } else if (boundCompanyId) {
+    setActingCompanyId(String(boundCompanyId))
   } else {
-    // Tenant logins must never inherit a previous developer company context,
-    // but their own company binding must become the active API context.
-    setActingCompanyId(boundCompanyId ? String(boundCompanyId) : '')
+    // Global OneEngine identities may need an explicit tenant selection.
+    setActingCompanyId('')
   }
 
   sessionStorage.setItem('onepos_user', JSON.stringify(resolvedUser))
   if (data?.permissions && typeof data.permissions === 'object') {
     setStoredSessionPermissions(data.permissions)
   }
+
+  if (resolvedUser?.companyId) {
+    const storeContext = await ensureActiveStoreContext().catch(() => ({ stores: [], activeStoreId: '' }))
+    if (storeContext.activeStoreId) {
+      resolvedUser = { ...resolvedUser, storeId: storeContext.activeStoreId }
+      sessionStorage.setItem('onepos_user', JSON.stringify(resolvedUser))
+    }
+  } else {
+    sessionStorage.removeItem(AVAILABLE_STORES_STORAGE_KEY)
+    setActiveStoreId('')
+  }
+
   return { ...data, user: resolvedUser }
 }
 
@@ -398,6 +452,7 @@ export async function ensureActingCompanyContext() {
       user = { ...user, companyId: boundCompanyId }
       sessionStorage.setItem('onepos_user', JSON.stringify(user))
     }
+    await ensureActiveStoreContext().catch(() => null)
     return boundCompanyId
   }
 
@@ -432,6 +487,7 @@ export async function ensureActingCompanyContext() {
     setActingCompanyId(companyId)
     const resolvedUser = { ...user, companyId }
     sessionStorage.setItem('onepos_user', JSON.stringify(resolvedUser))
+    await ensureActiveStoreContext().catch(() => null)
     return companyId
   } catch (error) {
     setActingCompanyId('')
