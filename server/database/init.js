@@ -745,6 +745,37 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
            ON CONFLICT (role_id,permission_id) DO NOTHING`
         );
       },
+    },
+    {
+      key: "0029_workflow_version_baseline",
+      version: "29",
+      name: "Backfill immutable workflow version baseline",
+      up: async client => {
+        await client.query(
+          `INSERT INTO platform_workflow_versions
+             (company_id,workflow_id,version,definition,lifecycle_status,created_by,created_at)
+           SELECT r.company_id,
+                  r.id,
+                  GREATEST(COALESCE(r.version,1),1),
+                  jsonb_build_object(
+                    'object_id',r.object_id,
+                    'name',r.name,
+                    'trigger_key',r.trigger_key,
+                    'conditions',COALESCE(r.conditions,'[]'::jsonb),
+                    'action',COALESCE(r.action,'{}'::jsonb),
+                    'active',r.active,
+                    'lifecycle_status',COALESCE(r.lifecycle_status,CASE WHEN r.active THEN 'ACTIVE' ELSE 'DRAFT' END),
+                    'version',GREATEST(COALESCE(r.version,1),1)
+                  ),
+                  COALESCE(r.lifecycle_status,CASE WHEN r.active THEN 'ACTIVE' ELSE 'DRAFT' END),
+                  r.created_by,
+                  COALESCE(r.created_at,NOW())
+             FROM platform_rules r
+            WHERE r.company_id IS NOT NULL
+              AND r.action->>'type'='workflow'
+           ON CONFLICT (company_id,workflow_id,version) DO NOTHING`
+        );
+      },
     }
   ]);
 
