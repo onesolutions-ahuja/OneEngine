@@ -889,6 +889,20 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
   const required = new Set(Array.isArray(schema?.required) ? schema.required : []);
   const entries = Object.entries(properties);
   if (!schema || schema.type !== "object" || !entries.length) {
+    const hiddenKeys = new Set([
+      "object","recordId","filters","match","sortField","sortDirection","store","limit",
+      "fieldMappings","fieldValues","template","templateId","recipient","providerStatus",
+      "functionKey","inputs","workflowId","workflowInputs","condition","ifBranch","elseBranch",
+      "durationSeconds","resumeAt","reason","url","method","message","title","apiParameters"
+    ]);
+    const existingParameters = Object.fromEntries(Object.entries(config || {}).filter(([key, value]) => {
+      if (hiddenKeys.has(key)) return false;
+      if (value === undefined || value === null || value === "") return false;
+      if (Array.isArray(value) && !value.length) return false;
+      if (value && typeof value === "object" && !Array.isArray(value) && !Object.keys(value).length) return false;
+      return true;
+    }));
+    const parameterValues = { ...existingParameters, ...(config.apiParameters || {}) };
     return (
       <div className="space-y-3">
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -899,7 +913,7 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Action parameters</label>
           <MappingEditor
-            value={config.apiParameters || {}}
+            value={parameterValues}
             onChange={(apiParameters) => onChange({ apiParameters })}
             rootObjectKey={rootObjectKey}
             extraResources={extraResources}
@@ -1317,7 +1331,12 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 
       <div className="mt-4 space-y-3">
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-          <select className={inputClass} value={step.type} onChange={(event) => updateStep(index, { type: event.target.value, label: getActionLabel(event.target.value) })}>
+          <select className={inputClass} value={step.type} onChange={(event) => {
+            const nextType = event.target.value;
+            const nextDefinition = registryOptions.find((option) => option.value === nextType);
+            const fresh = makeStep(nextType);
+            updateStep(index, { type: nextType, label: nextDefinition?.label || getActionLabel(nextType), config: fresh.config });
+          }}>
             {registryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
           <button type="button" className="rounded border border-slate-200 px-3 py-2 text-sm text-slate-600" onClick={() => updateStep(index, { expanded: !step.expanded })}>{step.expanded ? "Collapse" : "Expand"}</button>
@@ -1358,6 +1377,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   };
   const addFromPalette = (type, index = workflow.steps.length) => {
     const step = makeStep(type);
+    const definition = registryOptions.find((option) => option.value === type);
+    if (definition?.label) step.label = definition.label;
     setWorkflow((current) => ({ ...current, steps: [...current.steps.slice(0, index), step, ...current.steps.slice(index)] }));
     setSelectedId(step.id);
   };
