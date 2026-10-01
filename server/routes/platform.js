@@ -3389,17 +3389,46 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const action = actions[index];
         const actionType = String(action?.type || action?.key || "").toUpperCase();
         if (actionType === "CONDITION") {
-          const yes = Array.isArray(action.ifBranch) ? action.ifBranch.map(String) : [];
-          const otherwise = Array.isArray(action.elseBranch) ? action.elseBranch.map(String) : [];
-          for (const targetId of [...yes, ...otherwise]) {
-            if (!indexById.has(targetId)) return `Decision "${action.label || action.id || index + 1}" references an action that no longer exists`;
-            if (indexById.get(targetId) <= index) return `Decision "${action.label || action.id || index + 1}" can only route to later actions`;
-            const owner = claimedControlTargets.get(targetId);
-            if (owner && owner !== String(action.id || index)) return `Action "${actions[indexById.get(targetId)]?.label || targetId}" is already controlled by another Decision or Loop`;
-            claimedControlTargets.set(targetId, String(action.id || index));
+          const outcomes = Array.isArray(action.outcomes) ? action.outcomes : [];
+          if (outcomes.length) {
+            const outcomeIds = outcomes.map((outcome) => String(outcome?.id || ""));
+            if (new Set(outcomeIds).size !== outcomeIds.length) return `Decision "${action.label || action.id || index + 1}" has duplicate outcome identifiers`;
+            const targetOwners = new Map();
+            for (const outcome of outcomes) {
+              const label = String(outcome?.label || "Outcome");
+              const targets = Array.isArray(outcome?.branch) ? outcome.branch.map(String) : [];
+              for (const targetId of targets) {
+                if (!indexById.has(targetId)) return `Decision "${action.label || action.id || index + 1}" outcome "${label}" references an action that no longer exists`;
+                if (indexById.get(targetId) <= index) return `Decision "${action.label || action.id || index + 1}" can only route to later actions`;
+                if (targetOwners.has(targetId)) return `Decision "${action.label || action.id || index + 1}" assigns action "${actions[indexById.get(targetId)]?.label || targetId}" to more than one outcome`;
+                targetOwners.set(targetId, label);
+                const owner = claimedControlTargets.get(targetId);
+                if (owner && owner !== String(action.id || index)) return `Action "${actions[indexById.get(targetId)]?.label || targetId}" is already controlled by another Decision or Loop`;
+                claimedControlTargets.set(targetId, String(action.id || index));
+              }
+            }
+            for (const targetId of Array.isArray(action.defaultBranch) ? action.defaultBranch.map(String) : []) {
+              if (!indexById.has(targetId)) return `Decision "${action.label || action.id || index + 1}" Default path references an action that no longer exists`;
+              if (indexById.get(targetId) <= index) return `Decision "${action.label || action.id || index + 1}" can only route to later actions`;
+              if (targetOwners.has(targetId)) return `Decision "${action.label || action.id || index + 1}" assigns action "${actions[indexById.get(targetId)]?.label || targetId}" to an outcome and Default`;
+              targetOwners.set(targetId, "Default");
+              const owner = claimedControlTargets.get(targetId);
+              if (owner && owner !== String(action.id || index)) return `Action "${actions[indexById.get(targetId)]?.label || targetId}" is already controlled by another Decision or Loop`;
+              claimedControlTargets.set(targetId, String(action.id || index));
+            }
+          } else {
+            const yes = Array.isArray(action.ifBranch) ? action.ifBranch.map(String) : [];
+            const otherwise = Array.isArray(action.elseBranch) ? action.elseBranch.map(String) : [];
+            for (const targetId of [...yes, ...otherwise]) {
+              if (!indexById.has(targetId)) return `Decision "${action.label || action.id || index + 1}" references an action that no longer exists`;
+              if (indexById.get(targetId) <= index) return `Decision "${action.label || action.id || index + 1}" can only route to later actions`;
+              const owner = claimedControlTargets.get(targetId);
+              if (owner && owner !== String(action.id || index)) return `Action "${actions[indexById.get(targetId)]?.label || targetId}" is already controlled by another Decision or Loop`;
+              claimedControlTargets.set(targetId, String(action.id || index));
+            }
+            const overlap = yes.find((targetId) => otherwise.includes(targetId));
+            if (overlap) return `Decision "${action.label || action.id || index + 1}" assigns the same action to both outcomes`;
           }
-          const overlap = yes.find((targetId) => otherwise.includes(targetId));
-          if (overlap) return `Decision "${action.label || action.id || index + 1}" assigns the same action to both outcomes`;
           continue;
         }
         if (actionType === "LOOP") {
