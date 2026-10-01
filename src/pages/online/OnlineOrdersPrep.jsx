@@ -28,7 +28,7 @@ import useOnlineOrderMetadata from "./useOnlineOrderMetadata.js";
  * UI - new orders stay with the full admin page.
  */
 
-const PREP_FILTER_STATUSES = ["ACCEPTED", "PREPARING", "READY"];
+const PREP_FILTER_STATUSES = ["ACCEPTED", "PREPARING", "READY", "READY_FOR_PICKUP"];
 
 export default function OnlineOrdersPrep({ permissions = null }) {
   const orderMetadata = useOnlineOrderMetadata();
