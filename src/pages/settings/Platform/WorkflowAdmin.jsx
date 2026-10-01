@@ -2176,6 +2176,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         ...(makeStep(step.type || step.key || "CREATE_RECORD").config),
         ...(step.config || {}),
         ...Object.fromEntries(Object.entries(step).filter(([key]) => !["id","type","key","label","enabled","expanded","config","_visual"].includes(key))),
+        apiParameters: { ...(step.config?.apiParameters || {}), ...Object.fromEntries(Object.entries(step).filter(([key]) => !["id","type","key","label","enabled","expanded","config","_visual"].includes(key))) },
         ...((step.type || step.key) === "FORMULA" ? { formulaInputs: step.formulaInputs || step.inputs || step.config?.formulaInputs || step.config?.inputs || {} } : {}),
       },
     })),
@@ -2373,6 +2374,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               config: {
                 ...base.config,
                 ...action,
+                apiParameters: {
+                  ...(action.apiParameters || {}),
+                  ...Object.fromEntries(Object.entries(action).filter(([key]) => !["id","type","key","label","enabled","expanded","config","_visual"].includes(key))),
+                },
                 ...(action.type === "FORMULA" ? { formulaInputs: action.formulaInputs || action.inputs || {} } : {}),
               },
             };
@@ -2647,7 +2652,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           }
           const apiParameters = config.apiParameters && typeof config.apiParameters === "object" ? config.apiParameters : {};
           delete config.apiParameters;
-          return { id: step.id, label: step.label || getActionLabel(step.type), type: step.type, ...config, ...apiParameters };
+          return { id: step.id, label: step.label || getActionLabel(step.type), type: step.type, ...apiParameters, ...config };
         }),
       },
     };
@@ -2849,6 +2854,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             config: {
               ...base.config,
               ...action,
+              apiParameters: {
+                ...(action.apiParameters || {}),
+                ...Object.fromEntries(Object.entries(action).filter(([key]) => !["id","type","key","label","enabled","expanded","config","_visual"].includes(key))),
+              },
               ...(action.type === "FORMULA" ? { formulaInputs: action.formulaInputs || action.inputs || {} } : {}),
             },
           };
