@@ -26,15 +26,12 @@ jobs:
           test -n "$ASSET"
           curl --retry 6 --retry-all-errors --retry-delay 5 -fsSI "https://onesolutions-ahuja.github.io$ASSET" >/dev/null
 
-      - name: Test Render frontend shell
+      - name: Test backend legacy browser redirect
         run: |
           set -euo pipefail
-          curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "https://smart-theme.onrender.com/" -o /tmp/render.html
-          grep -q '/assets/' /tmp/render.html
-          if grep -q '/smart-theme/assets/' /tmp/render.html; then
-            echo "Render frontend still contains legacy smart-theme base path"
-            exit 1
-          fi
+          HEADERS="$(curl --retry 6 --retry-all-errors --retry-delay 5 -fsSI "https://onepos.onrender.com/")"
+          echo "$HEADERS"
+          echo "$HEADERS" | grep -qi '^location: https://onesolutions-ahuja.github.io/OneEngine'
 
       - name: Test backend and database health
         run: |
