@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      ONEPOS_E2E_USERNAME: ${{ secrets.ONEPOS_PLAYWRIGHT_USERNAME }}
-      ONEPOS_E2E_PASSWORD: ${{ secrets.ONEPOS_PLAYWRIGHT_PASSWORD }}
+      ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
+      ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
       PLAYWRIGHT_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
       ONEPOS_API_URL: https://onepos.onrender.com
       ONEPOS_E2E_ORIGIN: https://onesolutions-ahuja.github.io
