@@ -2621,6 +2621,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const entryConditionIssue = (workflow.conditions || []).length && !conditionIsValid({ rules: workflow.conditions })
     ? "One or more Start conditions are incomplete."
     : "";
+  const entryTransitionIssue = workflow.entryTransition === "UPDATED_TO_MEET"
+    ? !(workflow.conditions || []).length
+      ? "Add at least one Start condition for Only when updated to meet."
+      : !["after_update","after_save","before_update","before_save","field_changed"].includes(workflow.trigger)
+        ? "Only when updated to meet requires an update trigger."
+        : ""
+    : "";
   const definitionFor = (step) => registryOptions.find((option) => option.value === step.type) || null;
   const conditionIssue = conditionSteps.length && conditionSteps.some((step) => workflowActionIssue(step, definitionFor(step)))
     ? "One or more conditions are incomplete."
@@ -2657,9 +2664,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       : duplicateOutput ? `Subflow output "${duplicateOutput.name}" is declared more than once.`
         : missingOutputSource ? `Choose a Resource for subflow output "${missingOutputSource.label || missingOutputSource.name || "output"}".`
           : "";
-  const reviewIssue = triggerIssue || entryConditionIssue || conditionIssue || actionsIssue || contractIssue || (!workflow.name ? "Enter a workflow name." : "");
+  const reviewIssue = triggerIssue || entryConditionIssue || entryTransitionIssue || conditionIssue || actionsIssue || contractIssue || (!workflow.name ? "Enter a workflow name." : "");
   const guideSteps = [
-    { key: "trigger", label: "Trigger", status: triggerIssue ? "error" : "complete", message: triggerIssue },
+    { key: "trigger", label: "Trigger", status: (triggerIssue || entryTransitionIssue) ? "error" : "complete", message: triggerIssue || entryTransitionIssue },
     {
       key: "conditions",
       label: "Conditions",
@@ -3338,6 +3345,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 </div>
               </div>
               <p className="mt-1 text-xs text-slate-500">{debugMode === "debug" ? "Debug shows the path taken and highlights failed steps." : "Test gives a simple pass/fail result using the same safe execution trace."} Database changes are rolled back and external actions such as messages, payments, webhooks and printing are simulated.</p>
+              {workflow.entryTransition === "UPDATED_TO_MEET" ? <p className="mt-1 text-[11px] text-amber-700">For this test, the selected record is treated as the newly matching state. Production still verifies the real previous record did not meet the Start conditions.</p> : null}
             </div>
             <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(false)}>Close</button>
           </div>
