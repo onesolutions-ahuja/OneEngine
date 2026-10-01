@@ -4373,7 +4373,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (requestedLifecycle !== undefined && !["DRAFT", "ACTIVE", "INACTIVE"].includes(String(requestedLifecycle).toUpperCase())) return res.status(400).json({ success: false, message: "lifecycleStatus must be DRAFT, ACTIVE or INACTIVE" });
     const lifecycleStatus = requestedLifecycle === undefined ? null : String(requestedLifecycle).toUpperCase();
     const activeValue = lifecycleStatus === null ? next.active : lifecycleStatus === "ACTIVE";
-    const result = await db("UPDATE platform_approval_processes SET name=COALESCE($1,name),conditions=COALESCE($2::jsonb,conditions),config=COALESCE($3::jsonb,config),active=COALESCE($4,active),lifecycle_status=COALESCE($5,lifecycle_status),updated_at=NOW() WHERE id=$6 RETURNING *", [next.name, next.conditions === undefined ? null : JSON.stringify(next.conditions), next.config === undefined ? null : JSON.stringify(next.config), activeValue, lifecycleStatus, process.id]);
+    const result = await db("UPDATE platform_approval_processes SET name=COALESCE($1,name),conditions=COALESCE($2::jsonb,conditions),config=COALESCE($3::jsonb,config),active=COALESCE($4,active),lifecycle_status=COALESCE($5,lifecycle_status),version=version+1,updated_at=NOW() WHERE id=$6 RETURNING *", [next.name, next.conditions === undefined ? null : JSON.stringify(next.conditions), next.config === undefined ? null : JSON.stringify(next.config), activeValue, lifecycleStatus, process.id]);
     if (Array.isArray(next.steps)) {
       await db("DELETE FROM platform_approval_steps WHERE process_id=$1", [process.id]);
       for (let index = 0; index < next.steps.length; index += 1) {
