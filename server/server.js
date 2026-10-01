@@ -83,7 +83,7 @@ import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
 import { createPaypalQrDriver } from "./services/paypalQrConnector.js";
-import { createSmsGateDriver, configureSmsGateInboundWebhook } from "./services/smsGateConnector.js";
+import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
 import { ONE_CONNECT_PROVIDER_DRIVER_KEYS, createOneConnectProviderDriver } from "./services/oneConnectProviders.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
@@ -2008,6 +2008,35 @@ async function startServer() {
           );
 
           console.log(`onePOS: SMSGate inbound webhook ready (${webhook.created ? "created" : "existing"}) ${webhookUrl}`);
+          const diagnostics = await getSmsGateDiagnostics({ ...configuration, ...nextSecrets }).catch((error) => ({ error: error?.message || String(error) }));
+          const webhookRows = Array.isArray(diagnostics?.webhooks)
+            ? diagnostics.webhooks
+            : Array.isArray(diagnostics?.webhooks?.data)
+              ? diagnostics.webhooks.data
+              : Array.isArray(diagnostics?.webhooks?.webhooks)
+                ? diagnostics.webhooks.webhooks
+                : [];
+          const relevantWebhook = webhookRows.find((item) =>
+            String(item?.url || "") === webhookUrl
+              && String(item?.event || "").toLowerCase() === "sms:received"
+          );
+          const logRows = Array.isArray(diagnostics?.logs)
+            ? diagnostics.logs
+            : Array.isArray(diagnostics?.logs?.data)
+              ? diagnostics.logs.data
+              : Array.isArray(diagnostics?.logs?.logs)
+                ? diagnostics.logs.logs
+                : [];
+          console.log("onePOS: SMSGate diagnostics", {
+            webhookRegistered: Boolean(relevantWebhook),
+            webhookCount: webhookRows.length,
+            recentProviderLogs: logRows.slice(-8).map((entry) => ({
+              level: entry?.level || entry?.type || null,
+              message: String(entry?.message || entry?.event || entry?.action || "").slice(0, 180),
+              createdAt: entry?.createdAt || entry?.created_at || entry?.timestamp || null,
+            })),
+            providerLogError: diagnostics?.logs?.error || diagnostics?.error || null,
+          });
         }
       } catch (error) {
         console.error("onePOS: SMSGate inbound webhook reconciliation failed:", error?.message || error);
