@@ -1563,24 +1563,58 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
           </div>
         );
-      case "RUN_SUBFLOW":
+      case "RUN_SUBFLOW": {
+        const selectedSubflow = availableWorkflows.find((item) => String(item.id) === String(step.config?.workflowId || ""));
+        const inputContract = Array.isArray(selectedSubflow?.inputContract) ? selectedSubflow.inputContract : [];
+        const outputContract = Array.isArray(selectedSubflow?.outputContract) ? selectedSubflow.outputContract : [];
         return (
           <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Workflow</label>
-              <select className={inputClass} value={step.config?.workflowId || ""} onChange={(event) => updateConfig({ workflowId: event.target.value })}>
+              <select className={inputClass} value={step.config?.workflowId || ""} onChange={(event) => {
+                const selected = availableWorkflows.find((item) => String(item.id) === String(event.target.value));
+                updateConfig({ workflowId: event.target.value, workflowInputs: {}, declaredOutputs: selected?.outputContract || [] });
+              }}>
                 <option value="">Select a saved workflow</option>
                 {step.config?.workflowId && !availableWorkflows.some((item) => String(item.id) === String(step.config.workflowId)) ? <option value={step.config.workflowId} disabled>{step.config.workflowId} (unavailable)</option> : null}
                 {availableWorkflows.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
               {!availableWorkflows.length ? <p className="text-xs text-slate-500">Save another active workflow before selecting a subflow.</p> : null}
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Input mapping</label>
-              <MappingEditor value={step.config?.workflowInputs || {}} onChange={(workflowInputs) => updateConfig({ workflowInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Subflow input" valueLabel="Map from resource" />
-            </div>
+            {inputContract.length ? (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-700">Declared inputs</div>
+                {inputContract.map((input) => (
+                  <ResourceOrLiteralInput
+                    key={input.name}
+                    label={`${input.label || input.name}${input.required ? " *" : ""}`}
+                    value={step.config?.workflowInputs?.[input.name] ?? ""}
+                    onChange={(value) => updateConfig({ workflowInputs: { ...(step.config?.workflowInputs || {}), [input.name]: value } })}
+                    rootObjectKey={rootObjectKey}
+                    extraResources={extraResources}
+                    type={input.type || "string"}
+                    required={input.required === true}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Input mapping</label>
+                <MappingEditor value={step.config?.workflowInputs || {}} onChange={(workflowInputs) => updateConfig({ workflowInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Subflow input" valueLabel="Map from resource" />
+                <p className="mt-1 text-[11px] text-slate-500">This workflow has no formal input contract yet, so legacy free-form mapping remains available.</p>
+              </div>
+            )}
+            {outputContract.length ? (
+              <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                <div className="text-xs font-semibold text-blue-800">Outputs available after this step</div>
+                <div className="mt-2 space-y-1 text-[11px] text-blue-700">
+                  {outputContract.map((output) => <div key={output.name}>{output.label || output.name} · {output.type || "text"}</div>)}
+                </div>
+              </div>
+            ) : null}
           </div>
         );
+      }
       case "CONDITION": {
         const configuredOutcomes = Array.isArray(step.config?.outcomes) ? step.config.outcomes : [];
         const outcomes = configuredOutcomes.length
