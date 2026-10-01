@@ -118,20 +118,28 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   // normal active-store selector to switch among explicitly assigned stores.
   await pool.query(
     `UPDATE users u
-        SET store_id = chosen.store_id,
+        SET store_id = (
+              SELECT us.store_id
+                FROM user_stores us
+                JOIN stores s ON s.id=us.store_id
+               WHERE us.user_id=u.id
+                 AND us.active=TRUE
+                 AND s.active=TRUE
+                 AND s.company_id=u.company_id
+               ORDER BY s.created_at ASC, s.id ASC
+               LIMIT 1
+            ),
             updated_at = NOW()
-       FROM LATERAL (
-         SELECT us.store_id
-           FROM user_stores us
-           JOIN stores s ON s.id=us.store_id
-          WHERE us.user_id=u.id
-            AND us.active=TRUE
-            AND s.active=TRUE
-            AND s.company_id=u.company_id
-          ORDER BY s.created_at ASC, s.id ASC
-          LIMIT 1
-       ) chosen
       WHERE u.id=$1
+        AND EXISTS (
+          SELECT 1
+            FROM user_stores assigned
+            JOIN stores assigned_store ON assigned_store.id=assigned.store_id
+           WHERE assigned.user_id=u.id
+             AND assigned.active=TRUE
+             AND assigned_store.active=TRUE
+             AND assigned_store.company_id=u.company_id
+        )
         AND (
           u.store_id IS NULL
           OR NOT EXISTS (
