@@ -76,7 +76,7 @@ test("communication package routes and SMS booking package versions stay aligned
   assert.equal(byKey.get("email_connector")?.manifest?.route, "/app/settings/email-delivery");
   assert.equal(byKey.get("sms_connector")?.manifest?.route, "/app/settings/sms-delivery");
   assert.equal(byKey.get("sms_connector")?.version, "1.1.0");
-  assert.equal(byKey.get("smsgate_connector")?.version, "1.1.0");
+  assert.equal(byKey.get("smsgate_connector")?.version, "1.2.0");
   assert.ok(byKey.get("smsgate_connector")?.manifest?.capabilities?.includes("sms_inbound"));
   assert.ok(byKey.get("one_assistant")?.manifest?.capabilities?.includes("sms_booking"));
 });
