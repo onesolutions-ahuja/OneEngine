@@ -584,17 +584,15 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   );
 
   const configuredTenantEmail = String(
-    env.BOOTSTRAP_TENANT_SUPERADMIN_EMAIL
-      || env.BOOTSTRAP_SUPERADMIN_EMAIL
-      || ""
+    env.BOOTSTRAP_TENANT_SUPERADMIN_EMAIL || ""
   ).trim().toLowerCase();
   const domain = String(company.user_email_domain || "").trim().toLowerCase().replace(/^@/, "");
   const defaultTenantEmail = String(company.name || "").trim().toLowerCase() === "onepos demo"
-    ? "superadmin@onepos.com"
-    : (domain ? `superadmin@${domain}` : "");
+    ? "superadmin@local"
+    : (domain ? `superadmin@${domain}` : "superadmin@local");
   const tenantEmailRaw = configuredTenantEmail || defaultTenantEmail;
   const tenantEmail = tenantEmailRaw === "superadmin@onepos.local"
-    ? "superadmin@onepos.com"
+    ? "superadmin@local"
     : tenantEmailRaw;
   const tenantPassword = String(
     env.BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD
@@ -664,7 +662,7 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     const tenantPasswordHash = await bcrypt.hash(tenantPassword, 12);
     tenantUser = await pool.query(
       `INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active,must_change_password)
-       VALUES ($1,$2,$3,$3,$4,$5,FALSE,TRUE,FALSE)
+       VALUES ($1,$2,$3,$3,$4,$5,FALSE,TRUE,TRUE)
        RETURNING id,password_hash,company_id`,
       [company.id, tenantRoleId, tenantEmail, tenantPasswordHash, tenantName]
     );
@@ -673,13 +671,18 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     console.warn("onePOS: tenant Superadmin user not created because no bootstrap password is configured");
   }
 
-  const engineEmail = String(env.BOOTSTRAP_ONEENGINE_MANAGER_EMAIL || "").trim().toLowerCase();
-  const enginePassword = String(env.BOOTSTRAP_ONEENGINE_MANAGER_PASSWORD || "");
+  const engineEmail = "superadmin@onepos.com";
+  const enginePassword = String(
+    env.BOOTSTRAP_ONEENGINE_MANAGER_PASSWORD
+      || env.BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD
+      || env.BOOTSTRAP_SUPERADMIN_PASSWORD
+      || ""
+  );
   const engineName = String(env.BOOTSTRAP_ONEENGINE_MANAGER_NAME || "OneEngine Manager").trim();
   let engineManagerReady = false;
   let engineRoleId = null;
 
-  if (engineEmail) {
+  {
     engineRoleId = await ensureGlobalSystemProfile(pool, {
       name: "OneEngine Manager",
       apiKey: "engine_manager",
@@ -712,7 +715,7 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
       const enginePasswordHash = await bcrypt.hash(enginePassword, 12);
       engineUser = await pool.query(
         `INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active)
-         VALUES (NULL,$1,$2,$2,$3,$4,FALSE,TRUE)
+         VALUES (NULL,$1,$2,$2,$3,$4,FALSE,TRUE,TRUE)
          RETURNING id`,
         [engineRoleId, engineEmail, enginePasswordHash, engineName]
       );
