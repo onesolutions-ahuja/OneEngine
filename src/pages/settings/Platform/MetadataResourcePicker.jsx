@@ -6,7 +6,7 @@ function keyOf(object) { return String(object?.object_key || object?.api_name ||
 /** Shared metadata resource picker for Flow, Approval, Form/Page and Button builders.
  * Stores canonical dotted API paths while showing friendly labels. UUID/FK values are never typed by admins.
  */
-export default function MetadataResourcePicker({ objectKey = "", value = "", onChange, label = "Resource", allowVariables = true, className = "" }) {
+export default function MetadataResourcePicker({ objectKey = "", value = "", onChange, label = "Resource", allowVariables = true, extraResources = [], className = "" }) {
   const [objects, setObjects] = useState([]);
   const [paths, setPaths] = useState([]);
   const [search, setSearch] = useState("");
@@ -36,8 +36,13 @@ export default function MetadataResourcePicker({ objectKey = "", value = "", onC
       { value: "$user.id", label: "Current User → User ID", type: "global" },
       { value: "$now", label: "Current Date/Time", type: "global" },
     ] : [];
-    return [...vars, ...friendly].filter(o => !q || `${o.label} ${o.value}`.toLowerCase().includes(q));
-  }, [paths, search, allowVariables]);
+    const extras = (Array.isArray(extraResources) ? extraResources : []).filter((item) => item?.value).map((item) => ({
+      value: item.value,
+      label: item.label || item.value,
+      type: item.type || "step output",
+    }));
+    return [...vars, ...extras, ...friendly].filter(o => !q || `${o.label} ${o.value}`.toLowerCase().includes(q));
+  }, [paths, search, allowVariables, extraResources]);
 
   return <div className={`space-y-1 ${className}`}>
     <label className="block text-xs font-medium text-slate-600">{label}</label>
