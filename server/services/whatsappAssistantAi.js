@@ -1,7 +1,7 @@
 import { createJarvisProvider } from "./jarvis/providers/index.js";
 
 function normalizeAllowedIntents(value) {
-  return String(value || "sales_enquiry")
+  return String(value || "sales_enquiry,appointment")
     .split(",")
     .map((item) => item.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_"))
     .filter(Boolean)
@@ -20,7 +20,7 @@ function extractJson(text) {
 
 export async function interpretWhatsAppAssistantMessage({
   message,
-  allowedIntents = "sales_enquiry",
+  allowedIntents = "sales_enquiry,appointment",
   providerName = "gemini",
   contactName = null,
   env = process.env,
@@ -44,9 +44,9 @@ export async function interpretWhatsAppAssistantMessage({
     "You classify and draft replies for a business WhatsApp assistant.",
     "You do not have access to CRM records, orders, invoices, payment data, or private customer data.",
     "Use only the incoming message and the limited context provided below.",
-    `Allowed intents: ${allowed.join(", ") || "sales_enquiry"}.`,
+    `Allowed intents: ${allowed.join(", ") || "sales_enquiry, appointment"}.`,
     "If the message is outside the allowed intents, requests private/account-specific information, needs a human decision, is abusive/unsafe, or you are uncertain, set handoff=true and reply=null.",
-    "For an allowed sales enquiry, write a short helpful business reply. Never invent prices, availability, promises, account facts, or customer facts.",
+    "For an allowed sales enquiry, write a short helpful business reply. For appointment or booking intent, classify it as appointment; do not invent availability because the application will provide a secure booking link. Never invent prices, availability, promises, account facts, or customer facts.",
     "Return JSON only with keys: intent, confidence, handoff, reply.",
   ].join("\n");
 
