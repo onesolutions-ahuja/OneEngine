@@ -816,6 +816,32 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             WHERE action->>'type'='workflow';
         `);
       },
+    },
+    {
+      key: "0031_workflow_saved_tests",
+      version: "31",
+      name: "Create persisted workflow test cases",
+      up: async client => {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS platform_workflow_tests (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            workflow_id UUID NOT NULL REFERENCES platform_rules(id) ON DELETE CASCADE,
+            name VARCHAR(200) NOT NULL,
+            config JSONB NOT NULL DEFAULT '{}'::jsonb,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            last_status VARCHAR(20),
+            last_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL,
+            last_result JSONB,
+            last_run_at TIMESTAMPTZ,
+            created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_platform_workflow_tests_lookup
+            ON platform_workflow_tests(company_id, workflow_id, active, created_at DESC);
+        `);
+      },
     }
   ]);
 
