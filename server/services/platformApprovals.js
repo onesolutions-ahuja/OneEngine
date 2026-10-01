@@ -139,7 +139,8 @@ export async function decidePlatformApproval({ db, requestId, decision, comment,
   const current = await currentRequest({ db, requestId, companyId: req.user.companyId });
   if (!current || current.status !== "pending") return { status: 404, message: "Pending approval request not found" };
 
-  const processConfig = cfg(current.process_config);
+  const snapshot=cfg(current.definition_snapshot);
+  const processConfig = cfg(snapshot.process?.config && Object.keys(snapshot.process.config).length ? snapshot.process.config : current.process_config);
   if (decision === "reject" && processConfig.requireCommentOnReject !== false && !String(comment || "").trim()) {
     return { status: 400, message: "A rejection reason is required" };
   }
@@ -148,7 +149,8 @@ export async function decidePlatformApproval({ db, requestId, decision, comment,
   const item=work.rows[0];
   if(!item) return {status:403,message:"This approval is assigned to another approver"};
 
-  const stepConfig=cfg(current.step_config);
+  const snapshotStep=(snapshot.steps||[]).find(step=>Number(step.step_order)===Number(current.step_order));
+  const stepConfig=cfg(snapshotStep?.config && Object.keys(snapshotStep.config).length ? snapshotStep.config : current.step_config);
   const approvalRule=String(stepConfig.approvalRule||"FIRST_RESPONSE").toUpperCase();
   const prior = await db("SELECT id FROM platform_approval_actions WHERE request_id=$1 AND step_order=$2 AND actor_user_id=$3 LIMIT 1",[requestId,current.step_order,req.user.id||null]);
   if(prior.rows.length) return {status:409,message:"You have already decided this approval step"};
@@ -180,7 +182,7 @@ export async function decidePlatformApproval({ db, requestId, decision, comment,
     return { status: 200, data: result.rows[0] };
   }
 
-  const snapshot=cfg(current.definition_snapshot); const snapshotNext=(snapshot.steps||[]).filter(step=>Number(step.step_order)>Number(current.step_order)).sort((a,b)=>a.step_order-b.step_order)[0];
+  const snapshotNext=(snapshot.steps||[]).filter(step=>Number(step.step_order)>Number(current.step_order)).sort((a,b)=>a.step_order-b.step_order)[0];
   const next = snapshotNext ? {rows:[snapshotNext]} : await db("SELECT * FROM platform_approval_steps WHERE process_id=$1 AND step_order>$2 ORDER BY step_order LIMIT 1", [current.process_id, current.step_order]);
   if (next.rows.length) {
     const result = await db("UPDATE platform_approval_requests SET current_step=$1 WHERE id=$2 RETURNING *", [next.rows[0].step_order, requestId]);
