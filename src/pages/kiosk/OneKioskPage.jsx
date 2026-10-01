@@ -152,6 +152,7 @@ export default function OneKioskPage({ publicMode = false }) {
   const [receiptEmail, setReceiptEmail] = useState("");
   const [receiptEmailBusy, setReceiptEmailBusy] = useState(false);
   const [receiptEmailSent, setReceiptEmailSent] = useState(false);
+  const [journeyData, setJourneyData] = useState({});
   const [fulfilmentDetails, setFulfilmentDetails] = useState({
     storeId: "",
     name: "",
@@ -391,11 +392,74 @@ export default function OneKioskPage({ publicMode = false }) {
     }
   };
 
+  const workflowValue = (path) => {
+    const context = {
+      fulfilmentType,
+      basketCount: basket.reduce((sum, line) => sum + Number(line.quantity || 0), 0),
+      customerId: customer?.id || null,
+      customerIdentified: Boolean(customer?.id),
+      journeyData,
+      ...journeyData,
+    };
+    return String(path || "").split(".").filter(Boolean).reduce((value, key) => value?.[key], context);
+  };
+
+  const matchesJourneyCondition = (condition) => {
+    if (!condition || typeof condition !== "object" || !condition.path) return true;
+    const actual = workflowValue(condition.path);
+    const operator = String(condition.operator || "equals").toLowerCase();
+    const expected = condition.value;
+    if (operator === "equals") return String(actual ?? "") === String(expected ?? "");
+    if (operator === "not_equals") return String(actual ?? "") !== String(expected ?? "");
+    if (operator === "in") {
+      const values = Array.isArray(expected) ? expected : String(expected ?? "").split(",").map((item) => item.trim());
+      return values.map(String).includes(String(actual ?? ""));
+    }
+    if (operator === "not_in") {
+      const values = Array.isArray(expected) ? expected : String(expected ?? "").split(",").map((item) => item.trim());
+      return !values.map(String).includes(String(actual ?? ""));
+    }
+    if (operator === "truthy") return Boolean(actual);
+    if (operator === "falsy") return !actual;
+    if (operator === "greater_than") return Number(actual) > Number(expected);
+    if (operator === "less_than") return Number(actual) < Number(expected);
+    return true;
+  };
+
+  const screenApplicable = (screen) => {
+    if (!screen) return false;
+    if (screen.showWhen && !matchesJourneyCondition(screen.showWhen)) return false;
+    if (Array.isArray(screen.showWhenAll) && !screen.showWhenAll.every(matchesJourneyCondition)) return false;
+    return true;
+  };
+
+  const resolveApplicableScreen = (candidate, visited = new Set()) => {
+    if (!candidate || visited.has(candidate.key)) return null;
+    if (screenApplicable(candidate)) return candidate;
+    visited.add(candidate.key);
+    if (candidate.next && screensByKey[candidate.next]) return resolveApplicableScreen(screensByKey[candidate.next], visited);
+    const index = screenSequence.findIndex((screen) => screen.key === candidate.key);
+    return resolveApplicableScreen(index >= 0 ? screenSequence[index + 1] : null, visited);
+  };
+
   const nextScreenFrom = (screen, fallbackType = null) => {
-    if (screen?.next && screensByKey[screen.next]) return screensByKey[screen.next];
+    for (const rule of Array.isArray(screen?.nextRules) ? screen.nextRules : []) {
+      if (matchesJourneyCondition(rule?.when) && rule?.next && screensByKey[rule.next]) {
+        const resolved = resolveApplicableScreen(screensByKey[rule.next]);
+        if (resolved) return resolved;
+      }
+    }
+    if (screen?.next && screensByKey[screen.next]) {
+      const resolved = resolveApplicableScreen(screensByKey[screen.next]);
+      if (resolved) return resolved;
+    }
     const index = screenSequence.findIndex((candidate) => candidate.key === screen?.key);
-    if (index >= 0 && screenSequence[index + 1]) return screenSequence[index + 1];
-    return fallbackType ? screenSequence.find((candidate) => candidate.type === fallbackType) || null : null;
+    if (index >= 0) {
+      const resolved = resolveApplicableScreen(screenSequence[index + 1]);
+      if (resolved) return resolved;
+    }
+    const fallback = fallbackType ? screenSequence.find((candidate) => candidate.type === fallbackType) || null : null;
+    return resolveApplicableScreen(fallback);
   };
 
   const catalogueScreen = screensByType.CATALOGUE || {};
@@ -493,6 +557,7 @@ export default function OneKioskPage({ publicMode = false }) {
         setCustomerLookup("");
         setReceiptEmail("");
         setReceiptEmailSent(false);
+        setJourneyData({});
         setError("");
         setIdleWarning(false);
         setAttractMode(true);
@@ -737,7 +802,7 @@ export default function OneKioskPage({ publicMode = false }) {
       body: JSON.stringify({
         saleId: sale.id,
         fulfilmentType,
-        fulfilmentDetails,
+        fulfilmentDetails: { ...fulfilmentDetails, journeyData },
         fulfilmentStoreId: fulfilmentDetails.storeId || null,
         deviceKey: kioskDeviceKey(),
       }),
@@ -953,6 +1018,7 @@ export default function OneKioskPage({ publicMode = false }) {
     setCustomerLookup("");
     setReceiptEmail("");
     setReceiptEmailSent(false);
+    setJourneyData({});
     if (publicMode) setAttractMode(true);
   };
 
@@ -1183,6 +1249,44 @@ export default function OneKioskPage({ publicMode = false }) {
                   if (next?.key) setCurrentScreenKey(next.key);
                 } catch (reason) { setError(reason?.message || "Complete fulfilment details"); }
               }}>Continue</button>
+            </div>
+          ) : null}
+
+          {stageType === "FORM" ? (
+            <div className="one-kiosk-stage one-kiosk-stage-narrow">
+              <div className="one-kiosk-generic-form">
+                <h2>{translate(currentScreen?.title) || "Order details"}</h2>
+                {currentScreen?.subtitle ? <p>{translate(currentScreen.subtitle)}</p> : null}
+                <div className="one-kiosk-form-grid">
+                  {(Array.isArray(currentScreen?.fields) ? currentScreen.fields : []).map((field) => {
+                    const value = journeyData[field.key] ?? (field.type === "checkbox" ? false : "");
+                    const common = {
+                      id: `kiosk-field-${field.key}`,
+                      name: field.key,
+                      required: field.required === true,
+                    };
+                    if (field.type === "textarea") {
+                      return <label key={field.key} className="wide"><span>{translate(field.label) || field.key}{field.required ? " *" : ""}</span><textarea {...common} rows={4} value={String(value)} placeholder={translate(field.placeholder)} onChange={(e)=>setJourneyData((data)=>({...data,[field.key]:e.target.value}))}/></label>;
+                    }
+                    if (field.type === "select") {
+                      return <label key={field.key}><span>{translate(field.label) || field.key}{field.required ? " *" : ""}</span><select {...common} value={String(value)} onChange={(e)=>setJourneyData((data)=>({...data,[field.key]:e.target.value}))}><option value="">Choose…</option>{(field.options || []).map((option)=><option key={typeof option==="string"?option:option.value} value={typeof option==="string"?option:option.value}>{translate(typeof option==="string"?option:option.label) || option.value}</option>)}</select></label>;
+                    }
+                    if (field.type === "checkbox") {
+                      return <label key={field.key} className="wide one-kiosk-form-checkbox"><input {...common} type="checkbox" checked={Boolean(value)} onChange={(e)=>setJourneyData((data)=>({...data,[field.key]:e.target.checked}))}/><span>{translate(field.label) || field.key}{field.required ? " *" : ""}</span></label>;
+                    }
+                    return <label key={field.key}><span>{translate(field.label) || field.key}{field.required ? " *" : ""}</span><input {...common} type={["email","tel","number","date","time"].includes(field.type)?field.type:"text"} value={String(value)} placeholder={translate(field.placeholder)} onChange={(e)=>setJourneyData((data)=>({...data,[field.key]:e.target.value}))}/></label>;
+                  })}
+                </div>
+              </div>
+              <div className="one-kiosk-stage-actions">
+                {currentScreen?.optional !== false ? <button type="button" onClick={() => { const next=nextScreenFrom(currentScreen,"BASKET"); if(next?.key)setCurrentScreenKey(next.key); }}>Skip</button> : <span />}
+                <button type="button" className="one-kiosk-pay" onClick={() => {
+                  const missing=(currentScreen?.fields||[]).find((field)=>field.required===true && (field.type==="checkbox" ? journeyData[field.key]!==true : !String(journeyData[field.key]??"").trim()));
+                  if(missing){setError(`${translate(missing.label)||missing.key} is required`);return;}
+                  const next=nextScreenFrom(currentScreen,"BASKET");
+                  if(next?.key)setCurrentScreenKey(next.key);
+                }}>Continue</button>
+              </div>
             </div>
           ) : null}
 
