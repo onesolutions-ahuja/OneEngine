@@ -116,9 +116,28 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
   const definition = ACTIONS[type];
   if (!definition) throw Object.assign(new Error(`Unsupported shared action: ${type}`), { retryable: false });
   const entitlements = await getCompanyEntitlements(db, companyId);
-  const entitled = type === "SEND_WHATSAPP"
+  let entitled = type === "SEND_WHATSAPP"
     ? (hasEntitlement(entitlements, definition.entitlement) || hasEntitlement(entitlements, "whatsapp_assistant"))
     : hasEntitlement(entitlements, definition.entitlement);
+
+  // An enabled tenant-scoped SMSGate connector is itself an installed,
+  // administrator-enabled SMS capability. Treat that configured connector as
+  // sufficient authority for registered SEND_SMS workflow actions so inbound
+  // booking replies and appointment confirmations use the same capability
+  // path instead of disagreeing on licensing state.
+  if (!entitled && type === "SEND_SMS") {
+    const configuredSmsGate = await db(
+      `SELECT 1
+         FROM integration_connections
+        WHERE company_id=$1
+          AND connector_package_key='smsgate_connector'
+          AND enabled=TRUE
+        LIMIT 1`,
+      [companyId]
+    );
+    entitled = configuredSmsGate.rows.length > 0;
+  }
+
   if (!entitled) {
     return { status: "UNAVAILABLE", code: "ENTITLEMENT_REQUIRED", retryable: false };
   }
