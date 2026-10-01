@@ -2413,26 +2413,52 @@ async function startServer() {
                 : { variables: {}, steps: {} };
               if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
               if (!workflowVariables.steps || typeof workflowVariables.steps !== "object") workflowVariables.steps = {};
-              const results = await executeWorkflowActions({
-                actions,
-                allActions: scheduledResumeIds ? allResumeActions : actions,
-                db,
-                pool,
-                req,
-                companyId: job.company_id,
-                userId: req.user.id,
-                object,
-                fields,
-                record,
-                recordId: run.record_id || null,
-                storeId: req.user.storeId,
-                tillId: req.user.tillId,
-                connectorDrivers,
-                writeAudit,
-                runId: run.id,
-                trigger: run.trigger_key || workflow.trigger_key,
-                workflowVariables,
-              });
+              let results;
+              try {
+                results = await executeWorkflowActions({
+                  actions,
+                  allActions: scheduledResumeIds ? allResumeActions : actions,
+                  db,
+                  pool,
+                  req,
+                  companyId: job.company_id,
+                  userId: req.user.id,
+                  object,
+                  fields,
+                  record,
+                  recordId: run.record_id || null,
+                  storeId: req.user.storeId,
+                  tillId: req.user.tillId,
+                  connectorDrivers,
+                  writeAudit,
+                  runId: run.id,
+                  trigger: run.trigger_key || workflow.trigger_key,
+                  workflowVariables,
+                });
+              } catch (error) {
+                if (run.parent_run_id) {
+                  const parentRunResult = await db(
+                    "SELECT id,status FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1",
+                    [run.parent_run_id, job.company_id]
+                  );
+                  const parentRun = parentRunResult.rows[0];
+                  if (parentRun && ["WAITING","RUNNING"].includes(String(parentRun.status || "").toUpperCase())) {
+                    await db(
+                      "UPDATE platform_workflow_runs SET status='RUNNING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+                      [run.parent_run_id, job.company_id]
+                    );
+                    await enqueuePlatformJob({
+                      db,
+                      companyId: job.company_id,
+                      kind: "WAIT",
+                      payload: { runId: run.parent_run_id, resumeParentFromFailedChildRunId: run.id },
+                      runAt: new Date(),
+                      idempotencyKey: `resume-parent-failed:${run.parent_run_id}:${run.id}`,
+                    });
+                  }
+                }
+                throw error;
+              }
 
               const containsWaiting = (entries = []) => entries.some((entry) =>
                 entry?.result?.status === "waiting"
