@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
-import { apiRequest } from "../../services/api.js";
+import { apiRequest, KIOSK_TOKEN_STORAGE_KEY } from "../../services/api.js";
 import "./oneKiosk.css";
 
 const ONE_KIOSK_DEVICE_KEY = "onepos_one_kiosk_device_key";
@@ -176,7 +176,7 @@ export default function OneKioskPage({ publicMode = false }) {
         if (live) setLoading(false);
       });
     return () => { live = false; };
-  }, [demoMode]);
+  }, [demoMode, publicMode]);
 
   const loadExperience = async (deviceKey) => {
     const response = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(deviceKey)}`, {
@@ -261,23 +261,45 @@ export default function OneKioskPage({ publicMode = false }) {
 
     const register = async () => {
       try {
-        const response = await apiRequest("/api/kiosk/devices/register", {
-          method: "POST",
-          body: JSON.stringify({
-            deviceKey: key,
-            name: `OneKiosk ${key.slice(-6).toUpperCase()}`,
-          }),
-        });
-        if (!response?.success || !response?.data) return;
-        if (live) setDeviceState(response.data);
-        try {
+        let device = null;
+        const hasKioskToken = publicMode && Boolean(localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY));
+
+        if (hasKioskToken) {
+          const runtime = await loadExperience(key);
+          device = runtime?.device || null;
+        } else {
+          const response = await apiRequest("/api/kiosk/devices/register", {
+            method: "POST",
+            body: JSON.stringify({
+              deviceKey: key,
+              name: `OneKiosk ${key.slice(-6).toUpperCase()}`,
+            }),
+          });
+          if (!response?.success || !response?.data) return;
+          device = response.data;
+
+          if (publicMode) {
+            const session = await apiRequest("/api/kiosk/device-session", {
+              method: "POST",
+              body: JSON.stringify({ deviceKey: key }),
+            });
+            if (!session?.success || !session?.data?.modeToken) {
+              throw new Error(session?.message || "Unable to secure this kiosk device");
+            }
+            localStorage.setItem(KIOSK_TOKEN_STORAGE_KEY, session.data.modeToken);
+          }
+
           await loadExperience(key);
-        } catch (reason) {
-          if (live) setError(reason?.message || "Unable to load kiosk experience flow");
         }
-        await sendHeartbeat(response.data);
-        timer = window.setInterval(() => void sendHeartbeat(response.data), 20000);
-      } catch {}
+
+        if (live && device) setDeviceState(device);
+        if (device?.id) {
+          await sendHeartbeat(device);
+          timer = window.setInterval(() => void sendHeartbeat(device), 20000);
+        }
+      } catch (reason) {
+        if (live) setError(reason?.message || "Unable to start OneKiosk");
+      }
     };
 
     void register();
