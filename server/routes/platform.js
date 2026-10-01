@@ -197,7 +197,7 @@ async function syncLayoutButtons(db, req, layout, { deactivateExisting = true } 
 async function canManageGlobal(db, req) {
   if (!req.user?.roleId) return false;
   const result = await db(
-    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='platform.manage' LIMIT 1",
+    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
     [req.user.roleId]
   );
   return result.rows.length > 0;
@@ -207,7 +207,7 @@ async function hasPlatformObjectPermission(db, req, objectId, action) {
   if (!objectId) return false;
   if (req.user?.roleId) {
     const platformPermission = await db(
-      "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='platform.manage' LIMIT 1",
+      "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
       [req.user.roleId]
     );
     if (platformPermission.rows.length) return true;
@@ -631,7 +631,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       }
 
       // Only global/cross-company profiles reach the permission lookup.
-      const platformManage = await hasPlatformManageAccess(req.user?.id);
+      const platformManage = await hasOneEngineManageAccess(req.user?.id);
       if (!platformManage && !legacyDeveloper) {
         req.platformCompanyId = req.user.companyId;
         return next();
@@ -659,7 +659,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     }
   }
   async function authorizePlatformManage(req, res, next) {
-    return authorize("platform.manage")(req, res, next);
+    return authorize("oneengine.manage")(req, res, next);
   }
   const manage = [authenticate, resolveActingCompany, authorizePlatformManage];
   // Record CRUD is governed by Object permissions/RBAC, not by the Settings
@@ -683,13 +683,13 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     }
   });
 
-  async function hasPlatformManageAccess(userId) {
+  async function hasOneEngineManageAccess(userId) {
     const result = await db(
       `SELECT 1
          FROM users u
          JOIN role_permissions rp ON rp.role_id=u.role_id
          JOIN permissions p ON p.id=rp.permission_id
-        WHERE u.id=$1 AND u.active=true AND p.code='platform.manage'
+        WHERE u.id=$1 AND u.active=true AND p.code='oneengine.manage'
         LIMIT 1`,
       [userId]
     );
@@ -697,10 +697,10 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   }
 
   router.get("/platform/developer/companies", authenticate, async (req, res) => {
-    const platformManage = await hasPlatformManageAccess(req.user?.id);
+    const platformManage = await hasOneEngineManageAccess(req.user?.id);
     const legacyDeveloper = req.user?.isPlatformDeveloper === true || req.user?.is_platform_developer === true;
     if (!platformManage && !legacyDeveloper) {
-      return res.status(403).json({ success: false, message: "Platform permission required" });
+      return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
     }
 
     const result = await db(
@@ -717,10 +717,10 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.put("/platform/developer/acting-company", authenticate, async (req, res) => {
     const companyId = req.body?.actingCompanyId;
-    const platformManage = await hasPlatformManageAccess(req.user?.id);
+    const platformManage = await hasOneEngineManageAccess(req.user?.id);
     const legacyDeveloper = req.user?.isPlatformDeveloper === true || req.user?.is_platform_developer === true;
     if (!platformManage && !legacyDeveloper) {
-      return res.status(403).json({ success: false, message: "Platform permission required" });
+      return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
     }
 
     const result = await db(
@@ -1256,8 +1256,8 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       const code = systemObjectRbacPermission(object, action);
       return code && rolePermissions.includes(code);
     });
-    const canManagePlatform = permissions.includes("platform.manage");
-    const source = canManagePlatform ? "platform_permission"
+    const canManageOneEngine = permissions.includes("oneengine.manage");
+    const source = canManageOneEngine ? "oneengine_permission"
       : result.rows[0] ? "role_override"
         : setGranted ? "permission_set"
           : bridgeGranted ? "rbac_bridge"
@@ -1282,7 +1282,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         permissionSetGroups,
         systemPermissions,
         fields,
-        canManagePlatform,
+        canManageOneEngine,
         source,
       },
     });
@@ -1348,7 +1348,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.get("/platform/permission-sets", ...manage, async (req, res) => {
     const result = await db(
-      "SELECT id,name,api_key,description,system_permissions,object_permissions,field_permissions,active,source_package_id,package_required FROM platform_permission_sets WHERE company_id=$1 ORDER BY name",
+      "SELECT id,name,api_key,description,system_permissions,object_permissions,field_permissions,active,source_package_id,package_required FROM oneengine_permission_sets WHERE company_id=$1 ORDER BY name",
       [req.user.companyId]
     );
     res.json({ success: true, data: result.rows });
@@ -1359,7 +1359,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     if (!definition) return res.status(400).json({ success: false, message: "Permission set metadata is invalid or references unavailable permissions, Objects, or fields" });
     try {
       const result = await db(
-        `INSERT INTO platform_permission_sets
+        `INSERT INTO oneengine_permission_sets
          (company_id,name,api_key,description,system_permissions,object_permissions,field_permissions,active)
          VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8) RETURNING *`,
         [req.user.companyId, definition.name, definition.apiKey, definition.description,
@@ -1375,7 +1375,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.put("/platform/permission-sets/:permissionSetId", ...manage, async (req, res) => {
     const existing = await db(
-      "SELECT * FROM platform_permission_sets WHERE id=$1 AND company_id=$2",
+      "SELECT * FROM oneengine_permission_sets WHERE id=$1 AND company_id=$2",
       [req.params.permissionSetId, req.user.companyId]
     );
     if (!existing.rows.length) return res.status(404).json({ success: false, message: "Permission set not found" });
@@ -1392,7 +1392,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     if (!definition) return res.status(400).json({ success: false, message: "Permission set metadata is invalid or references unavailable permissions, Objects, or fields" });
     try {
       const result = await db(
-        `UPDATE platform_permission_sets SET name=$1,api_key=$2,description=$3,
+        `UPDATE oneengine_permission_sets SET name=$1,api_key=$2,description=$3,
            system_permissions=$4::jsonb,object_permissions=$5::jsonb,field_permissions=$6::jsonb,
            active=$7,user_modified=true,updated_at=NOW()
          WHERE id=$8 AND company_id=$9 RETURNING *`,
@@ -1409,7 +1409,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.delete("/platform/permission-sets/:permissionSetId", ...manage, async (req, res) => {
     const result = await db(
-      "UPDATE platform_permission_sets SET active=false,user_modified=true,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",
+      "UPDATE oneengine_permission_sets SET active=false,user_modified=true,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",
       [req.params.permissionSetId, req.user.companyId]
     );
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Permission set not found" });
@@ -1419,7 +1419,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   router.get("/platform/permission-sets/:permissionSetId/assignments", ...manage, async (req, res) => {
     const result = await db(
       `SELECT a.id,a.user_id,a.effective_from,a.effective_until,a.active,u.username
-         FROM platform_permission_set_assignments a
+         FROM oneengine_permission_set_assignments a
          JOIN users u ON u.id=a.user_id AND u.company_id=a.company_id
         WHERE a.permission_set_id=$1 AND a.company_id=$2 ORDER BY u.username`,
       [req.params.permissionSetId, req.user.companyId]
@@ -1430,12 +1430,12 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   router.post("/platform/permission-sets/:permissionSetId/assignments", ...manage, async (req, res) => {
     if (!validAssignmentDates(req.body)) return res.status(400).json({ success: false, message: "Assignment dates are invalid" });
     const [set, user] = await Promise.all([
-      db("SELECT id FROM platform_permission_sets WHERE id=$1 AND company_id=$2 AND active=true", [req.params.permissionSetId, req.user.companyId]),
+      db("SELECT id FROM oneengine_permission_sets WHERE id=$1 AND company_id=$2 AND active=true", [req.params.permissionSetId, req.user.companyId]),
       db("SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=true", [req.body.userId, req.user.companyId]),
     ]);
     if (!set.rows.length || !user.rows.length) return res.status(404).json({ success: false, message: "Permission set or company user not found" });
     const result = await db(
-      `INSERT INTO platform_permission_set_assignments
+      `INSERT INTO oneengine_permission_set_assignments
        (permission_set_id,user_id,company_id,effective_from,effective_until,active,assigned_by)
        VALUES ($1,$2,$3,$4,$5,true,$6)
        ON CONFLICT (permission_set_id,user_id,company_id) DO UPDATE SET
@@ -1448,7 +1448,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.delete("/platform/permission-sets/:permissionSetId/assignments/:userId", ...manage, async (req, res) => {
     const result = await db(
-      "UPDATE platform_permission_set_assignments SET active=false WHERE permission_set_id=$1 AND user_id=$2 AND company_id=$3 RETURNING id",
+      "UPDATE oneengine_permission_set_assignments SET active=false WHERE permission_set_id=$1 AND user_id=$2 AND company_id=$3 RETURNING id",
       [req.params.permissionSetId, req.params.userId, req.user.companyId]
     );
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Permission set assignment not found" });
@@ -1459,9 +1459,9 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const result = await db(
       `SELECT g.*,COUNT(DISTINCT m.permission_set_id)::int AS permission_set_count,
               COUNT(DISTINCT a.user_id)::int AS assigned_user_count
-         FROM platform_permission_set_groups g
-         LEFT JOIN platform_permission_set_group_members m ON m.group_id=g.id AND m.company_id=g.company_id
-         LEFT JOIN platform_permission_set_group_assignments a ON a.group_id=g.id AND a.company_id=g.company_id AND a.active=true
+         FROM oneengine_permission_set_groups g
+         LEFT JOIN oneengine_permission_set_group_members m ON m.group_id=g.id AND m.company_id=g.company_id
+         LEFT JOIN oneengine_permission_set_group_assignments a ON a.group_id=g.id AND a.company_id=g.company_id AND a.active=true
         WHERE g.company_id=$1 GROUP BY g.id ORDER BY g.name`,
       [req.user.companyId]
     );
@@ -1474,7 +1474,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     if (!name || !isSafeIdentifier(apiKey)) return res.status(400).json({ success: false, message: "Group name and valid API key are required" });
     try {
       const result = await db(
-        "INSERT INTO platform_permission_set_groups (company_id,name,api_key,description,active) VALUES ($1,$2,$3,$4,true) RETURNING *",
+        "INSERT INTO oneengine_permission_set_groups (company_id,name,api_key,description,active) VALUES ($1,$2,$3,$4,true) RETURNING *",
         [req.user.companyId, name, apiKey, req.body.description || null]
       );
       res.status(201).json({ success: true, data: result.rows[0] });
@@ -1486,7 +1486,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.put("/platform/permission-set-groups/:groupId", ...manage, async (req, res) => {
     const result = await db(
-      `UPDATE platform_permission_set_groups SET name=COALESCE($1,name),api_key=COALESCE($2,api_key),
+      `UPDATE oneengine_permission_set_groups SET name=COALESCE($1,name),api_key=COALESCE($2,api_key),
          description=COALESCE($3,description),active=COALESCE($4,active),user_modified=true,updated_at=NOW()
        WHERE id=$5 AND company_id=$6 RETURNING *`,
       [req.body.name?.trim() || null, req.body.apiKey || null, req.body.description, req.body.active,
@@ -1498,7 +1498,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.delete("/platform/permission-set-groups/:groupId", ...manage, async (req, res) => {
     const result = await db(
-      "UPDATE platform_permission_set_groups SET active=false,user_modified=true,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",
+      "UPDATE oneengine_permission_set_groups SET active=false,user_modified=true,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",
       [req.params.groupId, req.user.companyId]
     );
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Permission set group not found" });
@@ -1508,8 +1508,8 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   router.get("/platform/permission-set-groups/:groupId/members", ...manage, async (req, res) => {
     const result = await db(
       `SELECT m.id,m.permission_set_id,ps.name,ps.api_key,ps.active
-         FROM platform_permission_set_group_members m
-         JOIN platform_permission_sets ps ON ps.id=m.permission_set_id AND ps.company_id=m.company_id
+         FROM oneengine_permission_set_group_members m
+         JOIN oneengine_permission_sets ps ON ps.id=m.permission_set_id AND ps.company_id=m.company_id
         WHERE m.group_id=$1 AND m.company_id=$2 ORDER BY ps.name`,
       [req.params.groupId, req.user.companyId]
     );
@@ -1518,12 +1518,12 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.post("/platform/permission-set-groups/:groupId/members", ...manage, async (req, res) => {
     const [group, set] = await Promise.all([
-      db("SELECT id FROM platform_permission_set_groups WHERE id=$1 AND company_id=$2 AND active=true", [req.params.groupId, req.user.companyId]),
-      db("SELECT id FROM platform_permission_sets WHERE id=$1 AND company_id=$2 AND active=true", [req.body.permissionSetId, req.user.companyId]),
+      db("SELECT id FROM oneengine_permission_set_groups WHERE id=$1 AND company_id=$2 AND active=true", [req.params.groupId, req.user.companyId]),
+      db("SELECT id FROM oneengine_permission_sets WHERE id=$1 AND company_id=$2 AND active=true", [req.body.permissionSetId, req.user.companyId]),
     ]);
     if (!group.rows.length || !set.rows.length) return res.status(404).json({ success: false, message: "Group or company permission set not found" });
     const result = await db(
-      `INSERT INTO platform_permission_set_group_members (group_id,permission_set_id,company_id)
+      `INSERT INTO oneengine_permission_set_group_members (group_id,permission_set_id,company_id)
        VALUES ($1,$2,$3) ON CONFLICT (group_id,permission_set_id,company_id) DO NOTHING RETURNING *`,
       [req.params.groupId, req.body.permissionSetId, req.user.companyId]
     );
@@ -1532,7 +1532,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.delete("/platform/permission-set-groups/:groupId/members/:permissionSetId", ...manage, async (req, res) => {
     const result = await db(
-      "DELETE FROM platform_permission_set_group_members WHERE group_id=$1 AND permission_set_id=$2 AND company_id=$3 RETURNING id",
+      "DELETE FROM oneengine_permission_set_group_members WHERE group_id=$1 AND permission_set_id=$2 AND company_id=$3 RETURNING id",
       [req.params.groupId, req.params.permissionSetId, req.user.companyId]
     );
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Permission set group member not found" });
@@ -1542,7 +1542,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   router.get("/platform/permission-set-groups/:groupId/assignments", ...manage, async (req, res) => {
     const result = await db(
       `SELECT a.id,a.user_id,a.effective_from,a.effective_until,a.active,u.username
-         FROM platform_permission_set_group_assignments a
+         FROM oneengine_permission_set_group_assignments a
          JOIN users u ON u.id=a.user_id AND u.company_id=a.company_id
         WHERE a.group_id=$1 AND a.company_id=$2 ORDER BY u.username`,
       [req.params.groupId, req.user.companyId]
@@ -1553,12 +1553,12 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   router.post("/platform/permission-set-groups/:groupId/assignments", ...manage, async (req, res) => {
     if (!validAssignmentDates(req.body)) return res.status(400).json({ success: false, message: "Assignment dates are invalid" });
     const [group, user] = await Promise.all([
-      db("SELECT id FROM platform_permission_set_groups WHERE id=$1 AND company_id=$2 AND active=true", [req.params.groupId, req.user.companyId]),
+      db("SELECT id FROM oneengine_permission_set_groups WHERE id=$1 AND company_id=$2 AND active=true", [req.params.groupId, req.user.companyId]),
       db("SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=true", [req.body.userId, req.user.companyId]),
     ]);
     if (!group.rows.length || !user.rows.length) return res.status(404).json({ success: false, message: "Group or company user not found" });
     const result = await db(
-      `INSERT INTO platform_permission_set_group_assignments
+      `INSERT INTO oneengine_permission_set_group_assignments
        (group_id,user_id,company_id,effective_from,effective_until,active,assigned_by)
        VALUES ($1,$2,$3,$4,$5,true,$6)
        ON CONFLICT (group_id,user_id,company_id) DO UPDATE SET
@@ -1571,7 +1571,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.delete("/platform/permission-set-groups/:groupId/assignments/:userId", ...manage, async (req, res) => {
     const result = await db(
-      "UPDATE platform_permission_set_group_assignments SET active=false WHERE group_id=$1 AND user_id=$2 AND company_id=$3 RETURNING id",
+      "UPDATE oneengine_permission_set_group_assignments SET active=false WHERE group_id=$1 AND user_id=$2 AND company_id=$3 RETURNING id",
       [req.params.groupId, req.params.userId, req.user.companyId]
     );
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Permission set group assignment not found" });
@@ -1852,7 +1852,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     if (referenceError) return res.status(400).json({ success: false, message: referenceError });
     const parent = await getObject(parentObjectId, req);
     const child = await getObject(childObjectId, req);
-    if (!await canManageGlobal(db, req) && (parent.company_id === null || child.company_id === null)) return res.status(403).json({ success: false, message: "platform.manage permission is required to change global relationships" });
+    if (!await canManageGlobal(db, req) && (parent.company_id === null || child.company_id === null)) return res.status(403).json({ success: false, message: "oneengine.manage permission is required to change global relationships" });
     try {
       const result = await db("INSERT INTO platform_relationships (parent_object_id,child_object_id,relationship_key,relationship_type,child_field_id,on_delete,on_update) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *", [parentObjectId, childObjectId, relationshipKey, relationshipType, childFieldId, onDelete, onUpdate]);
       res.status(201).json({ success: true, data: result.rows[0] });
@@ -1874,7 +1874,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     if (referenceError) return res.status(400).json({ success: false, message: referenceError });
     const parent = await getObject(parentId, req);
     const child = await getObject(childId, req);
-    if (!await canManageGlobal(db, req) && (parent.company_id === null || child.company_id === null)) return res.status(403).json({ success: false, message: "platform.manage permission is required to change global relationships" });
+    if (!await canManageGlobal(db, req) && (parent.company_id === null || child.company_id === null)) return res.status(403).json({ success: false, message: "oneengine.manage permission is required to change global relationships" });
     const relationshipType = req.body.relationshipType || relationship.relationship_type;
     const onDelete = req.body.onDelete || relationship.on_delete;
     const onUpdate = req.body.onUpdate || relationship.on_update;
@@ -3299,7 +3299,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             manifest: object.module_package_manifest || {},
           }),
           permitted: true,
-          canManagePlatform: permissions.includes("platform.manage"),
+          canManageOneEngine: permissions.includes("oneengine.manage"),
         });
         if (!access.allowed) return false;
       }
@@ -3652,7 +3652,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   });
 
   router.patch("/platform/modules/:moduleId", ...manage, async (req, res) => {
-    if (!await canManageGlobal(db, req)) return res.status(403).json({ success: false, message: "platform.manage permission is required to activate or deactivate a platform module" });
+    if (!await canManageGlobal(db, req)) return res.status(403).json({ success: false, message: "oneengine.manage permission is required to activate or deactivate a platform module" });
     if (typeof req.body.installed !== "boolean") return res.status(400).json({ success: false, message: "installed must be a boolean" });
     const result = await db("UPDATE platform_modules SET installed=$1,updated_at=NOW() WHERE id=$2 RETURNING *", [req.body.installed, req.params.moduleId]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Module not found" });
@@ -3840,7 +3840,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       getCompanyEntitlements(db, req.user.companyId),
     ]);
     const permissions = permissionResult.rows.map((row) => row.code);
-    const canManagePlatform = permissions.includes("platform.manage");
+    const canManageOneEngine = permissions.includes("oneengine.manage");
     const byKey = new Map(internalAppCatalog.map((entry) => [entry.key, entry]));
     /*
      * Visibility is decided by the SHARED rule (services/authorization.js) so
@@ -3857,8 +3857,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           enabledByCompany: module.company_enabled ?? true,
           packageInstalled: module.package_status === "active",
           licensed: isPackageLicensed(entitlementResult, { manifest: module.package_manifest || {} }),
-          permitted: canManagePlatform || Boolean(definition?.permissions?.some((code) => permissions.includes(code))),
-          canManagePlatform,
+          permitted: canManageOneEngine || Boolean(definition?.permissions?.some((code) => permissions.includes(code))),
+          canManageOneEngine,
         }).allowed;
       });
     /* The configured Object navigation rides in the SAME payload as the module
@@ -3926,12 +3926,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
          object identity + Settings presentation config is returned here; the
          canonical Object runtime fetches its own metadata after selection.
 
-         Reuse the role permission query above for platform.manage instead of
+         Reuse the role permission query above for oneengine.manage instead of
          re-querying it once per hosted object. For other roles, resolve object
          visibility concurrently so this lightweight catalogue cannot degrade
          into a sequential N+1 request chain. */
       const hostedObjects = hostedObjectsResult.rows || [];
-      const visibleHostedObjects = permissions.includes("platform.manage")
+      const visibleHostedObjects = permissions.includes("oneengine.manage")
         ? hostedObjects
         : (await Promise.all(
             hostedObjects.map(async (object) => ({
