@@ -18,7 +18,7 @@ import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
 import { claimDueScheduledWorkflows, completeScheduledWorkflow, failScheduledWorkflow } from "./services/platformSchedules.js";
 import { deliverPlatformWebhook, verifyWebhookSignature } from "./services/platformEvents.js";
 import { decryptSecret, encryptSecret } from "./services/onlineOrders/platformConfig.js";
-import { decryptCredentials } from "./services/integrationCredentials.js";
+import { decryptCredentials, encryptCredentials } from "./services/integrationCredentials.js";
 import {
   createWorkflowRun,
   executeWorkflowAction,
@@ -83,7 +83,7 @@ import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
 import { createPaypalQrDriver } from "./services/paypalQrConnector.js";
-import { createSmsGateDriver } from "./services/smsGateConnector.js";
+import { createSmsGateDriver, configureSmsGateInboundWebhook } from "./services/smsGateConnector.js";
 import { ONE_CONNECT_PROVIDER_DRIVER_KEYS, createOneConnectProviderDriver } from "./services/oneConnectProviders.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
@@ -1980,6 +1980,58 @@ async function startServer() {
     // every start so environment-driven bootstrap credentials can still change.
     await bootstrapInitialSuperadmin(pool);
     console.log("onePOS: platform bootstrap ready");
+
+    // Reconcile SMSGate inbound webhooks after the HTTP listener is live. This
+    // is idempotent: existing callbacks are reused, while missing callbacks
+    // are created. Signing keys stay encrypted in integration credentials.
+    setTimeout(async () => {
+      try {
+        const rows = await pool.query(
+          `SELECT id,connector_configuration,credentials_encrypted,last_test_result,enabled
+             FROM integration_connections
+            WHERE connector_package_key='smsgate_connector'`
+        );
+        for (const row of rows.rows) {
+          const lastTest = typeof row.last_test_result === "string"
+            ? JSON.parse(row.last_test_result || "{}")
+            : (row.last_test_result || {});
+          if (lastTest?.success !== true) continue;
+
+          const configuration = typeof row.connector_configuration === "string"
+            ? JSON.parse(row.connector_configuration || "{}")
+            : (row.connector_configuration || {});
+          const secrets = (() => {
+            try { return decryptCredentials(row.credentials_encrypted) || {}; }
+            catch { return {}; }
+          })();
+          const signingKey = String(secrets.webhookSigningKey || "").trim() || randomBytes(32).toString("hex");
+          const webhookUrl = `${String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || "https://onepos.onrender.com").replace(/\/$/, "")}/api/smsgate/webhook/${row.id}`;
+
+          const webhook = await configureSmsGateInboundWebhook(
+            { ...configuration, ...secrets },
+            { webhookUrl, signingKey }
+          );
+
+          const nextSecrets = { ...secrets, webhookSigningKey: signingKey };
+          await pool.query(
+            `UPDATE integration_connections
+                SET credentials_encrypted=$1,
+                    connector_configuration=connector_configuration - 'webhookSigningKey',
+                    enabled=CASE
+                      WHEN COALESCE((connector_configuration->>'enabled')::boolean,FALSE)=TRUE THEN TRUE
+                      ELSE enabled
+                    END,
+                    updated_at=NOW()
+              WHERE id=$2`,
+            [encryptCredentials(nextSecrets), row.id]
+          );
+
+          console.log(`onePOS: SMSGate inbound webhook ready (${webhook.created ? "created" : "existing"}) ${webhookUrl}`);
+        }
+      } catch (error) {
+        console.error("onePOS: SMSGate inbound webhook reconciliation failed:", error?.message || error);
+      }
+    }, 1500).unref?.();
 
     let draining = false;
     const workerEnabled = process.env.PLATFORM_JOB_WORKER !== "false";
