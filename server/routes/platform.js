@@ -611,7 +611,7 @@ function validAssignmentDates(body) {
     && (!fromDate || !untilDate || untilDate > fromDate);
 }
 
-export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, canViewCompanyCustomers = async () => false }) {
+export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, canViewCompanyCustomers = async () => false, hasPermission = null }) {
   const router = express.Router();
 
   // Express 4 does not forward rejected async route promises to error
@@ -689,7 +689,8 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   });
 
   async function hasOneEngineManageAccess(req) {
-    if (!req.user?.id || !req.user?.companyId) return false;
+    if (!req.user?.id) return false;
+    if (hasPermission) return hasPermission(req, "oneengine.manage");
     return canManageGlobal(db, req);
   }
 
