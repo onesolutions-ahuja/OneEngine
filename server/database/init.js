@@ -266,6 +266,41 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         await client.query("CREATE INDEX IF NOT EXISTS idx_sales_company_store_status_date ON sales(company_id,store_id,status,created_at DESC)");
       },
     },
+    {
+      key: "0017_audit_data_hygiene",
+      version: "17",
+      name: "Audit data hygiene and dashboard uniqueness",
+      up: async client => {
+        await client.query(
+          `WITH ranked AS (
+             SELECT id,name,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY company_id,LOWER(name)
+                      ORDER BY updated_at DESC,created_at DESC,id
+                    ) AS duplicate_ordinal
+               FROM dashboards
+              WHERE archived_at IS NULL
+           )
+           UPDATE dashboards d
+              SET name=LEFT(d.name || ' (Duplicate ' || ranked.duplicate_ordinal || ')',150),
+                  updated_at=NOW()
+             FROM ranked
+            WHERE d.id=ranked.id
+              AND ranked.duplicate_ordinal>1`
+        );
+        await client.query(
+          "CREATE UNIQUE INDEX IF NOT EXISTS ux_dashboards_company_active_name ON dashboards(company_id,LOWER(name)) WHERE archived_at IS NULL"
+        );
+        await client.query(
+          `UPDATE users u
+              SET active=false,updated_at=NOW()
+             FROM companies c
+            WHERE u.company_id=c.id
+              AND LOWER(c.name)=LOWER('onePOS Demo')
+              AND LOWER(u.username) IN ('probe_lifecycle','testuser_noperm')`
+        );
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
