@@ -75,6 +75,10 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
   router.put("/kiosk/devices/:id/settings", authenticate, async (req, res) => {
     const paymentTerminalId = req.body?.paymentTerminalId || null;
     const printerHardwareId = req.body?.printerHardwareId || null;
+    const printerName = req.body?.printerName == null ? null : String(req.body.printerName).trim().slice(0, 150);
+    const printerConnectionType = req.body?.printerConnectionType == null ? null : String(req.body.printerConnectionType).trim().slice(0, 50);
+    const printerConnectionAddress = req.body?.printerConnectionAddress == null ? null : String(req.body.printerConnectionAddress).trim().slice(0, 500);
+    const printerPaperWidth = ["58mm","80mm"].includes(String(req.body?.printerPaperWidth || "")) ? String(req.body.printerPaperWidth) : "80mm";
     const name = String(req.body?.name || "OneKiosk").trim().slice(0, 150);
     const active = req.body?.active !== false;
     const paymentRequired = req.body?.paymentRequired !== false;
@@ -97,14 +101,15 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
       const result = await db(
         `UPDATE kiosk_devices
             SET name=$1,payment_terminal_id=$2,printer_hardware_id=$3,
-                payment_required=$4,printer_required=$5,active=$6,updated_at=NOW()
-          WHERE id=$7 AND company_id=$8 AND store_id=$9
+                printer_name=$4,printer_connection_type=$5,printer_connection_address=$6,printer_paper_width=$7,
+                payment_required=$8,printer_required=$9,active=$10,updated_at=NOW()
+          WHERE id=$11 AND company_id=$12 AND store_id=$13
           RETURNING *`,
-        [name, paymentTerminalId, printerHardwareId, paymentRequired, printerRequired, active, req.params.id, req.user.companyId, req.user.storeId]
+        [name, paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active, req.params.id, req.user.companyId, req.user.storeId]
       );
       if (!result.rows.length) return res.status(404).json({ success: false, message: "Kiosk device not found" });
       await writeAudit?.(req.user.companyId, req.user.id, "kiosk.device.settings", "kiosk_device", req.params.id, {
-        paymentTerminalId, printerHardwareId, paymentRequired, printerRequired, active,
+        paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active,
       });
       res.json({ success: true, message: "Kiosk device settings saved", data: result.rows[0] });
     } catch (error) {
