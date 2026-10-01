@@ -1589,31 +1589,47 @@ export default function createOnlineRouter({
         });
       }
 
-      console.time(`[${req.params.id}] ${toStatus} - loadPlatformConfig`);
-      const runtime = await loadPlatformConfig(db, req.user.companyId, order.platform);
-      console.timeEnd(`[${req.params.id}] ${toStatus} - loadPlatformConfig`);
-      const service = getPlatformService(order.platform);
+      const isInternalKiosk = order.platform === "one_kiosk";
+      const shouldReleaseInventory = releaseInventory && !isInternalKiosk;
+      let runtime = { environment: "INTERNAL" };
+      let service = null;
+      let platformResponse = null;
 
-      console.time(`[${req.params.id}] ${toStatus} - callPlatform`);
-      const platformResponse = await callPlatform(service, order, runtime, client);
-      console.timeEnd(`[${req.params.id}] ${toStatus} - callPlatform`);
+      if (isInternalKiosk) {
+        platformResponse = {
+          success: true,
+          internal: true,
+          simulated: false,
+          action: platformAction,
+          status: toStatus,
+        };
+      } else {
+        console.time(`[${req.params.id}] ${toStatus} - loadPlatformConfig`);
+        runtime = await loadPlatformConfig(db, req.user.companyId, order.platform);
+        console.timeEnd(`[${req.params.id}] ${toStatus} - loadPlatformConfig`);
+        service = getPlatformService(order.platform);
 
-      // Queue logging for after commit to avoid lock conflicts
-      deferredLogs.push({
-        companyId: req.user.companyId,
-        platform: order.platform,
-        environment: runtime.environment,
-        action: platformAction,
-        response: platformResponse,
-        orderId: order.id,
-        requestPayload: {
-          external_order_id: order.external_order_id,
-          from: order.status,
-          to: toStatus,
-          reason: reason || null,
-          otp: (req.body && req.body.otp) || null,
-        },
-      });
+        console.time(`[${req.params.id}] ${toStatus} - callPlatform`);
+        platformResponse = await callPlatform(service, order, runtime, client);
+        console.timeEnd(`[${req.params.id}] ${toStatus} - callPlatform`);
+
+        // Only external provider calls belong in platform_api_logs.
+        deferredLogs.push({
+          companyId: req.user.companyId,
+          platform: order.platform,
+          environment: runtime.environment,
+          action: platformAction,
+          response: platformResponse,
+          orderId: order.id,
+          requestPayload: {
+            external_order_id: order.external_order_id,
+            from: order.status,
+            to: toStatus,
+            reason: reason || null,
+            otp: (req.body && req.body.otp) || null,
+          },
+        });
+      }
 
       if (!platformResponse || platformResponse.success !== true) {
         await client.query("ROLLBACK");
@@ -1659,7 +1675,7 @@ export default function createOnlineRouter({
       const items = await loadOrderItems(order.id);
       console.timeEnd(`[${req.params.id}] ${toStatus} - loadOrderItems`);
 
-      if (releaseInventory) {
+      if (shouldReleaseInventory) {
         console.time(`[${req.params.id}] ${toStatus} - releaseOrderInventory`);
         await releaseOrderInventory(client, {
           companyId: req.user.companyId,
@@ -1676,12 +1692,14 @@ export default function createOnlineRouter({
       let query = "UPDATE online_orders SET status = $2, updated_at = NOW()";
       const params = [order.id, toStatus];
 
-      if (releaseInventory) {
+      if (shouldReleaseInventory) {
         query += ", inventory_reserved = FALSE, inventory_released = TRUE";
       }
 
       if (timestampColumn === "completed_at") {
-        query += ", completed_at = NOW(), completed_by = $3, otp_verified_at = NOW()";
+        query += isInternalKiosk
+          ? ", completed_at = NOW(), completed_by = $3"
+          : ", completed_at = NOW(), completed_by = $3, otp_verified_at = NOW()";
         params.push(req.user.id);
       } else if (timestampColumn) {
         query += `, ${timestampColumn} = NOW()`;
@@ -1695,7 +1713,7 @@ export default function createOnlineRouter({
       params.push(req.user.companyId);
       query += ` WHERE id = $1 AND company_id = $${params.length}`;
 
-      if (releaseInventory) {
+      if (shouldReleaseInventory) {
         query += " AND inventory_released = FALSE";
       }
 
@@ -1717,7 +1735,7 @@ export default function createOnlineRouter({
           ? buildMessage(order)
           : `Order moved to ${toStatus} (platform action ${platformAction}: ${
               platformResponse.simulated ? "simulated" : "confirmed"
-            })${releaseInventory ? "; inventory released" : ""}`,
+            })${shouldReleaseInventory ? "; inventory released" : ""}`,
         platformResponse,
         actorUserId: req.user.id,
       });
@@ -1754,7 +1772,7 @@ export default function createOnlineRouter({
        * createInventoryMovement here would double-deduct.
        */
       let saleInfo = null;
-      if (createSale) {
+      if (createSale && !isInternalKiosk) {
         console.time(`[${req.params.id}] ${toStatus} - createSale`);
         try {
           saleInfo = await createSale(client, { order, items, user: req.user });
