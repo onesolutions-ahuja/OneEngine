@@ -330,12 +330,14 @@ export default function createAdminRouter({
         return res.status(403).json({ success: false, message: "This system-managed role can only be changed by OneEngine Manager" });
       }
       await client.query("DELETE FROM role_permissions WHERE role_id=$1", [req.params.roleId]);
-      const codes = req.body.permissions;
-      for (const code of codes) {
-        const perm = await client.query("SELECT id FROM permissions WHERE code=$1", [code]);
-        if (perm.rows.length) {
-          await client.query("INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [req.params.roleId, perm.rows[0].id]);
-        }
+      const codes = [...new Set(req.body.permissions.map((code) => String(code || "").trim()).filter(Boolean))];
+      if (codes.length) {
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT $1,p.id FROM permissions p WHERE p.code=ANY($2::text[])
+           ON CONFLICT (role_id,permission_id) DO NOTHING`,
+          [req.params.roleId, codes]
+        );
       }
       await client.query("COMMIT");
       const result = await db("SELECT p.code FROM permissions p INNER JOIN role_permissions rp ON rp.permission_id=p.id WHERE rp.role_id=$1 ORDER BY p.code", [req.params.roleId]);
