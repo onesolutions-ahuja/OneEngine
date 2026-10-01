@@ -18,7 +18,7 @@ import {
   validateWorkflowAction,
   friendlyWorkflowError,
 } from "../services/platformWorkflow.js";
-import { decidePlatformApproval, submitPlatformApproval, reassignPlatformApproval, recallPlatformApproval } from "../services/platformApprovals.js";
+import { decidePlatformApproval, submitPlatformApproval, reassignPlatformApproval, recallPlatformApproval, isPlatformRecordLocked } from "../services/platformApprovals.js";
 import { systemObject, systemObjectRbacPermission, tenantFields, isExtensionField, safeSystemFields, hydrateExtensions, appendSystemReadScope, platformFieldSql } from "../services/platformSystemObjects.js";
 import { readDomainConfiguration, saveDomainConfiguration, withDomainSave } from "../services/platformDomainRecords.js";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
@@ -5816,6 +5816,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     };
     let saved;
     if (action === "update") {
+      if (await isPlatformRecordLocked({ db, companyId: req.user.companyId, objectId: object.id, recordId })) return { status: 423, code: "RECORD_LOCKED_FOR_APPROVAL", message: "This record is locked while its approval is pending" };
       const valueParams = validation.values.map(({ value }) => value);
       const assignments = validation.values.map(({ column }, index) => `"${column}"=$${index + 1}`);
       const params = [...valueParams, recordId];
