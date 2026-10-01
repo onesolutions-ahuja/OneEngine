@@ -2162,7 +2162,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               </div>
             ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
           </div>
-        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
+        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
       </aside> : null}
     </div>
   );
@@ -2179,6 +2179,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     version: Number(initialWorkflow.version || 1),
     lifecycleStatus: initialWorkflow.lifecycleStatus || initialWorkflow.lifecycle_status || (initialWorkflow.active === false ? "INACTIVE" : "ACTIVE"),
     active: initialWorkflow.active !== false,
+    runtimeActive: initialWorkflow.runtimeActive ?? initialWorkflow.runtime_active ?? initialWorkflow.active !== false,
+    activeVersion: Number(initialWorkflow.activeVersion || initialWorkflow.active_version || 0) || null,
+    draftVersion: Number(initialWorkflow.draftVersion || initialWorkflow.draft_version || 0) || null,
     conditions: initialWorkflow.conditions || [],
     match: initialWorkflow.action?.match || initialWorkflow.match || "all",
     inputContract: initialWorkflow.action?.inputContract || initialWorkflow.inputContract || [],
@@ -2373,6 +2376,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           object: rule.object_key || rule.object || "",
           trigger: rule.trigger_key,
           active: rule.active !== false,
+          runtimeActive: rule.runtime_active === true || rule.active === true,
+          activeVersion: Number(rule.active_version || 0) || null,
+          draftVersion: Number(rule.draft_version || 0) || null,
           scope: rule.action.scope || null,
           systemGenerated: rule.action.systemGenerated === true,
           systemKey: rule.action.systemKey || null,
@@ -2698,7 +2704,16 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       const saved = response?.data || {};
       const nextId = saved.id || workflowId;
       setWorkflowId(nextId);
-      const savedWorkflow = { ...workflow, ...saved, id: nextId, lifecycleStatus: nextLifecycle, active: nextLifecycle === "ACTIVE" };
+      const savedWorkflow = {
+        ...workflow,
+        ...saved,
+        id: nextId,
+        lifecycleStatus: nextLifecycle,
+        active: nextLifecycle === "ACTIVE",
+        runtimeActive: saved.runtime_active ?? saved.runtimeActive ?? (nextLifecycle === "ACTIVE" ? true : workflow.runtimeActive === true),
+        activeVersion: Number(saved.active_version || saved.activeVersion || workflow.activeVersion || 0) || null,
+        draftVersion: Number(saved.draft_version || saved.draftVersion || (nextLifecycle === "DRAFT" ? saved.version || workflow.version : 0)) || null,
+      };
       setWorkflow(savedWorkflow);
       setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => item.id !== nextId)]);
       if (embedded) onSaved?.({ ...workflow, ...saved, id: nextId });
@@ -3012,6 +3027,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <div className="flex items-center gap-2">
                   <strong className="text-sm text-slate-800">{item.name || "Unnamed workflow"}</strong>
                   {item.systemGenerated || item.scope === "system" ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">SYSTEM</span> : null}
+                  {item.runtimeActive ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">LIVE{item.activeVersion ? ` v${item.activeVersion}` : ""}</span> : null}
+                  {item.lifecycleStatus === "DRAFT" ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">DRAFT{item.version ? ` v${item.version}` : ""}</span> : null}
                 </div>
                 <span className="block text-xs text-slate-500">
                   {item.object || "No trigger object"} · {getTriggerLabel(item.trigger)}
@@ -3034,7 +3051,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   });
                   setShowBuilder(true);
                 }}>Clone</button>
-                {item.id && item.active !== false ? <button type="button" className="text-sm text-slate-600" onClick={() => {
+                {item.id && (item.runtimeActive === true || item.active !== false) ? <button type="button" className="text-sm text-slate-600" onClick={() => {
                   apiRequest(`/api/platform/rules/${item.id}`, { method: "PUT", body: JSON.stringify({
                     name: item.name,
                     triggerKey: item.trigger,
@@ -3065,7 +3082,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                         fieldValues: step.config?.fieldValues || step.config?.fieldMappings,
                       }))
                     },
-                  }) }).then(() => setSavedWorkflows((current) => current.map((entry) => entry.id === item.id ? { ...entry, active: false, lifecycleStatus: "INACTIVE" } : entry))).catch((error) => onError?.(error.message));
+                  }) }).then(() => setSavedWorkflows((current) => current.map((entry) => entry.id === item.id ? { ...entry, active: false, runtimeActive: false, lifecycleStatus: "INACTIVE", activeVersion: null } : entry))).catch((error) => onError?.(error.message));
                 }}>Deactivate</button> : item.id ? <button type="button" className="text-sm text-blue-700" onClick={() => { setWorkflowId(item.id || null); setWorkflow(item); setShowBuilder(true); }}>Open to activate</button> : null}
               </div>
             </div>
