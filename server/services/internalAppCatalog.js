@@ -1103,6 +1103,42 @@ const CATALOG = [
     visibility: "PUBLIC",
   },
   {
+    key: "one_kiosk",
+    packageKey: "one_kiosk",
+    name: "OneKiosk",
+    description: "Customer self-service ordering and collection workflow for restaurants, retail, electronics and other counter-service businesses.",
+    route: "/app/kiosk",
+    permissions: ["sale.create", "online_orders.view", "online_orders.manage"],
+    storeScoped: true,
+    category: "Operations",
+    version: "1.0.0",
+    packageType: "APPLICATION",
+    billable: true,
+    licenceRequired: true,
+    licenceMode: "COMMERCIAL",
+    installable: true,
+    visibility: "PUBLIC",
+    entitlementKey: "one_kiosk",
+    dependencies: ["products", "online_orders", "retail_pos"],
+    optionalDependencies: ["connector_core"],
+    iconAssetKey: "default-app",
+    capabilities: [
+      "kiosk_catalogue",
+      "kiosk_cart",
+      "kiosk_fulfilment",
+      "kiosk_collection_number",
+      "kiosk_order_display",
+      "kiosk_responsive_touch_ui",
+      "kiosk_payment_connectors"
+    ],
+    kiosk: {
+      deploymentTargets: ["ANDROID", "WINDOWS", "BROWSER", "PWA"],
+      layouts: ["AUTO", "TABLET", "DESKTOP", "PORTRAIT_KIOSK", "LANDSCAPE_KIOSK"],
+      fulfilmentTypes: ["COLLECT", "EAT_IN", "TAKEAWAY", "COUNTER_SERVICE"],
+      lifecycle: ["RECEIVED", "PREPARING", "READY", "COLLECTED"]
+    }
+  },
+  {
     key: "one_assistant",
     packageKey: "one_assistant",
     name: "OneAssistant",
