@@ -2303,6 +2303,7 @@ async function startServer() {
                 },
               };
 
+              const workflowVariables = { variables: {}, steps: {} };
               const results = await executeWorkflowActions({
                 actions,
                 db,
@@ -2319,17 +2320,19 @@ async function startServer() {
                 writeAudit,
                 runId: run.id,
                 trigger: run.trigger_key || workflow.trigger_key,
+                workflowVariables,
               });
 
               const containsWaiting = (entries = []) => entries.some((entry) =>
                 entry?.result?.status === "waiting"
                 || containsWaiting(entry?.result?.branch?.results || [])
+                || (Array.isArray(entry?.result?.iterations) && entry.result.iterations.some((iteration) => containsWaiting(iteration?.results || [])))
               );
               const stillWaiting = containsWaiting(results);
               if (!stillWaiting) {
                 await db(
-                  "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
-                  [run.id, job.company_id]
+                  "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
+                  [JSON.stringify({ childResults: results, finalVariables: workflowVariables }), run.id, job.company_id]
                 );
                 if (run.parent_run_id) {
                   const parentStep = await db(
@@ -2341,7 +2344,7 @@ async function startServer() {
                   if (parentStep.rows[0]) {
                     await db(
                       `UPDATE platform_workflow_step_runs
-                          SET status='COMPLETED',completed_at=NOW(),
+                          SET status='WAITING',completed_at=NULL,
                               metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW()
                         WHERE id=$2`,
                       [JSON.stringify({ childRunId: run.id, resumedChildCompleted: true }), parentStep.rows[0].id]
