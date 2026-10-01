@@ -41,8 +41,8 @@ const NAV_CATALOGUE = [
   ["Own Delivery", ShoppingBag, (s)=>has(s,"online_orders.view")],
   ["Audit Log", FileText, (s)=>has(s,"audit.view")],
   ["Settings", Settings],
-  ["App Releases", Package, (s)=>has(s,"platform.manage")],
-  ["Licensing", KeyRound, (s)=>has(s,"platform.manage")],
+  ["App Releases", Package, (s)=>has(s,"oneengine.manage")],
+  ["Licensing", KeyRound, (s)=>has(s,"oneengine.manage")],
 ];
 
 export function permittedNavItems(state) {
