@@ -24,8 +24,8 @@ jobs:
     env:
       ONEPOS_E2E_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
       ONEPOS_E2E_API_BASE_URL: https://onepos.onrender.com/
-      ONEPOS_E2E_USERNAME: ${{ secrets.ONEPOS_E2E_USERNAME }}
-      ONEPOS_E2E_PASSWORD: ${{ secrets.ONEPOS_E2E_PASSWORD }}
+      ONEPOS_E2E_USERNAME: ${{ secrets.ONEPOS_PLAYWRIGHT_USERNAME }}
+      ONEPOS_E2E_PASSWORD: ${{ secrets.ONEPOS_PLAYWRIGHT_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,8 +37,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Reinstall Playwright Chromium
+        run: |
+          rm -rf ~/.cache/ms-playwright
+          npx playwright install --with-deps chromium
 
       - name: Wait for deployed frontend
         run: |
