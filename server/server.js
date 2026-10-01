@@ -2194,13 +2194,49 @@ async function startServer() {
                 entry?.result?.status === "waiting"
                 || containsWaiting(entry?.result?.branch?.results || [])
               );
-              if (!containsWaiting(results)) {
+              const stillWaiting = containsWaiting(results);
+              if (!stillWaiting) {
                 await db(
                   "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
                   [run.id, job.company_id]
                 );
+                if (run.parent_run_id) {
+                  const parentStep = await db(
+                    `SELECT id,run_id FROM platform_workflow_step_runs
+                      WHERE child_run_id=$1 AND run_id=$2
+                      ORDER BY created_at DESC LIMIT 1`,
+                    [run.id, run.parent_run_id]
+                  );
+                  if (parentStep.rows[0]) {
+                    await db(
+                      `UPDATE platform_workflow_step_runs
+                          SET status='COMPLETED',completed_at=NOW(),
+                              metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW()
+                        WHERE id=$2`,
+                      [JSON.stringify({ childRunId: run.id, resumedChildCompleted: true }), parentStep.rows[0].id]
+                    );
+                  }
+                  const parentRun = await db(
+                    "SELECT id,status FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1",
+                    [run.parent_run_id, job.company_id]
+                  );
+                  if (parentRun.rows[0] && parentRun.rows[0].status === "WAITING") {
+                    await db(
+                      "UPDATE platform_workflow_runs SET status='RUNNING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+                      [run.parent_run_id, job.company_id]
+                    );
+                    await enqueuePlatformJob({
+                      db,
+                      companyId: job.company_id,
+                      kind: "WAIT",
+                      payload: { runId: run.parent_run_id, resumeParentFromChildRunId: run.id },
+                      runAt: new Date(),
+                      idempotencyKey: `resume-parent:${run.parent_run_id}:${run.id}`,
+                    });
+                  }
+                }
               }
-              return { status: containsWaiting(results) ? "WAITING" : "COMPLETED", resumed: true, runId: run.id };
+              return { status: stillWaiting ? "WAITING" : "COMPLETED", resumed: true, runId: run.id };
             }
             const payload = job.payload || {};
             if (job.kind === "APP_RELEASE_UPGRADE") {
