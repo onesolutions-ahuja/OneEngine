@@ -91,3 +91,24 @@ test("approval work items expose hierarchy, queues and delegation without unsafe
   await expect(page.getByText("My delegate",{exact:true})).toBeVisible();
   expect(failures,failures.join("\n")).toEqual([]);
 });
+
+
+test("approval record submission separates manual and automatic paths", async ({ page }) => {
+  const failures=watchRuntimeFailures(page);
+  await page.goto("developer/approval-builder");
+  const newApproval=page.getByRole("button",{name:/new approval/i});
+  if(await newApproval.isVisible().catch(()=>false)) await newApproval.click();
+  await expect(page.getByRole("option",{name:"User submits from record"})).toHaveCount(1);
+  await expect(page.getByRole("option",{name:"Automatically when criteria match"})).toHaveCount(1);
+  expect(failures,failures.join("\n")).toEqual([]);
+});
+
+test("approval work items show deadline reminder and escalation audit fields", async ({ page }) => {
+  const failures=watchRuntimeFailures(page);
+  await page.goto("developer/work-items");
+  await expect(page.getByText("Timing",{exact:true})).toBeVisible();
+  await expect(page.getByText("Reminder",{exact:true})).toBeVisible();
+  await expect(page.getByText("Escalated",{exact:true})).toBeVisible();
+  await expect(page.getByText("Approval History",{exact:true})).toBeVisible();
+  expect(failures,failures.join("\n")).toEqual([]);
+});
