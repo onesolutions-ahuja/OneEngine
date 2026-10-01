@@ -1,6 +1,6 @@
 import { evaluateCondition } from "./platformConditions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
-import { createWorkflowRun, executeWorkflowActions } from "./platformWorkflow.js";
+import { createWorkflowRun, executeWorkflowActions, workflowResultsContainStatus } from "./platformWorkflow.js";
 import { systemObject, isExtensionField } from "./platformSystemObjects.js";
 
 function apiRecord(fields, record) {
@@ -117,12 +117,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
           workflowVersion: Number(rule.active_version || rule.version || 1),
           workflowVariables,
         });
-        const containsWaiting = (entries = []) => (Array.isArray(entries) ? entries : []).some((entry) =>
-          entry?.result?.status === "waiting"
-          || containsWaiting(entry?.result?.branch?.results || [])
-          || (Array.isArray(entry?.result?.iterations) && entry.result.iterations.some((iteration) => containsWaiting(iteration?.results || [])))
-        );
-        const waiting = containsWaiting(workflowResults);
+        const waiting = workflowResultsContainStatus(workflowResults, "waiting");
         if (run?.id && !waiting) {
           await db(
             "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
