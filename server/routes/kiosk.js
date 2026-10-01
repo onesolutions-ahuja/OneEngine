@@ -1,4 +1,5 @@
 import express from "express";
+import { resolvePrice } from "../services/pricingEngine.js";
 
 /*
  * OneKiosk fulfilment bridge.
@@ -14,6 +15,200 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
     const key = String(value || "UNKNOWN").trim().toUpperCase();
     return ["ONLINE","OFFLINE","DEGRADED","READY","ERROR","NOT_CONFIGURED","UNKNOWN"].includes(key) ? key : "UNKNOWN";
   };
+
+  router.get("/kiosk/catalogue", authenticate, async (req, res) => {
+    try {
+      const result = await db(
+        `SELECT p.id,p.name,p.sku,p.barcode,p.description,p.price,p.vat_rate,p.vat_applicable,
+                p.age_restricted,p.image_url,p.category_id,p.parent_product_id,p.product_kind,
+                p.variant_attributes,p.kiosk_metadata,p.track_stock,p.active,
+                c.name AS category_name,
+                COALESCE(ps.quantity,p.stock_quantity,0) AS store_stock
+           FROM products p
+           LEFT JOIN categories c ON c.id=p.category_id
+           LEFT JOIN product_store_stock ps
+             ON ps.company_id=p.company_id AND ps.store_id=$2 AND ps.product_id=p.id
+          WHERE p.company_id=$1
+            AND p.active=TRUE
+            AND p.sku IS DISTINCT FROM 'MISC'
+          ORDER BY COALESCE((p.kiosk_metadata->>'sortOrder')::int,999999),c.display_order,p.name`,
+        [req.user.companyId, req.user.storeId]
+      );
+      res.json({ success: true, data: result.rows.map((row) => ({
+        ...row,
+        categoryLabel: row.category_name || "Other",
+        stock_message: row.track_stock === true
+          ? Number(row.store_stock || 0) > 0
+            ? `${Number(row.store_stock)} in stock`
+            : "Out of stock"
+          : "Available",
+      })) });
+    } catch (error) {
+      console.error("Load OneKiosk catalogue error:", error);
+      res.status(500).json({ success: false, message: "Unable to load kiosk catalogue" });
+    }
+  });
+
+  router.get("/kiosk/products/:id/options", authenticate, async (req, res) => {
+    try {
+      const product = await db(
+        `SELECT p.*,c.name AS category_name,
+                COALESCE(ps.quantity,p.stock_quantity,0) AS store_stock
+           FROM products p
+           LEFT JOIN categories c ON c.id=p.category_id
+           LEFT JOIN product_store_stock ps
+             ON ps.company_id=p.company_id AND ps.store_id=$3 AND ps.product_id=p.id
+          WHERE p.id=$1 AND p.company_id=$2 AND p.active=TRUE
+          LIMIT 1`,
+        [req.params.id, req.user.companyId, req.user.storeId]
+      );
+      if (!product.rows[0]) return res.status(404).json({ success: false, message: "Product not found" });
+
+      const parentId = product.rows[0].parent_product_id || product.rows[0].id;
+      const [variants, modifierRows] = await Promise.all([
+        db(
+          `SELECT p.id,p.parent_product_id,p.name,p.sku,p.barcode,p.price,p.variant_attributes,
+                  p.image_url,p.kiosk_metadata,p.track_stock,
+                  COALESCE(ps.quantity,p.stock_quantity,0) AS store_stock
+             FROM products p
+             LEFT JOIN product_store_stock ps
+               ON ps.company_id=p.company_id AND ps.store_id=$3 AND ps.product_id=p.id
+            WHERE p.company_id=$2 AND p.active=TRUE AND (p.id=$1 OR p.parent_product_id=$1)
+            ORDER BY p.name`,
+          [parentId, req.user.companyId, req.user.storeId]
+        ),
+        db(
+          `SELECT g.id AS group_id,g.name AS group_name,g.required,g.max_selections,g.display_order AS group_display_order,
+                  o.id AS option_id,o.name AS option_name,o.price,o.track_stock,o.inventory_product_id,o.display_order
+             FROM product_modifier_groups g
+             LEFT JOIN product_modifier_options o ON o.group_id=g.id AND o.active=TRUE
+            WHERE g.company_id=$1 AND g.product_id=$2 AND g.active=TRUE
+            ORDER BY g.display_order,o.display_order,o.name`,
+          [req.user.companyId, req.params.id]
+        ),
+      ]);
+
+      const groups = [];
+      const byGroup = new Map();
+      for (const row of modifierRows.rows) {
+        const key = String(row.group_id);
+        if (!byGroup.has(key)) {
+          const group = {
+            id: row.group_id,
+            name: row.group_name,
+            required: row.required === true,
+            maxSelections: Number(row.max_selections || 1),
+            options: [],
+          };
+          byGroup.set(key, group);
+          groups.push(group);
+        }
+        if (row.option_id) {
+          byGroup.get(key).options.push({
+            id: row.option_id,
+            name: row.option_name,
+            price: Number(row.price || 0),
+            trackStock: row.track_stock === true,
+            inventoryProductId: row.inventory_product_id || null,
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          product: {
+            ...product.rows[0],
+            categoryLabel: product.rows[0].category_name || "Other",
+          },
+          variants: variants.rows,
+          modifierGroups: groups,
+          metadata: product.rows[0].kiosk_metadata || {},
+        },
+      });
+    } catch (error) {
+      console.error("Load OneKiosk product options error:", error);
+      res.status(500).json({ success: false, message: "Unable to load product options" });
+    }
+  });
+
+  router.post("/kiosk/quote", authenticate, async (req, res) => {
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (!items.length) return res.json({ success: true, data: { lines: [], subtotal: 0, total: 0, savings: 0 } });
+    try {
+      const lines = [];
+      let subtotal = 0;
+      let total = 0;
+      for (const item of items) {
+        const quantity = Math.max(1, Number(item.quantity) || 1);
+        const product = await db(
+          `SELECT id,name,price,category_id,vat_rate,vat_applicable
+             FROM products WHERE id=$1 AND company_id=$2 AND active=TRUE LIMIT 1`,
+          [item.productId, req.user.companyId]
+        );
+        if (!product.rows[0]) return res.status(400).json({ success: false, message: "A basket product is unavailable" });
+
+        const selectedIds = (Array.isArray(item.modifiers) ? item.modifiers : []).map((m) => m.optionId).filter(Boolean);
+        let modifierUnit = 0;
+        if (selectedIds.length) {
+          const selected = await db(
+            `SELECT o.id,o.price
+               FROM product_modifier_options o
+               JOIN product_modifier_groups g ON g.id=o.group_id
+              WHERE o.id=ANY($1::uuid[]) AND g.company_id=$2 AND g.product_id=$3
+                AND o.active=TRUE AND g.active=TRUE`,
+            [selectedIds, req.user.companyId, item.productId]
+          );
+          if (selected.rows.length !== new Set(selectedIds.map(String)).size) {
+            return res.status(400).json({ success: false, message: "A selected product option is no longer available" });
+          }
+          modifierUnit = selected.rows.reduce((sum, row) => sum + Number(row.price || 0), 0);
+        }
+
+        const pricingRows = await db(
+          `SELECT
+             COALESCE((SELECT json_agg(spp) FROM scheduled_product_prices spp
+               WHERE spp.product_id=$1 AND spp.company_id=$2 AND spp.active=TRUE),'[]') AS scheduled_prices,
+             COALESCE((SELECT json_agg(pr) FROM promotions pr
+               WHERE pr.company_id=$2 AND pr.active=TRUE AND (pr.product_id=$1 OR pr.category_id=$3)),'[]') AS promotions`,
+          [item.productId, req.user.companyId, product.rows[0].category_id]
+        );
+        const resolved = resolvePrice({
+          basePrice: Number(product.rows[0].price || 0) + modifierUnit,
+          scheduledPrices: pricingRows.rows[0]?.scheduled_prices || [],
+          promotions: pricingRows.rows[0]?.promotions || [],
+          quantity,
+          at: new Date(),
+        });
+        const lineSubtotal = (Number(product.rows[0].price || 0) + modifierUnit) * quantity;
+        subtotal += lineSubtotal;
+        total += resolved.total;
+        lines.push({
+          productId: item.productId,
+          name: product.rows[0].name,
+          quantity,
+          unitPrice: resolved.unitPrice,
+          lineTotal: resolved.total,
+          originalLineTotal: lineSubtotal,
+          savings: Math.max(0, lineSubtotal - resolved.total),
+          promotionId: resolved.promotionId,
+          quantityOfferId: resolved.quantityOfferId,
+        });
+      }
+      res.json({
+        success: true,
+        data: {
+          lines,
+          subtotal: Math.round(subtotal * 100) / 100,
+          total: Math.round(total * 100) / 100,
+          savings: Math.round(Math.max(0, subtotal - total) * 100) / 100,
+        },
+      });
+    } catch (error) {
+      console.error("Quote OneKiosk basket error:", error);
+      res.status(500).json({ success: false, message: error.message || "Unable to price basket" });
+    }
+  });
 
   router.get("/kiosk/flows", authenticate, async (req, res) => {
     try {
