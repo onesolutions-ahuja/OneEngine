@@ -33,9 +33,14 @@ function verifySmsGateSignature(rawBody, headers, signingKey) {
 }
 
 function normalizePhone(value) {
-  const raw = String(value || "").trim();
+  const candidate = value && typeof value === "object"
+    ? (value.phoneNumber || value.phone || value.number || value.address || value.value || "")
+    : value;
+  const raw = String(candidate || "").trim();
   if (!raw) return null;
-  return raw.startsWith("+") ? raw : raw;
+  const compact = raw.replace(/[\s().-]/g, "");
+  if (!/^\+?[0-9]{7,15}$/.test(compact)) return null;
+  return compact;
 }
 
 export default function createSmsGateWebhookRouter({ pool } = {}) {
@@ -102,7 +107,10 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
       const recipient = normalizePhone(payload.recipient);
       const message = String(payload.message || "").trim();
       if (!sender || !message) {
-        return res.status(400).json({ success: false, message: "Inbound SMS sender and message are required" });
+        return res.status(400).json({
+          success: false,
+          message: !sender ? "Inbound SMS sender is not a valid phone number" : "Inbound SMS message is required",
+        });
       }
 
       const providerMessageId = String(payload.messageId || body?.id || "").trim() || null;
