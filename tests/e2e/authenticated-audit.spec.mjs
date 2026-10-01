@@ -112,3 +112,26 @@ test("approval work items show deadline reminder and escalation audit fields", a
   await expect(page.getByText("Approval History",{exact:true})).toBeVisible();
   expect(failures,failures.join("\n")).toEqual([]);
 });
+
+
+test("approval UX is record first and uses human language", async ({ page }) => {
+  const failures=watchRuntimeFailures(page);
+  await page.goto("developer/approval-builder");
+  const create=page.getByRole("button",{name:/new process/i}); if(await create.isVisible().catch(()=>false)) await create.click();
+  await expect(page.getByText("Why is approval required?",{exact:true})).toBeVisible();
+  await expect(page.getByText("Review before activation",{exact:true})).toBeVisible();
+  await expect(page.getByRole("option",{name:"Any one approver can decide"})).toHaveCount(1);
+  await expect(page.getByRole("option",{name:"Everyone must approve"})).toHaveCount(1);
+  await expect(page.getByRole("option",{name:"Choose a record…"})).toHaveCount(1);
+  expect(failures,failures.join("\n")).toEqual([]);
+});
+
+test("approval inbox uses business language and dated delegation", async ({ page }) => {
+  const failures=watchRuntimeFailures(page);
+  await page.goto("developer/work-items");
+  await expect(page.getByText("Approvals",{exact:true})).toBeVisible();
+  await expect(page.getByText("My delegate",{exact:true})).toBeVisible();
+  await expect(page.getByText("From",{exact:true})).toBeVisible();
+  await expect(page.getByText("Until",{exact:true})).toBeVisible();
+  expect(failures,failures.join("\n")).toEqual([]);
+});
