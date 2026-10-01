@@ -2091,6 +2091,122 @@ async function startServer() {
             assertTrustedJobKind(job.kind);
             if (job.kind === "WAIT") {
               const payload = job.payload || {};
+              if (payload.scheduledPath === true) {
+                const parentRunResult = payload.parentRunId
+                  ? await db("SELECT * FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1", [payload.parentRunId, job.company_id])
+                  : { rows: [] };
+                const parentRun = parentRunResult.rows[0] || null;
+                const workflowId = payload.workflowId || parentRun?.workflow_id || null;
+                if (!workflowId) throw Object.assign(new Error("Scheduled Path workflow is unavailable"), { retryable: false });
+                const workflowResult = await db(
+                  `SELECT * FROM platform_rules
+                    WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow'
+                    LIMIT 1`,
+                  [workflowId, job.company_id]
+                );
+                const workflow = workflowResult.rows[0];
+                if (!workflow) throw Object.assign(new Error("Scheduled Path workflow no longer exists"), { retryable: false });
+                const allActions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
+                const stepIds = new Set((payload.scheduledPathStepIds || []).map(String));
+                const actions = allActions.filter((action) => stepIds.has(String(action?.id || "")));
+                if (!actions.length) throw Object.assign(new Error("Scheduled Path has no executable steps"), { retryable: false });
+
+                let object = null;
+                let record = null;
+                const objectId = payload.objectId || parentRun?.object_id || workflow.object_id || null;
+                const recordId = payload.recordId || parentRun?.record_id || null;
+                if (objectId) {
+                  const objectResult = await db(
+                    "SELECT * FROM platform_objects WHERE id=$1 AND active=TRUE AND (company_id IS NULL OR company_id=$2) LIMIT 1",
+                    [objectId, job.company_id]
+                  );
+                  object = objectResult.rows[0] || null;
+                }
+                if (object?.source_table && recordId) {
+                  const table = String(object.source_table || "");
+                  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) throw Object.assign(new Error("Scheduled Path record source is invalid"), { retryable: false });
+                  const params = [recordId];
+                  const clauses = ["id=$1"];
+                  if (object.company_scoped !== false) {
+                    params.push(job.company_id);
+                    clauses.push(`company_id=${params.length}`);
+                  }
+                  const recordResult = await db(`SELECT * FROM "${table}" WHERE ${clauses.join(" AND ")} LIMIT 1`, params);
+                  record = recordResult.rows[0] || null;
+                }
+
+                const actorId = parentRun?.metadata?.actorUserId || null;
+                const actorResult = actorId
+                  ? await db("SELECT id,role_id,store_id,till_id FROM users WHERE id=$1 AND company_id=$2 LIMIT 1", [actorId, job.company_id])
+                  : { rows: [] };
+                const actor = actorResult.rows[0] || {};
+                const childRun = await createWorkflowRun({
+                  db,
+                  companyId: job.company_id,
+                  workflowId: workflow.id,
+                  workflowName: `${workflow.name} · ${payload.scheduledPathLabel || "Scheduled Path"}`,
+                  objectId: object?.id || objectId,
+                  recordId,
+                  triggerKey: "SCHEDULED_PATH",
+                  parentRunId: parentRun?.id || null,
+                  status: "RUNNING",
+                  metadata: {
+                    scheduledPath: true,
+                    scheduledPathId: payload.scheduledPathId || null,
+                    scheduledPathLabel: payload.scheduledPathLabel || null,
+                    actorUserId: actorId,
+                    sourceRunId: parentRun?.id || null,
+                  },
+                });
+                const req = {
+                  user: {
+                    id: actor.id || actorId || null,
+                    roleId: actor.role_id || null,
+                    companyId: job.company_id,
+                    storeId: actor.store_id || parentRun?.metadata?.storeId || null,
+                    tillId: actor.till_id || parentRun?.metadata?.tillId || null,
+                  },
+                };
+                try {
+                  const results = await executeWorkflowActions({
+                    actions,
+                    allActions,
+                    db,
+                    pool,
+                    req,
+                    companyId: job.company_id,
+                    userId: req.user.id,
+                    object,
+                    record,
+                    recordId,
+                    storeId: req.user.storeId,
+                    tillId: req.user.tillId,
+                    connectorDrivers,
+                    writeAudit,
+                    runId: childRun.id,
+                    trigger: "SCHEDULED_PATH",
+                  });
+                  await db(
+                    "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
+                    [childRun.id, job.company_id]
+                  );
+                  if (payload.sourceStepRunId) {
+                    await db(
+                      `UPDATE platform_workflow_step_runs
+                          SET metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW()
+                        WHERE id=$2`,
+                      [JSON.stringify({ scheduledChildRunId: childRun.id, scheduledPathFiredAt: new Date().toISOString() }), payload.sourceStepRunId]
+                    );
+                  }
+                  return { status: "COMPLETED", scheduledPath: true, runId: childRun.id, results };
+                } catch (error) {
+                  await db(
+                    "UPDATE platform_workflow_runs SET status='FAILED',error_text=$1,completed_at=NOW(),updated_at=NOW() WHERE id=$2 AND company_id=$3",
+                    [String(error?.message || error).slice(0, 2000), childRun.id, job.company_id]
+                  );
+                  throw error;
+                }
+              }
               if (!payload.runId) return { status: "COMPLETED", resumed: false };
 
               const runResult = await db(
