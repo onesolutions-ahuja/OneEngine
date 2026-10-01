@@ -4,7 +4,7 @@ import {
   Minus, Pause, Pencil, Plus, Printer, QrCode, ReceiptText, Search, Settings2,
   ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor, RefreshCw, ArrowLeftRight,
 } from 'lucide-react'
-import { apiRequest, ensureActingCompanyContext, getActingCompanyId, getStoredUser, loadSessionPermissions } from '../../services/api'
+import { apiRequest, getActingCompanyId, getStoredUser, loadSessionPermissions } from '../../services/api'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
 import {
   cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
@@ -195,15 +195,10 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     setError('')
 
     const sessionUser = getStoredUser()
-    let companyContext = sessionUser?.companyId || sessionUser?.company_id || getActingCompanyId()
-    if (!companyContext) {
-      try {
-        companyContext = await ensureActingCompanyContext()
-      } catch {}
-    }
+    const companyContext = sessionUser?.companyId || sessionUser?.company_id || getActingCompanyId()
     if (!companyContext) {
       setLoading(false)
-      setError('Unable to resolve company context. Please sign in again.')
+      setError('Select a company context before opening Till.')
       await refreshOfflineCount()
       return
     }
