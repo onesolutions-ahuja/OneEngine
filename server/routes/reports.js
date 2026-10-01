@@ -169,9 +169,10 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
           FROM stock_returns sr
           INNER JOIN stock_return_items sri ON sri.return_id=sr.id
           INNER JOIN sale_items si ON si.id=sri.sale_item_id
+          INNER JOIN companies c ON c.id=sr.company_id
           WHERE sr.company_id=$1 AND sr.store_id=$2 AND sr.return_type='CUSTOMER'
-            AND ($3::date IS NULL OR sr.created_at::date >= $3::date)
-            AND ($4::date IS NULL OR sr.created_at::date <= $4::date)
+            AND ($3::date IS NULL OR (sr.created_at AT TIME ZONE c.timezone)::date >= $3::date)
+            AND ($4::date IS NULL OR (sr.created_at AT TIME ZONE c.timezone)::date <= $4::date)
         ) SELECT sales_total.*, returns_total.returned_value FROM sales_total, returns_total
         `,
         scopedReportParams(req)
@@ -189,7 +190,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         `
         WITH dates AS (SELECT generate_series(COALESCE($3::date, CURRENT_DATE), COALESCE($4::date, CURRENT_DATE), '1 day')::date AS report_date),
         daily AS (SELECT (s.created_at AT TIME ZONE c.timezone)::date report_date, COUNT(*)::int transactions, COALESCE(SUM(s.total),0) gross_sales, COALESCE(SUM(s.tax),0) vat FROM sales s INNER JOIN companies c ON c.id=s.company_id WHERE s.company_id=$1 AND s.store_id=$2 AND s.status='completed' GROUP BY 1),
-        returned AS (SELECT sr.created_at::date report_date, COALESCE(SUM(sri.quantity * si.unit_price),0) returns FROM stock_returns sr INNER JOIN stock_return_items sri ON sri.return_id=sr.id INNER JOIN sale_items si ON si.id=sri.sale_item_id WHERE sr.company_id=$1 AND sr.store_id=$2 AND sr.return_type='CUSTOMER' GROUP BY 1)
+        returned AS (SELECT (sr.created_at AT TIME ZONE c.timezone)::date report_date, COALESCE(SUM(sri.quantity * si.unit_price),0) returns FROM stock_returns sr INNER JOIN stock_return_items sri ON sri.return_id=sr.id INNER JOIN sale_items si ON si.id=sri.sale_item_id INNER JOIN companies c ON c.id=sr.company_id WHERE sr.company_id=$1 AND sr.store_id=$2 AND sr.return_type='CUSTOMER' GROUP BY 1)
         SELECT dates.report_date AS date, COALESCE(daily.transactions,0) transactions, COALESCE(daily.gross_sales,0) gross_sales, COALESCE(returned.returns,0) returns, COALESCE(daily.gross_sales,0)-COALESCE(returned.returns,0) net_sales, COALESCE(daily.vat,0) vat FROM dates LEFT JOIN daily USING(report_date) LEFT JOIN returned USING(report_date) ORDER BY dates.report_date
         `,
         scopedReportParams(req)
