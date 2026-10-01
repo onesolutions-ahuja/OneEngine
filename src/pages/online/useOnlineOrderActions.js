@@ -16,7 +16,11 @@ export default function useOnlineOrderActions({ applyOrderUpdate, otpRequired, s
     inFlight.current.add(order.id);
     setBusyActions((current) => ({ ...current, [order.id]: action }));
     try {
-      const data = await apiRequest(`/api/online/orders/${order.id}/${action}`, {
+      const internalKiosk = order?.platform === "one_kiosk";
+      const endpoint = internalKiosk
+        ? `/api/online/orders/generic/${order.id}/${action}`
+        : `/api/online/orders/${order.id}/${action}`;
+      const data = await apiRequest(endpoint, {
         method: "POST", body: JSON.stringify(body),
       });
       if (!data.success) {
