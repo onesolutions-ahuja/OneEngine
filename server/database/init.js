@@ -893,6 +893,47 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           ON CONFLICT(request_id,step_order) DO NOTHING;
         `);
       },
+    },
+    {
+      key: "0033_approval_enterprise_assignment",
+      version: "33",
+      name: "Add approval assignment, delegation and immutable definitions",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE platform_approval_requests ADD COLUMN IF NOT EXISTS definition_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb;
+          ALTER TABLE platform_approval_requests ADD COLUMN IF NOT EXISTS submission_comment TEXT;
+          ALTER TABLE platform_approval_steps ADD COLUMN IF NOT EXISTS assignment_type VARCHAR(30) NOT NULL DEFAULT 'role';
+          ALTER TABLE platform_approval_steps ADD COLUMN IF NOT EXISTS assignment_config JSONB NOT NULL DEFAULT '{}'::jsonb;
+          ALTER TABLE platform_approval_work_items DROP CONSTRAINT IF EXISTS platform_approval_work_items_request_id_step_order_key;
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_approval_work_item_assignee
+            ON platform_approval_work_items(request_id,step_order,COALESCE(assigned_to,'00000000-0000-0000-0000-000000000000'::uuid));
+          CREATE TABLE IF NOT EXISTS platform_approval_groups (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            name VARCHAR(160) NOT NULL,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(company_id,name)
+          );
+          CREATE TABLE IF NOT EXISTS platform_approval_group_members (
+            group_id UUID NOT NULL REFERENCES platform_approval_groups(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            PRIMARY KEY(group_id,user_id)
+          );
+          CREATE TABLE IF NOT EXISTS platform_approval_delegations (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            delegate_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            starts_at TIMESTAMPTZ,
+            ends_at TIMESTAMPTZ,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_platform_approval_delegations_active
+            ON platform_approval_delegations(company_id,user_id,active,starts_at,ends_at);
+        `);
+      },
     }
   ]);
 
