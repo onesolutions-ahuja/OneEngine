@@ -2947,6 +2947,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     if (!workflowId) return;
     try {
       await apiRequest(`/api/platform/rules/${workflowId}/tests/${testId}`, { method: "DELETE" });
+      if (String(editingTestId || "") === String(testId)) cancelTestEdit();
       await loadSavedTests();
     } catch (error) {
       onError?.(error.message || "Unable to remove workflow test.");
