@@ -153,6 +153,8 @@ export default function OneKioskPage({ publicMode = false }) {
   const [receiptEmailBusy, setReceiptEmailBusy] = useState(false);
   const [receiptEmailSent, setReceiptEmailSent] = useState(false);
   const [journeyData, setJourneyData] = useState({});
+  const [pendingAgeProduct, setPendingAgeProduct] = useState(null);
+  const [ageApprovalBusy, setAgeApprovalBusy] = useState(false);
   const [fulfilmentDetails, setFulfilmentDetails] = useState({
     storeId: "",
     name: "",
@@ -225,6 +227,9 @@ export default function OneKioskPage({ publicMode = false }) {
     setExperienceFlow(response.data.flow || null);
     setPaymentRuntime(response.data.payment || null);
     setPrinterRuntime(response.data.printer || null);
+    if (response.data.device) {
+      setDeviceState((current) => ({ ...(current || {}), ...response.data.device }));
+    }
     return response.data;
   };
 
@@ -559,6 +564,7 @@ export default function OneKioskPage({ publicMode = false }) {
         setReceiptEmail("");
         setReceiptEmailSent(false);
         setJourneyData({});
+        setPendingAgeProduct(null);
         setError("");
         setIdleWarning(false);
         setAttractMode(true);
@@ -740,8 +746,52 @@ export default function OneKioskPage({ publicMode = false }) {
     }
   };
 
-  const handleProductAction = async (product) => {
+  const requestAgeApproval = async (product) => {
+    if (ageApprovalBusy) return;
+    setAgeApprovalBusy(true);
+    setPendingAgeProduct(product);
+    setError("");
+    try {
+      const response = await apiRequest("/api/kiosk/age-approval/request", {
+        method: "POST",
+        body: JSON.stringify({ deviceKey: kioskDeviceKey() }),
+      });
+      if (!response?.success) throw new Error(response?.message || "Unable to request staff approval");
+    } catch (reason) {
+      setPendingAgeProduct(null);
+      setError(reason?.message || "Unable to request staff approval");
+    } finally {
+      setAgeApprovalBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingAgeProduct || demoMode) return undefined;
+    let live = true;
+    const check = async () => {
+      try {
+        const runtime = await loadExperience(kioskDeviceKey());
+        const approved = runtime?.device?.ageApproved === true;
+        if (live && approved) {
+          const product = pendingAgeProduct;
+          setPendingAgeProduct(null);
+          window.setTimeout(() => void handleProductAction(product, { skipAgeCheck: true }), 0);
+        }
+      } catch {}
+    };
+    void check();
+    const timer = window.setInterval(check, 2000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [pendingAgeProduct?.id, demoMode]);
+
+  const handleProductAction = async (product, { skipAgeCheck = false } = {}) => {
     setLastInteractionAt(Date.now());
+    if (product?.age_restricted === true && featureFlags.ageVerification === true && !skipAgeCheck) {
+      if (deviceState?.ageApproved !== true) {
+        await requestAgeApproval(product);
+        return;
+      }
+    }
     if (catalogueScreen.productAction === "OPEN_DETAIL" && Object.keys(productScreen).length) {
       setSelectedProduct(product);
       if (productScreen?.key) setCurrentScreenKey(productScreen.key);
@@ -1020,6 +1070,7 @@ export default function OneKioskPage({ publicMode = false }) {
     setReceiptEmail("");
     setReceiptEmailSent(false);
     setJourneyData({});
+    setPendingAgeProduct(null);
     if (publicMode) setAttractMode(true);
   };
 
@@ -1401,6 +1452,16 @@ export default function OneKioskPage({ publicMode = false }) {
           <small className="one-kiosk-payment-note">{stageType === "PAYMENT" ? "Complete payment in the main panel." : "Your basket stays with you through each step."}</small>
         </aside>
       </div>
+
+      {pendingAgeProduct ? (
+        <div className="one-kiosk-idle-overlay">
+          <div>
+            <strong>Staff approval required</strong>
+            <span>This item is age restricted. A member of staff has been notified to verify your age.</span>
+            <button type="button" onClick={() => setPendingAgeProduct(null)}>Cancel</button>
+          </div>
+        </div>
+      ) : null}
 
       {idleWarning ? (
         <div className="one-kiosk-idle-overlay">
