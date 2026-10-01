@@ -3,6 +3,81 @@ import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2 } fr
 import { apiRequest } from "../../services/api.js";
 import "./oneKiosk.css";
 
+const DEMO_PRODUCTS = [
+  {
+    id: "demo-classic-beef",
+    name: "Classic Beef Burger",
+    sku: "DEMO-BEEF-01",
+    description: "Juicy beef patty, cheese, lettuce and tomato",
+    categoryLabel: "Burgers",
+    price: 5.49,
+    imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    id: "demo-crispy-chicken",
+    name: "Crispy Chicken Burger",
+    sku: "DEMO-CHICK-01",
+    description: "Crispy chicken, lettuce and creamy mayo",
+    categoryLabel: "Chicken",
+    price: 5.29,
+    imageUrl: "https://images.unsplash.com/photo-1606755962773-d324e0a13086?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    id: "demo-veggie-deluxe",
+    name: "Veggie Deluxe",
+    sku: "DEMO-VEG-01",
+    description: "Plant-based patty, lettuce, tomato and onion",
+    categoryLabel: "Burgers",
+    price: 4.99,
+    imageUrl: "https://images.unsplash.com/photo-1520072959219-c595dc870360?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    id: "demo-cheese-fries",
+    name: "Cheese Fries",
+    sku: "DEMO-SIDE-01",
+    description: "Golden fries with melted cheese",
+    categoryLabel: "Sides",
+    price: 3.49,
+    imageUrl: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    id: "demo-chicken-bites",
+    name: "Chicken Bites",
+    sku: "DEMO-CHICK-02",
+    description: "Six crispy chicken pieces with dip",
+    categoryLabel: "Chicken",
+    price: 3.99,
+    imageUrl: "https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    id: "demo-cola",
+    name: "Cola",
+    sku: "DEMO-DRINK-01",
+    description: "Chilled cola with ice",
+    categoryLabel: "Drinks",
+    price: 2.29,
+    imageUrl: "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    id: "demo-sundae",
+    name: "Chocolate Sundae",
+    sku: "DEMO-DESSERT-01",
+    description: "Soft serve with chocolate sauce",
+    categoryLabel: "Desserts",
+    price: 2.49,
+    imageUrl: "https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    id: "demo-shake",
+    name: "Vanilla Shake",
+    sku: "DEMO-DRINK-02",
+    description: "Creamy vanilla shake",
+    categoryLabel: "Drinks",
+    price: 2.79,
+    imageUrl: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=900&q=85",
+  },
+];
+
 function money(value, currency = "GBP") {
   const amount = Number(value || 0);
   try {
@@ -13,7 +88,8 @@ function money(value, currency = "GBP") {
 }
 
 export default function OneKioskPage() {
-  const [products, setProducts] = useState([]);
+  const demoMode = useMemo(() => new URLSearchParams(window.location.search).get("demo") === "1", []);
+  const [products, setProducts] = useState(demoMode ? DEMO_PRODUCTS : []);
   const [currency, setCurrency] = useState("GBP");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -26,6 +102,12 @@ export default function OneKioskPage() {
   const [paidSale, setPaidSale] = useState(null);
 
   useEffect(() => {
+    if (demoMode) {
+      setProducts(DEMO_PRODUCTS);
+      setCurrency("GBP");
+      setLoading(false);
+      return undefined;
+    }
     let live = true;
     Promise.all([
       apiRequest("/api/products"),
@@ -50,7 +132,7 @@ export default function OneKioskPage() {
         if (live) setLoading(false);
       });
     return () => { live = false; };
-  }, []);
+  }, [demoMode]);
 
   const categories = useMemo(
     () => ["All", ...new Set(products.map((product) => product.categoryLabel).filter(Boolean))],
@@ -110,6 +192,19 @@ export default function OneKioskPage() {
     setPaying(true);
     setError("");
     try {
+      if (demoMode) {
+        await new Promise((resolve) => window.setTimeout(resolve, 850));
+        setConfirmation({
+          collectionNumber: `K${Math.floor(100 + Math.random() * 900)}`,
+          receiptNumber: `DEMO-${Date.now().toString().slice(-6)}`,
+          total,
+          fulfilmentType,
+        });
+        setBasket([]);
+        setSearch("");
+        setCategory("All");
+        return;
+      }
       if (paidSale?.id) {
         await createFulfilmentFromPaidSale(paidSale);
         return;
@@ -189,7 +284,8 @@ export default function OneKioskPage() {
   }
 
   return (
-    <main className="one-kiosk">
+    <main className={`one-kiosk${demoMode ? " is-demo" : ""}`}>
+      {demoMode ? <div className="one-kiosk-demo-ribbon">Demo catalogue · no live sale or payment is created</div> : null}
       <header className="one-kiosk-header">
         <div>
           <span className="one-kiosk-eyebrow">Self-service ordering</span>
@@ -240,7 +336,7 @@ export default function OneKioskPage() {
                 </div>
                 <div className="one-kiosk-product-copy">
                   <strong>{product.name}</strong>
-                  <small>{product.categoryLabel}</small>
+                  <small>{product.description || product.categoryLabel}</small>
                   <span>{money(product.price, currency)}</span>
                 </div>
               </button>
@@ -321,7 +417,7 @@ export default function OneKioskPage() {
             <CreditCard size={20} />
             {paying ? "Processing…" : paidSale ? "Finish order" : "Pay & collect"}
           </button>
-          <small className="one-kiosk-payment-note">Card payment is processed through the payment terminal configured for this store/kiosk.</small>
+          <small className="one-kiosk-payment-note">{demoMode ? "Demo payment completes on-screen without charging a card." : "Card payment is processed through the payment terminal configured for this store/kiosk."}</small>
         </aside>
       </div>
     </main>
