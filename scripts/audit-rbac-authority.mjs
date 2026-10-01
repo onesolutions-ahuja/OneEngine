@@ -36,6 +36,12 @@ const runtimeFiles = new Set([
   path.join(root, "server", "server.js"),
 ]);
 
+const genericAccessFilesWithoutOneEngineOverride = new Set([
+  "server/services/platformReportSecurity.js",
+  "server/services/platformSearch.js",
+  "server/services/platformObjectNavigation.js",
+]);
+
 const findings = [];
 for (const base of scanRoots) {
   for (const file of walk(path.join(root, base))) {
@@ -43,6 +49,15 @@ for (const base of scanRoots) {
     const relative = path.relative(root, file).replaceAll(path.sep, "/");
     const isRuntime = runtimeFiles.has(file) || runtimePrefixes.some((prefix) => file.startsWith(prefix));
     if (!isRuntime) continue;
+
+    if (genericAccessFilesWithoutOneEngineOverride.has(relative) && text.includes("oneengine.manage")) {
+      findings.push({
+        file: relative,
+        line: text.slice(0, text.indexOf("oneengine.manage")).split("\n").length,
+        rule: "generic-access-bypass",
+        token: "oneengine.manage must not replace granular Object/module RBAC",
+      });
+    }
 
     for (const token of runtimeForbiddenTokens) {
       let from = 0;
