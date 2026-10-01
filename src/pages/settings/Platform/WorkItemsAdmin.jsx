@@ -32,7 +32,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
       const response = await apiRequest("/api/platform/approval-requests");
       const rows = Array.isArray(response?.data) ? response.data : [];
       setItems(rows);
-      setSelectedId((current) => rows.some((row) => String(row.id) === String(current)) ? current : (rows[0]?.id || ""));
+      setSelectedId((current) => rows.some((row) => String(row.work_item_id || row.id) === String(current)) ? current : (rows[0]?.work_item_id || rows[0]?.id || ""));
     } catch (error) {
       onError?.(error?.message || "Unable to load work items");
     } finally {
@@ -75,12 +75,12 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
   }, [items, query, statusFilter]);
 
   const selected = useMemo(
-    () => filteredItems.find((item) => String(item.id) === String(selectedId)) || filteredItems[0] || null,
+    () => filteredItems.find((item) => String(item.work_item_id || item.id) === String(selectedId)) || filteredItems[0] || null,
     [filteredItems, selectedId],
   );
 
   useEffect(() => {
-    if (selected && String(selected.id) !== String(selectedId)) setSelectedId(selected.id);
+    if (selected && String(selected.work_item_id || selected.id) !== String(selectedId)) setSelectedId(selected.work_item_id || selected.id);
     if (!selected && selectedId) setSelectedId("");
   }, [selected, selectedId]);
 
@@ -89,7 +89,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
       setWorking(requestId);
       await apiRequest(`/api/platform/approval-requests/${requestId}/decision`, {
         method: "POST",
-        body: JSON.stringify({ decision, comment: comment.trim() }),
+        body: JSON.stringify({ workItemId: selected?.work_item_id || null, decision, comment: comment.trim() }),
       });
       await loadItems();
       setComment("");
@@ -112,7 +112,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
     if (!selected || !reassignTo) return;
     try {
       setWorking(selected.id);
-      await apiRequest(`/api/platform/approval-requests/${selected.id}/reassign`, { method:"POST", body:JSON.stringify({assigneeUserId:reassignTo,comment:comment.trim()}) });
+      await apiRequest(`/api/platform/approval-requests/${selected.id}/reassign`, { method:"POST", body:JSON.stringify({workItemId:selected.work_item_id||null,assigneeUserId:reassignTo,comment:comment.trim()}) });
       setComment(""); setReassignTo(""); await loadItems(); onMessage?.("Approval reassigned.");
     } catch(error) { onError?.(error?.message || "Unable to reassign approval"); } finally { setWorking(""); }
   };
@@ -134,7 +134,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
     <div className="developer-record-shell work-items-record-shell">
       <aside className="developer-record-list">
         <div className="developer-record-list-head">
-          <div><strong>Work Items</strong><span>{loading ? "Loading…" : `${filteredItems.length} of ${items.length}`}</span></div>
+          <div><strong>Approvals</strong><span>{loading ? "Loading…" : `${filteredItems.length} of ${items.length}`}</span></div>
           <div className="developer-record-head-actions">
             <button type="button" onClick={loadItems} disabled={loading} title="Refresh" aria-label="Refresh">
               <RefreshCw size={14} className={loading ? "is-spinning" : ""}/>
@@ -144,7 +144,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
 
         <label className="developer-record-search">
           <Search size={14}/>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search work items" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search approvals" />
         </label>
 
         <div className="developer-record-filters">
@@ -156,13 +156,13 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
         </div>
 
         <div className="developer-record-list-body">
-          {loading ? <div className="developer-record-empty">Loading work items…</div> : null}
+          {loading ? <div className="developer-record-empty">Loading approvals…</div> : null}
           {!loading && filteredItems.map((item) => (
             <button
-              key={item.id}
+              key={item.work_item_id || item.id}
               type="button"
-              className={`developer-record-row ${String(selected?.id) === String(item.id) ? "is-selected" : ""}`}
-              onClick={() => setSelectedId(item.id)}
+              className={`developer-record-row ${String(selected?.work_item_id || selected?.id) === String(item.work_item_id || item.id) ? "is-selected" : ""}`}
+              onClick={() => setSelectedId(item.work_item_id || item.id)}
             >
               <span className="developer-record-row-copy">
                 <strong>{item.process_name || item.flow_name || item.step_label || "Work item"}</strong>
@@ -175,7 +175,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
             </button>
           ))}
           {!loading && !filteredItems.length ? (
-            <div className="developer-record-empty"><strong>No work items found</strong><span>Change the search or status filter.</span></div>
+            <div className="developer-record-empty"><strong>No approvals found</strong><span>Change the search or status filter.</span></div>
           ) : null}
         </div>
 <div className="developer-record-section">
@@ -192,7 +192,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
           <>
             <div className="developer-record-detail-head">
               <div>
-                <span>Work Item</span>
+                <span>Approval request</span>
                 <strong>{selected.process_name || selected.flow_name || selected.step_label || "Work item"}</strong>
                 <small>#{String(selected.id || "").slice(0, 12)}</small>
               </div>
