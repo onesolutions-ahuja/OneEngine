@@ -62,3 +62,10 @@
 .one-kiosk-confirmation-meta strong{font-size:16px}
 .one-kiosk-collection-help{margin:18px auto 24px!important;max-width:540px;line-height:1.5}
 @media(max-width:560px){.one-kiosk-confirmation-meta{grid-template-columns:1fr}.one-kiosk-confirmation-card{border-radius:22px}.one-kiosk-collection-number strong{font-size:52px}}
+
+.one-kiosk-demo-ribbon{margin:-2px 0 16px;display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:#111827;color:#fff;font-size:12px;font-weight:800;letter-spacing:.02em;box-shadow:0 8px 24px rgba(15,23,42,.12)}
+.one-kiosk.is-demo .one-kiosk-product-image{background:#f3f4f6}
+.one-kiosk.is-demo .one-kiosk-product-image img{transition:transform .22s ease}
+.one-kiosk.is-demo .one-kiosk-product:hover .one-kiosk-product-image img{transform:scale(1.035)}
+.one-kiosk.is-demo .one-kiosk-product-copy small{min-height:34px;line-height:1.35}
+@media(max-width:640px){.one-kiosk-demo-ribbon{font-size:11px;padding:7px 10px;margin-bottom:10px}}
