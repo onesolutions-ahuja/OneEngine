@@ -432,7 +432,7 @@ export function packageDefinition(entry) {
                 features: {
                   variants: true, modifiers: true, promotions: true, upsell: true, loyalty: true,
                   stockPromise: false, compare: false, specifications: false, warranty: false,
-                  accessibility: true, language: true, assistance: true, idleReset: true
+                  accessibility: true, language: true, audio: true, ageVerification: true, assistance: true, idleReset: true
                 }
               },
               actions: []
