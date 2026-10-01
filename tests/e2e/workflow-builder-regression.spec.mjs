@@ -32,7 +32,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
 
   // Start configuration owns scheduled paths; adding one must expose the
   // no-code timing controls without adding a normal canvas node.
-  await page.getByRole("button", { name: /configure when this workflow starts/i }).click();
+  await page.locator(".workflow-start-node").click();
   await expect(page.getByText("Scheduled paths", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "+ Add path", exact: true }).click();
   await expect(page.getByPlaceholder("Path name")).toHaveValue("Scheduled Path");
