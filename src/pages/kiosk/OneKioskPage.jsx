@@ -805,6 +805,19 @@ export default function OneKioskPage({ publicMode = false }) {
     }
   };
 
+  const requestAssistance = async () => {
+    try {
+      const response = await apiRequest("/api/kiosk/assistance", {
+        method: "POST",
+        body: JSON.stringify({ deviceKey: kioskDeviceKey(), note: "Customer requested assistance from the kiosk screen" }),
+      });
+      if (!response?.success) throw new Error(response?.message || "Unable to request assistance");
+      setError("Staff have been notified. Please stay near this kiosk.");
+    } catch (reason) {
+      setError(reason?.message || "Unable to notify staff");
+    }
+  };
+
   const generateReceiptQr = async () => {
     const saleId = confirmation?.saleId || confirmation?.order?.platform_data?.saleId || confirmation?.order?.platform_data?.sale_id;
     if (!saleId) return setError("Receipt QR is not available for this order.");
@@ -1137,7 +1150,7 @@ export default function OneKioskPage({ publicMode = false }) {
         </div>
       ) : null}
 
-      {featureFlags.assistance ? <button type="button" className="one-kiosk-help" onClick={() => setError("A member of staff can assist you at this kiosk.")}><HelpCircle size={20}/> Need help?</button> : null}
+      {featureFlags.assistance ? <button type="button" className="one-kiosk-help" onClick={requestAssistance}><HelpCircle size={20}/> Need help?</button> : null}
 
       {selectedProduct ? (
         <div className="one-kiosk-product-modal" role="dialog" aria-modal="true" aria-label={selectedProduct.name}>
