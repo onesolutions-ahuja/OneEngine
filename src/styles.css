@@ -11885,3 +11885,17 @@ button.git-control-tile { cursor: pointer; }
 .oneengine-list-row small{color:#94a3b8;margin-top:2px}
 @media(max-width:900px){.oneengine-manager-shell{grid-template-columns:170px minmax(0,1fr)}.oneengine-manager-layout{grid-template-columns:150px minmax(0,1fr)}}
 @media(max-width:700px){.oneengine-manager-shell{grid-template-columns:1fr;height:auto}.oneengine-client-pane{border-right:0;border-bottom:1px solid rgba(15,23,42,.08);max-height:220px}.oneengine-manager-layout{grid-template-columns:1fr}.oneengine-subnav{display:flex;overflow:auto;border-right:0;border-bottom:1px solid rgba(15,23,42,.07)}.oneengine-subnav button{min-width:170px}.oneengine-form-grid,.oneengine-user-grid{grid-template-columns:1fr}}
+
+
+:root{--onepos-dock-clearance:104px}
+.demo-menubar{padding-right:max(14px,env(safe-area-inset-right))}
+.menubar-right{flex-shrink:0}
+.status-button{flex:0 0 auto}
+.login-password-wrap{position:relative;width:100%}
+.login-password-wrap .login-field{width:100%;padding-right:42px}
+.login-password-toggle{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:0;border-radius:8px;background:transparent;display:grid;place-items:center;cursor:pointer;color:inherit}
+.login-password-toggle:hover{background:rgba(255,255,255,.1)}
+.dashboard-page,.settings-content,.module-page,.workspace-page,.onepos-page{scroll-padding-bottom:var(--onepos-dock-clearance)}
+.settings-content-body,.module-page,.workspace-page,.onepos-page{padding-bottom:max(var(--onepos-dock-clearance),env(safe-area-inset-bottom))}
+.launcher-app strong,.onestore-list strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+@media(max-width:700px){:root{--onepos-dock-clearance:92px}.demo-menubar{padding-right:max(8px,env(safe-area-inset-right))}}
