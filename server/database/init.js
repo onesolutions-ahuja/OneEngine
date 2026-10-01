@@ -670,6 +670,59 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log(`onePOS: OneAssistant first-booking defaults ready for ${companies.rows.length} configured tenant(s)`);
       },
     },
+
+    {
+      key: "0027_oneassistant_visible_confirmation_message",
+      version: "27",
+      name: "Make OneAssistant confirmation text visible and editable",
+      up: async client => {
+        await client.query(`
+          UPDATE platform_rules r
+             SET action=jsonb_set(
+               r.action,
+               '{actions}',
+               COALESCE((
+                 SELECT jsonb_agg(
+                   CASE
+                     WHEN item->>'type'='SEND_APPOINTMENT_CONFIRMATION'
+                      AND COALESCE(item->>'message','')=''
+                     THEN item || jsonb_build_object(
+                       'message',
+                       'Your {{serviceName}} appointment is booked for {{startsAt}}.'
+                     )
+                     ELSE item
+                   END
+                   ORDER BY ord
+                 )
+                   FROM jsonb_array_elements(COALESCE(r.action->'actions','[]'::jsonb))
+                        WITH ORDINALITY AS a(item,ord)
+               ), '[]'::jsonb),
+               TRUE
+             ),
+             updated_at=NOW()
+           WHERE r.trigger_key='appointment.confirmed'
+             AND r.action->>'type'='workflow'
+             AND EXISTS (
+               SELECT 1
+                 FROM jsonb_array_elements(COALESCE(r.action->'actions','[]'::jsonb)) item
+                WHERE item->>'type'='SEND_APPOINTMENT_CONFIRMATION'
+                  AND COALESCE(item->>'message','')=''
+             )
+        `);
+        const verified = await client.query(`
+          SELECT COUNT(*)::int AS count
+            FROM platform_rules r
+           WHERE r.trigger_key='appointment.confirmed'
+             AND EXISTS (
+               SELECT 1
+                 FROM jsonb_array_elements(COALESCE(r.action->'actions','[]'::jsonb)) item
+                WHERE item->>'type'='SEND_APPOINTMENT_CONFIRMATION'
+                  AND COALESCE(item->>'message','')<>''
+             )
+        `);
+        console.log(`onePOS: visible OneAssistant confirmation messages ready: ${verified.rows[0]?.count || 0}`);
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
