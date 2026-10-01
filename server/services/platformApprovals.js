@@ -35,7 +35,7 @@ async function resolveStepAssignees({ db, request, step, record = {} }) {
   const config = cfg(step.assignment_config);
   let ids = [];
   if (type === "user" && config.userId) ids = [config.userId];
-  else if (type === "manager") { const manager=await db("SELECT manager_id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE",[request.submitted_by,request.company_id]); ids=manager.rows[0]?.manager_id?[manager.rows[0].manager_id]:[]; }
+  else if (type === "manager") { const manager=await db("SELECT m.id FROM users u JOIN users m ON m.id=u.manager_id AND m.company_id=u.company_id AND m.active=TRUE WHERE u.id=$1 AND u.company_id=$2 AND u.active=TRUE",[request.submitted_by,request.company_id]); ids=manager.rows[0]?.id?[manager.rows[0].id]:[]; }
   else if (type === "submitter") ids = request.submitted_by ? [request.submitted_by] : [];
   else if (type === "record_user" && config.field) {
     const value = record?.[config.field];
