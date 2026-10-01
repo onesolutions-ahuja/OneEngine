@@ -814,7 +814,8 @@ app.get("/api/auth/google/callback", async (req, res) => {
         u.active,
         u.is_platform_developer,
         u.must_change_password,
-        r.name AS role_name
+        r.name AS role_name,
+        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page
       FROM users u
       LEFT JOIN roles r ON r.id=u.role_id
       WHERE LOWER(BTRIM(u.email))=$1 AND u.company_id=$2
@@ -878,7 +879,8 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         u.active,
         u.is_platform_developer,
         u.must_change_password,
-        r.name AS role_name
+        r.name AS role_name,
+        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page
       FROM users u
       LEFT JOIN roles r ON r.id = u.role_id
       WHERE LOWER(BTRIM(u.email)) = LOWER(BTRIM($1))
@@ -1054,6 +1056,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         username: user.username,
         name: user.full_name,
         role: user.role_name,
+        defaultLandingPage: user.default_landing_page || 'dashboard',
         companyId: user.company_id,
         storeId: user.store_id,
         isPlatformDeveloper: user.is_platform_developer === true,
@@ -1153,7 +1156,8 @@ app.get("/api/auth/me", authenticate, async (req, res) => {
         u.store_id,
         u.is_platform_developer,
         u.must_change_password,
-        r.name AS role_name
+        r.name AS role_name,
+        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page
       FROM users u
       LEFT JOIN roles r ON r.id = u.role_id
       WHERE u.id = $1
@@ -1177,6 +1181,7 @@ app.get("/api/auth/me", authenticate, async (req, res) => {
         username: user.username,
         name: user.full_name,
         role: user.role_name,
+        defaultLandingPage: user.default_landing_page || 'dashboard',
         companyId: user.company_id,
         storeId: user.store_id,
         isPlatformDeveloper: user.is_platform_developer === true,
