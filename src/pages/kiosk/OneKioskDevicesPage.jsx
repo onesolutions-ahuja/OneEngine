@@ -20,6 +20,7 @@ export default function OneKioskDevicesPage() {
   const [devices, setDevices] = useState([]);
   const [terminals, setTerminals] = useState([]);
   const [paymentConnectors, setPaymentConnectors] = useState([]);
+  const [printerConnectors, setPrinterConnectors] = useState([]);
   const [flows, setFlows] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState(null);
@@ -34,10 +35,11 @@ export default function OneKioskDevicesPage() {
     setLoading(true);
     setError("");
     try {
-      const [deviceResponse, terminalResponse, paymentConnectorResponse, flowResponse] = await Promise.all([
+      const [deviceResponse, terminalResponse, paymentConnectorResponse, printerConnectorResponse, flowResponse] = await Promise.all([
         apiRequest("/api/kiosk/devices"),
         apiRequest("/api/payment-terminals").catch(() => ({ data: [] })),
         apiRequest("/api/kiosk/payment-connectors").catch(() => ({ data: [] })),
+        apiRequest("/api/kiosk/printer-connectors").catch(() => ({ data: [] })),
         apiRequest("/api/kiosk/flows").catch(() => ({ data: [] })),
       ]);
       if (!deviceResponse?.success) throw new Error(deviceResponse?.message || "Unable to load kiosk devices");
@@ -45,6 +47,7 @@ export default function OneKioskDevicesPage() {
       setDevices(rows);
       setTerminals(Array.isArray(terminalResponse?.data) ? terminalResponse.data : []);
       setPaymentConnectors(Array.isArray(paymentConnectorResponse?.data) ? paymentConnectorResponse.data : []);
+      setPrinterConnectors(Array.isArray(printerConnectorResponse?.data) ? printerConnectorResponse.data : []);
       setFlows(Array.isArray(flowResponse?.data) ? flowResponse.data : []);
       const nextId = selectedId && rows.some((row) => row.id === selectedId) ? selectedId : rows[0]?.id || "";
       setSelectedId(nextId);
@@ -54,6 +57,7 @@ export default function OneKioskDevicesPage() {
         workflowId: selected.workflow_id || "",
         active: selected.active !== false,
         paymentConnectorId: selected.payment_connector_id || "",
+        printerConnectorId: selected.printer_connector_id || "",
         paymentTerminalId: selected.payment_terminal_id || "",
         paymentRequired: selected.payment_required !== false,
         printerRequired: selected.printer_required === true,
@@ -81,6 +85,7 @@ export default function OneKioskDevicesPage() {
       workflowId: device.workflow_id || "",
       active: device.active !== false,
       paymentConnectorId: device.payment_connector_id || "",
+      printerConnectorId: device.printer_connector_id || "",
       paymentTerminalId: device.payment_terminal_id || "",
       paymentRequired: device.payment_required !== false,
       printerRequired: device.printer_required === true,
@@ -116,6 +121,7 @@ export default function OneKioskDevicesPage() {
           ...draft,
           workflowId: draft.workflowId || null,
           paymentConnectorId: draft.paymentConnectorId || null,
+          printerConnectorId: draft.printerConnectorId || null,
           paymentTerminalId: draft.paymentTerminalId || null,
         }),
       });
@@ -245,6 +251,19 @@ export default function OneKioskDevicesPage() {
 
               <div className="kiosk-device-section">
                 <h3><Printer size={18}/> Receipt printer</h3>
+                <label><span>Assigned One Connect printer</span>
+                  <select value={draft.printerConnectorId} onChange={(e) => setDraft((d) => ({ ...d, printerConnectorId: e.target.value }))}>
+                    <option value="">Use local/browser printer fallback</option>
+                    {printerConnectors.map((connector) => (
+                      <option key={connector.id} value={connector.id}>
+                        {connector.name} · {connector.connector_package_key}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {draft.printerConnectorId ? (
+                  <div className="kiosk-device-current"><span>Connector printer</span><strong>{printerConnectors.find((connector) => connector.id === draft.printerConnectorId)?.name || selected.printer_connector_name || "Assigned printer"}</strong><small>{selected.printer_connector_status || "Status updates from One Connect"}</small></div>
+                ) : null}
                 <div className="kiosk-device-two">
                   <label><span>Printer name</span><input value={draft.printerName} onChange={(e) => setDraft((d) => ({ ...d, printerName: e.target.value }))} placeholder="Kiosk receipt printer"/></label>
                   <label><span>Connection</span><select value={draft.printerConnectionType} onChange={(e) => setDraft((d) => ({ ...d, printerConnectionType: e.target.value }))}><option>NETWORK</option><option>USB</option><option>BLUETOOTH</option></select></label>
