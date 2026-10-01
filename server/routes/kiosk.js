@@ -24,6 +24,8 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
           WHERE company_id=$1
             AND action->>'scope'='one_kiosk'
             AND action->>'flowType'='KIOSK_EXPERIENCE'
+            AND active=TRUE
+            AND lifecycle_status='ACTIVE'
           ORDER BY
             CASE WHEN action->>'defaultForNewDevices'='true' THEN 0 ELSE 1 END,
             name`,
@@ -50,6 +52,8 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
             AND pr.company_id=kd.company_id
             AND pr.action->>'scope'='one_kiosk'
             AND pr.action->>'flowType'='KIOSK_EXPERIENCE'
+            AND pr.active=TRUE
+            AND pr.lifecycle_status='ACTIVE'
           WHERE kd.company_id=$1 AND kd.store_id=$2 AND kd.device_key=$3
           LIMIT 1`,
         [req.user.companyId, req.user.storeId, deviceKey]
@@ -66,6 +70,8 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
             WHERE company_id=$1
               AND action->>'scope'='one_kiosk'
               AND action->>'flowType'='KIOSK_EXPERIENCE'
+              AND active=TRUE
+              AND lifecycle_status='ACTIVE'
             ORDER BY CASE WHEN action->>'defaultForNewDevices'='true' THEN 0 ELSE 1 END,name
             LIMIT 1`,
           [req.user.companyId]
@@ -154,6 +160,8 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
           WHERE company_id=$1
             AND action->>'scope'='one_kiosk'
             AND action->>'flowType'='KIOSK_EXPERIENCE'
+            AND active=TRUE
+            AND lifecycle_status='ACTIVE'
           ORDER BY CASE WHEN action->>'defaultForNewDevices'='true' THEN 0 ELSE 1 END,name
           LIMIT 1`,
         [req.user.companyId]
@@ -206,7 +214,9 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
           `SELECT id FROM platform_rules
             WHERE id=$1 AND company_id=$2
               AND action->>'scope'='one_kiosk'
-              AND action->>'flowType'='KIOSK_EXPERIENCE'`,
+              AND action->>'flowType'='KIOSK_EXPERIENCE'
+              AND active=TRUE
+              AND lifecycle_status='ACTIVE'`,
           [workflowId, req.user.companyId]
         );
         if (!flow.rows.length) return res.status(400).json({ success: false, message: "Workflow is not a OneKiosk experience flow" });
