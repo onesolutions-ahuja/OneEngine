@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, getStoredSessionPermissions, getStoredUser, hasSession, loadSessionPermissions, login, logout, startGoogleLogin, verifyPin } from './services/api'
+import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, loadSessionPermissions, login, logout, setActiveStoreId, startGoogleLogin, verifyPin } from './services/api'
 import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/routes'
 import { Dock, MenuBarClock, dockItems, useClock } from './components/shell/DesktopDock'
 import { CompanyContextLoading, LockScreen } from './components/shell/LoginShell'
@@ -1838,6 +1838,8 @@ function Desktop({ onLock, onSignOut }) {
   const [storeAppsError, setStoreAppsError] = useState('')
   const storeRefreshInFlightRef = useRef(null)
   const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
+  const [availableStores, setAvailableStores] = useState(() => getAvailableStores())
+  const [activeStoreId, setActiveStoreState] = useState(() => getActiveStoreId())
   const [desktopPermissions, setDesktopPermissions] = useState(() => {
     const cached = getStoredSessionPermissions()
     return Array.isArray(cached?.permissions) ? cached.permissions : []
@@ -1899,6 +1901,22 @@ function Desktop({ onLock, onSignOut }) {
       document.removeEventListener('keydown', closeEscape)
     }
   }, [topPanel])
+
+  useEffect(() => {
+    let live = true
+    ensureActiveStoreContext()
+      .then(({ stores, activeStoreId: selected }) => {
+        if (!live) return
+        setAvailableStores(Array.isArray(stores) ? stores : [])
+        setActiveStoreState(selected || '')
+      })
+      .catch(() => {
+        if (!live) return
+        setAvailableStores(getAvailableStores())
+        setActiveStoreState(getActiveStoreId())
+      })
+    return () => { live = false }
+  }, [storedUser?.companyId])
 
   useEffect(() => {
     let live = true
@@ -2167,6 +2185,27 @@ function Desktop({ onLock, onSignOut }) {
         <div className="menubar-spacer" />
 
         <div className="menubar-right">
+          {availableStores.length ? (
+            <label className="topbar-store-context" title="Active store">
+              <Store size={14} strokeWidth={2.1} />
+              <select
+                aria-label="Active store"
+                value={activeStoreId}
+                onChange={(event) => {
+                  const nextStoreId = event.target.value
+                  setActiveStoreId(nextStoreId)
+                  setActiveStoreState(nextStoreId)
+                  const currentUser = getStoredUser()
+                  sessionStorage.setItem('onepos_user', JSON.stringify({ ...currentUser, storeId: nextStoreId || null }))
+                }}
+              >
+                {availableStores.length > 1 ? <option value="">Select store</option> : null}
+                {availableStores.map((store) => (
+                  <option key={store.id} value={store.id}>{store.name || store.code || 'Store'}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <div className="topbar-status-wrap">
             <button type="button" className={`status-button ${topPanel === 'wifi' ? 'is-active' : ''}`} aria-label="Connection health" aria-expanded={topPanel === 'wifi'} onClick={() => setTopPanel(topPanel === 'wifi' ? '' : 'wifi')}>
               <Wifi size={17} strokeWidth={2.1} />
@@ -2250,7 +2289,7 @@ function Desktop({ onLock, onSignOut }) {
       </AnimatePresence>
 
       <LazyLoadBoundary resetKey={`${activeApp || ""}:${routeState?.section || ""}`}>
-      <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>
+      <Suspense key={activeStoreId || 'no-store'} fallback={<div className="route-loading" role="status">Loading…</div>}>
         {activeApp === 'developer' ? (
           canManageOneEngine ? (
             <OneDeveloperPage
@@ -2327,9 +2366,9 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'custom-reports' ? (
           <CustomReportsPage onBack={() => openItem('reports')} />
         ) : activeApp === 'integrations' ? (
-          <IntegrationsAdmin storeId={routeState?.storeId || storedUser?.storeId || null} />
+          <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'accounting' ? (
-          <AccountingAdmin storeId={routeState?.storeId || storedUser?.storeId || null} />
+          <AccountingAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'online-orders' ? (
           <OnlineOrdersAdmin />
         ) : activeApp === 'order-prep' ? (
