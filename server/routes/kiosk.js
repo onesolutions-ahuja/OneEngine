@@ -922,6 +922,7 @@ export default function createKioskRouter({
         message: "Payment complete — order sent for collection",
         data: {
           order,
+          saleId: sale.id,
           collectionNumber,
           receiptNumber: sale.receipt_number,
           fulfilmentType,
