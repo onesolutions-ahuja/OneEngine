@@ -4489,6 +4489,31 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({success:true,data:result.rows[0]});
   });
 
+  router.post("/platform/approval-processes/:id/test", ...manage, async (req,res) => {
+    try {
+      const processResult=await db("SELECT * FROM platform_approval_processes WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId]);
+      const process=processResult.rows[0]; if(!process)return res.status(404).json({success:false,message:"Approval process not found"});
+      const steps=await db("SELECT * FROM platform_approval_steps WHERE process_id=$1 ORDER BY step_order",[process.id]);
+      const record=req.body?.record||{}; const objectResult=await db("SELECT * FROM platform_objects WHERE id=$1 AND company_id=$2",[process.object_id,req.user.companyId]);
+      const object=objectResult.rows[0]; const fields=await db("SELECT * FROM platform_fields WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2)",[process.object_id,req.user.companyId]);
+      const matched=evaluateCondition(process.conditions,fields.rows,record);
+      const trace=[{key:"criteria",label:"Entry criteria",status:matched?"success":"failed",message:matched?"Record matches the approval entry criteria.":"Record does not match the approval entry criteria."}];
+      if(matched) {
+        for(const step of steps.rows) {
+          const type=step.assignment_type||"role"; const ac=cfg(step.assignment_config); let detail=type;
+          if(type==="role") { const role=await db("SELECT name FROM roles WHERE id=$1 AND company_id=$2",[step.role_id,req.user.companyId]); detail=role.rows[0]?.name||"Role unavailable"; }
+          if(type==="user") { const user=await db("SELECT username,email FROM users WHERE id=$1 AND company_id=$2",[ac.userId,req.user.companyId]); detail=user.rows[0]?.username||user.rows[0]?.email||"User unavailable"; }
+          if(type==="group") { const group=await db("SELECT name FROM platform_approval_groups WHERE id=$1 AND company_id=$2",[ac.groupId,req.user.companyId]); detail=group.rows[0]?.name||"Group unavailable"; }
+          if(type==="record_user") detail=record?.[ac.field]?`Record field ${ac.field} → ${record[ac.field]}`:`Record field ${ac.field||"?"} is empty`;
+          trace.push({key:`step-${step.step_order}`,label:step.label,status:detail.includes("unavailable")||detail.includes("empty")?"failed":"success",message:`Approver: ${detail}. Rule: ${cfg(step.config).approvalRule||"FIRST_RESPONSE"}.`});
+        }
+        trace.push({key:"lock",label:"Record lock",status:"success",message:cfg(process.config).lockRecord===false?"Record remains editable while pending.":"Record will be locked while approval is pending."});
+        trace.push({key:"actions",label:"Outcome actions",status:"success",message:`Submission: ${(cfg(process.config).submissionActions||[]).length}; approval: ${(cfg(process.config).finalApprovalActions||[]).length}; rejection: ${(cfg(process.config).finalRejectionActions||[]).length}. Test mode did not execute actions or change data.`});
+      }
+      res.json({success:true,data:{matched,trace,rolledBack:true,mutated:false}});
+    } catch(error){console.error("Approval test error:",error);res.status(500).json({success:false,message:error.message||"Unable to test approval"});}
+  });
+
   router.get("/platform/objects/:objectKey/records/:recordId/approval", ...recordAccess, async (req,res) => {
     try {
       const {object}=await getRecordMetadata(req.params.objectKey,req);
