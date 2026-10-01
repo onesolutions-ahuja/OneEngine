@@ -456,21 +456,29 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     [email]
   );
 
-  const passwordHash = await bcrypt.hash(password, 12);
   if (existing.rows[0]) {
+    /*
+     * Bootstrap is identity/RBAC reconciliation, not a password rotation path.
+     * Re-hashing BOOTSTRAP_SUPERADMIN_PASSWORD on every deploy silently changes
+     * an existing user's password whenever the Render bootstrap secret differs
+     * from the password the user currently uses (or from E2E credentials).
+     * Preserve the existing password hash. Password changes must go through the
+     * explicit password-reset/change-password flow.
+     */
     const updated = await pool.query(
       `UPDATE users
-          SET company_id=$1,role_id=$2,username=$3,email=$3,password_hash=$4,
-              full_name=$5,active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
-        WHERE id=$6
+          SET company_id=$1,role_id=$2,username=$3,email=$3,
+              full_name=$4,active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
+        WHERE id=$5
         RETURNING id`,
-      [companyId, superadminRoleId, email, passwordHash, name, existing.rows[0].id]
+      [companyId, superadminRoleId, email, name, existing.rows[0].id]
     );
     await pool.query("UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1", [updated.rows[0].id]);
-    console.log("onePOS: existing Superadmin synchronized as normal company-bound RBAC user");
-    return { created: false, updated: true, id: updated.rows[0].id, roleId: superadminRoleId };
+    console.log("onePOS: existing Superadmin synchronized as normal company-bound RBAC user; password preserved");
+    return { created: false, updated: true, passwordPreserved: true, id: updated.rows[0].id, roleId: superadminRoleId };
   }
 
+  const passwordHash = await bcrypt.hash(password, 12);
   const inserted = await pool.query(
     `INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active)
      VALUES ($1,$2,$3,$3,$4,$5,FALSE,TRUE)
