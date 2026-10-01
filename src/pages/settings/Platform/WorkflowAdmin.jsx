@@ -811,7 +811,7 @@ function workflowActionIssue(step, definition = null) {
   }
   if (step.type === "CALL_FUNCTION" && !config.functionKey) return "Choose a registered function.";
   if (step.type === "RUN_SUBFLOW" && !config.workflowId) return "Choose a subflow.";
-  if (step.type === "WEBHOOK" && !config.url) return "Enter the webhook URL.";
+  if (["WEBHOOK","CALL_WEBHOOK","HTTP_REQUEST"].includes(step.type) && !config.url && !config.endpoint) return "Enter the request URL.";
   if (step.type === "SCHEDULE_PATH") {
     if (!String(config.pathLabel || "").trim()) return "Name the Scheduled Path.";
     if (!Array.isArray(config.branch) || !config.branch.length) return "Choose at least one step for the Scheduled Path.";
