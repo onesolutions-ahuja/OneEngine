@@ -2429,7 +2429,6 @@ VALUES
 ('reports.payments.view', 'Payments Report', 'View the payment method breakdown report'),
 ('reports.purchases.view', 'Purchase Report', 'View the purchase orders report'),
 ('reports.returns.view', 'Sales Returns Report', 'View the sales returns report'),
-('reports.profit.view', 'Profit Report', 'View the profit / margin report'),
 ('reports.till.view', 'Till Report', 'View the till session report'),
 ('reports.vat.view', 'Tax / VAT Report', 'View the tax/VAT report'),
 ('reports.summary.view', 'Reports Summary', 'View the reports summary cards'),
