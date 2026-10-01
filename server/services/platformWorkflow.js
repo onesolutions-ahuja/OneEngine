@@ -4309,6 +4309,7 @@ function workflowResultsContainStatus(entries = [], status = "waiting") {
   return (Array.isArray(entries) ? entries : []).some((entry) => {
     if (String(entry?.result?.status || "").toLowerCase() === String(status).toLowerCase()) return true;
     if (workflowResultsContainStatus(entry?.result?.branch?.results || [], status)) return true;
+    if (workflowResultsContainStatus(entry?.result?.faultBranch?.results || [], status)) return true;
     const iterations = Array.isArray(entry?.result?.iterations) ? entry.result.iterations : [];
     return iterations.some((iteration) => workflowResultsContainStatus(iteration?.results || [], status));
   });
