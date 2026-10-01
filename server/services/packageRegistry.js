@@ -241,7 +241,6 @@ export function packageDefinition(entry) {
     connector_core: "Hidden runtime, capability routing and hardware-service contracts for installable connector apps.",
     communication_core: "Provider-neutral communication events, templates, delivery tracking and workflow actions for Email, SMS and WhatsApp.",
     mobile_scanner_connector: "Send-only phone barcode scanning paired to one store and till.",
-    payment_reference: "Test-only reference payment simulator; not a certified or production payment provider.",
     paypal_qr: "Metadata-driven PayPal QR payment connector for transaction-specific checkout and verification.",
     one_connect_google: "Licensed Google Workspace/OpenID Connect single sign-on for onePOS users.",
     smsgate_connector: "SMSGate Android SMS provider for Communication Core.",
