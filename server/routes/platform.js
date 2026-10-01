@@ -17,6 +17,7 @@ import {
   getWorkflowActionRegistry,
   validateWorkflowAction,
   friendlyWorkflowError,
+  workflowResultsContainStatus,
 } from "../services/platformWorkflow.js";
 import { decidePlatformApproval, submitPlatformApproval, reassignPlatformApproval, recallPlatformApproval, isPlatformRecordLocked } from "../services/platformApprovals.js";
 import { systemObject, systemObjectRbacPermission, tenantFields, isExtensionField, safeSystemFields, hydrateExtensions, appendSystemReadScope, platformFieldSql } from "../services/platformSystemObjects.js";
@@ -2386,13 +2387,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             workflowVersion: Number(workflow.active_version || workflow.version || 1),
             trigger: "page_interaction",
           });
+          const waiting = workflowResultsContainStatus(results, "waiting");
           if (run?.id) {
             await db(
-              "UPDATE platform_workflow_runs SET status=$1, completed_at=NOW(), updated_at=NOW() WHERE id=$2 AND company_id=$3",
-              ["COMPLETED", run.id, req.user.companyId]
+              `UPDATE platform_workflow_runs
+                  SET status=$1,
+                      completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                      updated_at=NOW()
+                WHERE id=$2 AND company_id=$3`,
+              [waiting ? "WAITING" : "COMPLETED", run.id, req.user.companyId]
             );
           }
-          return res.json({ success: true, data: { runId: run?.id || null, results } });
+          return res.json({ success: true, data: { runId: run?.id || null, status: waiting ? "WAITING" : "COMPLETED", results } });
         } catch (error) {
           if (run?.id) {
             await db(
@@ -5008,7 +5014,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           workflowVersion: Number(workflow.active_version || workflow.version || 1),
           trigger: "till_button",
         });
-        return res.json({ success: true, data: { results, runId: run?.id || null } });
+        const waiting = workflowResultsContainStatus(results, "waiting");
+        if (run?.id) {
+          await db(
+            `UPDATE platform_workflow_runs
+                SET status=$1,
+                    completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                    updated_at=NOW()
+              WHERE id=$2 AND company_id=$3`,
+            [waiting ? "WAITING" : "COMPLETED", run.id, req.user.companyId]
+          );
+        }
+        return res.json({ success: true, data: { results, runId: run?.id || null, status: waiting ? "WAITING" : "COMPLETED" } });
       }
 
       const target = await resolveButtonTarget(req, {
@@ -5097,8 +5114,43 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (!workflow) return res.status(404).json({ success: false, message: "Configured workflow not found" });
         const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
         if (!actions.length) return res.status(422).json({ success: false, message: "Configured workflow contains no executable actions" });
-        const results = await executeWorkflowActions({ actions, db, pool, req, object, record, recordId: req.params.recordId, companyId: req.user.companyId, trigger: "record_page_button" });
-        return res.json({ success: true, data: { results } });
+        const run = await createWorkflowRun({
+          db,
+          companyId: req.user.companyId,
+          workflowId: workflow.id,
+          workflowName: workflow.name,
+          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          objectId: object.id,
+          recordId: req.params.recordId,
+          triggerKey: "record_page_button",
+          status: "RUNNING",
+          metadata: { buttonKey: button.button_key, actorUserId: req.user.id || null, storeId: req.user.storeId || null },
+        });
+        const results = await executeWorkflowActions({
+          actions,
+          db,
+          pool,
+          req,
+          object,
+          record,
+          recordId: req.params.recordId,
+          companyId: req.user.companyId,
+          runId: run?.id || null,
+          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          trigger: "record_page_button",
+        });
+        const waiting = workflowResultsContainStatus(results, "waiting");
+        if (run?.id) {
+          await db(
+            `UPDATE platform_workflow_runs
+                SET status=$1,
+                    completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                    updated_at=NOW()
+              WHERE id=$2 AND company_id=$3`,
+            [waiting ? "WAITING" : "COMPLETED", run.id, req.user.companyId]
+          );
+        }
+        return res.json({ success: true, data: { results, runId: run?.id || null, status: waiting ? "WAITING" : "COMPLETED" } });
       }
 
       const target = await resolveButtonTarget(req, {
@@ -5256,13 +5308,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           workflowVersion: Number(workflow.active_version || workflow.version || 1),
           trigger: "record_page_action",
         });
+        const waiting = workflowResultsContainStatus(results, "waiting");
         if (run?.id) {
           await db(
-            "UPDATE platform_workflow_runs SET status=$1, completed_at=NOW(), updated_at=NOW() WHERE id=$2 AND company_id=$3",
-            ["COMPLETED", run.id, req.user.companyId]
+            `UPDATE platform_workflow_runs
+                SET status=$1,
+                    completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                    updated_at=NOW()
+              WHERE id=$2 AND company_id=$3`,
+            [waiting ? "WAITING" : "COMPLETED", run.id, req.user.companyId]
           );
         }
-        return res.json({ success: true, data: { runId: run?.id || null, results } });
+        return res.json({ success: true, data: { runId: run?.id || null, status: waiting ? "WAITING" : "COMPLETED", results } });
       } catch (error) {
         if (run?.id) {
           await db(
