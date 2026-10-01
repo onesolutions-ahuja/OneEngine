@@ -23,10 +23,9 @@ export default function createPlatformSecurityRouter({ authenticate, authorize, 
 
   async function resolveCompany(req, res, next) {
     try {
-      const platformManage = await hasOneEngineManageAccess(req.user?.id);
-      const legacyDeveloper = req.user?.isPlatformDeveloper === true || req.user?.is_platform_developer === true;
+      const canManageOneEngine = await hasOneEngineManageAccess(req.user?.id);
 
-      if (!platformManage && !legacyDeveloper) {
+      if (!canManageOneEngine) {
         if (req.headers["x-acting-company-id"]) return res.status(403).json({ success: false, message: "Tenant users cannot switch company context" });
         req.securityCompanyId = req.user.companyId;
         return next();
@@ -36,10 +35,8 @@ export default function createPlatformSecurityRouter({ authenticate, authorize, 
       if (!companyId) return res.status(409).json({ success: false, code: "ACTING_COMPANY_REQUIRED", message: "Select a company" });
 
       const result = await db(
-        `SELECT c.id FROM companies c
-         JOIN platform_developer_company_access a ON a.company_id=c.id
-         WHERE a.developer_id=$1 AND a.company_id=$2 AND a.active=true AND c.active=true`,
-        [req.user.id, companyId]
+        "SELECT id FROM companies WHERE id=$1 AND active=true LIMIT 1",
+        [companyId]
       );
 
       if (!result.rows.length) return res.status(403).json({ success: false, message: "You are not authorised for the selected company" });
