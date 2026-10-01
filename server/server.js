@@ -1701,7 +1701,7 @@ app.use("/api", createKioskRouter({ authenticate, authorize, db, pool, writeAudi
 
 app.use("/api", createReturnsRouter({ authenticate, authorize, db, pool, createInventoryMovement, writeAudit, canonicalTransactionWriter: createCanonicalRelatedTransaction }));
 
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, bcrypt, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
 /*
 |--------------------------------------------------------------------------
