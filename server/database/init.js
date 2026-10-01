@@ -136,6 +136,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           ["package.manage", "Manage Packages", "Install and manage onePOS packages"],
           ["product.manage", "Manage Products", "Execute product management actions"],
           ["records.create", "Create Records", "Create generic platform records"],
+          ["records.view", "View Records", "Read generic platform records in workflows"],
           ["records.delete", "Delete Records", "Delete generic platform records"],
           ["records.update", "Update Records", "Update generic platform records"],
           ["records.validate", "Validate Records", "Validate generic platform records"],
@@ -722,7 +723,29 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         `);
         console.log(`onePOS: visible OneAssistant confirmation messages ready: ${verified.rows[0]?.count || 0}`);
       },
-    },
+    },,
+    {
+      key: "0028_workflow_records_view_permission",
+      version: "28",
+      name: "Add workflow record read permission",
+      up: async client => {
+        await client.query(
+          `INSERT INTO permissions (code,name,description)
+           VALUES ('records.view','View Records','Read generic platform records in workflows')
+           ON CONFLICT (code) DO UPDATE
+             SET name=EXCLUDED.name,
+                 description=COALESCE(NULLIF(permissions.description,''),EXCLUDED.description)`
+        );
+        await client.query(
+          `INSERT INTO role_permissions (role_id,permission_id)
+           SELECT r.id,p.id
+             FROM roles r
+             JOIN permissions p ON p.code='records.view'
+            WHERE r.api_key='platform_superadmin'
+           ON CONFLICT (role_id,permission_id) DO NOTHING`
+        );
+      },
+    }
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
