@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      ONEPOS_E2E_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
+      ONEPOS_E2E_BASE_URL: https://smart-theme.onrender.com/
       ONEPOS_E2E_USERNAME: ${{ secrets.ONEPOS_E2E_USERNAME }}
       ONEPOS_E2E_PASSWORD: ${{ secrets.ONEPOS_E2E_PASSWORD }}
     steps:
@@ -42,7 +42,7 @@ jobs:
       - name: Wait for deployed frontend
         run: |
           for i in {1..18}; do
-            if curl -fsSL "https://onesolutions-ahuja.github.io/OneEngine/" >/dev/null; then
+            if curl -fsSL "https://smart-theme.onrender.com/" >/dev/null; then
               exit 0
             fi
             sleep 10
