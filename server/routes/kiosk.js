@@ -311,6 +311,45 @@ export default function createKioskRouter({
     }
   });
 
+  router.post("/kiosk/assistance", authenticate, async (req, res) => {
+    const deviceKey = String(req.body?.deviceKey || req.user?.kioskDeviceKey || "").trim();
+    const note = String(req.body?.note || "Customer requested assistance").trim().slice(0, 300);
+    if (!deviceKey) return res.status(400).json({ success: false, message: "Kiosk device key is required" });
+    if (req.user?.mode === "kiosk" && String(req.user.kioskDeviceKey || "") !== deviceKey) {
+      return res.status(403).json({ success: false, message: "This kiosk session belongs to another device" });
+    }
+    try {
+      const result = await db(
+        `UPDATE kiosk_devices
+            SET assistance_requested_at=NOW(),assistance_note=$1,updated_at=NOW()
+          WHERE company_id=$2 AND store_id=$3 AND device_key=$4 AND active=TRUE
+          RETURNING id,name,assistance_requested_at,assistance_note`,
+        [note, req.user.companyId, req.user.storeId, deviceKey]
+      );
+      if (!result.rows.length) return res.status(404).json({ success: false, message: "Kiosk device is unavailable" });
+      await writeAudit?.(req.user.companyId, req.user.id || null, "KIOSK_ASSISTANCE_REQUESTED", "kiosk_device", result.rows[0].id, { note });
+      res.json({ success: true, message: "A member of staff has been notified", data: result.rows[0] });
+    } catch (error) {
+      console.error("OneKiosk assistance request error:", error);
+      res.status(500).json({ success: false, message: "Unable to request assistance" });
+    }
+  });
+
+  router.post("/kiosk/devices/:id/assistance-clear", authenticate, async (req, res) => {
+    if (req.user?.mode === "kiosk") return res.status(403).json({ success: false, message: "Staff access required" });
+    try {
+      const result = await db(
+        `UPDATE kiosk_devices SET assistance_requested_at=NULL,assistance_note=NULL,updated_at=NOW()
+          WHERE id=$1 AND company_id=$2 AND store_id=$3 RETURNING id`,
+        [req.params.id, req.user.companyId, req.user.storeId]
+      );
+      if (!result.rows.length) return res.status(404).json({ success: false, message: "Kiosk device not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: "Unable to clear assistance request" });
+    }
+  });
+
   router.get("/kiosk/flows", authenticate, async (req, res) => {
     try {
       const result = await db(
@@ -362,7 +401,7 @@ export default function createKioskRouter({
             AND pr.action->>'flowType'='KIOSK_EXPERIENCE'
             AND pr.active=TRUE
             AND pr.lifecycle_status='ACTIVE'
-          WHERE kd.company_id=$1 AND kd.store_id=$2 AND kd.device_key=$3
+          WHERE kd.company_id=$1 AND kd.store_id=$2 AND kd.device_key=$3 AND kd.active=TRUE
           LIMIT 1`,
         [req.user.companyId, req.user.storeId, deviceKey]
       );
@@ -967,6 +1006,7 @@ export function createKioskModeGate() {
       (method === "GET" && /^\/api\/kiosk\/products\/[^/]+\/options$/.test(path)) ||
       (method === "POST" && path === "/api/kiosk/quote") ||
       (method === "POST" && path === "/api/kiosk/availability") ||
+      (method === "POST" && path === "/api/kiosk/assistance") ||
       (method === "POST" && path === "/api/kiosk/orders/from-sale") ||
       (method === "POST" && /^\/api\/kiosk\/devices\/[^/]+\/heartbeat$/.test(path)) ||
       (method === "POST" && path === "/api/sales") ||
