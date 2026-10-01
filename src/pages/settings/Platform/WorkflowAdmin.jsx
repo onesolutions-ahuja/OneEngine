@@ -531,7 +531,7 @@ function StepEditor({ step, index, updateStep, moveStep, duplicateStep, deleteSt
                 rows={4}
                 placeholder="Your {{serviceName}} appointment is booked for {{startsAt}}."
               />
-              <p className="mt-1 text-xs text-slate-500">Available values: {{serviceName}}, {{startsAt}}, {{appointmentId}}. If left blank, OneAssistant uses its standard confirmation message.</p>
+              <p className="mt-1 text-xs text-slate-500">Available values: {"{{serviceName}}"}, {"{{startsAt}}"}, {"{{appointmentId}}"}. If left blank, OneAssistant uses its standard confirmation message.</p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Recipient override</label>
