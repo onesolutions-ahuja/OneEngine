@@ -9,6 +9,11 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+function historyLabel(entry) {
+  const key=String(entry?.event_type||entry?.decision||"activity").toLowerCase();
+  return ({submitted:"Submitted for approval",approver_approved:"Approver approved",step_approved:"Approval step completed",approved:"Approval completed",rejected:"Approval rejected",reassigned:"Approval reassigned",recalled:"Approval recalled",due_reminder:"Approval reminder sent",escalated:"Approval escalated",assignment_failed:"Approver could not be resolved",approve:"Approved",reject:"Rejected"})[key]||key.replaceAll("_"," ").replace(/\b\w/g,m=>m.toUpperCase());
+}
+
 function normalizedStatus(status) {
   return String(status || "pending").toUpperCase();
 }
@@ -239,7 +244,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
               <div className="space-y-2">
                 {[...(history.events||[]),...(history.actions||[])].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map((entry,index)=>(
                   <div key={entry.id||index} className="rounded-lg border p-2 text-sm">
-                    <strong>{entry.event_type || entry.decision || "Activity"}</strong>
+                    <strong>{historyLabel(entry)}</strong>
                     <span className="ml-2 text-slate-500">{entry.actor_name || "System"} · {formatDate(entry.created_at)}</span>
                     {entry.comment ? <div className="mt-1">{entry.comment}</div> : null}
                   </div>
