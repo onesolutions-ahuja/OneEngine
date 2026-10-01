@@ -148,7 +148,15 @@ app.use(cors({
     callback(isAllowedOrigin(origin) ? null : new Error("CORS origin not allowed"), isAllowedOrigin(origin));
   },
   credentials: true,
-  allowedHeaders: ["Authorization", "Content-Type", "X-Acting-Company-Id", "X-Requested-With"],
+  allowedHeaders: [
+    "Authorization",
+    "Content-Type",
+    "X-Acting-Company-Id",
+    "X-Store-Id",
+    "X-OneEngine-Capability",
+    "X-OneEngine-Runtime",
+    "X-Requested-With",
+  ],
   methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   maxAge: 86400,
 }));
