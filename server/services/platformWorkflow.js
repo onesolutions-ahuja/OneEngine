@@ -3174,6 +3174,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           sourceStepRunId: stepRunId || null,
           recordId: record?.id || null,
           objectId: object?.id || null,
+          workflowVariables: redact(workflowVariables),
         },
         runAt,
         idempotencyKey: `${tenantId || "workflow"}:scheduled-path:${runId || "no-run"}:${action.id || action.pathLabel}:${runAt.toISOString()}`,
