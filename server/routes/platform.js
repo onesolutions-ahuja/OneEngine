@@ -4435,7 +4435,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         ORDER BY r.submitted_at DESC`,
       [req.user.companyId, req.query.status || null]
     );
-    res.json({ success: true, data: result.rows });
+    const data=result.rows.map(row=>({
+      ...row,
+      can_decide: row.status==="pending" && ((row.assigned_to && String(row.assigned_to)===String(req.user.id)) || (!row.assigned_to && String(row.role_id)===String(req.user.roleId))),
+      can_reassign: row.status==="pending" && cfg(row.process_config).allowReassign!==false && ((row.assigned_to && String(row.assigned_to)===String(req.user.id)) || (!row.assigned_to && String(row.role_id)===String(req.user.roleId))),
+      can_recall: row.status==="pending" && String(row.submitted_by)===String(req.user.id),
+    }));
+    res.json({ success: true, data });
   });
 
   router.get("/platform/approval-requests/:requestId/history", authenticate, async (req, res) => {
