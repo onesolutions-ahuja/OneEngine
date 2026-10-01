@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      ONEPOS_E2E_USERNAME: ${{ secrets.ONEPOS_E2E_USERNAME }}
-      ONEPOS_E2E_PASSWORD: ${{ secrets.ONEPOS_E2E_PASSWORD }}
+      ONEPOS_E2E_USERNAME: ${{ secrets.ONEPOS_PLAYWRIGHT_USERNAME }}
+      ONEPOS_E2E_PASSWORD: ${{ secrets.ONEPOS_PLAYWRIGHT_PASSWORD }}
       PLAYWRIGHT_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
       ONEPOS_API_URL: https://onepos.onrender.com
       ONEPOS_E2E_ORIGIN: https://onesolutions-ahuja.github.io
@@ -45,8 +45,10 @@ jobs:
           npm run audit:apps
           npm run audit:workflow-coverage
           npm run build
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Reinstall Playwright Chromium
+        run: |
+          rm -rf ~/.cache/ms-playwright
+          npx playwright install --with-deps chromium
       - name: Wait for deployed frontend and API
         shell: bash
         run: |
@@ -76,7 +78,7 @@ jobs:
             exit 1
           fi
       - name: Run Workflow Builder regression
-        run: npx playwright test tests/e2e/workflow-builder-regression.spec.mjs --project=chromium
+        run: npx playwright test tests/e2e/workflow-builder-regression.spec.mjs --project=desktop-chromium
       - name: Upload Playwright report and traces
         if: always()
         uses: actions/upload-artifact@v4
