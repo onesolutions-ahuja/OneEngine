@@ -122,7 +122,81 @@ const PORT = process.env.PORT || 10000;
 |--------------------------------------------------------------------------
 */
 
-app.use(cors());
+const configuredCorsOrigins = String(process.env.CORS_ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const defaultCorsOrigins = new Set([
+  "https://onesolutions-ahuja.github.io",
+  "https://smart-theme.onrender.com",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+]);
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (defaultCorsOrigins.has(origin) || configuredCorsOrigins.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:" && (url.hostname === "onepos.com" || url.hostname.endsWith(".onepos.com"));
+  } catch {
+    return false;
+  }
+};
+app.use(cors({
+  origin(origin, callback) {
+    callback(isAllowedOrigin(origin) ? null : new Error("CORS origin not allowed"), isAllowedOrigin(origin));
+  },
+  credentials: true,
+  allowedHeaders: ["Authorization", "Content-Type", "X-Acting-Company-Id", "X-Requested-With"],
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  maxAge: 86400,
+}));
+
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  if (req.secure || String(req.headers["x-forwarded-proto"] || "").toLowerCase() === "https") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+  next();
+});
+
+function createFixedWindowRateLimiter({ windowMs, max, keyPrefix }) {
+  const buckets = new Map();
+  const cleanup = () => {
+    const now = Date.now();
+    for (const [key, entry] of buckets) if (entry.resetAt <= now) buckets.delete(key);
+  };
+  const timer = setInterval(cleanup, Math.max(60_000, Math.min(windowMs, 15 * 60_000)));
+  timer.unref?.();
+  return (req, res, next) => {
+    const now = Date.now();
+    const address = String(req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown").split(",")[0].trim();
+    const key = `${keyPrefix}:${address}`;
+    let entry = buckets.get(key);
+    if (!entry || entry.resetAt <= now) {
+      entry = { count: 0, resetAt: now + windowMs };
+      buckets.set(key, entry);
+    }
+    entry.count += 1;
+    res.setHeader("RateLimit-Limit", String(max));
+    res.setHeader("RateLimit-Remaining", String(Math.max(0, max - entry.count)));
+    res.setHeader("RateLimit-Reset", String(Math.ceil(entry.resetAt / 1000)));
+    if (entry.count > max) {
+      res.setHeader("Retry-After", String(Math.ceil((entry.resetAt - now) / 1000)));
+      return res.status(429).json({ success: false, message: "Too many requests. Please try again later." });
+    }
+    next();
+  };
+}
+const apiLimiter = createFixedWindowRateLimiter({ windowMs: 60_000, max: 600, keyPrefix: "api" });
+const loginLimiter = createFixedWindowRateLimiter({ windowMs: 15 * 60_000, max: 5, keyPrefix: "login" });
+app.use("/api", apiLimiter);
 
 /*
  * Deliveroo webhooks are HMAC-signed over the RAW request body - parse it
@@ -602,7 +676,7 @@ app.get("/api/auth/google/status", async (req, res) => {
 });
 
 app.get("/api/auth/google/start", async (req, res) => {
-  const secret = process.env.JWT_SECRET || "development-secret-change-this";
+  const secret = process.env.JWT_SECRET;
   const returnTo = safeGoogleReturnTo(req.query?.returnTo);
   try {
     const email = String(req.query?.email || "").trim().toLowerCase();
@@ -651,7 +725,7 @@ app.get("/api/auth/google/start", async (req, res) => {
 });
 
 app.get("/api/auth/google/callback", async (req, res) => {
-  const secret = process.env.JWT_SECRET || "development-secret-change-this";
+  const secret = process.env.JWT_SECRET;
 
   let returnTo = "https://onesolutions-ahuja.github.io/smart-theme/";
   try {
@@ -769,7 +843,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
   }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", loginLimiter, async (req, res) => {
   const loginStartedAt = Date.now();
   const loginTimings = {};
   const markLoginTiming = (name, startedAt) => { loginTimings[name] = Date.now() - startedAt; };
