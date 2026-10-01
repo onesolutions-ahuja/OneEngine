@@ -3779,6 +3779,9 @@ export async function executeWorkflowActions({ actions, ...context }) {
       if (resolveWorkflowActionType(item) === "ASSIGNMENT" && priorResult?.variableName) {
         workflowVariables.variables[priorResult.variableName] = priorResult.value;
       }
+      if (["CONSTANT","FORMULA"].includes(resolveWorkflowActionType(item)) && priorResult?.resourceName) {
+        workflowVariables.variables[priorResult.resourceName] = priorResult.value;
+      }
       completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
       continue;
     }
