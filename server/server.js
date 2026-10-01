@@ -1919,75 +1919,6 @@ async function markPlatformBootstrapCurrent(fingerprint) {
   );
 }
 
-async function runOneTimeTestTenantCleanup() {
-  if (String(process.env.ONEPOS_CLEANUP_TEST_TENANTS || "") !== "keep-top-5-v1") return;
-
-  const keepNames = [
-    "onePOS Demo",
-    "profit-4bb1e232",
-    "profit-bffb422a",
-    "profit-4fb3c146",
-    "profit-5c7c14a8",
-  ];
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    const keepCheck = await client.query(
-      "SELECT id, name FROM companies WHERE name = ANY($1::text[]) ORDER BY name",
-      [keepNames]
-    );
-    if (keepCheck.rowCount !== keepNames.length) {
-      throw new Error(`Tenant cleanup aborted: expected ${keepNames.length} preserved companies, found ${keepCheck.rowCount}`);
-    }
-
-    const before = await client.query("SELECT COUNT(*)::int AS count FROM companies");
-
-    await client.query(
-      `DELETE FROM hospitality_bill_sales h
-         USING sales s
-         WHERE h.sale_id = s.id
-           AND s.company_id NOT IN (SELECT id FROM companies WHERE name = ANY($1::text[]))`,
-      [keepNames]
-    );
-    await client.query(
-      `DELETE FROM refunds r
-         USING sales s
-         WHERE r.sale_id = s.id
-           AND s.company_id NOT IN (SELECT id FROM companies WHERE name = ANY($1::text[]))`,
-      [keepNames]
-    );
-    await client.query(
-      "DELETE FROM sales WHERE company_id NOT IN (SELECT id FROM companies WHERE name = ANY($1::text[]))",
-      [keepNames]
-    );
-    await client.query(
-      "DELETE FROM audit_logs WHERE company_id NOT IN (SELECT id FROM companies WHERE name = ANY($1::text[]))",
-      [keepNames]
-    );
-    const deleted = await client.query(
-      "DELETE FROM companies WHERE name <> ALL($1::text[]) RETURNING name",
-      [keepNames]
-    );
-
-    const after = await client.query("SELECT COUNT(*)::int AS count FROM companies");
-    if (after.rows[0]?.count !== 5) {
-      throw new Error(`Tenant cleanup verification failed: expected 5 companies, found ${after.rows[0]?.count}`);
-    }
-
-    await client.query("COMMIT");
-    console.log(
-      `onePOS: one-time tenant cleanup complete; companies ${before.rows[0]?.count} -> ${after.rows[0]?.count}; deleted ${deleted.rowCount}`
-    );
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 async function startServer() {
   try {
     const trustedRuntime = validateTrustedRuntime();
@@ -1998,7 +1929,6 @@ async function startServer() {
     await db("SELECT NOW()");
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
-    await runOneTimeTestTenantCleanup();
 
     const recoveredCommands = await db(
       `UPDATE platform_workflow_runs
