@@ -3424,7 +3424,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       for (let index = 0; index < actions.length; index += 1) {
         const action = actions[index];
         const actionType = String(action?.type || action?.key || "").toUpperCase();
-        const faultTargets = Array.isArray(action.faultBranch) ? action.faultBranch.map(String) : [];
+        const faultMode = String(action?.faultMode || (Array.isArray(action?.faultBranch) && action.faultBranch.length ? "ROUTE" : "FAIL")).toUpperCase();
+        if (!["FAIL","CONTINUE","STOP","ROUTE","RETRY"].includes(faultMode)) return `Action "${action.label || action.id || index + 1}" has an unsupported On Error behaviour`;
+        if (faultMode === "RETRY" && (!Number.isFinite(Number(action.retryCount || 1)) || Number(action.retryCount || 1) < 1 || Number(action.retryCount || 1) > 3)) return `Action "${action.label || action.id || index + 1}" retry count must be between 1 and 3`;
+        if (faultMode === "ROUTE" && (!Array.isArray(action.faultBranch) || !action.faultBranch.length)) return `Action "${action.label || action.id || index + 1}" requires at least one On Error path step`;
+        const faultTargets = ["ROUTE","RETRY"].includes(faultMode) && Array.isArray(action.faultBranch) ? action.faultBranch.map(String) : [];
         for (const targetId of faultTargets) {
           if (!indexById.has(targetId)) return `Action "${action.label || action.id || index + 1}" error path references an action that no longer exists`;
           if (indexById.get(targetId) <= index) return `Action "${action.label || action.id || index + 1}" error path can only route to later actions`;
