@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { LayoutGrid, MonitorSmartphone, Settings as GearIcon, Users } from 'lucide-react'
+import { LayoutDashboard, LayoutGrid, MonitorSmartphone, Settings as GearIcon, Users } from 'lucide-react'
 import { localAppIcon } from '../../utils/appMarketplace'
 import JarvisOrb, { ORB_STATES } from '../jarvis/JarvisOrb'
 import JarvisPanel from '../jarvis/JarvisPanel'
 
 export const dockItems = [
   { id: 'launchpad', label: 'Launcher', icon: LayoutGrid },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
   { id: 'builder', label: 'OneDeveloper', icon: LayoutGrid },
   { id: 'contacts', label: 'Contacts', icon: Users },
@@ -17,7 +18,7 @@ export const dockItems = [
 
 const mobileDockItems = [
   { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'till', label: 'Till', icon: MonitorSmartphone },
   { id: 'workspace', label: 'Workspace', icon: Users },
   { id: 'settings', label: 'Settings', icon: GearIcon },
