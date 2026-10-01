@@ -2,7 +2,10 @@ import { apiUrl } from '../services/api'
 
 const ICON_ALIASES = Object.freeze({
   onestore: 'onestore',
-  retail_pos: 'retail-pos',
+  onetill: 'onetill',
+  one_till: 'onetill',
+  till: 'onetill',
+  retail_pos: 'onetill',
   receipt_qr: 'default-app',
   inventory: 'inventory',
   batch_expiry: 'batch-expiry',
@@ -67,7 +70,10 @@ const ICON_ALIASES = Object.freeze({
   stripe: 'one-connect-stripe',
 })
 
+const PNG_APP_ICONS = new Set(['onetill'])
+
 const BRAND_ICON_MATCHES = [
+  [/\bone\s*till\b|\bone_till\b|\bretail\s*pos\b/i,'onetill'],
   [/quickbooks/i,'quickbooks'],[/shopify/i,'shopify'],[/xero/i,'xero-accounting'],[/sage/i,'sage-business-cloud-accounting'],
   [/prestashop/i,'prestashop'],[/woocommerce|woo commerce/i,'woocommerce'],[/wix/i,'wix'],[/uber\s*eats/i,'uber-eats'],
   [/deliveroo/i,'deliveroo'],[/just\s*eat/i,'just-eat'],[/whatsapp/i,'whatsapp'],
@@ -82,8 +88,9 @@ export const MARKETPLACE_CACHE_KEY = 'onepos.marketplace.catalog.v1'
 export function localAppIcon(assetKey = 'default-app') {
   const clean = String(assetKey || 'default-app').trim().toLowerCase().replaceAll('_', '-')
   const safe = /^[a-z0-9-]+$/.test(clean) ? clean : 'default-app'
+  const extension = PNG_APP_ICONS.has(safe) ? 'png' : 'svg'
   const base = import.meta.env.BASE_URL || '/'
-  return `${base}icons/apps/${safe}.svg`
+  return `${base}icons/apps/${safe}.${extension}`
 }
 
 export function appIconUrl(item) {
@@ -157,9 +164,6 @@ export function resolveAppOpenRoute(item) {
   const key = String(item?.package_key || item?.manifest?.packageKey || '')
   if (DEDICATED_OPEN_ROUTES[key]) return DEDICATED_OPEN_ROUTES[key]
 
-  // Connector packages own their setup lifecycle. Opening an installed
-  // connector must land on its schema-driven settings, never the generic
-  // Integrations list.
   const connectorApp = item?.manifest?.connectorApp || item?.company_installation?.manifest?.connectorApp
   if (connectorApp && !connectorApp.template) return `/app/connector-settings/${encodeURIComponent(key)}`
 
