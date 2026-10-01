@@ -12,6 +12,7 @@ import { bootstrapInitialSuperadmin } from "./database/rbacBootstrap.js";
 import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs } from "./services/platformJobs.js";
+import { processApprovalDueJob } from "./services/platformApprovals.js";
 import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
 import { validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
 import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
@@ -2825,6 +2826,7 @@ async function startServer() {
                 throw error;
               }
             }
+            if (job.kind === "APPROVAL_DUE") return processApprovalDueJob({ db, job });
             if (job.kind === "SHOPIFY_WEBHOOK_EVENT") {
               const execution = await executeSystemWorkflow({
                 db,
