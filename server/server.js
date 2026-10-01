@@ -42,6 +42,7 @@ import createInventoryBatchesRouter from "./routes/inventoryBatches.js";
 import createSalesRouter from "./routes/sales.js";
 import createLayawaysRouter from "./routes/layaways.js";
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
+import createKioskRouter from "./routes/kiosk.js";
 import createScanGoRouter from "./routes/scanAndGo.js";
 import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReturnsRouter from "./routes/returns.js";
@@ -1674,6 +1675,7 @@ app.use(
 
 app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, createInventoryMovement, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
 app.use("/api", createLayawaysRouter({ authenticate, authorize, db, pool, createInventoryMovement }));
+app.use("/api", createKioskRouter({ authenticate, authorize, db, pool, writeAudit }));
 
 app.use("/api", createReturnsRouter({ authenticate, authorize, db, pool, createInventoryMovement, writeAudit, canonicalTransactionWriter: createCanonicalRelatedTransaction }));
 
