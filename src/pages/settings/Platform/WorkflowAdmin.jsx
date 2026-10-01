@@ -2220,18 +2220,18 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               </div>
             </div>
 
-            {workflow.object ? (
-              <div className="space-y-3">
-                {["after_update","after_save","before_update","before_save","field_changed"].includes(workflow.trigger) ? (
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">When conditions become true</label>
-                    <select className={inputClass} value={workflow.entryTransition || "EVERY_TIME"} onChange={(event) => setWorkflow((current) => ({ ...current, entryTransition: event.target.value }))}>
-                      <option value="EVERY_TIME">Every time the record meets the conditions</option>
-                      <option value="UPDATED_TO_MEET">Only when the record is updated to meet the conditions</option>
-                    </select>
-                    <p className="mt-1 text-[11px] text-slate-500">“Only when updated to meet” runs when the full entry criteria changes from false to true. Later edits are ignored while the record remains matched.</p>
-                  </div>
-                ) : null}
+            <div className="space-y-3">
+              {["after_update","after_save","before_update","before_save","field_changed"].includes(workflow.trigger) ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">When conditions become true</label>
+                  <select className={inputClass} value={workflow.entryTransition || "EVERY_TIME"} onChange={(event) => setWorkflow((current) => ({ ...current, entryTransition: event.target.value }))}>
+                    <option value="EVERY_TIME">Every time the record meets the conditions</option>
+                    <option value="UPDATED_TO_MEET">Only when the record is updated to meet the conditions</option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-500">“Only when updated to meet” runs when the full entry criteria changes from false to true. Later edits are ignored while the record remains matched.</p>
+                </div>
+              ) : null}
+              {workflow.object ? (
                 <div>
                   <div className="mb-2 text-xs font-semibold text-slate-700">Entry conditions</div>
                   <StepConditionEditor
@@ -2245,8 +2245,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   />
                   <p className="mt-2 text-[11px] text-slate-500">Use Changed / Changed to for a specific field transition. Use the option above when the full entry criteria should transition from false to true.</p>
                 </div>
-              </div>
-            ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
+              ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
+            </div>
           </div>
         ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
       </aside> : null}
