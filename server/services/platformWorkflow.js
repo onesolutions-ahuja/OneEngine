@@ -1097,7 +1097,7 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
        FROM users u
        JOIN role_permissions rp ON rp.role_id=u.role_id
        JOIN permissions p ON p.id=rp.permission_id
-      WHERE u.active=true AND p.code='platform.manage'`
+      WHERE u.active=true AND p.code='oneengine.manage'`
   );
   for (const admin of platformAdmins.rows || []) {
     await db(
@@ -1657,7 +1657,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           operation: action.operation,
           input: action.input || {},
           platformCredentialAccess:
-            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("platform.manage"),
+            Array.isArray(req?.user?.permissions) && req.user.permissions.includes("oneengine.manage"),
           actorUserId: req?.user?.id || null,
         })),
       };
