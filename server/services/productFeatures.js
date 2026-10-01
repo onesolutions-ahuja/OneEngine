@@ -65,11 +65,16 @@ export async function loadSaleLineFeatures(client, companyId, items) {
   for (const item of items) {
     const modifiers = Array.isArray(item.modifiers) ? item.modifiers : [];
     const selected = [];
+    const productOwner = await client.query(
+      "SELECT parent_product_id FROM products WHERE id=$1 AND company_id=$2 LIMIT 1",
+      [item.productId, companyId]
+    );
+    const modifierOwnerId = productOwner.rows[0]?.parent_product_id || item.productId;
     const groupsResult = await client.query(
       `SELECT id, required, max_selections
          FROM product_modifier_groups
         WHERE company_id=$1 AND product_id=$2 AND active=true`,
-      [companyId, item.productId]
+      [companyId, modifierOwnerId]
     );
     const groupsById = new Map(groupsResult.rows.map((row) => [String(row.id), row]));
     const groupSelections = new Map();
@@ -82,7 +87,7 @@ export async function loadSaleLineFeatures(client, companyId, items) {
            INNER JOIN product_modifier_groups g ON g.id=o.group_id
           WHERE o.id=ANY($1::uuid[]) AND o.active=true AND g.company_id=$2
             AND g.product_id=$3 AND g.active=true`,
-        [optionIds, companyId, item.productId]
+        [optionIds, companyId, modifierOwnerId]
       );
       const byId = new Map(result.rows.map((row) => [String(row.id), row]));
       for (const modifier of modifiers) {
