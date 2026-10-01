@@ -164,8 +164,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
            SELECT r.id,p.id
              FROM roles r
              CROSS JOIN permissions p
-            WHERE r.company_id IS NULL
-              AND r.api_key='platform_superadmin'
+            WHERE r.api_key='platform_superadmin'
            ON CONFLICT (role_id,permission_id) DO NOTHING`
         );
       },
@@ -262,51 +261,78 @@ export async function ensureGlobalSystemProfile(pool, {
 }
 
 export async function bootstrapInitialSuperadmin(pool, env = process.env) {
-  const superadminRoleId = await ensureGlobalSystemProfile(pool, {
-    name: "Superadmin",
-    apiKey: "platform_superadmin",
-    description: "Global platform profile. Access is granted through RBAC permissions.",
-    grantAllPermissions: true,
-  });
   const email = String(env.BOOTSTRAP_SUPERADMIN_EMAIL || "").trim();
   const password = String(env.BOOTSTRAP_SUPERADMIN_PASSWORD || "");
   const name = String(env.BOOTSTRAP_SUPERADMIN_NAME || "OnePOS Superadmin").trim();
+  const configuredCompanyId = String(env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || "").trim();
 
-  const ensureBootstrapCompanyMapping = async (userId) => {
-    if (!userId) return null;
-    const configuredId = String(env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || "").trim();
-    const company = configuredId
-      ? await pool.query("SELECT id FROM companies WHERE id=$1 AND active=true LIMIT 1", [configuredId])
-      : await pool.query("SELECT id FROM companies WHERE LOWER(name)=LOWER('onePOS Demo') AND active=true ORDER BY created_at,id LIMIT 1");
-    const companyId = company.rows[0]?.id || null;
-    if (!companyId) {
-      console.warn("onePOS: bootstrap Superadmin company mapping skipped; no configured active company was found");
-      return null;
-    }
-    await pool.query("UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1", [userId]);
-    await pool.query(
-      `INSERT INTO platform_developer_company_access (developer_id,company_id,granted_by,active)
-       VALUES ($1,$2,$1,true)
-       ON CONFLICT (developer_id,company_id)
-       DO UPDATE SET granted_by=EXCLUDED.granted_by,active=true`,
-      [userId, companyId]
+  /*
+   * Superadmin is an ordinary tenant user. Its elevated access comes only from
+   * its RBAC role, which is seeded with every permission. Do not create a
+   * company-less identity or rely on acting-company/developer mappings.
+   */
+  const companyResult = configuredCompanyId
+    ? await pool.query("SELECT id FROM companies WHERE id=$1 AND active=true LIMIT 1", [configuredCompanyId])
+    : await pool.query("SELECT id FROM companies WHERE LOWER(name)=LOWER('onePOS Demo') AND active=true ORDER BY created_at,id LIMIT 1");
+  const companyId = companyResult.rows[0]?.id || null;
+
+  if (!companyId) {
+    console.warn("onePOS: Superadmin bootstrap skipped; no configured active company was found");
+    return { created: false, reason: "company_not_configured" };
+  }
+
+  let role = await pool.query(
+    "SELECT id FROM roles WHERE company_id=$1 AND api_key='platform_superadmin' ORDER BY created_at,id LIMIT 1",
+    [companyId]
+  );
+  let superadminRoleId = role.rows[0]?.id || null;
+  if (!superadminRoleId) {
+    const insertedRole = await pool.query(
+      `INSERT INTO roles (company_id,name,description,is_system_role,api_key)
+       VALUES ($1,'Superadmin','Tenant Superadmin profile. Access is granted through RBAC permissions.',TRUE,'platform_superadmin')
+       RETURNING id`,
+      [companyId]
     );
-    return companyId;
-  };
-
-  if (!email && !password) {
-    const existing = await pool.query(
-      "SELECT id FROM users WHERE company_id IS NULL AND role_id=$1 ORDER BY created_at,id LIMIT 1",
+    superadminRoleId = insertedRole.rows[0].id;
+  } else {
+    await pool.query(
+      `UPDATE roles
+          SET name='Superadmin',
+              description='Tenant Superadmin profile. Access is granted through RBAC permissions.',
+              is_system_role=TRUE
+        WHERE id=$1`,
       [superadminRoleId]
     );
-    if (existing.rows[0]) {
-      await pool.query("UPDATE users SET active=TRUE,updated_at=NOW() WHERE id=$1", [existing.rows[0].id]);
-      await ensureBootstrapCompanyMapping(existing.rows[0].id);
-      console.log("onePOS: existing global Superadmin profile synchronized; credentials were preserved");
-      return { created: false, reason: "existing", roleId: superadminRoleId };
+  }
+
+  await pool.query(
+    `INSERT INTO role_permissions (role_id,permission_id,company_id)
+     SELECT $1,p.id,$2 FROM permissions p
+     ON CONFLICT (role_id,permission_id) DO UPDATE SET company_id=EXCLUDED.company_id`,
+    [superadminRoleId, companyId]
+  );
+
+  if (!email && !password) {
+    const legacy = await pool.query(
+      `SELECT u.id
+         FROM users u
+         JOIN roles r ON r.id=u.role_id
+        WHERE u.company_id IS NULL
+          AND r.api_key='platform_superadmin'
+        ORDER BY u.created_at,u.id
+        LIMIT 1`
+    );
+    if (legacy.rows[0]) {
+      await pool.query(
+        "UPDATE users SET company_id=$1,role_id=$2,active=TRUE,updated_at=NOW() WHERE id=$3",
+        [companyId, superadminRoleId, legacy.rows[0].id]
+      );
+      await pool.query("UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1", [legacy.rows[0].id]);
+      console.log("onePOS: legacy global Superadmin migrated to normal company-bound RBAC user");
+      return { created: false, migrated: true, id: legacy.rows[0].id, roleId: superadminRoleId };
     }
-    console.log("onePOS: Superadmin bootstrap skipped; bootstrap credentials are not configured");
-    return { created: false, reason: "not_configured" };
+    console.log("onePOS: Superadmin bootstrap credentials are not configured; role permissions synchronized");
+    return { created: false, reason: "not_configured", roleId: superadminRoleId };
   }
 
   if (!email || !password || !name) {
@@ -315,67 +341,37 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   if (email.length > 100) throw new Error("BOOTSTRAP_SUPERADMIN_EMAIL must be 100 characters or fewer");
 
   const existing = await pool.query(
-    `SELECT id,username,email,role_id
+    `SELECT id,username,email,company_id,role_id
        FROM users
-      WHERE company_id IS NULL
-        AND (LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1))
+      WHERE LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1)
+      ORDER BY created_at,id
       LIMIT 1`,
     [email]
   );
 
+  const passwordHash = await bcrypt.hash(password, 12);
   if (existing.rows[0]) {
-    const collision = await pool.query(
-      "SELECT id FROM users WHERE (LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1)) AND id<>$2 LIMIT 1",
-      [email, existing.rows[0].id]
-    );
-    if (collision.rows[0]) throw new Error("BOOTSTRAP_SUPERADMIN_EMAIL already belongs to another user");
-
-    const passwordHash = await bcrypt.hash(password, 12);
     const updated = await pool.query(
       `UPDATE users
-          SET company_id=NULL, role_id=$4, username=$1, email=$1, password_hash=$2,
-              full_name=$3, active=TRUE, updated_at=NOW()
-        WHERE id=$5
+          SET company_id=$1,role_id=$2,username=$3,email=$3,password_hash=$4,
+              full_name=$5,active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
+        WHERE id=$6
         RETURNING id`,
-      [email, passwordHash, name, superadminRoleId, existing.rows[0].id]
+      [companyId, superadminRoleId, email, passwordHash, name, existing.rows[0].id]
     );
-    await ensureBootstrapCompanyMapping(updated.rows[0].id);
-    console.log("onePOS: existing global Superadmin profile synchronized from bootstrap credentials");
-    return { created: false, updated: true, id: updated.rows[0].id };
+    await pool.query("UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1", [updated.rows[0].id]);
+    console.log("onePOS: existing Superadmin synchronized as normal company-bound RBAC user");
+    return { created: false, updated: true, id: updated.rows[0].id, roleId: superadminRoleId };
   }
 
-  const collision = await pool.query(
-    "SELECT id FROM users WHERE LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1) LIMIT 1",
-    [email]
-  );
-  if (collision.rows[0]) {
-    throw new Error("Bootstrap Superadmin email already belongs to another user");
-  }
-
-  const passwordHash = await bcrypt.hash(password, 12);
   const inserted = await pool.query(
-    `INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,active)
-     VALUES (NULL,$4,$1,$1,$2,$3,TRUE)
-     ON CONFLICT (username) DO NOTHING
+    `INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active)
+     VALUES ($1,$2,$3,$3,$4,$5,FALSE,TRUE)
      RETURNING id`,
-    [email, passwordHash, name, superadminRoleId]
+    [companyId, superadminRoleId, email, passwordHash, name]
   );
-  if (inserted.rows[0]) {
-    await ensureBootstrapCompanyMapping(inserted.rows[0].id);
-    console.log("onePOS: initial global Superadmin profile user created");
-    return { created: true, id: inserted.rows[0].id };
-  }
-
-  const concurrentBootstrap = await pool.query(
-    "SELECT id FROM users WHERE company_id IS NULL AND role_id=$1 ORDER BY created_at,id LIMIT 1",
-    [superadminRoleId]
-  );
-  if (concurrentBootstrap.rows[0]) {
-    await ensureBootstrapCompanyMapping(concurrentBootstrap.rows[0].id);
-    console.log("onePOS: Superadmin bootstrap skipped; another process created it");
-    return { created: false, reason: "existing" };
-  }
-  throw new Error("Bootstrap Superadmin could not be created because its username is already in use");
+  console.log("onePOS: initial company-bound Superadmin user created");
+  return { created: true, id: inserted.rows[0].id, roleId: superadminRoleId };
 }
 
 async function initializeLegacyDatabase(pool) {
