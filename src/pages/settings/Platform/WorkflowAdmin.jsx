@@ -1160,7 +1160,7 @@ function BranchStepPicker({ label, value = [], onChange, steps = [], currentInde
   );
 }
 
-function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null }) {
+function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null, debugInfo = null }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const extraResources = workflowStepResources(allSteps, index);
   const registryDefinition = registryOptions.find((option) => option.value === step.type) || null;
@@ -1718,6 +1718,19 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
         </div>
       </div>
 
+      {debugInfo?.status === "FAILED" && debugInfo?.error ? (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-red-600">Debug failure</div>
+          <div className="mt-1 font-semibold">{debugInfo.error.title || "This step could not complete"}</div>
+          <div className="mt-2 text-xs leading-5">{debugInfo.error.whatHappened || "The step failed during Debug."}</div>
+          <div className="mt-3 rounded-lg border border-red-100 bg-white/80 p-3 text-xs leading-5"><strong>How to fix it:</strong> {debugInfo.error.howToFix || "Check this step's required values and Resources, then run Debug again."}</div>
+        </div>
+      ) : debugInfo?.status === "COMPLETED" ? (
+        <div className={`mt-4 rounded-xl border p-3 text-xs ${debugInfo.simulated ? "border-blue-200 bg-blue-50 text-blue-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
+          {debugInfo.simulated ? "This step was simulated in Debug mode. No external or irreversible action was performed." : "This step completed successfully in the last Debug run."}
+        </div>
+      ) : null}
+
       <div className="mt-4 space-y-3">
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <select className={inputClass} value={step.type} onChange={(event) => {
@@ -1968,7 +1981,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               </div>
             ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
           </div>
-        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
+        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
       </aside> : null}
     </div>
   );
