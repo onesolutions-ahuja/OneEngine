@@ -743,7 +743,64 @@ function StepConditionEditor({ value, onChange, objectKey }) {
   );
 }
 
-function StepEditor({ step, index, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null }) {
+function MappingEditor({ value = {}, onChange, rootObjectKey, keyLabel = "Input", valueLabel = "Value" }) {
+  const entries = Object.entries(value || {});
+  const setEntry = (index, nextKey, nextValue) => {
+    const next = {};
+    entries.forEach(([key, currentValue], itemIndex) => {
+      if (itemIndex === index) {
+        if (nextKey) next[nextKey] = nextValue;
+      } else if (key) next[key] = currentValue;
+    });
+    onChange(next);
+  };
+  return (
+    <div className="space-y-2">
+      {entries.map(([key, currentValue], index) => (
+        <div key={`${key}-${index}`} className="grid gap-2 md:grid-cols-[0.8fr_1.2fr_auto]">
+          <input className={inputClass} value={key} onChange={(event) => setEntry(index, event.target.value, currentValue)} placeholder={keyLabel} />
+          <MetadataResourcePicker objectKey={rootObjectKey} label={valueLabel} value={String(currentValue ?? "")} onChange={(nextValue) => setEntry(index, key, nextValue)} />
+          <button type="button" className="rounded border border-slate-200 px-2 text-xs text-red-600" onClick={() => {
+            const next = Object.fromEntries(entries.filter((_, itemIndex) => itemIndex !== index));
+            onChange(next);
+          }}>Remove</button>
+        </div>
+      ))}
+      <button type="button" className="text-sm text-blue-700" onClick={() => onChange({ ...(value || {}), [`input_${entries.length + 1}`]: "" })}>+ Add mapping</button>
+    </div>
+  );
+}
+
+function BranchStepPicker({ label, value = [], onChange, steps = [], currentIndex }) {
+  const candidates = steps
+    .map((candidate, index) => ({ candidate, index }))
+    .filter(({ candidate, index }) => index > currentIndex && candidate.type !== "CONDITION");
+  const selected = new Set(value || []);
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-2 text-xs font-semibold text-slate-700">{label}</div>
+      {!candidates.length ? <p className="text-xs text-slate-500">Add an action after this Decision, then assign it to this outcome.</p> : null}
+      <div className="space-y-1">
+        {candidates.map(({ candidate, index }) => (
+          <label key={candidate.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-700 hover:bg-white">
+            <input
+              type="checkbox"
+              checked={selected.has(candidate.id)}
+              onChange={(event) => {
+                const next = new Set(selected);
+                if (event.target.checked) next.add(candidate.id); else next.delete(candidate.id);
+                onChange([...next]);
+              }}
+            />
+            <span>{index + 1}. {candidate.label || getActionLabel(candidate.type)}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const updateFieldMapping = (key, value) => {
     const fieldMappings = { ...(step.config?.fieldMappings || {}) };
@@ -881,13 +938,7 @@ function StepEditor({ step, index, updateStep, moveStep, duplicateStep, deleteSt
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Inputs</label>
-              <textarea className={inputClass} value={JSON.stringify(step.config?.inputs || {}, null, 2)} onChange={(event) => {
-                try {
-                  updateConfig({ inputs: JSON.parse(event.target.value) || {} });
-                } catch {
-                  updateConfig({ inputs: { value: event.target.value } });
-                }
-              }} rows={4} />
+              <MappingEditor value={step.config?.inputs || {}} onChange={(inputs) => updateConfig({ inputs })} rootObjectKey={rootObjectKey} keyLabel="Input name" valueLabel="Input value" />
             </div>
           </div>
         );
@@ -905,28 +956,17 @@ function StepEditor({ step, index, updateStep, moveStep, duplicateStep, deleteSt
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Input mapping</label>
-              <textarea className={inputClass} value={JSON.stringify(step.config?.workflowInputs || {}, null, 2)} onChange={(event) => {
-                try {
-                  updateConfig({ workflowInputs: JSON.parse(event.target.value) || {} });
-                } catch {
-                  updateConfig({ workflowInputs: { value: event.target.value } });
-                }
-              }} rows={4} />
+              <MappingEditor value={step.config?.workflowInputs || {}} onChange={(workflowInputs) => updateConfig({ workflowInputs })} rootObjectKey={rootObjectKey} keyLabel="Subflow input" valueLabel="Map from resource" />
             </div>
           </div>
         );
       case "CONDITION":
         return (
           <div className="space-y-3">
-            <StepConditionEditor objectKey={step.config?.object || ""} value={step.config?.condition || { type: "all", rules: [blankCondition()] }} onChange={(condition) => updateConfig({ condition })} />
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">IF branch</label>
-              <input className={inputClass} value={step.config?.ifBranch?.join(", ") || ""} onChange={(event) => updateConfig({ ifBranch: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="Matching steps" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">ELSE branch</label>
-              <input className={inputClass} value={step.config?.elseBranch?.join(", ") || ""} onChange={(event) => updateConfig({ elseBranch: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="Fallback steps" />
-            </div>
+            <StepConditionEditor objectKey={rootObjectKey} value={step.config?.condition || { type: "all", rules: [blankCondition()] }} onChange={(condition) => updateConfig({ condition })} />
+            <p className="text-xs text-slate-500">Choose which later actions run for each outcome. The engine routes these paths automatically; no step IDs are required.</p>
+            <BranchStepPicker label="YES · Conditions matched" value={step.config?.ifBranch || []} onChange={(ifBranch) => updateConfig({ ifBranch })} steps={allSteps} currentIndex={index} />
+            <BranchStepPicker label="OTHERWISE · Conditions did not match" value={step.config?.elseBranch || []} onChange={(elseBranch) => updateConfig({ elseBranch })} steps={allSteps} currentIndex={index} />
           </div>
         );
       case "WAIT":
@@ -1096,7 +1136,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <span className="workflow-properties-tab is-active">Properties</span>
           <span className="workflow-properties-tab">Node Settings</span>
         </div>
-        {selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} /> : <p className="text-sm text-slate-500">Select a flow element to configure it.</p>}
+        {selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} /> : <p className="text-sm text-slate-500">Select a flow element to configure it.</p>}
       </aside> : null}
     </div>
   );
@@ -1191,7 +1231,24 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [messageTemplates, setMessageTemplates] = useState([]);
   const [workflowListSearch, setWorkflowListSearch] = useState("");
   const [workflowListFilter, setWorkflowListFilter] = useState("all");
+  const [triggerOptions, setTriggerOptions] = useState([
+    { key: "after_create", label: "After a record is created", kind: "record" },
+    { key: "after_update", label: "After a record is updated", kind: "record" },
+    { key: "after_save", label: "After a record is created or updated", kind: "record" },
+    { key: "manual", label: "Manual trigger", kind: "record" },
+  ]);
+  const [builderLoadIssues, setBuilderLoadIssues] = useState([]);
 
+
+  useEffect(() => {
+    if (scopeKey === "whatsapp_assistant") return;
+    apiRequest("/api/platform/workflow-triggers")
+      .then((response) => {
+        const options = Array.isArray(response?.data) ? response.data : [];
+        if (options.length) setTriggerOptions(options);
+      })
+      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load workflow triggers."])]));
+  }, [scopeKey]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -1222,7 +1279,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         const registry = (Array.isArray(source) ? source : []).map((item) => ({ value: item.key, label: item.displayName || item.key }));
         if (registry.length) setRegistryOptions(registry);
       })
-      .catch(() => {});
+      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load workflow actions."])]));
   }, [scopeKey]);
 
   useEffect(() => {
@@ -1234,7 +1291,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   useEffect(() => {
     apiRequest("/api/platform/message-templates")
       .then((response) => setMessageTemplates(Array.isArray(response?.data) ? response.data.filter((item) => item.active !== false) : []))
-      .catch(() => setMessageTemplates([]));
+      .catch((error) => {
+        setMessageTemplates([]);
+        setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load message templates."])]);
+      });
   }, []);
 
   useEffect(() => {
@@ -1386,7 +1446,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           const config = { ...(step.config || {}) };
           if (config.fieldMappings && !config.fieldValues) config.fieldValues = config.fieldMappings;
           if (config.template && !config.templateId) config.templateId = config.template;
-          return { type: step.type, ...config };
+          return { id: step.id, label: step.label || getActionLabel(step.type), type: step.type, ...config };
         }),
       },
     };
@@ -1510,6 +1570,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   return (
     <div className="workflow-builder-page space-y-3">
       <style>{WORKFLOW_VISUAL_CSS}</style>
+      {builderLoadIssues.length ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <strong>Some workflow resources could not be loaded.</strong>
+          <div className="mt-1 text-xs">{builderLoadIssues.join(" · ")}</div>
+          <div className="mt-1 text-xs">Do not assume an empty dropdown means there are no records. Refresh after the connection/API issue is resolved.</div>
+        </div>
+      ) : null}
       <div id="workflow-trigger-section" className="workflow-builder-header">
         <div className="workflow-builder-heading">
           <span className={`workflow-ready-dot ${reviewIssue ? "has-issue" : ""}`} title={reviewIssue || "Workflow ready"} />
@@ -1536,10 +1603,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             {workflow.systemGenerated ? <option value="system_function">System function</option> : null}
             {workflow.systemGenerated ? <option value="system_action">System action</option> : null}
             {workflow.systemGenerated ? <option value="system_job">System job trigger</option> : null}
-            <option value="after_create">Record created</option>
-            <option value="after_update">Record updated</option>
-            <option value="after_save">Created or updated</option>
-            <option value="manual">Manual trigger</option>
+            {!scopeKey ? triggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>) : null}
           </select>
         </div>
         <div className="workflow-builder-actions">
