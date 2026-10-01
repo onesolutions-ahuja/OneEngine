@@ -889,7 +889,7 @@ app.post("/api/auth/login", async (req, res) => {
     markLoginTiming("last_login_update_ms", stepStartedAt);
 
     /*
-     * Resolve the optional Platform Developer acting-company inside the login
+     * Resolve the optional OneEngine Manager acting-company inside the login
      * request. Smart Theme previously performed two extra HTTP round trips
      * after authentication (developer/companies + acting-company), which kept
      * the login button stuck on "Signing in..." even though the password had
@@ -1028,13 +1028,13 @@ app.post("/api/auth/unlock-pin", authenticate, async (req, res) => {
     }
 
     /*
-     * Bootstrap only for a global profile holding platform.manage. This is an
+     * Bootstrap only for a global profile holding oneengine.manage. This is an
      * RBAC check, not an identity/profile-name bypass.
      */
     if (!user.pin_hash && user.company_id == null && process.env.SUPERADMIN_BOOTSTRAP_PIN) {
       const platformAccess = user.role_id
         ? await db(
-            "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='platform.manage' LIMIT 1",
+            "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
             [user.role_id]
           )
         : { rows: [] };
@@ -2245,15 +2245,15 @@ async function startServer() {
     await bootstrapInitialSuperadmin(pool);
     const developerRoleId = await ensureGlobalSystemProfile(pool, {
       name: "Developer",
-      apiKey: "platform_developer",
-      description: "Global platform developer profile. Access is granted through RBAC permissions.",
+      apiKey: "oneengine_manager",
+      description: "Global OneEngine Manager profile. Access is granted through RBAC permissions.",
       grantAllPermissions: true,
     });
     if (process.env.PLATFORM_DEVELOPER_PASSWORD) {
       const developerHash = await bcrypt.hash(process.env.PLATFORM_DEVELOPER_PASSWORD, 12);
       await db(
         `INSERT INTO users (company_id,role_id,username,password_hash,full_name,email,is_platform_developer,active)
-         VALUES (NULL,$2,'developer@onepos.local',$1,'Platform Developer','developer@onepos.local',true,true)
+         VALUES (NULL,$2,'oneengine.manager@onepos.local',$1,'OneEngine Manager','developer@onepos.local',true,true)
          ON CONFLICT (username) DO UPDATE SET role_id=$2,is_platform_developer=true,active=true,password_hash=EXCLUDED.password_hash`,
         [developerHash, developerRoleId]
       );
