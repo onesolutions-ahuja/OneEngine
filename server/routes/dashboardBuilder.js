@@ -200,8 +200,36 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
 
         if (!context.object) throw new Error("Data source unavailable");
 
-        built = buildPlatformObjectQuery(definition, context.object, context.fields, req.user.companyId, 1000, {
-          storeId: req.user.storeId,
+        // Dashboard store selection is security scope, not a reportable object
+        // field. Validate it through the same user_stores access check used by
+        // sales dashboards, then remove the synthetic filter before the generic
+        // platform report validator sees it.
+        const requestedStores = [...new Set([
+          ...(definition.storeIds || []),
+          ...definition.filters
+            .filter((filter) => filter.field === "store")
+            .flatMap((filter) => Array.isArray(filter.value) ? filter.value : [filter.value])
+            .filter(Boolean),
+        ].map(String))];
+        if (requestedStores.length > 1) throw new Error("Platform-object dashboard components support one active store at a time");
+        for (const storeId of requestedStores) {
+          if (!canAccessStore || !(await canAccessStore(req.user, storeId))) throw new Error("You do not have access to one or more stores");
+        }
+        const scopedStoreId = requestedStores[0] || (req.user.storeId ? String(req.user.storeId) : null);
+        if (!requestedStores.length && scopedStoreId
+          && (!canAccessStore || !(await canAccessStore(req.user, scopedStoreId)))) {
+          throw new Error("You do not have access to the current store");
+        }
+        if (context.object.store_scoped === true && !scopedStoreId) {
+          throw new Error("A store assignment is required to run this dashboard");
+        }
+        const platformDefinition = {
+          ...definition,
+          filters: definition.filters.filter((filter) => filter.field !== "store"),
+        };
+
+        built = buildPlatformObjectQuery(platformDefinition, context.object, context.fields, req.user.companyId, 1000, {
+          storeId: scopedStoreId,
           visibilitySql: context.visibilitySql,
           visibilityParams: context.visibilityParams,
         }, context.relationships);
