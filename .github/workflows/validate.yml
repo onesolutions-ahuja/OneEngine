@@ -20,7 +20,8 @@ jobs:
       - run: npm run audit:apps
       - run: npm run audit:workflow-coverage:enforce
       - run: npm run build
-      - run: npm ci
+      # server has its own package.json but no package-lock.json, so npm ci is invalid here.
+      - run: npm install --ignore-scripts --no-audit --no-fund
         working-directory: server
       - run: npm run build
         working-directory: server
