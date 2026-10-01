@@ -3459,8 +3459,9 @@ export default function createOnlineRouter({
     }
 
     const order = orderResult.rows[0];
+    const collectionTypes = new Set(["SELF_PICKUP", "COLLECT", "TAKEAWAY", "COUNTER_SERVICE", "EAT_IN"]);
     const toStatus =
-      order.fulfilment_type === "SELF_PICKUP"
+      collectionTypes.has(String(order.fulfilment_type || "").toUpperCase())
         ? "READY_FOR_PICKUP"
         : order.fulfilment_type === "DELIVERY"
           ? "READY_FOR_DELIVERY"
@@ -3483,7 +3484,8 @@ export default function createOnlineRouter({
       });
     }
 
-    res.json({ success: true, message: `Order marked ready (${toStatus})` });
+    const updatedOrder = await getGenericOrder(db, req.user.companyId, req.params.id);
+    res.json({ success: true, message: `Order marked ready (${toStatus})`, data: { order: updatedOrder } });
   });
 
   router.post("/online/orders/generic/:id/complete", authenticate, authorize("online_orders.manage"), async (req, res) => {
@@ -3501,9 +3503,13 @@ export default function createOnlineRouter({
     const order = orderResult.rows[0];
     let toStatus;
 
-    if (order.status === "READY_FOR_PICKUP") {
+    const collectionTypes = new Set(["SELF_PICKUP", "COLLECT", "TAKEAWAY", "COUNTER_SERVICE", "EAT_IN"]);
+    if (
+      (order.status === "READY_FOR_PICKUP" || order.status === "READY")
+      && collectionTypes.has(String(order.fulfilment_type || "").toUpperCase())
+    ) {
       toStatus = "COLLECTED";
-    } else if (order.status === "COMPLETED" || order.status === "CANCELLED" || order.status === "REJECTED") {
+    } else if (order.status === "COMPLETED" || order.status === "COLLECTED" || order.status === "CANCELLED" || order.status === "REJECTED") {
       return res.status(409).json({
         success: false,
         message: `Order in status ${order.status} cannot be completed`,
