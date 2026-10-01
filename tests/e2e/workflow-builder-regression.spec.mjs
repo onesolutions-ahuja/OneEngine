@@ -11,9 +11,10 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await page.goto("developer/workflow-builder");
 
   const newWorkflow = page.getByRole("button", { name: /new workflow/i });
-  if (await newWorkflow.isVisible().catch(() => false)) await newWorkflow.click();
+  await expect(newWorkflow).toBeVisible({ timeout: 15_000 });
+  await newWorkflow.click();
 
-  await expect(page.getByText("Elements", { exact: true })).toBeVisible();
+  await expect(page.getByText("Elements", { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Resources", { exact: true })).toBeVisible();
 
   // Unsaved workflows can be Debugged safely, but persisted-test/version controls
