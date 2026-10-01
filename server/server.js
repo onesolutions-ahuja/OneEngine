@@ -2229,6 +2229,7 @@ async function startServer() {
                     initialVariables: payload.workflowVariables && typeof payload.workflowVariables === "object"
                       ? payload.workflowVariables
                       : { variables: {}, steps: {} },
+                    initialPreviousRecord: payload.previousRecord || null,
                   },
                 });
                 const req = {
@@ -2416,6 +2417,7 @@ async function startServer() {
                   object,
                   fields,
                   record,
+                  previousRecord: run.metadata?.initialPreviousRecord || null,
                   recordId: run.record_id || null,
                   storeId: req.user.storeId,
                   tillId: req.user.tillId,
