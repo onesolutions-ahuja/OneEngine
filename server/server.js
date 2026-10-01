@@ -2435,10 +2435,19 @@ async function startServer() {
                   if (parentStep.rows[0]) {
                     await db(
                       `UPDATE platform_workflow_step_runs
-                          SET status='WAITING',completed_at=NULL,
+                          SET status='COMPLETED',completed_at=NOW(),
                               metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW()
                         WHERE id=$2`,
-                      [JSON.stringify({ childRunId: run.id, resumedChildCompleted: true }), parentStep.rows[0].id]
+                      [JSON.stringify({
+                        childRunId: run.id,
+                        resumedChildCompleted: true,
+                        result: {
+                          status: "completed",
+                          runId: run.id,
+                          resumedChildCompleted: true,
+                          outputs: workflowVariables?.outputs || workflowVariables?.variables || {},
+                        },
+                      }), parentStep.rows[0].id]
                     );
                   }
                   const parentRun = await db(
