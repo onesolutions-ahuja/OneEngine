@@ -1856,6 +1856,114 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "GET_RECORDS",
+    displayName: "Get Records",
+    description: "Find records on a Platform object and expose the result to later workflow steps.",
+    schema: {
+      type: "object",
+      properties: {
+        objectKey: { type: "string" },
+        filters: { type: "array" },
+        match: { type: "string" },
+        sortField: { type: "string" },
+        sortDirection: { type: "string" },
+        limit: { type: "number" },
+        store: { type: "string" },
+      },
+      required: ["objectKey"],
+    },
+    validation: (action) => {
+      if (!action?.objectKey && !action?.objectId && !action?.object) throw new Error("Get Records requires an object");
+      if (action?.filters !== undefined && !Array.isArray(action.filters)) throw new Error("Get Records filters must be a list");
+      if (action?.match && !["all", "any"].includes(String(action.match).toLowerCase())) throw new Error("Get Records match must be all or any");
+      if (action?.sortDirection && !["asc", "desc"].includes(String(action.sortDirection).toLowerCase())) throw new Error("Get Records sort direction must be ascending or descending");
+    },
+    async: false,
+    requiredPermissions: ["records.view"],
+    executor: async ({ db, action, req, object, companyId, record, previousRecord, workflowVariables }) => {
+      const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const table = targetObject.source_table;
+      const fieldResult = await db(
+        `SELECT api_name,source_column,field_type,readable,active
+           FROM platform_fields
+          WHERE object_id=$1 AND active=true AND readable=true
+          ORDER BY display_order,label`,
+        [targetObject.id]
+      );
+      const fields = fieldResult.rows || [];
+      const fieldByKey = new Map();
+      for (const field of fields) {
+        fieldByKey.set(String(field.api_name), field);
+        if (field.source_column) fieldByKey.set(String(field.source_column), field);
+      }
+
+      const params = [];
+      const clauses = [];
+      if (targetObject.company_scoped) {
+        params.push(req?.user?.companyId || companyId || null);
+        clauses.push(`"company_id"=${params.length}`);
+      }
+      if (targetObject.store_scoped && req?.user?.storeId) {
+        params.push(req.user.storeId);
+        clauses.push(`"store_id"=${params.length}`);
+      }
+
+      const filterClauses = [];
+      const filters = Array.isArray(action.filters) ? action.filters : [];
+      for (const filter of filters) {
+        const metadata = fieldByKey.get(String(filter?.field || ""));
+        if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name)) {
+          throw new Error(`Get Records filter field "${filter?.field || ""}" is unavailable`);
+        }
+        const column = `"${metadata.source_column || metadata.api_name}"`;
+        const operator = String(filter?.operator || "equals").toLowerCase();
+        const value = resolveConfiguredResource(filter?.value, { record, previousRecord, req, object, workflowVariables });
+        if (operator === "is_empty") {
+          filterClauses.push(`(${column} IS NULL OR ${column}::text='')`);
+          continue;
+        }
+        if (operator === "is_not_empty") {
+          filterClauses.push(`(${column} IS NOT NULL AND ${column}::text<>'')`);
+          continue;
+        }
+        params.push(value);
+        const index = params.length;
+        if (operator === "equals") filterClauses.push(`${column}=${index}`);
+        else if (operator === "not_equals") filterClauses.push(`${column}<>${index}`);
+        else if (operator === "greater_than") filterClauses.push(`${column}>${index}`);
+        else if (operator === "greater_than_or_equal") filterClauses.push(`${column}>=${index}`);
+        else if (operator === "less_than") filterClauses.push(`${column}<${index}`);
+        else if (operator === "less_than_or_equal") filterClauses.push(`${column}<=${index}`);
+        else if (operator === "contains") filterClauses.push(`${column}::text ILIKE '%' || ${index}::text || '%'`);
+        else throw new Error(`Get Records uses unsupported operator "${operator}"`);
+      }
+      if (filterClauses.length) {
+        clauses.push(`(${filterClauses.join(String(action.match || "all").toLowerCase() === "any" ? " OR " : " AND ")})`);
+      }
+
+      let orderBy = "";
+      if (action.sortField) {
+        const sortMetadata = fieldByKey.get(String(action.sortField));
+        if (!sortMetadata || !isSafeIdentifier(sortMetadata.source_column || sortMetadata.api_name)) {
+          throw new Error(`Get Records sort field "${action.sortField}" is unavailable`);
+        }
+        orderBy = ` ORDER BY "${sortMetadata.source_column || sortMetadata.api_name}" ${String(action.sortDirection || "asc").toLowerCase() === "desc" ? "DESC" : "ASC"}`;
+      }
+      const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 50 : 1)), 200));
+      params.push(requestedLimit);
+      const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+      const result = await db(`SELECT * FROM "${table}"${where}${orderBy} LIMIT ${params.length}`, params);
+      const rows = result.rows || [];
+      return {
+        status: "completed",
+        objectKey: targetObject.object_key,
+        record: rows[0] || null,
+        records: String(action.store || "first").toLowerCase() === "all" ? rows : (rows[0] ? [rows[0]] : []),
+        count: rows.length,
+      };
+    },
+  },
+  {
     key: "CREATE_RECORD",
     displayName: "Create Record",
     description: "Create a record on an object using field mappings.",
