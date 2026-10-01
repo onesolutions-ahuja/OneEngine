@@ -2255,12 +2255,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [workflowId, setWorkflowId] = useState(() => normalizedInitialWorkflow?.id || null);
   const [workflow, setWorkflow] = useState(() => {
     if (normalizedInitialWorkflow) return normalizedInitialWorkflow;
-    try {
-      const cached = scopeKey ? null : localStorage.getItem("onepos_workflow_builder");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed.steps)) {
-          return {
+    return {
             ...parsed,
             steps: parsed.steps.map((step) => ({
               ...makeStep(step.type || "CREATE_RECORD"),
@@ -2297,16 +2292,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
 
   const [guideStep, setGuideStep] = useState("trigger");
   const [showBuilder, setShowBuilder] = useState(embedded);
-  const [savedWorkflows, setSavedWorkflows] = useState(() => {
-    if (embedded && normalizedInitialWorkflow) return [normalizedInitialWorkflow];
-    try {
-      const cached = scopeKey ? null : localStorage.getItem("onepos_workflow_builder");
-      const parsed = cached ? JSON.parse(cached) : null;
-      return parsed && typeof parsed === "object" ? [parsed] : [];
-    } catch {
-      return [];
-    }
-  });
+  const [savedWorkflows, setSavedWorkflows] = useState(() => embedded && normalizedInitialWorkflow ? [normalizedInitialWorkflow] : []);
   const [providerAvailable, setProviderAvailable] = useState({ EMAIL: false, SMS: false, WHATSAPP: false });
   const [registryOptions, setRegistryOptions] = useState(scopeKey ? [] : actionOptions);
   const [functionRegistry, setFunctionRegistry] = useState([]);
