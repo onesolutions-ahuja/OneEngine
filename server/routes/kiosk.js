@@ -1,6 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import { resolvePrice } from "../services/pricingEngine.js";
+import { executeConnectorWorkflowAction } from "../services/platformWorkflow.js";
 import { resendInvoiceByChannel } from "../services/invoiceDelivery.js";
 
 const KIOSK_MODE_TTL = process.env.KIOSK_MODE_TTL || "12h";
@@ -18,6 +19,7 @@ export default function createKioskRouter({
   db,
   pool,
   writeAudit,
+  connectorDrivers = null,
   jwtSecret = process.env.JWT_SECRET,
   modeTtl = KIOSK_MODE_TTL,
 }) {
@@ -400,6 +402,69 @@ export default function createKioskRouter({
     }
   });
 
+  router.post("/kiosk/receipt/print", authenticate, async (req, res) => {
+    const saleId = String(req.body?.saleId || "").trim();
+    const deviceKey = String(req.body?.deviceKey || req.user?.kioskDeviceKey || "").trim();
+    if (!saleId || !deviceKey) return res.status(400).json({ success: false, message: "Sale and kiosk device are required" });
+    if (req.user?.mode === "kiosk" && String(req.user.kioskDeviceKey || "") !== deviceKey) {
+      return res.status(403).json({ success: false, message: "This kiosk session belongs to another device" });
+    }
+    try {
+      const owned = await db(
+        `SELECT s.*,kd.id AS kiosk_device_id,kd.printer_connector_id,
+                rc.till_id AS printer_till_id
+           FROM sales s
+           JOIN kiosk_devices kd
+             ON kd.company_id=s.company_id AND kd.store_id=s.store_id AND kd.device_key=$3
+           JOIN online_orders o
+             ON o.company_id=s.company_id AND o.platform='one_kiosk'
+            AND o.platform_data->>'saleId'=s.id::text
+            AND o.platform_data->>'kioskDeviceId'=kd.id::text
+           LEFT JOIN integration_connections rc
+             ON rc.id=kd.printer_connector_id AND rc.company_id=kd.company_id
+          WHERE s.id=$1 AND s.company_id=$2
+          LIMIT 1`,
+        [saleId, req.user.companyId, deviceKey]
+      );
+      const sale = owned.rows[0];
+      if (!sale) return res.status(404).json({ success: false, message: "Receipt is not available for this kiosk order" });
+      if (!sale.printer_connector_id) {
+        return res.status(409).json({ success: false, code: "LOCAL_PRINT_FALLBACK", message: "No One Connect receipt printer is assigned to this kiosk" });
+      }
+      const result = await executeConnectorWorkflowAction({
+        db,
+        req,
+        companyId: req.user.companyId,
+        storeId: req.user.storeId,
+        tillId: sale.printer_till_id || null,
+        connectorDrivers,
+        writeAudit,
+        actorUserId: req.user.id || null,
+        action: {
+          key: "PRINT_RECEIPT",
+          connectorInstanceId: sale.printer_connector_id,
+          capability: "printer.print",
+          saleId: sale.id,
+          receiptNumber: sale.receipt_number,
+          payload: {
+            connectorInstanceId: sale.printer_connector_id,
+            saleId: sale.id,
+            receiptNumber: sale.receipt_number,
+            sale,
+          },
+        },
+      });
+      if (!result?.success) {
+        return res.status(502).json({ success: false, code: result?.code || "PRINT_FAILED", message: result?.message || "Receipt printer is unavailable" });
+      }
+      await writeAudit?.(req.user.companyId, req.user.id || null, "KIOSK_RECEIPT_PRINTED", "sale", saleId, { kioskDeviceId: sale.kiosk_device_id, connectorInstanceId: sale.printer_connector_id });
+      res.json({ success: true, message: "Receipt sent to printer", data: result.result || null });
+    } catch (error) {
+      console.error("OneKiosk receipt print error:", error);
+      res.status(500).json({ success: false, message: "Unable to print receipt" });
+    }
+  });
+
   router.post("/kiosk/receipt/email", authenticate, async (req, res) => {
     const saleId = String(req.body?.saleId || "").trim();
     const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 255);
@@ -528,19 +593,25 @@ export default function createKioskRouter({
     }
     try {
       const deviceResult = await db(
-        `SELECT kd.id,kd.device_key,kd.name,kd.workflow_id,kd.payment_connector_id,
+        `SELECT kd.id,kd.device_key,kd.name,kd.workflow_id,kd.payment_connector_id,kd.printer_connector_id,
                 kd.printer_name,kd.printer_connection_type,kd.printer_connection_address,
                 kd.printer_paper_width,kd.printer_required,kd.printer_status,
                 pc.name AS payment_connector_name,pc.connector_package_key,
                 pc.enabled AS payment_connector_enabled,pc.connection_status AS payment_connector_status,
                 pc.last_error AS payment_connector_error,pc.last_connected_at AS payment_connector_last_connected_at,
                 pc.till_id AS payment_connector_till_id,
+                rc.name AS printer_connector_name,rc.connector_package_key AS printer_connector_package_key,
+                rc.enabled AS printer_connector_enabled,rc.connection_status AS printer_connector_status,
+                rc.last_error AS printer_connector_error,rc.last_connected_at AS printer_connector_last_connected_at,
                 pr.id AS flow_id,pr.name AS flow_name,pr.version AS flow_version,
                 pr.action AS flow_action,pr.lifecycle_status AS flow_status
            FROM kiosk_devices kd
            LEFT JOIN integration_connections pc
              ON pc.id=kd.payment_connector_id
             AND pc.company_id=kd.company_id
+           LEFT JOIN integration_connections rc
+             ON rc.id=kd.printer_connector_id
+            AND rc.company_id=kd.company_id
            LEFT JOIN platform_rules pr
              ON pr.id=kd.workflow_id
             AND pr.company_id=kd.company_id
@@ -580,14 +651,25 @@ export default function createKioskRouter({
         data: {
           device: { id: device.id, deviceKey: device.device_key, name: device.name },
           printer: {
-            name: device.printer_name || null,
-            connectionType: device.printer_connection_type || null,
+            connectorInstanceId: device.printer_connector_id || null,
+            connectorName: device.printer_connector_name || null,
+            connectorPackageKey: device.printer_connector_package_key || null,
+            name: device.printer_name || device.printer_connector_name || null,
+            connectionType: device.printer_connection_type || (device.printer_connector_id ? "CONNECTOR" : null),
             address: device.printer_connection_address || null,
             paperWidth: device.printer_paper_width || "80mm",
             required: device.printer_required === true,
-            status: device.printer_name
-              ? (device.printer_status || "UNKNOWN")
-              : "NOT_CONFIGURED",
+            status: device.printer_connector_id
+              ? device.printer_connector_enabled !== true
+                ? "NOT_CONFIGURED"
+                : device.printer_connector_status === "CONNECTED"
+                  ? "READY"
+                  : device.printer_connector_status || "UNKNOWN"
+              : device.printer_name
+                ? (device.printer_status || "UNKNOWN")
+                : "NOT_CONFIGURED",
+            error: device.printer_connector_error || null,
+            lastConnectedAt: device.printer_connector_last_connected_at || null,
           },
           payment: {
             connectorInstanceId: device.payment_connector_id || null,
@@ -615,6 +697,39 @@ export default function createKioskRouter({
     } catch (error) {
       console.error("Load OneKiosk runtime error:", error);
       res.status(500).json({ success: false, message: "Unable to load OneKiosk runtime" });
+    }
+  });
+
+  router.get("/kiosk/printer-connectors", authenticate, async (req, res) => {
+    try {
+      const result = await db(
+        `SELECT c.id,c.name,c.connector_package_key,c.till_id,c.store_id,c.enabled,
+                c.connection_status,c.last_error,c.last_connected_at,c.last_test_at,
+                t.name AS till_name,t.terminal_number
+           FROM integration_connections c
+           JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
+           LEFT JOIN terminals t ON t.id=c.till_id
+          WHERE c.company_id=$1
+            AND c.enabled=TRUE
+            AND (c.store_id IS NULL OR c.store_id=$2)
+            AND (
+              c.connector_capabilities ? 'printer.print'
+              OR EXISTS (
+                SELECT 1
+                  FROM jsonb_array_elements(COALESCE(p.manifest->'connectorApp'->'capabilities','[]'::jsonb)) cap
+                 WHERE CASE
+                   WHEN jsonb_typeof(cap)='string' THEN trim(both '"' from cap::text)
+                   ELSE cap->>'key'
+                 END = 'printer.print'
+              )
+            )
+          ORDER BY c.name`,
+        [req.user.companyId, req.user.storeId]
+      );
+      res.json({ success: true, data: result.rows });
+    } catch (error) {
+      console.error("Load OneKiosk printer connectors error:", error);
+      res.status(500).json({ success: false, message: "Unable to load kiosk printer connectors" });
     }
   });
 
@@ -662,6 +777,11 @@ export default function createKioskRouter({
                 pc.last_error AS payment_connector_error,
                 pc.last_connected_at AS payment_connector_last_connected_at,
                 pc.till_id AS payment_connector_till_id,
+                rc.name AS printer_connector_name,
+                rc.connector_package_key AS printer_connector_package_key,
+                rc.connection_status AS printer_connector_status,
+                rc.last_error AS printer_connector_error,
+                rc.last_connected_at AS printer_connector_last_connected_at,
                 pt.name AS payment_terminal_name,
                 pt.provider AS payment_provider,
                 pt.active AS payment_terminal_active,
@@ -680,6 +800,9 @@ export default function createKioskRouter({
                   ELSE kd.payment_status
                 END AS effective_payment_status,
                 CASE
+                  WHEN kd.printer_connector_id IS NOT NULL AND rc.enabled IS FALSE THEN 'OFFLINE'
+                  WHEN kd.printer_connector_id IS NOT NULL AND rc.connection_status='CONNECTED' THEN 'READY'
+                  WHEN kd.printer_connector_id IS NOT NULL AND rc.connection_status IN ('ERROR','DISCONNECTED','DISABLED') THEN 'OFFLINE'
                   WHEN NULLIF(kd.printer_name,'') IS NULL AND kd.printer_hardware_id IS NULL THEN 'NOT_CONFIGURED'
                   WHEN hc.id IS NOT NULL AND hc.active IS FALSE THEN 'OFFLINE'
                   ELSE kd.printer_status
@@ -690,11 +813,15 @@ export default function createKioskRouter({
                   WHEN kd.last_heartbeat_at < NOW() - INTERVAL '60 seconds' THEN 'OFFLINE'
                   WHEN kd.internet_status = 'OFFLINE' OR kd.server_status = 'OFFLINE' THEN 'OFFLINE'
                   WHEN kd.payment_required AND (kd.payment_connector_id IS NULL OR pc.enabled IS FALSE OR COALESCE(pc.connection_status,'') <> 'CONNECTED') THEN 'DEGRADED'
-                  WHEN kd.printer_required AND ((NULLIF(kd.printer_name,'') IS NULL AND kd.printer_hardware_id IS NULL) OR (hc.id IS NOT NULL AND hc.active IS FALSE) OR kd.printer_status NOT IN ('READY','ONLINE')) THEN 'DEGRADED'
+                  WHEN kd.printer_required AND (
+                    (kd.printer_connector_id IS NOT NULL AND (rc.enabled IS FALSE OR COALESCE(rc.connection_status,'') <> 'CONNECTED'))
+                    OR (kd.printer_connector_id IS NULL AND ((NULLIF(kd.printer_name,'') IS NULL AND kd.printer_hardware_id IS NULL) OR (hc.id IS NOT NULL AND hc.active IS FALSE) OR kd.printer_status NOT IN ('READY','ONLINE')))
+                  ) THEN 'DEGRADED'
                   ELSE 'ONLINE'
                 END AS overall_status
            FROM kiosk_devices kd
            LEFT JOIN integration_connections pc ON pc.id=kd.payment_connector_id AND pc.company_id=kd.company_id
+           LEFT JOIN integration_connections rc ON rc.id=kd.printer_connector_id AND rc.company_id=kd.company_id
            LEFT JOIN payment_terminals pt ON pt.id=kd.payment_terminal_id AND pt.company_id=kd.company_id
            LEFT JOIN hardware_configurations hc ON hc.id=kd.printer_hardware_id AND hc.company_id=kd.company_id
           WHERE kd.company_id=$1
@@ -747,6 +874,7 @@ export default function createKioskRouter({
   router.put("/kiosk/devices/:id/settings", authenticate, async (req, res) => {
     let workflowId = req.body?.workflowId || null;
     const paymentConnectorId = req.body?.paymentConnectorId || null;
+    const printerConnectorId = req.body?.printerConnectorId || null;
     const paymentTerminalId = req.body?.paymentTerminalId || null;
     const printerHardwareId = req.body?.printerHardwareId || null;
     const printerName = req.body?.printerName == null ? null : String(req.body.printerName).trim().slice(0, 150);
@@ -801,6 +929,24 @@ export default function createKioskRouter({
         );
         if (!connector.rows.length) return res.status(400).json({ success: false, message: "Payment connector is not available for this store" });
       }
+      if (printerConnectorId) {
+        const connector = await db(
+          `SELECT c.id,c.till_id
+             FROM integration_connections c
+             JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
+            WHERE c.id=$1 AND c.company_id=$2 AND c.enabled=TRUE
+              AND (c.store_id IS NULL OR c.store_id=$3)
+              AND (
+                c.connector_capabilities ? 'printer.print'
+                OR EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(COALESCE(p.manifest->'connectorApp'->'capabilities','[]'::jsonb)) cap
+                   WHERE CASE WHEN jsonb_typeof(cap)='string' THEN trim(both '"' from cap::text) ELSE cap->>'key' END='printer.print'
+                )
+              )`,
+          [printerConnectorId, req.user.companyId, req.user.storeId]
+        );
+        if (!connector.rows.length) return res.status(400).json({ success: false, message: "Printer connector is not available for this store" });
+      }
       if (paymentTerminalId) {
         const payment = await db(
           "SELECT id FROM payment_terminals WHERE id=$1 AND company_id=$2 AND store_id=$3",
@@ -817,16 +963,16 @@ export default function createKioskRouter({
       }
       const result = await db(
         `UPDATE kiosk_devices
-            SET name=$1,workflow_id=$2,payment_connector_id=$3,payment_terminal_id=$4,printer_hardware_id=$5,
-                printer_name=$6,printer_connection_type=$7,printer_connection_address=$8,printer_paper_width=$9,
-                payment_required=$10,printer_required=$11,active=$12,updated_at=NOW()
-          WHERE id=$13 AND company_id=$14 AND store_id=$15
+            SET name=$1,workflow_id=$2,payment_connector_id=$3,printer_connector_id=$4,payment_terminal_id=$5,printer_hardware_id=$6,
+                printer_name=$7,printer_connection_type=$8,printer_connection_address=$9,printer_paper_width=$10,
+                payment_required=$11,printer_required=$12,active=$13,updated_at=NOW()
+          WHERE id=$14 AND company_id=$15 AND store_id=$16
           RETURNING *`,
-        [name, workflowId, paymentConnectorId, paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active, req.params.id, req.user.companyId, req.user.storeId]
+        [name, workflowId, paymentConnectorId, printerConnectorId, paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active, req.params.id, req.user.companyId, req.user.storeId]
       );
       if (!result.rows.length) return res.status(404).json({ success: false, message: "Kiosk device not found" });
       await writeAudit?.(req.user.companyId, req.user.id, "kiosk.device.settings", "kiosk_device", req.params.id, {
-        workflowId, paymentConnectorId, paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active,
+        workflowId, paymentConnectorId, printerConnectorId, paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active,
       });
       res.json({ success: true, message: "Kiosk device settings saved", data: result.rows[0] });
     } catch (error) {
@@ -1156,6 +1302,7 @@ export function createKioskModeGate() {
       (method === "POST" && path === "/api/kiosk/assistance") ||
       (method === "POST" && path === "/api/kiosk/customer-lookup") ||
       (method === "POST" && path === "/api/kiosk/receipt/email") ||
+      (method === "POST" && path === "/api/kiosk/receipt/print") ||
       (method === "POST" && path === "/api/kiosk/orders/from-sale") ||
       (method === "POST" && /^\/api\/kiosk\/devices\/[^/]+\/heartbeat$/.test(path)) ||
       (method === "POST" && path === "/api/sales") ||
