@@ -84,15 +84,17 @@ async function createWorkItems({ db, request, step }) {
 }
 async function currentRequest({ db, requestId, companyId }) {
   const result = await db(
-    `SELECT r.*,p.config AS process_config,p.name AS process_name,
-            s.id AS step_id,s.role_id,s.step_order,s.label AS step_label,s.config AS step_config,s.assignment_type,s.assignment_config
+    `SELECT r.*,p.config AS process_config,p.name AS process_name
        FROM platform_approval_requests r
        JOIN platform_approval_processes p ON p.id=r.process_id
-       JOIN platform_approval_steps s ON s.process_id=r.process_id AND s.step_order=r.current_step
       WHERE r.id=$1 AND r.company_id=$2`,
     [requestId, companyId]
   );
-  return result.rows[0] || null;
+  const row=result.rows[0]; if(!row) return null;
+  const snapshot=cfg(row.definition_snapshot); const pinned=(snapshot.steps||[]).find(step=>Number(step.step_order)===Number(row.current_step));
+  if(pinned) return {...row,step_id:pinned.id||null,role_id:pinned.role_id||null,step_order:pinned.step_order,step_label:pinned.label,step_config:cfg(pinned.config),assignment_type:pinned.assignment_type||"role",assignment_config:cfg(pinned.assignment_config)};
+  const live=await db("SELECT id AS step_id,role_id,step_order,label AS step_label,config AS step_config,assignment_type,assignment_config FROM platform_approval_steps WHERE process_id=$1 AND step_order=$2",[row.process_id,row.current_step]);
+  return {...row,...(live.rows[0]||{})};
 }
 
 export async function submitPlatformApproval({ db, object, fields, recordId, record, req, manual = false }) {
@@ -200,7 +202,8 @@ export async function decidePlatformApproval({ db, requestId, decision, comment,
 export async function reassignPlatformApproval({ db, requestId, assigneeUserId, comment, req }) {
   const current = await currentRequest({ db, requestId, companyId: req.user.companyId });
   if (!current || current.status !== "pending") return { status: 404, message: "Pending approval request not found" };
-  if (cfg(current.process_config).allowReassign === false) return { status: 403, message: "Reassignment is disabled for this approval process" };
+  const pinnedConfig=cfg(cfg(current.definition_snapshot).process?.config || current.process_config);
+  if (pinnedConfig.allowReassign === false) return { status: 403, message: "Reassignment is disabled for this approval process" };
   const itemResult = await db("SELECT * FROM platform_approval_work_items WHERE request_id=$1 AND step_order=$2 AND status='pending'", [requestId,current.step_order]);
   const item=itemResult.rows[0];
   if (!item) return { status:409,message:"Pending work item not found" };
