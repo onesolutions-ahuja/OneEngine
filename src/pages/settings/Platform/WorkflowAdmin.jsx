@@ -255,6 +255,7 @@ const actionOptions = [
   { value: "SEND_EMAIL", label: "Send Email" },
   { value: "SEND_SMS", label: "Send SMS" },
   { value: "SEND_WHATSAPP", label: "Send WhatsApp" },
+  { value: "SEND_APPOINTMENT_CONFIRMATION", label: "Appointments - Send Booking Confirmation" },
   { value: "CALL_FUNCTION", label: "Call Function" },
   { value: "RUN_SUBFLOW", label: "Run Subflow" },
   { value: "WEBHOOK", label: "Webhook" },
@@ -514,6 +515,35 @@ function StepEditor({ step, index, updateStep, moveStep, duplicateStep, deleteSt
           </div>
         );
       }
+      case "SEND_APPOINTMENT_CONFIRMATION":
+        return (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <strong className="text-sm text-slate-700">Booking confirmation</strong>
+              <p className="mt-1 text-xs text-slate-500">Sent through the same mobile channel used to book. Leave Recipient blank to reply to the booking customer.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Confirmation message</label>
+              <textarea
+                className={inputClass}
+                value={step.config?.message || ""}
+                onChange={(event) => updateConfig({ message: event.target.value })}
+                rows={4}
+                placeholder="Your {{serviceName}} appointment is booked for {{startsAt}}."
+              />
+              <p className="mt-1 text-xs text-slate-500">Available values: {{serviceName}}, {{startsAt}}, {{appointmentId}}. If left blank, OneAssistant uses its standard confirmation message.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Recipient override</label>
+              <input
+                className={inputClass}
+                value={step.config?.recipient || ""}
+                onChange={(event) => updateConfig({ recipient: event.target.value })}
+                placeholder="Leave blank to use the booking customer's phone"
+              />
+            </div>
+          </div>
+        );
       case "IN_APP_NOTIFICATION":
         return (
           <div className="space-y-3">
