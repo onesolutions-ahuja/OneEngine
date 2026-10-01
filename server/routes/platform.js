@@ -2920,7 +2920,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   router.get("/platform/rules", ...manage, async (req, res) => {
     await ensureSystemWorkflowCatalog({ db, companyId: req.user.companyId, userId: req.user.id || null });
-    const result = await db("SELECT * FROM platform_rules WHERE (company_id IS NULL OR company_id=$1) ORDER BY name", [req.user.companyId]);
+    const result = await db(
+      `SELECT r.*, o.object_key, o.label AS object_label
+         FROM platform_rules r
+         LEFT JOIN platform_objects o ON o.id=r.object_id
+        WHERE (r.company_id IS NULL OR r.company_id=$1)
+        ORDER BY r.name`,
+      [req.user.companyId]
+    );
     const rows = result.rows || [];
     const fieldIds = [...new Set(rows.flatMap((rule) => [
       ...collectRuleFieldIds(rule.conditions),
