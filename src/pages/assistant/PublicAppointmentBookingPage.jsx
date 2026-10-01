@@ -34,7 +34,9 @@ export default function PublicAppointmentBookingPage({token:tokenProp}){
       const r=await apiRequest('/api/public/assistant/book/'+encodeURIComponent(token))
       if(!r?.success)throw new Error(r?.message||'Unable to open booking link')
       setData(r.data)
+      const availableServices=Array.isArray(r.data?.services)?r.data.services:[]
       if(r.data?.selectedServiceId)setServiceId(r.data.selectedServiceId)
+      else if(availableServices.length===1)setServiceId(availableServices[0].id)
     }catch(err){setError(err?.message||'This booking link is unavailable')}
     finally{setLoading(false)}
   }
@@ -100,7 +102,15 @@ export default function PublicAppointmentBookingPage({token:tokenProp}){
         <div style={{marginTop:4}}>Please contact the business to complete its OneAssistant setup before booking.</div>
       </div>:null}
       <div className="customer-editor-grid">
-        <label className="module-input-label"><span>Service</span><select value={serviceId} disabled={services.length===0} onChange={e=>{setServiceId(e.target.value);setSlots([])}}><option value="">{services.length===0?'No services available':'Choose service'}</option>{services.map(s=><option key={s.id} value={s.id}>{s.name} · {s.duration_minutes} min</option>)}</select></label>
+        {services.length===1
+          ? <div className="module-input-label">
+              <span>Service</span>
+              <div className="module-page-card" style={{padding:12}}>
+                <strong>{services[0].name}</strong>
+                <div>{services[0].duration_minutes} min · {services[0].currency} {Number(services[0].price||0).toFixed(2)}</div>
+              </div>
+            </div>
+          : <label className="module-input-label"><span>Service</span><select value={serviceId} disabled={services.length===0} onChange={e=>{setServiceId(e.target.value);setSlots([])}}><option value="">{services.length===0?'No services available':'Choose service'}</option>{services.map(s=><option key={s.id} value={s.id}>{s.name} · {s.duration_minutes} min</option>)}</select></label>}
         <label className="module-input-label"><span>Search from</span><input type="date" value={date} onChange={e=>{setDate(e.target.value);setSlots([])}}/></label>
       </div>
       {selectedService?<div className="product-stats" style={{marginTop:12}}><div><span>Service</span><strong>{selectedService.name}</strong></div><div><span>Price</span><strong>{selectedService.currency} {Number(selectedService.price||0).toFixed(2)}</strong></div><div><span>Payment</span><strong>{String(selectedService.payment_policy||'NO_ADVANCE').replaceAll('_',' ')}</strong></div></div>:null}
