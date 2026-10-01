@@ -99,46 +99,6 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     user = await pool.query(`INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,active,must_change_password) VALUES ($1,$2,$3,$3,$4,$5,TRUE,TRUE) RETURNING id,password_hash,company_id`, [company.id,roleId,email,hash,name]);
   }
 
-  // Scope is explicit even for Superadmin: keep its user_stores assignments
-  // synchronized with every active store in its tenant. Runtime authorization
-  // still uses the normal canAccessStore() assignment check; this is
-  // provisioning, not an identity/role bypass.
-  await pool.query(
-    `INSERT INTO user_stores (user_id,store_id,active)
-     SELECT $1,s.id,TRUE
-       FROM stores s
-      WHERE s.company_id=$2 AND s.active=TRUE
-     ON CONFLICT (user_id,store_id) DO UPDATE SET active=TRUE`,
-    [user.rows[0].id, company.id]
-  );
-  await pool.query(
-    `UPDATE users u
-        SET store_id=chosen.store_id,updated_at=NOW()
-       FROM LATERAL (
-         SELECT us.store_id
-           FROM user_stores us
-           JOIN stores s ON s.id=us.store_id
-          WHERE us.user_id=u.id
-            AND us.active=TRUE
-            AND s.company_id=u.company_id
-            AND s.active=TRUE
-          ORDER BY s.created_at,s.id
-          LIMIT 1
-       ) chosen
-      WHERE u.id=$1
-        AND (u.store_id IS NULL OR NOT EXISTS (
-          SELECT 1
-            FROM user_stores current_assignment
-            JOIN stores current_store ON current_store.id=current_assignment.store_id
-           WHERE current_assignment.user_id=u.id
-             AND current_assignment.store_id=u.store_id
-             AND current_assignment.active=TRUE
-             AND current_store.active=TRUE
-             AND current_store.company_id=u.company_id
-        ))`,
-    [user.rows[0].id]
-  );
-
   console.log("onePOS: company-bound Superadmin synchronized through RBAC", { companyId: company.id, email });
   return { superadminReady: true, superadminEmail: email, companyId: company.id, roleId };
 }
