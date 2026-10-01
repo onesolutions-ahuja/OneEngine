@@ -1,0 +1,100 @@
+name: Canonical RBAC cleanup
+
+on:
+  push:
+    paths:
+      - '.github/workflows/canonical-rbac-cleanup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply canonical company-bound RBAC cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('server/database/init.js')
+          s = p.read_text()
+          s = s.replace("            WHERE r.api_key='platform_superadmin'\n              AND p.code NOT IN ('oneengine.manage','platform.manage')", "            WHERE r.api_key='platform_superadmin'")
+
+          start = s.index('    {', 0, s.index('key: "0019_dual_superadmin_seed"'))
+          marker = s.index('key: "0020_engine_manager_all_permissions"')
+          end = s.index('    },', marker) + len('    },')
+          replacement = '''    {
+                key: "0019_dual_superadmin_seed",
+                version: "19",
+                name: "Legacy seed compatibility (canonical bootstrap owns identity)",
+                up: async client => {
+                  await client.query(`INSERT INTO permissions (code,name,description) VALUES ('oneengine.manage','Manage OneEngine','Manage metadata across organisations inside OneDeveloper') ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description`);
+                },
+              },
+              {
+                key: "0020_engine_manager_all_permissions",
+                version: "20",
+                name: "Grant all permissions to company-bound Superadmin roles",
+                up: async client => {
+                  await client.query(`INSERT INTO role_permissions (role_id,permission_id) SELECT r.id,p.id FROM roles r CROSS JOIN permissions p WHERE r.company_id IS NOT NULL AND r.api_key='platform_superadmin' ON CONFLICT (role_id,permission_id) DO NOTHING`);
+                },
+              },'''
+          s = s[:start] + replacement + s[end:]
+
+          legacy_start = s.find('    /* Global Platform Developer role:')
+          if legacy_start >= 0:
+              legacy_end = s.index('    await pool.query(`\n    ALTER TABLE companies', legacy_start)
+              s = s[:legacy_start] + s[legacy_end:]
+
+          block_start = s.index('export const ONEENGINE_MANAGE_PERMISSION')
+          block_end = s.index('\nasync function initializeLegacyDatabase', block_start)
+          replacement = '''export { ONEENGINE_MANAGE_PERMISSION, PLATFORM_MANAGE_PERMISSION } from "./rbacBootstrap.js";
+          import { bootstrapInitialSuperadmin as canonicalBootstrapInitialSuperadmin } from "./rbacBootstrap.js";
+
+          /** @deprecated Global identities are forbidden; retained only for source compatibility. */
+          export async function ensureGlobalSystemProfile(pool) {
+            delete process.env.PLATFORM_DEVELOPER_PASSWORD;
+            const result = await pool.query(`SELECT id FROM roles WHERE company_id IS NOT NULL AND api_key='platform_superadmin' ORDER BY created_at,id LIMIT 1`);
+            if (!result.rows[0]?.id) throw new Error("Company-bound Superadmin role is not initialized");
+            return result.rows[0].id;
+          }
+
+          export async function bootstrapInitialSuperadmin(pool, env = process.env) {
+            return canonicalBootstrapInitialSuperadmin(pool, env);
+          }
+          '''
+          s = s[:block_start] + replacement + s[block_end:]
+          p.write_text(s)
+
+          p = Path('server/server.js')
+          s = p.read_text()
+          s = s.replace('import { bootstrapInitialSuperadmin, ensureGlobalSystemProfile, initializeDatabase } from "./database/init.js";', 'import { initializeDatabase } from "./database/init.js";\nimport { bootstrapInitialSuperadmin } from "./database/rbacBootstrap.js";')
+          start = s.find('    const developerRoleId = await ensureGlobalSystemProfile(pool, {')
+          if start >= 0:
+              end_marker = '    console.log("onePOS: platform bootstrap ready");'
+              end = s.index(end_marker, start)
+              s = s[:start] + s[end:]
+          p.write_text(s)
+
+      - name: Syntax check
+        run: |
+          node --check server/database/init.js
+          node --check server/database/rbacBootstrap.js
+          node --check server/server.js
+      - name: Commit cleanup
+        run: |
+          git config user.name "OneEngine RBAC Cleanup"
+          git config user.email "actions@users.noreply.github.com"
+          git add server/database/init.js server/database/rbacBootstrap.js server/server.js
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(auth): canonical company-bound RBAC across startup"
+          git push
