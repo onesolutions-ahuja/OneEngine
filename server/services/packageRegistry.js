@@ -379,9 +379,9 @@ export function packageDefinition(entry) {
                   { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, modifiers: true, nutrition: true, allergens: true },
                   { key: "upsell", type: "RECOMMENDATIONS", source: "CROSS_SELL", title: "Make it yours", optional: true },
                   { key: "fulfilment", type: "FULFILMENT", title: "How would you like it?", defaultOption: "EAT_IN", options: [
-                    { key: "EAT_IN", label: "Eat in" },
-                    { key: "TAKEAWAY", label: "Takeaway" },
-                    { key: "COLLECT", label: "Collect" }
+                    { key: "EAT_IN", label: "Eat in", canonicalType: "SELF_PICKUP" },
+                    { key: "TAKEAWAY", label: "Takeaway", canonicalType: "SELF_PICKUP" },
+                    { key: "COLLECT", label: "Collect", canonicalType: "SELF_PICKUP" }
                   ] },
                   { key: "basket", type: "BASKET", editable: true, promotions: true },
                   { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & collect" },
@@ -418,9 +418,9 @@ export function packageDefinition(entry) {
                   { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true },
                   { key: "extras", type: "RECOMMENDATIONS", source: "ACCESSORY", title: "Accessories & protection", warranty: true, optional: true },
                   { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", defaultOption: "COLLECT", options: [
-                    { key: "COLLECT", label: "Collect here" },
-                    { key: "OTHER_STORE", label: "Collect another store" },
-                    { key: "DELIVERY", label: "Home delivery" }
+                    { key: "COLLECT", label: "Collect here", canonicalType: "SELF_PICKUP" },
+                    { key: "OTHER_STORE", label: "Collect another store", canonicalType: "SELF_PICKUP" },
+                    { key: "DELIVERY", label: "Home delivery", canonicalType: "DELIVERY" }
                   ], stockPromise: true },
                   { key: "basket", type: "BASKET", editable: true, promotions: true },
                   { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & order" },
