@@ -738,7 +738,6 @@ const CATALOG = [
         }
       ],
       configurationSchema: [
-        { key: "enabled", type: "boolean", default: true, label: "Enabled" },
         { key: "apiUrl", type: "string", required: true, default: "https://api.sms-gate.app", label: "API URL" },
         { key: "authenticationMethod", type: "picklist", required: true, default: "USERNAME_PASSWORD", enum: ["USERNAME_PASSWORD", "API_TOKEN"], label: "Authentication method" },
         { key: "username", type: "string", label: "Username" },
