@@ -1564,6 +1564,8 @@ export default function createSalesRouter({
           }
         }
 
+        await client.query("COMMIT");
+
         if (kioskContext && basketHasAgeRestricted) {
           await db(
             `UPDATE kiosk_devices
@@ -1573,8 +1575,6 @@ export default function createSalesRouter({
           );
           await writeAudit?.(req.user.companyId, req.user.id || null, "KIOSK_AGE_APPROVAL_CONSUMED", "kiosk_device", kioskContext.kiosk_device_id, {});
         }
-
-        await client.query("COMMIT");
 
         /*
          * T10R: Customer loyalty earning - fire-and-forget after sale commit
