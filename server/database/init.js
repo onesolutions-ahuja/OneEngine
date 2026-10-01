@@ -925,6 +925,30 @@ async function initializeLegacyDatabase(pool) {
     ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_expiry_rule VARCHAR(20) NOT NULL DEFAULT 'none';
     ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_expiry_days INTEGER NOT NULL DEFAULT 365;
 
+    CREATE TABLE IF NOT EXISTS kiosk_devices (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+      device_key VARCHAR(120) NOT NULL,
+      name VARCHAR(150) NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      payment_terminal_id UUID REFERENCES payment_terminals(id) ON DELETE SET NULL,
+      printer_hardware_id UUID,
+      printer_required BOOLEAN NOT NULL DEFAULT FALSE,
+      payment_required BOOLEAN NOT NULL DEFAULT TRUE,
+      internet_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+      server_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+      payment_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+      printer_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+      last_heartbeat_at TIMESTAMPTZ,
+      last_health_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(company_id, device_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_kiosk_devices_store
+      ON kiosk_devices(company_id, store_id, active);
+
     CREATE TABLE IF NOT EXISTS payment_terminals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -940,6 +964,17 @@ async function initializeLegacyDatabase(pool) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE kiosk_devices
+      DROP CONSTRAINT IF EXISTS kiosk_devices_payment_terminal_id_fkey;
+    ALTER TABLE kiosk_devices
+      ADD CONSTRAINT kiosk_devices_payment_terminal_id_fkey
+      FOREIGN KEY (payment_terminal_id) REFERENCES payment_terminals(id) ON DELETE SET NULL;
+    ALTER TABLE kiosk_devices
+      DROP CONSTRAINT IF EXISTS kiosk_devices_printer_hardware_id_fkey;
+    ALTER TABLE kiosk_devices
+      ADD CONSTRAINT kiosk_devices_printer_hardware_id_fkey
+      FOREIGN KEY (printer_hardware_id) REFERENCES hardware_configurations(id) ON DELETE SET NULL;
 
     CREATE INDEX IF NOT EXISTS idx_payment_terminals_company
     ON payment_terminals(company_id, store_id);
