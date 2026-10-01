@@ -65,26 +65,28 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   const password = String(env.BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD || env.BOOTSTRAP_SUPERADMIN_PASSWORD || "");
   const name = String(env.BOOTSTRAP_TENANT_SUPERADMIN_NAME || env.BOOTSTRAP_SUPERADMIN_NAME || `${company.name} Superadmin`).trim();
 
-  let user = await pool.query(`SELECT id,password_hash,company_id FROM users WHERE company_id=$1 AND (LOWER(username)=LOWER($2) OR LOWER(email)=LOWER($2)) ORDER BY created_at,id LIMIT 1`, [company.id,email]);
-  if (!user.rows[0] && isDemoCompany) {
-    // Recover the legacy demo identity in the same tenant. This is deliberately
-    // tenant-scoped: there is no central/global superadmin identity.
+  // Bootstrap identity reconciliation is deterministic: only the configured
+  // tenant/email identity may be reused. Role names, API keys and usernames
+  // never select an account for authority or migration.
+  let user = await pool.query(
+    `SELECT id,password_hash,company_id
+       FROM users
+      WHERE company_id=$1
+        AND (LOWER(username)=LOWER($2) OR LOWER(email)=LOWER($2))
+      ORDER BY created_at,id
+      LIMIT 1`,
+    [company.id, email]
+  );
+  if (!user.rows[0]) {
     user = await pool.query(
       `SELECT id,password_hash,company_id
          FROM users
-        WHERE company_id=$1
-          AND active=TRUE
-          AND (LOWER(COALESCE(username,'')) IN ('superadmin','superadmin@local','superadmin@onepos.local')
-            OR LOWER(COALESCE(email,'')) IN ('superadmin@local','superadmin@onepos.local'))
-        ORDER BY created_at,id LIMIT 1`,
-      [company.id]
+        WHERE company_id IS NULL
+          AND (LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1))
+        ORDER BY created_at,id
+        LIMIT 1`,
+      [email]
     );
-  }
-  if (!user.rows[0]) {
-    user = await pool.query(`SELECT id,password_hash,company_id FROM users WHERE company_id IS NULL AND (LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1)) ORDER BY created_at,id LIMIT 1`, [email]);
-  }
-  if (!user.rows[0]) {
-    user = await pool.query(`SELECT u.id,u.password_hash,u.company_id FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE (r.api_key IN ('engine_manager','oneengine_manager') OR LOWER(COALESCE(u.username,''))='superadmin') ORDER BY u.created_at,u.id LIMIT 1`);
   }
 
   if (user.rows[0]) {
@@ -96,8 +98,6 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     const hash = await bcrypt.hash(password,12);
     user = await pool.query(`INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,active,must_change_password) VALUES ($1,$2,$3,$3,$4,$5,TRUE,TRUE) RETURNING id,password_hash,company_id`, [company.id,roleId,email,hash,name]);
   }
-
-  await pool.query(`UPDATE users u SET company_id=$1, active=FALSE, username='legacy_engine_'||REPLACE(u.id::text,'-',''), email=NULL, updated_at=NOW() FROM roles r WHERE u.role_id=r.id AND u.id<>$2 AND u.company_id IS NULL AND r.api_key IN ('engine_manager','oneengine_manager')`, [company.id,user.rows[0].id]);
 
   console.log("onePOS: company-bound Superadmin synchronized through RBAC", { companyId: company.id, email });
   return { superadminReady: true, superadminEmail: email, companyId: company.id, roleId };
