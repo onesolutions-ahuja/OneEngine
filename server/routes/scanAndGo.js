@@ -68,7 +68,8 @@ function round2(value) {
 
 export default function createScanGoRouter({ authenticate, db, pool, writeAudit = null, createInventoryMovement = null }) {
   const router = express.Router();
-  const jwtSecret = process.env.JWT_SECRET || "development-secret-change-this";
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) throw new Error("JWT_SECRET is required");
 
   /*
    * Middleware: resolve the Scan & Go session from the Authorization header.
