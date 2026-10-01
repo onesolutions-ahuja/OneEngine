@@ -1022,9 +1022,10 @@ async function loadRecordRelationship({ db, action, object }) {
   const parentObjectId = action?.parentObjectId || object?.id || null;
   if (!relationshipKey || !parentObjectId) return null;
   const result = await db(
-    `SELECT r.id, r.relationship_key, r.relationship_type, r.child_field_id,
+    `SELECT r.id, r.relationship_key, r.relationship_type, r.parent_object_id, r.child_object_id, r.child_field_id,
             p.object_key AS parent_object_key,
             c.object_key AS child_object_key, c.source_table AS child_source_table,
+            c.company_id AS child_company_id, c.label AS child_label,
             c.company_scoped AS child_company_scoped, c.store_scoped AS child_store_scoped
        FROM platform_relationships r
        JOIN platform_objects p ON p.id=r.parent_object_id
@@ -2417,17 +2418,24 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           table = targetObject?.source_table || null;
         }
       }
-      if (!table) throw new Error("Update Related Record requires a target table");
+      if (!table || !targetObject) throw new Error("Update Related Record requires a target object");
+      await assertSpecificWorkflowObjectPermission({ db, req, companyId }, targetObject, "edit");
       const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
       const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", recordId: resolvedRecordId, updated: null };
+      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: resolvedRecordId });
-      const sets = entries.map(([field], index) => `"${String(field).replace(/"/g, "")}"=$${index + 1}`).join(", ");
+      const sets = mappedFields.map((field, index) => `"${field.source_column}"=${index + 1}`).join(", ");
       const params = [...entries.map(([, value]) => value), resolvedRecordId];
       const clauses = ["id=$" + params.length];
-      if (req?.user?.companyId) {
-        params.push(req.user.companyId);
-        clauses.push(`company_id=$${params.length}`);
+      if (targetObject.company_scoped) {
+        params.push(req?.user?.companyId || companyId || null);
+        clauses.push(`company_id=${params.length}`);
+      }
+      if (targetObject.store_scoped) {
+        if (!req?.user?.storeId) throw new Error("A store session is required for this related record");
+        params.push(req.user.storeId);
+        clauses.push(`store_id=${params.length}`);
       }
       const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
       const updated = result.rows[0] || null;
@@ -2462,7 +2470,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         targetObject = await resolveTargetObjectMetadata({ db, objectId: relationship.child_object_id, companyId: companyId || req?.user?.companyId });
         table = targetObject?.source_table || table;
       }
-      if (!table) throw new Error("Create Related Record requires a target table");
+      if (!table || !targetObject) throw new Error("Create Related Record requires a target object");
+      await assertSpecificWorkflowObjectPermission({ db, req, companyId }, targetObject, "create");
       const fieldValues = { ...(resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables }) || {}) };
       let relationField = action.relationshipField || action.relatedField || action.foreignKey || action.foreign_key || null;
       if (!relationField && relationship?.child_field_id && db && typeof db === "function") {
@@ -2474,18 +2483,20 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       const entries = Object.entries(fieldValues);
       if (!entries.length) return { status: "completed", created: null };
+      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
-      const columns = entries.map(([field]) => `"${String(field).replace(/"/g, "")}"`);
-      const values = entries.map((_, index) => `$${index + 1}`);
+      const columns = mappedFields.map((field) => `"${field.source_column}"`);
+      const values = entries.map((_, index) => `${index + 1}`);
       const params = entries.map(([, value]) => value);
-      if (req?.user?.companyId && (targetObject?.company_scoped || action.companyScoped || action.company_scoped || object?.company_scoped)) {
+      if (targetObject.company_scoped) {
         columns.push('"company_id"');
-        values.push(`$${params.length + 1}`);
-        params.push(req.user.companyId);
+        values.push(`${params.length + 1}`);
+        params.push(req?.user?.companyId || companyId || null);
       }
-      if (req?.user?.storeId && (targetObject?.store_scoped || action.storeScoped || action.store_scoped || object?.store_scoped)) {
+      if (targetObject.store_scoped) {
+        if (!req?.user?.storeId) throw new Error("A store session is required for this related record");
         columns.push('"store_id"');
-        values.push(`$${params.length + 1}`);
+        values.push(`${params.length + 1}`);
         params.push(req.user.storeId);
       }
       const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
