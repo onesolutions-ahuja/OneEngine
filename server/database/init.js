@@ -4,6 +4,7 @@ import { runMigrations } from "./migrations.js";
 import { ensureReleaseTablesSql } from "../services/appReleaseManager.js";
 import { backfillLegacyRuleFieldReferences } from "../services/platformRuleReferences.js";
 import { oneAssistantSchema } from "../services/oneAssistant.js";
+import { packageDefinitions } from "../services/packageRegistry.js";
 
 export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env = process.env } = {}) {
   if (!pool) throw new Error("A PostgreSQL connection is required to initialize onePOS");
@@ -452,6 +453,106 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         await client.query(`DELETE FROM permissions WHERE code='platform.manage'`);
         await client.query(`DROP TABLE IF EXISTS platform_developer_company_access`);
         await client.query(`ALTER TABLE users DROP COLUMN IF EXISTS is_platform_developer`);
+      },
+    },
+
+    {
+      key: "0024_sync_internal_package_catalog",
+      version: "24",
+      name: "Synchronise internal package catalog with package registry",
+      up: async client => {
+        const definitions = packageDefinitions();
+        for (const pkg of definitions) {
+          const packageType = pkg.manifest?.packageType || "APPLICATION";
+          const publisher = pkg.manifest?.publisher || "OneSolutions";
+          const category = pkg.manifest?.category || "Business";
+          const lifecycle = pkg.manifest?.lifecycleState === "RETIRED" ? "RETIRED" : "PUBLISHED";
+          const visible = String(pkg.manifest?.visibility || "PUBLIC").toUpperCase() !== "HIDDEN";
+          const installable = pkg.manifest?.installable !== false;
+          const billable = pkg.manifest?.billable !== false;
+          const systemOnly = pkg.manifest?.systemOnly === true;
+          const displayOrder = Number(pkg.manifest?.displayOrder || 0);
+          const licenceMode = pkg.manifest?.licenceMode || (packageType === "FOUNDATION" ? "TECHNICAL" : "COMMERCIAL");
+
+          await client.query(
+            `INSERT INTO package_registry
+               (package_key,name,version,description,manifest,active,package_type,publisher,category,
+                publication_state,visible,installable,billable,system_only,display_order,licence_mode,updated_at)
+             VALUES ($1,$2,$3,$4,$5::jsonb,TRUE,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
+             ON CONFLICT (package_key) DO UPDATE SET
+               name=EXCLUDED.name,
+               version=EXCLUDED.version,
+               description=EXCLUDED.description,
+               manifest=EXCLUDED.manifest,
+               active=TRUE,
+               package_type=EXCLUDED.package_type,
+               publisher=EXCLUDED.publisher,
+               category=EXCLUDED.category,
+               publication_state=EXCLUDED.publication_state,
+               visible=EXCLUDED.visible,
+               installable=EXCLUDED.installable,
+               billable=EXCLUDED.billable,
+               system_only=EXCLUDED.system_only,
+               display_order=EXCLUDED.display_order,
+               licence_mode=EXCLUDED.licence_mode,
+               updated_at=NOW()`,
+            [
+              pkg.packageKey,
+              pkg.name,
+              pkg.version,
+              pkg.description || null,
+              JSON.stringify(pkg.manifest || {}),
+              packageType,
+              publisher,
+              category,
+              lifecycle,
+              visible,
+              installable,
+              billable,
+              systemOnly,
+              displayOrder,
+              licenceMode,
+            ]
+          );
+        }
+
+        for (const pkg of definitions) {
+          const packageRow = await client.query("SELECT id FROM package_registry WHERE package_key=$1", [pkg.packageKey]);
+          const packageId = packageRow.rows[0]?.id;
+          if (!packageId) continue;
+          for (const dependency of pkg.dependencies || []) {
+            const dependencyKey = typeof dependency === "string" ? dependency : dependency.packageKey || dependency.package_key;
+            if (!dependencyKey) continue;
+            const dependencyRow = await client.query("SELECT id FROM package_registry WHERE package_key=$1", [dependencyKey]);
+            const dependencyId = dependencyRow.rows[0]?.id;
+            if (!dependencyId) continue;
+            await client.query(
+              `INSERT INTO package_dependencies
+                 (package_id,dependency_id,version_range,min_version,max_version,optional)
+               VALUES ($1,$2,$3,$4,$5,$6)
+               ON CONFLICT (package_id,dependency_id) DO UPDATE SET
+                 version_range=EXCLUDED.version_range,
+                 min_version=EXCLUDED.min_version,
+                 max_version=EXCLUDED.max_version,
+                 optional=EXCLUDED.optional`,
+              [
+                packageId,
+                dependencyId,
+                typeof dependency === "object" ? dependency.versionRange || dependency.version_range || null : null,
+                typeof dependency === "object" ? dependency.minVersion || dependency.min_version || null : null,
+                typeof dependency === "object" ? dependency.maxVersion || dependency.max_version || null : null,
+                typeof dependency === "object" && dependency.optional === true,
+              ]
+            );
+          }
+        }
+
+        const verified = await client.query(
+          `SELECT package_key FROM package_registry
+            WHERE package_key IN ('communication_core','sms_connector','smsgate_connector','one_assistant')
+            ORDER BY package_key`
+        );
+        console.log(`onePOS: internal package catalog synchronized (${verified.rows.map(row => row.package_key).join(", ")})`);
       },
     },
   ]);
