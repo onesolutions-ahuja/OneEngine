@@ -2236,6 +2236,9 @@ async function startServer() {
                     scheduledPathStepIds: payload.scheduledPathStepIds || [],
                     actorUserId: actorId,
                     sourceRunId: parentRun?.id || null,
+                    initialVariables: payload.workflowVariables && typeof payload.workflowVariables === "object"
+                      ? payload.workflowVariables
+                      : { variables: {}, steps: {} },
                   },
                 });
                 const req = {
@@ -2405,7 +2408,11 @@ async function startServer() {
                 },
               };
 
-              const workflowVariables = { variables: {}, steps: {} };
+              const workflowVariables = run.metadata?.initialVariables && typeof run.metadata.initialVariables === "object"
+                ? JSON.parse(JSON.stringify(run.metadata.initialVariables))
+                : { variables: {}, steps: {} };
+              if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+              if (!workflowVariables.steps || typeof workflowVariables.steps !== "object") workflowVariables.steps = {};
               const results = await executeWorkflowActions({
                 actions,
                 allActions: scheduledResumeIds ? allResumeActions : actions,
