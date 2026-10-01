@@ -461,6 +461,22 @@ export async function ensureActingCompanyContext() {
   return companyId
 }
 
+export function lockToKioskMode() {
+  // Preserve the dedicated kiosk token and server address only. Remove all
+  // staff/browser identity so navigating away from /kiosk-runtime cannot
+  // inherit an administrator or cashier session.
+  clearCompanyContext()
+  sessionStorage.removeItem('onepos_token')
+  sessionStorage.removeItem('onepos_user')
+  sessionStorage.removeItem('onepos.settings.context.v2')
+  sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
+  sessionStorage.removeItem(AVAILABLE_STORES_STORAGE_KEY)
+  localStorage.removeItem('onepos_token')
+  localStorage.removeItem('onepos_user')
+  setActingCompanyId('')
+  try { localStorage.removeItem(ACTIVE_STORE_STORAGE_KEY) } catch {}
+}
+
 export function logout() {
   clearCompanyContext()
   sessionStorage.removeItem('onepos_token')
