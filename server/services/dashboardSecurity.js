@@ -51,6 +51,7 @@ export async function resolveDefaultDashboard(db, user) {
   const result = await db("SELECT * FROM dashboards WHERE company_id=$1 AND archived_at IS NULL ORDER BY id", [principals.companyId]);
   const candidates = [];
   for (const dashboard of result.rows || []) {
+    if (!Array.isArray(dashboard.components) || dashboard.components.length === 0) continue;
     const access = await resolveDashboardAccess(db, dashboard, user, principals);
     if (!access) continue;
     for (const assignment of rowArray(dashboard.default_assignments)) {
