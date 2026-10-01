@@ -842,15 +842,19 @@ function MappingEditor({ value = {}, onChange, rootObjectKey, extraResources = [
 
 function workflowStepResources(steps = [], currentIndex = 0) {
   const resources = [];
+  const seenVariables = new Set();
   steps.slice(0, currentIndex).forEach((step, index) => {
     const label = step.label || getActionLabel(step.type) || `Step ${index + 1}`;
     const prefix = `steps.${step.id}`;
     if (step.type === "ASSIGNMENT" && step.config?.variableName) {
-      resources.push({
-        value: `variables.${step.config.variableName}`,
-        label: `${step.config.variableName} · ${step.config.variableType || "text"}`,
-        type: step.config.variableType || "variable",
-      });
+      if (!seenVariables.has(step.config.variableName)) {
+        resources.push({
+          value: `variables.${step.config.variableName}`,
+          label: `${step.config.variableName} · ${step.config.variableType || "text"}`,
+          type: step.config.variableType || "variable",
+        });
+        seenVariables.add(step.config.variableName);
+      }
       resources.push({
         value: `${prefix}.value`,
         label: `${label} → Assigned Value`,
@@ -881,6 +885,8 @@ function looksLikeWorkflowResource(value = "") {
 function ResourceOrLiteralInput({ label, value, onChange, rootObjectKey, extraResources = [], type = "string", required = false }) {
   const [mode, setMode] = useState(() => looksLikeWorkflowResource(value) ? "resource" : "value");
   const numeric = type === "number" || type === "integer";
+  const boolean = type === "boolean";
+  const dateType = type === "date" ? "date" : type === "datetime" ? "datetime-local" : (numeric ? "number" : "text");
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
@@ -892,10 +898,16 @@ function ResourceOrLiteralInput({ label, value, onChange, rootObjectKey, extraRe
       </div>
       {mode === "resource" ? (
         <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="" value={String(value ?? "")} onChange={onChange} />
+      ) : boolean ? (
+        <select className={inputClass} value={value === true ? "true" : value === false ? "false" : ""} onChange={(event) => onChange(event.target.value === "" ? "" : event.target.value === "true")}>
+          <option value="">Select value</option>
+          <option value="true">True</option>
+          <option value="false">False</option>
+        </select>
       ) : (
         <input
           className={inputClass}
-          type={numeric ? "number" : "text"}
+          type={dateType}
           value={value ?? ""}
           onChange={(event) => onChange(numeric ? (event.target.value === "" ? "" : Number(event.target.value)) : event.target.value)}
         />
@@ -1070,7 +1082,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Type</label>
-                <select className={inputClass} value={step.config?.variableType || "text"} onChange={(event) => updateConfig({ variableType: event.target.value })}>
+                <select className={inputClass} value={step.config?.variableType || "text"} onChange={(event) => updateConfig({ variableType: event.target.value, operator: "set", value: "" })}>
                   <option value="text">Text</option>
                   <option value="number">Number</option>
                   <option value="boolean">Boolean</option>
@@ -1085,9 +1097,9 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Operation</label>
                 <select className={inputClass} value={step.config?.operator || "set"} onChange={(event) => updateConfig({ operator: event.target.value })}>
                   <option value="set">Set value</option>
-                  <option value="add">Add</option>
-                  <option value="subtract">Subtract</option>
-                  <option value="append">Append to collection</option>
+                  {step.config?.variableType === "number" ? <option value="add">Add</option> : null}
+                  {step.config?.variableType === "number" ? <option value="subtract">Subtract</option> : null}
+                  {step.config?.variableType === "collection" ? <option value="append">Append to collection</option> : null}
                 </select>
               </div>
             </div>
@@ -1097,8 +1109,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               onChange={(value) => updateConfig({ value })}
               rootObjectKey={rootObjectKey}
               extraResources={extraResources}
-              type={step.config?.variableType === "number" ? "number" : "string"}
-              required={step.config?.operator !== "set" || true}
+              type={step.config?.variableType || "string"}
+              required
             />
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
               Later steps will find this under Resources as <strong>{step.config?.variableName ? `variables.${step.config.variableName}` : "your variable"}</strong>.
@@ -1142,7 +1154,13 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                       <option value="is_not_empty">Is not empty</option>
                     </select>
                     {["is_empty","is_not_empty"].includes(filter.operator) ? <div /> : (
-                      <input className={inputClass} value={filter.value ?? ""} onChange={(event) => updateFilter(filterIndex, { value: event.target.value })} placeholder="Value" />
+                      <ResourceOrLiteralInput
+                        label=""
+                        value={filter.value ?? ""}
+                        onChange={(value) => updateFilter(filterIndex, { value })}
+                        rootObjectKey={rootObjectKey}
+                        extraResources={extraResources}
+                      />
                     )}
                     <button type="button" className="rounded border border-slate-200 px-2 text-xs text-red-600" onClick={() => updateConfig({ filters: filters.filter((_, itemIndex) => itemIndex !== filterIndex) })}>Remove</button>
                   </div>
