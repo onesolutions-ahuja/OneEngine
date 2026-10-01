@@ -29,7 +29,7 @@ export function createSelfCheckoutRouter({
   authorize,
   db,
   bcrypt = null,
-  jwtSecret = process.env.JWT_SECRET || "development-secret-change-this",
+  jwtSecret = process.env.JWT_SECRET,
   modeTtl = SCO_MODE_TTL,
   writeAudit = null,
   requireSelfCheckoutEntitlement = null,
