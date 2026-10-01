@@ -1995,7 +1995,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       const config = req.body?.config === undefined ? row.config : normalizeReportConfig(req.body.config || {});
       const active = req.body?.active === undefined ? row.active : req.body.active === true;
       const result = await db(
-        "UPDATE platform_reports SET report_key=$1,label=$2,description=$3,config=$4::jsonb,active=$5,updated_at=NOW() WHERE id=$6 AND company_id=$7 RETURNING *",
+        "UPDATE platform_reports SET report_key=$1,label=$2,description=$3,config=$4::jsonb,active=$5,user_modified=true,updated_at=NOW() WHERE id=$6 AND company_id=$7 RETURNING *",
         [reportKey, label, req.body?.description === undefined ? row.description : req.body.description || null, JSON.stringify(config), active, req.params.reportId, req.user.companyId]
       );
       res.json({ success: true, data: result.rows[0] });
@@ -2084,18 +2084,6 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       console.error("Platform report execution error:", error);
       res.status(500).json({ success: false, message: "Unable to execute report" });
     }
-  });
-
-  router.put("/platform/reports/:reportId", ...manage, async (req, res) => {
-    const existing = await db("SELECT * FROM platform_reports WHERE id=$1 AND company_id=$2", [req.params.reportId, req.user.companyId]);
-    const report = existing.rows[0];
-    if (!report) return res.status(404).json({ success: false, message: "Report not found or not editable" });
-    const nextConfig = req.body?.config === undefined ? report.config : normalizeReportConfig(req.body.config);
-    const result = await db(
-      "UPDATE platform_reports SET label=COALESCE($1,label), description=COALESCE($2,description), active=COALESCE($3,active), config=COALESCE($4::jsonb,config), user_modified=true,updated_at=NOW() WHERE id=$5 RETURNING *",
-      [req.body?.label, req.body?.description, req.body?.active, JSON.stringify(nextConfig), report.id]
-    );
-    res.json({ success: true, data: result.rows[0] });
   });
 
   router.delete("/platform/reports/:reportId", ...manage, async (req, res) => {
