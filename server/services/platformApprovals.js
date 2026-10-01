@@ -12,8 +12,8 @@ async function runOutcomeActions({ db, request, process, actions, req, event }) 
   const object = await db("SELECT * FROM platform_objects WHERE id=$1 AND company_id=$2", [request.object_id, request.company_id]);
   const objectRow = object.rows[0] || { id: request.object_id };
   let record = null;
-  if (objectRow.table_name && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(objectRow.table_name)) {
-    const found = await db(`SELECT * FROM "${objectRow.table_name}" WHERE id=$1 AND company_id=$2 LIMIT 1`, [request.record_id, request.company_id]).catch(() => ({ rows: [] }));
+  if (objectRow.source_table && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(objectRow.source_table)) {
+    const found = await db(`SELECT * FROM "${objectRow.source_table}" WHERE id=$1 AND company_id=$2 LIMIT 1`, [request.record_id, request.company_id]).catch(() => ({ rows: [] }));
     record = found.rows[0] || null;
   }
   return executeWorkflowActions({
