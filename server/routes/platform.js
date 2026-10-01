@@ -4517,6 +4517,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           if(type==="role") { const role=await db("SELECT name FROM roles WHERE id=$1 AND company_id=$2",[step.role_id,req.user.companyId]); detail=role.rows[0]?.name||"Role unavailable"; }
           if(type==="user") { const user=await db("SELECT username,email FROM users WHERE id=$1 AND company_id=$2",[ac.userId,req.user.companyId]); detail=user.rows[0]?.username||user.rows[0]?.email||"User unavailable"; }
           if(type==="group") { const group=await db("SELECT name FROM platform_approval_groups WHERE id=$1 AND company_id=$2",[ac.groupId,req.user.companyId]); detail=group.rows[0]?.name||"Group unavailable"; }
+          if(type==="manager") { const manager=await db("SELECT m.username,m.email FROM users u JOIN users m ON m.id=u.manager_id AND m.company_id=u.company_id AND m.active=TRUE WHERE u.id=$1 AND u.company_id=$2",[req.user.id,req.user.companyId]); detail=manager.rows[0]?.username||manager.rows[0]?.email||"Manager unavailable"; }
           if(type==="record_user") detail=record?.[ac.field]?`Record field ${ac.field} → ${record[ac.field]}`:`Record field ${ac.field||"?"} is empty`;
           trace.push({key:`step-${step.step_order}`,label:step.label,status:detail.includes("unavailable")||detail.includes("empty")?"failed":"success",message:`Approver: ${detail}. Rule: ${cfg(step.config).approvalRule||"FIRST_RESPONSE"}.`});
         }
