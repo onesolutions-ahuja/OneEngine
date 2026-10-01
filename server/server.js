@@ -1922,16 +1922,44 @@ async function markPlatformBootstrapCurrent(fingerprint) {
 async function runOneTimeTestTenantCleanup() {
   if (String(process.env.ONEPOS_CLEANUP_TEST_TENANTS || "") !== "keep-top-5-v2") return;
 
-  const keepSql = "'onePOS Demo','profit-4bb1e232','profit-bffb422a','profit-4fb3c146','profit-5c7c14a8'";
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-
-    const keepCheck = await client.query(
-      `SELECT id, name FROM companies WHERE name IN (${keepSql}) ORDER BY name`
+    await client.query(
+      `CREATE TEMP TABLE onepos_cleanup_keep_companies (
+         id UUID PRIMARY KEY
+       ) ON COMMIT DROP`
     );
-    if (keepCheck.rowCount !== 5) {
-      throw new Error(`Tenant cleanup aborted: expected 5 preserved companies, found ${keepCheck.rowCount}`);
+    await client.query(
+      `INSERT INTO onepos_cleanup_keep_companies (id)
+       SELECT c.id
+       FROM companies c
+       ORDER BY
+         (
+           (SELECT COUNT(*) FROM users u WHERE u.company_id=c.id) +
+           (SELECT COUNT(*) FROM stores s WHERE s.company_id=c.id) +
+           (SELECT COUNT(*) FROM products p WHERE p.company_id=c.id) +
+           (SELECT COUNT(*) FROM customers cu WHERE cu.company_id=c.id) +
+           (SELECT COUNT(*) FROM sales sa WHERE sa.company_id=c.id) +
+           (SELECT COUNT(*) FROM suppliers su WHERE su.company_id=c.id) +
+           (SELECT COUNT(*) FROM purchases pu WHERE pu.company_id=c.id)
+         ) DESC,
+         c.created_at ASC
+       LIMIT 5`
+    );
+
+    const kept = await client.query(
+      `SELECT c.id, c.name,
+              (SELECT COUNT(*) FROM users u WHERE u.company_id=c.id) AS users,
+              (SELECT COUNT(*) FROM stores s WHERE s.company_id=c.id) AS stores,
+              (SELECT COUNT(*) FROM products p WHERE p.company_id=c.id) AS products,
+              (SELECT COUNT(*) FROM sales sa WHERE sa.company_id=c.id) AS sales
+       FROM companies c
+       JOIN onepos_cleanup_keep_companies k ON k.id=c.id
+       ORDER BY c.created_at ASC`
+    );
+    if (kept.rowCount !== 5) {
+      throw new Error(`Tenant cleanup aborted: expected 5 preserved companies, found ${kept.rowCount}`);
     }
 
     const before = await client.query("SELECT COUNT(*)::int AS count FROM companies");
@@ -1939,25 +1967,27 @@ async function runOneTimeTestTenantCleanup() {
     await client.query(
       `DELETE FROM hospitality_bill_sales h
          USING sales s
-         WHERE h.sale_id = s.id
-           AND s.company_id NOT IN (SELECT id FROM companies WHERE name IN (${keepSql}))`
+         WHERE h.sale_id=s.id
+           AND NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=s.company_id)`
     );
     await client.query(
       `DELETE FROM refunds r
          USING sales s
-         WHERE r.sale_id = s.id
-           AND s.company_id NOT IN (SELECT id FROM companies WHERE name IN (${keepSql}))`
+         WHERE r.sale_id=s.id
+           AND NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=s.company_id)`
     );
     await client.query(
-      `DELETE FROM sales
-         WHERE company_id NOT IN (SELECT id FROM companies WHERE name IN (${keepSql}))`
+      `DELETE FROM sales s
+         WHERE NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=s.company_id)`
     );
     await client.query(
-      `DELETE FROM audit_logs
-         WHERE company_id NOT IN (SELECT id FROM companies WHERE name IN (${keepSql}))`
+      `DELETE FROM audit_logs a
+         WHERE NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=a.company_id)`
     );
     const deleted = await client.query(
-      `DELETE FROM companies WHERE name NOT IN (${keepSql}) RETURNING name`
+      `DELETE FROM companies c
+         WHERE NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=c.id)
+         RETURNING c.name`
     );
 
     const after = await client.query("SELECT COUNT(*)::int AS count FROM companies");
@@ -1966,6 +1996,7 @@ async function runOneTimeTestTenantCleanup() {
     }
 
     await client.query("COMMIT");
+    console.log("onePOS: preserved tenant set", kept.rows);
     console.log(
       `onePOS: one-time tenant cleanup complete; companies ${before.rows[0]?.count} -> ${after.rows[0]?.count}; deleted ${deleted.rowCount}`
     );
