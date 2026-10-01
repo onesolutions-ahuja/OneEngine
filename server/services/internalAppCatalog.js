@@ -1269,8 +1269,7 @@ export function catalogEntry(moduleKey) {
   return internalAppCatalog.find((entry) => entry.key === moduleKey) || null;
 }
 
-export function hasCatalogPermission(entry, permissions = [], isAdmin = false) {
-  if (isAdmin === true) return true;
+export function hasCatalogPermission(entry, permissions = [], _legacyAuthority = false) {
   return entry.permissions.some((permission) => permissions.includes(permission));
 }
 
