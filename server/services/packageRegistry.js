@@ -323,6 +323,9 @@ export function packageDefinition(entry) {
   // a package cannot forget runtime permissions that its actions require.
   // This keeps current and future connector packages aligned automatically.
   const manifestPermissions = new Set(Array.isArray(entry.permissions) ? entry.permissions : []);
+  // Foundation package manifests must carry the same RBAC contract as their catalogue surface.
+  // Staff explicitly owns user/attendance capabilities and must never silently drop user.create.
+  if (entry.key === "staff") for (const permission of ["user.view","user.create","user.edit","attendance.view","attendance.use"]) manifestPermissions.add(permission);
   if (entry.connectorApp && typeof entry.connectorApp === "object") {
     manifestPermissions.add("connector.test");
     manifestPermissions.add("connector.view");
