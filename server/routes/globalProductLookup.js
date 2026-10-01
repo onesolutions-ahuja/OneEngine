@@ -5,7 +5,12 @@ import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing
 import { globalProductProviderConfigKeys, globalProductProviderDefaults, testGlobalProductProvider } from "../services/globalProductLookup.js";
 
 const PROVIDER_KEYS = Object.freeze(Object.keys(globalProductProviderConfigKeys));
-const PROVIDER_HOSTS = Object.freeze({ open_food_facts: "openfoodfacts.org", go_upc: "go-upc.com" });
+const PROVIDER_HOSTS = Object.freeze({
+  open_food_facts: "openfoodfacts.org",
+  upcitemdb: "upcitemdb.com",
+  barcode_nest: "barcodenest.com",
+  go_upc: "go-upc.com",
+});
 const CONFIGURABLE_FIELDS = new Set(["enabled", "priority", "timeoutMs", "fallbackEnabled", "cacheTtlSeconds", "baseUrl", "userAgent", "fieldMappings"]);
 const MAPPED_FIELDS = new Set(["barcode", "name", "brand", "description", "category", "variant", "quantity", "imageUrl", "country", "manufacturer"]);
 
@@ -83,15 +88,17 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
           WHERE p.package_key=ANY($2::text[])`,
         [companyId, packageKeys]
       ),
-      db("SELECT provider,configuration,active FROM integrations WHERE company_id=$1 AND provider=ANY($2::text[])", [companyId, Object.values(globalProductProviderConfigKeys)]),
-      db("SELECT provider_name,credentials_encrypted IS NOT NULL AS has_credentials,last_connected_at,last_error FROM integration_connections WHERE company_id=$1 AND provider_name=ANY($2::text[]) AND store_id IS NULL ORDER BY updated_at DESC", [companyId, ["go_upc"]]),
+      db("SELECT provider,configuration,active FROM integrations WHERE company_id=$1 AND provider=ANY($2::text[])", [companyId, [...Object.values(globalProductProviderConfigKeys), "global_product_lookup_preferences"]]),
+      db("SELECT provider_name,credentials_encrypted IS NOT NULL AS has_credentials,last_connected_at,last_error FROM integration_connections WHERE company_id=$1 AND provider_name=ANY($2::text[]) AND store_id IS NULL ORDER BY updated_at DESC", [companyId, ["go_upc","upcitemdb","barcode_nest"]]),
       getCompanyEntitlements(db, companyId),
     ]);
     const packageByKey = new Map((packages.rows || []).map((row) => [row.package_key, row]));
     const configByKey = new Map((settings.rows || []).map((row) => [row.provider, row]));
     const connectionByProvider = new Map((connections.rows || []).map((row) => [String(row.provider_name || "").toLowerCase(), row]));
+    const preferences = parseObject(configByKey.get("global_product_lookup_preferences")?.configuration);
+    const defaultProviderKey = String(preferences.defaultProviderKey || "");
 
-    return appEntries.map((entry) => {
+    const rows = appEntries.map((entry) => {
       const definition = packageByKey.get(entry.key);
       const metadata = definition ? parseObject(definition.manifest) : {};
       const manifestConnector = metadata.providerConnector?.globalProductLookup || entry.providerConnector.globalProductLookup;
@@ -122,13 +129,22 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
         userAgent: manifestConnector.providerKey === "open_food_facts" ? config.userAgent || "onePOS/1.0 (product lookup; support@onesolutions.example)" : undefined,
         fieldMappings: config.fieldMappings || manifestConnector.fieldMappings || {},
         authType: manifestConnector.authType || "none",
-        requiresApiKey: manifestConnector.authType === "bearer",
+        requiresApiKey: ["bearer","x-api-key"].includes(manifestConnector.authType),
+        acceptsApiKey: ["bearer","x-api-key","optional_user_key"].includes(manifestConnector.authType),
         configurableFields: Array.isArray(manifestConnector.configurableFields) ? manifestConnector.configurableFields : [],
-        configured: manifestConnector.providerKey === "go_upc" ? connection?.has_credentials === true : true,
+        configured: ["bearer","x-api-key"].includes(manifestConnector.authType) ? connection?.has_credentials === true : true,
+        usingCustomerKey: connection?.has_credentials === true,
+        isDefault: defaultProviderKey === manifestConnector.providerKey,
         lastSuccessfulLookup: connection?.last_connected_at || null,
         lastProviderError: connection?.last_error ? "Test connection reported an error" : null,
       };
     }).sort((left, right) => left.priority - right.priority || left.displayName.localeCompare(right.displayName));
+
+    if (!rows.some((row) => row.isDefault && row.installed && row.licensed && row.enabled)) {
+      const firstUsable = rows.find((row) => row.installed && row.licensed && row.enabled && (!row.requiresApiKey || row.configured));
+      if (firstUsable) firstUsable.isDefault = true;
+    }
+    return rows;
   }
 
   router.get("/global-products/providers", authenticate, authorize("global_product.view"), async (req, res) => {
@@ -146,6 +162,7 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
         companyId: req.user.companyId,
         reqCompanyId: req.user.companyId,
         query: req.query?.q,
+        providerKey: req.query?.providerKey || null,
         page: req.query?.page,
         pageSize: req.query?.pageSize,
       });
@@ -163,7 +180,11 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
   router.post("/global-products/lookup", authenticate, authorize("global_product.view"), async (req, res) => {
     try {
       const result = await lookupService.lookup({
-        db, companyId: req.user.companyId, reqCompanyId: req.user.companyId, barcode: req.body?.barcode,
+        db,
+        companyId: req.user.companyId,
+        reqCompanyId: req.user.companyId,
+        barcode: req.body?.barcode,
+        providerKey: req.body?.providerKey || null,
       });
       if (result.status === "unavailable" && writeAudit) {
         await writeAudit(req.user.companyId, req.user.id, "global_product_lookup_unavailable", "global_product_lookup", null, {
@@ -177,10 +198,34 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
     }
   });
 
+  router.patch("/global-products/default-provider", authenticate, authorize("integration.manage"), async (req, res) => {
+    const providerKey = String(req.body?.providerKey || "").trim();
+    if (!PROVIDER_KEYS.includes(providerKey)) {
+      return res.status(400).json({ success: false, message: "Choose an installed product lookup provider" });
+    }
+    try {
+      const providers = await providerRows(req.user.companyId);
+      const selected = providers.find((item) => item.providerKey === providerKey);
+      if (!selected?.installed || !selected?.licensed || !selected?.enabled || (selected.requiresApiKey && !selected.configured)) {
+        return res.status(400).json({ success: false, message: "The selected provider must be installed, licensed, enabled and configured first" });
+      }
+      await db(
+        `INSERT INTO integrations (company_id,name,provider,configuration,active)
+         VALUES ($1,'Global Product Lookup preferences','global_product_lookup_preferences',$2::jsonb,true)
+         ON CONFLICT (company_id,provider) DO UPDATE SET configuration=EXCLUDED.configuration,active=true,updated_at=NOW()`,
+        [req.user.companyId, JSON.stringify({ defaultProviderKey: providerKey })]
+      );
+      await writeAudit?.(req.user.companyId, req.user.id, "global_product_default_provider_updated", "global_product_lookup", providerKey, {});
+      res.json({ success: true, data: { providerKey } });
+    } catch {
+      res.status(500).json({ success: false, message: "Unable to change the default product lookup provider" });
+    }
+  });
+
   router.patch("/global-products/providers/:providerKey", authenticate, authorize("integration.manage"), async (req, res) => {
     const providerKey = String(req.params.providerKey || "");
     if (!PROVIDER_KEYS.includes(providerKey)) return res.status(404).json({ success: false, message: "Unknown product lookup provider" });
-    if (providerKey === "go_upc" && typeof req.body?.apiKey === "string" && req.body.apiKey.trim().length > 1000) {
+    if (typeof req.body?.apiKey === "string" && req.body.apiKey.trim().length > 1000) {
       return res.status(400).json({ success: false, message: "API key is too long" });
     }
     try {
@@ -199,19 +244,33 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
       );
 
       let credentialsChanged = false;
-      if (providerKey === "go_upc" && typeof req.body?.apiKey === "string" && req.body.apiKey.trim()) {
+      if (connector.globalProductLookup.authType !== "none" && typeof req.body?.apiKey === "string" && req.body.apiKey.trim()) {
         const apiKey = req.body.apiKey.trim();
-        const existing = await db("SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND store_id IS NULL ORDER BY updated_at DESC LIMIT 1", [req.user.companyId, "go_upc"]);
+        const authType = connector.globalProductLookup.authType === "x-api-key" ? "x-api-key"
+          : connector.globalProductLookup.authType === "optional_user_key" ? "user_key"
+            : "bearer";
+        const existing = await db(
+          "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND store_id IS NULL ORDER BY updated_at DESC LIMIT 1",
+          [req.user.companyId, providerKey]
+        );
         if (existing.rows?.[0]) {
           await db(
-            "UPDATE integration_connections SET credentials_encrypted=$1,auth_type='bearer',base_url=$2,enabled=true,connection_status='CONFIGURED',last_error=NULL,updated_at=NOW() WHERE id=$3 AND company_id=$4",
-            [encryptCredentials({ apiKey }), next.baseUrl || connector.globalProductLookup.baseUrl, existing.rows[0].id, req.user.companyId]
+            "UPDATE integration_connections SET credentials_encrypted=$1,auth_type=$2,base_url=$3,enabled=true,connection_status='CONFIGURED',last_error=NULL,updated_at=NOW() WHERE id=$4 AND company_id=$5",
+            [encryptCredentials({ apiKey }), authType, next.baseUrl || connector.globalProductLookup.baseUrl, existing.rows[0].id, req.user.companyId]
           );
         } else {
           await db(
             `INSERT INTO integration_connections (company_id,store_id,name,provider_name,integration_type,base_url,auth_type,credentials_encrypted,enabled,connection_status,created_by)
-             VALUES ($1,NULL,'Go-UPC Product Lookup','go_upc','product_lookup',$2,'bearer',$3,true,'CONFIGURED',$4)`,
-            [req.user.companyId, next.baseUrl || connector.globalProductLookup.baseUrl, encryptCredentials({ apiKey }), req.user.id]
+             VALUES ($1,NULL,$2,$3,'product_lookup',$4,$5,$6,true,'CONFIGURED',$7)`,
+            [
+              req.user.companyId,
+              `${connector.globalProductLookup.displayName} Product Lookup`,
+              providerKey,
+              next.baseUrl || connector.globalProductLookup.baseUrl,
+              authType,
+              encryptCredentials({ apiKey }),
+              req.user.id,
+            ]
           );
         }
         credentialsChanged = true;
@@ -231,13 +290,13 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
     const providerKey = String(req.params.providerKey || "");
     if (!PROVIDER_KEYS.includes(providerKey)) return res.status(404).json({ success: false, message: "Unknown product lookup provider" });
     const result = await testGlobalProductProvider({ db, companyId: req.user.companyId, providerKey });
-    if (providerKey === "go_upc") {
-      const error = result.success ? null : result.code || "Provider test failed";
+    if (["go_upc","upcitemdb","barcode_nest"].includes(providerKey)) {
+      const error = result.success ? null : result.message || result.code || "Provider test failed";
       await db(
         `UPDATE integration_connections SET last_connected_at=CASE WHEN $1 THEN NOW() ELSE last_connected_at END,
                 last_error=$2,connection_status=$3,updated_at=NOW()
           WHERE company_id=$4 AND LOWER(provider_name)=LOWER($5) AND store_id IS NULL`,
-        [result.success, error, result.success ? "CONNECTED" : "ERROR", req.user.companyId, "go_upc"]
+        [result.success, error, result.success ? "CONNECTED" : "ERROR", req.user.companyId, providerKey]
       );
     }
     await writeAudit?.(req.user.companyId, req.user.id, "global_product_provider_tested", "global_product_provider", providerKey, {
