@@ -637,12 +637,14 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       const actingCompanyId = requestedOverride || req.user?.companyId;
       if (!actingCompanyId) return res.status(409).json({ success: false, code: "ACTING_COMPANY_REQUIRED", message: "Select a company before customising tenant metadata" });
 
-      const access = await db(
-        `SELECT c.id FROM companies c
-         JOIN platform_developer_company_access a ON a.company_id=c.id
-         WHERE a.developer_id=$1 AND a.company_id=$2 AND a.active=true AND c.active=true`,
-        [req.user.id, actingCompanyId]
-      );
+      const access = oneEngineManager
+        ? await db("SELECT id FROM companies WHERE id=$1 AND active=true LIMIT 1", [actingCompanyId])
+        : await db(
+            `SELECT c.id FROM companies c
+             JOIN platform_developer_company_access a ON a.company_id=c.id
+             WHERE a.developer_id=$1 AND a.company_id=$2 AND a.active=true AND c.active=true`,
+            [req.user.id, actingCompanyId]
+          );
 
       if (!access.rows.length) return res.status(403).json({ success: false, message: "You are not authorised for the selected company" });
       req.platformCompanyId = access.rows[0].id;
@@ -698,14 +700,16 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
     }
 
-    const result = await db(
-      `SELECT c.id,c.name
-         FROM companies c
-         JOIN platform_developer_company_access a ON a.company_id=c.id
-        WHERE a.developer_id=$1 AND a.active=true AND c.active=true
-        ORDER BY c.name`,
-      [req.user.id]
-    );
+    const result = oneEngineManager
+      ? await db("SELECT c.id,c.name FROM companies c WHERE c.active=true ORDER BY c.name")
+      : await db(
+          `SELECT c.id,c.name
+             FROM companies c
+             JOIN platform_developer_company_access a ON a.company_id=c.id
+            WHERE a.developer_id=$1 AND a.active=true AND c.active=true
+            ORDER BY c.name`,
+          [req.user.id]
+        );
 
     res.json({ success: true, data: result.rows });
   });
@@ -718,13 +722,15 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
     }
 
-    const result = await db(
-      `SELECT c.id,c.name
-         FROM companies c
-         JOIN platform_developer_company_access a ON a.company_id=c.id
-        WHERE a.developer_id=$1 AND a.company_id=$2 AND a.active=true AND c.active=true`,
-      [req.user.id, companyId]
-    );
+    const result = oneEngineManager
+      ? await db("SELECT c.id,c.name FROM companies c WHERE c.id=$1 AND c.active=true", [companyId])
+      : await db(
+          `SELECT c.id,c.name
+             FROM companies c
+             JOIN platform_developer_company_access a ON a.company_id=c.id
+            WHERE a.developer_id=$1 AND a.company_id=$2 AND a.active=true AND c.active=true`,
+          [req.user.id, companyId]
+        );
 
     if (!result.rows.length) {
       return res.status(403).json({ success: false, message: "You are not authorised for the selected company" });
