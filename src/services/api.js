@@ -10,6 +10,7 @@ export const SESSION_PERMISSIONS_STORAGE_KEY = 'onepos_session_permissions'
 export const ACTIVE_STORE_STORAGE_KEY = 'onepos_active_store_id'
 export const AVAILABLE_STORES_STORAGE_KEY = 'onepos_available_stores'
 export const KIOSK_TOKEN_STORAGE_KEY = 'onepos_kiosk_token'
+export const KIOSK_DISPLAY_TOKEN_STORAGE_KEY = 'onepos_kiosk_display_token'
 
 export function getActingCompanyId() {
   try { return sessionStorage.getItem(ACTING_COMPANY_STORAGE_KEY) || '' } catch { return '' }
@@ -177,8 +178,10 @@ export async function apiFetch(path, options = {}) {
     })
   }
   const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
+  const kioskDisplay = typeof window !== 'undefined' && /\/kiosk-display\/?$/.test(window.location.pathname)
   const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
-  const token = kioskToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || '') : ''
+  const token = kioskToken || displayToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   return fetch(apiUrl(path), {
     ...options,
     headers: {
@@ -242,8 +245,10 @@ export async function apiRequest(path, options = {}) {
     ...fetchOptions
   } = options
   const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
+  const kioskDisplay = typeof window !== 'undefined' && /\/kiosk-display\/?$/.test(window.location.pathname)
   const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
-  const token = kioskToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || '') : ''
+  const token = kioskToken || displayToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   const maxAttempts = method === 'GET' && retryGet ? 2 : 1
   let lastError = null
 
@@ -459,6 +464,19 @@ export async function ensureActingCompanyContext() {
   sessionStorage.setItem('onepos_user', JSON.stringify({ ...user, companyId, storeId: null }))
   await ensureActiveStoreContext().catch(() => { setActiveStoreId('') })
   return companyId
+}
+
+export function lockToKioskDisplayMode() {
+  clearCompanyContext()
+  sessionStorage.removeItem('onepos_token')
+  sessionStorage.removeItem('onepos_user')
+  sessionStorage.removeItem('onepos.settings.context.v2')
+  sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
+  sessionStorage.removeItem(AVAILABLE_STORES_STORAGE_KEY)
+  localStorage.removeItem('onepos_token')
+  localStorage.removeItem('onepos_user')
+  setActingCompanyId('')
+  try { localStorage.removeItem(ACTIVE_STORE_STORAGE_KEY) } catch {}
 }
 
 export function lockToKioskMode() {
