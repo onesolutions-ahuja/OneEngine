@@ -430,7 +430,7 @@ export function packageDefinition(entry) {
                   { key: "confirmation", type: "CONFIRMATION", title: "Thank you", subtitle: "Your order has been sent for preparation.", collectionNumber: true, collectionLabel: "Your collection number", helpText: "Keep this number and go to the collection counter. Your number will be shown when your order is ready.", doneLabel: "Start a new order", receipt: ["PRINT","QR"], resetAfterSeconds: 30 }
                 ],
                 features: {
-                  variants: true, modifiers: true, promotions: true, upsell: true, loyalty: true,
+                  variants: false, modifiers: true, promotions: true, upsell: true, loyalty: true,
                   stockPromise: false, compare: false, specifications: false, warranty: false,
                   accessibility: true, language: true, audio: true, ageVerification: true, assistance: true, idleReset: true
                 }
@@ -496,7 +496,7 @@ export function packageDefinition(entry) {
                 },
                 screens: [
                   { key: "catalogue", type: "CATALOGUE", title: "Find your product", search: true, categories: true, productAction: "OPEN_DETAIL", next: "product" },
-                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true, next: "extras" },
+                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true, warranty: true, next: "extras" },
                   { key: "extras", type: "RECOMMENDATIONS", source: "ACCESSORY", title: "Accessories & protection", warranty: true, optional: true, next: "fulfilment" },
                   { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", defaultOption: "COLLECT", next: "service_details", options: [
                     { key: "COLLECT", label: "Collect here", canonicalType: "SELF_PICKUP", requires: [] },
@@ -516,7 +516,7 @@ export function packageDefinition(entry) {
                 features: {
                   variants: true, modifiers: false, promotions: true, upsell: true, loyalty: true,
                   stockPromise: true, compare: true, specifications: true, warranty: true,
-                  accessibility: true, language: true, assistance: true, idleReset: true
+                  accessibility: true, language: true, audio: true, ageVerification: true, assistance: true, idleReset: true
                 }
               },
               actions: []
