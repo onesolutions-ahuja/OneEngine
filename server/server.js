@@ -2199,9 +2199,20 @@ async function startServer() {
                     runId: childRun.id,
                     trigger: "SCHEDULED_PATH",
                   });
+                  const scheduledWaiting = containsWaiting(results);
                   await db(
-                    "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
-                    [childRun.id, job.company_id]
+                    `UPDATE platform_workflow_runs
+                        SET status=$1,
+                            completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                            metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,
+                            updated_at=NOW()
+                      WHERE id=$3 AND company_id=$4`,
+                    [
+                      scheduledWaiting ? "WAITING" : "COMPLETED",
+                      JSON.stringify({ childResults: results, finalVariables: workflowVariables || { variables: {}, steps: {} } }),
+                      childRun.id,
+                      job.company_id,
+                    ]
                   );
                   if (payload.sourceStepRunId) {
                     await db(
@@ -2211,7 +2222,7 @@ async function startServer() {
                       [JSON.stringify({ scheduledChildRunId: childRun.id, scheduledPathFiredAt: new Date().toISOString() }), payload.sourceStepRunId]
                     );
                   }
-                  return { status: "COMPLETED", scheduledPath: true, runId: childRun.id, results };
+                  return { status: scheduledWaiting ? "WAITING" : "COMPLETED", scheduledPath: true, runId: childRun.id, results };
                 } catch (error) {
                   await db(
                     "UPDATE platform_workflow_runs SET status='FAILED',error_text=$1,completed_at=NOW(),updated_at=NOW() WHERE id=$2 AND company_id=$3",
@@ -2340,12 +2351,24 @@ async function startServer() {
                     [run.id, run.parent_run_id]
                   );
                   if (parentStep.rows[0]) {
+                    const childFinal = await db(
+                      "SELECT metadata FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1",
+                      [run.id, job.company_id]
+                    );
+                    const childMetadata = childFinal.rows[0]?.metadata || {};
+                    const replayResult = {
+                      status: "completed",
+                      runId: run.id,
+                      results: childMetadata.childResults || [],
+                      outputs: childMetadata.outputs || {},
+                      resumed: true,
+                    };
                     await db(
                       `UPDATE platform_workflow_step_runs
-                          SET status='WAITING',completed_at=NULL,
+                          SET status='COMPLETED',completed_at=NOW(),
                               metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW()
                         WHERE id=$2`,
-                      [JSON.stringify({ childRunId: run.id, resumedChildCompleted: true }), parentStep.rows[0].id]
+                      [JSON.stringify({ childRunId: run.id, resumedChildCompleted: true, result: replayResult }), parentStep.rows[0].id]
                     );
                   }
                   const parentRun = await db(
