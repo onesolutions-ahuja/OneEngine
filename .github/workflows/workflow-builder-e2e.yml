@@ -6,6 +6,16 @@ on:
     paths:
       - ".github/workflows/workflow-builder-e2e.yml"
       - "tests/e2e/workflow-builder-regression.spec.mjs"
+      - "src/pages/settings/Platform/WorkflowAdmin.jsx"
+      - "src/pages/settings/Platform/WorkflowRunsAdmin.jsx"
+      - "server/routes/platform.js"
+      - "server/routes/platformSchedules.js"
+      - "server/services/platformWorkflow.js"
+      - "server/services/platformSchedules.js"
+      - "server/services/platformFormula.js"
+      - "server/services/platformRecordPaths.js"
+      - "server/database/init.js"
+      - "server/server.js"
 
 permissions:
   contents: read
