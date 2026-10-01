@@ -165,6 +165,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
              FROM roles r
              CROSS JOIN permissions p
             WHERE r.api_key='platform_superadmin'
+              AND p.code NOT IN ('oneengine.manage','platform.manage')
            ON CONFLICT (role_id,permission_id) DO NOTHING`
         );
       },
@@ -350,10 +351,19 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   }
 
   await pool.query(
-    `INSERT INTO role_permissions (role_id,permission_id,company_id)
-     SELECT $1,p.id,$2 FROM permissions p
-     ON CONFLICT (role_id,permission_id) DO UPDATE SET company_id=EXCLUDED.company_id`,
-    [superadminRoleId, companyId]
+    `INSERT INTO role_permissions (role_id,permission_id)
+     SELECT $1,p.id FROM permissions p
+      WHERE p.code NOT IN ('oneengine.manage','platform.manage')
+     ON CONFLICT (role_id,permission_id) DO NOTHING`,
+    [superadminRoleId]
+  );
+  await pool.query(
+    `DELETE FROM role_permissions rp
+      USING permissions p
+      WHERE rp.role_id=$1
+        AND rp.permission_id=p.id
+        AND p.code IN ('oneengine.manage','platform.manage')`,
+    [superadminRoleId]
   );
 
   if (!email && !password) {
