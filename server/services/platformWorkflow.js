@@ -2154,16 +2154,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (!entries.length) return { status: "completed", updated: [], count: 0 };
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
       const params = entries.map(([, value]) => value);
-      const sets = mappedFields.map((field, index) => `"${field.source_column}"=${index + 1}`).join(", ");
+      const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
       params.push(ids);
-      const clauses = [`id::text = ANY(${params.length}::text[])`];
+      const clauses = [`id::text = ANY($${params.length}::text[])`];
       if (targetObject.company_scoped) {
         params.push(req?.user?.companyId || companyId || null);
-        clauses.push(`company_id=${params.length}`);
+        clauses.push(`company_id=$${params.length}`);
       }
       if (targetObject.store_scoped && req?.user?.storeId) {
         params.push(req.user.storeId);
-        clauses.push(`store_id=${params.length}`);
+        clauses.push(`store_id=$${params.length}`);
       }
       const result = await db(`UPDATE "${targetObject.source_table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
       for (const updated of result.rows || []) {
@@ -2425,17 +2425,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (!entries.length) return { status: "completed", recordId: resolvedRecordId, updated: null };
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: resolvedRecordId });
-      const sets = mappedFields.map((field, index) => `"${field.source_column}"=${index + 1}`).join(", ");
+      const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
       const params = [...entries.map(([, value]) => value), resolvedRecordId];
       const clauses = ["id=$" + params.length];
       if (targetObject.company_scoped) {
         params.push(req?.user?.companyId || companyId || null);
-        clauses.push(`company_id=${params.length}`);
+        clauses.push(`company_id=$${params.length}`);
       }
       if (targetObject.store_scoped) {
         if (!req?.user?.storeId) throw new Error("A store session is required for this related record");
         params.push(req.user.storeId);
-        clauses.push(`store_id=${params.length}`);
+        clauses.push(`store_id=$${params.length}`);
       }
       const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
       const updated = result.rows[0] || null;
