@@ -3425,6 +3425,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               {[
                 ["accessibility","Accessibility"],
                 ["language","Language"],
+                ["audio","Read aloud"],
+                ["ageVerification","Age verification"],
                 ["assistance","Need Help"],
                 ["idleReset","Idle privacy reset"],
                 ["loyalty","Loyalty"],
