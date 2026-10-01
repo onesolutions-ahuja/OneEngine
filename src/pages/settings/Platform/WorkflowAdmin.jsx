@@ -3261,12 +3261,21 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             </div>
           )}
           {debugResult ? (
-            <div className={`mt-4 rounded-xl border p-4 ${debugResult.status === "FAILED" || (debugMode === "test" && debugResult.testPassed === false) ? "border-red-200 bg-red-50" : debugResult.status === "NOT_STARTED" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+            <div className={`mt-4 rounded-xl border p-4 ${debugMode === "test" ? (debugResult.testPassed === true ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50") : debugResult.status === "FAILED" ? "border-red-200 bg-red-50" : debugResult.status === "NOT_STARTED" || debugResult.completedWithHandledError ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
               <div className="flex items-center justify-between gap-3">
-                <strong className={debugResult.status === "FAILED" || (debugMode === "test" && debugResult.testPassed === false) ? "text-red-800" : debugResult.status === "NOT_STARTED" || debugResult.completedWithHandledError ? "text-amber-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.status === "FAILED" || debugResult.testPassed === false ? "Test failed" : debugResult.status === "NOT_STARTED" ? "Test did not start" : debugResult.completedWithHandledError ? "Test passed with handled error" : "Test passed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : debugResult.completedWithHandledError ? "Debug completed with handled error" : "Debug completed successfully")}</strong>
+                <strong className={debugMode === "test" ? (debugResult.testPassed === true ? "text-emerald-800" : "text-red-800") : debugResult.status === "FAILED" ? "text-red-800" : debugResult.status === "NOT_STARTED" || debugResult.completedWithHandledError ? "text-amber-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.testPassed === true ? "Test passed" : "Test failed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : debugResult.completedWithHandledError ? "Debug completed with handled error" : "Debug completed successfully")}</strong>
                 <span className="text-xs text-slate-500">No database changes were kept.</span>
               </div>
-              {debugResult.status === "FAILED" ? (
+              {debugMode === "test" && debugResult.testPassed === true && debugResult.status !== "COMPLETED" ? (
+                <div className="mt-3 text-sm text-emerald-800">
+                  The observed workflow result was <strong>{debugResult.status}</strong>, exactly as this test expected.
+                  {(debugResult.assertionResult?.checks || []).length ? (
+                    <div className="mt-2 space-y-1">
+                      {(debugResult.assertionResult.checks || []).map((check) => <div key={check.index} className="rounded-lg bg-white/70 p-2 text-xs">✓ {check.label || check.type}</div>)}
+                    </div>
+                  ) : null}
+                </div>
+              ) : debugResult.status === "FAILED" ? (
                 <div className="mt-3 space-y-2 text-sm text-red-800">
                   <div><strong>{debugResult.friendlyError?.title || "A step failed"}</strong></div>
                   <div>{debugResult.friendlyError?.whatHappened || debugResult.run?.error_text || "The workflow could not complete."}</div>
