@@ -50,10 +50,13 @@ async function resolveStepAssignees({ db, request, step, record = {} }) {
   if (!ids.length) return [];
   const delegated = [];
   for (const id of ids) {
-    const d = await db(`SELECT delegate_user_id FROM platform_approval_delegations WHERE company_id=$1 AND user_id=$2 AND active=TRUE AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>=NOW()) ORDER BY created_at DESC LIMIT 1`, [request.company_id,id]);
+    const d = await db(`SELECT d.delegate_user_id FROM platform_approval_delegations d JOIN users u ON u.id=d.delegate_user_id AND u.company_id=d.company_id AND u.active=TRUE WHERE d.company_id=$1 AND d.user_id=$2 AND d.active=TRUE AND (d.starts_at IS NULL OR d.starts_at<=NOW()) AND (d.ends_at IS NULL OR d.ends_at>=NOW()) ORDER BY d.created_at DESC LIMIT 1`, [request.company_id,id]);
     delegated.push(d.rows[0]?.delegate_user_id || id);
   }
-  return [...new Set(delegated.map(String))];
+  const unique=[...new Set(delegated.map(String))];
+  if(!unique.length) return [];
+  const valid=await db("SELECT id FROM users WHERE company_id=$1 AND active=TRUE AND id=ANY($2::uuid[])",[request.company_id,unique]);
+  return valid.rows.map(row=>String(row.id));
 }
 
 async function loadApprovalRecord({ db, request }) {
