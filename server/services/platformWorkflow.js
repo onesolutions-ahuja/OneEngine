@@ -2935,7 +2935,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (outcomes.length) {
         for (let index = 0; index < outcomes.length; index += 1) {
           const outcome = outcomes[index];
-          const matched = evaluateCondition(outcome.condition, fields || [], record || {}, previousRecord || null);
+          const matched = evaluateCondition(normalizeWorkflowConditionConfig(outcome.condition), fields || [], record || {}, previousRecord || null);
           if (matched) {
             return {
               status: "completed",
@@ -2948,7 +2948,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         return { status: "completed", matched: false, outcomeId: null, outcomeLabel: "Default", outcomeIndex: -1 };
       }
-      const result = evaluateCondition(action.condition, fields || [], record || {}, previousRecord || null);
+      const result = evaluateCondition(normalizeWorkflowConditionConfig(action.condition), fields || [], record || {}, previousRecord || null);
       return { status: result ? "completed" : "skipped", matched: Boolean(result), legacyBinary: true };
     },
   },
@@ -3654,6 +3654,20 @@ async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId 
     [value, companyId]
   );
   return result.rows[0] || null;
+}
+
+function normalizeWorkflowConditionConfig(condition) {
+  if (!condition || typeof condition !== "object" || Array.isArray(condition)) return condition;
+  if (Array.isArray(condition.conditions)) {
+    return { ...condition, match: condition.match || condition.type || "all" };
+  }
+  if (Array.isArray(condition.rules)) {
+    return {
+      match: condition.match || condition.type || "all",
+      conditions: condition.rules.map((rule) => ({ ...rule })),
+    };
+  }
+  return condition;
 }
 
 function workflowBindingContext({ record, previousRecord, req, object, workflowVariables } = {}) {
