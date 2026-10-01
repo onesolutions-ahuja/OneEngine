@@ -3263,7 +3263,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           {debugResult ? (
             <div className={`mt-4 rounded-xl border p-4 ${debugResult.status === "FAILED" || (debugMode === "test" && debugResult.testPassed === false) ? "border-red-200 bg-red-50" : debugResult.status === "NOT_STARTED" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
               <div className="flex items-center justify-between gap-3">
-                <strong className={debugResult.status === "FAILED" || (debugMode === "test" && debugResult.testPassed === false) ? "text-red-800" : debugResult.status === "NOT_STARTED" ? "text-amber-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.status === "FAILED" || debugResult.testPassed === false ? "Test failed" : debugResult.status === "NOT_STARTED" ? "Test did not start" : "Test passed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : "Debug completed successfully")}</strong>
+                <strong className={debugResult.status === "FAILED" || (debugMode === "test" && debugResult.testPassed === false) ? "text-red-800" : debugResult.status === "NOT_STARTED" || debugResult.completedWithHandledError ? "text-amber-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.status === "FAILED" || debugResult.testPassed === false ? "Test failed" : debugResult.status === "NOT_STARTED" ? "Test did not start" : debugResult.completedWithHandledError ? "Test passed with handled error" : "Test passed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : debugResult.completedWithHandledError ? "Debug completed with handled error" : "Debug completed successfully")}</strong>
                 <span className="text-xs text-slate-500">No database changes were kept.</span>
               </div>
               {debugResult.status === "FAILED" ? (
@@ -3271,6 +3271,16 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   <div><strong>{debugResult.friendlyError?.title || "A step failed"}</strong></div>
                   <div>{debugResult.friendlyError?.whatHappened || debugResult.run?.error_text || "The workflow could not complete."}</div>
                   <div className="rounded-lg bg-white/70 p-3"><strong>How to fix it:</strong> {debugResult.friendlyError?.howToFix || "Click the red step on the canvas and check its Properties."}</div>
+                </div>
+              ) : debugResult.completedWithHandledError ? (
+                <div className="mt-3 space-y-2 text-sm text-amber-800">
+                  <div>The workflow continued through an On Error path. The failed step remains red so you can see what was handled.</div>
+                  {(debugResult.handledFaults || []).map((fault, index) => (
+                    <div key={`${fault.stepId}-${index}`} className="rounded-lg bg-white/80 p-3 text-xs">
+                      <strong>{fault.error?.title || "Handled step failure"}</strong>
+                      {fault.error?.whatHappened ? <div className="mt-1">{fault.error.whatHappened}</div> : null}
+                    </div>
+                  ))}
                 </div>
               ) : debugResult.status === "NOT_STARTED" ? (
                 <div className="mt-2 text-sm text-amber-800">
