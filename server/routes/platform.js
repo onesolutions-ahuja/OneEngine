@@ -4513,6 +4513,21 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({success:true,data:result.rows[0]});
   });
 
+  router.delete("/platform/approval-delegations/:id", authenticate, async (req,res) => {
+    const result=await db("UPDATE platform_approval_delegations SET active=FALSE WHERE id=$1 AND company_id=$2 AND user_id=$3 RETURNING id",[req.params.id,req.user.companyId,req.user.id]);
+    if(!result.rows.length)return res.status(404).json({success:false,message:"Active delegation not found"});
+    res.json({success:true,data:result.rows[0]});
+  });
+
+  router.put("/platform/approval-groups/:id", ...manage, async (req,res) => {
+    const name=String(req.body?.name||"").trim(); const memberIds=Array.isArray(req.body?.memberIds)?req.body.memberIds:[];
+    const group=await db("UPDATE platform_approval_groups SET name=COALESCE(NULLIF($1,''),name),active=COALESCE($2,active) WHERE id=$3 AND company_id=$4 RETURNING *",[name,typeof req.body?.active==="boolean"?req.body.active:null,req.params.id,req.user.companyId]);
+    if(!group.rows.length)return res.status(404).json({success:false,message:"Approval group not found"});
+    await db("DELETE FROM platform_approval_group_members WHERE group_id=$1",[req.params.id]);
+    for(const userId of memberIds) await db("INSERT INTO platform_approval_group_members(group_id,user_id) SELECT $1,u.id FROM users u WHERE u.id=$2 AND u.company_id=$3 AND u.active=TRUE ON CONFLICT DO NOTHING",[req.params.id,userId,req.user.companyId]);
+    res.json({success:true,data:group.rows[0]});
+  });
+
   router.post("/platform/approval-processes/:id/test", ...manage, async (req,res) => {
     try {
       const processResult=await db("SELECT * FROM platform_approval_processes WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId]);
