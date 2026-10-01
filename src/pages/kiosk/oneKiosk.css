@@ -45,3 +45,20 @@
 @media(max-width:640px){.one-kiosk{padding:12px}.one-kiosk-header p{display:none}.one-kiosk-shell{gap:12px}.one-kiosk-catalogue,.one-kiosk-cart{border-radius:18px}.one-kiosk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.one-kiosk-product{min-height:205px}.one-kiosk-product-image{height:120px}.one-kiosk-product-copy{padding:11px}.one-kiosk-cart{min-height:360px}}
 @media(min-width:1500px){.one-kiosk-grid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}.one-kiosk-product-image{height:180px}.one-kiosk-shell{grid-template-columns:minmax(0,1fr) 430px}}
 @media(orientation:portrait) and (min-width:900px){.one-kiosk-shell{grid-template-columns:1fr}.one-kiosk-cart{min-height:460px}}
+
+.one-kiosk-pay{display:flex;align-items:center;justify-content:center;gap:9px}
+.one-kiosk-payment-note{display:block;margin-top:9px;text-align:center;color:#8992a2;line-height:1.35}
+.one-kiosk-confirmation{display:grid;place-items:center;min-height:calc(100vh - 92px)}
+.one-kiosk-confirmation-card{width:min(680px,94vw);background:white;border:1px solid rgba(15,23,42,.08);border-radius:30px;padding:clamp(28px,5vw,54px);text-align:center;box-shadow:0 28px 70px rgba(15,23,42,.12)}
+.one-kiosk-success-icon{width:88px;height:88px;margin:0 auto 18px;border-radius:50%;display:grid;place-items:center;background:#ecfdf3;color:#047857}
+.one-kiosk-confirmation-card h1{font-size:clamp(34px,5vw,56px);margin:5px 0 8px;letter-spacing:-.04em}
+.one-kiosk-confirmation-card>p{color:#667085;font-size:17px}
+.one-kiosk-collection-number{margin:28px 0;padding:24px;border-radius:22px;background:#111827;color:white;display:grid;gap:7px}
+.one-kiosk-collection-number span{font-size:14px;opacity:.72;text-transform:uppercase;letter-spacing:.12em;font-weight:800}
+.one-kiosk-collection-number strong{font-size:clamp(54px,9vw,88px);line-height:1;letter-spacing:.04em}
+.one-kiosk-confirmation-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.one-kiosk-confirmation-meta>div{background:#f6f7f9;border-radius:16px;padding:14px;display:grid;gap:5px}
+.one-kiosk-confirmation-meta span{font-size:12px;color:#7a8493;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+.one-kiosk-confirmation-meta strong{font-size:16px}
+.one-kiosk-collection-help{margin:18px auto 24px!important;max-width:540px;line-height:1.5}
+@media(max-width:560px){.one-kiosk-confirmation-meta{grid-template-columns:1fr}.one-kiosk-confirmation-card{border-radius:22px}.one-kiosk-collection-number strong{font-size:52px}}
