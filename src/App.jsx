@@ -2433,6 +2433,9 @@ export default function App() {
   if (route.app === 'kiosk-runtime') {
     return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading kiosk…</div>}><OneKioskPage publicMode /></Suspense></LazyLoadBoundary>
   }
+  if (route.app === 'kiosk-display') {
+    return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading collection display…</div>}><OneKioskDisplayPage /></Suspense></LazyLoadBoundary>
+  }
 
   // A browser refresh should restore an authenticated session, not behave like
   // an explicit workstation lock. PIN is only required after the user chooses
