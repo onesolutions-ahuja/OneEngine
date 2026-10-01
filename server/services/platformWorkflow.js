@@ -4304,14 +4304,26 @@ export async function executeWorkflowActions({ actions, ...context }) {
       break;
     }
 
+    let retryAttempts = 0;
     try {
-      const result = await executeWorkflowAction({
-        ...context,
-        workflowVariables,
-        allActions,
-        action: item,
-        stepRunId: stepRun?.id || null,
-      });
+      const faultMode = String(item.faultMode || (Array.isArray(item.faultBranch) && item.faultBranch.length ? "ROUTE" : "FAIL")).toUpperCase();
+      const maxRetries = faultMode === "RETRY" ? Math.max(1, Math.min(Number(item.retryCount || 1), 3)) : 0;
+      let result;
+      while (true) {
+        try {
+          result = await executeWorkflowAction({
+            ...context,
+            workflowVariables,
+            allActions,
+            action: item,
+            stepRunId: stepRun?.id || null,
+          });
+              break;
+        } catch (executionError) {
+          if (retryAttempts >= maxRetries) throw executionError;
+          retryAttempts += 1;
+        }
+      }
 
       let branchPaused = false;
       if (resolveWorkflowActionType(item) === "LOOP") {
@@ -4409,6 +4421,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
                 : "COMPLETED",
           metadata: {
             result: redact(result),
+            retryAttempts,
             irreversible: IRREVERSIBLE_ACTIONS.has(resolveWorkflowActionType(item)),
           },
         });
@@ -4424,11 +4437,38 @@ export async function executeWorkflowActions({ actions, ...context }) {
           stepRunId: stepRun.id,
           status: "FAILED",
           errorText: details.message,
-          metadata: { error: details, friendlyError },
+          metadata: { error: details, friendlyError, retryAttempts },
         });
       }
+      const faultMode = String(item.faultMode || (Array.isArray(item.faultBranch) && item.faultBranch.length ? "ROUTE" : "FAIL")).toUpperCase();
       const faultIds = Array.isArray(item.faultBranch) ? item.faultBranch : [];
-      if (faultIds.length) {
+      if (faultMode === "CONTINUE") {
+        const handled = { status: "fault_handled", faultHandled: true, mode: "CONTINUE", error: details, friendlyError, retryAttempts };
+        workflowVariables.variables.fault = {
+          stepId: item.id || `step-${globalIndex + 1}`,
+          actionType: resolveWorkflowActionType(item),
+          message: details.message,
+          title: friendlyError.title,
+          howToFix: friendlyError.howToFix,
+        };
+        workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
+        results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
+        continue;
+      }
+      if (faultMode === "STOP") {
+        const handled = { status: "stopped", faultHandled: true, mode: "STOP", error: details, friendlyError, retryAttempts };
+        workflowVariables.variables.fault = {
+          stepId: item.id || `step-${globalIndex + 1}`,
+          actionType: resolveWorkflowActionType(item),
+          message: details.message,
+          title: friendlyError.title,
+          howToFix: friendlyError.howToFix,
+        };
+        workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
+        results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
+        break;
+      }
+      if ((faultMode === "ROUTE" || faultMode === "RETRY") && faultIds.length) {
         const faultActions = faultIds
           .map((id) => actionById.get(String(id)))
           .filter(Boolean)
