@@ -2401,10 +2401,21 @@ export default function App() {
     }
     let live = true
     setSessionContextReady(false)
+    const bootstrapTimeout = window.setTimeout(() => {
+      // Never leave the workstation trapped behind the company-context loader.
+      // API calls have their own timeout, but this is a final UI recovery guard.
+      if (live) setSessionContextReady(true)
+    }, 15000)
     ensureActingCompanyContext()
       .catch(() => '')
-      .finally(() => { if (live) setSessionContextReady(true) })
-    return () => { live = false }
+      .finally(() => {
+        window.clearTimeout(bootstrapTimeout)
+        if (live) setSessionContextReady(true)
+      })
+    return () => {
+      live = false
+      window.clearTimeout(bootstrapTimeout)
+    }
   }, [])
 
   const unlock = () => {
