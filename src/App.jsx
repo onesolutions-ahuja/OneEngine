@@ -121,6 +121,7 @@ const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/Con
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 const OneAssistantPage = lazyWithRecovery(() => import('./pages/assistant/OneAssistantPage'))
+const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const PublicAppointmentBookingPage = lazyWithRecovery(() => import('./pages/assistant/PublicAppointmentBookingPage'))
 import {
   Bluetooth,
@@ -2052,6 +2053,7 @@ function Desktop({ onLock, onSignOut }) {
       contacts: 'workspace',
       one_connect_google: 'google-connect',
       one_assistant: 'assistant',
+      one_kiosk: 'kiosk',
     }
     const target = aliases[id] || id
 
@@ -2071,7 +2073,7 @@ function Desktop({ onLock, onSignOut }) {
 
     const routeMap = new Set([
       'integrations','google-connect','accounting','online-orders','order-prep','own-delivery',
-      'assistant','returns','exchange','layaway','supplier-returns','audit-log','licensing',
+      'assistant','kiosk','returns','exchange','layaway','supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
       'gift-cards','suppliers','purchases','inventory','replenishment','categories',
       'global-products','products','sales','workspace','till',
@@ -2377,6 +2379,8 @@ function Desktop({ onLock, onSignOut }) {
           <OwnDeliveryWorkspace />
         ) : activeApp === 'assistant' ? (
           <OneAssistantPage />
+        ) : activeApp === 'kiosk' ? (
+          <OneKioskPage />
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
