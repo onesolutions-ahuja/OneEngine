@@ -2365,7 +2365,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["functions.execute"],
-    executor: async ({ action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields }) => {
+    executor: async ({ action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields, workflowVariables = {} }) => {
       const functionKey = action.functionKey || action.key;
       const functionDefinition = getRegisteredFunction(functionKey);
       if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
@@ -2374,7 +2374,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       const inputs = Object.fromEntries(Object.entries(action.inputs || {}).map(([key, value]) => [
         key,
-        resolveConfiguredResource(value, { record, previousRecord, req, object, workflowVariables: arguments[0]?.workflowVariables }),
+        resolveConfiguredResource(value, { record, previousRecord, req, object, workflowVariables }),
       ]));
       return functionDefinition.handler({
         action,
@@ -3297,7 +3297,7 @@ async function resolveWorkflowTargetObject({ db, action = {}, object = null, com
     throw new Error("Workflow target tables must be resolved from tenant-scoped Platform metadata");
   }
   const requestedObjectId = action.objectId || action.object_id || null;
-  const requestedObjectKey = action.objectKey || action.object_key || null;
+  const requestedObjectKey = action.objectKey || action.object_key || action.object || null;
   const objectId = requestedObjectId || (!requestedObjectKey ? object?.id || null : null);
   const objectKey = requestedObjectKey || (!objectId ? object?.object_key || object?.api_name || null : null);
   const target = await resolveTargetObjectMetadata({ db, objectId, objectKey, companyId: runtimeCompanyId });
