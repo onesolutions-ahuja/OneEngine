@@ -46,18 +46,18 @@ export async function searchPlatformRecords(db, req, query, { maxResults = MAX_R
   if (normalized.length < MIN_QUERY_LENGTH) return { query: normalized, results: [] };
   const objects = await searchableObjects(db, req);
   const results = [];
-  const platformManage = req.user?.roleId
+  const oneEngineManage = req.user?.roleId
     ? await db(
-        "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='platform.manage' LIMIT 1",
+        "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
         [req.user.roleId]
       )
     : { rows: [] };
-  const canManagePlatform = platformManage.rows.length > 0;
+  const canManageOneEngine = oneEngineManage.rows.length > 0;
 
   for (const object of objects) {
     if (results.length >= maxResults || !isSafeIdentifier(object.source_table)) break;
     try {
-      if (!canManagePlatform) {
+      if (!canManageOneEngine) {
         const system = systemObject(object);
         const permission = system?.permission;
         const access = permission
