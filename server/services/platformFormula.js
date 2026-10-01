@@ -186,6 +186,20 @@ function evaluate(node, get) {
   }
 }
 
+export function workflowFormulaReferences(expression) {
+  const ast = parseFormula(expression);
+  const refs = new Set();
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (node.kind === "field") refs.add(node.name);
+    else if (node.kind === "unary") walk(node.value);
+    else if (node.kind === "binary") { walk(node.left); walk(node.right); }
+    else if (node.kind === "call") node.args.forEach(walk);
+  };
+  walk(ast);
+  return [...refs];
+}
+
 export function evaluateWorkflowFormula(expression, inputs = {}) {
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
     throw new FormulaError("Workflow formula inputs must be an object");
