@@ -4502,7 +4502,10 @@ export async function executeWorkflowActions({ actions, ...context }) {
           .map((id) => actionById.get(String(id)))
           .filter(Boolean)
           .sort((a, b) => allActions.indexOf(a) - allActions.indexOf(b));
-        const collection = Array.isArray(result?.collection) ? result.collection : [];
+        const pinnedLoopCollection = stepRun?.status === "WAITING" && Array.isArray(stepRun.metadata?.result?.loopCollection)
+          ? stepRun.metadata.result.loopCollection
+          : null;
+        const collection = pinnedLoopCollection || (Array.isArray(result?.collection) ? result.collection : []);
         const itemVariable = String(item.itemVariable || result?.itemVariable || "currentItem");
         const iterations = [];
         const hadPrevious = Object.prototype.hasOwnProperty.call(workflowVariables.variables, itemVariable);
@@ -4521,6 +4524,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
           if (workflowResultsContainStatus(iterationResults, "waiting")) {
             result.status = "waiting";
             result.waitingIteration = loopIndex;
+            result.loopCollection = collection;
             break;
           }
           if (iterationResults.some((entry) => entry?.result?.status === "stopped")) break;
@@ -4530,6 +4534,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
         result.iterations = iterations;
         result.bodyStepIds = bodyIds;
         result.collection = undefined;
+        if (result.status !== "waiting") delete result.loopCollection;
       }
       if (resolveWorkflowActionType(item) === "CONDITION" && typeof result?.matched === "boolean") {
         const outcomes = Array.isArray(item.outcomes) ? item.outcomes : [];
