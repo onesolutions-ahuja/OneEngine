@@ -1,3 +1,4 @@
+import { hasOneEngineManagePermission } from "../services/authorization.js";
 import express from "express";
 
 import {
@@ -80,14 +81,8 @@ export default function createSettingsRouter({
   router.put("/settings/runtime", authenticate, authorize("settings.manage"), async (req, res) => {
     const { companyDefault, roleDefault, appProfile, landingFlow, platformTheme } = req.body || {};
     if (platformTheme !== undefined) {
-      const platformAccess = req.user?.roleId
-        ? await db(
-            "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='platform.manage' LIMIT 1",
-            [req.user.roleId]
-          )
-        : { rows: [] };
-      if (!platformAccess.rows.length) {
-        return res.status(403).json({ success: false, message: "platform.manage permission is required to change the platform theme" });
+      if (!(await hasOneEngineManagePermission(db, req.user?.roleId))) {
+        return res.status(403).json({ success: false, message: "OneEngine Manager permission is required to change the OneEngine theme" });
       }
     }
     if (!isValidLandingPage(companyDefault) || (roleDefault != null && !isValidLandingPage(roleDefault))) {
