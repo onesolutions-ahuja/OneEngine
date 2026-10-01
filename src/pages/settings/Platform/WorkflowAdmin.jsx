@@ -648,6 +648,8 @@ function makeStep(type = "CREATE_RECORD") {
       workflowId: "",
       workflowInputs: {},
       condition: { type: "all", rules: [blankCondition()] },
+      outcomes: [],
+      defaultBranch: [],
       ifBranch: [],
       elseBranch: [],
       durationSeconds: 60,
@@ -748,6 +750,14 @@ function workflowActionIssue(step, definition = null) {
     if (!config.operator) return "Choose an assignment operation.";
   }
   if (step.type === "CONDITION") {
+    const outcomes = Array.isArray(config.outcomes) ? config.outcomes : [];
+    if (outcomes.length) {
+      if (outcomes.some((outcome) => !String(outcome?.label || "").trim())) return "Name every Decision outcome.";
+      if (outcomes.some((outcome) => !conditionIsValid(outcome?.condition))) return "Complete every Decision outcome condition.";
+      const ids = outcomes.map((outcome) => String(outcome?.id || ""));
+      if (new Set(ids).size !== ids.length) return "Decision outcome identifiers must be unique.";
+      return "";
+    }
     return conditionIsValid(config.condition) ? "" : "Complete the condition field/operator/value.";
   }
   if ((RECORD_ACTION_TYPES.has(step.type) || step.type === "GET_RECORDS") && !config.object) return "Choose the target object.";
@@ -1528,15 +1538,100 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
           </div>
         );
-      case "CONDITION":
+      case "CONDITION": {
+        const configuredOutcomes = Array.isArray(step.config?.outcomes) ? step.config.outcomes : [];
+        const outcomes = configuredOutcomes.length
+          ? configuredOutcomes
+          : [{
+              id: "outcome-1",
+              label: "Outcome 1",
+              condition: step.config?.condition || { type: "all", rules: [blankCondition()] },
+              branch: step.config?.ifBranch || [],
+            }];
+        const defaultBranch = configuredOutcomes.length ? (step.config?.defaultBranch || []) : (step.config?.elseBranch || []);
+        const setOutcomes = (nextOutcomes) => updateConfig({ outcomes: nextOutcomes, defaultBranch, condition: null, ifBranch: [], elseBranch: [] });
         return (
-          <div className="space-y-3">
-            <StepConditionEditor objectKey={rootObjectKey} value={step.config?.condition || { type: "all", rules: [blankCondition()] }} onChange={(condition) => updateConfig({ condition })} />
-            <p className="text-xs text-slate-500">Choose which later actions run for each outcome. The engine routes these paths automatically; no step IDs are required.</p>
-            <BranchStepPicker label="YES · Conditions matched" value={step.config?.ifBranch || []} onChange={(ifBranch) => updateConfig({ ifBranch })} steps={allSteps} currentIndex={index} />
-            <BranchStepPicker label="OTHERWISE · Conditions did not match" value={step.config?.elseBranch || []} onChange={(elseBranch) => updateConfig({ elseBranch })} steps={allSteps} currentIndex={index} />
+          <div className="space-y-4">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+              Outcomes are checked from top to bottom. The first matching outcome runs; if none match, the Default path runs.
+            </div>
+            {outcomes.map((outcome, outcomeIndex) => (
+              <div key={outcome.id || outcomeIndex} className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    className={inputClass}
+                    value={outcome.label || ""}
+                    onChange={(event) => {
+                      const next = [...outcomes];
+                      next[outcomeIndex] = { ...outcome, label: event.target.value };
+                      setOutcomes(next);
+                    }}
+                    placeholder={`Outcome ${outcomeIndex + 1}`}
+                  />
+                  <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === 0} onClick={() => {
+                    if (outcomeIndex === 0) return;
+                    const next = [...outcomes];
+                    [next[outcomeIndex - 1], next[outcomeIndex]] = [next[outcomeIndex], next[outcomeIndex - 1]];
+                    setOutcomes(next);
+                  }}>↑</button>
+                  <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === outcomes.length - 1} onClick={() => {
+                    if (outcomeIndex >= outcomes.length - 1) return;
+                    const next = [...outcomes];
+                    [next[outcomeIndex], next[outcomeIndex + 1]] = [next[outcomeIndex + 1], next[outcomeIndex]];
+                    setOutcomes(next);
+                  }}>↓</button>
+                  <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-red-600" disabled={outcomes.length <= 1} onClick={() => {
+                    if (outcomes.length <= 1) return;
+                    setOutcomes(outcomes.filter((_, itemIndex) => itemIndex !== outcomeIndex));
+                  }}>Remove</button>
+                </div>
+                <StepConditionEditor
+                  objectKey={rootObjectKey}
+                  value={outcome.condition || { type: "all", rules: [blankCondition()] }}
+                  onChange={(condition) => {
+                    const next = [...outcomes];
+                    next[outcomeIndex] = { ...outcome, condition };
+                    setOutcomes(next);
+                  }}
+                />
+                <BranchStepPicker
+                  label={`${outcome.label || `Outcome ${outcomeIndex + 1}`} path`}
+                  value={outcome.branch || []}
+                  onChange={(branch) => {
+                    const next = [...outcomes];
+                    next[outcomeIndex] = { ...outcome, branch };
+                    setOutcomes(next);
+                  }}
+                  steps={allSteps}
+                  currentIndex={index}
+                />
+              </div>
+            ))}
+            <button type="button" className="text-sm text-blue-700" disabled={outcomes.length >= 20} onClick={() => {
+              const nextIndex = outcomes.length + 1;
+              setOutcomes([...outcomes, {
+                id: `outcome-${Date.now()}-${nextIndex}`,
+                label: `Outcome ${nextIndex}`,
+                condition: { type: "all", rules: [blankCondition()] },
+                branch: [],
+              }]);
+            }}>+ Add outcome</button>
+            <BranchStepPicker
+              label="Default · No outcome matched"
+              value={defaultBranch}
+              onChange={(nextDefault) => updateConfig({
+                outcomes,
+                defaultBranch: nextDefault,
+                condition: null,
+                ifBranch: [],
+                elseBranch: [],
+              })}
+              steps={allSteps}
+              currentIndex={index}
+            />
           </div>
         );
+      }
       case "WAIT":
         return (
           <div className="space-y-3">
@@ -1797,7 +1892,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""}`}>
               <span className="workflow-node-kind">{getActionLabel(step.type)}</span>
               <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
-              {step.type === "CONDITION" ? <span className="workflow-node-note">Decision branches are evaluated from metadata conditions.</span> : null}
+              {step.type === "CONDITION" ? <span className="workflow-node-note">{Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? `${step.config.outcomes.length} ordered outcome${step.config.outcomes.length === 1 ? "" : "s"} + Default` : "Decision branches are evaluated from metadata conditions."}</span> : null}
               {step.type === "LOOP" ? <span className="workflow-node-note">Runs selected body steps once per collection item.</span> : null}
             </button>
             {visibleCanvasSteps.findIndex((item) => item.index === index) < visibleCanvasSteps.length - 1 ? <div className="workflow-node-connector" /> : null}
