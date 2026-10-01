@@ -539,13 +539,13 @@
   padding: 9px;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(128px,1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px,1fr));
   align-content: start;
   gap: 8px;
 }
 
 .till-product-card {
-  min-height: 126px;
+  min-height: 172px;
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -563,7 +563,7 @@
 }
 
 .till-product-image {
-  height: 64px;
+  height: 102px;
   margin-bottom: 7px;
   display: grid;
   place-items: center;
@@ -576,7 +576,7 @@
 .till-product-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .till-product-card strong {
