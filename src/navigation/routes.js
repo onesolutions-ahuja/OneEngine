@@ -73,6 +73,10 @@ export function readRoute() {
   if (parts[0] === 'own-delivery') return { app: 'own-delivery', section: null }
   if (parts[0] === 'assistant' && parts[1] === 'book' && parts[2]) return { app: 'public-assistant-booking', section: null, token: decodeURIComponent(parts[2]) }
   if (parts[0] === 'assistant') return { app: 'assistant', section: null }
+  if (parts[0] === 'kiosk-runtime') return { app: 'kiosk-runtime', section: null }
+  if (parts[0] === 'kiosk') return { app: 'kiosk', section: null }
+  if (parts[0] === 'kiosk-display') return { app: 'kiosk-display', section: null }
+  if (parts[0] === 'kiosk-devices') return { app: 'kiosk-devices', section: null }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -145,6 +149,14 @@ export function setRoute(app, section = null, options = {}) {
         ? `${base}/own-delivery`
       : app === 'assistant'
         ? `${base}/assistant`
+      : app === 'kiosk-runtime'
+        ? `${base}/kiosk-runtime`
+      : app === 'kiosk'
+        ? `${base}/kiosk`
+      : app === 'kiosk-display'
+        ? `${base}/kiosk-display`
+      : app === 'kiosk-devices'
+        ? `${base}/kiosk-devices`
       : app === 'returns'
         ? `${base}/returns`
       : app === 'supplier-returns'
