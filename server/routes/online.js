@@ -3576,6 +3576,22 @@ export default function createOnlineRouter({
   router.post("/online/orders/generic/:id/cancel", authenticate, authorize("online_orders.manage"), async (req, res) => {
     const { reason } = req.body || {};
 
+    const paidKiosk = await db(
+      "SELECT platform,payment_status,platform_data FROM online_orders WHERE id=$1 AND company_id=$2 LIMIT 1",
+      [req.params.id, req.user.companyId]
+    );
+    if (!paidKiosk.rows.length) {
+      return res.status(404).json({ success: false, message: "Online order not found" });
+    }
+    if (paidKiosk.rows[0].platform === "one_kiosk" && String(paidKiosk.rows[0].payment_status || "").toLowerCase() === "paid") {
+      return res.status(409).json({
+        success: false,
+        code: "REFUND_REQUIRED",
+        message: "This OneKiosk order is already paid. Refund the linked sale before cancelling fulfilment.",
+        data: { saleId: paidKiosk.rows[0].platform_data?.saleId || null },
+      });
+    }
+
     const transitionExecution = await executeOnlineOrderFunction({
       req,
       companyId: req.user.companyId,
