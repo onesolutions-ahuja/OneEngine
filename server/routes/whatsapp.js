@@ -37,6 +37,7 @@ import { getCompanyEntitlements, hasEntitlement } from "../services/licensing.js
 import { createWorkflowRun, executeWorkflowActions } from "../services/platformWorkflow.js";
 import { interpretWhatsAppAssistantMessage } from "../services/whatsappAssistantAi.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "../services/communicationCore.js";
+import { createAppointmentBookingCase, issueAppointmentPublicLink } from "../services/oneAssistant.js";
 
 /* Test-connection rate limit: per company, fixed 1-minute window (in-memory,
  * no new dependencies). 256-bit tokens/credentials are not brute-forceable,
@@ -1053,7 +1054,7 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
           if (assistantMode === "AI") {
             aiResult = await interpretWhatsAppAssistantMessage({
               message: body,
-              allowedIntents: configuration.allowed_intents || "sales_enquiry",
+              allowedIntents: configuration.allowed_intents || "sales_enquiry,appointment",
               providerName: configuration.ai_provider || process.env.JARVIS_AI_PROVIDER || "gemini",
               contactName,
             });
@@ -1083,6 +1084,61 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
               });
               continue;
             }
+          }
+
+          const normalizedBody = String(body || "").trim().toLowerCase();
+          const appointmentIntent =
+            String(aiResult?.intent || "").toLowerCase() === "appointment"
+            || /\b(appointment|book|booking|book appointment|make appointment)\b/i.test(normalizedBody);
+
+          if (appointmentIntent) {
+            const bookingCase = await createAppointmentBookingCase(db, {
+              companyId,
+              channel: "WHATSAPP",
+              sourceMessageId: message.id,
+              sender: `+${sender}`,
+              recipient: phoneNumberId,
+              body,
+              customerId: customer?.id || null,
+              state: {
+                provider: "whatsapp",
+                integrationId: integration.id,
+                conversationId: conversation.id,
+                whatsappMessageId: storedMessage.id,
+                assistantIntent: "appointment",
+              },
+            });
+            const bookingBaseUrl = String(
+              configuration.booking_base_url
+              || process.env.PUBLIC_APP_URL
+              || process.env.FRONTEND_URL
+              || "https://onesolutions-ahuja.github.io/OneEngine"
+            ).replace(/\/$/, "");
+            const link = await issueAppointmentPublicLink(db, {
+              companyId,
+              bookingCaseId: bookingCase.id,
+              purpose: "BOOK_SLOT",
+              ttlMinutes: 15,
+              publicBaseUrl: bookingBaseUrl,
+              metadata: { channel: "WHATSAPP", conversationId: conversation.id, integrationId: integration.id },
+            });
+            const bookingReply = `Welcome. Book your appointment here: ${link.url}. This secure link expires in 15 minutes.`;
+            const sentBookingReply = await sendWhatsAppTextMessage({
+              db,
+              companyId,
+              to: `+${sender}`,
+              body: bookingReply,
+              conversationId: conversation.id,
+            });
+            if (!sentBookingReply?.ok) {
+              throw new Error(sentBookingReply?.errorText || "Unable to send WhatsApp booking link");
+            }
+            await writeAudit?.(companyId, null, "whatsapp_assistant_appointment_link_sent", "appointment_booking_case", bookingCase.id, {
+              channel: "WHATSAPP",
+              conversationId: conversation.id,
+              expiresAt: link.expires_at,
+            });
+            continue;
           }
 
           const workflowsResult = await db(
@@ -1117,7 +1173,7 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
               intent: aiResult?.intent || null,
               confidence: aiResult?.confidence ?? null,
               ai_reply: aiResult?.reply || null,
-              allowed_intents: configuration.allowed_intents || "sales_enquiry",
+              allowed_intents: configuration.allowed_intents || "sales_enquiry,appointment",
               privacy_scope: configuration.privacy_scope || "MINIMUM_REQUIRED",
               human_handoff_enabled: configuration.human_handoff_enabled !== false,
             },
