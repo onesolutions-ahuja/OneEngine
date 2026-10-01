@@ -389,50 +389,99 @@ export async function ensureGlobalSystemProfile(pool, {
 }
 
 export async function bootstrapInitialSuperadmin(pool, env = process.env) {
-  const configuredEmail = String(env.BOOTSTRAP_SUPERADMIN_EMAIL || "").trim();
-  const email = configuredEmail.toLowerCase() === "superadmin@onepos.local"
-    ? "superadmin@onepos.com"
-    : configuredEmail;
-  const password = String(env.BOOTSTRAP_SUPERADMIN_PASSWORD || "");
-  const name = String(env.BOOTSTRAP_SUPERADMIN_NAME || "OnePOS Superadmin").trim();
+  const onePosEmail = "superadmin@onepos.com";
+  const onePosPassword = String(env.BOOTSTRAP_SUPERADMIN_PASSWORD || "");
+  const onePosName = String(env.BOOTSTRAP_SUPERADMIN_NAME || "OnePOS Engine Manager").trim();
   const configuredCompanyId = String(env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || "").trim();
 
   /*
-   * Superadmin is an ordinary tenant user. Its elevated access comes only from
-   * its RBAC role, which is seeded with every permission. Do not create a
-   * company-less identity or rely on acting-company/developer mappings.
+   * Security model:
+   *   1) superadmin@onepos.com is the platform/OneEngine identity. It is global
+   *      (company_id NULL) and owns oneengine.manage.
+   *   2) every tenant has its own company-bound Superadmin role/user. That role
+   *      deliberately NEVER receives oneengine.manage/platform.manage.
+   *
+   * This keeps platform authority separate from a tenant administrator while
+   * still allowing the OnePOS operator to select an authorised tenant context.
    */
-  const companyResult = configuredCompanyId
-    ? await pool.query("SELECT id FROM companies WHERE id=$1 AND active=true LIMIT 1", [configuredCompanyId])
-    : await pool.query("SELECT id FROM companies WHERE LOWER(name)=LOWER('onePOS Demo') AND active=true ORDER BY created_at,id LIMIT 1");
-  const companyId = companyResult.rows[0]?.id || null;
+  const engineRoleId = await ensureGlobalSystemProfile(pool, {
+    name: "OneEngine Manager",
+    apiKey: "engine_manager",
+    description: "OnePOS platform operator. Cross-tenant authority is granted only through RBAC oneengine.manage.",
+    grantAllPermissions: true,
+  });
+  await pool.query(
+    `INSERT INTO role_permissions (role_id,permission_id)
+     SELECT $1,p.id FROM permissions p WHERE p.code='oneengine.manage'
+     ON CONFLICT (role_id,permission_id) DO NOTHING`,
+    [engineRoleId]
+  );
 
-  if (!companyId) {
-    console.warn("onePOS: Superadmin bootstrap skipped; no configured active company was found");
-    return { created: false, reason: "company_not_configured" };
+  let engineUser = await pool.query(
+    `SELECT id,company_id,password_hash
+       FROM users
+      WHERE LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1)
+      ORDER BY created_at,id
+      LIMIT 1`,
+    [onePosEmail]
+  );
+
+  if (engineUser.rows[0]) {
+    /*
+     * Convert any older tenant-bound superadmin@onepos.com identity into the
+     * canonical global OneEngine Manager without changing its password.
+     */
+    await pool.query(
+      `UPDATE users
+          SET company_id=NULL,role_id=$1,username=$2,email=$2,full_name=$3,
+              active=TRUE,is_platform_developer=TRUE,updated_at=NOW()
+        WHERE id=$4`,
+      [engineRoleId, onePosEmail, onePosName, engineUser.rows[0].id]
+    );
+    console.log("onePOS: OneEngine Manager synchronized; existing password preserved");
+  } else if (onePosPassword) {
+    const passwordHash = await bcrypt.hash(onePosPassword, 12);
+    engineUser = await pool.query(
+      `INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active)
+       VALUES (NULL,$1,$2,$2,$3,$4,TRUE,TRUE)
+       RETURNING id,company_id,password_hash`,
+      [engineRoleId, onePosEmail, passwordHash, onePosName]
+    );
+    console.log("onePOS: OneEngine Manager created");
+  } else {
+    console.warn("onePOS: OneEngine Manager user not created because BOOTSTRAP_SUPERADMIN_PASSWORD is not configured");
   }
 
-  let role = await pool.query(
+  const companyResult = configuredCompanyId
+    ? await pool.query("SELECT id,name,user_email_domain FROM companies WHERE id=$1 AND active=true LIMIT 1", [configuredCompanyId])
+    : await pool.query("SELECT id,name,user_email_domain FROM companies WHERE LOWER(name)=LOWER('onePOS Demo') AND active=true ORDER BY created_at,id LIMIT 1");
+  const company = companyResult.rows[0] || null;
+  if (!company) {
+    console.warn("onePOS: tenant Superadmin bootstrap skipped; no configured active company was found");
+    return { engineManagerReady: Boolean(engineUser.rows?.[0]), tenantSuperadminReady: false, reason: "company_not_configured" };
+  }
+
+  let tenantRole = await pool.query(
     "SELECT id FROM roles WHERE company_id=$1 AND api_key='platform_superadmin' ORDER BY created_at,id LIMIT 1",
-    [companyId]
+    [company.id]
   );
-  let superadminRoleId = role.rows[0]?.id || null;
-  if (!superadminRoleId) {
+  let tenantRoleId = tenantRole.rows[0]?.id || null;
+  if (!tenantRoleId) {
     const insertedRole = await pool.query(
       `INSERT INTO roles (company_id,name,description,is_system_role,api_key)
-       VALUES ($1,'Superadmin','Tenant Superadmin profile. Access is granted through RBAC permissions.',TRUE,'platform_superadmin')
+       VALUES ($1,'Superadmin','Tenant Superadmin. Full tenant access without OneEngine Manager authority.',TRUE,'platform_superadmin')
        RETURNING id`,
-      [companyId]
+      [company.id]
     );
-    superadminRoleId = insertedRole.rows[0].id;
+    tenantRoleId = insertedRole.rows[0].id;
   } else {
     await pool.query(
       `UPDATE roles
           SET name='Superadmin',
-              description='Tenant Superadmin profile. Access is granted through RBAC permissions.',
+              description='Tenant Superadmin. Full tenant access without OneEngine Manager authority.',
               is_system_role=TRUE
         WHERE id=$1`,
-      [superadminRoleId]
+      [tenantRoleId]
     );
   }
 
@@ -441,7 +490,7 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
      SELECT $1,p.id FROM permissions p
       WHERE p.code NOT IN ('oneengine.manage','platform.manage')
      ON CONFLICT (role_id,permission_id) DO NOTHING`,
-    [superadminRoleId]
+    [tenantRoleId]
   );
   await pool.query(
     `DELETE FROM role_permissions rp
@@ -449,98 +498,88 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
       WHERE rp.role_id=$1
         AND rp.permission_id=p.id
         AND p.code IN ('oneengine.manage','platform.manage')`,
-    [superadminRoleId]
+    [tenantRoleId]
   );
 
-  if (!email && !password) {
-    const legacy = await pool.query(
-      `SELECT u.id
+  const configuredTenantEmail = String(env.BOOTSTRAP_TENANT_SUPERADMIN_EMAIL || "").trim().toLowerCase();
+  const domain = String(company.user_email_domain || "").trim().toLowerCase().replace(/^@/, "");
+  const tenantEmail = configuredTenantEmail
+    || (domain && domain !== "onepos.com" ? `superadmin@${domain}` : "superadmin@tenant.onepos.local");
+  const tenantPassword = String(env.BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD || onePosPassword || "");
+  const tenantName = String(env.BOOTSTRAP_TENANT_SUPERADMIN_NAME || `${company.name} Superadmin`).trim();
+
+  let tenantUser = await pool.query(
+    `SELECT id,password_hash FROM users
+      WHERE company_id=$1
+        AND (LOWER(username)=LOWER($2) OR LOWER(email)=LOWER($2))
+      ORDER BY created_at,id LIMIT 1`,
+    [company.id, tenantEmail]
+  );
+
+  if (!tenantUser.rows[0]) {
+    /*
+     * Reuse an older tenant Superadmin identity where possible, but never reuse
+     * the global superadmin@onepos.com account.
+     */
+    tenantUser = await pool.query(
+      `SELECT u.id,u.password_hash
          FROM users u
          JOIN roles r ON r.id=u.role_id
-        WHERE u.company_id IS NULL
-          AND r.api_key='platform_superadmin'
-        ORDER BY u.created_at,u.id
-        LIMIT 1`
-    );
-    if (legacy.rows[0]) {
-      await pool.query(
-        "UPDATE users SET company_id=$1,role_id=$2,active=TRUE,updated_at=NOW() WHERE id=$3",
-        [companyId, superadminRoleId, legacy.rows[0].id]
-      );
-      await pool.query("UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1", [legacy.rows[0].id]);
-      console.log("onePOS: legacy global Superadmin migrated to normal company-bound RBAC user");
-      return { created: false, migrated: true, id: legacy.rows[0].id, roleId: superadminRoleId };
-    }
-    console.log("onePOS: Superadmin bootstrap credentials are not configured; role permissions synchronized");
-    return { created: false, reason: "not_configured", roleId: superadminRoleId };
-  }
-
-  if (!email || !password || !name) {
-    throw new Error("BOOTSTRAP_SUPERADMIN_EMAIL and BOOTSTRAP_SUPERADMIN_PASSWORD are required together");
-  }
-  if (email.length > 100) throw new Error("BOOTSTRAP_SUPERADMIN_EMAIL must be 100 characters or fewer");
-
-  let existing = await pool.query(
-    `SELECT id,username,email,company_id,role_id
-       FROM users
-      WHERE LOWER(username)=LOWER($1) OR LOWER(email)=LOWER($1)
-      ORDER BY created_at,id
-      LIMIT 1`,
-    [email]
-  );
-
-  // Safe bootstrap email migration: when the configured tenant Superadmin
-  // email changes, reuse the existing identity instead of creating a duplicate.
-  // The onePOS demo tenant historically used superadmin@onepos.local; migrate
-  // that legacy address only, while preserving the per-tenant Superadmin model.
-  if (!existing.rows[0]) {
-    existing = await pool.query(
-      `SELECT u.id,u.username,u.email,u.company_id,u.role_id
-         FROM users u
         WHERE u.company_id=$1
-          AND u.active=true
-          AND (
-            LOWER(COALESCE(u.email,''))='superadmin@onepos.local'
-            OR LOWER(COALESCE(u.username,''))='superadmin'
-          )
-        ORDER BY CASE WHEN LOWER(COALESCE(u.email,''))='superadmin@onepos.local' THEN 0 ELSE 1 END,
-                 u.created_at,u.id
+          AND r.api_key='platform_superadmin'
+          AND LOWER(COALESCE(u.email,''))<>LOWER($2)
+        ORDER BY u.created_at,u.id
         LIMIT 1`,
-      [companyId]
+      [company.id, onePosEmail]
     );
   }
 
-  if (existing.rows[0]) {
-    /*
-     * Bootstrap is identity/RBAC reconciliation, not a password rotation path.
-     * Re-hashing BOOTSTRAP_SUPERADMIN_PASSWORD on every deploy silently changes
-     * an existing user's password whenever the Render bootstrap secret differs
-     * from the password the user currently uses (or from E2E credentials).
-     * Preserve the existing password hash. Password changes must go through the
-     * explicit password-reset/change-password flow.
-     */
-    const updated = await pool.query(
+  if (tenantUser.rows[0]) {
+    await pool.query(
       `UPDATE users
-          SET company_id=$1,role_id=$2,username=$3,email=$3,
-              full_name=$4,active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
-        WHERE id=$5
-        RETURNING id`,
-      [companyId, superadminRoleId, email, name, existing.rows[0].id]
+          SET role_id=$1,username=$2,email=$2,full_name=$3,active=TRUE,
+              is_platform_developer=FALSE,updated_at=NOW()
+        WHERE id=$4 AND company_id=$5`,
+      [tenantRoleId, tenantEmail, tenantName, tenantUser.rows[0].id, company.id]
     );
-    await pool.query("UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1", [updated.rows[0].id]);
-    console.log("onePOS: existing Superadmin synchronized as normal company-bound RBAC user; password preserved");
-    return { created: false, updated: true, passwordPreserved: true, id: updated.rows[0].id, roleId: superadminRoleId };
+    await pool.query("UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1", [tenantUser.rows[0].id]);
+    console.log("onePOS: tenant Superadmin synchronized; existing password preserved");
+  } else if (tenantPassword) {
+    const tenantPasswordHash = await bcrypt.hash(tenantPassword, 12);
+    tenantUser = await pool.query(
+      `INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active,must_change_password)
+       VALUES ($1,$2,$3,$3,$4,$5,FALSE,TRUE,$6)
+       RETURNING id,password_hash`,
+      [company.id, tenantRoleId, tenantEmail, tenantPasswordHash, tenantName, !env.BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD]
+    );
+    console.log("onePOS: tenant Superadmin created without OneEngine Manager authority");
+  } else {
+    console.warn("onePOS: tenant Superadmin user not created because no bootstrap password is configured");
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
-  const inserted = await pool.query(
-    `INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,is_platform_developer,active)
-     VALUES ($1,$2,$3,$3,$4,$5,FALSE,TRUE)
-     RETURNING id`,
-    [companyId, superadminRoleId, email, passwordHash, name]
-  );
-  console.log("onePOS: initial company-bound Superadmin user created");
-  return { created: true, id: inserted.rows[0].id, roleId: superadminRoleId };
+  if (engineUser.rows?.[0]?.id) {
+    /*
+     * The OneEngine Manager account may work across active tenants. Keep the
+     * explicit access table populated for compatibility with older routes;
+     * oneengine.manage remains the canonical authorization signal.
+     */
+    await pool.query(
+      `INSERT INTO platform_developer_company_access (developer_id,company_id,granted_by,active)
+       VALUES ($1,$2,$1,true)
+       ON CONFLICT (developer_id,company_id) DO UPDATE SET active=true,granted_by=EXCLUDED.granted_by`,
+      [engineUser.rows[0].id, company.id]
+    );
+  }
+
+  return {
+    engineManagerReady: Boolean(engineUser.rows?.[0]),
+    engineManagerEmail: onePosEmail,
+    tenantSuperadminReady: Boolean(tenantUser.rows?.[0]),
+    tenantSuperadminEmail: tenantEmail,
+    companyId: company.id,
+    tenantRoleId,
+    engineRoleId,
+  };
 }
 
 async function initializeLegacyDatabase(pool) {
