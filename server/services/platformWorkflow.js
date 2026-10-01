@@ -3068,12 +3068,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ action, fields, record, previousRecord }) => {
+    executor: async ({ action, fields, record, previousRecord, req, object, workflowVariables = {} }) => {
+      const conditionContext = { record, previousRecord, req, object, workflowVariables };
       const outcomes = Array.isArray(action?.outcomes) ? action.outcomes : [];
       if (outcomes.length) {
         for (let index = 0; index < outcomes.length; index += 1) {
           const outcome = outcomes[index];
-          const matched = evaluateCondition(normalizeWorkflowConditionConfig(outcome.condition), fields || [], record || {}, previousRecord || null);
+          const matched = evaluateCondition(resolveWorkflowConditionConfig(outcome.condition, conditionContext), fields || [], record || {}, previousRecord || null);
           if (matched) {
             return {
               status: "completed",
@@ -3086,7 +3087,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         return { status: "completed", matched: false, outcomeId: null, outcomeLabel: "Default", outcomeIndex: -1 };
       }
-      const result = evaluateCondition(normalizeWorkflowConditionConfig(action.condition), fields || [], record || {}, previousRecord || null);
+      const result = evaluateCondition(resolveWorkflowConditionConfig(action.condition, conditionContext), fields || [], record || {}, previousRecord || null);
       return { status: result ? "completed" : "skipped", matched: Boolean(result), legacyBinary: true };
     },
   },
@@ -3878,6 +3879,27 @@ function normalizeWorkflowConditionConfig(condition) {
     };
   }
   return condition;
+}
+
+function resolveWorkflowConditionConfig(condition, context = {}) {
+  const normalized = normalizeWorkflowConditionConfig(condition);
+  if (!normalized || !Array.isArray(normalized.conditions)) return normalized;
+  return {
+    ...normalized,
+    conditions: normalized.conditions.map((rule) => {
+      if (!rule || typeof rule !== "object") return rule;
+      if (rule.operator === "changed_from_to" && rule.value && typeof rule.value === "object" && !Array.isArray(rule.value)) {
+        return {
+          ...rule,
+          value: {
+            from: resolveConfiguredResource(rule.value.from, context),
+            to: resolveConfiguredResource(rule.value.to, context),
+          },
+        };
+      }
+      return { ...rule, value: resolveConfiguredResource(rule.value, context) };
+    }),
+  };
 }
 
 function workflowBindingContext({ record, previousRecord, req, object, workflowVariables } = {}) {
