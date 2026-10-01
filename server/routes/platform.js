@@ -3494,7 +3494,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             if (indexById.get(targetId) <= index) return `Loop "${action.label || action.id || index + 1}" can only contain later actions`;
             const target = actions[indexById.get(targetId)];
             const owner = claimedControlTargets.get(targetId);
-            if (owner && owner !== String(action.id || index)) return `Action "${target?.label || targetId}" is already controlled by another Decision or Loop`;
+            if (owner && owner !== String(action.id || index)) return `Action "${target?.label || targetId}" is already controlled by another Decision, Loop, Scheduled Path or error path`;
+            claimedControlTargets.set(targetId, String(action.id || index));
+          }
+        }
+        if (actionType === "SCHEDULE_PATH") {
+          const targets = Array.isArray(action.branch) ? action.branch.map(String) : [];
+          if (!targets.length) return `Scheduled Path "${action.pathLabel || action.label || index + 1}" requires at least one later step`;
+          for (const targetId of targets) {
+            if (!indexById.has(targetId)) return `Scheduled Path "${action.pathLabel || action.label || index + 1}" references an action that no longer exists`;
+            if (indexById.get(targetId) <= index) return `Scheduled Path "${action.pathLabel || action.label || index + 1}" can only route to later actions`;
+            const owner = claimedControlTargets.get(targetId);
+            if (owner && owner !== String(action.id || index)) return `Action "${actions[indexById.get(targetId)]?.label || targetId}" is already controlled by another Decision, Loop, Scheduled Path or error path`;
             claimedControlTargets.set(targetId, String(action.id || index));
           }
         }
