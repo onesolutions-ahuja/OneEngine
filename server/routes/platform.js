@@ -3647,6 +3647,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   async function runWorkflowDebugRequest(req, res, workflowId = null) {
     let client = null;
     let run = null;
+    const executionMode = String(req.body?.mode || "debug").toLowerCase() === "test" ? "TEST" : "DEBUG";
     try {
       const definition = req.body?.definition && typeof req.body.definition === "object" ? req.body.definition : null;
       let workflow = null;
