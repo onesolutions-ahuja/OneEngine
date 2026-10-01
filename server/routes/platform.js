@@ -2364,6 +2364,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           companyId: req.user.companyId,
           workflowId: workflow.id,
           workflowName: workflow.name,
+          workflowVersion: Number(workflow.active_version || workflow.version || 1),
           objectId: object?.id || null,
           recordId: record?.id || null,
           triggerKey: "page_interaction",
@@ -2381,6 +2382,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             recordId: record?.id || null,
             companyId: req.user.companyId,
             runId: run?.id || null,
+            workflowVersion: Number(workflow.active_version || workflow.version || 1),
             trigger: "page_interaction",
           });
           if (run?.id) {
@@ -3781,6 +3783,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         companyId: req.user.companyId,
         workflowId: workflow.id || null,
         workflowName: workflow.name,
+          workflowVersion: Number(workflow.active_version || workflow.version || 1),
         objectId: object?.id || null,
         recordId: record?.id || null,
         triggerKey: executionMode,
@@ -3842,6 +3845,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: record?.id || null,
           companyId: req.user.companyId,
           runId: run?.id || null,
+          workflowVersion: Number(workflow.active_version || workflow.version || 1),
           trigger: executionMode,
           debugMode: true,
           workflowVariables,
@@ -4869,6 +4873,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           companyId: req.user.companyId,
           workflowId: workflow.id,
           workflowName: workflow.name,
+          workflowVersion: Number(workflow.active_version || workflow.version || 1),
           objectId: object.id,
           recordId: null,
           triggerKey: "till_button",
@@ -4891,6 +4896,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: null,
           companyId: req.user.companyId,
           runId: run?.id || null,
+          workflowVersion: Number(workflow.active_version || workflow.version || 1),
           trigger: "till_button",
         });
         return res.json({ success: true, data: { results, runId: run?.id || null } });
@@ -5121,6 +5127,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         companyId: req.user.companyId,
         workflowId: workflow.id,
         workflowName: workflow.name,
+          workflowVersion: Number(workflow.active_version || workflow.version || 1),
         objectId: object.id,
         recordId: req.params.recordId,
         triggerKey: "record_page_action",
@@ -5137,6 +5144,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: req.params.recordId,
           companyId: req.user.companyId,
           runId: run?.id || null,
+          workflowVersion: Number(workflow.active_version || workflow.version || 1),
           trigger: "record_page_action",
         });
         if (run?.id) {
