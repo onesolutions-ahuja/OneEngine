@@ -419,9 +419,9 @@ export function packageDefinition(entry) {
                   { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true },
                   { key: "extras", type: "RECOMMENDATIONS", source: "ACCESSORY", title: "Accessories & protection", warranty: true, optional: true },
                   { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", defaultOption: "COLLECT", options: [
-                    { key: "COLLECT", label: "Collect here", canonicalType: "SELF_PICKUP" },
-                    { key: "OTHER_STORE", label: "Collect another store", canonicalType: "SELF_PICKUP" },
-                    { key: "DELIVERY", label: "Home delivery", canonicalType: "DELIVERY" }
+                    { key: "COLLECT", label: "Collect here", canonicalType: "SELF_PICKUP", requires: [] },
+                    { key: "OTHER_STORE", label: "Collect another store", canonicalType: "SELF_PICKUP", requires: ["STORE"] },
+                    { key: "DELIVERY", label: "Home delivery", canonicalType: "DELIVERY", requires: ["ADDRESS","CONTACT"] }
                   ], stockPromise: true },
                   { key: "basket", type: "BASKET", editable: true, promotions: true },
                   { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & order" },
