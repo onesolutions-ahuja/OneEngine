@@ -2960,7 +2960,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             triggerKey: "subflow",
             parentRunId: runId || null,
             status: "RUNNING",
-            metadata: { parentWorkflow: workflowKey, inputMappings: mappings },
+            metadata: { parentWorkflow: workflowKey, inputMappings: mappings, initialVariables: childWorkflowVariables },
           })
         : null;
       const childResult = await executeWorkflowActions({
