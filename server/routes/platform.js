@@ -4570,7 +4570,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   router.post("/platform/approval-requests/:requestId/decision", authenticate, async (req, res) => {
     try {
-      const result = await decidePlatformApproval({ db, requestId: req.params.requestId, decision: req.body?.decision, comment: req.body?.comment, req });
+      const result = await decidePlatformApproval({ db, requestId: req.params.requestId, workItemId: req.body?.workItemId || null, decision: req.body?.decision, comment: req.body?.comment, req });
       res.status(result.status).json(result.status === 200 ? { success: true, data: result.data } : { success: false, message: result.message });
     } catch (error) {
       console.error("Platform approval decision error:", error);
@@ -4580,7 +4580,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   router.post("/platform/approval-requests/:requestId/reassign", authenticate, async (req,res)=>{
     try {
-      const result=await reassignPlatformApproval({db,requestId:req.params.requestId,assigneeUserId:req.body?.assigneeUserId,comment:req.body?.comment,req});
+      const result=await reassignPlatformApproval({db,requestId:req.params.requestId,workItemId:req.body?.workItemId||null,assigneeUserId:req.body?.assigneeUserId,comment:req.body?.comment,req});
       res.status(result.status).json(result.status===200?{success:true,data:result.data}:{success:false,message:result.message});
     } catch(error) {
       console.error("Platform approval reassignment error:",error);
