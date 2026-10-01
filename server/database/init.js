@@ -301,6 +301,36 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
       },
     },
+    {
+      key: "0018_legacy_demo_superadmin_email",
+      version: "18",
+      name: "Migrate legacy demo Superadmin email",
+      up: async client => {
+        await client.query(
+          `UPDATE users u
+              SET username='superadmin@onepos.com',
+                  email='superadmin@onepos.com',
+                  updated_at=NOW()
+             FROM companies c
+            WHERE u.company_id=c.id
+              AND LOWER(c.name)=LOWER('onePOS Demo')
+              AND u.active=true
+              AND (
+                LOWER(COALESCE(u.email,''))='superadmin@onepos.local'
+                OR LOWER(COALESCE(u.username,''))='superadmin'
+              )
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM users existing
+                 WHERE existing.id<>u.id
+                   AND (
+                     LOWER(COALESCE(existing.email,''))='superadmin@onepos.com'
+                     OR LOWER(COALESCE(existing.username,''))='superadmin@onepos.com'
+                   )
+              )`
+        );
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
