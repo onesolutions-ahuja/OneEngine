@@ -649,15 +649,18 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
   }
 
   if (tenantUser.rows[0]) {
+    const tenantPasswordHash = tenantPassword
+      ? await bcrypt.hash(tenantPassword, 12)
+      : tenantUser.rows[0].password_hash;
     await pool.query(
       `UPDATE users
           SET company_id=$1,role_id=$2,username=$3,email=$3,full_name=$4,
-              active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
-        WHERE id=$5`,
-      [company.id, tenantRoleId, tenantEmail, tenantName, tenantUser.rows[0].id]
+              password_hash=$5,active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
+        WHERE id=$6`,
+      [company.id, tenantRoleId, tenantEmail, tenantName, tenantPasswordHash, tenantUser.rows[0].id]
     );
     await pool.query("UPDATE platform_developer_company_access SET active=false WHERE developer_id=$1", [tenantUser.rows[0].id]);
-    console.log("onePOS: tenant Superadmin synchronized; existing password preserved");
+    console.log("onePOS: tenant Superadmin synchronized including configured bootstrap password");
   } else if (tenantPassword) {
     const tenantPasswordHash = await bcrypt.hash(tenantPassword, 12);
     tenantUser = await pool.query(
@@ -703,18 +706,17 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
       [engineEmail]
     );
     if (engineUser.rows[0]) {
-      /*
-       * Bootstrap reconciles identity/RBAC only. Preserve the password after
-       * initial seeding so a first-login password change is never undone by a
-       * later deploy.
-       */
+      const enginePasswordHash = enginePassword
+        ? await bcrypt.hash(enginePassword, 12)
+        : engineUser.rows[0].password_hash;
       await pool.query(
         `UPDATE users
             SET company_id=NULL,role_id=$1,username=$2,email=$2,full_name=$3,
-                active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
-          WHERE id=$4`,
-        [engineRoleId, engineEmail, engineName, engineUser.rows[0].id]
+                password_hash=$4,active=TRUE,is_platform_developer=FALSE,updated_at=NOW()
+          WHERE id=$5`,
+        [engineRoleId, engineEmail, engineName, enginePasswordHash, engineUser.rows[0].id]
       );
+      console.log("onePOS: OneEngine Manager synchronized including configured bootstrap password");
       engineManagerReady = true;
     } else if (enginePassword) {
       const enginePasswordHash = await bcrypt.hash(enginePassword, 12);
@@ -726,6 +728,33 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
       );
       engineManagerReady = true;
     }
+  }
+
+  /*
+   * Keep every existing seeded Superadmin credential aligned with the bootstrap
+   * password. This intentionally updates both tenant Superadmin roles and the
+   * global OneEngine Manager so an environment/database mismatch cannot leave
+   * automation or operator access locked out.
+   */
+  const canonicalSuperadminPassword = String(
+    env.BOOTSTRAP_SUPERADMIN_PASSWORD
+      || env.BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD
+      || env.BOOTSTRAP_ONEENGINE_MANAGER_PASSWORD
+      || ""
+  );
+  if (canonicalSuperadminPassword) {
+    const canonicalHash = await bcrypt.hash(canonicalSuperadminPassword, 12);
+    const synced = await pool.query(
+      `UPDATE users u
+          SET password_hash=$1,updated_at=NOW()
+         FROM roles r
+        WHERE u.role_id=r.id
+          AND r.api_key IN ('platform_superadmin','engine_manager')
+          AND u.active=true
+        RETURNING u.id`,
+      [canonicalHash]
+    );
+    console.log(`onePOS: synchronized bootstrap password for ${synced.rowCount || synced.rows.length} Superadmin/OneEngine account(s)`);
   }
 
   return {
