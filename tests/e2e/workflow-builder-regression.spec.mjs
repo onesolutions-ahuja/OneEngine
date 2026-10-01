@@ -40,9 +40,11 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await page.getByRole("button", { name: "Stop", exact: true }).first().click();
   await page.getByRole("button", { name: "Save Draft", exact: true }).click();
 
-  const savedRow = page.locator("div").filter({ hasText: qaWorkflowName }).filter({ has: page.getByRole("button", { name: "Edit", exact: true }) }).last();
+  const workflowSearch = page.getByPlaceholder("Search Workflow");
+  await workflowSearch.fill(qaWorkflowName);
+  const savedRow = page.locator(".onebuilder-list-row").filter({ hasText: qaWorkflowName }).first();
   await expect(savedRow).toBeVisible();
-  await savedRow.getByRole("button", { name: "Edit", exact: true }).click();
+  await savedRow.click();
 
   await expect(page.getByRole("button", { name: "Tests", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Versions", exact: true })).toBeEnabled();
