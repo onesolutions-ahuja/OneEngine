@@ -26,6 +26,9 @@ export default function OneKioskDevicesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [orderSearch, setOrderSearch] = useState("");
+  const [orderResults, setOrderResults] = useState([]);
+  const [orderSearchBusy, setOrderSearchBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +91,20 @@ export default function OneKioskDevicesPage() {
     });
   };
 
+  const searchOrders = async () => {
+    setOrderSearchBusy(true);
+    setError("");
+    try {
+      const response = await apiRequest(`/api/kiosk/orders/search?q=${encodeURIComponent(orderSearch.trim())}&limit=20`);
+      if (!response?.success) throw new Error(response?.message || "Unable to search kiosk orders");
+      setOrderResults(Array.isArray(response.data) ? response.data : []);
+    } catch (reason) {
+      setError(reason?.message || "Unable to search kiosk orders");
+    } finally {
+      setOrderSearchBusy(false);
+    }
+  };
+
   const save = async () => {
     if (!selected || !draft) return;
     setSaving(true);
@@ -130,6 +147,22 @@ export default function OneKioskDevicesPage() {
       </header>
 
       {error ? <div className="kiosk-devices-error">{error}</div> : null}
+
+      <section className="kiosk-order-recovery">
+        <div className="kiosk-order-recovery-head">
+          <div><strong>Find kiosk order</strong><span>Search collection number, receipt, amount or kiosk name.</span></div>
+          <div><input value={orderSearch} onChange={(e)=>setOrderSearch(e.target.value)} onKeyDown={(e)=>{if(e.key==="Enter") void searchOrders();}} placeholder="e.g. K103, £11.27, Kiosk 02"/><button type="button" onClick={searchOrders} disabled={orderSearchBusy}>{orderSearchBusy ? "Searching…" : "Search"}</button></div>
+        </div>
+        {orderResults.length ? <div className="kiosk-order-results">
+          {orderResults.map((order) => (
+            <div key={order.id}>
+              <div><strong>{order.external_reference || order.external_order_id || "Kiosk order"}</strong><span>{order.kiosk_name || "OneKiosk"} · {order.created_at ? new Date(order.created_at).toLocaleString() : ""}</span></div>
+              <div><span>{order.receipt_number || "No receipt"}</span><strong>{order.total != null ? new Intl.NumberFormat(undefined,{style:"currency",currency:"GBP"}).format(Number(order.total)) : ""}</strong></div>
+              <StatusPill status={order.status} />
+            </div>
+          ))}
+        </div> : null}
+      </section>
 
       <div className="kiosk-devices-layout">
         <aside className="kiosk-devices-list">
