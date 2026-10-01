@@ -196,12 +196,15 @@ async function syncLayoutButtons(db, req, layout, { deactivateExisting = true } 
 }
 
 async function canManageGlobal(db, req) {
-  if (!req.user?.roleId) return false;
-  const result = await db(
-    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
-    [req.user.roleId]
-  );
-  return result.rows.length > 0;
+  if (!req.user?.id || !req.user?.companyId) return false;
+  const [roleResult, permissionSets] = await Promise.all([
+    req.user.roleId
+      ? db("SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1", [req.user.roleId])
+      : Promise.resolve({ rows: [] }),
+    loadEffectivePermissionSets(db, req.user, req),
+  ]);
+  return roleResult.rows.length > 0
+    || permissionSetAllowsSystemPermission(permissionSets, "oneengine.manage");
 }
 
 async function hasPlatformObjectPermission(db, req, objectId, action) {
@@ -629,7 +632,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   }
   async function resolveActingCompany(req, res, next) {
     try {
-      const oneEngineManager = await hasOneEngineManageAccess(req.user?.id);
+      const oneEngineManager = await hasOneEngineManageAccess(req);
       const requestedOverride = req.headers["x-acting-company-id"] || req.body?.actingCompanyId || req.query?.actingCompanyId;
 
       // Ordinary tenant users are permanently scoped to their authenticated
@@ -665,9 +668,8 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     return authorize("oneengine.manage")(req, res, next);
   }
   const manage = [authenticate, resolveActingCompany, authorizePlatformManage];
-  // Record CRUD is governed by Object permissions/RBAC, not by the Settings
-  // administration permission. Superadmin is the only hard bypass inside
-  // hasPlatformObjectPermission.
+  // Record CRUD is governed by Object permissions/RBAC, not by identity,
+  // role names, or the Settings administration permission.
   const recordAccess = [authenticate, resolveActingCompany];
 
   router.use("/platform", authenticate, async (req, res, next) => {
@@ -686,21 +688,13 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     }
   });
 
-  async function hasOneEngineManageAccess(userId) {
-    const result = await db(
-      `SELECT 1
-         FROM users u
-         JOIN role_permissions rp ON rp.role_id=u.role_id
-         JOIN permissions p ON p.id=rp.permission_id
-        WHERE u.id=$1 AND u.active=true AND p.code='oneengine.manage'
-        LIMIT 1`,
-      [userId]
-    );
-    return result.rows.length > 0;
+  async function hasOneEngineManageAccess(req) {
+    if (!req.user?.id || !req.user?.companyId) return false;
+    return canManageGlobal(db, req);
   }
 
   router.get("/platform/developer/companies", authenticate, async (req, res) => {
-    const oneEngineManager = await hasOneEngineManageAccess(req.user?.id);
+    const oneEngineManager = await hasOneEngineManageAccess(req);
     if (!oneEngineManager) {
       return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
     }
@@ -711,7 +705,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.put("/platform/developer/acting-company", authenticate, async (req, res) => {
     const companyId = req.body?.actingCompanyId;
-    const oneEngineManager = await hasOneEngineManageAccess(req.user?.id);
+    const oneEngineManager = await hasOneEngineManageAccess(req);
     if (!oneEngineManager) {
       return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
     }
