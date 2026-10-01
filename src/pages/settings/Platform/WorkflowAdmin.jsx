@@ -638,6 +638,7 @@ function makeStep(type = "CREATE_RECORD") {
       method: "POST",
       message: "",
       title: "",
+      apiParameters: {},
     },
   };
 }
@@ -689,9 +690,17 @@ function conditionIsValid(condition) {
   });
 }
 
-function workflowActionIssue(step) {
+function workflowActionIssue(step, definition = null) {
   if (!step || step.enabled === false) return "";
   const config = step.config || {};
+  const required = Array.isArray(definition?.schema?.required) ? definition.schema.required : [];
+  for (const key of required) {
+    const value = config[key] ?? config.apiParameters?.[key];
+    if (value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length)) {
+      const label = String(key).replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ");
+      return `Complete required field: ${label}.`;
+    }
+  }
   if (step.type === "CONDITION") {
     return conditionIsValid(config.condition) ? "" : "Complete the condition field/operator/value.";
   }
@@ -881,8 +890,23 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
   const entries = Object.entries(properties);
   if (!schema || schema.type !== "object" || !entries.length) {
     return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-        This registered API action does not publish a visual input schema yet. Its runtime capability is available, but its configuration cannot safely be exposed as a no-code form until the action publishes schema metadata.
+      <div className="space-y-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <strong className="text-xs text-slate-700">{definition?.label || definition?.value || "Registered action"}</strong>
+          {definition?.description ? <p className="mt-1 text-xs text-slate-500">{definition.description}</p> : null}
+          <p className="mt-2 text-[11px] text-slate-500">This action is available through the workflow API but does not publish a field schema yet. Configure the same request parameters here without writing JSON.</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Action parameters</label>
+          <MappingEditor
+            value={config.apiParameters || {}}
+            onChange={(apiParameters) => onChange({ apiParameters })}
+            rootObjectKey={rootObjectKey}
+            extraResources={extraResources}
+            keyLabel="API parameter"
+            valueLabel="Value / resource"
+          />
+        </div>
       </div>
     );
   }
@@ -1742,10 +1766,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const entryConditionIssue = (workflow.conditions || []).length && !conditionIsValid({ rules: workflow.conditions })
     ? "One or more Start conditions are incomplete."
     : "";
-  const conditionIssue = conditionSteps.length && conditionSteps.some((step) => workflowActionIssue(step))
+  const definitionFor = (step) => registryOptions.find((option) => option.value === step.type) || null;
+  const conditionIssue = conditionSteps.length && conditionSteps.some((step) => workflowActionIssue(step, definitionFor(step)))
     ? "One or more conditions are incomplete."
     : "";
-  const actionIssues = actionSteps.map(workflowActionIssue).filter(Boolean);
+  const actionIssues = actionSteps.map((step) => workflowActionIssue(step, definitionFor(step))).filter(Boolean);
   const actionsIssue = !actionSteps.length
     ? "Add at least one action."
     : actionIssues[0] || "";
@@ -1800,7 +1825,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           const config = { ...(step.config || {}) };
           if (config.fieldMappings && !config.fieldValues) config.fieldValues = config.fieldMappings;
           if (config.template && !config.templateId) config.templateId = config.template;
-          return { id: step.id, label: step.label || getActionLabel(step.type), type: step.type, ...config };
+          const apiParameters = config.apiParameters && typeof config.apiParameters === "object" ? config.apiParameters : {};
+          delete config.apiParameters;
+          return { id: step.id, label: step.label || getActionLabel(step.type), type: step.type, ...config, ...apiParameters };
         }),
       },
     };
