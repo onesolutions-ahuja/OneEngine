@@ -4506,7 +4506,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if(object.company_scoped){params.push(req.user.companyId);clauses.push(`company_id=$${params.length}`);}
       const found=await db(`SELECT * FROM "${object.source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`,params);
       if(!found.rows.length) return res.status(404).json({success:false,message:"Record not found"});
-      const request=await submitPlatformApproval({db,object,fields:metadataFields,recordId:req.params.recordId,record:found.rows[0],req});
+      const request=await submitPlatformApproval({db,object,fields:metadataFields,recordId:req.params.recordId,record:found.rows[0],req,manual:true});
       if(!request) return res.status(422).json({success:false,message:"This record does not meet an active approval process's entry criteria"});
       if(req.body?.comment) await db("UPDATE platform_approval_requests SET submission_comment=$1 WHERE id=$2",[String(req.body.comment).trim(),request.id]);
       res.json({success:true,data:request});
