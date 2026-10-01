@@ -4535,7 +4535,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         FROM platform_approval_requests r JOIN platform_approval_processes p ON p.id=r.process_id
         LEFT JOIN platform_approval_steps s ON s.process_id=r.process_id AND s.step_order=r.current_step
         WHERE r.company_id=$1 AND r.object_id=$2 AND r.record_id=$3 ORDER BY r.submitted_at DESC`,[req.user.companyId,object.id,req.params.recordId]);
-      const request=requests.rows[0]||null;
+      let request=requests.rows[0]||null;
+      if(request){const snap=cfg(request.definition_snapshot);const pinned=(snap.steps||[]).find(step=>Number(step.step_order)===Number(request.current_step));if(pinned)request={...request,process_name:snap.process?.name||request.process_name,process_config:snap.process?.config||request.process_config,step_label:pinned.label||request.step_label};}
       let history={actions:[],events:[]};
       if(request) {
         const actions=await db("SELECT a.*,u.username AS actor_name FROM platform_approval_actions a LEFT JOIN users u ON u.id=a.actor_user_id WHERE a.request_id=$1 ORDER BY a.created_at",[request.id]);
