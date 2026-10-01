@@ -19,3 +19,6 @@
 .kiosk-device-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.kiosk-device-current{display:grid;gap:3px;background:#f7f8fa;border-radius:12px;padding:12px}.kiosk-device-current span,.kiosk-device-current small{color:#7d8796;font-size:12px}
 .kiosk-device-actions{display:flex;justify-content:flex-end;padding-top:8px}.kiosk-device-actions .primary{background:#111827;color:white;border-color:#111827}.kiosk-devices-empty{padding:22px 12px;color:#8993a3;text-align:center;font-size:13px;line-height:1.5}
 @media(max-width:900px){.kiosk-devices-layout{grid-template-columns:1fr}.kiosk-health-grid{grid-template-columns:1fr 1fr}.kiosk-device-two{grid-template-columns:1fr}}
+
+.kiosk-devices-header-actions{display:flex;gap:9px;align-items:center}
+@media(max-width:640px){.kiosk-devices-header{display:grid}.kiosk-devices-header-actions{width:100%}.kiosk-devices-header-actions button{flex:1;justify-content:center}}
