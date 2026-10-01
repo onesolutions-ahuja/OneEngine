@@ -1,20 +1,36 @@
 import { expect } from "@playwright/test";
+import fs from "node:fs/promises";
+import path from "node:path";
 
+const SESSION_CACHE_FILE = path.resolve("test-results/.auth/browser-session.json");
 let cachedBrowserSession = null;
+
+async function loadBrowserSession() {
+  if (cachedBrowserSession) return cachedBrowserSession;
+  try {
+    cachedBrowserSession = JSON.parse(await fs.readFile(SESSION_CACHE_FILE, "utf8"));
+  } catch {
+    cachedBrowserSession = null;
+  }
+  return cachedBrowserSession;
+}
 
 async function captureBrowserSession(page) {
   cachedBrowserSession = await page.evaluate(() => ({
     session: Object.fromEntries(Object.entries(sessionStorage)),
     local: Object.fromEntries(Object.entries(localStorage)),
   }));
+  await fs.mkdir(path.dirname(SESSION_CACHE_FILE), { recursive: true });
+  await fs.writeFile(SESSION_CACHE_FILE, JSON.stringify(cachedBrowserSession), "utf8");
 }
 
 async function restoreBrowserSession(page) {
-  if (!cachedBrowserSession) return false;
+  const state = await loadBrowserSession();
+  if (!state) return false;
   await page.addInitScript((state) => {
     for (const [key, value] of Object.entries(state.session || {})) sessionStorage.setItem(key, value);
     for (const [key, value] of Object.entries(state.local || {})) localStorage.setItem(key, value);
-  }, cachedBrowserSession);
+  }, state);
   await page.goto("./");
   const authenticated = await page.evaluate(() => Boolean(sessionStorage.getItem("onepos_token")));
   if (!authenticated) return false;
@@ -27,10 +43,11 @@ export async function loginIfConfigured(page) {
   const password = process.env.ONEPOS_E2E_PASSWORD || "";
   if (!username || !password) return false;
 
-  // The authenticated audit contains many tests. Logging in independently for
-  // every test exhausts the production login rate limiter and looks like an
-  // RBAC/auth failure after the first few routes. Reuse the already-issued
-  // browser session while still letting every test run in a fresh page.
+  // Persist the issued browser session to disk as well as memory. Playwright
+  // may replace a worker process after a failed test/retry; an in-memory cache
+  // disappears with that worker and would otherwise cause another production
+  // login for every retry until the API rate limiter returns 429. sessionStorage
+  // is not included in Playwright's native storageState, so restore it explicitly.
   if (await restoreBrowserSession(page)) return true;
 
   await page.goto("./");
