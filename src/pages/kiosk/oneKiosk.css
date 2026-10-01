@@ -145,3 +145,6 @@
 .one-kiosk-generic-form input:not([type=checkbox]),.one-kiosk-generic-form select{min-height:48px}
 .one-kiosk-form-checkbox{grid-template-columns:auto 1fr!important;align-items:center;border:1px solid #e5e9ef;border-radius:12px;padding:12px}
 .one-kiosk-form-checkbox input{width:20px;height:20px}
+
+.one-kiosk-staff-exit{position:fixed;z-index:790;right:14px;bottom:14px;border:1px solid rgba(148,163,184,.45);background:rgba(255,255,255,.76);backdrop-filter:blur(8px);border-radius:999px;padding:7px 10px;display:flex;align-items:center;gap:6px;color:#64748b;font-size:11px;font-weight:750;opacity:.62}.one-kiosk-staff-exit:hover,.one-kiosk-staff-exit:focus-visible{opacity:1}
+@media(max-width:640px){.one-kiosk-staff-exit span{display:none}.one-kiosk-staff-exit{width:34px;height:34px;justify-content:center;padding:0}}
