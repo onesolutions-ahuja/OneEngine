@@ -1,6 +1,5 @@
 -- Correct the OneEngine operator model after the temporary dual/global identity migration.
--- There is no central superadmin identity. Each tenant owns its own
--- superadmin@onepos.com user and OneEngine authority is ordinary RBAC.
+-- There is no central superadmin identity. OneEngine authority is ordinary RBAC.
 
 -- Every tenant Superadmin role receives all permissions, including
 -- oneengine.manage. The email itself grants no authority.
@@ -13,20 +12,16 @@ WHERE r.company_id IS NOT NULL
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- Remove any obsolete company-less user created for the abandoned global
--- OneEngine-manager identity model. This intentionally does not touch tenant
--- users with the same email address.
-DELETE FROM user_roles ur
-USING users u
-WHERE ur.user_id = u.id
-  AND u.company_id IS NULL
-  AND LOWER(COALESCE(u.username, u.email, '')) = 'superadmin@onepos.com';
-
+-- OneEngine-manager identity model. Role membership is stored directly on
+-- users.role_id; there is no user_roles join table in the OneEngine schema.
 DELETE FROM users
 WHERE company_id IS NULL
   AND LOWER(COALESCE(username, email, '')) = 'superadmin@onepos.com';
 
--- Normalize the tenant bootstrap identity. Only update a tenant when doing so
--- cannot collide with an existing tenant-local superadmin@onepos.com record.
+-- Normalize the tenant bootstrap identity only where the current schema's
+-- direct users.role_id assignment proves this is a tenant Superadmin.
+-- NOTE: username is globally UNIQUE in the current schema, so this update is
+-- intentionally guarded against any existing superadmin@onepos.com identity.
 UPDATE users u
 SET username = 'superadmin@onepos.com',
     email = 'superadmin@onepos.com',
@@ -39,19 +34,14 @@ WHERE u.company_id IS NOT NULL
   )
   AND EXISTS (
     SELECT 1
-    FROM user_roles ur
-    JOIN roles r ON r.id = ur.role_id
-    WHERE ur.user_id = u.id
+    FROM roles r
+    WHERE r.id = u.role_id
       AND r.company_id = u.company_id
       AND r.api_key = 'platform_superadmin'
   )
   AND NOT EXISTS (
     SELECT 1
     FROM users existing
-    WHERE existing.company_id = u.company_id
-      AND existing.id <> u.id
-      AND (
-        LOWER(COALESCE(existing.username, '')) = 'superadmin@onepos.com'
-        OR LOWER(COALESCE(existing.email, '')) = 'superadmin@onepos.com'
-      )
+    WHERE existing.id <> u.id
+      AND LOWER(COALESCE(existing.username, '')) = 'superadmin@onepos.com'
   );
