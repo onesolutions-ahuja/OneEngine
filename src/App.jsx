@@ -2052,7 +2052,7 @@ function Desktop({ onLock, onSignOut }) {
     const aliases = {
       platform: 'developer',
       builder: 'developer',
-      contacts: 'workspace',
+      contacts: 'customers',
       one_connect_google: 'google-connect',
       one_assistant: 'assistant',
       one_kiosk: 'kiosk',
