@@ -219,7 +219,6 @@ export function objectNavigationEntries({
   deviceProfile = DEVICE_PROFILES.ADMIN,
   companyId = null,
 } = {}) {
-  const canManageOneEngine = permissions.includes("oneengine.manage");
   const profile = normalizeDeviceProfile(deviceProfile);
 
   const appById = new Map(apps.map((app) => [String(app.id), app]));
@@ -310,7 +309,6 @@ export function objectNavigationEntries({
         packageInstalled: module.package_status === "active",
         licensed: isPackageLicensed(entitlements, { manifest: module.package_manifest || {} }),
         permitted: true,
-        canManageOneEngine,
       });
       /* Company disablement, a missing package and a missing entitlement all
          exclude the entry; they are reported as one reason because the caller
