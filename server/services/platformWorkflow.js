@@ -3026,6 +3026,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     key: "CALL_WEBHOOK",
     displayName: "Call Webhook",
     description: "Send a webhook to an approved endpoint.",
+    schema: {
+      type: "object",
+      properties: {"url":{"type":"string","title":"Webhook URL"},"method":{"type":"string","title":"Method","enum":["POST","GET","PUT","PATCH"]},"headers":{"type":"object","title":"Headers"},"body":{"type":"object","title":"Body"}},
+      required: ["url"],
+    },
     validation: (action) => {
       if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a url or endpoint");
     },
@@ -3037,6 +3042,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     key: "HTTP_REQUEST",
     displayName: "HTTP Request",
     description: "Send an HTTP request to an approved endpoint.",
+    schema: {
+      type: "object",
+      properties: {"url":{"type":"string","title":"Request URL"},"method":{"type":"string","title":"Method","enum":["POST","GET","PUT","PATCH","DELETE"]},"headers":{"type":"object","title":"Headers"},"body":{"type":"object","title":"Body"}},
+      required: ["url"],
+    },
     validation: (action) => {
       if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a url or endpoint");
     },
