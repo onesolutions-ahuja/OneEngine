@@ -24,7 +24,8 @@ import { processShopifyWebhookEvent } from "./onlineOrders/shopifyWebhookProcess
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
-import { loadEffectivePermissionSets, permissionSetAllowsObject } from "./platformPermissionSets.js";
+import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
+import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { createGlobalProductLookupService, testGlobalProductProvider } from "./globalProductLookup.js";
 import {
   findAvailableAppointmentSlots,
@@ -3858,8 +3859,9 @@ async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId 
   if (!value) return null;
   const result = await db(
     `SELECT * FROM platform_objects
-      WHERE ${where} AND company_id=$2 AND active=true
+      WHERE ${where} AND (company_id=$2 OR company_id IS NULL) AND active=true
         AND source_table IS NOT NULL
+      ORDER BY CASE WHEN company_id=$2 THEN 0 ELSE 1 END
       LIMIT 1`,
     [value, companyId]
   );
@@ -3950,7 +3952,8 @@ async function resolveWorkflowTargetObject({ db, action = {}, object = null, com
   const objectKey = requestedObjectKey || (!objectId ? object?.object_key || object?.api_name || null : null);
   const target = await resolveTargetObjectMetadata({ db, objectId, objectKey, companyId: runtimeCompanyId });
   if (!target) throw new Error("Workflow target object is not available for this company");
-  if (!isSafeIdentifier(target.source_table) || target.company_id == null || String(target.company_id) !== String(runtimeCompanyId)) {
+  if (!isSafeIdentifier(target.source_table)
+      || (target.company_id != null && String(target.company_id) !== String(runtimeCompanyId))) {
     throw new Error("Workflow target object is not permitted");
   }
   return target;
@@ -4068,17 +4071,9 @@ const WORKFLOW_OBJECT_ACCESS = Object.freeze({
   SET_FIELD: "edit",
 });
 
-async function assertWorkflowObjectPermission(context, actionType) {
-  const access = WORKFLOW_OBJECT_ACCESS[actionType];
+async function assertSpecificWorkflowObjectPermission(context, targetObject, access) {
   const req = context?.req;
-  if (!access || !req?.user?.roleId || !req?.user?.companyId) return;
-  const targetObject = await resolveWorkflowTargetObject({
-    db: context.db,
-    action: context.action || {},
-    object: context.object || null,
-    companyId: context.companyId || req.user.companyId,
-    req,
-  });
+  if (!access || !targetObject || !req?.user?.roleId || !req?.user?.companyId) return;
   const [roleGrant, permissionSets] = await Promise.all([
     context.db(
       `SELECT can_view,can_create,can_edit,can_delete
@@ -4092,7 +4087,35 @@ async function assertWorkflowObjectPermission(context, actionType) {
   const column = `can_${access}`;
   if (roleGrant.rows[0]?.[column] === true) return;
   if (permissionSetAllowsObject(permissionSets, targetObject.object_key, access)) return;
+
+  const systemPermission = systemObjectRbacPermission(targetObject, access);
+  if (systemPermission) {
+    if (permissionSetAllowsSystemPermission(permissionSets, systemPermission)) return;
+    const rolePermission = await context.db(
+      `SELECT 1
+         FROM role_permissions rp
+         JOIN permissions p ON p.id=rp.permission_id
+        WHERE rp.role_id=$1 AND p.code=$2
+        LIMIT 1`,
+      [req.user.roleId, systemPermission]
+    );
+    if (rolePermission.rows.length) return;
+  }
   throw new Error(`You do not have permission to ${access} records for ${targetObject.label || targetObject.object_key}`);
+}
+
+async function assertWorkflowObjectPermission(context, actionType) {
+  const access = WORKFLOW_OBJECT_ACCESS[actionType];
+  const req = context?.req;
+  if (!access || !req?.user?.roleId || !req?.user?.companyId) return;
+  const targetObject = await resolveWorkflowTargetObject({
+    db: context.db,
+    action: context.action || {},
+    object: context.object || null,
+    companyId: context.companyId || req.user.companyId,
+    req,
+  });
+  await assertSpecificWorkflowObjectPermission(context, targetObject, access);
 }
 
 const DEBUG_EXECUTABLE_ACTIONS = new Set([
