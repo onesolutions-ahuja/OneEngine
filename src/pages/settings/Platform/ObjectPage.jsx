@@ -160,6 +160,8 @@ export default function ObjectPage({
   const [relatedLists, setRelatedLists] = useState({});
   const [executingAction, setExecutingAction] = useState("");
   const [recordButtons, setRecordButtons] = useState([]);
+  const [approvalState,setApprovalState]=useState(null);
+  const [approvalComment,setApprovalComment]=useState("");
 
   const [loading, setLoading] = useState(
     !suppliedObject
@@ -247,6 +249,22 @@ export default function ObjectPage({
       .then((response) => setHistory(Array.isArray(response?.data) ? response.data : []))
       .catch((err) => setError(err?.message || "Unable to load record history."));
   }, [objectMetadata, selectedRecord, selfServiceView]);
+
+  useEffect(()=>{ loadApprovalState(); },[objectMetadata,selectedRecord,selfServiceView]);
+
+  async function loadApprovalState(){
+    const key=getObjectKey(objectMetadata); const id=selectedRecord?.id||selectedRecord?.record_id;
+    if(!key||!id||selfServiceView){setApprovalState(null);return;}
+    try{const response=await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records/${encodeURIComponent(id)}/approval`);setApprovalState(response?.data||null);}
+    catch{setApprovalState(null);}
+  }
+
+  async function submitForApproval(){
+    const key=getObjectKey(objectMetadata); const id=selectedRecord?.id||selectedRecord?.record_id;
+    if(!key||!id)return;
+    try{await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records/${encodeURIComponent(id)}/submit-approval`,{method:"POST",body:JSON.stringify({comment:approvalComment})});setApprovalComment("");await loadApprovalState();}
+    catch(err){setError(err?.message||"Unable to submit for approval.");}
+  }
 
   useEffect(() => {
     const components = detailLayout?.definition?.components || [];
@@ -785,6 +803,12 @@ export default function ObjectPage({
                   <FormRenderer formId="platform-edit-record-form" definition={editLayout?.definition || createLayout?.definition || detailLayout?.definition} fields={activeFields} initialValues={selectedRecord} mode="edit" onSubmit={saveEditedRecord} />
                 </RecordModal>
               ) : null}
+              {approvalState ? <section className="rounded-xl border bg-white p-3">
+                <div className="flex items-center justify-between"><div><strong>Approval</strong><div className="text-xs text-slate-500">{approvalState.request ? `${approvalState.request.process_name} · ${approvalState.request.status}` : "Not submitted"}</div></div>{approvalState.request?.locked ? <span className="onepos-badge onepos-badge-warning">Locked</span>:null}</div>
+                {approvalState.request?.status==="pending" ? <div className="mt-3 text-sm"><div><b>Current step:</b> {approvalState.request.step_label||"Approval"}</div>{approvalState.request.submission_comment?<div className="mt-1 text-slate-600">{approvalState.request.submission_comment}</div>:null}</div> : null}
+                {!approvalState.request && approvalState.availableProcesses?.length ? <div className="mt-3"><textarea className="w-full rounded-lg border p-2 text-sm" rows="2" placeholder="Submission comment (optional)" value={approvalComment} onChange={e=>setApprovalComment(e.target.value)}/><button type="button" className="onepos-btn onepos-btn-primary mt-2" onClick={submitForApproval}>Submit for Approval</button></div>:null}
+                {(approvalState.history?.events?.length||approvalState.history?.actions?.length)?<div className="mt-3 border-t pt-2"><b className="text-xs uppercase text-slate-500">Approval history</b>{[...(approvalState.history.events||[]),...(approvalState.history.actions||[])].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map((entry,index)=><div key={entry.id||index} className="mt-2 text-xs"><b>{entry.event_type||entry.decision}</b>{entry.actor_name?` · ${entry.actor_name}`:""}{entry.comment?<div className="text-slate-500">{entry.comment}</div>:null}</div>)}</div>:null}
+              </section>:null}
               <ObjectRecordDetail
                 record={selectedRecord}
                 fields={activeFields}
