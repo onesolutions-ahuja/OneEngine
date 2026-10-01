@@ -933,7 +933,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                             <div><span>Source</span><strong>{objectData.permissions.source || 'default_deny'}</strong></div>
                             <div><span>Permission sets</span><strong>{(objectData.permissions.permissionSets || []).map((set) => set.name).join(', ') || 'None'}</strong></div>
                             <div><span>Permission groups</span><strong>{(objectData.permissions.permissionSetGroups || []).map((group) => group.name).join(', ') || 'None'}</strong></div>
-                            <div><span>Platform manager</span><strong>{objectData.permissions.canManagePlatform ? 'Yes' : 'No'}</strong></div>
+                            <div><span>OneEngine manager</span><strong>{objectData.permissions.canManageOneEngine ? 'Yes' : 'No'}</strong></div>
                           </div>
                           <div className="objects-config-list">
                             <div className="objects-config-list-head"><strong>Field Access</strong></div>
