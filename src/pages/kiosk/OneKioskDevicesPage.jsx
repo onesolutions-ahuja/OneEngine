@@ -19,6 +19,7 @@ function StatusPill({ status }) {
 export default function OneKioskDevicesPage() {
   const [devices, setDevices] = useState([]);
   const [terminals, setTerminals] = useState([]);
+  const [paymentConnectors, setPaymentConnectors] = useState([]);
   const [flows, setFlows] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState(null);
@@ -30,15 +31,17 @@ export default function OneKioskDevicesPage() {
     setLoading(true);
     setError("");
     try {
-      const [deviceResponse, terminalResponse, flowResponse] = await Promise.all([
+      const [deviceResponse, terminalResponse, paymentConnectorResponse, flowResponse] = await Promise.all([
         apiRequest("/api/kiosk/devices"),
         apiRequest("/api/payment-terminals").catch(() => ({ data: [] })),
+        apiRequest("/api/kiosk/payment-connectors").catch(() => ({ data: [] })),
         apiRequest("/api/kiosk/flows").catch(() => ({ data: [] })),
       ]);
       if (!deviceResponse?.success) throw new Error(deviceResponse?.message || "Unable to load kiosk devices");
       const rows = Array.isArray(deviceResponse.data) ? deviceResponse.data : [];
       setDevices(rows);
       setTerminals(Array.isArray(terminalResponse?.data) ? terminalResponse.data : []);
+      setPaymentConnectors(Array.isArray(paymentConnectorResponse?.data) ? paymentConnectorResponse.data : []);
       setFlows(Array.isArray(flowResponse?.data) ? flowResponse.data : []);
       const nextId = selectedId && rows.some((row) => row.id === selectedId) ? selectedId : rows[0]?.id || "";
       setSelectedId(nextId);
@@ -47,6 +50,7 @@ export default function OneKioskDevicesPage() {
         name: selected.name || "OneKiosk",
         workflowId: selected.workflow_id || "",
         active: selected.active !== false,
+        paymentConnectorId: selected.payment_connector_id || "",
         paymentTerminalId: selected.payment_terminal_id || "",
         paymentRequired: selected.payment_required !== false,
         printerRequired: selected.printer_required === true,
@@ -73,6 +77,7 @@ export default function OneKioskDevicesPage() {
       name: device.name || "OneKiosk",
       workflowId: device.workflow_id || "",
       active: device.active !== false,
+      paymentConnectorId: device.payment_connector_id || "",
       paymentTerminalId: device.payment_terminal_id || "",
       paymentRequired: device.payment_required !== false,
       printerRequired: device.printer_required === true,
@@ -93,6 +98,7 @@ export default function OneKioskDevicesPage() {
         body: JSON.stringify({
           ...draft,
           workflowId: draft.workflowId || null,
+          paymentConnectorId: draft.paymentConnectorId || null,
           paymentTerminalId: draft.paymentTerminalId || null,
         }),
       });
@@ -181,14 +187,18 @@ export default function OneKioskDevicesPage() {
 
               <div className="kiosk-device-section">
                 <h3><CreditCard size={18}/> Card machine</h3>
-                <label><span>Assigned terminal</span>
-                  <select value={draft.paymentTerminalId} onChange={(e) => setDraft((d) => ({ ...d, paymentTerminalId: e.target.value }))}>
-                    <option value="">No terminal assigned</option>
-                    {terminals.map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.name} · {terminal.provider}</option>)}
+                <label><span>Assigned One Connect card machine</span>
+                  <select value={draft.paymentConnectorId} onChange={(e) => setDraft((d) => ({ ...d, paymentConnectorId: e.target.value }))}>
+                    <option value="">No payment connector assigned</option>
+                    {paymentConnectors.map((connector) => (
+                      <option key={connector.id} value={connector.id}>
+                        {connector.name} · {connector.connector_package_key} · {connector.till_name || connector.terminal_number || "terminal"}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="kiosk-device-toggle"><span><strong>Payment required</strong><small>Mark the kiosk degraded if its card machine is unavailable.</small></span><input type="checkbox" checked={draft.paymentRequired} onChange={(e) => setDraft((d) => ({ ...d, paymentRequired: e.target.checked }))}/></label>
-                <div className="kiosk-device-current"><span>Configured terminal</span><strong>{selected.payment_terminal_name || "None"}</strong><small>{selected.payment_provider || ""} {selected.payment_terminal_last_test || ""}</small></div>
+                <div className="kiosk-device-current"><span>Configured connector</span><strong>{selected.payment_connector_name || "None"}</strong><small>{selected.payment_connector_package_key || ""} {selected.payment_connector_status || ""}{selected.payment_connector_error ? ` · ${selected.payment_connector_error}` : ""}</small></div>
               </div>
 
               <div className="kiosk-device-section">
