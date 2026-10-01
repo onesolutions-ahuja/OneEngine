@@ -1919,95 +1919,6 @@ async function markPlatformBootstrapCurrent(fingerprint) {
   );
 }
 
-async function runOneTimeTestTenantCleanup() {
-  if (String(process.env.ONEPOS_CLEANUP_TEST_TENANTS || "") !== "keep-top-5-v2") return;
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(
-      `CREATE TEMP TABLE onepos_cleanup_keep_companies (
-         id UUID PRIMARY KEY
-       ) ON COMMIT DROP`
-    );
-    await client.query(
-      `INSERT INTO onepos_cleanup_keep_companies (id)
-       SELECT c.id
-       FROM companies c
-       ORDER BY
-         (
-           (SELECT COUNT(*) FROM users u WHERE u.company_id=c.id) +
-           (SELECT COUNT(*) FROM stores s WHERE s.company_id=c.id) +
-           (SELECT COUNT(*) FROM products p WHERE p.company_id=c.id) +
-           (SELECT COUNT(*) FROM customers cu WHERE cu.company_id=c.id) +
-           (SELECT COUNT(*) FROM sales sa WHERE sa.company_id=c.id) +
-           (SELECT COUNT(*) FROM suppliers su WHERE su.company_id=c.id) +
-           (SELECT COUNT(*) FROM purchases pu WHERE pu.company_id=c.id)
-         ) DESC,
-         c.created_at ASC
-       LIMIT 5`
-    );
-
-    const kept = await client.query(
-      `SELECT c.id, c.name,
-              (SELECT COUNT(*) FROM users u WHERE u.company_id=c.id) AS users,
-              (SELECT COUNT(*) FROM stores s WHERE s.company_id=c.id) AS stores,
-              (SELECT COUNT(*) FROM products p WHERE p.company_id=c.id) AS products,
-              (SELECT COUNT(*) FROM sales sa WHERE sa.company_id=c.id) AS sales
-       FROM companies c
-       JOIN onepos_cleanup_keep_companies k ON k.id=c.id
-       ORDER BY c.created_at ASC`
-    );
-    if (kept.rowCount !== 5) {
-      throw new Error(`Tenant cleanup aborted: expected 5 preserved companies, found ${kept.rowCount}`);
-    }
-
-    const before = await client.query("SELECT COUNT(*)::int AS count FROM companies");
-
-    await client.query(
-      `DELETE FROM hospitality_bill_sales h
-         USING sales s
-         WHERE h.sale_id=s.id
-           AND NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=s.company_id)`
-    );
-    await client.query(
-      `DELETE FROM refunds r
-         USING sales s
-         WHERE r.sale_id=s.id
-           AND NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=s.company_id)`
-    );
-    await client.query(
-      `DELETE FROM sales s
-         WHERE NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=s.company_id)`
-    );
-    await client.query(
-      `DELETE FROM audit_logs a
-         WHERE NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=a.company_id)`
-    );
-    const deleted = await client.query(
-      `DELETE FROM companies c
-         WHERE NOT EXISTS (SELECT 1 FROM onepos_cleanup_keep_companies k WHERE k.id=c.id)
-         RETURNING c.name`
-    );
-
-    const after = await client.query("SELECT COUNT(*)::int AS count FROM companies");
-    if (after.rows[0]?.count !== 5) {
-      throw new Error(`Tenant cleanup verification failed: expected 5 companies, found ${after.rows[0]?.count}`);
-    }
-
-    await client.query("COMMIT");
-    console.log("onePOS: preserved tenant set", kept.rows);
-    console.log(
-      `onePOS: one-time tenant cleanup complete; companies ${before.rows[0]?.count} -> ${after.rows[0]?.count}; deleted ${deleted.rowCount}`
-    );
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 async function startServer() {
   try {
     const trustedRuntime = validateTrustedRuntime();
@@ -2018,7 +1929,6 @@ async function startServer() {
     await db("SELECT NOW()");
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
-    await runOneTimeTestTenantCleanup();
 
     const recoveredCommands = await db(
       `UPDATE platform_workflow_runs
