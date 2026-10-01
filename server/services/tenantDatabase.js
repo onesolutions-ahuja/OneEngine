@@ -181,11 +181,8 @@ export function createAuthenticatedDatabaseMiddleware({ router, pool }) {
     if (actingCompanyId) {
       try {
         /*
-         * Company switching is a OneEngine RBAC capability. The old implementation
-         * incorrectly required the legacy is_platform_developer identity flag,
-         * while the rest of the platform already authorises operators with
-         * oneengine.manage. Keep legacy mapped-developer access for compatibility,
-         * but make oneengine.manage the canonical authority.
+         * Company switching is controlled only by RBAC. Legacy developer identity
+         * flags and mapping tables never grant authority.
          */
         const manager = await pool.query(
           `SELECT 1
@@ -198,19 +195,13 @@ export function createAuthenticatedDatabaseMiddleware({ router, pool }) {
             LIMIT 1`,
           [req.user.id]
         );
-        const access = manager.rows.length
-          ? await pool.query("SELECT id FROM companies WHERE id=$1 AND active=true LIMIT 1", [actingCompanyId])
-          : await pool.query(
-              `SELECT c.id
-                 FROM companies c
-                 JOIN platform_developer_company_access a ON a.company_id=c.id
-                WHERE a.developer_id=$1
-                  AND a.company_id=$2
-                  AND a.active=true
-                  AND c.active=true
-                LIMIT 1`,
-              [req.user.id, actingCompanyId]
-            );
+        if (!manager.rows.length) {
+          return res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
+        }
+        const access = await pool.query(
+          "SELECT id FROM companies WHERE id=$1 AND active=true LIMIT 1",
+          [actingCompanyId]
+        );
         if (!access.rows.length) {
           return res.status(403).json({ success: false, message: "You are not authorised for the selected company" });
         }
