@@ -461,6 +461,7 @@ function SettingsPage({ onOpenProfile }) {
   const canViewUsers = permissionCodes.includes('user.view')
   const canCreateUsers = permissionCodes.includes('user.create')
   const canEditUsers = permissionCodes.includes('user.edit')
+  const canManageUserStoreAssignments = permissionCodes.includes('user.store_assignment.manage')
   const canManageRoles = permissionCodes.includes('role.manage')
 
   const access = settingSectionAccess({
@@ -1350,7 +1351,7 @@ function SettingsPage({ onOpenProfile }) {
                       key: 'store_access',
                       label: 'Store Access',
                       sortValue: () => '',
-                      render: (row) => (
+                      render: (row) => canManageUserStoreAssignments ? (
                         <button
                           type="button"
                           className="user-store-access-button"
@@ -1361,7 +1362,7 @@ function SettingsPage({ onOpenProfile }) {
                         >
                           Manage
                         </button>
-                      ),
+                      ) : '—',
                     },
                     {
                       key: 'jarves_enabled',
@@ -1447,7 +1448,7 @@ function SettingsPage({ onOpenProfile }) {
         <UserStoreAccessModal
           user={userStoreEditor}
           currentUserId={user?.id}
-          canEdit={canEditUsers}
+          canEdit={canManageUserStoreAssignments}
           onClose={() => setUserStoreEditor(null)}
           onSaved={refreshUsers}
         />
