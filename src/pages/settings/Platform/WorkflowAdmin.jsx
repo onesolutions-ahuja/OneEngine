@@ -2997,12 +2997,122 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           </select>
         </div>
         <div className="workflow-builder-actions">
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>Tests</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Versions</button>
           <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
           <button type="button" className="workflow-cancel-button" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>Cancel</button>
           <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save Draft</button>
           <button type="button" className="workflow-save-button" disabled={Boolean(reviewIssue)} title={reviewIssue || "Activate workflow"} onClick={() => saveWorkflow("ACTIVE")}>Activate</button>
         </div>
       </div>
+
+      {testsOpen ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-800">Saved Tests</div>
+              <p className="mt-1 text-xs text-slate-500">Reusable rollback-safe tests. Assertions make regressions visible after future workflow edits.</p>
+            </div>
+            <button type="button" className="workflow-cancel-button" onClick={() => setTestsOpen(false)}>Close</button>
+          </div>
+          <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <input className={inputClass} value={testDraft.name} onChange={(event) => setTestDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Test name, e.g. High value order takes VIP path" />
+            <div className="grid gap-2 md:grid-cols-2">
+              <select className={inputClass} value={testDraft.recordMode} onChange={(event) => setTestDraft((current) => ({ ...current, recordMode: event.target.value }))}>
+                <option value="latest">Use latest record</option>
+                <option value="specific">Use specific record</option>
+              </select>
+              {testDraft.recordMode === "specific" ? <input className={inputClass} value={testDraft.recordId} onChange={(event) => setTestDraft((current) => ({ ...current, recordId: event.target.value }))} placeholder="Record ID" /> : <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">Uses the latest accessible record in the current store/company.</div>}
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <strong className="text-xs text-slate-700">Assertions</strong>
+                <button type="button" className="text-xs text-blue-700" onClick={() => setTestDraft((current) => ({ ...current, assertions: [...(current.assertions || []), { type: "STEP_STATUS", stepId: "", expected: "COMPLETED" }] }))}>+ Assertion</button>
+              </div>
+              {(testDraft.assertions || []).map((assertion, assertionIndex) => {
+                const decisionStep = workflow.steps.find((step) => String(step.id) === String(assertion.stepId || ""));
+                const outcomes = Array.isArray(decisionStep?.config?.outcomes) ? decisionStep.config.outcomes : [];
+                return (
+                  <div key={assertionIndex} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
+                      <select className={inputClass} value={assertion.type || "RUN_STATUS"} onChange={(event) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { type: event.target.value, expected: event.target.value === "RUN_STATUS" ? "COMPLETED" : "", stepId: "", resource: "" } : item) }))}>
+                        <option value="RUN_STATUS">Workflow result</option>
+                        <option value="STEP_STATUS">Step result</option>
+                        <option value="DECISION_OUTCOME">Decision outcome</option>
+                        <option value="RESOURCE_EQUALS">Resource equals</option>
+                      </select>
+                      {["STEP_STATUS","DECISION_OUTCOME"].includes(assertion.type) ? (
+                        <select className={inputClass} value={assertion.stepId || ""} onChange={(event) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, stepId: event.target.value, expected: "" } : item) }))}>
+                          <option value="">Select step</option>
+                          {workflow.steps.filter((step) => assertion.type !== "DECISION_OUTCOME" || step.type === "CONDITION").map((step) => <option key={step.id} value={step.id}>{step.label || getActionLabel(step.type)}</option>)}
+                        </select>
+                      ) : assertion.type === "RESOURCE_EQUALS" ? (
+                        <MetadataResourcePicker objectKey={workflow.object || ""} extraResources={workflowStepResources(workflow.steps, workflow.steps.length)} label="" value={assertion.resource || ""} onChange={(resource) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, resource } : item) }))} />
+                      ) : <div />}
+                      {assertion.type === "RUN_STATUS" ? (
+                        <select className={inputClass} value={assertion.expected || "COMPLETED"} onChange={(event) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, expected: event.target.value } : item) }))}>
+                          <option value="COMPLETED">Completes</option><option value="FAILED">Fails</option><option value="NOT_STARTED">Does not start</option>
+                        </select>
+                      ) : assertion.type === "STEP_STATUS" ? (
+                        <select className={inputClass} value={assertion.expected || "COMPLETED"} onChange={(event) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, expected: event.target.value } : item) }))}>
+                          <option value="COMPLETED">Completed</option><option value="FAILED">Failed</option><option value="NOT_RUN">Not run</option>
+                        </select>
+                      ) : assertion.type === "DECISION_OUTCOME" ? (
+                        <select className={inputClass} value={assertion.expected || ""} onChange={(event) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, expected: event.target.value } : item) }))}>
+                          <option value="">Select outcome</option>
+                          {outcomes.map((outcome) => <option key={outcome.id} value={outcome.id}>{outcome.label || outcome.id}</option>)}
+                          <option value="Default">Default</option>
+                        </select>
+                      ) : (
+                        <input className={inputClass} value={assertion.expected ?? ""} onChange={(event) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, expected: event.target.value } : item) }))} placeholder="Expected value" />
+                      )}
+                      <button type="button" className="text-xs text-red-600" onClick={() => setTestDraft((current) => ({ ...current, assertions: current.assertions.filter((_, index) => index !== assertionIndex) }))}>Remove</button>
+                    </div>
+                    <div className="text-[11px] text-slate-500">{assertionLabel(assertion)}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-end"><button type="button" className="workflow-save-button" disabled={testBusyId === "new"} onClick={saveTestCase}>{testBusyId === "new" ? "Saving…" : "Save Test"}</button></div>
+          </div>
+          <div className="mt-4 space-y-2">
+            {savedTests.map((test) => (
+              <div key={test.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
+                <div>
+                  <strong className="text-sm text-slate-800">{test.name}</strong>
+                  <div className="mt-1 text-[11px] text-slate-500">{(test.config?.assertions || []).length} assertion(s){test.last_status ? ` · Last result: ${test.last_status}` : " · Not run yet"}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" className="workflow-cancel-button" disabled={testBusyId === test.id} onClick={() => runSavedTest(test)}>{testBusyId === test.id ? "Running…" : "Run"}</button>
+                  <button type="button" className="workflow-cancel-button" onClick={() => deleteSavedTest(test.id)}>Delete</button>
+                </div>
+              </div>
+            ))}
+            {!savedTests.length ? <div className="text-xs text-slate-500">No saved tests yet.</div> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {versionsOpen ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-800">Version History</div>
+              <p className="mt-1 text-xs text-slate-500">Every meaningful save creates an immutable snapshot. Restoring creates a new Draft version; history is never overwritten.</p>
+            </div>
+            <button type="button" className="workflow-cancel-button" onClick={() => setVersionsOpen(false)}>Close</button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {workflowVersions.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
+                <div><strong className="text-sm text-slate-800">Version {item.version}</strong><div className="mt-1 text-[11px] text-slate-500">{item.lifecycle_status || "DRAFT"} · {item.created_at ? new Date(item.created_at).toLocaleString("en-GB") : ""}</div></div>
+                <button type="button" className="workflow-cancel-button" disabled={versionsBusy || Number(item.version) === Number(workflow.version)} onClick={() => restoreWorkflowVersion(item.version)}>Restore as new Draft</button>
+              </div>
+            ))}
+            {versionsBusy ? <div className="text-xs text-slate-500">Loading versions…</div> : !workflowVersions.length ? <div className="text-xs text-slate-500">No version snapshots yet.</div> : null}
+          </div>
+        </div>
+      ) : null}
 
       <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <summary className="cursor-pointer text-sm font-semibold text-slate-800">Subflow interface</summary>
@@ -3080,9 +3190,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             </div>
           )}
           {debugResult ? (
-            <div className={`mt-4 rounded-xl border p-4 ${debugResult.status === "FAILED" ? "border-red-200 bg-red-50" : debugResult.status === "NOT_STARTED" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+            <div className={`mt-4 rounded-xl border p-4 ${debugResult.status === "FAILED" || (debugMode === "test" && debugResult.testPassed === false) ? "border-red-200 bg-red-50" : debugResult.status === "NOT_STARTED" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
               <div className="flex items-center justify-between gap-3">
-                <strong className={debugResult.status === "FAILED" ? "text-red-800" : debugResult.status === "NOT_STARTED" ? "text-amber-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.status === "FAILED" ? "Test failed" : debugResult.status === "NOT_STARTED" ? "Test did not start" : "Test passed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : "Debug completed successfully")}</strong>
+                <strong className={debugResult.status === "FAILED" || (debugMode === "test" && debugResult.testPassed === false) ? "text-red-800" : debugResult.status === "NOT_STARTED" ? "text-amber-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.status === "FAILED" || debugResult.testPassed === false ? "Test failed" : debugResult.status === "NOT_STARTED" ? "Test did not start" : "Test passed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : "Debug completed successfully")}</strong>
                 <span className="text-xs text-slate-500">No database changes were kept.</span>
               </div>
               {debugResult.status === "FAILED" ? (
@@ -3095,6 +3205,15 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <div className="mt-2 text-sm text-amber-800">
                   <div>{debugResult.friendlyError?.whatHappened || "The selected record did not meet the workflow Start conditions."}</div>
                   <div className="mt-2 rounded-lg bg-white/70 p-3 text-xs"><strong>What to do:</strong> {debugResult.friendlyError?.howToFix || "Choose another record or review the Start conditions."}</div>
+                </div>
+              ) : debugMode === "test" && debugResult.testPassed === false ? (
+                <div className="mt-3 space-y-2 text-sm text-red-800">
+                  <strong>One or more assertions did not match.</strong>
+                  {(debugResult.assertionResult?.checks || []).map((check) => (
+                    <div key={check.index} className={`rounded-lg p-2 text-xs ${check.passed ? "bg-emerald-50 text-emerald-800" : "bg-white text-red-800"}`}>
+                      {check.passed ? "✓" : "✕"} {check.label || check.type} · expected {String(check.expected ?? "—")} · actual {String(check.actual ?? "—")}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-emerald-800">{debugMode === "test" ? "The workflow passed this test record. Green steps ran successfully; dashed green steps were safely simulated." : "Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action."}</p>
