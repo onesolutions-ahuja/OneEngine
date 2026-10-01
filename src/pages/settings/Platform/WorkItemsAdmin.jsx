@@ -24,6 +24,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
   const [users, setUsers] = useState([]);
   const [reassignTo, setReassignTo] = useState("");
   const [history, setHistory] = useState({ actions: [], events: [] });
+  const [groups,setGroups]=useState([]); const [delegations,setDelegations]=useState([]); const [newGroup,setNewGroup]=useState(""); const [groupMembers,setGroupMembers]=useState([]); const [delegateTo,setDelegateTo]=useState("");
 
   const loadItems = async () => {
     setLoading(true);
@@ -39,7 +40,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
     }
   };
 
-  useEffect(() => { void loadItems(); apiRequest("/api/platform/approval-users").then(r=>setUsers(r.data||[])).catch(()=>setUsers([])); }, []);
+  useEffect(() => { void loadItems(); apiRequest("/api/platform/approval-users").then(r=>setUsers(r.data||[])).catch(()=>setUsers([])); apiRequest("/api/platform/approval-groups").then(r=>setGroups(r.data||[])).catch(()=>setGroups([])); apiRequest("/api/platform/approval-delegations").then(r=>setDelegations(r.data||[])).catch(()=>setDelegations([])); }, []);
 
   useEffect(() => {
     if (!selectedId) { setHistory({actions:[],events:[]}); return; }
@@ -125,6 +126,9 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
     } catch(error) { onError?.(error?.message || "Unable to recall approval"); } finally { setWorking(""); }
   };
 
+  const createGroup=async()=>{if(!newGroup.trim())return;try{await apiRequest("/api/platform/approval-groups",{method:"POST",body:JSON.stringify({name:newGroup.trim(),memberIds:groupMembers})});setNewGroup("");setGroupMembers([]);const r=await apiRequest("/api/platform/approval-groups");setGroups(r.data||[]);onMessage?.("Approval group created.");}catch(error){onError?.(error?.message||"Unable to create approval group");}};
+  const saveDelegate=async()=>{if(!delegateTo)return;try{await apiRequest("/api/platform/approval-delegations",{method:"POST",body:JSON.stringify({delegateUserId:delegateTo})});setDelegateTo("");const r=await apiRequest("/api/platform/approval-delegations");setDelegations(r.data||[]);onMessage?.("Approval delegate saved.");}catch(error){onError?.(error?.message||"Unable to save delegate");}};
+
   return (
     <div className="developer-record-shell work-items-record-shell">
       <aside className="developer-record-list">
@@ -172,6 +176,13 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
           {!loading && !filteredItems.length ? (
             <div className="developer-record-empty"><strong>No work items found</strong><span>Change the search or status filter.</span></div>
           ) : null}
+        </div>
+<div className="developer-record-section">
+          <div className="developer-record-section-title">Approval Administration</div>
+          <div className="grid gap-3">
+            <div><strong className="text-sm">Queues / Groups</strong><div className="text-xs text-slate-500">{groups.map(g=>`${g.name} (${g.member_count})`).join(" · ")||"No groups yet"}</div><input className="mt-2 rounded-lg border p-2" placeholder="New group name" value={newGroup} onChange={e=>setNewGroup(e.target.value)}/><select multiple className="mt-2 w-full rounded-lg border p-2" value={groupMembers} onChange={e=>setGroupMembers([...e.target.selectedOptions].map(o=>o.value))}>{users.map(u=><option key={u.id} value={u.id}>{u.username||u.email}</option>)}</select><button type="button" className="mt-2" onClick={createGroup}>Create group</button></div>
+            <div><strong className="text-sm">My delegate</strong><div className="text-xs text-slate-500">{delegations.find(d=>d.active)?.delegate_name||"No active delegate"}</div><select className="mt-2 rounded-lg border p-2" value={delegateTo} onChange={e=>setDelegateTo(e.target.value)}><option value="">Choose delegate…</option>{users.map(u=><option key={u.id} value={u.id}>{u.username||u.email}</option>)}</select><button type="button" className="ml-2" disabled={!delegateTo} onClick={saveDelegate}>Save delegate</button></div>
+          </div>
         </div>
       </aside>
 
