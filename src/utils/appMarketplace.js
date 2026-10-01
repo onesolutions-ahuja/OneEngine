@@ -6,6 +6,7 @@ const ICON_ALIASES = Object.freeze({
   one_till: 'onetill-new',
   till: 'onetill-new',
   retail_pos: 'onetill-new',
+  one_kiosk: 'default-app',
   receipt_qr: 'default-app',
   inventory: 'inventory',
   batch_expiry: 'batch-expiry',
@@ -157,6 +158,7 @@ const DEDICATED_OPEN_ROUTES = Object.freeze({
   sms_connector: '/app/settings/sms-delivery',
   whatsapp_assistant: '/app/settings/whatsapp-assistant',
   one_assistant: '/app/assistant',
+  one_kiosk: '/app/kiosk',
   mobile_scanner_connector: '/app/settings/hardware',
 })
 
