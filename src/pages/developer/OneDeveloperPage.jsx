@@ -186,7 +186,8 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
         <div className="settings-content-header"><h2>{current.label}</h2></div>
         <div className="settings-content-body">
           {error ? <div className="settings-error">{error}</div> : null}
-          {current.key === 'objects' ? <ObjectsSettingsPane />
+          {clientsLoading ? <div className="settings-state-card">Resolving client context…</div>
+            : current.key === 'objects' ? <ObjectsSettingsPane />
             : current.key === 'workflow-builder' ? <OneBuilder initialTab="workflow" singleBuilder />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
             : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
