@@ -774,7 +774,7 @@ function MappingEditor({ value = {}, onChange, rootObjectKey, keyLabel = "Input"
 function BranchStepPicker({ label, value = [], onChange, steps = [], currentIndex }) {
   const candidates = steps
     .map((candidate, index) => ({ candidate, index }))
-    .filter(({ candidate, index }) => index > currentIndex && candidate.type !== "CONDITION");
+    .filter(({ index }) => index > currentIndex);
   const selected = new Set(value || []);
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -1047,7 +1047,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 
 
 function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange }) {
-  const [selectedId, setSelectedId] = useState(workflow.steps?.[0]?.id || null);
+  const [selectedId, setSelectedId] = useState("__start__");
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [paletteSearch, setPaletteSearch] = useState("");
@@ -1055,12 +1055,13 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
   useEffect(() => {
+    if (selectedId === "__start__") return;
     if (!workflow.steps.length) {
-      if (selectedId !== null) setSelectedId(null);
+      setSelectedId("__start__");
       return;
     }
     if (!workflow.steps.some((step) => step.id === selectedId)) {
-      setSelectedId(workflow.steps[0].id);
+      setSelectedId("__start__");
     }
   }, [workflow.steps, selectedId]);
 
@@ -1112,11 +1113,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide properties" : "Show properties"}</button>
         </div>
         <div className="workflow-canvas-lane">
-          <div className="workflow-start-node">
+          <button type="button" className="workflow-start-node" onClick={() => setSelectedId("__start__")} title="Configure when this workflow starts">
             <span className="workflow-start-icon">▶</span>
             <span className="workflow-start-title">Start</span>
-            <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}</span>
-          </div>
+            <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}{workflow.conditions?.length ? ` · ${workflow.conditions.length} condition${workflow.conditions.length === 1 ? "" : "s"}` : ""}</span>
+          </button>
           <div className="workflow-node-connector" />
           {workflow.steps.map((step, index) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
             <button type="button" className="workflow-node-delete" title="Remove step" aria-label={`Remove ${step.label || getActionLabel(step.type)}`} onClick={(event) => { event.stopPropagation(); removeStep(index); }}>×</button>
@@ -1136,7 +1137,43 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <span className="workflow-properties-tab is-active">Properties</span>
           <span className="workflow-properties-tab">Node Settings</span>
         </div>
-        {selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} /> : <p className="text-sm text-slate-500">Select a flow element to configure it.</p>}
+        {selectedId === "__start__" ? (
+          <div className="space-y-4 rounded-xl bg-white p-2">
+            <div>
+              <div className="text-sm font-semibold text-slate-800">Start</div>
+              <p className="mt-1 text-xs text-slate-500">Define exactly when this workflow is allowed to begin. Entry conditions are evaluated before any action runs.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Trigger object</label>
+              <PlatformFieldPicker
+                scopeKey={scopeKey}
+                includeObjectSelector
+                objectOnly
+                selectedObjectKey={workflow.object || ""}
+                onObjectChange={(object) => setWorkflow((current) => ({ ...current, object }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Trigger</label>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">{getTriggerLabel(workflow.trigger)}</div>
+            </div>
+            {workflow.object ? (
+              <div>
+                <div className="mb-2 text-xs font-semibold text-slate-700">Entry conditions</div>
+                <StepConditionEditor
+                  objectKey={workflow.object}
+                  value={{ type: workflow.match || "all", rules: workflow.conditions?.length ? workflow.conditions : [blankCondition()] }}
+                  onChange={(condition) => setWorkflow((current) => ({
+                    ...current,
+                    match: condition.type || "all",
+                    conditions: condition.rules || [],
+                  }))}
+                />
+                <p className="mt-2 text-[11px] text-slate-500">Use Changed / Changed to when the workflow should run only on a transition instead of every later edit.</p>
+              </div>
+            ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
+          </div>
+        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => item.active !== false && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
       </aside> : null}
     </div>
   );
@@ -1393,6 +1430,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     : triggerNeedsObject && !workflow.object
       ? "Choose the trigger object."
       : "";
+  const entryConditionIssue = (workflow.conditions || []).length && !conditionIsValid({ rules: workflow.conditions })
+    ? "One or more Start conditions are incomplete."
+    : "";
   const conditionIssue = conditionSteps.length && conditionSteps.some((step) => workflowActionIssue(step))
     ? "One or more conditions are incomplete."
     : "";
@@ -1400,7 +1440,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const actionsIssue = !actionSteps.length
     ? "Add at least one action."
     : actionIssues[0] || "";
-  const reviewIssue = triggerIssue || conditionIssue || actionsIssue || (!workflow.name ? "Enter a workflow name." : "");
+  const reviewIssue = triggerIssue || entryConditionIssue || conditionIssue || actionsIssue || (!workflow.name ? "Enter a workflow name." : "");
   const guideSteps = [
     { key: "trigger", label: "Trigger", status: triggerIssue ? "error" : "complete", message: triggerIssue },
     {
@@ -1421,7 +1461,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const saveWorkflow = () => {
+  const saveWorkflow = (lifecycleOverride = null) => {
+    const nextLifecycle = String(lifecycleOverride || workflow.lifecycleStatus || (workflow.active === true ? "ACTIVE" : "DRAFT")).toUpperCase();
+    if (nextLifecycle === "ACTIVE" && reviewIssue) {
+      onError?.(`Cannot activate workflow: ${reviewIssue}`);
+      return;
+    }
     const payload = {
       objectId: workflow.objectId || null,
       objectKey: workflow.objectKey || workflow.object || null,
@@ -1429,8 +1474,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       triggerKey: workflow.trigger,
       conditions: workflow.conditions || [],
       version: Number(workflow.version || 1),
-      lifecycleStatus: String(workflow.lifecycleStatus || (workflow.active === true ? "ACTIVE" : "DRAFT")).toUpperCase(),
-      active: workflow.active === true,
+      lifecycleStatus: nextLifecycle,
+      active: nextLifecycle === "ACTIVE",
       action: {
         type: "workflow",
         ...(scopeKey ? { scope: scopeKey } : {}),
@@ -1456,13 +1501,15 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     request.then((response) => {
       const saved = response?.data || {};
       setWorkflowId(saved.id || workflowId);
-      setSavedWorkflows((current) => [{ ...workflow, ...saved, id: saved.id || workflowId }, ...current.filter((item) => item.id !== (saved.id || workflowId))]);
+      const savedWorkflow = { ...workflow, ...saved, id: saved.id || workflowId, lifecycleStatus: nextLifecycle, active: nextLifecycle === "ACTIVE" };
+      setWorkflow(savedWorkflow);
+      setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => item.id !== (saved.id || workflowId))]);
       if (embedded) {
         onSaved?.({ ...workflow, ...saved, id: saved.id || workflowId });
       } else {
         setShowBuilder(false);
       }
-      onMessage?.("Workflow saved.");
+      onMessage?.(nextLifecycle === "ACTIVE" ? "Workflow activated." : "Workflow draft saved.");
     }).catch((error) => onError?.(error.message || "Unable to save workflow."));
   };
 
@@ -1608,7 +1655,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
         <div className="workflow-builder-actions">
           <button type="button" className="workflow-cancel-button" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>Cancel</button>
-          <button type="button" className="workflow-save-button" onClick={saveWorkflow}>▣&nbsp;&nbsp;Save workflow</button>
+          <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save Draft</button>
+          <button type="button" className="workflow-save-button" disabled={Boolean(reviewIssue)} title={reviewIssue || "Activate workflow"} onClick={() => saveWorkflow("ACTIVE")}>Activate</button>
         </div>
       </div>
 
