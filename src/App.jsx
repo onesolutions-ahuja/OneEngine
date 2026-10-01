@@ -2578,199 +2578,62 @@ function Desktop({ onLock, onSignOut }) {
   }
 
   const openItem = (id) => {
-    if (id === 'developer' || id === 'platform') {
-      setRoute('developer', 'objects')
-      setRouteState({ app: 'developer', section: 'objects' })
-      setActiveApp('developer')
-      return
+    const aliases = {
+      platform: 'developer',
+      builder: 'developer',
+      contacts: 'workspace',
+      one_connect_google: 'google-connect',
+      one_assistant: 'assistant',
     }
-    if (id === 'integrations') {
-      setRoute('integrations')
-      setActiveApp('integrations')
-      return
-    }
-    if (id === 'google-connect' || id === 'one_connect_google') {
-      setRoute('google-connect')
-      setRouteState({ app: 'google-connect', section: null })
-      setActiveApp('google-connect')
-      return
-    }
-    if (id === 'accounting') {
-      setRoute('accounting')
-      setActiveApp('accounting')
-      return
-    }
-    if (id === 'online-orders') {
-      setRoute('online-orders')
-      setActiveApp('online-orders')
-      return
-    }
-    if (id === 'order-prep') {
-      setRoute('order-prep')
-      setActiveApp('order-prep')
-      return
-    }
-    if (id === 'own-delivery') {
-      setRoute('own-delivery')
-      setActiveApp('own-delivery')
-      return
-    }
-    if (id === 'assistant' || id === 'one_assistant') {
-      setRoute('assistant')
-      setRouteState({ app: 'assistant', section: null })
-      setActiveApp('assistant')
-      return
-    }
-    if (id === 'returns') {
-      setRoute('returns')
-      setActiveApp('returns')
-      return
-    }
-    if (id === 'exchange') {
-      setRoute('exchange')
-      setActiveApp('exchange')
-      return
-    }
-    if (id === 'layaway') {
-      setRoute('layaway')
-      setActiveApp('layaway')
-      return
-    }
-    if (id === 'supplier-returns') {
-      setRoute('supplier-returns')
-      setActiveApp('supplier-returns')
-      return
-    }
-    if (id === 'audit-log') {
-      setRoute('audit-log')
-      setActiveApp('audit-log')
-      return
-    }
-    if (id === 'licensing') {
-      setRoute('licensing')
-      setActiveApp('licensing')
-      return
-    }
-    if (id === 'app-releases') {
-      setRoute('app-releases')
-      setActiveApp('app-releases')
-      return
-    }
-    if (id === 'dashboard') {
-      setRoute('dashboard')
-      setActiveApp('dashboard')
-      return
-    }
-    if (id === 'reports') {
-      setRoute('reports')
-      setActiveApp('reports')
-      return
-    }
-    if (id === 'custom-reports') {
-      setRoute('custom-reports')
-      setActiveApp('custom-reports')
-      return
-    }
-    if (id === 'stores') {
-      setRoute('stores')
-      setActiveApp('stores')
-      return
-    }
-    if (id === 'employees') {
-      setRoute('employees')
-      setActiveApp('employees')
-      return
-    }
-    if (id === 'customers') {
-      setRoute('customers')
-      setActiveApp('customers')
-      return
-    }
-    if (id === 'gift-cards') {
-      setRoute('gift-cards')
-      setActiveApp('gift-cards')
-      return
-    }
-    if (id === 'suppliers') {
-      setRoute('suppliers')
-      setActiveApp('suppliers')
-      return
-    }
-    if (id === 'purchases') {
-      setRoute('purchases')
-      setActiveApp('purchases')
-      return
-    }
-    if (id === 'inventory') {
-      setRoute('inventory')
-      setActiveApp('inventory')
-      return
-    }
-    if (id === 'replenishment') {
-      setRoute('replenishment')
-      setActiveApp('replenishment')
-      return
-    }
-    if (id === 'categories') {
-      setRoute('categories')
-      setActiveApp('categories')
-      return
-    }
-    if (id === 'global-products') {
-      setRoute('global-products')
-      setActiveApp('global-products')
-      return
-    }
-    if (id === 'products') {
-      setRoute('products')
-      setActiveApp('products')
-      return
-    }
-    if (id === 'sales') {
-      setRoute('sales')
-      setActiveApp('sales')
-      return
-    }
-    if (id === 'workspace') {
-      setRoute('workspace')
-      setActiveApp('workspace')
-      return
-    }
-    if (id === 'launchpad') {
+    const target = aliases[id] || id
+
+    if (target === 'launchpad') {
       setAppSearch('')
       setTopPanel('')
       setLauncherOpen(true)
       return
     }
-    if (id === 'store') {
+    if (target === 'store') {
       setAppSearch('')
       setLauncherOpen(false)
       setStoreFocusPackageKey('')
       setTopPanel('store')
       return
     }
-    if (id === 'builder') {
+
+    const routeMap = new Set([
+      'integrations','google-connect','accounting','online-orders','order-prep','own-delivery',
+      'assistant','returns','exchange','layaway','supplier-returns','audit-log','licensing',
+      'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
+      'gift-cards','suppliers','purchases','inventory','replenishment','categories',
+      'global-products','products','sales','workspace','till',
+    ])
+
+    if (target === 'developer') {
+      const next = { app: 'developer', section: 'objects' }
       setRoute('developer', 'objects')
+      setRouteState(next)
       setActiveApp('developer')
       return
     }
-    if (id === 'contacts') {
-      setRoute('workspace')
-      setActiveApp('workspace')
-      return
-    }
-    if (id === 'settings') {
-      setRoute('settings', readRoute().section || 'company')
+    if (target === 'settings') {
+      const section = readRoute().section || 'company'
+      const next = { app: 'settings', section }
+      setRoute('settings', section)
+      setRouteState(next)
       setActiveApp('settings')
       return
     }
-    if (id === 'till') {
-      setRoute('till')
-      setActiveApp('till')
+    if (routeMap.has(target)) {
+      const next = { app: target, section: null }
+      setRoute(target)
+      setRouteState(next)
+      setActiveApp(target)
       return
     }
+
     const item = dockItems.find((entry) => entry.id === id) ?? null
-    setMessage(`${item?.label ?? 'App'} clicked — component wiring comes next.`)
+    setMessage(`${item?.label ?? 'App'} is not available in this workspace.`)
   }
 
   return (
