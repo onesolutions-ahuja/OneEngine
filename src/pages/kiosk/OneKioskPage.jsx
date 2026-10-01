@@ -153,6 +153,7 @@ export default function OneKioskPage({ publicMode = false }) {
   const [receiptEmail, setReceiptEmail] = useState("");
   const [receiptEmailBusy, setReceiptEmailBusy] = useState(false);
   const [receiptEmailSent, setReceiptEmailSent] = useState(false);
+  const [checkoutRequestId, setCheckoutRequestId] = useState("");
   const [journeyData, setJourneyData] = useState({});
   const [pendingAgeProduct, setPendingAgeProduct] = useState(null);
   const [ageApprovalBusy, setAgeApprovalBusy] = useState(false);
@@ -571,6 +572,7 @@ export default function OneKioskPage({ publicMode = false }) {
         setRedeemPoints(0);
         setReceiptEmail("");
         setReceiptEmailSent(false);
+        setCheckoutRequestId("");
         setJourneyData({});
         setPendingAgeProduct(null);
         setError("");
@@ -924,7 +926,8 @@ export default function OneKioskPage({ publicMode = false }) {
         throw new Error(exactPayment.error || "The assigned card machine is not available");
       }
 
-      const clientRequestId = crypto.randomUUID();
+      const clientRequestId = checkoutRequestId || crypto.randomUUID();
+      if (!checkoutRequestId) setCheckoutRequestId(clientRequestId);
       const saleResponse = await apiRequest("/api/sales", {
         method: "POST",
         body: JSON.stringify({
@@ -1117,6 +1120,7 @@ export default function OneKioskPage({ publicMode = false }) {
     setRedeemPoints(0);
     setReceiptEmail("");
     setReceiptEmailSent(false);
+    setCheckoutRequestId("");
     setJourneyData({});
     setPendingAgeProduct(null);
     if (publicMode) setAttractMode(true);
