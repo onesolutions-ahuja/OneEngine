@@ -491,6 +491,12 @@ export default function OneKioskPage({ publicMode = false }) {
     return value || "";
   };
 
+  const translateKey = (key, fallback = "") => {
+    if (language === "en") return translate(fallback);
+    const dictionary = experienceUi?.translations?.[language] || {};
+    return dictionary[key] || translate(fallback);
+  };
+
   const needsStoreAvailability = fulfilmentRequirements.includes("STORE") || fulfilmentType === "DELIVERY";
 
   useEffect(() => {
@@ -1148,17 +1154,17 @@ export default function OneKioskPage({ publicMode = false }) {
         <section className="one-kiosk-confirmation-card">
           <div className="one-kiosk-success-icon"><CheckCircle2 size={52} /></div>
           <span className="one-kiosk-eyebrow">{confirmationScreen.eyebrow || "Payment complete"}</span>
-          <h1>{confirmationScreen.title || "Order confirmed"}</h1>
-          <p>{confirmationScreen.subtitle || "Your order has been placed."}</p>
+          <h1>{translateKey(`screen.${confirmationScreen.key}.title`, confirmationScreen.title) || "Order confirmed"}</h1>
+          <p>{translateKey(`screen.${confirmationScreen.key}.subtitle`, confirmationScreen.subtitle) || "Your order has been placed."}</p>
           <div className="one-kiosk-collection-number">
-            <span>{confirmationScreen.collectionLabel || "Order reference"}</span>
+            <span>{translateKey("confirmation.collectionLabel", confirmationScreen.collectionLabel) || "Order reference"}</span>
             <strong>{confirmation.collectionNumber}</strong>
           </div>
           <div className="one-kiosk-confirmation-meta">
             <div><span>Total paid</span><strong>{money(confirmation.total, currency)}</strong></div>
             <div><span>Receipt</span><strong>{confirmation.receiptNumber || "Created"}</strong></div>
           </div>
-          <p className="one-kiosk-collection-help">{translate(confirmationScreen.helpText) || "Keep this reference for your order."}</p>
+          <p className="one-kiosk-collection-help">{translateKey("confirmation.helpText", confirmationScreen.helpText) || "Keep this reference for your order."}</p>
           {receiptQr?.qrcodeUrl ? (
             <div className="one-kiosk-receipt-qr">
               <img src={receiptQr.qrcodeUrl} alt="Receipt QR" />
@@ -1176,7 +1182,7 @@ export default function OneKioskPage({ publicMode = false }) {
           <div className="one-kiosk-confirmation-actions">
             {receiptMethods.includes("QR") ? <button type="button" onClick={generateReceiptQr}><QrCode size={18}/> Receipt QR</button> : null}
             {receiptMethods.includes("PRINT") ? <button type="button" onClick={printReceipt}>Print receipt</button> : null}
-            <button type="button" className="one-kiosk-pay" onClick={startNewOrder}>{translate(confirmationScreen.doneLabel) || "Start a new order"}</button>
+            <button type="button" className="one-kiosk-pay" onClick={startNewOrder}>{translateKey("confirmation.doneLabel", confirmationScreen.doneLabel) || "Start a new order"}</button>
           </div>
           {idleWarning ? <div className="one-kiosk-idle-warning">This screen will reset shortly.</div> : null}
         </section>
@@ -1190,8 +1196,8 @@ export default function OneKioskPage({ publicMode = false }) {
       <header className="one-kiosk-header">
         <div>
           <span className="one-kiosk-eyebrow">{experienceFlow?.name || "OneKiosk"}</span>
-          <h1>{translate(currentScreen?.title) || translate(catalogueScreen.title) || "OneKiosk"}</h1>
-          <p>{translate(currentScreen?.subtitle) || translate(catalogueScreen.subtitle) || "Select what you need and continue through the configured journey."}</p>
+          <h1>{translateKey(`screen.${currentScreen?.key}.title`, currentScreen?.title) || translateKey("screen.catalogue.title", catalogueScreen.title) || "OneKiosk"}</h1>
+          <p>{translateKey(`screen.${currentScreen?.key}.subtitle`, currentScreen?.subtitle) || translateKey("screen.catalogue.subtitle", catalogueScreen.subtitle) || "Select what you need and continue through the configured journey."}</p>
         </div>
         <div className="one-kiosk-header-actions">
           {featureFlags.language ? (
@@ -1294,10 +1300,10 @@ export default function OneKioskPage({ publicMode = false }) {
           {stageType === "FULFILMENT" ? (
             <div className="one-kiosk-stage one-kiosk-stage-narrow">
               <div className="one-kiosk-fulfilment">
-                <span>{translate(fulfilmentScreen.title) || "Choose fulfilment"}</span>
+                <span>{translateKey(`screen.${fulfilmentScreen.key}.title`, fulfilmentScreen.title) || "Choose fulfilment"}</span>
                 <div>{fulfilmentOptions.map((option) => (
                   <button type="button" key={option.key} className={fulfilmentType === option.key ? "is-active" : ""} onClick={() => setFulfilmentType(option.key)}>
-                    {translate(option.label) || option.key}
+                    {translateKey(`fulfilment.${option.key}`, option.label) || option.key}
                   </button>
                 ))}</div>
               </div>
@@ -1393,8 +1399,8 @@ export default function OneKioskPage({ publicMode = false }) {
           {stageType === "LOYALTY" ? (
             <div className="one-kiosk-stage one-kiosk-stage-narrow">
               <div className="one-kiosk-loyalty-card">
-                <h2>{translate(loyaltyScreen.title) || "Rewards"}</h2>
-                <p>{translate(loyaltyScreen.subtitle) || "Enter your phone number or email, or continue as a guest."}</p>
+                <h2>{translateKey(`screen.${loyaltyScreen.key}.title`, loyaltyScreen.title) || "Rewards"}</h2>
+                <p>{translateKey(`screen.${loyaltyScreen.key}.subtitle`, loyaltyScreen.subtitle) || "Enter your phone number or email, or continue as a guest."}</p>
                 {customer ? (
                   <div className="one-kiosk-customer-found">
                     <CheckCircle2 size={28}/>
@@ -1418,11 +1424,11 @@ export default function OneKioskPage({ publicMode = false }) {
           {stageType === "PAYMENT" ? (
             <div className="one-kiosk-stage one-kiosk-payment-stage">
               <CreditCard size={48}/>
-              <h2>{translate(paymentScreen.title) || "Pay by card"}</h2>
-              <p>{translate(paymentScreen.subtitle) || "Follow the instructions on the card machine."}</p>
+              <h2>{translateKey(`screen.${paymentScreen.key}.title`, paymentScreen.title) || "Pay by card"}</h2>
+              <p>{translateKey(`screen.${paymentScreen.key}.subtitle`, paymentScreen.subtitle) || "Follow the instructions on the card machine."}</p>
               <div className="one-kiosk-total"><span>Total to pay</span><strong>{money(total,currency)}</strong></div>
               <button type="button" className="one-kiosk-pay" disabled={!basket.length || paying || quoteLoading} onClick={payAndCollect}>
-                <CreditCard size={20}/>{paying ? "Processing…" : paidSale ? "Finish order" : (translate(paymentScreen.actionLabel) || "Pay now")}
+                <CreditCard size={20}/>{paying ? "Processing…" : paidSale ? "Finish order" : (translateKey(`screen.${paymentScreen.key}.actionLabel`, paymentScreen.actionLabel) || "Pay now")}
               </button>
               <button type="button" className="one-kiosk-secondary" disabled={paying || Boolean(paidSale)} onClick={() => goToScreen("BASKET")}>Back to order</button>
               <small className="one-kiosk-payment-note">{demoMode ? "Demo payment completes on-screen without charging a card." : `Using ${paymentRuntime?.name || "the assigned card machine"}.`}</small>
