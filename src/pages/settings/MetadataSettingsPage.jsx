@@ -129,7 +129,7 @@ function MetadataField({ field, value, disabled, onChange, lookupOptions = [] })
   return <input type="text" value={value ?? ''} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
 }
 
-function GenericObjectSettings({ object, superadmin }) {
+function GenericObjectSettings({ object }) {
   const key = objectKey(object)
   const [fields, setFields] = useState([])
   const [rows, setRows] = useState([])
@@ -197,9 +197,9 @@ function GenericObjectSettings({ object, superadmin }) {
   const allowCreate = object?.config?.settingsAllowCreate !== false && object?.config?.settings_allow_create !== false
   const allowEdit = object?.config?.settingsAllowEdit !== false && object?.config?.settings_allow_edit !== false
   const allowDelete = object?.config?.settingsAllowDelete !== false && object?.config?.settings_allow_delete !== false
-  const canCreate = allowCreate && (superadmin || permissions?.can_create === true)
-  const canEdit = allowEdit && (superadmin || permissions?.can_edit === true)
-  const canDelete = allowDelete && (superadmin || permissions?.can_delete === true)
+  const canCreate = allowCreate && permissions?.can_create === true
+  const canEdit = allowEdit && permissions?.can_edit === true
+  const canDelete = allowDelete && permissions?.can_delete === true
 
   const startEdit = () => {
     if (!selected || !canEdit) return
@@ -321,9 +321,9 @@ function GenericObjectSettings({ object, superadmin }) {
   )
 }
 
-function SystemSettingsSection({ object, fields, record, permissions, superadmin, section, onSaved }) {
+function SystemSettingsSection({ object, fields, record, permissions, section, onSaved }) {
   const visible = fields.filter((field) => field.active !== false && field.readable !== false && fieldSection(field) === section && !['id', 'company_id', 'updated_at'].includes(field.api_name))
-  const canEdit = superadmin || permissions?.can_edit === true
+  const canEdit = permissions?.can_edit === true
   const [saving, setSaving] = useState('')
   const [error, setError] = useState('')
 
@@ -375,7 +375,6 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   const [error, setError] = useState('')
 
   const sectionedObjects = objects.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
-  const superadmin = user?.isSuperadmin === true || user?.is_superadmin === true
 
   const loadSectionedRows = async (object) => {
     if (!object?.id) return
@@ -458,7 +457,6 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   }, [objects, sectionedData, sectionedObjects])
 
   const permittedEntries = entries.filter((entry) => {
-    if (superadmin) return true
     const permission = objectPermissions[entry.object?.id]
     return permission?.can_view === true
   })
@@ -480,7 +478,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   }, [visibleEntries])
 
   const profileName = user?.name || user?.full_name || user?.username || 'User'
-  const profileRole = superadmin ? 'Superadmin' : (user?.role || 'User')
+  const profileRole = user?.role || 'User'
   const initial = profileName.trim().charAt(0).toUpperCase() || 'U'
 
   return (
@@ -516,12 +514,11 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
               fields={sectionedData[current.object.id]?.fields || []}
               record={sectionedData[current.object.id]?.rows?.[0] || null}
               permissions={objectPermissions[current.object.id]}
-              superadmin={superadmin}
               section={current.section}
               onSaved={() => loadSectionedRows(current.object)}
             />
           ) : (
-            <GenericObjectSettings object={current.object} superadmin={superadmin} />
+            <GenericObjectSettings object={current.object} />
           )}
         </div>
       </div>
