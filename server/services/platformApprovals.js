@@ -122,7 +122,8 @@ export async function submitPlatformApproval({ db, object, fields, recordId, rec
       [process.id, object.id, recordId, req.user.companyId, steps.rows[0].step_order, req.user.id || null, cfg(process.config).lockRecord !== false, JSON.stringify(definitionSnapshot), Number(process.version||1)]
     );
     const request = result.rows[0];
-    await createWorkItems({ db, request, step: steps.rows[0] });
+    const workItems=await createWorkItems({ db, request, step: steps.rows[0] });
+    if(!workItems.length || workItems.every(item=>!item.assigned_to && !item.role_id)) { await db("UPDATE platform_approval_requests SET status=$1,locked=false,resolved_at=NOW() WHERE id=$2",["error",request.id]); await db("INSERT INTO platform_approval_events(request_id,company_id,event_type,actor_user_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)",[request.id,request.company_id,"assignment_failed",req.user.id||null,JSON.stringify({step:steps.rows[0].step_order,message:"No eligible approver could be resolved"})]); const error=new Error("No eligible approver could be resolved for the first approval step"); error.code="APPROVAL_ASSIGNEE_REQUIRED"; throw error; }
     await db(
       "INSERT INTO platform_approval_events(request_id,company_id,event_type,actor_user_id,metadata) VALUES($1,$2,'submitted',$3,$4::jsonb)",
       [request.id, request.company_id, req.user.id || null, JSON.stringify({ step: steps.rows[0].step_order })]
@@ -188,7 +189,8 @@ export async function decidePlatformApproval({ db, requestId, decision, comment,
   const next = snapshotNext ? {rows:[snapshotNext]} : await db("SELECT * FROM platform_approval_steps WHERE process_id=$1 AND step_order>$2 ORDER BY step_order LIMIT 1", [current.process_id, current.step_order]);
   if (next.rows.length) {
     const result = await db("UPDATE platform_approval_requests SET current_step=$1 WHERE id=$2 RETURNING *", [next.rows[0].step_order, requestId]);
-    await createWorkItems({ db, request: result.rows[0], step: next.rows[0] });
+    const nextItems=await createWorkItems({ db, request: result.rows[0], step: next.rows[0] });
+    if(!nextItems.length || nextItems.every(item=>!item.assigned_to && !item.role_id)) { await db("UPDATE platform_approval_requests SET status=$1,locked=false,resolved_at=NOW() WHERE id=$2",["error",requestId]); await db("INSERT INTO platform_approval_events(request_id,company_id,event_type,actor_user_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)",[requestId,current.company_id,"assignment_failed",req.user.id||null,JSON.stringify({step:next.rows[0].step_order,message:"No eligible approver could be resolved"})]); return {status:422,message:"The next approval step has no eligible approver"}; }
     await db("INSERT INTO platform_approval_events(request_id,company_id,event_type,actor_user_id,metadata) VALUES($1,$2,'step_approved',$3,$4::jsonb)", [requestId,current.company_id,req.user.id||null,JSON.stringify({fromStep:current.step_order,toStep:next.rows[0].step_order})]);
     return { status: 200, data: result.rows[0] };
   }
