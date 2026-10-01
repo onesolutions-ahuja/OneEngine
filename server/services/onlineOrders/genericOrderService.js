@@ -408,7 +408,7 @@ export async function getGenericOrder(db, companyId, orderId) {
     FROM online_orders o
     WHERE o.id = $1
       AND o.company_id = $2
-      AND o.platform = 'direct'
+      AND o.platform IN ('direct','one_kiosk')
     `,
     [orderId, companyId]
   );
