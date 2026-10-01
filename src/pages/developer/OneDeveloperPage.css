@@ -40,23 +40,24 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .oneengine-client-list button {
   width: 100%;
-  min-height: 48px;
-  padding: 7px 8px;
+  min-height: 36px;
+  padding: 4px 7px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 7px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
   color: #20242a;
   text-align: left;
   cursor: pointer;
+  transition: background .12s ease, color .12s ease;
 }
 
 .oneengine-client-list button:hover { background: rgba(0,0,0,.045); }
@@ -66,7 +67,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .oneengine-client-list strong,
@@ -76,8 +77,22 @@
   white-space: nowrap;
 }
 
-.oneengine-client-list strong { font-size: 10.5px; }
-.oneengine-client-list small { font-size: 8.5px; opacity: .62; }
+.oneengine-client-list strong {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 650;
+}
+.oneengine-client-list small {
+  font-size: 8.5px;
+  line-height: 10px;
+  opacity: .58;
+}
+.oneengine-client-list button > svg {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  opacity: .7;
+}
 
 .onedeveloper-page > .settings-sidebar,
 .onedeveloper-page > .settings-content {
