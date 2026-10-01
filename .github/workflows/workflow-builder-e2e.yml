@@ -1,0 +1,71 @@
+name: Workflow Builder E2E Gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/workflow-builder-e2e.yml"
+      - "tests/e2e/workflow-builder-regression.spec.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-builder-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ONEPOS_E2E_USERNAME: ${{ secrets.ONEPOS_E2E_USERNAME }}
+      ONEPOS_E2E_PASSWORD: ${{ secrets.ONEPOS_E2E_PASSWORD }}
+      PLAYWRIGHT_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
+      ONEPOS_API_URL: https://onepos.onrender.com
+      ONEPOS_E2E_ORIGIN: https://onesolutions-ahuja.github.io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Wait for deployed frontend and API
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..60}; do
+            if curl -fsS "$PLAYWRIGHT_BASE_URL" >/dev/null && curl -fsS "$ONEPOS_API_URL/api/health" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Frontend/API did not become ready" >&2
+          exit 1
+      - name: Verify E2E credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ONEPOS_E2E_USERNAME"
+          test -n "$ONEPOS_E2E_PASSWORD"
+          STATUS=$(curl -sS -o /tmp/e2e-login.json -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -H "Origin: $ONEPOS_E2E_ORIGIN" \
+            --data-binary "$(node -e 'process.stdout.write(JSON.stringify({username: process.env.ONEPOS_E2E_USERNAME, password: process.env.ONEPOS_E2E_PASSWORD}))')" \
+            "$ONEPOS_API_URL/api/auth/login")
+          if [ "$STATUS" != "200" ]; then
+            echo "E2E credential verification failed with HTTP $STATUS" >&2
+            node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/e2e-login.json","utf8")||"{}"); console.error(x.message||"Login failed")'
+            exit 1
+          fi
+      - name: Run Workflow Builder regression
+        run: npx playwright test tests/e2e/workflow-builder-regression.spec.mjs --project=chromium
+      - name: Upload Playwright report and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-builder-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
