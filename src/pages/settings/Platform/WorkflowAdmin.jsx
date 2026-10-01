@@ -1430,11 +1430,19 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           systemKey: rule.action.systemKey || null,
           capabilityType: rule.action.capabilityType || null,
           capabilityKey: rule.action.capabilityKey || null,
-          steps: (rule.action.actions || []).map((action) => ({
-            ...makeStep(action.type || action.key),
-            type: action.type || action.key,
-            config: { ...makeStep(action.type || action.key).config, ...action },
-          })),
+          match: rule.action.match || "all",
+          lifecycleStatus: rule.lifecycle_status || (rule.active === false ? "INACTIVE" : "ACTIVE"),
+          version: Number(rule.version || 1),
+          steps: (rule.action.actions || []).map((action) => {
+            const base = makeStep(action.type || action.key);
+            return {
+              ...base,
+              id: action.id || base.id,
+              label: action.label || getActionLabel(action.type || action.key),
+              type: action.type || action.key,
+              config: { ...base.config, ...action },
+            };
+          }),
         }));
         setSavedWorkflows(workflows);
       })
@@ -1661,13 +1669,14 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               </div>
               <div className="flex gap-3">
                 <button type="button" className="text-sm text-blue-700" onClick={() => { setWorkflowId(item.id || null); setWorkflow(item); setShowBuilder(true); }}>Edit</button>
-                {item.id ? <button type="button" className="text-sm text-slate-600" onClick={() => {
-                  const nextActive = item.active === false;
+                {item.id && item.active !== false ? <button type="button" className="text-sm text-slate-600" onClick={() => {
                   apiRequest(`/api/platform/rules/${item.id}`, { method: "PUT", body: JSON.stringify({
                     name: item.name,
                     triggerKey: item.trigger,
                     conditions: item.conditions || [],
-                    active: nextActive,
+                    active: false,
+                    lifecycleStatus: "INACTIVE",
+                    version: Number(item.version || 1),
                     action: {
                       type: "workflow",
                       ...(scopeKey ? { scope: scopeKey } : {}),
@@ -1679,10 +1688,16 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                         scope: item.scope || "system",
                       } : {}),
                       match: item.match || "all",
-                      actions: (item.steps || []).filter((step) => step.enabled !== false).map((step) => ({ type: step.type, ...(step.config || {}), fieldValues: step.config?.fieldValues || step.config?.fieldMappings }))
+                      actions: (item.steps || []).filter((step) => step.enabled !== false).map((step) => ({
+                        id: step.id,
+                        label: step.label || getActionLabel(step.type),
+                        type: step.type,
+                        ...(step.config || {}),
+                        fieldValues: step.config?.fieldValues || step.config?.fieldMappings,
+                      }))
                     },
-                  }) }).then(() => setSavedWorkflows((current) => current.map((entry) => entry.id === item.id ? { ...entry, active: nextActive } : entry))).catch((error) => onError?.(error.message));
-                }}>{item.active === false ? "Activate" : "Deactivate"}</button> : null}
+                  }) }).then(() => setSavedWorkflows((current) => current.map((entry) => entry.id === item.id ? { ...entry, active: false, lifecycleStatus: "INACTIVE" } : entry))).catch((error) => onError?.(error.message));
+                }}>Deactivate</button> : item.id ? <button type="button" className="text-sm text-blue-700" onClick={() => { setWorkflowId(item.id || null); setWorkflow(item); setShowBuilder(true); }}>Open to activate</button> : null}
               </div>
             </div>
           ))}
