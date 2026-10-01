@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, Pencil, RefreshCw } from 'lucide-react'
-import { apiRequest } from '../../services/api'
+import { apiRequest, getActiveStoreId } from '../../services/api'
 
 const DATE_RANGES = [
   ['all_time', 'All time'],
@@ -156,19 +156,25 @@ export default function DashboardPage({ onOpenBuilder }) {
         value = fallback.data
       }
       setDefinition(value)
-      if (dashboardId && !range) {
-        const run = await apiRequest(`/api/dashboards/${dashboardId}/run`, { method: 'POST' })
-        setResults(run?.success ? run.data?.components || [] : [])
-      } else {
-        const filters = range
-          ? [...(value.filters || []).filter((filter) => filter?.field !== 'date'), { field: 'date', operator: range }]
-          : (value.filters || [])
-        const run = await apiRequest('/api/dashboards/run', {
-          method: 'POST',
-          body: JSON.stringify({ ...value, filters }),
-        })
-        setResults(run?.success ? run.data?.components || [] : [])
-      }
+
+      // The active store selected by the shell is the authoritative runtime
+      // store context. Dashboard reports previously relied only on the storeId
+      // embedded in the login JWT, so a user mapped through user_stores (or a
+      // multi-store user who switched stores) reached the dashboard with no
+      // store and every component failed. Inject the active store through the
+      // normal dashboard filter pipeline; the backend still validates access
+      // with canAccessStore before executing any report.
+      const activeStoreId = getActiveStoreId()
+      const filters = [
+        ...(value.filters || []).filter((filter) => filter?.field !== 'date' && filter?.field !== 'store'),
+        ...(range ? [{ field: 'date', operator: range }] : (value.filters || []).filter((filter) => filter?.field === 'date')),
+        ...(activeStoreId ? [{ field: 'store', operator: 'in', value: [activeStoreId] }] : []),
+      ]
+      const run = await apiRequest('/api/dashboards/run', {
+        method: 'POST',
+        body: JSON.stringify({ ...value, filters }),
+      })
+      setResults(run?.success ? run.data?.components || [] : [])
     } catch (err) {
       setError(err?.message || 'Unable to load dashboard')
     } finally {
@@ -177,6 +183,11 @@ export default function DashboardPage({ onOpenBuilder }) {
   }, [])
 
   useEffect(() => { void loadDashboard(activeId, dateRange) }, [activeId])
+  useEffect(() => {
+    const handleStoreChange = () => { void loadDashboard(activeId, dateRange) }
+    window.addEventListener('onepos:store-context-changed', handleStoreChange)
+    return () => window.removeEventListener('onepos:store-context-changed', handleStoreChange)
+  }, [activeId, dateRange, loadDashboard])
 
   const ordered = useMemo(() => {
     const rank = { kpi: 0, modern_kpi_card: 0, text: 1, pie: 2, donut: 2, chart: 2, bar: 2, table: 3 }
