@@ -75,6 +75,20 @@ export default function useOnlineOrderMetadata() {
     loading,
     error,
     actionsFor(order, { prepOnly = false } = {}) {
+      if (order?.platform === "one_kiosk") {
+        if (order.status === "PREPARING") {
+          return [
+            { button_key: "one_kiosk_ready", label: "Mark Ready", variant: "secondary", config: { uiAction: "ready" } },
+            { button_key: "one_kiosk_cancel", label: "Cancel", variant: "danger", config: { uiAction: "cancel" } },
+          ];
+        }
+        if (order.status === "READY" || order.status === "READY_FOR_PICKUP") {
+          return [
+            { button_key: "one_kiosk_collect", label: "Collected", variant: "primary", config: { uiAction: "complete" } },
+          ];
+        }
+        return [];
+      }
       return buttons.filter((button) => {
         if (!matchesRule(button.visibility_rule || button.visibilityRule, order)) return false;
         const action = actionKeyForButton(button);
