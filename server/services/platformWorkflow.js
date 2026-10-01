@@ -4335,6 +4335,7 @@ export function workflowResultsContainStatus(entries = [], status = "waiting") {
     if (String(entry?.result?.status || "").toLowerCase() === String(status).toLowerCase()) return true;
     if (workflowResultsContainStatus(entry?.result?.branch?.results || [], status)) return true;
     if (workflowResultsContainStatus(entry?.result?.faultBranch?.results || [], status)) return true;
+    if (workflowResultsContainStatus(entry?.result?.scheduledBranch?.results || [], status)) return true;
     const iterations = Array.isArray(entry?.result?.iterations) ? entry.result.iterations : [];
     return iterations.some((iteration) => workflowResultsContainStatus(iteration?.results || [], status));
   });
@@ -4496,6 +4497,29 @@ export async function executeWorkflowActions({ actions, ...context }) {
       }
 
       let branchPaused = false;
+      if (context.debugMode === true && resolveWorkflowActionType(item) === "SCHEDULE_PATH") {
+        const scheduledIds = Array.isArray(item.branch) ? item.branch : [];
+        const scheduledActions = scheduledIds
+          .map((id) => actionById.get(String(id)))
+          .filter(Boolean)
+          .sort((a, b) => allActions.indexOf(a) - allActions.indexOf(b));
+        const scheduledResults = scheduledActions.length
+          ? await executeWorkflowActions({
+              actions: scheduledActions,
+              ...context,
+              workflowVariables,
+              allActions,
+              branchExecution: true,
+              executionScope: `${context.executionScope ? context.executionScope + ":" : ""}${item.id || globalIndex}:scheduled-debug`,
+            })
+          : [];
+        result.scheduledBranch = {
+          simulated: true,
+          stepIds: scheduledIds,
+          results: scheduledResults,
+        };
+        if (workflowResultsContainStatus(scheduledResults, "stopped")) result.status = "stopped";
+      }
       if (resolveWorkflowActionType(item) === "LOOP") {
         const bodyIds = Array.isArray(item.bodyBranch) ? item.bodyBranch : [];
         const bodyActions = bodyIds
