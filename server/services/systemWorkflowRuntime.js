@@ -14,6 +14,41 @@ function safeSource(req, source = null) {
   };
 }
 
+async function resolveSystemWorkflowActor({ db, companyId, userId = null, req = null }) {
+  const requestedId = userId || req?.user?.id || null;
+  if (requestedId) {
+    const preferred = await db(
+      `SELECT u.id,u.role_id,u.store_id,u.till_id
+         FROM users u
+         JOIN roles r ON r.id=u.role_id
+        WHERE u.id=$1 AND u.company_id=$2 AND u.active=true
+          AND u.role_id IS NOT NULL
+          AND (r.company_id=$2 OR r.company_id IS NULL)
+        LIMIT 1`,
+      [requestedId, companyId]
+    );
+    if (preferred.rows[0]) return preferred.rows[0];
+  }
+  const fallback = await db(
+    `SELECT u.id,u.role_id,u.store_id,u.till_id
+       FROM users u
+       JOIN roles r ON r.id=u.role_id
+      WHERE u.company_id=$1 AND u.active=true
+        AND r.api_key='platform_superadmin'
+        AND (r.company_id=$1 OR r.company_id IS NULL)
+      ORDER BY u.created_at,u.id
+      LIMIT 1`,
+    [companyId]
+  );
+  if (!fallback.rows[0]) {
+    const error = new Error("System workflow has no active RBAC execution user");
+    error.code = "WORKFLOW_RBAC_ACTOR_REQUIRED";
+    error.status = 409;
+    throw error;
+  }
+  return fallback.rows[0];
+}
+
 function runtimeAction(action, capabilityType, runtimeInput = {}) {
   if (!action || typeof action !== "object") return action;
   if (capabilityType === "function" && action.type === "CALL_FUNCTION") {
@@ -47,6 +82,18 @@ export async function executeSystemWorkflow({
   if (!systemKey) throw new Error("System workflow key is required");
 
   await ensureSystemWorkflowCatalog({ db, companyId, userId });
+  const actor = await resolveSystemWorkflowActor({ db, companyId, userId, req });
+  const runtimeReq = {
+    ...(req || {}),
+    user: {
+      ...(req?.user || {}),
+      id: actor.id,
+      roleId: actor.role_id,
+      companyId,
+      storeId: storeId || actor.store_id || req?.user?.storeId || null,
+      tillId: tillId || actor.till_id || req?.user?.tillId || null,
+    },
+  };
 
   const workflowResult = await db(
     `SELECT * FROM platform_rules
@@ -98,9 +145,9 @@ export async function executeSystemWorkflow({
       systemKey,
       capabilityType,
       capabilityKey,
-      actorUserId: userId || req?.user?.id || null,
-      storeId: storeId || req?.user?.storeId || null,
-      tillId: tillId || req?.user?.tillId || null,
+      actorUserId: actor.id,
+      storeId: runtimeReq.user.storeId || null,
+      tillId: runtimeReq.user.tillId || null,
       correlationId,
       source: sourceInfo,
     },
@@ -110,16 +157,16 @@ export async function executeSystemWorkflow({
     const results = await executeWorkflowActions({
       actions,
       db,
-      req,
+      req: runtimeReq,
       companyId,
       object,
       record,
       recordId: recordId || record?.id || null,
-      storeId: storeId || req?.user?.storeId || null,
-      tillId: tillId || req?.user?.tillId || null,
+      storeId: runtimeReq.user.storeId || null,
+      tillId: runtimeReq.user.tillId || null,
       connectorDrivers,
       writeAudit,
-      actorUserId: userId || req?.user?.id || null,
+      actorUserId: actor.id,
       runId: run?.id || null,
       workflowVersion: Number(workflow.active_version || workflow.version || 1),
       trigger: workflow.trigger_key || "system",
