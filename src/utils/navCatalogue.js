@@ -30,7 +30,7 @@ const NAV_CATALOGUE = [
   ["Replenishment", Grid3X3, (s)=>has(s,"inventory.replenishment.view")||has(s,"inventory.view")||has(s,"reports.low_stock.view")],
   ["Customers", Users, (s)=>has(s,"customer.view")||has(s,"customer.create")||has(s,"customer.edit")],
   ["Gift Cards", CreditCard],
-  ["Employees", Users],
+  ["Employees", Users, (s)=>has(s,"user.view")||has(s,"attendance.view")||has(s,"attendance.use")],
   ["Stores", Store, (s)=>has(s,"store.view")||has(s,"store.edit")||has(s,"store.create")],
   ["Reports", BarChart3, (s)=>s.permissions.some((code)=>code.startsWith("reports."))],
   ["My Reports", BarChart3, (s)=>has(s,"reports.custom.view")],
