@@ -20,6 +20,7 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const [apiKeys,setApiKeys]=useState({})
   const [savingProvider,setSavingProvider]=useState('')
   const [testingProvider,setTestingProvider]=useState('')
+  const [changingDefault,setChangingDefault]=useState(false)
   const [preset,setPreset]=useState(null)
 
   const loadSettings=async()=>{
@@ -48,13 +49,13 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
       setLoading(true);setError('');setNotice('');setResult(null);setSearchResults([])
       if(lookupMode==='barcode'){
         if(!barcode.trim())return
-        const r=await apiRequest('/api/global-products/lookup',{method:'POST',body:JSON.stringify({barcode:barcode.trim()})})
+        const r=await apiRequest('/api/global-products/lookup',{method:'POST',body:JSON.stringify({barcode:barcode.trim(),providerKey:activeProvider?.providerKey||null})})
         if(!r?.success)throw new Error(r?.message||'Product lookup failed')
         setResult(r.data)
       }else{
         const q=searchText.trim()
         if(q.length<2)return
-        const r=await apiRequest(`/api/global-products/search?q=${encodeURIComponent(q)}&pageSize=24`)
+        const r=await apiRequest(`/api/global-products/search?q=${encodeURIComponent(q)}&pageSize=24&providerKey=${encodeURIComponent(activeProvider?.providerKey||'')}`)
         if(!r?.success)throw new Error(r?.message||'Product search failed')
         setResult(r.data)
         setSearchResults(Array.isArray(r.data?.products)?r.data.products:[])
@@ -77,7 +78,7 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
           cacheTtlSeconds:provider.cacheTtlSeconds,
           ...(provider.configurableFields?.includes('baseUrl')?{baseUrl:provider.baseUrl}:{}),
           ...(provider.configurableFields?.includes('userAgent')?{userAgent:provider.userAgent}:{}),
-          ...(provider.requiresApiKey&&apiKeys[provider.providerKey]?{apiKey:apiKeys[provider.providerKey]}:{}),
+          ...(provider.acceptsApiKey&&apiKeys[provider.providerKey]?{apiKey:apiKeys[provider.providerKey]}:{}),
         })
       })
       if(!r?.success)throw new Error(r?.message||'Unable to save provider settings')
@@ -87,6 +88,21 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
     }catch(err){setError(err?.message||'Unable to save provider settings')}
     finally{setSavingProvider('')}
   }
+  const makeDefaultProvider=async(providerKey)=>{
+    try{
+      setChangingDefault(true);setError('');setNotice('')
+      const r=await apiRequest('/api/global-products/default-provider',{
+        method:'PATCH',
+        body:JSON.stringify({providerKey})
+      })
+      if(!r?.success)throw new Error(r?.message||'Unable to change default provider')
+      setProviders(list=>list.map(p=>({...p,isDefault:p.providerKey===providerKey})))
+      const selected=providers.find(p=>p.providerKey===providerKey)
+      setNotice(`${selected?.displayName||'Provider'} is now the default lookup provider.`)
+    }catch(err){setError(err?.message||'Unable to change default provider')}
+    finally{setChangingDefault(false)}
+  }
+
   const testProvider=async(provider)=>{
     try{
       setTestingProvider(provider.providerKey);setError('');setNotice('')
@@ -112,7 +128,10 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   }
 
   const availableProviders=providers.filter(p=>p.installed&&p.licensed&&p.enabled)
-  const providerMissing=!settingsLoading&&availableProviders.length===0
+  const usableProviders=availableProviders.filter(p=>!p.requiresApiKey||p.configured)
+  const activeProvider=usableProviders.find(p=>p.isDefault)||usableProviders[0]||null
+  const providerMissing=!settingsLoading&&usableProviders.length===0
+  const selectedProviderCannotSearch=lookupMode==='name'&&activeProvider&&activeProvider.supportsSearch===false
 
   return <section className="module-page global-product-page">
     <header className="module-page-header">
@@ -129,14 +148,20 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
         {lookupMode==='barcode'
           ?<label className="module-input-label"><span>Barcode</span><input inputMode="numeric" autoComplete="off" value={barcode} maxLength={20} onChange={e=>setBarcode(e.target.value)} placeholder="Scan or enter EAN, UPC or GTIN"/></label>
           :<label className="module-input-label"><span>Product search</span><input autoComplete="off" value={searchText} maxLength={120} onChange={e=>setSearchText(e.target.value)} placeholder="e.g. Nutella, Haribo, Coca-Cola"/></label>}
-        <button className="module-primary-button" type="submit" disabled={loading||settingsLoading||providerMissing||(lookupMode==='barcode'?!barcode.trim():searchText.trim().length<2)}>{loading?<LoaderCircle size={14}/>:settingsLoading?<LoaderCircle size={14}/>:<Search size={14}/>} {loading?'Searching…':settingsLoading?'Loading providers…':'Search worldwide'}</button>
+        <button className="module-primary-button" type="submit" disabled={loading||settingsLoading||providerMissing||selectedProviderCannotSearch||(lookupMode==='barcode'?!barcode.trim():searchText.trim().length<2)}>{loading?<LoaderCircle size={14}/>:settingsLoading?<LoaderCircle size={14}/>:<Search size={14}/>} {loading?'Searching…':settingsLoading?'Loading providers…':'Search worldwide'}</button>
       </form>
-      <div className="module-state" style={{paddingTop:8,paddingBottom:8}}>Worldwide scope — no UK or Europe-only restriction. Open Food Facts does not require an API key for read/search access.</div>
+      <div className="module-state" style={{paddingTop:8,paddingBottom:8}}>
+        {activeProvider?<>Using <strong>{activeProvider.displayName}</strong> as the default provider. Only this provider is called for each lookup, so API usage stays under the user's control.</>:<>Worldwide scope — install a lookup provider to begin.</>}
+      </div>
+      {selectedProviderCannotSearch?<div className="module-inline-error">The selected provider supports barcode lookup only. Choose a provider with product-name search support or switch back to barcode mode.</div>:null}
 
       {providerMissing?<div className="module-state global-provider-missing">No Global Product Lookup provider is installed and enabled.{onOpenStore?<button type="button" onClick={onOpenStore}>Browse oneStore</button>:null}</div>:null}
 
       {result?.status==='not_found'?<div className="module-state">No provider found a Product for this barcode.</div>:null}
-      {result?.status==='unavailable'?<div className="module-inline-error">Product Lookup providers are temporarily unavailable.</div>:null}
+      {result?.status==='unavailable'?<div className="module-inline-error">
+        <strong>{activeProvider?.displayName||'Product provider'} could not complete the request.</strong>
+        {Array.isArray(result?.providerErrors)&&result.providerErrors.length?<ul>{result.providerErrors.map((item,index)=><li key={`${item.provider}-${index}`}>{item.message||item.code||'Provider request failed'}</li>)}</ul>:null}
+      </div>:null}
       {lookupMode==='name'&&result?.status==='not_found'?<div className="module-state">No matching products were found in the worldwide database.</div>:null}
       {lookupMode==='name'&&searchResults.length?<div className="global-product-search-results">{searchResults.map(product=><div className="global-product-result" key={`${product.sourceProvider}:${product.barcode}`}>
         {product.imageUrl?<img src={product.imageUrl} alt="" />:null}
@@ -151,9 +176,18 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
     </section>
 
     <section className="module-panel global-provider-panel">
-      <header className="module-card-header"><strong>Provider settings</strong><span>{providers.length} providers</span></header>
+      <header className="module-card-header">
+        <div><strong>Provider settings</strong><span>{providers.length} providers</span></div>
+        <label className="module-input-label" style={{minWidth:260}}>
+          <span>Default provider</span>
+          <select value={activeProvider?.providerKey||''} disabled={changingDefault||!usableProviders.length} onChange={e=>makeDefaultProvider(e.target.value)}>
+            {!usableProviders.length?<option value="">No configured provider</option>:null}
+            {usableProviders.map(provider=><option key={provider.providerKey} value={provider.providerKey}>{provider.displayName}</option>)}
+          </select>
+        </label>
+      </header>
       {settingsLoading?<div className="module-state">Loading provider settings…</div>:<div className="global-provider-list">{providers.map(provider=><article key={provider.providerKey}>
-        <div className="global-provider-heading"><div><strong>{provider.displayName}</strong><span>{provider.installed&&provider.licensed?'Installed':'Not installed'}{provider.requiresApiKey?` · ${provider.configured?'Key configured':'Not configured'}`:''}</span></div><div>
+        <div className="global-provider-heading"><div><strong>{provider.displayName}</strong><span>{provider.installed&&provider.licensed?'Installed':'Not installed'}{provider.isDefault?' · Default':''}{provider.requiresApiKey?` · ${provider.configured?'Key configured':'Not configured'}`:provider.acceptsApiKey&&provider.usingCustomerKey?' · Customer key configured':''}</span></div><div>
           <button type="button" disabled={!provider.installed||!provider.licensed||testingProvider===provider.providerKey} onClick={()=>testProvider(provider)}>{testingProvider===provider.providerKey?<LoaderCircle size={13}/>:<Wifi size={13}/>} Test</button>
           <button type="button" disabled={!provider.installed||!provider.licensed||savingProvider===provider.providerKey} onClick={()=>saveProvider(provider)}>{savingProvider===provider.providerKey?<LoaderCircle size={13}/>:<Check size={13}/>} Save</button>
         </div></div>
@@ -166,7 +200,7 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
         </div>
         {provider.configurableFields?.includes('baseUrl')?<label className="module-input-label"><span>API base URL</span><input value={provider.baseUrl||''} onChange={e=>setProviderField(provider.providerKey,'baseUrl',e.target.value)}/></label>:null}
         {provider.configurableFields?.includes('userAgent')?<label className="module-input-label"><span>User-Agent identification</span><input value={provider.userAgent||''} onChange={e=>setProviderField(provider.providerKey,'userAgent',e.target.value)}/></label>:null}
-        {provider.requiresApiKey?<label className="module-input-label global-provider-key"><span>{provider.displayName} API key</span><div><KeyRound size={13}/><input type="password" autoComplete="new-password" value={apiKeys[provider.providerKey]||''} onChange={e=>setApiKeys(keys=>({...keys,[provider.providerKey]:e.target.value}))} placeholder={provider.configured?'Enter a new key to replace saved key':'Enter your customer API key'}/></div></label>:null}
+        {provider.acceptsApiKey?<label className="module-input-label global-provider-key"><span>{provider.displayName} API key{provider.requiresApiKey?'':' (optional)'}</span><div><KeyRound size={13}/><input type="password" autoComplete="new-password" value={apiKeys[provider.providerKey]||''} onChange={e=>setApiKeys(keys=>({...keys,[provider.providerKey]:e.target.value}))} placeholder={provider.usingCustomerKey||provider.configured?'Enter a new key to replace saved key':provider.requiresApiKey?'Enter your customer API key':'Leave blank to use the provider free mode'}/></div></label>:null}
       </article>)}</div>}
     </section>
 
