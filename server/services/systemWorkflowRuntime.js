@@ -88,6 +88,7 @@ export async function executeSystemWorkflow({
     companyId,
     workflowId: workflow.id,
     workflowName: workflow.name,
+    workflowVersion: Number(workflow.active_version || workflow.version || 1),
     objectId: object?.id || workflow.object_id || null,
     recordId: recordId || record?.id || null,
     triggerKey: workflow.trigger_key || "system",
@@ -120,6 +121,7 @@ export async function executeSystemWorkflow({
       writeAudit,
       actorUserId: userId || req?.user?.id || null,
       runId: run?.id || null,
+      workflowVersion: Number(workflow.active_version || workflow.version || 1),
       trigger: workflow.trigger_key || "system",
       ...extraContext,
     });
