@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Minus, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
+import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
 import "./oneKiosk.css";
 
@@ -21,6 +21,9 @@ export default function OneKioskPage() {
   const [category, setCategory] = useState("All");
   const [basket, setBasket] = useState([]);
   const [fulfilmentType, setFulfilmentType] = useState("COLLECT");
+  const [paying, setPaying] = useState(false);
+  const [confirmation, setConfirmation] = useState(null);
+  const [paidSale, setPaidSale] = useState(null);
 
   useEffect(() => {
     let live = true;
@@ -84,8 +87,105 @@ export default function OneKioskPage() {
       .filter((line) => line.quantity > 0));
   };
 
+  const createFulfilmentFromPaidSale = async (sale) => {
+    const fulfilment = await apiRequest("/api/kiosk/orders/from-sale", {
+      method: "POST",
+      body: JSON.stringify({ saleId: sale.id, fulfilmentType }),
+    });
+    if (!fulfilment?.success) {
+      throw new Error(fulfilment?.message || "Payment succeeded, but the collection order could not be created");
+    }
+    setConfirmation({
+      ...(fulfilment.data || {}),
+      total: sale.total,
+    });
+    setPaidSale(null);
+    setBasket([]);
+    setSearch("");
+    setCategory("All");
+  };
+
+  const payAndCollect = async () => {
+    if (!basket.length || paying) return;
+    setPaying(true);
+    setError("");
+    try {
+      if (paidSale?.id) {
+        await createFulfilmentFromPaidSale(paidSale);
+        return;
+      }
+
+      const capability = await apiRequest("/api/connector-capabilities/payment.sale");
+      if (capability?.data?.available !== true) {
+        throw new Error(capability?.message || "No healthy card payment connector is assigned to this kiosk");
+      }
+
+      const clientRequestId = crypto.randomUUID();
+      const saleResponse = await apiRequest("/api/sales", {
+        method: "POST",
+        body: JSON.stringify({
+          clientRequestId,
+          items: basket.map((line) => ({
+            productId: line.id,
+            quantity: Number(line.quantity) || 1,
+            unitPrice: Number(line.price) || 0,
+            discount: 0,
+            tax: 0,
+            total: (Number(line.price) || 0) * (Number(line.quantity) || 1),
+          })),
+          subtotal: total,
+          tax: 0,
+          discount: 0,
+          total,
+          paymentMethod: "card",
+        }),
+      });
+
+      if (!saleResponse?.success || !saleResponse?.sale?.id) {
+        throw new Error(saleResponse?.message || "Card payment could not be completed");
+      }
+
+      setPaidSale(saleResponse.sale);
+      await createFulfilmentFromPaidSale(saleResponse.sale);
+    } catch (reason) {
+      setError(reason?.message || "Unable to complete payment");
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const startNewOrder = () => {
+    setConfirmation(null);
+    setPaidSale(null);
+    setError("");
+    setFulfilmentType("COLLECT");
+  };
+
   if (loading) {
     return <div className="one-kiosk one-kiosk-state">Loading OneKiosk…</div>;
+  }
+
+  if (confirmation) {
+    return (
+      <main className="one-kiosk one-kiosk-confirmation">
+        <section className="one-kiosk-confirmation-card">
+          <div className="one-kiosk-success-icon"><CheckCircle2 size={52} /></div>
+          <span className="one-kiosk-eyebrow">Payment complete</span>
+          <h1>Thank you</h1>
+          <p>Your order has been sent to the counter.</p>
+          <div className="one-kiosk-collection-number">
+            <span>Your collection number</span>
+            <strong>{confirmation.collectionNumber}</strong>
+          </div>
+          <div className="one-kiosk-confirmation-meta">
+            <div><span>Total paid</span><strong>{money(confirmation.total, currency)}</strong></div>
+            <div><span>Receipt</span><strong>{confirmation.receiptNumber || "Created"}</strong></div>
+          </div>
+          <p className="one-kiosk-collection-help">Please keep this number and go to the collection counter. Your number will be called or shown when your order is ready.</p>
+          <button type="button" className="one-kiosk-pay" onClick={startNewOrder}>Start a new order</button>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -102,7 +202,12 @@ export default function OneKioskPage() {
         </div>
       </header>
 
-      {error ? <div className="one-kiosk-error">{error}</div> : null}
+      {error ? (
+        <div className="one-kiosk-error">
+          {error}
+          {paidSale?.id ? <strong> Your payment has already succeeded. Press “Finish order” to retry collection-order creation; you will not be charged again.</strong> : null}
+        </div>
+      ) : null}
 
       <div className="one-kiosk-shell">
         <section className="one-kiosk-catalogue">
@@ -150,7 +255,7 @@ export default function OneKioskPage() {
               <span>Your order</span>
               <strong>{itemCount} {itemCount === 1 ? "item" : "items"}</strong>
             </div>
-            {basket.length ? (
+            {basket.length && !paidSale ? (
               <button type="button" className="one-kiosk-clear" onClick={() => setBasket([])} aria-label="Clear basket">
                 <Trash2 size={18} />
               </button>
@@ -165,9 +270,9 @@ export default function OneKioskPage() {
                   <span>{money(Number(line.price || 0) * line.quantity, currency)}</span>
                 </div>
                 <div className="one-kiosk-quantity">
-                  <button type="button" onClick={() => changeQuantity(line.id, -1)}><Minus size={17} /></button>
+                  <button type="button" disabled={Boolean(paidSale)} onClick={() => changeQuantity(line.id, -1)}><Minus size={17} /></button>
                   <strong>{line.quantity}</strong>
-                  <button type="button" onClick={() => changeQuantity(line.id, 1)}><Plus size={17} /></button>
+                  <button type="button" disabled={Boolean(paidSale)} onClick={() => changeQuantity(line.id, 1)}><Plus size={17} /></button>
                 </div>
               </div>
             ))}
@@ -192,6 +297,7 @@ export default function OneKioskPage() {
                 <button
                   type="button"
                   key={value}
+                  disabled={Boolean(paidSale)}
                   className={fulfilmentType === value ? "is-active" : ""}
                   onClick={() => setFulfilmentType(value)}
                 >
@@ -209,11 +315,13 @@ export default function OneKioskPage() {
           <button
             type="button"
             className="one-kiosk-pay"
-            disabled={!basket.length}
-            onClick={() => setError("OneKiosk catalogue and basket are ready. Payment + collection-order creation is the next wired step.")}
+            disabled={!basket.length || paying}
+            onClick={payAndCollect}
           >
-            Continue to payment
+            <CreditCard size={20} />
+            {paying ? "Processing…" : paidSale ? "Finish order" : "Pay & collect"}
           </button>
+          <small className="one-kiosk-payment-note">Card payment is processed through the payment terminal configured for this store/kiosk.</small>
         </aside>
       </div>
     </main>
