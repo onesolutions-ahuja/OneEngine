@@ -14,7 +14,7 @@ import { fmtDateTime, Flash, StatusPill } from "./shared.jsx";
 import IntegrationFormModal from "./IntegrationFormModal.jsx";
 import IntegrationDetail from "./IntegrationDetail.jsx";
 import SupplierFeedPreview from "./SupplierFeedPreview.jsx";
-import { BrandIcon } from "../../marketing/components/BrandIcons.jsx";
+import { BrandIcon } from "../../../server/src/marketing/components/BrandIcons.jsx";
 import ConnectorInstancesPanel from "./ConnectorInstancesPanel.jsx";
 
 export default function IntegrationsAdmin({ storeId }) {
