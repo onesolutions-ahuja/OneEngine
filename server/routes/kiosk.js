@@ -177,7 +177,7 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
   });
 
   router.put("/kiosk/devices/:id/settings", authenticate, async (req, res) => {
-    const workflowId = req.body?.workflowId || null;
+    let workflowId = req.body?.workflowId || null;
     const paymentTerminalId = req.body?.paymentTerminalId || null;
     const printerHardwareId = req.body?.printerHardwareId || null;
     const printerName = req.body?.printerName == null ? null : String(req.body.printerName).trim().slice(0, 150);
@@ -189,6 +189,18 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
     const paymentRequired = req.body?.paymentRequired !== false;
     const printerRequired = req.body?.printerRequired === true;
     try {
+      if (!workflowId) {
+        const defaultFlow = await db(
+          `SELECT id FROM platform_rules
+            WHERE company_id=$1
+              AND action->>'scope'='one_kiosk'
+              AND action->>'flowType'='KIOSK_EXPERIENCE'
+            ORDER BY CASE WHEN action->>'defaultForNewDevices'='true' THEN 0 ELSE 1 END,name
+            LIMIT 1`,
+          [req.user.companyId]
+        );
+        workflowId = defaultFlow.rows[0]?.id || null;
+      }
       if (workflowId) {
         const flow = await db(
           `SELECT id FROM platform_rules
