@@ -3,10 +3,10 @@ import { allocatePlatformSequence, upsertPlatformSequence } from "../services/pl
 
 const SAFE_KEY = /^[a-z_][a-z0-9_]{0,99}$/i;
 
-async function hasPlatformManage(db, req) {
+async function hasOneEngineManage(db, req) {
   if (!req.user?.roleId) return false;
   const result = await db(
-    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='platform.manage' LIMIT 1",
+    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
     [req.user.roleId],
     req
   );
@@ -66,7 +66,7 @@ export default function createPlatformSequencesRouter({ authenticate, authorize,
         [object.rows[0].id, req.user.roleId || null, req.user.companyId],
         req
       );
-      if (!(await hasPlatformManage(db, req)) && permission.rows[0]?.can_create !== true) return res.status(403).json({ success: false, message: "create permission is required" });
+      if (!(await hasOneEngineManage(db, req)) && permission.rows[0]?.can_create !== true) return res.status(403).json({ success: false, message: "create permission is required" });
       const data = await allocatePlatformSequence({ pool: req.tenantPool || pool, ...scope, objectKey, sequenceKey });
       res.json({ success: true, data });
     } catch (error) {
