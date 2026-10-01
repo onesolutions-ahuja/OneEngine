@@ -922,7 +922,7 @@ function looksLikeWorkflowResource(value = "") {
   return text.startsWith("$") || text.startsWith("steps.") || text.startsWith("variables.");
 }
 
-function ResourceOrLiteralInput({ label, value, onChange, rootObjectKey, extraResources = [], type = "string", required = false }) {
+function ResourceOrLiteralInput({ label, value, onChange, rootObjectKey, extraResources = [], type = "string", required = false, allowResource = true }) {
   const [mode, setMode] = useState(() => looksLikeWorkflowResource(value) ? "resource" : "value");
   const numeric = type === "number" || type === "integer";
   const boolean = type === "boolean";
@@ -931,12 +931,12 @@ function ResourceOrLiteralInput({ label, value, onChange, rootObjectKey, extraRe
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
         <label className="text-xs font-medium text-slate-600">{label}{required ? " *" : ""}</label>
-        <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
+        {allowResource ? <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
           <button type="button" className={`rounded px-2 py-1 text-[10px] ${mode === "value" ? "bg-slate-100 text-slate-800" : "text-slate-500"}`} onClick={() => setMode("value")}>Value</button>
           <button type="button" className={`rounded px-2 py-1 text-[10px] ${mode === "resource" ? "bg-blue-50 text-blue-700" : "text-slate-500"}`} onClick={() => setMode("resource")}>Resource</button>
-        </div>
+        </div> : null}
       </div>
-      {mode === "resource" ? (
+      {allowResource && mode === "resource" ? (
         <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="" value={String(value ?? "")} onChange={onChange} />
       ) : boolean ? (
         <select className={inputClass} value={value === true ? "true" : value === false ? "false" : ""} onChange={(event) => onChange(event.target.value === "" ? "" : event.target.value === "true")}>
@@ -1123,7 +1123,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 <option value="datetime">Date / Time</option>
               </select>
             </div>
-            <ResourceOrLiteralInput label="Fixed value" value={step.config?.value ?? ""} onChange={(value) => updateConfig({ value })} rootObjectKey={rootObjectKey} extraResources={[]} type={step.config?.resourceType || "text"} required />
+            <ResourceOrLiteralInput label="Fixed value" value={step.config?.value ?? ""} onChange={(value) => updateConfig({ value })} rootObjectKey={rootObjectKey} extraResources={[]} type={step.config?.resourceType || "text"} required allowResource={false} />
             <p className="text-[11px] text-slate-500">Constants are fixed for this workflow run and are exposed to later steps as Resources.</p>
           </div>
         );
@@ -1519,7 +1519,9 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             const fresh = makeStep(nextType);
             updateStep(index, { type: nextType, label: nextDefinition?.label || getActionLabel(nextType), config: fresh.config });
           }}>
-            {registryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {registryOptions
+              .filter((option) => ["CONSTANT","FORMULA"].includes(step.type) ? ["CONSTANT","FORMULA"].includes(option.value) : !["CONSTANT","FORMULA"].includes(option.value))
+              .map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
           <button type="button" className="rounded border border-slate-200 px-3 py-2 text-sm text-slate-600" onClick={() => updateStep(index, { expanded: !step.expanded })}>{step.expanded ? "Collapse" : "Expand"}</button>
         </div>
@@ -2046,7 +2048,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     ? "One or more conditions are incomplete."
     : "";
   const actionIssues = actionSteps.map((step) => workflowActionIssue(step, definitionFor(step))).filter(Boolean);
-  const actionsIssue = !actionSteps.length
+  const resourceNames = enabledSteps
+    .map((step) => step.type === "ASSIGNMENT" ? step.config?.variableName : ["CONSTANT","FORMULA"].includes(step.type) ? step.config?.resourceName : null)
+    .filter(Boolean);
+  const duplicateResourceName = resourceNames.find((name, index) => resourceNames.indexOf(name) !== index) || null;
+  const actionsIssue = duplicateResourceName
+    ? `Resource name "${duplicateResourceName}" is used more than once.`
+    : !actionSteps.length
     ? "Add at least one action."
     : actionIssues[0] || "";
   const reviewIssue = triggerIssue || entryConditionIssue || conditionIssue || actionsIssue || (!workflow.name ? "Enter a workflow name." : "");
