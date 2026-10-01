@@ -1,6 +1,6 @@
 import { evaluateCondition } from "./platformConditions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
-import { executeWorkflowActions } from "./platformWorkflow.js";
+import { createWorkflowRun, executeWorkflowActions } from "./platformWorkflow.js";
 import { systemObject, isExtensionField } from "./platformSystemObjects.js";
 
 function apiRecord(fields, record) {
@@ -50,7 +50,80 @@ export async function executePlatformAutomations({ db, object, fields, record, p
   const prior = apiRecord(fields, previousRecord);
 
   for (const rule of rules.rows) {
-    if (!ruleMatches(rule, fields, nextRecord, prior)) continue;
+    const currentMatches = ruleMatches(rule, fields, nextRecord, prior);
+    if (!currentMatches) continue;
+
+    const entryTransition = String(rule.action?.entryTransition || "EVERY_TIME").toUpperCase();
+    if (entryTransition === "UPDATED_TO_MEET") {
+      const updateTrigger = ["after_update","before_update","field_changed","before_save"].includes(trigger);
+      if (!updateTrigger || !previousRecord) continue;
+      const previousMatches = ruleMatches(rule, fields, prior, prior);
+      if (previousMatches) continue;
+    }
+
+    if (rule.action?.type === "workflow") {
+      const workflowActions = Array.isArray(rule.action.actions) ? rule.action.actions : [];
+      if (!workflowActions.length) {
+        executions.push({ ruleId: rule.id, action: "workflow", status: "skipped", reason: "Workflow has no actions" });
+        continue;
+      }
+      const workflowVariables = { variables: {}, steps: {} };
+      const run = await createWorkflowRun({
+        db,
+        companyId: req.user.companyId,
+        workflowId: rule.id,
+        workflowName: rule.name,
+        objectId: object.id,
+        recordId,
+        triggerKey: trigger,
+        status: "RUNNING",
+        metadata: {
+          actorUserId: req.user.id || null,
+          storeId: req.user.storeId || null,
+          tillId: req.user.tillId || null,
+          entryTransition,
+        },
+      });
+      try {
+        const workflowResults = await executeWorkflowActions({
+          actions: workflowActions,
+          db,
+          object,
+          fields,
+          record: nextRecord,
+          previousRecord: prior,
+          recordId,
+          trigger,
+          req,
+          companyId: req.user.companyId,
+          runId: run?.id || null,
+          workflowVariables,
+        });
+        const containsWaiting = (entries = []) => (Array.isArray(entries) ? entries : []).some((entry) =>
+          entry?.result?.status === "waiting"
+          || containsWaiting(entry?.result?.branch?.results || [])
+          || (Array.isArray(entry?.result?.iterations) && entry.result.iterations.some((iteration) => containsWaiting(iteration?.results || [])))
+        );
+        const waiting = containsWaiting(workflowResults);
+        if (run?.id && !waiting) {
+          await db(
+            "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
+            [JSON.stringify({ childResults: workflowResults, finalVariables: workflowVariables }), run.id, req.user.companyId]
+          );
+        }
+        executions.push({ ruleId: rule.id, action: "workflow", status: waiting ? "waiting" : "completed", runId: run?.id || null, details: workflowResults });
+      } catch (error) {
+        if (run?.id) {
+          await db(
+            "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,updated_at=NOW() WHERE id=$3 AND company_id=$4",
+            [String(error?.message || error).slice(0,2000), JSON.stringify({ finalVariables: workflowVariables }), run.id, req.user.companyId]
+          );
+        }
+        throw error;
+      }
+      continue;
+    }
+
     const actions = Array.isArray(rule.action?.actions) ? rule.action.actions : [rule.action];
     for (const action of actions) {
       if (action.type === "workflow") {
