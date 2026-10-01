@@ -2550,8 +2550,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     displayName: "Wait",
     description: "Pause a workflow without blocking an HTTP request.",
     validation: (action) => {
-      if (!action?.durationSeconds && !action?.waitSeconds && !action?.until) {
-        throw new Error("Wait requires a durationSeconds or until value");
+      if (!action?.durationSeconds && !action?.waitSeconds && !action?.until && !action?.resumeAt) {
+        throw new Error("Wait requires a duration or resume time");
       }
     },
     async: true,
