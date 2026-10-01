@@ -776,6 +776,27 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
            ON CONFLICT (company_id,workflow_id,version) DO NOTHING`
         );
       },
+    },
+    {
+      key: "0030_workflow_active_draft_pointer",
+      version: "30",
+      name: "Separate workflow runtime version from editable draft",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE platform_rules ADD COLUMN IF NOT EXISTS active_version INTEGER;
+          ALTER TABLE platform_rules ADD COLUMN IF NOT EXISTS draft_version INTEGER;
+          ALTER TABLE platform_rules ADD COLUMN IF NOT EXISTS draft_definition JSONB;
+          UPDATE platform_rules
+             SET active_version=COALESCE(active_version,version)
+           WHERE action->>'type'='workflow' AND active=TRUE;
+          UPDATE platform_rules
+             SET draft_version=COALESCE(draft_version,version)
+           WHERE action->>'type'='workflow' AND active=FALSE AND lifecycle_status='DRAFT';
+          CREATE INDEX IF NOT EXISTS idx_platform_rules_workflow_versions
+            ON platform_rules(company_id,active_version,draft_version)
+            WHERE action->>'type'='workflow';
+        `);
+      },
     }
   ]);
 
