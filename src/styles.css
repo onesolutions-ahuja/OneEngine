@@ -11852,3 +11852,36 @@ button.git-control-tile { cursor: pointer; }
     grid-column: 1;
   }
 }
+
+
+/* OneEngine Manager: persistent tenant context + Apple-style nested settings */
+.oneengine-manager-shell{display:grid;grid-template-columns:220px minmax(0,1fr);height:100%;min-height:0;background:rgba(255,255,255,.62);border:1px solid rgba(15,23,42,.08);border-radius:18px;overflow:hidden}
+.oneengine-client-pane{min-width:0;border-right:1px solid rgba(15,23,42,.08);background:rgba(246,248,251,.94);padding:14px;overflow:auto}
+.oneengine-pane-title{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b;padding:4px 6px 10px}
+.oneengine-client-list{display:flex;flex-direction:column;gap:4px;margin-top:10px}
+.oneengine-client-list button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;background:transparent;border-radius:10px;padding:9px 10px;text-align:left;color:inherit;cursor:pointer}
+.oneengine-client-list button:hover{background:rgba(15,23,42,.05)}
+.oneengine-client-list button.is-active{background:rgba(37,99,235,.12);box-shadow:inset 0 0 0 1px rgba(37,99,235,.16)}
+.oneengine-client-list button span{display:flex;flex-direction:column;min-width:0}
+.oneengine-client-list button strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.oneengine-client-list button small{font-size:10px;color:#94a3b8;margin-top:2px}
+.oneengine-manager-main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.oneengine-context-banner{height:48px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid rgba(15,23,42,.08);background:rgba(255,255,255,.9);position:sticky;top:0;z-index:4}
+.oneengine-context-banner span{font-size:12px;color:#64748b}
+.oneengine-context-banner strong{font-size:13px;max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.oneengine-manager-layout{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:0;flex:1}
+.oneengine-subnav{border-right:1px solid rgba(15,23,42,.07);padding:12px 8px;overflow:auto;background:rgba(250,251,253,.75)}
+.oneengine-subnav button{width:100%;display:grid;grid-template-columns:20px minmax(0,1fr) 14px;align-items:center;gap:7px;border:0;background:transparent;border-radius:9px;padding:8px 9px;text-align:left;font-size:12px;cursor:pointer}
+.oneengine-subnav button:hover{background:rgba(15,23,42,.045)}
+.oneengine-subnav button.is-active{background:rgba(37,99,235,.1);font-weight:700}
+.oneengine-manager-content{min-width:0;overflow:auto;padding:16px 18px 28px}
+.oneengine-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.oneengine-form-grid label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:#475569}
+.oneengine-form-grid input{border:1px solid rgba(15,23,42,.12);border-radius:9px;padding:9px 10px;background:#fff}
+.oneengine-form-grid .oneengine-check{flex-direction:row;align-items:center}
+.oneengine-user-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.oneengine-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(15,23,42,.07);font-size:12px}
+.oneengine-list-row span:first-child{display:flex;flex-direction:column;min-width:0}
+.oneengine-list-row small{color:#94a3b8;margin-top:2px}
+@media(max-width:900px){.oneengine-manager-shell{grid-template-columns:170px minmax(0,1fr)}.oneengine-manager-layout{grid-template-columns:150px minmax(0,1fr)}}
+@media(max-width:700px){.oneengine-manager-shell{grid-template-columns:1fr;height:auto}.oneengine-client-pane{border-right:0;border-bottom:1px solid rgba(15,23,42,.08);max-height:220px}.oneengine-manager-layout{grid-template-columns:1fr}.oneengine-subnav{display:flex;overflow:auto;border-right:0;border-bottom:1px solid rgba(15,23,42,.07)}.oneengine-subnav button{min-width:170px}.oneengine-form-grid,.oneengine-user-grid{grid-template-columns:1fr}}
