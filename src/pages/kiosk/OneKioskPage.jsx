@@ -356,7 +356,7 @@ export default function OneKioskPage() {
   const createFulfilmentFromPaidSale = async (sale) => {
     const fulfilment = await apiRequest("/api/kiosk/orders/from-sale", {
       method: "POST",
-      body: JSON.stringify({ saleId: sale.id, fulfilmentType }),
+      body: JSON.stringify({ saleId: sale.id, fulfilmentType, deviceKey: kioskDeviceKey() }),
     });
     if (!fulfilment?.success) {
       throw new Error(fulfilment?.message || "Payment succeeded, but the collection order could not be created");
