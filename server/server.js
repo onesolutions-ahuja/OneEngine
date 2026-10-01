@@ -2051,14 +2051,29 @@ async function startServer() {
     // including frontend-only commits. Persist a fingerprint of the source files
     // that actually define platform/package metadata and skip the heavy pass when
     // nothing relevant changed. The marker is written only after a successful run.
-    const bootstrapState = await platformBootstrapIsCurrent();
-    if (!bootstrapState.current) {
-      console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
-      await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-      await initializeStandardObjectEcosystem(pool);
-      await markPlatformBootstrapCurrent(bootstrapState.fingerprint);
-    } else {
-      console.log("onePOS: platform bootstrap metadata unchanged; skipping heavy bootstrap");
+    // Render performs rolling deploys, so old and new instances can overlap.
+    // Serialise the metadata bootstrap across processes to avoid DDL/seed
+    // deadlocks while both instances point at the same PostgreSQL database.
+    const bootstrapLockClient = await pool.connect();
+    try {
+      await bootstrapLockClient.query("SELECT pg_advisory_lock(hashtext('onepos_platform_bootstrap'))");
+      // Re-check after acquiring the lock: another instance may have completed
+      // the same fingerprint while this one was waiting.
+      const bootstrapState = await platformBootstrapIsCurrent();
+      if (!bootstrapState.current) {
+        console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
+        await initializePlatformMetadata(pool, { includeOperationalObjects: true });
+        await initializeStandardObjectEcosystem(pool);
+        await markPlatformBootstrapCurrent(bootstrapState.fingerprint);
+      } else {
+        console.log("onePOS: platform bootstrap metadata unchanged; skipping heavy bootstrap");
+      }
+    } finally {
+      try {
+        await bootstrapLockClient.query("SELECT pg_advisory_unlock(hashtext('onepos_platform_bootstrap'))");
+      } finally {
+        bootstrapLockClient.release();
+      }
     }
 
     // Identity/profile synchronization remains cheap and intentionally runs on
