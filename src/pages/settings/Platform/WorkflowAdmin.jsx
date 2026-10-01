@@ -1209,10 +1209,10 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
   );
 }
 
-function BranchStepPicker({ label, value = [], onChange, steps = [], currentIndex }) {
+function BranchStepPicker({ label, value = [], onChange, steps = [], currentIndex, candidateFilter = null }) {
   const candidates = steps
     .map((candidate, index) => ({ candidate, index }))
-    .filter(({ index }) => index > currentIndex);
+    .filter(({ candidate, index }) => index > currentIndex && (!candidateFilter || candidateFilter(candidate, index)));
   const selected = new Set(value || []);
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -2211,8 +2211,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                       label="Steps on this scheduled path"
                       value={pathStep.config?.branch || []}
                       onChange={(branch) => updateScheduledPath(pathIndex, { branch })}
-                      steps={workflow.steps.filter((candidate) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(candidate.type))}
-                      currentIndex={-1}
+                      steps={workflow.steps}
+                      currentIndex={pathIndex}
+                      candidateFilter={(candidate) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(candidate.type)}
                     />
                   </div>
                 ))}
