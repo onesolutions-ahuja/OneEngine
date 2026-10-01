@@ -3388,9 +3388,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return { lifecycle, version, active };
   }
 
-  async function checkRule(req, rule) {
+  async function checkRule(req, rule, { strict = null } = {}) {
     if (typeof rule.name !== "string" || !rule.name.trim() || rule.name.length > 200 || typeof rule.trigger_key !== "string" || !rule.trigger_key.trim()
       || !Array.isArray(rule.conditions) || !rule.action || typeof rule.action !== "object" || Array.isArray(rule.action) || typeof rule.active !== "boolean") return "Invalid rule name, trigger, conditions, action or status";
+    const isWorkflow = rule.action.type === "workflow";
+    const strictWorkflow = !isWorkflow || strict === true || rule.active === true || String(rule.lifecycle_status || rule.lifecycleStatus || "").toUpperCase() === "ACTIVE";
     const recordTriggers = ["after_create", "after_update", "after_save", "before_save", "before_create", "before_update", "field_changed", "before_delete", "after_delete", "manual"];
     if (!recordTriggers.includes(rule.trigger_key)) {
       const eventType = await db(
@@ -3401,11 +3403,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
     if (rule.object_id && !await getObject(rule.object_id, req)) return "Object not found";
     const conditionFields = rule.object_id ? await db("SELECT * FROM platform_fields WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) ORDER BY display_order, label", [rule.object_id, req.user.companyId]) : { rows: [] };
-    try {
-      validateConditionConfig({ match: rule.action.match || "all", conditions: rule.conditions }, conditionFields.rows, "Automation conditions");
-    } catch (error) {
-      if (error instanceof ConditionError) return error.message;
-      throw error;
+    if (strictWorkflow) {
+      try {
+        validateConditionConfig({ match: rule.action.match || "all", conditions: rule.conditions }, conditionFields.rows, "Automation conditions");
+      } catch (error) {
+        if (error instanceof ConditionError) return error.message;
+        throw error;
+      }
     }
     const normalizeDecisionCondition = (condition) => {
       if (!condition || typeof condition !== "object" || Array.isArray(condition)) return condition;
@@ -3413,21 +3417,21 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (Array.isArray(condition.rules)) return { match: condition.match || condition.type || "all", conditions: condition.rules };
       return condition;
     };
-    const isWorkflow = rule.action.type === "workflow";
     const workflowMatch = isWorkflow ? rule.action.match || "all" : null;
     if (isWorkflow && !["all", "any"].includes(workflowMatch)) return "Workflow actions require a match mode of all or any";
-    if (isWorkflow && (!Array.isArray(rule.action.actions) || !rule.action.actions.length)) return "Workflow actions require at least one action";
+    if (isWorkflow && strictWorkflow && (!Array.isArray(rule.action.actions) || !rule.action.actions.length)) return "Workflow actions require at least one action";
     const registryTypes = new Set(getWorkflowActionRegistry().map((definition) => definition.key));
     const legacyTypes = new Set(["validation", "set_field", "show_message", "SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "workflow"]);
     const allowed = new Set([...registryTypes, ...legacyTypes]);
     const actions = isWorkflow ? rule.action.actions : (Array.isArray(rule.action.actions) ? rule.action.actions : [rule.action]);
-    if (!actions.length || actions.some((action) => !action || !allowed.has(action.type || action.key))) return "Automation contains an unsupported action";
+    if ((!actions.length && strictWorkflow) || actions.some((action) => !action || !allowed.has(action.type || action.key))) return "Automation contains an unsupported action";
     for (const action of actions) {
       try {
         if (action.type === "workflow") {
           if (!Array.isArray(action.actions) || !action.actions.length) throw new Error("Workflow actions require at least one action");
           continue;
         }
+        if (!strictWorkflow) continue;
         validateWorkflowAction(action);
         if (String(action.type || action.key || "").toUpperCase() === "CONDITION") {
           const outcomes = Array.isArray(action.outcomes) ? action.outcomes : [];
@@ -3443,7 +3447,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         return error.message;
       }
     }
-    if (isWorkflow) {
+    if (isWorkflow && strictWorkflow) {
       const ids = actions.map((action) => action?.id).filter(Boolean).map(String);
       if (new Set(ids).size !== ids.length) return "Workflow element identifiers must be unique";
       const indexById = new Map(actions.map((action, index) => [String(action?.id || ""), index]).filter(([id]) => id));
@@ -3530,10 +3534,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
     }
-    if (actions.some((action) => action.type === "set_field" && (typeof action.field !== "string" || action.value === undefined))) return "Each field update action requires a field and value";
-    if (actions.some((action) => action.type === "show_message" && (!action.message || typeof action.message !== "string"))) return "Each message action requires a message";
-    if (actions.some((action) => ["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP"].includes(action.type) && (!action.templateId || !action.recipient))) return "Communication actions require a template and recipient";
-    if (actions.some((action) => ["CALL_WEBHOOK", "HTTP_REQUEST"].includes(action.type) && (!action.connectorId || !action.endpoint))) return "Webhook actions require a connector and endpoint";
+    if (strictWorkflow && actions.some((action) => action.type === "set_field" && (typeof action.field !== "string" || action.value === undefined))) return "Each field update action requires a field and value";
+    if (strictWorkflow && actions.some((action) => action.type === "show_message" && (!action.message || typeof action.message !== "string"))) return "Each message action requires a message";
+    if (strictWorkflow && actions.some((action) => ["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP"].includes(action.type) && (!action.templateId || !action.recipient))) return "Communication actions require a template and recipient";
+    if (strictWorkflow && actions.some((action) => ["CALL_WEBHOOK", "HTTP_REQUEST"].includes(action.type) && (!action.connectorId || !action.endpoint))) return "Webhook actions require a connector and endpoint";
     if (isWorkflow) {
       const allowedContractTypes = new Set(["text","number","boolean","date","datetime","record","collection","object"]);
       for (const [kind, entries] of [["input", rule.action?.inputContract], ["output", rule.action?.outputContract]]) {
@@ -3541,11 +3545,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const names = new Set();
         for (const item of contract) {
           const name = String(item?.name || "");
+          if (!name && !strictWorkflow) continue;
           if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(name)) return `Subflow ${kind} names can only use letters, numbers and underscores`;
           if (names.has(name)) return `Subflow ${kind} "${name}" is declared more than once`;
           names.add(name);
           if (!allowedContractTypes.has(String(item?.type || "text").toLowerCase())) return `Subflow ${kind} "${name}" uses an unsupported type`;
-          if (kind === "output" && !item?.source) return `Subflow output "${item?.label || name}" requires a Resource`;
+          if (strictWorkflow && kind === "output" && !item?.source) return `Subflow output "${item?.label || name}" requires a Resource`;
         }
       }
       for (const subflowAction of actions.filter((action) => String(action?.type || action?.key || "").toUpperCase() === "RUN_SUBFLOW")) {
@@ -3560,7 +3565,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const contract = Array.isArray(child.action?.inputContract) ? child.action.inputContract : [];
         const mappings = subflowAction.workflowInputs || subflowAction.inputs || subflowAction.inputMap || subflowAction.mappings || {};
         const missing = contract.find((input) => input?.required === true && (mappings[input.name] === undefined || mappings[input.name] === null || mappings[input.name] === ""));
-        if (missing) return `Run Subflow "${subflowAction.label || child.name}" is missing required input "${missing.label || missing.name}"`;
+        if (strictWorkflow && missing) return `Run Subflow "${subflowAction.label || child.name}" is missing required input "${missing.label || missing.name}"`;
       }
     }
     if (rule.active) {
@@ -3570,6 +3575,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
     }
     if (isWorkflow) {
+      if (!strictWorkflow) return null;
       const fields = rule.object_id ? await db("SELECT * FROM platform_fields WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) ORDER BY display_order, label", [rule.object_id, req.user.companyId]) : { rows: [] };
       for (const action of actions.filter((candidate) => candidate.type === "set_field")) {
         const field = fields.rows.find((candidate) => candidate.api_name === action.field);
@@ -3703,7 +3709,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           active: false,
           lifecycle_status: "DRAFT",
           version: workflow.version,
-        });
+        }, { strict: true });
         if (draftError) return res.status(400).json({ success: false, message: `Debug cannot start: ${draftError}` });
       } else {
         if (!workflowId) return res.status(400).json({ success: false, message: "Debug requires a workflow definition" });
