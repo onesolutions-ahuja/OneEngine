@@ -13,6 +13,16 @@ function statusBadge(status) {
   return `workflow-run-status workflow-run-status--${normalized.toLowerCase()}`;
 }
 
+function friendlyErrorFor(source) {
+  return source?.metadata?.friendlyError
+    || source?.friendlyError
+    || (source?.error_text ? {
+      title: "This step could not complete",
+      whatHappened: source.error_text,
+      howToFix: "Open this workflow in Builder, select the failed step, check its required values and Resources, then run Debug again.",
+    } : null);
+}
+
 function redact(value) {
   if (!value || typeof value !== "object") return value;
   if (Array.isArray(value)) return value.map(redact);
@@ -221,9 +231,16 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
               </div>
             </div>
 
-            {run.error_text || run.metadata?.last_error || run.metadata?.error || run.metadata?.rootError?.message ? (
-              <div className="workflow-run-error"><strong>Failure summary</strong><span>{run.error_text || run.metadata?.last_error || run.metadata?.rootError?.message || run.metadata?.error || "Execution failed"}</span></div>
-            ) : null}
+            {run.error_text || run.metadata?.last_error || run.metadata?.error || run.metadata?.rootError?.message || run.metadata?.friendlyError ? (() => {
+              const friendly = friendlyErrorFor(run);
+              return (
+                <div className="workflow-run-error">
+                  <strong>{friendly?.title || "Failure summary"}</strong>
+                  <span>{friendly?.whatHappened || run.error_text || run.metadata?.last_error || run.metadata?.rootError?.message || run.metadata?.error || "Execution failed"}</span>
+                  {friendly?.howToFix ? <span><b>How to fix it:</b> {friendly.howToFix}</span> : null}
+                </div>
+              );
+            })() : null}
 
             {run.metadata ? (
               <details className="workflow-run-trace">
@@ -272,7 +289,16 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
                     {step.child_run_id ? <span>Child run: {step.child_run_id}</span> : null}
                     {step.job?.status ? <span>Job: {step.job.status} · attempts {step.job.attempts || 0}</span> : null}
                   </div>
-                  {step.error_text ? <div className="workflow-run-error compact">{step.error_text}</div> : null}
+                  {step.error_text || step.metadata?.friendlyError ? (() => {
+                    const friendly = friendlyErrorFor(step);
+                    return (
+                      <div className="workflow-run-error compact">
+                        <strong>{friendly?.title || "Step failed"}</strong>
+                        <span>{friendly?.whatHappened || step.error_text}</span>
+                        {friendly?.howToFix ? <span><b>How to fix it:</b> {friendly.howToFix}</span> : null}
+                      </div>
+                    );
+                  })() : null}
                 </div>
               ))}
             </div>
