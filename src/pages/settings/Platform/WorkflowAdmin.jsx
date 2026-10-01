@@ -2085,6 +2085,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   ]);
   const [builderLoadIssues, setBuilderLoadIssues] = useState([]);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [debugMode, setDebugMode] = useState("debug");
   const [debugRunning, setDebugRunning] = useState(false);
   const [debugRecordMode, setDebugRecordMode] = useState("latest");
   const [debugRecordId, setDebugRecordId] = useState("");
@@ -2401,6 +2402,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         method: "POST",
         body: JSON.stringify({
           definition,
+          mode: debugMode,
           ...(debugRecordMode === "specific" && debugRecordId.trim() ? { recordId: debugRecordId.trim() } : {}),
         }),
       });
@@ -2571,8 +2573,14 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-base font-semibold text-slate-800">Debug workflow</div>
-              <p className="mt-1 text-xs text-slate-500">Tests the workflow safely. Database changes are rolled back and external actions such as messages, payments, webhooks and printing are simulated.</p>
+              <div className="flex items-center gap-2">
+                <div className="text-base font-semibold text-slate-800">Debug / Test workflow</div>
+                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                  <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${debugMode === "debug" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setDebugMode("debug")}>Debug</button>
+                  <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${debugMode === "test" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setDebugMode("test")}>Test</button>
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">{debugMode === "debug" ? "Debug shows the path taken and highlights failed steps." : "Test gives a simple pass/fail result using the same safe execution trace."} Database changes are rolled back and external actions such as messages, payments, webhooks and printing are simulated.</p>
             </div>
             <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(false)}>Close</button>
           </div>
@@ -2583,18 +2591,18 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <option value="specific">Use specific record</option>
               </select>
               {debugRecordMode === "specific" ? <input className={inputClass} value={debugRecordId} onChange={(event) => setDebugRecordId(event.target.value)} placeholder="Record ID" /> : <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">The most recent record in the current company/store will be used.</div>}
-              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue)} onClick={runDebug}>{debugRunning ? "Running…" : "Run Debug"}</button>
+              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue)} onClick={runDebug}>{debugRunning ? "Running…" : debugMode === "test" ? "Run Test" : "Run Debug"}</button>
             </div>
           ) : (
             <div className="mt-4 flex items-center justify-between gap-3">
               <div className="text-xs text-slate-600">This workflow has no trigger object, so Debug will run with user/company/store context only.</div>
-              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue)} onClick={runDebug}>{debugRunning ? "Running…" : "Run Debug"}</button>
+              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue)} onClick={runDebug}>{debugRunning ? "Running…" : debugMode === "test" ? "Run Test" : "Run Debug"}</button>
             </div>
           )}
           {debugResult ? (
             <div className={`mt-4 rounded-xl border p-4 ${debugResult.status === "FAILED" ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
               <div className="flex items-center justify-between gap-3">
-                <strong className={debugResult.status === "FAILED" ? "text-red-800" : "text-emerald-800"}>{debugResult.status === "FAILED" ? "Debug found a problem" : "Debug completed successfully"}</strong>
+                <strong className={debugResult.status === "FAILED" ? "text-red-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.status === "FAILED" ? "Test failed" : debugResult.status === "NOT_STARTED" ? "Test did not start" : "Test passed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : "Debug completed successfully")}</strong>
                 <span className="text-xs text-slate-500">No database changes were kept.</span>
               </div>
               {debugResult.status === "FAILED" ? (
@@ -2604,7 +2612,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   <div className="rounded-lg bg-white/70 p-3"><strong>How to fix it:</strong> {debugResult.friendlyError?.howToFix || "Click the red step on the canvas and check its Properties."}</div>
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-emerald-800">Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action.</p>
+                <p className="mt-2 text-sm text-emerald-800">{debugMode === "test" ? "The workflow passed this test record. Green steps ran successfully; dashed green steps were safely simulated." : "Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action."}</p>
               )}
             </div>
           ) : null}
