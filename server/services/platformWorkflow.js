@@ -2949,13 +2949,14 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
 
       const childWorkflowVariables = { variables: { ...mappedInputs }, steps: {} };
+      const childVersion = Number(definition.active_version || definition.version || 1);
       const childRun = runDb && typeof runDb === "function"
         ? await createWorkflowRun({
             db: runDb,
             companyId: targetCompanyId || runtimeCompanyId,
             workflowId: workflowKey,
             workflowName: definition.name || action.workflowName || "Subflow",
-            workflowVersion: Number(definition.version || definition.active_version || 1),
+            workflowVersion: childVersion,
             objectId: object?.id || action.objectId || null,
             recordId: record?.id || action.recordId || null,
             triggerKey: "subflow",
@@ -2970,7 +2971,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           })
         : null;
       const childResult = await executeWorkflowActions({
+        ...context,
         actions: childActions,
+        allActions: childActions,
         db,
         object,
         fields,
@@ -2980,12 +2983,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         companyId: targetCompanyId || runtimeCompanyId,
         workflowDepth: nextDepth,
         workflowStack: [...stack, workflowKey],
+        workflowVersion: childVersion,
         runId: childRun?.id || runId || null,
         stepRunId: null,
         workflowVariables: childWorkflowVariables,
         traceDb,
         debugMode,
-        ...context,
       });
       const childWaiting = workflowResultsContainStatus(childResult, "waiting");
       const outputs = {};
