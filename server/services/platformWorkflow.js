@@ -4279,7 +4279,7 @@ async function compensateCompletedSteps(completed, context, originalError) {
   return failures;
 }
 
-export function restoreWorkflowRuntimeState(result, workflowVariables) {
+export function restoreWorkflowRuntimeState(result, workflowVariables, stepId = null, actionType = null) {
   if (!result || typeof result !== "object" || !workflowVariables?.variables) return;
   if (result.variableName) workflowVariables.variables[result.variableName] = result.value;
   if (result.resourceName) workflowVariables.variables[result.resourceName] = result.value;
@@ -4287,8 +4287,8 @@ export function restoreWorkflowRuntimeState(result, workflowVariables) {
     const friendly = result.friendlyError || {};
     const error = result.error || {};
     workflowVariables.variables.fault = {
-      stepId: result.fault?.stepId || null,
-      actionType: friendly.actionType || null,
+      stepId: result.fault?.stepId || stepId || null,
+      actionType: result.fault?.actionType || friendly.actionType || actionType || null,
       message: error.message || friendly.whatHappened || "Workflow step failed",
       title: friendly.title || "This step could not complete",
       howToFix: friendly.howToFix || null,
@@ -4296,11 +4296,11 @@ export function restoreWorkflowRuntimeState(result, workflowVariables) {
   }
   const branchResults = result.branch?.results || result.faultBranch?.results || [];
   for (const entry of Array.isArray(branchResults) ? branchResults : []) {
-    restoreWorkflowRuntimeState(entry?.result, workflowVariables);
+    restoreWorkflowRuntimeState(entry?.result, workflowVariables, entry?.stepId || null, entry?.action || null);
   }
   for (const iteration of Array.isArray(result.iterations) ? result.iterations : []) {
     for (const entry of Array.isArray(iteration?.results) ? iteration.results : []) {
-      restoreWorkflowRuntimeState(entry?.result, workflowVariables);
+      restoreWorkflowRuntimeState(entry?.result, workflowVariables, entry?.stepId || null, entry?.action || null);
     }
   }
 }
@@ -4435,7 +4435,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       const priorResult = stepRun.metadata?.result || { status: "completed", idempotentReplay: true };
       results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
-      restoreWorkflowRuntimeState(priorResult, workflowVariables);
+      restoreWorkflowRuntimeState(priorResult, workflowVariables, item.id || `step-${globalIndex + 1}`, resolveWorkflowActionType(item));
       completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
       continue;
     }
