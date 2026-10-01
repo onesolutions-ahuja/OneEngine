@@ -12,7 +12,7 @@ const ICON_ALIASES = Object.freeze({
   customers: 'customers',
   suppliers: 'suppliers',
   reports: 'reports',
-  platform: 'default-app',
+  platform: 'one-developer',
   payment_reference: 'default-app',
   paypal_qr: 'default-app',
   one_connect_google: 'one-connect-google',
