@@ -95,5 +95,5 @@ export async function roleHasSystemPermission(db, roleId, permissionCodes = []) 
 }
 
 export async function hasOneEngineManagePermission(db, roleId) {
-  return roleHasSystemPermission(db, roleId, ["oneengine.manage", "platform.manage"]);
+  return roleHasSystemPermission(db, roleId, ["oneengine.manage"]);
 }
