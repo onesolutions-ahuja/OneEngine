@@ -2283,6 +2283,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [savedTests, setSavedTests] = useState([]);
   const [workflowVersions, setWorkflowVersions] = useState([]);
+  const [compareVersionId, setCompareVersionId] = useState(null);
   const [testDraft, setTestDraft] = useState({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
   const [testBusyId, setTestBusyId] = useState(null);
   const [versionsBusy, setVersionsBusy] = useState(false);
@@ -2839,6 +2840,29 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     }
   };
 
+  const compareVersionSummary = (versionItem) => {
+    const oldDefinition = versionItem?.definition || {};
+    const currentDefinition = buildWorkflowPayload(workflow.lifecycleStatus || "DRAFT");
+    const currentActions = currentDefinition.action?.actions || [];
+    const oldActions = oldDefinition.action?.actions || [];
+    const currentById = new Map(currentActions.filter((item) => item?.id).map((item) => [String(item.id), item]));
+    const oldById = new Map(oldActions.filter((item) => item?.id).map((item) => [String(item.id), item]));
+    const added = [...currentById.keys()].filter((id) => !oldById.has(id)).length;
+    const removed = [...oldById.keys()].filter((id) => !currentById.has(id)).length;
+    const changed = [...currentById.keys()].filter((id) => oldById.has(id) && JSON.stringify(currentById.get(id)) !== JSON.stringify(oldById.get(id))).length;
+    const changes = [];
+    if (String(oldDefinition.name || "") !== String(currentDefinition.name || "")) changes.push("Workflow name changed");
+    if (String(oldDefinition.trigger_key || "") !== String(currentDefinition.triggerKey || "")) changes.push("Trigger changed");
+    if (String(oldDefinition.object_id || "") !== String(currentDefinition.objectId || "")) changes.push("Trigger object changed");
+    if (JSON.stringify(oldDefinition.conditions || []) !== JSON.stringify(currentDefinition.conditions || [])) changes.push("Start conditions changed");
+    if (added) changes.push(`${added} step${added === 1 ? "" : "s"} added`);
+    if (removed) changes.push(`${removed} step${removed === 1 ? "" : "s"} removed`);
+    if (changed) changes.push(`${changed} step${changed === 1 ? "" : "s"} changed`);
+    if (JSON.stringify(oldDefinition.action?.inputContract || []) !== JSON.stringify(currentDefinition.action?.inputContract || [])) changes.push("Subflow inputs changed");
+    if (JSON.stringify(oldDefinition.action?.outputContract || []) !== JSON.stringify(currentDefinition.action?.outputContract || [])) changes.push("Subflow outputs changed");
+    return changes.length ? changes : ["No definition differences from the current Builder state"];
+  };
+
   const restoreWorkflowVersion = async (version) => {
     if (!workflowId) return;
     try {
@@ -3199,9 +3223,22 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           </div>
           <div className="mt-4 space-y-2">
             {workflowVersions.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
-                <div><strong className="text-sm text-slate-800">Version {item.version}</strong><div className="mt-1 text-[11px] text-slate-500">{item.lifecycle_status || "DRAFT"} · {item.created_at ? new Date(item.created_at).toLocaleString("en-GB") : ""}</div></div>
-                <button type="button" className="workflow-cancel-button" disabled={versionsBusy || Number(item.version) === Number(workflow.version)} onClick={() => restoreWorkflowVersion(item.version)}>Restore as new Draft</button>
+              <div key={item.id} className="rounded-lg border border-slate-200 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div><strong className="text-sm text-slate-800">Version {item.version}</strong><div className="mt-1 text-[11px] text-slate-500">{item.lifecycle_status || "DRAFT"} · {item.created_at ? new Date(item.created_at).toLocaleString("en-GB") : ""}</div></div>
+                  <div className="flex gap-2">
+                    <button type="button" className="workflow-cancel-button" onClick={() => setCompareVersionId((current) => current === item.id ? null : item.id)}>{compareVersionId === item.id ? "Hide comparison" : "Compare"}</button>
+                    <button type="button" className="workflow-cancel-button" disabled={versionsBusy || Number(item.version) === Number(workflow.version)} onClick={() => restoreWorkflowVersion(item.version)}>Restore as new Draft</button>
+                  </div>
+                </div>
+                {compareVersionId === item.id ? (
+                  <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold text-slate-700">Compared with current Builder state</div>
+                    <div className="mt-2 space-y-1">
+                      {compareVersionSummary(item).map((change) => <div key={change} className="text-xs text-slate-600">• {change}</div>)}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ))}
             {versionsBusy ? <div className="text-xs text-slate-500">Loading versions…</div> : !workflowVersions.length ? <div className="text-xs text-slate-500">No version snapshots yet.</div> : null}
