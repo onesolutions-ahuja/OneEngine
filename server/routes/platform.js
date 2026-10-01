@@ -3436,6 +3436,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       for (let index = 0; index < actions.length; index += 1) {
         const action = actions[index];
         const actionType = String(action?.type || action?.key || "").toUpperCase();
+        const faultTargets = Array.isArray(action.faultBranch) ? action.faultBranch.map(String) : [];
+        for (const targetId of faultTargets) {
+          if (!indexById.has(targetId)) return `Action "${action.label || action.id || index + 1}" error path references an action that no longer exists`;
+          if (indexById.get(targetId) <= index) return `Action "${action.label || action.id || index + 1}" error path can only route to later actions`;
+          const owner = claimedControlTargets.get(targetId);
+          if (owner && owner !== String(action.id || index)) return `Action "${actions[indexById.get(targetId)]?.label || targetId}" is already controlled by another Decision, Loop or error path`;
+          claimedControlTargets.set(targetId, String(action.id || index));
+        }
         if (actionType === "CONDITION") {
           const outcomes = Array.isArray(action.outcomes) ? action.outcomes : [];
           if (outcomes.length) {
@@ -3485,7 +3493,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             if (!indexById.has(targetId)) return `Loop "${action.label || action.id || index + 1}" references an action that no longer exists`;
             if (indexById.get(targetId) <= index) return `Loop "${action.label || action.id || index + 1}" can only contain later actions`;
             const target = actions[indexById.get(targetId)];
-            if (String(target?.type || target?.key || "").toUpperCase() === "WAIT") return `Loop "${action.label || action.id || index + 1}" cannot contain Wait yet`;
             const owner = claimedControlTargets.get(targetId);
             if (owner && owner !== String(action.id || index)) return `Action "${target?.label || targetId}" is already controlled by another Decision or Loop`;
             claimedControlTargets.set(targetId, String(action.id || index));
