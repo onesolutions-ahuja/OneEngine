@@ -1572,6 +1572,18 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         if (!module.rows.length) return res.status(400).json({ success: false, message: "Module not found" });
       }
       const result = await db("INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8) RETURNING *", [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, sourceTable, moduleId, req.user.companyId]);
+      await db(
+        `INSERT INTO platform_object_permissions
+           (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete,can_import,can_export)
+         SELECT $1,r.id,$2,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
+           FROM roles r
+           JOIN role_permissions rp ON rp.role_id=r.id
+           JOIN permissions p ON p.id=rp.permission_id
+          WHERE r.company_id=$2 AND p.code='oneengine.manage'
+         ON CONFLICT (object_id,role_id,company_id)
+         DO UPDATE SET can_view=TRUE,can_create=TRUE,can_edit=TRUE,can_delete=TRUE,can_import=TRUE,can_export=TRUE`,
+        [result.rows[0].id, req.user.companyId]
+      );
       res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (error.code === "23505") return res.status(409).json({ success: false, message: "An object with this key already exists" });
