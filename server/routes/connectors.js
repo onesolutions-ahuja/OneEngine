@@ -324,10 +324,10 @@ export default function createConnectorsRouter({
     };
   }
 
-  async function requireSuperadmin(req, res) {
+  async function requireOneEngineManage(req, res) {
     const userId = req.user?.id;
     if (!userId) {
-      res.status(403).json({ success: false, message: "Platform permission required" });
+      res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
       return false;
     }
     const result = await db(
@@ -335,12 +335,12 @@ export default function createConnectorsRouter({
          FROM users u
          JOIN role_permissions rp ON rp.role_id=u.role_id
          JOIN permissions p ON p.id=rp.permission_id
-        WHERE u.id=$1 AND u.active=true AND p.code='platform.manage'
+        WHERE u.id=$1 AND u.active=true AND p.code='oneengine.manage'
         LIMIT 1`,
       [userId]
     );
     if (!result.rows.length) {
-      res.status(403).json({ success: false, message: "Platform permission required" });
+      res.status(403).json({ success: false, message: "OneEngine Manager permission required" });
       return false;
     }
     return true;
@@ -375,7 +375,7 @@ export default function createConnectorsRouter({
         [credentialId, req.user.companyId, connectorId]
       );
       if (!tenantCredential.rows[0]) {
-        if (!(await requireSuperadmin(req, res))) return false;
+        if (!(await requireOneEngineManage(req, res))) return false;
         const platformCredential = await db(
           `SELECT id FROM platform_credentials
            WHERE id = $1 AND company_id IS NULL AND connector_id = $2 AND active = TRUE`,
@@ -653,7 +653,7 @@ export default function createConnectorsRouter({
     authorize("integration.manage"),
     async (req, res) => {
       try {
-        if (!(await requireSuperadmin(req, res))) return;
+        if (!(await requireOneEngineManage(req, res))) return;
         const body = req.body || {};
         const connectorKey = String(body.connectorKey || body.connector_key || "");
         const name = String(body.name || "").trim();
@@ -719,7 +719,7 @@ export default function createConnectorsRouter({
     authorize("integration.manage"),
     async (req, res) => {
       try {
-        if (!(await requireSuperadmin(req, res))) return;
+        if (!(await requireOneEngineManage(req, res))) return;
         const body = req.body || {};
         const connectorKey = String(body.connectorKey || body.connector_key || "");
         const name = String(body.name || "").trim();
@@ -963,7 +963,7 @@ export default function createConnectorsRouter({
     authorize("integration.manage"),
     async (req, res) => {
       try {
-        if (!(await requireSuperadmin(req, res))) return;
+        if (!(await requireOneEngineManage(req, res))) return;
         const result = await db(
           `SELECT id, company_id, connector_id, credential_key, name, metadata,
                   active, rotated_at, created_at, updated_at
@@ -990,7 +990,7 @@ export default function createConnectorsRouter({
     authorize("integration.manage"),
     async (req, res) => {
       try {
-        if (!(await requireSuperadmin(req, res))) return;
+        if (!(await requireOneEngineManage(req, res))) return;
         const { connectorId, credentialKey, name, secrets } = req.body || {};
         if (
           !connectorId ||
@@ -1054,7 +1054,7 @@ export default function createConnectorsRouter({
     authorize("integration.manage"),
     async (req, res) => {
       try {
-        if (!(await requireSuperadmin(req, res))) return;
+        if (!(await requireOneEngineManage(req, res))) return;
         const existing = await db(
           `SELECT id, connector_id, name FROM platform_credentials
            WHERE id = $1 AND company_id IS NULL`,
@@ -1110,7 +1110,7 @@ export default function createConnectorsRouter({
     authorize("integration.manage"),
     async (req, res) => {
       try {
-        if (!(await requireSuperadmin(req, res))) return;
+        if (!(await requireOneEngineManage(req, res))) return;
         const result = await db(
           `UPDATE platform_credentials SET active = FALSE, updated_at = NOW()
            WHERE id = $1 AND company_id IS NULL RETURNING id`,
