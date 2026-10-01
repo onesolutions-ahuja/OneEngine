@@ -3423,7 +3423,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     const registryTypes = new Set(getWorkflowActionRegistry().map((definition) => definition.key));
     const legacyTypes = new Set(["validation", "set_field", "show_message", "SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "workflow"]);
     const allowed = new Set([...registryTypes, ...legacyTypes]);
-    const actions = isWorkflow ? rule.action.actions : (Array.isArray(rule.action.actions) ? rule.action.actions : [rule.action]);
+    const actions = isWorkflow ? (Array.isArray(rule.action.actions) ? rule.action.actions : []) : (Array.isArray(rule.action.actions) ? rule.action.actions : [rule.action]);
     if ((!actions.length && strictWorkflow) || actions.some((action) => !action || !allowed.has(action.type || action.key))) return "Automation contains an unsupported action";
     for (const action of actions) {
       try {
