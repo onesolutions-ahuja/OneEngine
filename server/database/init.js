@@ -857,6 +857,7 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_dashboards_company_api_key ON dashboards(company_id,api_key);
     CREATE INDEX IF NOT EXISTS idx_dashboards_company_active ON dashboards(company_id, archived_at, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_dashboards_company_name ON dashboards(company_id, lower(name)) WHERE archived_at IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_dashboards_company_active_name ON dashboards(company_id, lower(name)) WHERE archived_at IS NULL;
     CREATE TABLE IF NOT EXISTS dashboard_users (
       dashboard_id UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
