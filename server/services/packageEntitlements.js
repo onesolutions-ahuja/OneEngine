@@ -546,9 +546,10 @@ export async function reconcileCompanyPackageEntitlements(db, companyId) {
         SET enabled=false,updated_at=NOW()
        FROM company_package_installations i
        JOIN package_registry p ON p.id=i.package_id
-      WHERE i.company_id=$1 AND i.status='inactive' AND i.suspended_by_entitlement=true
-        AND p.active=false AND p.module_id=a.module_id
-        AND a.company_id=i.company_id AND a.store_id IS NULL`,
+      WHERE i.company_id=$1 AND i.status='inactive'
+        AND (i.suspended_by_entitlement=true OR i.deactivated_by_user=true)
+        AND p.module_id=a.module_id
+        AND a.company_id=i.company_id`,
     [companyId]
   );
 
