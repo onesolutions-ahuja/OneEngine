@@ -2633,10 +2633,28 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     ? "One or more conditions are incomplete."
     : "";
   const actionIssues = actionSteps.map((step) => workflowActionIssue(step, definitionFor(step))).filter(Boolean);
-  const resourceNames = enabledSteps
-    .map((step) => step.type === "ASSIGNMENT" ? step.config?.variableName : ["CONSTANT","FORMULA"].includes(step.type) ? step.config?.resourceName : null)
-    .filter(Boolean);
-  const duplicateResourceName = resourceNames.find((name, index) => resourceNames.indexOf(name) !== index) || null;
+  const resourceDeclarations = new Map();
+  let resourceConflict = "";
+  for (const step of enabledSteps) {
+    const name = step.type === "ASSIGNMENT"
+      ? step.config?.variableName
+      : ["CONSTANT","FORMULA"].includes(step.type)
+        ? step.config?.resourceName
+        : null;
+    if (!name) continue;
+    const kind = step.type === "ASSIGNMENT" ? "VARIABLE" : step.type;
+    const type = step.type === "ASSIGNMENT" ? step.config?.variableType : step.type === "CONSTANT" ? step.config?.resourceType : step.config?.resultType;
+    const previous = resourceDeclarations.get(name);
+    if (!previous) {
+      resourceDeclarations.set(name, { kind, type });
+      continue;
+    }
+    if (kind === "VARIABLE" && previous.kind === "VARIABLE" && previous.type === type) continue;
+    resourceConflict = previous.kind === "VARIABLE" && kind === "VARIABLE"
+      ? `Variable "${name}" is assigned with conflicting types (${previous.type || "unknown"} and ${type || "unknown"}).`
+      : `Resource name "${name}" conflicts with another declared resource.`;
+    break;
+  }
   const kioskScreenIssue = isKioskExperience
     ? !(Array.isArray(kioskUi.screens) && kioskUi.screens.length)
       ? "Add at least one kiosk screen."
@@ -2648,8 +2666,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     : "";
   const actionsIssue = isKioskExperience
     ? kioskScreenIssue
-    : duplicateResourceName
-      ? `Resource name "${duplicateResourceName}" is used more than once.`
+    : resourceConflict
+      ? resourceConflict
       : !actionSteps.length
         ? "Add at least one action."
         : actionIssues[0] || "";
