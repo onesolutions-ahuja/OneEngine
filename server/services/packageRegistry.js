@@ -378,14 +378,14 @@ export function packageDefinition(entry) {
                   { key: "catalogue", type: "CATALOGUE", title: "What would you like?", search: true, categories: true, productAction: "OPEN_DETAIL" },
                   { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, modifiers: true, nutrition: true, allergens: true },
                   { key: "upsell", type: "RECOMMENDATIONS", source: "CROSS_SELL", title: "Make it yours", optional: true },
-                  { key: "fulfilment", type: "FULFILMENT", title: "How would you like it?", options: [
+                  { key: "fulfilment", type: "FULFILMENT", title: "How would you like it?", defaultOption: "EAT_IN", options: [
                     { key: "EAT_IN", label: "Eat in" },
                     { key: "TAKEAWAY", label: "Takeaway" },
                     { key: "COLLECT", label: "Collect" }
                   ] },
                   { key: "basket", type: "BASKET", editable: true, promotions: true },
                   { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & collect" },
-                  { key: "confirmation", type: "CONFIRMATION", collectionNumber: true, receipt: ["PRINT","QR"], resetAfterSeconds: 30 }
+                  { key: "confirmation", type: "CONFIRMATION", title: "Thank you", subtitle: "Your order has been sent for preparation.", collectionNumber: true, collectionLabel: "Your collection number", helpText: "Keep this number and go to the collection counter. Your number will be shown when your order is ready.", doneLabel: "Start a new order", receipt: ["PRINT","QR"], resetAfterSeconds: 30 }
                 ],
                 features: {
                   variants: true, modifiers: true, promotions: true, upsell: true, loyalty: true,
@@ -417,14 +417,14 @@ export function packageDefinition(entry) {
                   { key: "catalogue", type: "CATALOGUE", title: "Find your product", search: true, categories: true, productAction: "OPEN_DETAIL" },
                   { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true },
                   { key: "extras", type: "RECOMMENDATIONS", source: "ACCESSORY", title: "Accessories & protection", warranty: true, optional: true },
-                  { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", options: [
+                  { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", defaultOption: "COLLECT", options: [
                     { key: "COLLECT", label: "Collect here" },
                     { key: "OTHER_STORE", label: "Collect another store" },
                     { key: "DELIVERY", label: "Home delivery" }
                   ], stockPromise: true },
                   { key: "basket", type: "BASKET", editable: true, promotions: true },
                   { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & order" },
-                  { key: "confirmation", type: "CONFIRMATION", collectionNumber: true, receipt: ["PRINT","QR","EMAIL"], collectionVerification: true, resetAfterSeconds: 30 }
+                  { key: "confirmation", type: "CONFIRMATION", title: "Order confirmed", subtitle: "Your order has been placed.", collectionNumber: true, collectionLabel: "Order / collection number", helpText: "Keep this reference. We will show when your order is ready for collection.", doneLabel: "Start another order", receipt: ["PRINT","QR","EMAIL"], collectionVerification: true, resetAfterSeconds: 30 }
                 ],
                 features: {
                   variants: true, modifiers: false, promotions: true, upsell: true, loyalty: true,
