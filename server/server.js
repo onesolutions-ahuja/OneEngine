@@ -2126,6 +2126,15 @@ async function startServer() {
     await bootstrapInitialSuperadmin(pool);
     console.log("onePOS: platform bootstrap ready");
 
+    const workflowEntriesContainStatus = (entries = [], status = "waiting") =>
+      (Array.isArray(entries) ? entries : []).some((entry) => {
+        if (String(entry?.result?.status || "").toLowerCase() === String(status).toLowerCase()) return true;
+        if (workflowEntriesContainStatus(entry?.result?.branch?.results || [], status)) return true;
+        if (workflowEntriesContainStatus(entry?.result?.faultBranch?.results || [], status)) return true;
+        return (Array.isArray(entry?.result?.iterations) ? entry.result.iterations : [])
+          .some((iteration) => workflowEntriesContainStatus(iteration?.results || [], status));
+      });
+
     let draining = false;
     const workerEnabled = process.env.PLATFORM_JOB_WORKER !== "false";
     const drain = async () => {
@@ -2276,12 +2285,7 @@ async function startServer() {
                     trigger: "SCHEDULED_PATH",
                     workflowVariables: scheduledVariables,
                   });
-                  const scheduledContainsWaiting = (entries = []) => (Array.isArray(entries) ? entries : []).some((entry) =>
-                    entry?.result?.status === "waiting"
-                    || scheduledContainsWaiting(entry?.result?.branch?.results || [])
-                    || (Array.isArray(entry?.result?.iterations) && entry.result.iterations.some((iteration) => scheduledContainsWaiting(iteration?.results || [])))
-                  );
-                  const scheduledWaiting = scheduledContainsWaiting(results);
+                  const scheduledWaiting = workflowEntriesContainStatus(results, "waiting");
                   await db(
                     `UPDATE platform_workflow_runs
                         SET status=$1,
@@ -2470,12 +2474,7 @@ async function startServer() {
                 throw error;
               }
 
-              const containsWaiting = (entries = []) => entries.some((entry) =>
-                entry?.result?.status === "waiting"
-                || containsWaiting(entry?.result?.branch?.results || [])
-                || (Array.isArray(entry?.result?.iterations) && entry.result.iterations.some((iteration) => containsWaiting(iteration?.results || [])))
-              );
-              const stillWaiting = containsWaiting(results);
+              const stillWaiting = workflowEntriesContainStatus(results, "waiting");
               if (!stillWaiting) {
                 await db(
                   "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
@@ -2656,12 +2655,20 @@ async function startServer() {
                   workflowVersion: Number(workflow.active_version || workflow.version || 1),
                   trigger: "scheduled",
                 });
+                const waiting = workflowEntriesContainStatus(results, "waiting");
                 await db(
-                  "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
-                  [run.id, companyId]
+                  `UPDATE platform_workflow_runs
+                      SET status=$1,
+                          completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                          updated_at=NOW()
+                    WHERE id=$2 AND company_id=$3`,
+                  [waiting ? "WAITING" : "COMPLETED", run.id, companyId]
                 );
+                // This scheduled occurrence has been accepted. Advance the
+                // durable schedule even if the workflow itself is paused by WAIT,
+                // so recurring schedules are not blocked by a long-running run.
                 await completeScheduledWorkflow({ db, payload });
-                return { status: "COMPLETED", results };
+                return { status: waiting ? "WAITING" : "COMPLETED", results };
               } catch (error) {
                 if (run?.id) {
                   await db(
@@ -2747,13 +2754,18 @@ async function startServer() {
                   writeAudit,
                   createInventoryMovement,
                 });
+                const waiting = workflowEntriesContainStatus(results, "waiting");
                 if (run?.id) {
                   await db(
-                    "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
-                    [run.id, job.company_id]
+                    `UPDATE platform_workflow_runs
+                        SET status=$1,
+                            completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                            updated_at=NOW()
+                      WHERE id=$2 AND company_id=$3`,
+                    [waiting ? "WAITING" : "COMPLETED", run.id, job.company_id]
                   );
                 }
-                return { status: "COMPLETED", results };
+                return { status: waiting ? "WAITING" : "COMPLETED", results };
               } catch (error) {
                 if (run?.id) {
                   await db(
