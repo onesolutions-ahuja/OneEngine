@@ -1869,9 +1869,9 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
         </div>
       </div>
 
-      {debugInfo?.status === "FAILED" && debugInfo?.error ? (
+      {["FAILED","FAULT_HANDLED"].includes(debugInfo?.status) && debugInfo?.error ? (
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-red-600">Debug failure</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-red-600">{debugInfo?.status === "FAULT_HANDLED" ? "Debug fault handled" : "Debug failure"}</div>
           <div className="mt-1 font-semibold">{debugInfo.error.title || "This step could not complete"}</div>
           <div className="mt-2 text-xs leading-5">{debugInfo.error.whatHappened || "The step failed during Debug."}</div>
           <div className="mt-3 rounded-lg border border-red-100 bg-white/80 p-3 text-xs leading-5"><strong>How to fix it:</strong> {debugInfo.error.howToFix || "Check this step's required values and Resources, then run Debug again."}</div>
@@ -2135,8 +2135,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <div className="workflow-node-connector" />
           {visibleCanvasSteps.map(({ step, index }) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
             <button type="button" className="workflow-node-delete" title="Remove step" aria-label={`Remove ${step.label || getActionLabel(step.type)}`} onClick={(event) => { event.stopPropagation(); removeStep(index); }}>×</button>
-            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${debugTrace?.[step.id]?.status === "FAILED" ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
-              <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : getActionLabel(step.type)}</span>
+            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
+              <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : getActionLabel(step.type)}</span>
               <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
               {step.type === "CONDITION" ? <span className="workflow-node-note">{Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? `${step.config.outcomes.length} ordered outcome${step.config.outcomes.length === 1 ? "" : "s"} + Default` : "Decision branches are evaluated from metadata conditions."}</span> : null}
               {step.type === "LOOP" ? <span className="workflow-node-note">Runs selected body steps once per collection item.</span> : null}
@@ -2817,12 +2817,14 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       const baseId = String(stepRun.step_identifier || "").split("@")[0];
       if (!baseId) continue;
       const current = trace[baseId];
-      const status = String(stepRun.status || "").toUpperCase();
+      const rawStatus = String(stepRun.status || "").toUpperCase();
       const result = stepRun.metadata?.result || {};
+      const status = result?.faultHandled === true ? "FAULT_HANDLED" : rawStatus;
       const next = {
         status,
+        faultHandled: result?.faultHandled === true,
         simulated: result?.simulated === true,
-        error: stepRun.metadata?.friendlyError || (stepRun.error_text ? { title: "This step could not complete", whatHappened: stepRun.error_text, howToFix: "Open the step Properties and check its required values and Resources." } : null),
+        error: stepRun.metadata?.friendlyError || result?.friendlyError || (stepRun.error_text ? { title: "This step could not complete", whatHappened: stepRun.error_text, howToFix: "Open the step Properties and check its required values and Resources." } : null),
       };
       if (!current || status === "FAILED" || (current.status !== "FAILED" && status === "COMPLETED")) trace[baseId] = next;
     }
