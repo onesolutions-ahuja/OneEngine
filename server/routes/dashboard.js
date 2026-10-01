@@ -1,9 +1,9 @@
 import express from "express";
 
-export default function createDashboardRouter({ authenticate, db }) {
+export default function createDashboardRouter({ authenticate, authorize, db }) {
   const router = express.Router();
 
-  router.get("/dashboard/summary", authenticate, async (req, res) => {
+  router.get("/dashboard/summary", authenticate, authorize("dashboard.view"), async (req, res) => {
     try {
       const result = await db(
         `
