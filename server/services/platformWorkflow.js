@@ -2209,10 +2209,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
       const fieldResult = await db(
-        "SELECT api_name,source_column,field_type,readable,active FROM platform_fields WHERE object_id=$1 AND active=true AND readable=true ORDER BY display_order,label",
-        [targetObject.id]
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
+        [targetObject.id, req?.user?.companyId || companyId]
       );
-      const fields = fieldResult.rows || [];
+      const securedFields = req?.user
+        ? await applyFieldSecurity(db, fieldResult.rows || [], req)
+        : (fieldResult.rows || []);
+      const fields = securedFields.filter((field) => field.readable !== false && isSafeIdentifier(field.source_column || ""));
       const fieldByKey = new Map();
       for (const field of fields) {
         fieldByKey.set(String(field.api_name), field);
@@ -2275,7 +2278,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 50 : 1)), 200));
       params.push(requestedLimit);
       const where = clauses.length ? " WHERE " + clauses.join(" AND ") : "";
-      const query = 'SELECT * FROM "' + table + '"' + where + orderBy + " LIMIT " + parameter(params.length);
+      const selectColumns = ["id", ...fields.map((field) => '"' + field.source_column + '" AS "' + field.api_name + '"')];
+      const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + table + '"' + where + orderBy + " LIMIT " + parameter(params.length);
       const result = await db(query, params);
       const rows = result.rows || [];
       return {
