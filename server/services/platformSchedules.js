@@ -234,7 +234,7 @@ export async function claimDueScheduledWorkflows({ db, limit = 20, leaseSeconds 
      UPDATE platform_schedules s SET execution_state='RUNNING',
        locked_until=$1 + ($3 * INTERVAL '1 second'),updated_at=NOW()
      FROM due WHERE s.id=due.id
-     RETURNING s.id,s.company_id,s.workflow_id,s.schedule_type,s.schedule_definition,s.timezone,s.next_run_at AS fire_at`,
+     RETURNING s.id,s.company_id,s.workflow_id,s.schedule_type,s.schedule_definition,s.timezone,s.created_by,s.next_run_at AS fire_at`,
     [now, safeLimit, Math.max(Number(leaseSeconds) || 300, 30)]
   );
   const queued = [];
@@ -245,6 +245,7 @@ export async function claimDueScheduledWorkflows({ db, limit = 20, leaseSeconds 
       workflowId: schedule.workflow_id,
       companyId: schedule.company_id,
       triggerKey: "SCHEDULED",
+      actorUserId: schedule.created_by || null,
       fireAt: fireAt.toISOString(),
     };
     try {
