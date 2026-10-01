@@ -404,11 +404,6 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const activeTab = TABS.find((item) => item.key === tab)
   const ActiveTabIcon = activeTab?.icon || LayoutDashboard
   const listRows = saved[tab] || []
-  const visibleListRows = useMemo(() => {
-    const query = listQuery.trim().toLowerCase()
-    if (!query) return listRows
-    return listRows.filter((item) => `${rowTitle(item)} ${rowSubtitle(item)} ${item?.id || ''}`.toLowerCase().includes(query))
-  }, [listRows, listQuery, tab])
 
   const rowTitle = (item) => item?.name || item?.label || item?.report_key || item?.api_key || 'Untitled'
   const rowSubtitle = (item) => {
@@ -417,6 +412,12 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     if (tab === 'dashboard') return item?.description || item?.api_key || 'Dashboard'
     return item?.description || item?.report_key || 'Report'
   }
+
+  const visibleListRows = useMemo(() => {
+    const query = listQuery.trim().toLowerCase()
+    if (!query) return listRows
+    return listRows.filter((item) => `${rowTitle(item)} ${rowSubtitle(item)} ${item?.id || ''}`.toLowerCase().includes(query))
+  }, [listRows, listQuery, tab])
 
   if (tab === 'workflow' && mode === 'builder') {
     return (
