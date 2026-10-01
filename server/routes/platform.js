@@ -3377,8 +3377,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   });
 
   async function normalizeRuleLifecycle(rule, fallbackActive = false) {
-    const lifecycle = String(rule?.lifecycle_status ?? rule?.lifecycleStatus ?? (rule?.active === true ? "ACTIVE" : fallbackActive ? "ACTIVE" : "DRAFT")).toUpperCase();
-    if (!['DRAFT', 'ACTIVE', 'INACTIVE'].includes(lifecycle)) return 'DRAFT';
+    const requested = String(rule?.lifecycle_status ?? rule?.lifecycleStatus ?? (rule?.active === true ? "ACTIVE" : fallbackActive ? "ACTIVE" : "DRAFT")).toUpperCase();
+    const lifecycle = ['DRAFT', 'ACTIVE', 'INACTIVE'].includes(requested) ? requested : "DRAFT";
     const version = Number.isFinite(Number(rule?.version)) ? Math.max(1, Number(rule.version)) : 1;
     const active = rule?.active === undefined ? lifecycle === "ACTIVE" : Boolean(rule.active);
     return { lifecycle, version, active };
