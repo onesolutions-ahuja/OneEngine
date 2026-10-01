@@ -1259,8 +1259,6 @@ app.get("/api/auth/me/stores", authenticate, async (req, res) => {
 
 app.get("/api/auth/me/permissions", authenticate, async (req, res) => {
   try {
-    const isAdmin = await canViewCompanyCustomers(req.user, req);
-
     let permissions = req.user.roleId ? await getRolePermissionCodes(req.user.roleId, req) : [];
     const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
     permissions = [...new Set([...permissions, ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : [])])];
@@ -1269,7 +1267,6 @@ app.get("/api/auth/me/permissions", authenticate, async (req, res) => {
     res.json({
       success: true,
       data: {
-        isAdmin,
         permissions,
         ...(includeEntitlements ? { entitlements: await getCompanyEntitlements(db, req.user.companyId) } : {}),
       },
