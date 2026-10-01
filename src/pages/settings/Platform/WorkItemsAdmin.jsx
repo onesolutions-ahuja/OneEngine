@@ -103,7 +103,8 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
   const terminal = selected ? ["APPROVED","REJECTED","CANCELLED"].includes(normalizedStatus(selected.status)) : false;
 
   const processConfig = selected?.process_config || {};
-  const canReassign = selected && !terminal && processConfig.allowReassign !== false;
+  const canDecide = selected?.can_decide === true;
+  const canReassign = selected?.can_reassign === true;
   const requireRejectComment = processConfig.requireCommentOnReject !== false;
 
   const reassign = async () => {
@@ -230,17 +231,16 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
               </div>
             </div>
 
-            {!terminal ? (
+            {!terminal && (canDecide || canReassign || selected?.can_recall) ? (
               <>
                 <div className="developer-record-section">
                   <div className="developer-record-section-title">Decision comment {requireRejectComment ? "· required for rejection" : ""}</div>
                   <textarea className="w-full rounded-lg border p-3" rows={3} value={comment} onChange={e=>setComment(e.target.value)} placeholder="Add context for the submitter and future audit history…" />
                 </div>
                 <div className="developer-record-actions">
-                  <button type="button" className="is-primary" disabled={working===selected.id} onClick={()=>updateItem(selected.id,"approve")}>{working===selected.id?"Working…":"Approve"}</button>
-                  <button type="button" className="is-danger" disabled={working===selected.id || (requireRejectComment && !comment.trim())} onClick={()=>updateItem(selected.id,"reject")}>Reject</button>
+                  {canDecide ? <><button type="button" className="is-primary" disabled={working===selected.id} onClick={()=>updateItem(selected.id,"approve")}>{working===selected.id?"Working…":"Approve"}</button><button type="button" className="is-danger" disabled={working===selected.id || (requireRejectComment && !comment.trim())} onClick={()=>updateItem(selected.id,"reject")}>Reject</button></> : null}
                   {canReassign ? <><select value={reassignTo} onChange={e=>setReassignTo(e.target.value)}><option value="">Reassign to…</option>{users.map(user=><option key={user.id} value={user.id}>{user.username||user.email} · {user.role_name||"User"}</option>)}</select><button type="button" disabled={!reassignTo||working===selected.id} onClick={reassign}>Reassign</button></> : null}
-                  <button type="button" disabled={working===selected.id} onClick={recall}>Recall</button>
+                  {selected?.can_recall ? <button type="button" disabled={working===selected.id} onClick={recall}>Recall</button> : null}
                 </div>
               </>
             ) : null}
