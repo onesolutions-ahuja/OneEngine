@@ -35,7 +35,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   // version/test APIs rather than only checking their disabled pre-save state.
   const qaWorkflowName = `Workflow Builder E2E ${Date.now()}`;
   await page.getByPlaceholder("Workflow name").fill(qaWorkflowName);
-  const initialTriggerSelect = page.locator(".workflow-builder-field").filter({ hasText: "Trigger" }).locator("select");
+  const initialTriggerSelect = page.getByLabel("Workflow trigger");
   await initialTriggerSelect.selectOption("manual");
   await page.getByRole("button", { name: "Stop", exact: true }).first().click();
   await page.getByRole("button", { name: "Save Draft", exact: true }).click();
@@ -70,7 +70,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
 
   // Record-triggered Start configuration exposes Salesforce-style transition
   // semantics without requiring Changed operators on every individual field.
-  const triggerSelect = page.locator(".workflow-builder-field").filter({ hasText: "Trigger" }).locator("select");
+  const triggerSelect = page.getByLabel("Workflow trigger");
   await triggerSelect.selectOption("after_update");
   await page.locator(".workflow-start-node").click();
   await expect(page.getByText("When conditions become true", { exact: true })).toBeVisible();
