@@ -2005,7 +2005,6 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 </button>
               ))}
               <div className="workflow-palette-group-title">Flow context</div>
-              <div className="workflow-palette-group-title">Flow context</div>
               {visibleGlobalResources.map((resource) => (
                 <div key={resource.label} className="workflow-palette-item">
                   <span className="workflow-palette-item-copy">
@@ -2207,9 +2206,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     }
 
     return {
-      name: scopeKey === "whatsapp_assistant" ? "WhatsApp Assistant Workflow" : "Order Ready Workflow",
-      object: scopeKey === "whatsapp_assistant" ? "" : "orders",
-      trigger: scopeKey === "whatsapp_assistant" ? "whatsapp_message_received" : "after_update",
+      name: scopeKey === "whatsapp_assistant" ? "WhatsApp Assistant Workflow" : "",
+      object: "",
+      trigger: scopeKey === "whatsapp_assistant" ? "whatsapp_message_received" : "manual",
       version: 1,
       lifecycleStatus: "DRAFT",
       active: false,
@@ -2217,14 +2216,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       outputContract: [],
       steps: scopeKey === "whatsapp_assistant"
         ? [
-            { ...makeStep("WHEN"), type: "CONDITION", label: "Condition" },
+            { ...makeStep("WHEN"), type: "CONDITION", label: "Decision" },
             { ...makeStep("SEND_WHATSAPP"), config: { ...makeStep("SEND_WHATSAPP").config, template: "", recipient: "customer.phone" } },
           ]
-        : [
-            { ...makeStep("WHEN"), type: "CONDITION", label: "Condition" },
-            { ...makeStep("CREATE_RECORD"), config: { ...makeStep("CREATE_RECORD").config, object: "orders", fieldMappings: { status: "status" } } },
-            { ...makeStep("SEND_SMS"), config: { ...makeStep("SEND_SMS").config, template: "order_status", recipient: "customer.phone" } },
-          ],
+        : [],
     };
   });
 
