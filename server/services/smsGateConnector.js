@@ -152,8 +152,36 @@ export async function configureSmsGateInboundWebhook(configuration = {}, { webho
         ? current.webhooks
         : [];
 
-  const existing = webhooks.find((hook) =>
-    String(hook?.url || "").replace(/\/+$/, "") === url.replace(/\/+$/, "")
+  const normalizedUrl = url.replace(/\/+$/, "");
+  const target = new URL(normalizedUrl);
+  const pathParts = target.pathname.split("/").filter(Boolean);
+  const connectionPrefix = "/" + pathParts.slice(0, 4).join("/");
+
+  // Reconcile only stale OnePOS callbacks for this exact connection.
+  // This safely removes an older tokenless/tokenized registration without
+  // touching unrelated SMSGate webhooks owned by the customer.
+  const stale = webhooks.filter((hook) => {
+    if (String(hook?.event || "").toLowerCase() !== "sms:received") return false;
+    const hookUrl = String(hook?.url || "").replace(/\/+$/, "");
+    if (!hookUrl || hookUrl === normalizedUrl) return false;
+    try {
+      const parsed = new URL(hookUrl);
+      return parsed.origin === target.origin
+        && (parsed.pathname === connectionPrefix || parsed.pathname.startsWith(connectionPrefix + "/"));
+    } catch {
+      return false;
+    }
+  });
+
+  for (const hook of stale) {
+    const webhookId = hook?.id || hook?.webhookId || null;
+    if (!webhookId) continue;
+    await request(configuration, `/3rdparty/v1/webhooks/${encodeURIComponent(webhookId)}`, { method: "DELETE" });
+  }
+
+  const remaining = webhooks.filter((hook) => !stale.includes(hook));
+  const existing = remaining.find((hook) =>
+    String(hook?.url || "").replace(/\/+$/, "") === normalizedUrl
       && String(hook?.event || "").toLowerCase() === "sms:received"
   );
 
@@ -161,6 +189,7 @@ export async function configureSmsGateInboundWebhook(configuration = {}, { webho
     return {
       configured: true,
       created: false,
+      removedStale: stale.length,
       webhookId: existing.id || existing.webhookId || null,
       webhookUrl: url,
       event: "sms:received",
@@ -173,6 +202,7 @@ export async function configureSmsGateInboundWebhook(configuration = {}, { webho
   return {
     configured: true,
     created: true,
+    removedStale: stale.length,
     webhookId: created?.id || created?.webhookId || null,
     webhookUrl: url,
     event: "sms:received",
