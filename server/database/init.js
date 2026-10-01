@@ -723,7 +723,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         `);
         console.log(`onePOS: visible OneAssistant confirmation messages ready: ${verified.rows[0]?.count || 0}`);
       },
-    },,
+    },
     {
       key: "0028_workflow_records_view_permission",
       version: "28",
