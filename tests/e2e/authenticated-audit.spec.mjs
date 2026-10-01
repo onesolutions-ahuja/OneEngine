@@ -66,3 +66,28 @@ test("workflow builder can add/select/delete a step without stale selection", as
   await expect(page.getByText("Select a flow element to configure it.")).toBeVisible();
   expect(failures, failures.join("\n")).toEqual([]);
 });
+
+
+test("approval builder exposes enterprise assignment, deadlines and safe debug", async ({ page }) => {
+  const failures=watchRuntimeFailures(page);
+  await page.goto("developer/approval-builder");
+  const newApproval=page.getByRole("button",{name:/new approval/i});
+  if(await newApproval.isVisible().catch(()=>false)) await newApproval.click();
+  await expect(page.getByRole("option",{name:"Submitter’s manager"})).toHaveCount(1);
+  await expect(page.getByRole("option",{name:"First response decides"})).toHaveCount(1);
+  await expect(page.getByRole("option",{name:"All approvers must approve"})).toHaveCount(1);
+  await expect(page.getByPlaceholder("Due in hours")).toBeVisible();
+  await expect(page.getByText("Test Approval",{exact:true})).toBeVisible();
+  await expect(page.getByText(/No records are changed/i)).toBeVisible();
+  expect(failures,failures.join("\n")).toEqual([]);
+});
+
+test("approval work items expose hierarchy, queues and delegation without unsafe decisions", async ({ page }) => {
+  const failures=watchRuntimeFailures(page);
+  await page.goto("developer/work-items");
+  await expect(page.getByText("Approval Administration",{exact:true})).toBeVisible();
+  await expect(page.getByText("Queues / Groups",{exact:true})).toBeVisible();
+  await expect(page.getByText("Manager hierarchy",{exact:true})).toBeVisible();
+  await expect(page.getByText("My delegate",{exact:true})).toBeVisible();
+  expect(failures,failures.join("\n")).toEqual([]);
+});
