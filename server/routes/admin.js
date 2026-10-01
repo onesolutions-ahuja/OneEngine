@@ -446,13 +446,24 @@ export default function createAdminRouter({
           [role.id, req.user.companyId]
         );
         if (holders.rows.length) {
-          const otherUsers = await client.query(
-            "SELECT id,role_id FROM users WHERE company_id=$1 AND active AND role_id IS DISTINCT FROM $2",
-            [req.user.companyId, role.id]
+          const activeUsers = await client.query(
+            "SELECT id,role_id FROM users WHERE company_id=$1 AND active",
+            [req.user.companyId]
           );
           let hasAlternativeCompanyScope = false;
-          for (const user of otherUsers.rows) {
-            const permissionReq = { ...req, user: { ...req.user, id: user.id, roleId: user.role_id, companyId: req.user.companyId } };
+          for (const user of activeUsers.rows) {
+            const permissionReq = {
+              ...req,
+              user: {
+                ...req.user,
+                id: user.id,
+                // Users on the role being deactivated lose that role but keep
+                // independently assigned permission sets. Evaluate exactly
+                // that post-deactivation state to avoid a false lockout block.
+                roleId: String(user.role_id || "") === String(role.id) ? null : user.role_id,
+                companyId: req.user.companyId,
+              },
+            };
             if (await hasPermission(permissionReq, "company.scope.all")) {
               hasAlternativeCompanyScope = true;
               break;
