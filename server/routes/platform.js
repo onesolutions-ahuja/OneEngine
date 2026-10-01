@@ -4826,15 +4826,20 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   }
 
   async function hasExecutionPermission(req, permission) {
-    const result = await db(
-      `SELECT 1
-       FROM role_permissions rp
-       JOIN permissions p ON p.id=rp.permission_id
-       WHERE rp.role_id=$1 AND p.code=$2
-       LIMIT 1`,
-      [req.user?.roleId, permission]
-    );
-    return result.rows.length > 0;
+    if (!req.user?.id || !permission) return false;
+    if (hasPermission) return hasPermission(req, permission);
+    const [result, permissionSets] = await Promise.all([
+      db(
+        `SELECT 1
+         FROM role_permissions rp
+         JOIN permissions p ON p.id=rp.permission_id
+         WHERE rp.role_id=$1 AND p.code=$2
+         LIMIT 1`,
+        [req.user?.roleId, permission]
+      ),
+      loadEffectivePermissionSets(db, req.user, req),
+    ]);
+    return result.rows.length > 0 || permissionSetAllowsSystemPermission(permissionSets, permission);
   }
 
   router.get("/platform/runtime/settings-catalog", authenticate, async (req, res, next) => {
