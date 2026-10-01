@@ -1281,14 +1281,16 @@ export default function createKioskRouter({
       const orderResult = await client.query(
         `INSERT INTO online_orders (
            company_id,store_id,customer_id,platform,external_order_id,external_reference,
-           status,fulfilment_type,currency,subtotal,tax,delivery_fee,total,notes,
+           status,customer_name,customer_phone,customer_email,delivery_address,customer_data,
+           fulfilment_type,currency,subtotal,tax,delivery_fee,total,notes,
            payment_method,payment_status,platform_data,inventory_reserved,
            accepted_at,preparing_at
          )
          VALUES (
            $1,$2,$3,'one_kiosk',$4,$5,
-           'PREPARING',$6,$7,$8,$9,0,$10,$11,
-           $12,'paid',$13::jsonb,FALSE,
+           'PREPARING',$6,$7,$8,$9,$10::jsonb,
+           $11,$12,$13,$14,0,$15,$16,
+           $17,'paid',$18::jsonb,FALSE,
            NOW(),NOW()
          )
          RETURNING *`,
@@ -1298,6 +1300,16 @@ export default function createKioskRouter({
           sale.customer_id || null,
           externalOrderId,
           collectionNumber,
+          String(fulfilmentDetails.name || "").trim() || null,
+          String(fulfilmentDetails.phone || "").trim() || null,
+          String(fulfilmentDetails.email || "").trim().toLowerCase() || null,
+          canonicalFulfilmentType === "DELIVERY"
+            ? [fulfilmentDetails.address1, fulfilmentDetails.address2, fulfilmentDetails.city, fulfilmentDetails.postcode].filter(Boolean).join(", ") || null
+            : null,
+          JSON.stringify({
+            journeyData: fulfilmentDetails.journeyData || {},
+            requestedFulfilmentType: fulfilmentType,
+          }),
           canonicalFulfilmentType,
           String(sale.currency || "GBP").toUpperCase(),
           Number(sale.subtotal) || 0,
