@@ -132,7 +132,7 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
            FROM users u
            JOIN role_permissions rp ON rp.role_id=u.role_id
            JOIN permissions p ON p.id=rp.permission_id
-          WHERE u.active=true AND u.email IS NOT NULL AND p.code='platform.manage'`
+          WHERE u.active=true AND u.email IS NOT NULL AND p.code='oneengine.manage'`
       )).rows.map((row) => row.email)
     : [recipientSpec];
   const body = renderTemplate(action.body || action.message || action.templateBody || template?.body, action.templateContext || {});
