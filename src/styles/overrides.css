@@ -3130,3 +3130,6 @@
     height: 42px;
   }
 }
+
+/* Audit: make negative inventory immediately visible in Product Master. */
+.product-stock-negative{color:#b42318;font-weight:700}
