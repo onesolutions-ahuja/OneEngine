@@ -395,7 +395,8 @@ export function packageDefinition(entry) {
               },
               actions: []
             },
-            active: false
+            active: true,
+            lifecycleStatus: "ACTIVE"
           },
           {
             objectKey: "product",
@@ -434,7 +435,8 @@ export function packageDefinition(entry) {
               },
               actions: []
             },
-            active: false
+            active: true,
+            lifecycleStatus: "ACTIVE"
           }
         ]
       } : {}),
@@ -2897,6 +2899,15 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     if (!safeMetadataKey(rule.triggerKey || rule.trigger_key)) {
       throw new Error(`Package rule "${rule.name}" has an invalid trigger key`);
     }
+    const packageRuleActive =
+      (rule.action?.type === "validation" && rule.active === true) ||
+      (rule.action?.type === "workflow" && rule.active === true && String(rule.action?.flowType || "").toUpperCase() === "KIOSK_EXPERIENCE");
+    const packageRuleLifecycle = packageRuleActive
+      ? "ACTIVE"
+      : String(rule.lifecycleStatus || rule.lifecycle_status || "INACTIVE").toUpperCase() === "ACTIVE" && rule.active === true
+        ? "ACTIVE"
+        : "INACTIVE";
+
     const existingRule = await db(
       "SELECT id,action,source_package_id,user_modified FROM platform_rules WHERE object_id=$1 AND company_id IS NOT DISTINCT FROM $2 AND name=$3 LIMIT 1",
       [objectId, companyId || null, rule.name.trim()]
@@ -2918,8 +2929,8 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
                 updated_at=NOW()
           WHERE id=$8 AND source_package_id=$9`,
         [rule.triggerKey || rule.trigger_key, JSON.stringify(rule.conditions || []), JSON.stringify(ruleAction),
-          rule.action?.type === "validation" && rule.active === true,
-          rule.action?.type === "validation" && rule.active === true ? "ACTIVE" : "INACTIVE",
+          packageRuleActive,
+          packageRuleLifecycle,
           packageVersion, rule.required === true, existingRule.rows[0].id, packageId]
       );
       continue;
@@ -2934,9 +2945,9 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
         rule.triggerKey || rule.trigger_key,
         JSON.stringify(rule.conditions || []),
         JSON.stringify(ruleAction),
-        rule.action?.type === "validation" && rule.active === true,
+        packageRuleActive,
         companyId || null,
-        rule.action?.type === "validation" && rule.active === true ? "ACTIVE" : "INACTIVE",
+        packageRuleLifecycle,
         packageId,
         packageVersion,
         rule.required === true,
