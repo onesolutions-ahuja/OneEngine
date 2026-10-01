@@ -407,7 +407,10 @@ export async function ensureActingCompanyContext() {
     const permissionCodes = Array.isArray(permissionState?.permissions)
       ? permissionState.permissions
       : []
-    const canActForCompany = permissionCodes.includes('platform.manage') || user?.isPlatformDeveloper === true
+    const canActForCompany =
+      permissionCodes.includes('oneengine.manage')
+      || permissionCodes.includes('platform.manage') // legacy compatibility
+      || user?.isPlatformDeveloper === true
 
     if (!canActForCompany) return rememberedCompanyId || ''
 
