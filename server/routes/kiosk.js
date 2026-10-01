@@ -333,6 +333,50 @@ export default function createKioskRouter({
     }
   });
 
+  router.post("/kiosk/age-approval/request", authenticate, async (req, res) => {
+    const deviceKey = String(req.body?.deviceKey || req.user?.kioskDeviceKey || "").trim();
+    if (!deviceKey) return res.status(400).json({ success: false, message: "Kiosk device key is required" });
+    if (req.user?.mode === "kiosk" && String(req.user.kioskDeviceKey || "") !== deviceKey) {
+      return res.status(403).json({ success: false, message: "This kiosk session belongs to another device" });
+    }
+    try {
+      const result = await db(
+        `UPDATE kiosk_devices
+            SET age_approval_requested_at=NOW(),age_approved_until=NULL,age_approved_by=NULL,updated_at=NOW()
+          WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND active=TRUE
+          RETURNING id,name,age_approval_requested_at`,
+        [req.user.companyId, req.user.storeId, deviceKey]
+      );
+      if (!result.rows.length) return res.status(404).json({ success: false, message: "Kiosk device is unavailable" });
+      await writeAudit?.(req.user.companyId, req.user.id || null, "KIOSK_AGE_APPROVAL_REQUESTED", "kiosk_device", result.rows[0].id, {});
+      res.json({ success: true, message: "Staff approval requested", data: result.rows[0] });
+    } catch (error) {
+      console.error("OneKiosk age approval request error:", error);
+      res.status(500).json({ success: false, message: "Unable to request age approval" });
+    }
+  });
+
+  router.post("/kiosk/devices/:id/age-approve", authenticate, authorize("sale.create"), async (req, res) => {
+    if (req.user?.mode === "kiosk") return res.status(403).json({ success: false, message: "Staff access required" });
+    try {
+      const minutes = Math.min(15, Math.max(2, Number(req.body?.minutes) || 5));
+      const result = await db(
+        `UPDATE kiosk_devices
+            SET age_approved_until=NOW()+($1::text||' minutes')::interval,
+                age_approved_by=$2,age_approval_requested_at=NULL,updated_at=NOW()
+          WHERE id=$3 AND company_id=$4 AND store_id=$5 AND active=TRUE
+          RETURNING id,name,age_approved_until`,
+        [minutes, req.user.id, req.params.id, req.user.companyId, req.user.storeId]
+      );
+      if (!result.rows.length) return res.status(404).json({ success: false, message: "Kiosk device not found" });
+      await writeAudit?.(req.user.companyId, req.user.id, "KIOSK_AGE_APPROVED", "kiosk_device", req.params.id, { minutes });
+      res.json({ success: true, message: "Age check approved", data: result.rows[0] });
+    } catch (error) {
+      console.error("Approve OneKiosk age check error:", error);
+      res.status(500).json({ success: false, message: "Unable to approve age check" });
+    }
+  });
+
   router.post("/kiosk/assistance", authenticate, async (req, res) => {
     const deviceKey = String(req.body?.deviceKey || req.user?.kioskDeviceKey || "").trim();
     const note = String(req.body?.note || "Customer requested assistance").trim().slice(0, 300);
@@ -594,6 +638,7 @@ export default function createKioskRouter({
     try {
       const deviceResult = await db(
         `SELECT kd.id,kd.device_key,kd.name,kd.workflow_id,kd.payment_connector_id,kd.printer_connector_id,
+                kd.age_approval_requested_at,kd.age_approved_until,kd.age_approved_by,
                 kd.printer_name,kd.printer_connection_type,kd.printer_connection_address,
                 kd.printer_paper_width,kd.printer_required,kd.printer_status,
                 pc.name AS payment_connector_name,pc.connector_package_key,
@@ -649,7 +694,14 @@ export default function createKioskRouter({
       res.json({
         success: true,
         data: {
-          device: { id: device.id, deviceKey: device.device_key, name: device.name },
+          device: {
+            id: device.id,
+            deviceKey: device.device_key,
+            name: device.name,
+            ageApprovalRequestedAt: device.age_approval_requested_at || null,
+            ageApprovedUntil: device.age_approved_until || null,
+            ageApproved: Boolean(device.age_approved_until && new Date(device.age_approved_until).getTime() > Date.now()),
+          },
           printer: {
             connectorInstanceId: device.printer_connector_id || null,
             connectorName: device.printer_connector_name || null,
@@ -1300,6 +1352,7 @@ export function createKioskModeGate() {
       (method === "POST" && path === "/api/kiosk/quote") ||
       (method === "POST" && path === "/api/kiosk/availability") ||
       (method === "POST" && path === "/api/kiosk/assistance") ||
+      (method === "POST" && path === "/api/kiosk/age-approval/request") ||
       (method === "POST" && path === "/api/kiosk/customer-lookup") ||
       (method === "POST" && path === "/api/kiosk/receipt/email") ||
       (method === "POST" && path === "/api/kiosk/receipt/print") ||
