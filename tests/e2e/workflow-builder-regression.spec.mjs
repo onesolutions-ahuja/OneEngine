@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { loginIfConfigured, watchRuntimeFailures } from "./helpers.mjs";
 
 test.beforeEach(async ({ page }) => {
-  test.skip(!(process.env.ONEPOS_E2E_USERNAME && process.env.ONEPOS_E2E_PASSWORD), "Set ONEPOS_E2E_USERNAME and ONEPOS_E2E_PASSWORD GitHub secrets for authenticated QA.");
+  test.skip(!(process.env.ONEPOS_E2E_USERNAME && process.env.ONEPOS_E2E_PASSWORD), "Set ONEPOS_PLAYWRIGHT_USERNAME and ONEPOS_PLAYWRIGHT_PASSWORD in GitHub Actions repository Variables for authenticated QA.");
   await loginIfConfigured(page);
 });
 
