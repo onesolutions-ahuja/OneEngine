@@ -76,9 +76,11 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
       const signingKey = secrets.webhookSigningKey || configuration.webhookSigningKey || "";
       const configuredToken = String(secrets.webhookToken || "").trim();
       const suppliedToken = String(req.params.webhookToken || "").trim();
-      const tokenValid = configuredToken && suppliedToken
-        ? crypto.timingSafeEqual(Buffer.from(configuredToken), Buffer.from(suppliedToken))
-        : false;
+      const configuredTokenBuffer = Buffer.from(configuredToken);
+      const suppliedTokenBuffer = Buffer.from(suppliedToken);
+      const tokenValid = configuredTokenBuffer.length > 0
+        && configuredTokenBuffer.length === suppliedTokenBuffer.length
+        && crypto.timingSafeEqual(configuredTokenBuffer, suppliedTokenBuffer);
       const signatureValid = signingKey
         ? verifySmsGateSignature(rawBody, req.headers, signingKey)
         : false;
