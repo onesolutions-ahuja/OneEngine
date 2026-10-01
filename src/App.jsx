@@ -163,6 +163,8 @@ import {
   RefreshCw,
   LogOut,
   SunMedium,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 
 const dockItems = [
@@ -360,6 +362,7 @@ function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const storedUser = getStoredUser()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -409,7 +412,8 @@ function LockScreen({ onUnlock, onSignOut, preparing = false }) {
         return
       }
 
-      if (!username.trim() || !password) return
+      if (!username.trim()) { setError('Enter your email or username.'); return }
+      if (!password) { setError('Enter your password.'); return }
       await login(username.trim(), password)
       onUnlock()
     } catch (err) {
@@ -494,14 +498,26 @@ function LockScreen({ onUnlock, onSignOut, preparing = false }) {
                 autoFocus
               />
 
-              <input
-                className="login-field"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Password"
-                type="password"
-                autoComplete="current-password"
-              />
+              <div className="login-password-wrap">
+                <input
+                  className="login-field"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  aria-label="Password"
+                />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                </button>
+              </div>
 
               {error ? <div className="login-error">{error}</div> : null}
 
@@ -712,7 +728,16 @@ function readRoute() {
   const path = window.location.pathname.startsWith(base)
     ? window.location.pathname.slice(base.length)
     : window.location.pathname
-  const parts = path.replace(/^\/+/, '').split('/').filter(Boolean)
+  const hashPath = String(window.location.hash || '').replace(/^#\/?/, '')
+  let routePath = path.replace(/^\/+/, '')
+  if (!routePath && hashPath) routePath = hashPath
+  if (!routePath) {
+    try {
+      const remembered = sessionStorage.getItem('onepos.lastRoute') || ''
+      routePath = remembered.startsWith(base) ? remembered.slice(base.length).replace(/^\/+/, '') : remembered.replace(/^\/+/, '')
+    } catch {}
+  }
+  const parts = routePath.split('/').filter(Boolean)
   if (parts[0] === 'settings') {
     const section = !parts[1] || parts[1] === 'general' ? 'company' : parts[1]
     if (DEVELOPER_SETTINGS_KEYS.has(section)) return { app: 'developer', section: section === 'platform' ? 'workflow-builder' : section }
@@ -840,6 +865,7 @@ function setRoute(app, section = null, options = {}) {
           ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
           : `${base}/workspace`
         : `${base}/`
+  try { sessionStorage.setItem('onepos.lastRoute', next) } catch {}
   if (window.location.pathname !== next) window.history.pushState(null, '', next)
 }
 
@@ -2154,6 +2180,7 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
                 type="button"
                 className="launcher-app"
                 role="listitem"
+                aria-label={item.name || item.package_key}
                 title={installed ? (item.name || item.package_key) : `${item.name || item.package_key} — available in oneStore`}
                 initial={{ opacity: 0, y: 18, scale: 0.9 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -2368,7 +2395,7 @@ function Desktop({ onLock, onSignOut }) {
   const canManageOneEngine = desktopPermissions.includes('oneengine.manage') || desktopPermissions.includes('platform.manage')
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
-  const isTillUser = /till|cashier|sales/i.test(String(storedUser?.role || ''))
+  const isTillUser = String(storedUser?.defaultLandingPage || '').toLowerCase() === 'till'
 
   useEffect(() => {
     if (!isTillUser || activeApp !== 'home') return
