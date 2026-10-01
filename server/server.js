@@ -1422,7 +1422,7 @@ app.use("/api", createGlobalProductLookupRouter({
   lookupService: globalProductLookupService,
 }));
 
-app.use("/api", createDashboardRouter({ authenticate, db }));
+app.use("/api", createDashboardRouter({ authenticate, authorize, db }));
 app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
 
 /*
