@@ -7,11 +7,6 @@ import { isSafeIdentifier } from "./platformMetadata.js";
 export async function hasPlatformObjectPermission(db, req, objectId, action) {
   if (!objectId || !req.user?.companyId) return false;
   if (!req.user?.roleId) return false;
-  const platformPermission = await db(
-    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
-    [req.user.roleId]
-  );
-  if (platformPermission.rows.length) return true;
   const [permissionResult, permissionSets] = await Promise.all([
     db("SELECT can_view, can_create, can_edit, can_delete, can_import, can_export FROM platform_object_permissions WHERE object_id=$1 AND role_id=$2 AND company_id=$3", [objectId, req.user.roleId, req.user.companyId]),
     loadEffectivePermissionSets(db, req.user, req),
