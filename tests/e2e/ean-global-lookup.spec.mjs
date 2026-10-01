@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { loginIfConfigured, watchRuntimeFailures } from './helpers.mjs'
 
-const EAN = process.env.ONEPOS_E2E_EAN || '3017620422003'
+const EAN = process.env.ONEPOS_E2E_EAN || '5012035962142'
 
 test.beforeEach(async ({ page }) => {
   test.skip(!(process.env.ONEPOS_E2E_USERNAME && process.env.ONEPOS_E2E_PASSWORD), 'Authenticated E2E credentials are required.')
@@ -11,12 +11,13 @@ test.beforeEach(async ({ page }) => {
 test('EAN global lookup reaches the real lookup endpoint and renders a deterministic outcome', async ({ page }) => {
   const failures = watchRuntimeFailures(page)
   const lookupResponses = []
+  let searchStartedAt = 0
 
   page.on('response', async (response) => {
     if (response.request().method() === 'POST' && response.url().includes('/api/global-products/lookup')) {
       let body = null
       try { body = await response.json() } catch {}
-      lookupResponses.push({ status: response.status(), body })
+      lookupResponses.push({ status: response.status(), body, elapsedMs: searchStartedAt ? Date.now() - searchStartedAt : null })
     }
   })
 
@@ -29,10 +30,12 @@ test('EAN global lookup reaches the real lookup endpoint and renders a determini
 
   const search = page.getByRole('button', { name: /search worldwide/i })
   await expect(search).toBeEnabled()
+  searchStartedAt = Date.now()
   await search.click()
 
   await expect.poll(() => lookupResponses.length, { timeout: 20_000 }).toBeGreaterThan(0)
   const response = lookupResponses.at(-1)
+  console.log('EAN_LOOKUP_RESULT', JSON.stringify({ ean: EAN, httpStatus: response.status, elapsedMs: response.elapsedMs, body: response.body }))
   expect(response.status, JSON.stringify(response.body)).toBe(200)
   expect(response.body?.success, JSON.stringify(response.body)).toBe(true)
 
