@@ -56,6 +56,7 @@ function testRateLimited(companyId) {
 }
 
 const PHONE_NUMBER_ID_RE = /^\d{6,20}$/;
+const COUNTRY_CODE_RE = /^\+?\d{1,4}$/;
 const FINGERPRINT_PREFIX = "sha256:";
 const WHATSAPP_OPT_OUT_WORDS = new Set(["STOP", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"]);
 
@@ -263,6 +264,10 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
         appSecret,
         testToken, // issued by a successful POST /whatsapp/test-connection
       } = req.body || {};
+
+      if (defaultCountryCode !== undefined && defaultCountryCode !== null && String(defaultCountryCode).trim() && !COUNTRY_CODE_RE.test(String(defaultCountryCode).trim())) {
+        return res.status(400).json({ success: false, message: "Default country code must be a numeric international prefix such as +44." });
+      }
 
       const existing = await loadWhatsAppConfig(db, req.user.companyId);
       const candidateConfiguration = buildWhatsAppConfiguration(
