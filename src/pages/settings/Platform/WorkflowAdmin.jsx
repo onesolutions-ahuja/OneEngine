@@ -581,7 +581,9 @@ const actionOptions = [
   { value: "CONSTANT", label: "Constant" },
   { value: "FORMULA", label: "Formula" },
   { value: "ASSIGNMENT", label: "Assignment" },
+  { value: "LOOP", label: "Loop" },
   { value: "GET_RECORDS", label: "Get Records" },
+  { value: "BULK_UPDATE_RECORDS", label: "Bulk Update Records" },
   { value: "CREATE_RECORD", label: "Create Record" },
   { value: "UPDATE_RECORD", label: "Update Record" },
   { value: "UPDATE_RELATED_RECORD", label: "Update Related Record" },
@@ -626,6 +628,10 @@ function makeStep(type = "CREATE_RECORD") {
       resultType: "number",
       expression: "",
       formulaInputs: {},
+      collection: "",
+      itemVariable: "currentItem",
+      bodyBranch: [],
+      recordIds: "",
       filters: [],
       match: "all",
       sortField: "",
@@ -662,9 +668,9 @@ function getActionLabel(type) {
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONSTANT","FORMULA"].includes(key)) return "Resources";
-  if (["CONDITION","WAIT","STOP","ASSIGNMENT"].includes(key)) return "Logic";
+  if (["CONDITION","WAIT","STOP","ASSIGNMENT","LOOP"].includes(key)) return "Logic";
   if (key === "RUN_SUBFLOW") return "Workflows";
-  if (["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
+  if (["GET_RECORDS","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION"].includes(key)) return "Communication";
   if (key === "CALL_FUNCTION") return "Advanced";
   if (key.includes("WEBHOOK") || key === "HTTP_REQUEST" || key.startsWith("CONNECTOR_")) return "Integrations";
@@ -725,6 +731,16 @@ function workflowActionIssue(step, definition = null) {
     if (!String(config.expression || "").trim()) return "Enter a formula expression.";
     if (!config.formulaInputs || !Object.keys(config.formulaInputs).length) return "Add at least one formula input.";
     if (Object.keys(config.formulaInputs).some((name) => !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(name)))) return "Formula input names can only use letters, numbers and underscores.";
+  }
+  if (step.type === "LOOP") {
+    if (!config.collection) return "Choose the collection to loop through.";
+    if (!config.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.itemVariable))) return "Enter a valid Current Item variable name.";
+    if (!Array.isArray(config.bodyBranch) || !config.bodyBranch.length) return "Choose at least one step for the Loop body.";
+  }
+  if (step.type === "BULK_UPDATE_RECORDS") {
+    if (!config.object) return "Choose the target object.";
+    if (!config.recordIds) return "Choose the record collection.";
+    if (!config.fieldMappings || !Object.keys(config.fieldMappings).length) return "Map at least one field to update.";
   }
   if (step.type === "ASSIGNMENT") {
     if (!config.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.variableName))) return "Enter a valid variable name.";
@@ -900,6 +916,13 @@ function workflowStepResources(steps = [], currentIndex = 0) {
         label: `${label} → Assigned Value`,
         type: step.config.variableType || "step output",
       });
+    } else if (step.type === "LOOP" && step.config?.itemVariable) {
+      resources.push({
+        value: `variables.${step.config.itemVariable}`,
+        label: `${step.config.itemVariable} · Current Loop Item`,
+        type: "record",
+      });
+      resources.push({ value: `${prefix}.count`, label: `${label} → Iteration Count`, type: "number" });
     } else if (step.type === "GET_RECORDS") {
       resources.push(
         { value: `${prefix}.record.id`, label: `${label} → First Record → Record ID`, type: "step output" },
@@ -1156,6 +1179,62 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <textarea className={inputClass} rows={4} value={step.config?.expression || ""} onChange={(event) => updateConfig({ expression: event.target.value })} placeholder="amount + tax" />
               <p className="mt-1 text-[11px] text-slate-500">Supported: + - * / %, comparisons, && / ||, IF, COALESCE, CONCAT, ROUND, ABS, MIN and MAX. JavaScript is never executed.</p>
             </div>
+          </div>
+        );
+      case "LOOP":
+        return (
+          <div className="space-y-3">
+            <MetadataResourcePicker
+              objectKey={rootObjectKey}
+              extraResources={extraResources.filter((resource) => resource.type === "collection" || String(resource.value || "").endsWith(".records") || String(resource.value || "").startsWith("variables."))}
+              label="Collection"
+              value={step.config?.collection || ""}
+              onChange={(collection) => updateConfig({ collection })}
+            />
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Current Item variable</label>
+              <input className={inputClass} value={step.config?.itemVariable || "currentItem"} onChange={(event) => updateConfig({ itemVariable: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} />
+              <p className="mt-1 text-[11px] text-slate-500">Steps inside the Loop can use this Resource to access the item being processed.</p>
+            </div>
+            <BranchStepPicker label="Loop body steps" value={step.config?.bodyBranch || []} onChange={(bodyBranch) => updateConfig({ bodyBranch })} steps={allSteps} currentIndex={index} />
+            <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-800">
+              WAIT is currently blocked inside Loop bodies so durable resume cannot repeat or skip an iteration.
+            </div>
+          </div>
+        );
+      case "BULK_UPDATE_RECORDS":
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Object</label>
+              <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, fieldMappings: {} })} />
+            </div>
+            <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Record collection" value={step.config?.recordIds || ""} onChange={(recordIds) => updateConfig({ recordIds })} />
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Field updates</label>
+              <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                {Object.entries(step.config?.fieldMappings || {}).map(([key, value], mappingIndex) => (
+                  <div className="grid gap-2 md:grid-cols-2" key={`${key}-${mappingIndex}`}>
+                    <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={key} label="Target field" onChange={(field) => {
+                      const next = { ...(step.config?.fieldMappings || {}) };
+                      const currentValue = next[key];
+                      delete next[key];
+                      next[field] = currentValue;
+                      updateConfig({ fieldMappings: next });
+                    }} />
+                    <ResourceOrLiteralInput label="New value" value={value} onChange={(source) => updateFieldMapping(key, source)} rootObjectKey={rootObjectKey} extraResources={extraResources} />
+                  </div>
+                ))}
+                <button type="button" className="text-sm text-blue-700" onClick={() => {
+                  const next = { ...(step.config?.fieldMappings || {}) };
+                  let key = `field_${Object.keys(next).length + 1}`;
+                  while (Object.prototype.hasOwnProperty.call(next, key)) key += "_";
+                  next[key] = "";
+                  updateConfig({ fieldMappings: next });
+                }}>+ Add field</button>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500">All selected records are updated in one scoped database operation rather than one update per Loop iteration.</p>
           </div>
         );
       case "ASSIGNMENT":
@@ -1712,6 +1791,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <span className="workflow-node-kind">{getActionLabel(step.type)}</span>
               <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
               {step.type === "CONDITION" ? <span className="workflow-node-note">Decision branches are evaluated from metadata conditions.</span> : null}
+              {step.type === "LOOP" ? <span className="workflow-node-note">Runs selected body steps once per collection item.</span> : null}
             </button>
             {visibleCanvasSteps.findIndex((item) => item.index === index) < visibleCanvasSteps.length - 1 ? <div className="workflow-node-connector" /> : null}
           </div>)}
