@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2, ArrowLeft, Accessibility, Languages, HelpCircle, QrCode, GitCompareArrows } from "lucide-react";
-import { apiRequest, KIOSK_TOKEN_STORAGE_KEY } from "../../services/api.js";
+import { apiRequest, KIOSK_TOKEN_STORAGE_KEY, lockToKioskMode } from "../../services/api.js";
 import "./oneKiosk.css";
 
 const ONE_KIOSK_DEVICE_KEY = "onepos_one_kiosk_device_key";
@@ -325,6 +325,7 @@ export default function OneKioskPage({ publicMode = false }) {
               throw new Error(session?.message || "Unable to secure this kiosk device");
             }
             localStorage.setItem(KIOSK_TOKEN_STORAGE_KEY, session.data.modeToken);
+            lockToKioskMode();
           }
 
           await loadExperience(key);
