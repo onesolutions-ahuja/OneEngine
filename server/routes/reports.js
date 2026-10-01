@@ -607,8 +607,8 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         "sr.store_id = $2",
         "sr.return_type = 'CUSTOMER'",
         "sr.status = 'COMPLETED'",
-        "($3::date IS NULL OR sr.created_at::date >= $3::date)",
-        "($4::date IS NULL OR sr.created_at::date <= $4::date)",
+        "($3::date IS NULL OR (sr.created_at AT TIME ZONE c.timezone)::date >= $3::date)",
+        "($4::date IS NULL OR (sr.created_at AT TIME ZONE c.timezone)::date <= $4::date)",
       ];
       const params = [companyId, storeId, dateFrom, dateTo];
       if (productId) {
@@ -1008,6 +1008,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
           FROM stock_returns sr
           INNER JOIN stock_return_items sri ON sri.return_id=sr.id
           INNER JOIN sale_items si ON si.id=sri.sale_item_id
+          INNER JOIN companies c ON c.id=sr.company_id
           WHERE sr.company_id=$1 AND sr.store_id=$2 AND sr.return_type='CUSTOMER'
             AND ($3::date IS NULL OR sr.created_at::date >= $3::date)
             AND ($4::date IS NULL OR sr.created_at::date <= $4::date)
