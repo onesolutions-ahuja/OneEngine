@@ -2123,6 +2123,38 @@ async function startServer() {
     await bootstrapInitialSuperadmin(pool);
     console.log("onePOS: platform bootstrap ready");
 
+    const loadWorkflowAutomationActor = async (companyId, preferredUserId = null) => {
+      if (!companyId) throw Object.assign(new Error("Workflow automation requires a company context"), { retryable: false });
+      if (preferredUserId) {
+        const preferred = await db(
+          `SELECT u.id,u.role_id,u.store_id,u.till_id
+             FROM users u
+             JOIN roles r ON r.id=u.role_id
+            WHERE u.id=$1 AND u.company_id=$2 AND u.active=true
+              AND u.role_id IS NOT NULL
+              AND (r.company_id=$2 OR r.company_id IS NULL)
+            LIMIT 1`,
+          [preferredUserId, companyId]
+        );
+        if (preferred.rows[0]) return preferred.rows[0];
+      }
+      const fallback = await db(
+        `SELECT u.id,u.role_id,u.store_id,u.till_id
+           FROM users u
+           JOIN roles r ON r.id=u.role_id
+          WHERE u.company_id=$1 AND u.active=true
+            AND r.api_key='platform_superadmin'
+            AND (r.company_id=$1 OR r.company_id IS NULL)
+          ORDER BY u.created_at,u.id
+          LIMIT 1`,
+        [companyId]
+      );
+      if (!fallback.rows[0]) {
+        throw Object.assign(new Error("Workflow automation has no active RBAC execution user. Assign a tenant Superadmin or recreate the schedule/workflow with an active user."), { retryable: false });
+      }
+      return fallback.rows[0];
+    };
+
     const workflowEntriesContainStatus = (entries = [], status = "waiting") =>
       (Array.isArray(entries) ? entries : []).some((entry) => {
         if (String(entry?.result?.status || "").toLowerCase() === String(status).toLowerCase()) return true;
@@ -2217,11 +2249,11 @@ async function startServer() {
                   record = recordResult.rows[0] || null;
                 }
 
-                const actorId = parentRun?.metadata?.actorUserId || null;
-                const actorResult = actorId
-                  ? await db("SELECT id,role_id,store_id,till_id FROM users WHERE id=$1 AND company_id=$2 LIMIT 1", [actorId, job.company_id])
-                  : { rows: [] };
-                const actor = actorResult.rows[0] || {};
+                const actor = await loadWorkflowAutomationActor(
+                  job.company_id,
+                  parentRun?.metadata?.actorUserId || workflow.created_by || null
+                );
+                const actorId = actor.id;
                 const childRun = await createWorkflowRun({
                   db,
                   companyId: job.company_id,
@@ -2392,14 +2424,11 @@ async function startServer() {
                 record = recordResult.rows[0] || null;
               }
 
-              const actorId = run.metadata?.actorUserId || null;
-              const actorResult = actorId
-                ? await db(
-                    "SELECT id,role_id,store_id,till_id FROM users WHERE id=$1 AND company_id=$2 LIMIT 1",
-                    [actorId, job.company_id]
-                  )
-                : { rows: [] };
-              const actor = actorResult.rows[0] || {};
+              const actor = await loadWorkflowAutomationActor(
+                job.company_id,
+                run.metadata?.actorUserId || workflow.created_by || null
+              );
+              const actorId = actor.id;
               const allResumeActions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
               const scheduledResumeIds = run.trigger_key === "SCHEDULED_PATH" && Array.isArray(run.metadata?.scheduledPathStepIds)
                 ? new Set(run.metadata.scheduledPathStepIds.map(String))
@@ -2591,7 +2620,7 @@ async function startServer() {
             }
             if (job.kind === "PLATFORM_SCHEDULED_WORKFLOW") {
               const workflowResult = await db(
-                `SELECT id,name,object_id,action,version,active_version FROM platform_rules
+                `SELECT id,name,object_id,action,version,active_version,created_by FROM platform_rules
                  WHERE id=$1 AND company_id=$2 AND active=TRUE LIMIT 1`,
                 [payload.workflowId, payload.companyId || job.company_id]
               );
@@ -2640,10 +2669,20 @@ async function startServer() {
                   )
                 : { rows: [] };
               try {
+                const actor = await loadWorkflowAutomationActor(companyId, payload.actorUserId || workflow.created_by || null);
                 const results = await executeWorkflowActions({
                   actions,
                   db,
-                  req: { user: { companyId } },
+                  req: { user: {
+                    id: actor.id,
+                    roleId: actor.role_id,
+                    companyId,
+                    storeId: actor.store_id || null,
+                    tillId: actor.till_id || null,
+                  } },
+                  userId: actor.id,
+                  storeId: actor.store_id || null,
+                  tillId: actor.till_id || null,
                   companyId,
                   object: objectResult.rows[0] || null,
                   record: null,
@@ -2735,13 +2774,22 @@ async function startServer() {
                   )
                 : { rows: [] };
               try {
+                const actor = await loadWorkflowAutomationActor(job.company_id, payload.actorUserId || workflow.created_by || null);
                 const results = await executeWorkflowActions({
                   actions,
                   db,
                   pool,
-                  req: { user: { companyId: job.company_id, id: payload.actorUserId || null } },
+                  req: { user: {
+                    companyId: job.company_id,
+                    id: actor.id,
+                    roleId: actor.role_id,
+                    storeId: actor.store_id || payload.storeId || null,
+                    tillId: actor.till_id || null,
+                  } },
                   companyId: job.company_id,
-                  userId: payload.actorUserId || null,
+                  userId: actor.id,
+                  storeId: actor.store_id || payload.storeId || null,
+                  tillId: actor.till_id || null,
                   object: objectResult.rows[0] || null,
                   record: payload.record || null,
                   recordId: payload.recordId || null,
