@@ -1,9 +1,9 @@
-import { apiRequest, getActingCompanyId, getStoredUser, loadSessionPermissions, setActingCompanyId } from './api'
+import { apiRequest, getStoredUser, loadSessionPermissions } from './api'
 
 const SETTINGS_CONTEXT_CACHE_KEY = 'onepos.settings.context.v2'
 
 function currentScope(user = getStoredUser()) {
-  const companyId = user?.companyId || getActingCompanyId() || ''
+  const companyId = user?.companyId || user?.company_id || ''
   return {
     userId: String(user?.id || ''),
     companyId: String(companyId || ''),
@@ -43,7 +43,7 @@ export async function loadSettingsContext() {
   const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
 
   /*
-   * Fast path: the authenticated user and selected company are already stored
+   * Fast path: the authenticated user and company binding are already stored
    * by login/session bootstrap. Settings must not rediscover them on every
    * refresh. The server remains authoritative for every protected request.
    */
@@ -56,35 +56,7 @@ export async function loadSettingsContext() {
     }
   }
 
-  let actingCompanyId = getActingCompanyId()
-  let authorisedCompanies = []
-
-  /*
-   * Platform Developer is the exceptional path only. If an acting company is
-   * already selected, use it immediately. Company discovery is only needed
-   * when there is no usable company context at all.
-   */
-  if (user?.isPlatformDeveloper === true && !user?.companyId && !actingCompanyId) {
-    try {
-      const companiesResponse = await apiRequest('/api/platform/developer/companies')
-      authorisedCompanies = Array.isArray(companiesResponse?.data) ? companiesResponse.data : []
-      if (authorisedCompanies.length === 1) {
-        actingCompanyId = String(authorisedCompanies[0].id || '')
-        if (actingCompanyId) {
-          await apiRequest('/api/platform/developer/acting-company', {
-            method: 'PUT',
-            body: JSON.stringify({ actingCompanyId }),
-          })
-          setActingCompanyId(actingCompanyId)
-        }
-      }
-    } catch {
-      actingCompanyId = ''
-      authorisedCompanies = []
-    }
-  }
-
-  const hasCompanyContext = Boolean(user?.companyId || actingCompanyId)
+  const hasCompanyContext = Boolean(user?.companyId || user?.company_id)
   let settings = null
   let settingsError = ''
 
@@ -114,10 +86,7 @@ export async function loadSettingsContext() {
     permissions: permissions || {},
     settings,
     settingsError,
-    hasCompanyContext,
-    actingCompanyId: actingCompanyId || null,
-    authorisedCompanies,
-  }
+    hasCompanyContext,  }
 
   writeSettingsContextCache(context)
 

@@ -3,7 +3,7 @@ import {
   Bell, Building2, ChevronRight, AppWindow, BarChart3, LayoutDashboard,
   LayoutGrid, ListChecks, UserCheck, Rocket, Search, Workflow,
 } from 'lucide-react'
-import { apiRequest, getActingCompanyId, getStoredUser, setActingCompanyId } from '../../services/api'
+import { apiRequest, loadSessionPermissions, getActingCompanyId, getStoredUser, setActingCompanyId } from '../../services/api'
 import { clearSettingsContextCache } from '../../services/settings'
 import OneBuilder from '../settings/OneBuilder'
 import ObjectsSettingsPane from '../settings/ObjectsSettingsPane'
@@ -52,6 +52,11 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
     ;(async () => {
       try {
         setClientsLoading(true)
+        const permissions = await loadSessionPermissions()
+        if (!permissions?.permissions?.includes('oneengine.manage')) {
+          setCanManageEngine(false)
+          return
+        }
         const response = await apiRequest('/api/platform/developer/companies')
         if (!alive) return
         const rows = Array.isArray(response?.data) ? response.data : []

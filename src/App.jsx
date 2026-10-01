@@ -496,7 +496,7 @@ function SettingsPage({ onOpenProfile }) {
    * company settings. Access is granted by oneengine.manage.
    */
   const companyIndependentSection = platformOnlySection
-    || (current?.key === 'server-api' && (permissionCodes.includes('oneengine.manage') || permissionCodes.includes('platform.manage')))
+    || (current?.key === 'server-api' && (permissionCodes.includes('oneengine.manage')))
   const hasCompanyContext = context?.hasCompanyContext === true
   const companySettingsError = context?.settingsError || ''
 
@@ -1844,7 +1844,7 @@ function Desktop({ onLock, onSignOut }) {
     const cached = getStoredSessionPermissions()
     return Array.isArray(cached?.permissions) ? cached.permissions : []
   })
-  const canManageOneEngine = desktopPermissions.includes('oneengine.manage') || desktopPermissions.includes('platform.manage')
+  const canManageOneEngine = desktopPermissions.includes('oneengine.manage')
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
   const isTillUser = String(storedUser?.defaultLandingPage || '').toLowerCase() === 'till'
@@ -2172,7 +2172,7 @@ function Desktop({ onLock, onSignOut }) {
                     desktopPermissions.includes('package.install') ||
                     desktopPermissions.includes('package.manage') ||
                     desktopPermissions.includes('settings.manage') ||
-                    (desktopPermissions.includes('oneengine.manage') || desktopPermissions.includes('platform.manage'))
+                    (desktopPermissions.includes('oneengine.manage'))
                   }
                   onClose={() => setTopPanel('')}
                   onOpenRoute={openRoutePath}

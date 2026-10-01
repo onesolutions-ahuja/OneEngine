@@ -24,9 +24,7 @@ function tokenPayload() {
 
 function currentScope() {
   const payload = tokenPayload() || {}
-  let actingCompanyId = ''
-  try { actingCompanyId = localStorage.getItem('onepos_acting_company_id') || '' } catch {}
-  const companyId = payload.companyId || actingCompanyId || ''
+  const companyId = payload.companyId || payload.company_id || ''
   const userId = payload.id || payload.userId || ''
   return userId && companyId ? { userId: String(userId), companyId: String(companyId) } : null
 }
