@@ -857,6 +857,33 @@ export default function OneKioskPage({ publicMode = false }) {
     }
   };
 
+  const printReceipt = async () => {
+    if (demoMode) {
+      window.print();
+      return;
+    }
+    const saleId = confirmation?.saleId || confirmation?.order?.platform_data?.saleId || confirmation?.order?.platform_data?.sale_id;
+    if (!saleId) {
+      window.print();
+      return;
+    }
+    try {
+      const response = await apiRequest("/api/kiosk/receipt/print", {
+        method: "POST",
+        body: JSON.stringify({ saleId, deviceKey: kioskDeviceKey() }),
+      });
+      if (!response?.success) {
+        if (response?.code === "LOCAL_PRINT_FALLBACK") {
+          window.print();
+          return;
+        }
+        throw new Error(response?.message || "Receipt printer is unavailable");
+      }
+    } catch (reason) {
+      setError(reason?.message || "Unable to print receipt");
+    }
+  };
+
   const sendReceiptEmail = async () => {
     if (!receiptEmail.trim() || receiptEmailBusy) return;
     if (demoMode) {
@@ -1002,7 +1029,7 @@ export default function OneKioskPage({ publicMode = false }) {
           ) : null}
           <div className="one-kiosk-confirmation-actions">
             {receiptMethods.includes("QR") ? <button type="button" onClick={generateReceiptQr}><QrCode size={18}/> Receipt QR</button> : null}
-            {receiptMethods.includes("PRINT") ? <button type="button" onClick={() => window.print()}>Print receipt</button> : null}
+            {receiptMethods.includes("PRINT") ? <button type="button" onClick={printReceipt}>Print receipt</button> : null}
             <button type="button" className="one-kiosk-pay" onClick={startNewOrder}>{translate(confirmationScreen.doneLabel) || "Start a new order"}</button>
           </div>
           {idleWarning ? <div className="one-kiosk-idle-warning">This screen will reset shortly.</div> : null}
