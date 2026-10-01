@@ -12,14 +12,14 @@ export const dockItems = [
   { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
   { id: 'builder', label: 'OneDeveloper', icon: LayoutGrid },
   { id: 'contacts', label: 'Contacts', icon: Users },
-  { id: 'till', label: 'OneTill', src: localAppIcon('onetill'), scaled: true },
+  { id: 'till', label: 'OneTill', src: localAppIcon('onetill-new'), scaled: true },
   { id: 'settings', label: 'Settings', icon: GearIcon },
 ]
 
 const mobileDockItems = [
   { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'till', label: 'OneTill', src: localAppIcon('onetill'), scaled: true },
+  { id: 'till', label: 'OneTill', src: localAppIcon('onetill-new'), scaled: true },
   { id: 'workspace', label: 'Workspace', icon: Users },
   { id: 'settings', label: 'Settings', icon: GearIcon },
 ]
