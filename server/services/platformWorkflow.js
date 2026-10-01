@@ -3821,10 +3821,71 @@ async function assertWorkflowActionPermission(context, definition) {
   }
 }
 
+const DEBUG_EXECUTABLE_ACTIONS = new Set([
+  "CONSTANT","FORMULA","ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
+  "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
+  "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
+  "BULK_UPDATE_RECORDS","STOP",
+]);
+
+export function friendlyWorkflowError(error, actionType = "") {
+  const message = String(error?.message || error || "Workflow execution failed");
+  const lower = message.toLowerCase();
+  let title = "This step could not complete";
+  let howToFix = "Open this step in Workflow Builder and check its required fields and Resources, then run Debug again.";
+  if (lower.includes("permission")) {
+    title = "Permission is missing";
+    howToFix = "Check the running user's role and make sure it has the permission required by this step.";
+  } else if (lower.includes("not configured") || lower.includes("provider")) {
+    title = "A connection or provider is not configured";
+    howToFix = "Open Settings for this app or connector, complete its connection setup, test it successfully, then run Debug again.";
+  } else if (lower.includes("record") && (lower.includes("not found") || lower.includes("does not exist"))) {
+    title = "The record could not be found";
+    howToFix = "Check the Resource feeding this step and confirm the record exists in the current company/store.";
+  } else if (lower.includes("required") || lower.includes("requires")) {
+    title = "Required information is missing";
+    howToFix = "Open this step and complete the required value or Resource shown in its Properties.";
+  } else if (lower.includes("formula")) {
+    title = "The formula could not be evaluated";
+    howToFix = "Check the formula inputs and expression. Make sure every name in the formula has a mapped Resource.";
+  } else if (lower.includes("collection") || lower.includes("loop")) {
+    title = "The collection or Loop is invalid";
+    howToFix = "Check that the Loop receives a collection and that its Current Item/collection Resources come from an earlier step.";
+  } else if (lower.includes("object") || lower.includes("field")) {
+    title = "An object or field is unavailable";
+    howToFix = "Re-select the object/field in this step. It may have been renamed, removed, or made unavailable by permissions.";
+  }
+  return {
+    title,
+    whatHappened: message.slice(0, 1000),
+    howToFix,
+    actionType: String(actionType || ""),
+  };
+}
+
 export async function executeWorkflowAction(context) {
   const action = context?.action;
   const definition = validateWorkflowAction(action);
   await assertWorkflowActionPermission(context, definition);
+  const actionType = resolveWorkflowActionType(action);
+  if (context?.debugMode === true && !DEBUG_EXECUTABLE_ACTIONS.has(actionType)) {
+    return {
+      status: "completed",
+      simulated: true,
+      actionType,
+      message: "Simulated in Debug mode so no external action or irreversible operation was performed.",
+    };
+  }
+  if (context?.debugMode === true && actionType === "WAIT") {
+    return {
+      status: "completed",
+      simulated: true,
+      actionType,
+      message: "Wait was skipped in Debug mode.",
+      resumeAt: action?.resumeAt || action?.until || null,
+      durationSeconds: Number(action?.durationSeconds ?? action?.waitSeconds ?? 0),
+    };
+  }
   if (typeof definition.executor !== "function") {
     return { status: "skipped", reason: "No executor configured" };
   }
@@ -3929,9 +3990,10 @@ export async function executeWorkflowActions({ actions, ...context }) {
       ? Math.max(0, allActions.findIndex((candidate) => String(candidate?.id || "") === String(item.id)))
       : actionIndex;
     let stepRun = null;
-    if (context.db && context.runId) {
+    const traceDb = context.traceDb || context.db;
+    if (traceDb && context.runId) {
       stepRun = await getOrCreateWorkflowStepRun({
-        db: context.db,
+        db: traceDb,
         runId: context.runId,
         stepIdentifier: (item.id || `step-${globalIndex + 1}`) + (context.executionScope ? `@${context.executionScope}` : ""),
         stepOrder: globalIndex + 1,
@@ -4051,7 +4113,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       }
       if (stepRun?.id) {
         await updateWorkflowStepRunStatus({
-          db: context.db,
+          db: traceDb,
           stepRunId: stepRun.id,
           status: result?.status === "stopped"
             ? "STOPPED"
@@ -4072,11 +4134,11 @@ export async function executeWorkflowActions({ actions, ...context }) {
       const details = errorDetails(error);
       if (stepRun?.id) {
         await updateWorkflowStepRunStatus({
-          db: context.db,
+          db: traceDb,
           stepRunId: stepRun.id,
           status: "FAILED",
           errorText: details.message,
-          metadata: { error: details },
+          metadata: { error: details, friendlyError: friendlyWorkflowError(error, resolveWorkflowActionType(item)) },
         });
       }
       const compensationFailures = await compensateCompletedSteps(completed, context, error);
