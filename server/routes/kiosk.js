@@ -15,6 +15,86 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
     return ["ONLINE","OFFLINE","DEGRADED","READY","ERROR","NOT_CONFIGURED","UNKNOWN"].includes(key) ? key : "UNKNOWN";
   };
 
+  router.get("/kiosk/flows", authenticate, async (req, res) => {
+    try {
+      const result = await db(
+        `SELECT id,name,trigger_key,conditions,action,active,lifecycle_status,version,
+                managed,user_modified,source_package_version,updated_at
+           FROM platform_rules
+          WHERE company_id=$1
+            AND action->>'scope'='one_kiosk'
+            AND action->>'flowType'='KIOSK_EXPERIENCE'
+          ORDER BY
+            CASE WHEN action->>'defaultForNewDevices'='true' THEN 0 ELSE 1 END,
+            name`,
+        [req.user.companyId]
+      );
+      res.json({ success: true, data: result.rows });
+    } catch (error) {
+      console.error("Load OneKiosk flows error:", error);
+      res.status(500).json({ success: false, message: "Unable to load OneKiosk flows" });
+    }
+  });
+
+  router.get("/kiosk/runtime", authenticate, async (req, res) => {
+    const deviceKey = String(req.query?.deviceKey || "").trim();
+    if (!deviceKey) return res.status(400).json({ success: false, message: "Kiosk device key is required" });
+    try {
+      const deviceResult = await db(
+        `SELECT kd.id,kd.device_key,kd.name,kd.workflow_id,
+                pr.id AS flow_id,pr.name AS flow_name,pr.version AS flow_version,
+                pr.action AS flow_action,pr.lifecycle_status AS flow_status
+           FROM kiosk_devices kd
+           LEFT JOIN platform_rules pr
+             ON pr.id=kd.workflow_id
+            AND pr.company_id=kd.company_id
+            AND pr.action->>'scope'='one_kiosk'
+            AND pr.action->>'flowType'='KIOSK_EXPERIENCE'
+          WHERE kd.company_id=$1 AND kd.store_id=$2 AND kd.device_key=$3
+          LIMIT 1`,
+        [req.user.companyId, req.user.storeId, deviceKey]
+      );
+      const device = deviceResult.rows[0];
+      if (!device) return res.status(404).json({ success: false, message: "Kiosk device is not registered" });
+
+      let flow = device.flow_id ? device : null;
+      if (!flow) {
+        const fallback = await db(
+          `SELECT id AS flow_id,name AS flow_name,version AS flow_version,
+                  action AS flow_action,lifecycle_status AS flow_status
+             FROM platform_rules
+            WHERE company_id=$1
+              AND action->>'scope'='one_kiosk'
+              AND action->>'flowType'='KIOSK_EXPERIENCE'
+            ORDER BY CASE WHEN action->>'defaultForNewDevices'='true' THEN 0 ELSE 1 END,name
+            LIMIT 1`,
+          [req.user.companyId]
+        );
+        flow = fallback.rows[0] || null;
+      }
+      if (!flow?.flow_action?.ui) {
+        return res.status(409).json({ success: false, message: "No OneKiosk experience flow is available for this device" });
+      }
+      res.json({
+        success: true,
+        data: {
+          device: { id: device.id, deviceKey: device.device_key, name: device.name },
+          flow: {
+            id: flow.flow_id,
+            name: flow.flow_name,
+            version: flow.flow_version,
+            lifecycleStatus: flow.flow_status,
+            templateKey: flow.flow_action?.templateKey || null,
+          },
+          ui: flow.flow_action.ui,
+        },
+      });
+    } catch (error) {
+      console.error("Load OneKiosk runtime error:", error);
+      res.status(500).json({ success: false, message: "Unable to load OneKiosk runtime" });
+    }
+  });
+
   router.get("/kiosk/devices", authenticate, async (req, res) => {
     try {
       const result = await db(
@@ -68,13 +148,26 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
     const name = String(req.body?.name || "OneKiosk").trim().slice(0, 150);
     if (!deviceKey) return res.status(400).json({ success: false, message: "Kiosk device key is required" });
     try {
+      const defaultFlow = await db(
+        `SELECT id
+           FROM platform_rules
+          WHERE company_id=$1
+            AND action->>'scope'='one_kiosk'
+            AND action->>'flowType'='KIOSK_EXPERIENCE'
+          ORDER BY CASE WHEN action->>'defaultForNewDevices'='true' THEN 0 ELSE 1 END,name
+          LIMIT 1`,
+        [req.user.companyId]
+      );
       const result = await db(
-        `INSERT INTO kiosk_devices (company_id,store_id,device_key,name,last_heartbeat_at,updated_at)
-         VALUES ($1,$2,$3,$4,NOW(),NOW())
+        `INSERT INTO kiosk_devices (company_id,store_id,device_key,name,workflow_id,last_heartbeat_at,updated_at)
+         VALUES ($1,$2,$3,$4,$5,NOW(),NOW())
          ON CONFLICT (company_id,device_key)
-         DO UPDATE SET store_id=EXCLUDED.store_id,name=COALESCE(NULLIF(kiosk_devices.name,''),EXCLUDED.name),last_heartbeat_at=NOW(),updated_at=NOW()
+         DO UPDATE SET store_id=EXCLUDED.store_id,
+                       name=COALESCE(NULLIF(kiosk_devices.name,''),EXCLUDED.name),
+                       workflow_id=COALESCE(kiosk_devices.workflow_id,EXCLUDED.workflow_id),
+                       last_heartbeat_at=NOW(),updated_at=NOW()
          RETURNING *`,
-        [req.user.companyId, req.user.storeId, deviceKey, name]
+        [req.user.companyId, req.user.storeId, deviceKey, name, defaultFlow.rows[0]?.id || null]
       );
       res.json({ success: true, data: result.rows[0] });
     } catch (error) {
@@ -84,6 +177,7 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
   });
 
   router.put("/kiosk/devices/:id/settings", authenticate, async (req, res) => {
+    const workflowId = req.body?.workflowId || null;
     const paymentTerminalId = req.body?.paymentTerminalId || null;
     const printerHardwareId = req.body?.printerHardwareId || null;
     const printerName = req.body?.printerName == null ? null : String(req.body.printerName).trim().slice(0, 150);
@@ -95,6 +189,16 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
     const paymentRequired = req.body?.paymentRequired !== false;
     const printerRequired = req.body?.printerRequired === true;
     try {
+      if (workflowId) {
+        const flow = await db(
+          `SELECT id FROM platform_rules
+            WHERE id=$1 AND company_id=$2
+              AND action->>'scope'='one_kiosk'
+              AND action->>'flowType'='KIOSK_EXPERIENCE'`,
+          [workflowId, req.user.companyId]
+        );
+        if (!flow.rows.length) return res.status(400).json({ success: false, message: "Workflow is not a OneKiosk experience flow" });
+      }
       if (paymentTerminalId) {
         const payment = await db(
           "SELECT id FROM payment_terminals WHERE id=$1 AND company_id=$2 AND store_id=$3",
@@ -111,16 +215,16 @@ export default function createKioskRouter({ authenticate, authorize, db, pool, w
       }
       const result = await db(
         `UPDATE kiosk_devices
-            SET name=$1,payment_terminal_id=$2,printer_hardware_id=$3,
-                printer_name=$4,printer_connection_type=$5,printer_connection_address=$6,printer_paper_width=$7,
-                payment_required=$8,printer_required=$9,active=$10,updated_at=NOW()
-          WHERE id=$11 AND company_id=$12 AND store_id=$13
+            SET name=$1,workflow_id=$2,payment_terminal_id=$3,printer_hardware_id=$4,
+                printer_name=$5,printer_connection_type=$6,printer_connection_address=$7,printer_paper_width=$8,
+                payment_required=$9,printer_required=$10,active=$11,updated_at=NOW()
+          WHERE id=$12 AND company_id=$13 AND store_id=$14
           RETURNING *`,
-        [name, paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active, req.params.id, req.user.companyId, req.user.storeId]
+        [name, workflowId, paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active, req.params.id, req.user.companyId, req.user.storeId]
       );
       if (!result.rows.length) return res.status(404).json({ success: false, message: "Kiosk device not found" });
       await writeAudit?.(req.user.companyId, req.user.id, "kiosk.device.settings", "kiosk_device", req.params.id, {
-        paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active,
+        workflowId, paymentTerminalId, printerHardwareId, printerName, printerConnectionType, printerConnectionAddress, printerPaperWidth, paymentRequired, printerRequired, active,
       });
       res.json({ success: true, message: "Kiosk device settings saved", data: result.rows[0] });
     } catch (error) {
