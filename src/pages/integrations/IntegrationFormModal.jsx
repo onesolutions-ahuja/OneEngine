@@ -11,7 +11,7 @@ import { useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { Toggle } from "../../components/ui.jsx";
 import { AUTH_TYPES } from "./shared.jsx";
-import { BrandIcon } from "../../marketing/components/BrandIcons.jsx";
+import { BrandIcon } from "../../components/BrandIcons.jsx";
 
 export default function IntegrationFormModal({ integration, storeId, onClose, onSaved }) {
   const isEdit = Boolean(integration);
