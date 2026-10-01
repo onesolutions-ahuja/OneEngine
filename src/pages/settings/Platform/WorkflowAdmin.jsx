@@ -1775,6 +1775,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     }
   }, [workflow.steps, selectedId]);
 
+  useEffect(() => {
+    const failedId = workflow.steps.find((step) => debugTrace?.[step.id]?.status === "FAILED")?.id;
+    if (failedId) setSelectedId(failedId);
+  }, [debugTrace, workflow.steps]);
+
   const removeStep = (index) => {
     const nextId = workflow.steps[index + 1]?.id || workflow.steps[index - 1]?.id || null;
     deleteStep(index);
@@ -2600,7 +2605,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             </div>
           )}
           {debugResult ? (
-            <div className={`mt-4 rounded-xl border p-4 ${debugResult.status === "FAILED" ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
+            <div className={`mt-4 rounded-xl border p-4 ${debugResult.status === "FAILED" ? "border-red-200 bg-red-50" : debugResult.status === "NOT_STARTED" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
               <div className="flex items-center justify-between gap-3">
                 <strong className={debugResult.status === "FAILED" ? "text-red-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.status === "FAILED" ? "Test failed" : debugResult.status === "NOT_STARTED" ? "Test did not start" : "Test passed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : "Debug completed successfully")}</strong>
                 <span className="text-xs text-slate-500">No database changes were kept.</span>
@@ -2610,6 +2615,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   <div><strong>{debugResult.friendlyError?.title || "A step failed"}</strong></div>
                   <div>{debugResult.friendlyError?.whatHappened || debugResult.run?.error_text || "The workflow could not complete."}</div>
                   <div className="rounded-lg bg-white/70 p-3"><strong>How to fix it:</strong> {debugResult.friendlyError?.howToFix || "Click the red step on the canvas and check its Properties."}</div>
+                </div>
+              ) : debugResult.status === "NOT_STARTED" ? (
+                <div className="mt-2 text-sm text-amber-800">
+                  <div>{debugResult.friendlyError?.whatHappened || "The selected record did not meet the workflow Start conditions."}</div>
+                  <div className="mt-2 rounded-lg bg-white/70 p-3 text-xs"><strong>What to do:</strong> {debugResult.friendlyError?.howToFix || "Choose another record or review the Start conditions."}</div>
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-emerald-800">{debugMode === "test" ? "The workflow passed this test record. Green steps ran successfully; dashed green steps were safely simulated." : "Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action."}</p>
