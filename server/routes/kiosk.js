@@ -302,6 +302,8 @@ export default function createKioskRouter({
     try {
       const deviceResult = await db(
         `SELECT kd.id,kd.device_key,kd.name,kd.workflow_id,kd.payment_connector_id,
+                kd.printer_name,kd.printer_connection_type,kd.printer_connection_address,
+                kd.printer_paper_width,kd.printer_required,kd.printer_status,
                 pc.name AS payment_connector_name,pc.connector_package_key,
                 pc.enabled AS payment_connector_enabled,pc.connection_status AS payment_connector_status,
                 pc.last_error AS payment_connector_error,pc.last_connected_at AS payment_connector_last_connected_at,
@@ -350,6 +352,16 @@ export default function createKioskRouter({
         success: true,
         data: {
           device: { id: device.id, deviceKey: device.device_key, name: device.name },
+          printer: {
+            name: device.printer_name || null,
+            connectionType: device.printer_connection_type || null,
+            address: device.printer_connection_address || null,
+            paperWidth: device.printer_paper_width || "80mm",
+            required: device.printer_required === true,
+            status: device.printer_name
+              ? (device.printer_status || "UNKNOWN")
+              : "NOT_CONFIGURED",
+          },
           payment: {
             connectorInstanceId: device.payment_connector_id || null,
             name: device.payment_connector_name || null,
