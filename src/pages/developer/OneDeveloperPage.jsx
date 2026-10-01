@@ -129,7 +129,10 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
     }
   }
 
-  const contentKey = canManageEngine ? `${current.key}:${selectedClient}` : current.key
+  // Keep the builder mounted while Engine authority/clients load.
+  // selectedClient is initialised from the stored acting company, so changing
+  // canManageEngine alone must not destroy in-progress editor state.
+  const contentKey = `${current.key}:${selectedClient || "self"}`
 
   return (
     <section className="settings-page onedeveloper-page">
