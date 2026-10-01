@@ -1,5 +1,5 @@
 import { evaluateCondition } from "./platformConditions.js";
-import { evaluateWorkflowFormula } from "./platformFormula.js";
+import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
 import { executeRegisteredAction } from "./platformActions.js";
 import { executeInventoryPlatformAction } from "./inventoryPlatform.js";
@@ -1911,6 +1911,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       if (typeof action.expression !== "string" || !action.expression.trim()) throw new Error("Formula requires an expression");
       if (!action.inputs || typeof action.inputs !== "object" || Array.isArray(action.inputs)) throw new Error("Formula requires named inputs");
+      const inputNames = new Set(Object.keys(action.inputs));
+      for (const name of inputNames) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(name)) throw new Error(`Formula input "${name}" is invalid`);
+      }
+      const missing = workflowFormulaReferences(action.expression).filter((name) => !inputNames.has(name));
+      if (missing.length) throw new Error(`Formula is missing mapped inputs: ${missing.join(", ")}`);
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
