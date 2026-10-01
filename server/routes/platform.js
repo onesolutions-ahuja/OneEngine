@@ -18,7 +18,7 @@ import {
   validateWorkflowAction,
   friendlyWorkflowError,
 } from "../services/platformWorkflow.js";
-import { decidePlatformApproval, submitPlatformApproval } from "../services/platformApprovals.js";
+import { decidePlatformApproval, submitPlatformApproval, reassignPlatformApproval, recallPlatformApproval } from "../services/platformApprovals.js";
 import { systemObject, systemObjectRbacPermission, tenantFields, isExtensionField, safeSystemFields, hydrateExtensions, appendSystemReadScope, platformFieldSql } from "../services/platformSystemObjects.js";
 import { readDomainConfiguration, saveDomainConfiguration, withDomainSave } from "../services/platformDomainRecords.js";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
@@ -4419,15 +4419,32 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   router.get("/platform/approval-requests", authenticate, async (req, res) => {
     const result = await db(
-      "SELECT r.*, p.name AS process_name, s.label AS step_label FROM platform_approval_requests r JOIN platform_approval_processes p ON p.id=r.process_id JOIN platform_approval_steps s ON s.process_id=r.process_id AND s.step_order=r.current_step WHERE r.company_id=$1 AND ($2::text IS NULL OR r.status=$2) ORDER BY r.submitted_at DESC",
+      `SELECT r.*,p.name AS process_name,p.config AS process_config,s.label AS step_label,
+              o.object_key,o.label AS object_name,w.id AS work_item_id,w.assigned_to,w.role_id,
+              w.status AS work_item_status,w.due_at,w.reassigned_from,w.reassigned_at,
+              u.username AS assignee_name,u.email AS assignee_email
+         FROM platform_approval_requests r
+         JOIN platform_approval_processes p ON p.id=r.process_id
+         JOIN platform_objects o ON o.id=r.object_id
+         JOIN platform_approval_steps s ON s.process_id=r.process_id AND s.step_order=r.current_step
+         LEFT JOIN platform_approval_work_items w ON w.request_id=r.id AND w.step_order=r.current_step
+         LEFT JOIN users u ON u.id=w.assigned_to
+        WHERE r.company_id=$1 AND ($2::text IS NULL OR r.status=$2)
+        ORDER BY r.submitted_at DESC`,
       [req.user.companyId, req.query.status || null]
     );
     res.json({ success: true, data: result.rows });
   });
 
   router.get("/platform/approval-requests/:requestId/history", authenticate, async (req, res) => {
-    const result = await db("SELECT a.* FROM platform_approval_actions a JOIN platform_approval_requests r ON r.id=a.request_id WHERE a.request_id=$1 AND r.company_id=$2 ORDER BY a.created_at ASC", [req.params.requestId, req.user.companyId]);
-    res.json({ success: true, data: result.rows });
+    const actions = await db(`SELECT a.*,u.username AS actor_name FROM platform_approval_actions a JOIN platform_approval_requests r ON r.id=a.request_id LEFT JOIN users u ON u.id=a.actor_user_id WHERE a.request_id=$1 AND r.company_id=$2 ORDER BY a.created_at ASC`, [req.params.requestId, req.user.companyId]);
+    const events = await db(`SELECT e.*,u.username AS actor_name FROM platform_approval_events e JOIN platform_approval_requests r ON r.id=e.request_id LEFT JOIN users u ON u.id=e.actor_user_id WHERE e.request_id=$1 AND r.company_id=$2 ORDER BY e.created_at ASC`, [req.params.requestId, req.user.companyId]);
+    res.json({ success: true, data: { actions: actions.rows, events: events.rows } });
+  });
+
+  router.get("/platform/approval-users", authenticate, async (req,res) => {
+    const result=await db("SELECT u.id,u.username,u.email,r.name AS role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.company_id=$1 AND u.active=TRUE ORDER BY u.username,u.email",[req.user.companyId]);
+    res.json({success:true,data:result.rows});
   });
 
   router.post("/platform/approval-requests/:requestId/decision", authenticate, async (req, res) => {
@@ -4437,6 +4454,26 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     } catch (error) {
       console.error("Platform approval decision error:", error);
       res.status(500).json({ success: false, message: "Unable to process approval decision" });
+    }
+  });
+
+  router.post("/platform/approval-requests/:requestId/reassign", authenticate, async (req,res)=>{
+    try {
+      const result=await reassignPlatformApproval({db,requestId:req.params.requestId,assigneeUserId:req.body?.assigneeUserId,comment:req.body?.comment,req});
+      res.status(result.status).json(result.status===200?{success:true,data:result.data}:{success:false,message:result.message});
+    } catch(error) {
+      console.error("Platform approval reassignment error:",error);
+      res.status(500).json({success:false,message:"Unable to reassign approval"});
+    }
+  });
+
+  router.post("/platform/approval-requests/:requestId/recall", authenticate, async (req,res)=>{
+    try {
+      const result=await recallPlatformApproval({db,requestId:req.params.requestId,comment:req.body?.comment,req});
+      res.status(result.status).json(result.status===200?{success:true,data:result.data}:{success:false,message:result.message});
+    } catch(error) {
+      console.error("Platform approval recall error:",error);
+      res.status(500).json({success:false,message:"Unable to recall approval"});
     }
   });
 
