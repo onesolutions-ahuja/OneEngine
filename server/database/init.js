@@ -1289,6 +1289,7 @@ async function initializeLegacyDatabase(pool) {
     );
 
     ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS kiosk_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
       ADD COLUMN IF NOT EXISTS available_on_uber BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS available_on_deliveroo BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS uber_item_id VARCHAR(255),
