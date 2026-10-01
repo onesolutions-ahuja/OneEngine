@@ -501,10 +501,11 @@ export async function executeConnectorWorkflowAction({
   const runtimePayload = payload ?? action?.payload ?? { ...action };
   const explicitInstanceId = action?.connectorInstanceId || action?.instanceId || runtimePayload?.connectorInstanceId || runtimePayload?.instanceId || null;
 
-  // Management/test actions must work before a connector is enabled, so they
-  // resolve the explicitly selected instance instead of the enabled-candidate
-  // payment runtime.
-  if (explicitInstanceId && ["CONNECTOR_TEST_CONNECTION","CONNECTOR_ENABLE","CONNECTOR_DISABLE"].includes(requestedKey)) {
+  // Explicit device/app assignments resolve the exact installed connector
+  // instance instead of falling back to whichever connector is bound to the
+  // current till. Management/test actions may resolve disabled instances;
+  // runtime actions require the selected instance to be enabled and healthy.
+  if (explicitInstanceId) {
     const instanceResult = await db(
       `SELECT c.*,p.manifest
          FROM integration_connections c
@@ -568,31 +569,92 @@ export async function executeConnectorWorkflowAction({
         tillId: instance.till_id,
       }),
     });
+    if (!["CONNECTOR_TEST_CONNECTION","CONNECTOR_ENABLE","CONNECTOR_DISABLE"].includes(requestedKey)) {
+      if (instance.enabled !== true) {
+        return { success: false, code: "CONNECTOR_DISABLED", message: "The assigned connector instance is disabled", connectorInstanceId: instance.id };
+      }
+      if (tenantStoreId && instance.store_id && String(instance.store_id) !== String(tenantStoreId)) {
+        return { success: false, code: "INVALID_SCOPE", message: "The assigned connector belongs to a different store", connectorInstanceId: instance.id };
+      }
+      const declaredCapability = (manifest?.connectorApp?.capabilities || []).some((item) =>
+        (typeof item === "string" ? item : item?.key) === capability
+      );
+      if (!declaredCapability || !driver.capabilities.has(capability)) {
+        return { success: false, code: "NOT_SUPPORTED", message: `The assigned connector does not provide ${capability}`, connectorInstanceId: instance.id };
+      }
+    }
+
     const connection = await service.connect();
-    const test = connection.healthy
-      ? await service.test()
-      : { success: false, status: connection.state, code: connection.errorCode, message: connection.lastError };
-    const testResult = { ...test, testMode: manifest.connectorApp?.mode === "TEST" || (instance.connector_configuration?.mode === "TEST") };
     await db(
       `UPDATE integration_connections
-          SET connection_status=$1::varchar,last_error=$2,last_test_at=NOW(),
-              last_test_result=$3::jsonb,
+          SET connection_status=$1::varchar,last_error=$2,
               last_connected_at=CASE WHEN $1::varchar='CONNECTED' THEN NOW() ELSE last_connected_at END,
               updated_at=NOW()
-        WHERE id=$4 AND company_id=$5`,
-      [test.success ? "CONNECTED" : connection.state, test.message || null, JSON.stringify(testResult), instance.id, tenantCompanyId]
+        WHERE id=$3 AND company_id=$4`,
+      [connection.state, connection.lastError || null, instance.id, tenantCompanyId]
     );
-    await writeAudit?.(tenantCompanyId, actorUserId || req?.user?.id || null, "connector.instance.tested", "integration_connection", instance.id, { packageKey: instance.connector_package_key, success: test.success, testMode: testResult.testMode });
-    return {
-      success: test.success === true,
-      status: test.success ? "CONNECTED" : (test.status || connection.state || "ERROR"),
-      connectorInstanceId: instance.id,
-      connectorPackageKey: instance.connector_package_key,
-      capability,
-      requestedKey,
-      result: testResult,
-      ...(test.success ? {} : { code: test.code || connection.errorCode || "TEST_FAILED", message: test.message || connection.lastError || "Connector test failed" }),
-    };
+
+    if (requestedKey === "CONNECTOR_TEST_CONNECTION") {
+      const test = connection.healthy
+        ? await service.test()
+        : { success: false, status: connection.state, code: connection.errorCode, message: connection.lastError };
+      const testResult = { ...test, testMode: manifest.connectorApp?.mode === "TEST" || (instance.connector_configuration?.mode === "TEST") };
+      await db(
+        `UPDATE integration_connections
+            SET connection_status=$1::varchar,last_error=$2,last_test_at=NOW(),
+                last_test_result=$3::jsonb,
+                last_connected_at=CASE WHEN $1::varchar='CONNECTED' THEN NOW() ELSE last_connected_at END,
+                updated_at=NOW()
+          WHERE id=$4 AND company_id=$5`,
+        [test.success ? "CONNECTED" : connection.state, test.message || null, JSON.stringify(testResult), instance.id, tenantCompanyId]
+      );
+      await writeAudit?.(tenantCompanyId, actorUserId || req?.user?.id || null, "connector.instance.tested", "integration_connection", instance.id, { packageKey: instance.connector_package_key, success: test.success, testMode: testResult.testMode });
+      return {
+        success: test.success === true,
+        status: test.success ? "CONNECTED" : (test.status || connection.state || "ERROR"),
+        connectorInstanceId: instance.id,
+        connectorPackageKey: instance.connector_package_key,
+        capability,
+        requestedKey,
+        result: testResult,
+        ...(test.success ? {} : { code: test.code || connection.errorCode || "TEST_FAILED", message: test.message || connection.lastError || "Connector test failed" }),
+      };
+    }
+
+    if (!connection.healthy) {
+      return {
+        success: false,
+        code: connection.errorCode || "DEVICE_OFFLINE",
+        message: connection.lastError || "The assigned connector is unavailable",
+        connectorInstanceId: instance.id,
+        connectorPackageKey: instance.connector_package_key,
+        capability,
+        requestedKey,
+      };
+    }
+
+    try {
+      const result = await service.execute(capability, runtimePayload);
+      return {
+        success: true,
+        status: result?.status || "COMPLETED",
+        result,
+        connectorInstanceId: instance.id,
+        connectorPackageKey: instance.connector_package_key,
+        capability,
+        requestedKey,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        code: error?.code || "CONNECTOR_ACTION_FAILED",
+        message: error?.message || "Connector action failed",
+        connectorInstanceId: instance.id,
+        connectorPackageKey: instance.connector_package_key,
+        capability,
+        requestedKey,
+      };
+    }
   }
 
   if (!tenantStoreId || !tenantTillId) {
