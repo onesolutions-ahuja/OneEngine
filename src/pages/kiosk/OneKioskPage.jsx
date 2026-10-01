@@ -145,6 +145,9 @@ export default function OneKioskPage({ publicMode = false }) {
   const [attractMode, setAttractMode] = useState(publicMode);
   const [idleWarning, setIdleWarning] = useState(false);
   const [receiptQr, setReceiptQr] = useState(null);
+  const [customerLookup, setCustomerLookup] = useState("");
+  const [customer, setCustomer] = useState(null);
+  const [customerLookupBusy, setCustomerLookupBusy] = useState(false);
   const [fulfilmentDetails, setFulfilmentDetails] = useState({
     storeId: "",
     name: "",
@@ -185,6 +188,9 @@ export default function OneKioskPage({ publicMode = false }) {
           .filter((product) => product?.active !== false)
           .map((product) => ({
             ...product,
+            price: Number(product.display_price ?? product.price ?? 0),
+            basePrice: Number(product.base_price ?? product.price ?? 0),
+            displaySavings: Number(product.display_savings || 0),
             categoryLabel: product.categoryLabel || product.category_name || product.category || "Other",
           }));
         setProducts(rows);
@@ -391,6 +397,7 @@ export default function OneKioskPage({ publicMode = false }) {
   const paymentScreen = screensByType.PAYMENT || {};
   const recommendationsScreen = screensByType.RECOMMENDATIONS || {};
   const basketScreen = screensByType.BASKET || {};
+  const loyaltyScreen = screensByType.LOYALTY || {};
   const confirmationScreen = screensByType.CONFIRMATION || {};
   const fulfilmentOptions = Array.isArray(fulfilmentScreen.options) ? fulfilmentScreen.options : [];
   const selectedFulfilmentOption = fulfilmentOptions.find((option) => option.key === fulfilmentType) || null;
@@ -475,6 +482,8 @@ export default function OneKioskPage({ publicMode = false }) {
         setPaidSale(null);
         setConfirmation(null);
         setReceiptQr(null);
+        setCustomer(null);
+        setCustomerLookup("");
         setError("");
         setIdleWarning(false);
         setAttractMode(true);
@@ -788,6 +797,7 @@ export default function OneKioskPage({ publicMode = false }) {
           discount: 0,
           total,
           paymentMethod: "card",
+          customerId: customer?.id || null,
           kioskDeviceKey: kioskDeviceKey(),
           kioskFulfilmentStoreId: fulfilmentDetails.storeId || null,
         }),
@@ -803,6 +813,26 @@ export default function OneKioskPage({ publicMode = false }) {
       setError(reason?.message || "Unable to complete payment");
     } finally {
       setPaying(false);
+    }
+  };
+
+  const lookupCustomer = async () => {
+    const query = customerLookup.trim();
+    if (!query || customerLookupBusy) return;
+    setCustomerLookupBusy(true);
+    setError("");
+    try {
+      const response = await apiRequest("/api/kiosk/customer-lookup", {
+        method: "POST",
+        body: JSON.stringify({ query }),
+      });
+      if (!response?.success || !response?.data) throw new Error(response?.message || "Account not found");
+      setCustomer(response.data);
+    } catch (reason) {
+      setCustomer(null);
+      setError(reason?.message || "Account not found — continue as guest");
+    } finally {
+      setCustomerLookupBusy(false);
     }
   };
 
@@ -847,6 +877,8 @@ export default function OneKioskPage({ publicMode = false }) {
     setLastAddedProductId("");
     setCompareIds([]);
     setReceiptQr(null);
+    setCustomer(null);
+    setCustomerLookup("");
     if (publicMode) setAttractMode(true);
   };
 
@@ -982,7 +1014,7 @@ export default function OneKioskPage({ publicMode = false }) {
                 <div className="one-kiosk-product-copy">
                   <strong>{product.name}</strong>
                   <small>{product.description || product.categoryLabel}</small>
-                  <span>{money(product.price, currency)}</span>
+                  <span>{product.displaySavings > 0 ? <><s>{money(product.basePrice,currency)}</s> {money(product.price,currency)}</> : money(product.price, currency)}</span>
                 </div>
               </button>
             ))}
@@ -1003,7 +1035,7 @@ export default function OneKioskPage({ publicMode = false }) {
                       <div className="one-kiosk-product-image">
                         {product.image_url || product.imageUrl ? <img src={product.image_url || product.imageUrl} alt="" /> : <span>{String(product.name || "?").slice(0,1)}</span>}
                       </div>
-                      <div className="one-kiosk-product-copy"><strong>{product.name}</strong><small>{product.description || product.categoryLabel}</small><span>{money(product.price,currency)}</span></div>
+                      <div className="one-kiosk-product-copy"><strong>{product.name}</strong><small>{product.description || product.categoryLabel}</small><span>{product.displaySavings > 0 ? <><s>{money(product.basePrice,currency)}</s> {money(product.price,currency)}</> : money(product.price,currency)}</span></div>
                     </button>
                   ))}
                 </div>
@@ -1072,6 +1104,31 @@ export default function OneKioskPage({ publicMode = false }) {
                   const next = nextScreenFrom(basketScreen, "PAYMENT");
                   if (next?.key) setCurrentScreenKey(next.key);
                 }}>Continue to payment</button>
+              </div>
+            </div>
+          ) : null}
+
+          {stageType === "LOYALTY" ? (
+            <div className="one-kiosk-stage one-kiosk-stage-narrow">
+              <div className="one-kiosk-loyalty-card">
+                <h2>{translate(loyaltyScreen.title) || "Rewards"}</h2>
+                <p>{translate(loyaltyScreen.subtitle) || "Enter your phone number or email, or continue as a guest."}</p>
+                {customer ? (
+                  <div className="one-kiosk-customer-found">
+                    <CheckCircle2 size={28}/>
+                    <div><strong>{customer.name || "Rewards account"}</strong><span>Balance: {Number(customer.loyalty_balance || 0).toLocaleString()} points</span></div>
+                    <button type="button" onClick={() => { setCustomer(null); setCustomerLookup(""); }}>Change</button>
+                  </div>
+                ) : (
+                  <div className="one-kiosk-customer-search">
+                    <input value={customerLookup} onChange={(e)=>setCustomerLookup(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter") void lookupCustomer(); }} placeholder="Phone number or email" />
+                    <button type="button" disabled={!customerLookup.trim() || customerLookupBusy} onClick={lookupCustomer}>{customerLookupBusy ? "Checking…" : "Find account"}</button>
+                  </div>
+                )}
+              </div>
+              <div className="one-kiosk-stage-actions">
+                <button type="button" onClick={() => { setCustomer(null); setCustomerLookup(""); const next=nextScreenFrom(loyaltyScreen,"PAYMENT"); if(next?.key)setCurrentScreenKey(next.key); }}>Continue as guest</button>
+                <button type="button" className="one-kiosk-pay" onClick={() => { const next=nextScreenFrom(loyaltyScreen,"PAYMENT"); if(next?.key)setCurrentScreenKey(next.key); }}>{customer ? "Continue with rewards" : "Continue"}</button>
               </div>
             </div>
           ) : null}
