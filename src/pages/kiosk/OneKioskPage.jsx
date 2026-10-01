@@ -128,6 +128,7 @@ export default function OneKioskPage({ publicMode = false }) {
   const [experienceFlow, setExperienceFlow] = useState(null);
   const [paymentRuntime, setPaymentRuntime] = useState(null);
   const [printerRuntime, setPrinterRuntime] = useState(null);
+  const [runtimeUnavailable, setRuntimeUnavailable] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productOptions, setProductOptions] = useState(null);
   const [selectedVariantId, setSelectedVariantId] = useState("");
@@ -211,8 +212,11 @@ export default function OneKioskPage({ publicMode = false }) {
       retryGet: true,
     });
     if (!response?.success || !response?.data?.ui) {
-      throw new Error(response?.message || "No OneKiosk experience flow is assigned");
+      const message = response?.message || "This kiosk is temporarily unavailable";
+      setRuntimeUnavailable(message);
+      throw new Error(message);
     }
+    setRuntimeUnavailable("");
     setExperienceUi(response.data.ui);
     setExperienceFlow(response.data.flow || null);
     setPaymentRuntime(response.data.payment || null);
@@ -522,13 +526,14 @@ export default function OneKioskPage({ publicMode = false }) {
   const visibleProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
     return products.filter((product) => {
+      if (product.age_restricted === true && featureFlags.ageVerification !== true) return false;
       if (category !== "All" && product.categoryLabel !== category) return false;
       if (!query) return true;
       return [product.name, product.sku, product.barcode, product.description]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query));
     });
-  }, [products, category, search]);
+  }, [products, category, search, featureFlags.ageVerification]);
 
   const recommendationProducts = useMemo(() => {
     if (!lastAddedProductId) return [];
@@ -774,8 +779,8 @@ export default function OneKioskPage({ publicMode = false }) {
       if (!exactPayment?.connectorInstanceId) {
         throw new Error("No One Connect card machine is assigned to this kiosk");
       }
-      if (!["READY","CONNECTED"].includes(String(exactPayment.status || "").toUpperCase())) {
-        throw new Error(exactPayment.error || "The assigned card machine is not currently ready");
+      if (["NOT_CONFIGURED","DISABLED"].includes(String(exactPayment.status || "").toUpperCase())) {
+        throw new Error(exactPayment.error || "The assigned card machine is not available");
       }
 
       const clientRequestId = crypto.randomUUID();
@@ -810,7 +815,15 @@ export default function OneKioskPage({ publicMode = false }) {
       setPaidSale(saleResponse.sale);
       await createFulfilmentFromPaidSale(saleResponse.sale);
     } catch (reason) {
-      setError(reason?.message || "Unable to complete payment");
+      const message = String(reason?.message || "Unable to complete payment");
+      const friendly = /declin/i.test(message)
+        ? "Card declined. Please try again or use another card."
+        : /timeout|timed out/i.test(message)
+          ? "The card machine timed out. No second payment will be started until this attempt is resolved."
+          : /offline|unavailable|connector/i.test(message)
+            ? "The card machine is temporarily unavailable. Please ask a member of staff for help."
+            : message;
+      setError(friendly);
     } finally {
       setPaying(false);
     }
@@ -894,6 +907,19 @@ export default function OneKioskPage({ publicMode = false }) {
 
   if (loading) {
     return <div className="one-kiosk one-kiosk-state">Loading OneKiosk…</div>;
+  }
+
+  if (runtimeUnavailable && publicMode) {
+    return (
+      <main className={`${rootClasses} one-kiosk-attract one-kiosk-maintenance`}>
+        <section>
+          <span className="one-kiosk-eyebrow">OneKiosk</span>
+          <h1>Temporarily unavailable</h1>
+          <p>{runtimeUnavailable}</p>
+          <p>Please use another kiosk or ask a member of staff.</p>
+        </section>
+      </main>
+    );
   }
 
   if (attractMode && publicMode && !confirmation) {
