@@ -83,7 +83,12 @@ export default function createKioskRouter({
                 p.age_restricted,p.image_url,p.category_id,p.parent_product_id,p.product_kind,
                 p.variant_attributes,p.kiosk_metadata,p.track_stock,p.active,
                 c.name AS category_name,
-                COALESCE(ps.quantity,p.stock_quantity,0) AS store_stock
+                COALESCE(ps.quantity,p.stock_quantity,0) AS store_stock,
+                COALESCE((SELECT json_agg(spp) FROM scheduled_product_prices spp
+                  WHERE spp.product_id=p.id AND spp.company_id=p.company_id AND spp.active=TRUE),'[]') AS scheduled_prices,
+                COALESCE((SELECT json_agg(pr) FROM promotions pr
+                  WHERE pr.company_id=p.company_id AND pr.active=TRUE
+                    AND (pr.product_id=p.id OR pr.category_id=p.category_id)),'[]') AS promotions
            FROM products p
            LEFT JOIN categories c ON c.id=p.category_id
            LEFT JOIN product_store_stock ps
@@ -94,15 +99,29 @@ export default function createKioskRouter({
           ORDER BY COALESCE((p.kiosk_metadata->>'sortOrder')::int,999999),c.display_order,p.name`,
         [req.user.companyId, req.user.storeId]
       );
-      res.json({ success: true, data: result.rows.map((row) => ({
-        ...row,
-        categoryLabel: row.category_name || "Other",
-        stock_message: row.track_stock === true
-          ? Number(row.store_stock || 0) > 0
-            ? `${Number(row.store_stock)} in stock`
-            : "Out of stock"
-          : "Available",
-      })) });
+      res.json({ success: true, data: result.rows.map((row) => {
+        const resolved = resolvePrice({
+          basePrice: Number(row.price || 0),
+          scheduledPrices: row.scheduled_prices || [],
+          promotions: row.promotions || [],
+          quantity: 1,
+          at: new Date(),
+        });
+        const basePrice = Number(row.price || 0);
+        return {
+          ...row,
+          categoryLabel: row.category_name || "Other",
+          base_price: basePrice,
+          display_price: resolved.unitPrice,
+          display_savings: Math.max(0, Math.round((basePrice - resolved.unitPrice) * 100) / 100),
+          promotion_id: resolved.promotionId || null,
+          stock_message: row.track_stock === true
+            ? Number(row.store_stock || 0) > 0
+              ? `${Number(row.store_stock)} in stock`
+              : "Out of stock"
+            : "Available",
+        };
+      }) });
     } catch (error) {
       console.error("Load OneKiosk catalogue error:", error);
       res.status(500).json({ success: false, message: "Unable to load kiosk catalogue" });
@@ -347,6 +366,36 @@ export default function createKioskRouter({
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ success: false, message: "Unable to clear assistance request" });
+    }
+  });
+
+  router.post("/kiosk/customer-lookup", authenticate, async (req, res) => {
+    const query = String(req.body?.query || "").trim().slice(0, 255);
+    if (!query) return res.status(400).json({ success: false, message: "Enter a phone number or email" });
+    try {
+      const digits = query.replace(/[^0-9]/g, "");
+      const result = await db(
+        `SELECT c.id,c.name,c.email,c.phone,
+                COALESCE(lb.balance,0) AS loyalty_balance
+           FROM customers c
+           LEFT JOIN customer_loyalty_balances lb
+             ON lb.company_id=c.company_id AND lb.customer_id=c.id
+          WHERE c.company_id=$1 AND c.active=TRUE
+            AND (
+              LOWER(COALESCE(c.email,''))=LOWER($2)
+              OR c.phone=$2
+              OR ($3<>'' AND REGEXP_REPLACE(COALESCE(c.phone,''),'[^0-9]','','g')=$3)
+            )
+          LIMIT 1`,
+        [req.user.companyId, query, digits]
+      );
+      if (!result.rows.length) {
+        return res.status(404).json({ success: false, found: false, message: "Account not found — you can continue as a guest" });
+      }
+      res.json({ success: true, found: true, data: result.rows[0] });
+    } catch (error) {
+      console.error("OneKiosk customer lookup error:", error);
+      res.status(500).json({ success: false, message: "Unable to look up rewards account" });
     }
   });
 
@@ -1007,6 +1056,7 @@ export function createKioskModeGate() {
       (method === "POST" && path === "/api/kiosk/quote") ||
       (method === "POST" && path === "/api/kiosk/availability") ||
       (method === "POST" && path === "/api/kiosk/assistance") ||
+      (method === "POST" && path === "/api/kiosk/customer-lookup") ||
       (method === "POST" && path === "/api/kiosk/orders/from-sale") ||
       (method === "POST" && /^\/api\/kiosk\/devices\/[^/]+\/heartbeat$/.test(path)) ||
       (method === "POST" && path === "/api/sales") ||
