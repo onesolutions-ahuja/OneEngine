@@ -515,6 +515,7 @@ CREATE TABLE IF NOT EXISTS products (
     product_kind VARCHAR(20) NOT NULL DEFAULT 'standard'
       CHECK (product_kind IN ('standard', 'variant', 'bundle')),
     variant_attributes JSONB NOT NULL DEFAULT '{}'::jsonb,
+    kiosk_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     name VARCHAR(255) NOT NULL,
     sku VARCHAR(100),
     barcode VARCHAR(100),
