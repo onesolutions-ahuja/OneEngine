@@ -375,16 +375,16 @@ export function packageDefinition(entry) {
                 startScreen: "catalogue",
                 theme: { density: "touch", productCard: "image", accentRole: "primary" },
                 screens: [
-                  { key: "catalogue", type: "CATALOGUE", title: "What would you like?", search: true, categories: true, productAction: "OPEN_DETAIL" },
-                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, modifiers: true, nutrition: true, allergens: true },
-                  { key: "upsell", type: "RECOMMENDATIONS", source: "CROSS_SELL", title: "Make it yours", optional: true },
-                  { key: "fulfilment", type: "FULFILMENT", title: "How would you like it?", defaultOption: "EAT_IN", options: [
+                  { key: "catalogue", type: "CATALOGUE", title: "What would you like?", search: true, categories: true, productAction: "OPEN_DETAIL", next: "product" },
+                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, modifiers: true, nutrition: true, allergens: true, next: "upsell" },
+                  { key: "upsell", type: "RECOMMENDATIONS", source: "CROSS_SELL", title: "Make it yours", optional: true, next: "fulfilment" },
+                  { key: "fulfilment", type: "FULFILMENT", title: "How would you like it?", defaultOption: "EAT_IN", next: "basket", options: [
                     { key: "EAT_IN", label: "Eat in", canonicalType: "SELF_PICKUP" },
                     { key: "TAKEAWAY", label: "Takeaway", canonicalType: "SELF_PICKUP" },
                     { key: "COLLECT", label: "Collect", canonicalType: "SELF_PICKUP" }
                   ] },
-                  { key: "basket", type: "BASKET", editable: true, promotions: true },
-                  { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & collect" },
+                  { key: "basket", type: "BASKET", editable: true, promotions: true, next: "payment" },
+                  { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & collect", next: "confirmation" },
                   { key: "confirmation", type: "CONFIRMATION", title: "Thank you", subtitle: "Your order has been sent for preparation.", collectionNumber: true, collectionLabel: "Your collection number", helpText: "Keep this number and go to the collection counter. Your number will be shown when your order is ready.", doneLabel: "Start a new order", receipt: ["PRINT","QR"], resetAfterSeconds: 30 }
                 ],
                 features: {
@@ -415,16 +415,16 @@ export function packageDefinition(entry) {
                 startScreen: "catalogue",
                 theme: { density: "touch", productCard: "image_specs", accentRole: "primary" },
                 screens: [
-                  { key: "catalogue", type: "CATALOGUE", title: "Find your product", search: true, categories: true, productAction: "OPEN_DETAIL" },
-                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true },
-                  { key: "extras", type: "RECOMMENDATIONS", source: "ACCESSORY", title: "Accessories & protection", warranty: true, optional: true },
-                  { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", defaultOption: "COLLECT", options: [
+                  { key: "catalogue", type: "CATALOGUE", title: "Find your product", search: true, categories: true, productAction: "OPEN_DETAIL", next: "product" },
+                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true, next: "extras" },
+                  { key: "extras", type: "RECOMMENDATIONS", source: "ACCESSORY", title: "Accessories & protection", warranty: true, optional: true, next: "fulfilment" },
+                  { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", defaultOption: "COLLECT", next: "basket", options: [
                     { key: "COLLECT", label: "Collect here", canonicalType: "SELF_PICKUP", requires: [] },
                     { key: "OTHER_STORE", label: "Collect another store", canonicalType: "SELF_PICKUP", requires: ["STORE"] },
                     { key: "DELIVERY", label: "Home delivery", canonicalType: "DELIVERY", requires: ["ADDRESS","CONTACT"] }
                   ], stockPromise: true },
-                  { key: "basket", type: "BASKET", editable: true, promotions: true },
-                  { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & order" },
+                  { key: "basket", type: "BASKET", editable: true, promotions: true, next: "payment" },
+                  { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & order", next: "confirmation" },
                   { key: "confirmation", type: "CONFIRMATION", title: "Order confirmed", subtitle: "Your order has been placed.", collectionNumber: true, collectionLabel: "Order / collection number", helpText: "Keep this reference. We will show when your order is ready for collection.", doneLabel: "Start another order", receipt: ["PRINT","QR","EMAIL"], collectionVerification: true, resetAfterSeconds: 30 }
                 ],
                 features: {
