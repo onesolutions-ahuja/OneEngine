@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
+import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2, ArrowLeft, Accessibility, Languages, HelpCircle, QrCode, GitCompareArrows } from "lucide-react";
 import { apiRequest, KIOSK_TOKEN_STORAGE_KEY } from "../../services/api.js";
 import "./oneKiosk.css";
 
@@ -136,6 +136,14 @@ export default function OneKioskPage({ publicMode = false }) {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [lastInteractionAt, setLastInteractionAt] = useState(() => Date.now());
   const [storeAvailability, setStoreAvailability] = useState([]);
+  const [currentScreenKey, setCurrentScreenKey] = useState("");
+  const [lastAddedProductId, setLastAddedProductId] = useState("");
+  const [compareIds, setCompareIds] = useState([]);
+  const [accessMode, setAccessMode] = useState("DEFAULT");
+  const [language, setLanguage] = useState("en");
+  const [attractMode, setAttractMode] = useState(publicMode);
+  const [idleWarning, setIdleWarning] = useState(false);
+  const [receiptQr, setReceiptQr] = useState(null);
   const [fulfilmentDetails, setFulfilmentDetails] = useState({
     storeId: "",
     name: "",
@@ -331,13 +339,50 @@ export default function OneKioskPage({ publicMode = false }) {
     };
   }, [demoMode]);
 
+  const screenSequence = useMemo(
+    () => Array.isArray(experienceUi?.screens) ? experienceUi.screens.filter((screen) => screen?.key && screen?.type) : [],
+    [experienceUi]
+  );
+
   const screensByType = useMemo(() => {
     const map = {};
-    for (const screen of Array.isArray(experienceUi?.screens) ? experienceUi.screens : []) {
+    for (const screen of screenSequence) {
       if (screen?.type) map[screen.type] = screen;
     }
     return map;
-  }, [experienceUi]);
+  }, [screenSequence]);
+
+  const screensByKey = useMemo(
+    () => Object.fromEntries(screenSequence.map((screen) => [screen.key, screen])),
+    [screenSequence]
+  );
+
+  const currentScreen = screensByKey[currentScreenKey] || screenSequence[0] || null;
+
+  useEffect(() => {
+    if (!screenSequence.length) return;
+    const requested = experienceUi?.startScreen;
+    const first = requested && screensByKey[requested] ? requested : screenSequence[0].key;
+    setCurrentScreenKey((current) => current && screensByKey[current] ? current : first);
+  }, [experienceFlow?.id, screenSequence.map((screen) => screen.key).join("|")]);
+
+  const goToScreen = (keyOrType) => {
+    const direct = screensByKey[keyOrType];
+    const byType = screenSequence.find((screen) => screen.type === keyOrType);
+    const target = direct || byType;
+    if (target?.key) {
+      setCurrentScreenKey(target.key);
+      setLastInteractionAt(Date.now());
+      setError("");
+    }
+  };
+
+  const nextScreenFrom = (screen, fallbackType = null) => {
+    if (screen?.next && screensByKey[screen.next]) return screensByKey[screen.next];
+    const index = screenSequence.findIndex((candidate) => candidate.key === screen?.key);
+    if (index >= 0 && screenSequence[index + 1]) return screenSequence[index + 1];
+    return fallbackType ? screenSequence.find((candidate) => candidate.type === fallbackType) || null : null;
+  };
 
   const catalogueScreen = screensByType.CATALOGUE || {};
   const productScreen = screensByType.PRODUCT_DETAIL || {};
@@ -350,6 +395,16 @@ export default function OneKioskPage({ publicMode = false }) {
   const selectedFulfilmentOption = fulfilmentOptions.find((option) => option.key === fulfilmentType) || null;
   const fulfilmentRequirements = Array.isArray(selectedFulfilmentOption?.requires) ? selectedFulfilmentOption.requires : [];
   const featureFlags = experienceUi?.features || {};
+  const availableLanguages = Array.isArray(experienceUi?.languages) && experienceUi.languages.length
+    ? experienceUi.languages
+    : [{ key: "en", label: "English" }];
+
+  const translate = (value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value[language] || value.en || Object.values(value)[0] || "";
+    }
+    return value || "";
+  };
 
   const needsStoreAvailability = fulfilmentRequirements.includes("STORE") || fulfilmentType === "DELIVERY";
 
@@ -398,6 +453,57 @@ export default function OneKioskPage({ publicMode = false }) {
     }
   }, [fulfilmentType]);
 
+  useEffect(() => {
+    if (!publicMode || !featureFlags.idleReset) return undefined;
+    const timeoutSeconds = Math.max(30, Number(experienceUi?.idleTimeoutSeconds || 75));
+    const warningSeconds = Math.min(20, Math.max(8, Number(experienceUi?.idleWarningSeconds || 15)));
+    const tick = window.setInterval(() => {
+      const idleSeconds = (Date.now() - lastInteractionAt) / 1000;
+      setIdleWarning(idleSeconds >= timeoutSeconds - warningSeconds && idleSeconds < timeoutSeconds);
+      if (idleSeconds >= timeoutSeconds) {
+        setBasket([]);
+        setSelectedProduct(null);
+        setProductOptions(null);
+        setSelectedModifiers({});
+        setSelectedVariantId("");
+        setCompareIds([]);
+        setSearch("");
+        setCategory("All");
+        setFulfilmentDetails({ storeId: "", name: "", email: "", phone: "", address1: "", address2: "", city: "", postcode: "" });
+        setStoreAvailability([]);
+        setPaidSale(null);
+        setConfirmation(null);
+        setReceiptQr(null);
+        setError("");
+        setIdleWarning(false);
+        setAttractMode(true);
+        const start = experienceUi?.startScreen || screenSequence[0]?.key;
+        if (start) setCurrentScreenKey(start);
+        setLastInteractionAt(Date.now());
+      }
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [publicMode, featureFlags.idleReset, lastInteractionAt, experienceUi?.idleTimeoutSeconds, experienceFlow?.id]);
+
+  useEffect(() => {
+    const touch = () => {
+      setLastInteractionAt(Date.now());
+      setIdleWarning(false);
+    };
+    window.addEventListener("pointerdown", touch, { passive: true });
+    window.addEventListener("keydown", touch);
+    return () => {
+      window.removeEventListener("pointerdown", touch);
+      window.removeEventListener("keydown", touch);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!confirmation || !confirmationScreen.resetAfterSeconds) return undefined;
+    const timer = window.setTimeout(() => startNewOrder(), Math.max(5, Number(confirmationScreen.resetAfterSeconds)) * 1000);
+    return () => window.clearTimeout(timer);
+  }, [confirmation?.collectionNumber]);
+
   const categories = useMemo(
     () => ["All", ...new Set(products.map((product) => product.categoryLabel).filter(Boolean))],
     [products]
@@ -413,6 +519,24 @@ export default function OneKioskPage({ publicMode = false }) {
         .some((value) => String(value).toLowerCase().includes(query));
     });
   }, [products, category, search]);
+
+  const recommendationProducts = useMemo(() => {
+    if (!lastAddedProductId) return [];
+    const sourceProduct = products.find((product) => String(product.id) === String(lastAddedProductId));
+    const metadata = sourceProduct?.kiosk_metadata || sourceProduct?.kioskMetadata || {};
+    const sourceKey = String(recommendationsScreen.source || "CROSS_SELL").toUpperCase();
+    const candidateIds = metadata?.recommendations?.[sourceKey]
+      || metadata?.recommendations?.[sourceKey.toLowerCase()]
+      || metadata?.[`${sourceKey.toLowerCase()}ProductIds`]
+      || [];
+    const ids = new Set((Array.isArray(candidateIds) ? candidateIds : []).map(String));
+    return products.filter((product) => ids.has(String(product.id)));
+  }, [lastAddedProductId, products, recommendationsScreen.source]);
+
+  const comparedProducts = useMemo(
+    () => compareIds.map((id) => products.find((product) => String(product.id) === String(id))).filter(Boolean),
+    [compareIds, products]
+  );
 
   useEffect(() => {
     if (demoMode || !basket.length) {
@@ -504,17 +628,37 @@ export default function OneKioskPage({ publicMode = false }) {
         parentProductId: product.id,
       }];
     });
+    setLastAddedProductId(product.id);
     setSelectedProduct(null);
     setProductOptions(null);
     setSelectedVariantId("");
     setSelectedModifiers({});
     setLastInteractionAt(Date.now());
+    const next = nextScreenFrom(productScreen, "RECOMMENDATIONS");
+    if (next?.type === "RECOMMENDATIONS") {
+      const metadata = product.kiosk_metadata || product.kioskMetadata || productOptions?.metadata || {};
+      const sourceKey = String(next.source || "CROSS_SELL").toUpperCase();
+      const ids = metadata?.recommendations?.[sourceKey]
+        || metadata?.recommendations?.[sourceKey.toLowerCase()]
+        || metadata?.[`${sourceKey.toLowerCase()}ProductIds`]
+        || [];
+      if (Array.isArray(ids) && ids.length) setCurrentScreenKey(next.key);
+      else {
+        const afterRecommendations = nextScreenFrom(next, "FULFILMENT");
+        if (afterRecommendations?.key) setCurrentScreenKey(afterRecommendations.key);
+      }
+    } else if (next?.key) {
+      setCurrentScreenKey(next.key);
+    } else {
+      goToScreen("CATALOGUE");
+    }
   };
 
   const handleProductAction = async (product) => {
     setLastInteractionAt(Date.now());
     if (catalogueScreen.productAction === "OPEN_DETAIL" && Object.keys(productScreen).length) {
       setSelectedProduct(product);
+      if (productScreen?.key) setCurrentScreenKey(productScreen.key);
       setProductOptions(null);
       setSelectedVariantId(String(product.id));
       setSelectedModifiers({});
@@ -661,6 +805,21 @@ export default function OneKioskPage({ publicMode = false }) {
     }
   };
 
+  const generateReceiptQr = async () => {
+    const saleId = confirmation?.saleId || confirmation?.order?.platform_data?.saleId || confirmation?.order?.platform_data?.sale_id;
+    if (!saleId) return setError("Receipt QR is not available for this order.");
+    try {
+      const response = await apiRequest(`/api/sales/${encodeURIComponent(saleId)}/receipt-qr`, {
+        method: "POST",
+        body: JSON.stringify({ expiryMinutes: Number(confirmationScreen.qrExpiryMinutes || 5) }),
+      });
+      if (!response?.success || !response?.data?.qrcodeUrl) throw new Error(response?.message || "Unable to create receipt QR");
+      setReceiptQr(response.data);
+    } catch (reason) {
+      setError(reason?.message || "Unable to create receipt QR");
+    }
+  };
+
   const startNewOrder = () => {
     setConfirmation(null);
     setPaidSale(null);
@@ -669,6 +828,12 @@ export default function OneKioskPage({ publicMode = false }) {
     setStoreAvailability([]);
     const next = fulfilmentScreen.defaultOption || fulfilmentOptions[0]?.key || "";
     if (next) setFulfilmentType(next);
+    const start = experienceUi?.startScreen || screenSequence[0]?.key;
+    if (start) setCurrentScreenKey(start);
+    setLastAddedProductId("");
+    setCompareIds([]);
+    setReceiptQr(null);
+    if (publicMode) setAttractMode(true);
   };
 
   if (loading) {
