@@ -146,14 +146,14 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
         companyId: connection.company_id,
         bookingCaseId: bookingCase.id,
         purpose: "BOOK_SLOT",
-        ttlMinutes: 30,
+        ttlMinutes: 15,
         publicBaseUrl: bookingBaseUrl,
         metadata: { channel: "SMS", provider: "smsgate", connectorInstanceId: connection.id },
       });
 
       const connectorConfiguration = { ...configuration, ...secrets };
       const adapter = createSmsGateDriver().createAdapter({ configuration: connectorConfiguration });
-      const replyText = `Thanks for contacting us. Book your appointment here: ${link.url} (link valid for 30 minutes)`;
+      const replyText = `Welcome. Book your appointment here: ${link.url}. This secure link expires in 15 minutes.`;
       const sent = await adapter.execute("sms.send", { recipient: sender, text: replyText });
 
       return res.status(202).json({
