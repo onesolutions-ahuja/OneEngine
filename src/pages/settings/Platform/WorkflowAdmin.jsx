@@ -2066,6 +2066,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                       type="button"
                       draggable
                       title={option.description || option.label}
+                      aria-label={option.label || option.value}
                       onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)}
                       onClick={() => addFromPalette(option.value)}
                       className="workflow-palette-item"
