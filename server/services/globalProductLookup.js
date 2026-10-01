@@ -175,7 +175,59 @@ export function createGlobalProductLookupService({ fetchImpl = globalThis.fetch,
     };
   }
 
-  return { lookup };
+  async function search({ db, companyId, query: input, reqCompanyId = null, page = 1, pageSize = 20 }) {
+    if (!companyId || (reqCompanyId && String(reqCompanyId) !== String(companyId))) {
+      throw new ProductProviderError("Product lookup company context is invalid", { code: "INVALID_COMPANY", retryable: false });
+    }
+    const query = String(input || "").trim().replace(/\s+/g, " ");
+    if (query.length < 2 || query.length > 120) {
+      throw new ProductProviderError("Search text must be between 2 and 120 characters", { code: "INVALID_SEARCH", retryable: false });
+    }
+
+    const providers = (await discoverGlobalProductProviders({ db, companyId }))
+      .filter((provider) => provider.settings.enabled);
+    const triedProviders = [];
+    const providerErrors = [];
+
+    for (const provider of providers) {
+      const adapter = PROVIDER_ADAPTERS[provider.providerKey]({ fetchImpl });
+      if (typeof adapter.search !== "function") continue;
+      triedProviders.push(provider.providerKey);
+      try {
+        const result = await adapter.search({
+          query,
+          page,
+          pageSize,
+          config: {
+            ...provider.metadata,
+            ...provider.settings,
+            baseUrl: provider.settings.baseUrl || provider.metadata.baseUrl,
+          },
+        });
+        if (result.status === "found") {
+          return { ...result, query, triedProviders, providerErrors, scope: "worldwide" };
+        }
+        if (!provider.settings.fallbackEnabled) break;
+      } catch (error) {
+        providerErrors.push({ provider: provider.providerKey, code: error?.code || "PROVIDER_ERROR" });
+        if (!provider.settings.fallbackEnabled) break;
+      }
+    }
+
+    return {
+      status: providerErrors.length ? "unavailable" : "not_found",
+      query,
+      products: [],
+      count: 0,
+      page: Math.max(1, Number(page) || 1),
+      pageSize: Math.max(1, Math.min(Number(pageSize) || 20, 40)),
+      triedProviders,
+      providerErrors,
+      scope: "worldwide",
+    };
+  }
+
+  return { lookup, search };
 }
 
 export async function testGlobalProductProvider({ db, companyId, providerKey, fetchImpl = globalThis.fetch }) {
