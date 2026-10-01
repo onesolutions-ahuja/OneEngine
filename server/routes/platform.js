@@ -4457,8 +4457,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   });
 
   router.get("/platform/approval-users", authenticate, async (req,res) => {
-    const result=await db("SELECT u.id,u.username,u.email,r.name AS role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.company_id=$1 AND u.active=TRUE ORDER BY u.username,u.email",[req.user.companyId]);
+    const result=await db("SELECT u.id,u.username,u.email,u.manager_id,r.name AS role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.company_id=$1 AND u.active=TRUE ORDER BY u.username,u.email",[req.user.companyId]);
     res.json({success:true,data:result.rows});
+  });
+
+  router.put("/platform/approval-users/:userId/manager", ...manage, async (req,res) => {
+    const managerId=req.body?.managerId||null;
+    if(String(req.params.userId)===String(managerId)) return res.status(400).json({success:false,message:"A user cannot be their own manager"});
+    if(managerId){const manager=await db("SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE",[managerId,req.user.companyId]);if(!manager.rows.length)return res.status(400).json({success:false,message:"Manager must be an active user in this company"});}
+    const result=await db("UPDATE users SET manager_id=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3 RETURNING id,manager_id",[managerId,req.params.userId,req.user.companyId]);
+    if(!result.rows.length)return res.status(404).json({success:false,message:"User not found"});
+    res.json({success:true,data:result.rows[0]});
   });
 
   router.get("/platform/approval-groups", authenticate, async (req,res) => {
