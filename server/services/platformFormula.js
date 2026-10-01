@@ -2,6 +2,7 @@
 const TYPES = new Set(["number", "decimal", "currency", "text", "boolean", "date", "datetime", "email", "phone", "select", "picklist"]);
 const STRING_TYPES = new Set(["text", "date", "datetime", "email", "phone", "select", "picklist"]);
 const SAFE = /^[a-z_][a-z0-9_]*$/;
+const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED = new Set(["id", "company_id", "store_id", "__proto__", "constructor", "prototype"]);
 const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
 const ARITY = { IF: [3, 3], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20] };
@@ -35,7 +36,7 @@ export class FormulaError extends Error {
 }
 function fail(message) { throw new FormulaError(message); }
 
-export function parseFormula(expression) {
+export function parseFormula(expression, { identifierPattern = SAFE, caseInsensitiveReserved = false } = {}) {
   if (typeof expression !== "string" || !expression.trim() || expression.length > 2000) fail("Formula must contain 1–2000 characters");
   const tokens = [];
   const pattern = /\s*(?:(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|("(?:[^"\\]|\\["\\nrt])*")|([A-Za-z_][A-Za-z_0-9]*)|(\|\||&&|==|!=|>=|<=|[+*/%(),!<>-]))/y;
@@ -79,7 +80,8 @@ export function parseFormula(expression) {
         node = { kind: "call", name: token.value, args };
       } else if (["true", "false", "null"].includes(token.value)) node = { kind: "literal", value: JSON.parse(token.value) };
       else {
-        if (!SAFE.test(token.value) || RESERVED.has(token.value)) fail("Use a valid field API name");
+        const reservedKey = caseInsensitiveReserved ? String(token.value).toLowerCase() : token.value;
+        if (!identifierPattern.test(token.value) || RESERVED.has(reservedKey)) fail("Use a valid formula name");
         node = { kind: "field", name: token.value };
       }
     } else fail("Expected a value, field, or function");
@@ -187,7 +189,7 @@ function evaluate(node, get) {
 }
 
 export function workflowFormulaReferences(expression) {
-  const ast = parseFormula(expression);
+  const ast = parseFormula(expression, { identifierPattern: WORKFLOW_SAFE, caseInsensitiveReserved: true });
   const refs = new Set();
   const walk = (node) => {
     if (!node || typeof node !== "object") return;
@@ -206,9 +208,9 @@ export function evaluateWorkflowFormula(expression, inputs = {}) {
   }
   const names = Object.keys(inputs);
   for (const name of names) {
-    if (!SAFE.test(name) || RESERVED.has(name)) fail(`Invalid workflow formula input: ${name}`);
+    if (!WORKFLOW_SAFE.test(name) || RESERVED.has(String(name).toLowerCase())) fail(`Invalid workflow formula input: ${name}`);
   }
-  const ast = parseFormula(expression);
+  const ast = parseFormula(expression, { identifierPattern: WORKFLOW_SAFE, caseInsensitiveReserved: true });
   const value = evaluate(ast, (name) => {
     if (!Object.prototype.hasOwnProperty.call(inputs, name)) fail(`Workflow formula references an unknown input: ${name}`);
     const input = inputs[name];
