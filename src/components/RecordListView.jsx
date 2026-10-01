@@ -233,12 +233,16 @@ export default function RecordListView({
     })
   }
 
+  const resolvedSubtitle = typeof subtitle === 'function'
+    ? subtitle({ filteredCount: filtered.length, totalCount: rows.length })
+    : subtitle
+
   return (
     <div className="record-list-view">
       <div className="record-list-header">
         <div>
           <strong>{title}</strong>
-          {subtitle ? <p>{subtitle}</p> : null}
+          {resolvedSubtitle ? <p>{resolvedSubtitle}</p> : null}
         </div>
         <div className="record-list-header-actions">
           {objectKey ? (
