@@ -3384,17 +3384,36 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const ids = actions.map((action) => action?.id).filter(Boolean).map(String);
       if (new Set(ids).size !== ids.length) return "Workflow element identifiers must be unique";
       const indexById = new Map(actions.map((action, index) => [String(action?.id || ""), index]).filter(([id]) => id));
+      const claimedControlTargets = new Map();
       for (let index = 0; index < actions.length; index += 1) {
         const action = actions[index];
-        if (String(action?.type || action?.key || "").toUpperCase() !== "CONDITION") continue;
-        const yes = Array.isArray(action.ifBranch) ? action.ifBranch.map(String) : [];
-        const otherwise = Array.isArray(action.elseBranch) ? action.elseBranch.map(String) : [];
-        for (const targetId of [...yes, ...otherwise]) {
-          if (!indexById.has(targetId)) return `Decision "${action.label || action.id || index + 1}" references an action that no longer exists`;
-          if (indexById.get(targetId) <= index) return `Decision "${action.label || action.id || index + 1}" can only route to later actions`;
+        const actionType = String(action?.type || action?.key || "").toUpperCase();
+        if (actionType === "CONDITION") {
+          const yes = Array.isArray(action.ifBranch) ? action.ifBranch.map(String) : [];
+          const otherwise = Array.isArray(action.elseBranch) ? action.elseBranch.map(String) : [];
+          for (const targetId of [...yes, ...otherwise]) {
+            if (!indexById.has(targetId)) return `Decision "${action.label || action.id || index + 1}" references an action that no longer exists`;
+            if (indexById.get(targetId) <= index) return `Decision "${action.label || action.id || index + 1}" can only route to later actions`;
+            const owner = claimedControlTargets.get(targetId);
+            if (owner && owner !== String(action.id || index)) return `Action "${actions[indexById.get(targetId)]?.label || targetId}" is already controlled by another Decision or Loop`;
+            claimedControlTargets.set(targetId, String(action.id || index));
+          }
+          const overlap = yes.find((targetId) => otherwise.includes(targetId));
+          if (overlap) return `Decision "${action.label || action.id || index + 1}" assigns the same action to both outcomes`;
+          continue;
         }
-        const overlap = yes.find((targetId) => otherwise.includes(targetId));
-        if (overlap) return `Decision "${action.label || action.id || index + 1}" assigns the same action to both outcomes`;
+        if (actionType === "LOOP") {
+          const body = Array.isArray(action.bodyBranch) ? action.bodyBranch.map(String) : [];
+          for (const targetId of body) {
+            if (!indexById.has(targetId)) return `Loop "${action.label || action.id || index + 1}" references an action that no longer exists`;
+            if (indexById.get(targetId) <= index) return `Loop "${action.label || action.id || index + 1}" can only contain later actions`;
+            const target = actions[indexById.get(targetId)];
+            if (String(target?.type || target?.key || "").toUpperCase() === "WAIT") return `Loop "${action.label || action.id || index + 1}" cannot contain Wait yet`;
+            const owner = claimedControlTargets.get(targetId);
+            if (owner && owner !== String(action.id || index)) return `Action "${target?.label || targetId}" is already controlled by another Decision or Loop`;
+            claimedControlTargets.set(targetId, String(action.id || index));
+          }
+        }
       }
     }
     if (actions.some((action) => action.type === "set_field" && (typeof action.field !== "string" || action.value === undefined))) return "Each field update action requires a field and value";
