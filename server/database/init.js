@@ -609,6 +609,67 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log("onePOS: Communication Core runtime tables ready");
       },
     },
+
+    {
+      key: "0026_seed_oneassistant_first_booking_defaults",
+      version: "26",
+      name: "Seed first-booking defaults for configured SMSGate tenants",
+      up: async client => {
+        const companies = await client.query(`
+          SELECT DISTINCT ic.company_id
+            FROM integration_connections ic
+           WHERE ic.connector_package_key='smsgate_connector'
+             AND ic.enabled=TRUE
+             AND NOT EXISTS (
+               SELECT 1
+                 FROM appointment_services s
+                WHERE s.company_id=ic.company_id
+                  AND s.active=TRUE
+             )
+        `);
+
+        for (const row of companies.rows) {
+          const service = await client.query(
+            `INSERT INTO appointment_services
+               (company_id,name,description,duration_minutes,price,currency,payment_policy,deposit_value,active,metadata)
+             VALUES
+               ($1,'General Appointment','Default appointment service created during OneAssistant first-time setup',30,0,'GBP','NO_ADVANCE',0,TRUE,
+                '{"autoProvisioned":true,"source":"oneassistant_first_booking"}'::jsonb)
+             RETURNING id`,
+            [row.company_id]
+          );
+
+          const resource = await client.query(
+            `INSERT INTO appointment_resources
+               (company_id,name,resource_type,timezone,active,metadata)
+             VALUES
+               ($1,'Default Resource','STAFF','Europe/London',TRUE,
+                '{"autoProvisioned":true,"source":"oneassistant_first_booking"}'::jsonb)
+             RETURNING id`,
+            [row.company_id]
+          );
+
+          await client.query(
+            `INSERT INTO appointment_resource_services
+               (company_id,resource_id,service_id,duration_minutes,active)
+             VALUES($1,$2,$3,NULL,TRUE)
+             ON CONFLICT(resource_id,service_id) DO UPDATE SET active=TRUE`,
+            [row.company_id, resource.rows[0].id, service.rows[0].id]
+          );
+
+          for (const weekday of [1,2,3,4,5,6]) {
+            await client.query(
+              `INSERT INTO appointment_availability_rules
+                 (company_id,resource_id,weekday,start_time,end_time,slot_interval_minutes,active)
+               VALUES($1,$2,$3,'09:00','17:00',30,TRUE)`,
+              [row.company_id, resource.rows[0].id, weekday]
+            );
+          }
+        }
+
+        console.log(`onePOS: OneAssistant first-booking defaults ready for ${companies.rows.length} configured tenant(s)`);
+      },
+    },
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
