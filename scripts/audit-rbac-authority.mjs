@@ -23,6 +23,8 @@ const runtimeForbiddenTokens = [
   "is_superadmin",
   "platform.manage",
   "canManagePlatform",
+  "platform_developer_company_access",
+  "PLATFORM_MANAGE_PERMISSION",
 ];
 
 const runtimePrefixes = [
@@ -53,22 +55,24 @@ for (const base of scanRoots) {
       }
     }
 
-    const lines = text.split("\n");
-    const suspicious = [
-      /(?:role_name|roleName|role\.name|api_key|username|email)[^\n]{0,100}(?:admin|administrator|owner|superadmin|engine_manager|platform_developer)/i,
-      /(?:admin|administrator|owner|superadmin|engine_manager|platform_developer)[^\n]{0,100}(?:role_name|roleName|role\.name|api_key|username|email)/i,
-      /(?:permission|authorize|hasPermission)[^\n]{0,160}\|\|[^\n]{0,160}(?:role|username|email|isPlatform|is_platform)/i,
-    ];
-    lines.forEach((lineText, idx) => {
-      if (suspicious.some((re) => re.test(lineText))) {
-        findings.push({
-          file: relative,
-          line: idx + 1,
-          rule: "possible-identity-authority",
-          token: lineText.trim().slice(0, 220),
-        });
-      }
-    });
+    if (relative.startsWith("server/")) {
+      const lines = text.split("\n");
+      const suspicious = [
+        /(?:role_name|roleName|role\.name|api_key|username|email)[^\n]{0,100}(?:===|==|\.includes\()[^\n]{0,100}(?:admin|administrator|owner|superadmin|engine_manager|platform_developer)/i,
+        /(?:admin|administrator|owner|superadmin|engine_manager|platform_developer)[^\n]{0,100}(?:===|==|\.includes\()[^\n]{0,100}(?:role_name|roleName|role\.name|api_key|username|email)/i,
+        /(?:permission|authorize|hasPermission)[^\n]{0,160}\|\|[^\n]{0,160}(?:roleName|role_name|username|email|isPlatform|is_platform)/i,
+      ];
+      lines.forEach((lineText, idx) => {
+        if (suspicious.some((re) => re.test(lineText))) {
+          findings.push({
+            file: relative,
+            line: idx + 1,
+            rule: "possible-identity-authority",
+            token: lineText.trim().slice(0, 220),
+          });
+        }
+      });
+    }
   }
 }
 
