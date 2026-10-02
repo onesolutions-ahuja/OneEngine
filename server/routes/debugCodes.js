@@ -1,5 +1,5 @@
 import express from "express";
-import { BUILTIN_DEBUG_CODES, DEBUG_CODE_RE } from "../services/debugCodes.js";
+import { BUILTIN_DEBUG_CODES, DEBUG_CODE_RE, LEGACY_DEBUG_CODE_RE, normalizeDebugCode } from "../services/debugCodes.js";
 
 const SEVERITIES = new Set(["INFO", "WARNING", "ERROR", "CRITICAL", "FATAL"]);
 
@@ -10,7 +10,7 @@ function clean(value, max = 500) {
 function normalizeBody(body = {}) {
   const code = clean(body.code, 6).toUpperCase();
   const severity = clean(body.severity || "ERROR", 20).toUpperCase();
-  if (!DEBUG_CODE_RE.test(code)) throw Object.assign(new Error("Code must use the compact OneEngine format, for example OED02"), { status: 400 });
+  if (!DEBUG_CODE_RE.test(code)) throw Object.assign(new Error("Code must use OE + subsystem + cause + 2 digits, for example OEWA01"), { status: 400 });
   if (!SEVERITIES.has(severity)) throw Object.assign(new Error("Invalid severity"), { status: 400 });
   const category = clean(body.category, 80);
   const title = clean(body.title, 160);
@@ -71,8 +71,9 @@ export default function createDebugCodesRouter({ authenticate, authorize, db }) 
   });
 
   router.patch("/platform/developer/debug-codes/:code", ...manage, async (req, res) => {
-    const code = clean(req.params.code, 6).toUpperCase();
-    if (!DEBUG_CODE_RE.test(code)) return res.status(400).json({ success: false, message: "Invalid OneEngine debug code" });
+    const rawCode = clean(req.params.code, 6).toUpperCase();
+    const code = normalizeDebugCode(rawCode);
+    if (!DEBUG_CODE_RE.test(code) && !LEGACY_DEBUG_CODE_RE.test(rawCode)) return res.status(400).json({ success: false, message: "Invalid OneEngine debug code" });
     const current = await db("SELECT * FROM oneengine_debug_codes WHERE code=$1", [code]);
     if (!current.rows[0]) return res.status(404).json({ success: false, message: "Debug code not found" });
     const row = current.rows[0];
@@ -102,11 +103,15 @@ export default function createDebugCodesRouter({ authenticate, authorize, db }) 
   });
 
   router.get("/platform/developer/debug-events", ...manage, async (req, res) => {
-    const code = clean(req.query.code, 6).toUpperCase();
+    const rawCode = clean(req.query.code, 6).toUpperCase();
+    const code = normalizeDebugCode(rawCode);
     const reference = clean(req.query.reference, 32).toUpperCase();
     const params = [];
     const filters = [];
-    if (DEBUG_CODE_RE.test(code)) { params.push(code); filters.push(`e.code=$${params.length}`); }
+    if (DEBUG_CODE_RE.test(code) || LEGACY_DEBUG_CODE_RE.test(rawCode)) {
+      params.push(code);
+      filters.push(`(e.code=${params.length} OR e.code=(SELECT legacy_code FROM oneengine_debug_codes WHERE code=${params.length} LIMIT 1))`);
+    }
     if (reference) { params.push(reference); filters.push(`e.reference=$${params.length}`); }
     const result = await db(
       `SELECT e.reference,e.code,e.company_id AS "companyId",e.user_id AS "userId",
