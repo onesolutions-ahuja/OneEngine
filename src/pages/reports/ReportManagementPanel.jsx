@@ -67,7 +67,8 @@ export default function ReportManagementPanel({
   const filteredReports = useMemo(() => {
     const q = query.trim().toLowerCase();
     return reports.filter((report) => {
-      if (folderFilter && String(report.folder_id || "") !== String(folderFilter)) return false;
+      if (folderFilter === "__none__" && report.folder_id) return false;
+      if (folderFilter && folderFilter !== "__none__" && String(report.folder_id || "") !== String(folderFilter)) return false;
       if (!q) return true;
       return [report.name, report.description, report.created_by_name].some((value) => String(value || "").toLowerCase().includes(q));
     });
