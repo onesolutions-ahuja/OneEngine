@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Bell, Building2, ChevronRight, AppWindow, BarChart3, LayoutDashboard,
+  Bell, Bug, Building2, ChevronRight, AppWindow, BarChart3, LayoutDashboard,
   LayoutGrid, ListChecks, UserCheck, Rocket, Search, Workflow,
 } from 'lucide-react'
 import { apiRequest, loadSessionPermissions, getActingCompanyId, getStoredUser, setActingCompanyId } from '../../services/api'
@@ -13,6 +13,7 @@ import PlatformAppsAdmin from '../settings/Platform/PlatformAppsAdmin'
 import DeploymentAdmin from '../settings/Platform/DeploymentAdmin'
 import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSubscriptionsAdmin'
 import ValueSetList from '../settings/Platform/ValueSetList'
+import DebugCodesAdmin from './DebugCodesAdmin'
 import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
@@ -28,6 +29,7 @@ const DEVELOPER_ITEMS = [
   { key: 'deployments', label: 'Deployments', icon: Rocket },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'value-sets', label: 'Value Sets', icon: ListChecks },
+  { key: 'debug', label: 'Debug', icon: Bug },
 ]
 
 function normalizeSection(value) {
@@ -199,6 +201,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
             : current.key === 'deployments' ? <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'notifications' ? <NotificationSubscriptionsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'value-sets' ? <ValueSetList onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : current.key === 'debug' ? <DebugCodesAdmin onError={(value) => setError(value || '')} />
             : null}
         </div>
       </div>
