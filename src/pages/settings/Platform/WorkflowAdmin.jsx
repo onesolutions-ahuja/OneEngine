@@ -835,7 +835,53 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-action-choice strong { display: block; color: #181818; font-size: 10px; }
   .workflow-action-choice small { display: block; margin-top: 2px; color: #706e6b; font-size: 8px; line-height: 1.25; }
 
-  .workflow-properties-panel {
+  .workflow-freeform-canvas {
+    position: relative;
+    min-width: 1200px;
+    min-height: 900px;
+  }
+  .workflow-freeform-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .workflow-freeform-node {
+    position: absolute;
+    width: 250px;
+    z-index: 2;
+    cursor: grab;
+  }
+  .workflow-freeform-node:active { cursor: grabbing; }
+  .workflow-freeform-node .workflow-node-card { width: 250px; }
+  .workflow-freeform-start {
+    position: absolute;
+    width: 220px;
+    z-index: 2;
+    cursor: grab;
+  }
+  .workflow-layout-toggle {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid #d8dde6;
+    border-radius: 7px;
+    background: #f8fafc;
+    pointer-events: auto;
+  }
+  .workflow-layout-toggle button {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  .workflow-layout-toggle button.is-active {
+    background: #fff;
+    color: #0176d3;
+    box-shadow: 0 1px 3px rgba(15,23,42,.12);
+  }
+    .workflow-properties-panel {
     padding: 11px;
     overflow: auto;
     max-height: calc(100vh - 156px);
@@ -2470,6 +2516,41 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const applyingHistoryRef = useRef(false);
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
+  const layoutMode = String(workflow.actionMetadata?.builderLayout?.mode || "AUTO").toUpperCase();
+  const freeformPositions = workflow.actionMetadata?.builderLayout?.positions || {};
+  const setLayoutMode = (mode) => setWorkflow((current) => ({
+    ...current,
+    actionMetadata: {
+      ...(current.actionMetadata || {}),
+      builderLayout: {
+        ...(current.actionMetadata?.builderLayout || {}),
+        mode,
+        positions: { ...(current.actionMetadata?.builderLayout?.positions || {}) },
+      },
+    },
+  }));
+  const defaultFreeformPosition = (stepId, index = 0) => {
+    if (stepId === "__start__") return { x: 490, y: 38 };
+    return { x: 475, y: 150 + (index * 112) };
+  };
+  const getFreeformPosition = (stepId, index = 0) => freeformPositions?.[stepId] || defaultFreeformPosition(stepId, index);
+  const setFreeformPosition = (stepId, position) => setWorkflow((current) => ({
+    ...current,
+    actionMetadata: {
+      ...(current.actionMetadata || {}),
+      builderLayout: {
+        ...(current.actionMetadata?.builderLayout || {}),
+        mode: "FREEFORM",
+        positions: {
+          ...(current.actionMetadata?.builderLayout?.positions || {}),
+          [stepId]: {
+            x: Math.max(10, Math.round(Number(position?.x || 0))),
+            y: Math.max(10, Math.round(Number(position?.y || 0))),
+          },
+        },
+      },
+    },
+  }));
 
   useEffect(() => {
     const snapshot = JSON.stringify(workflow);
@@ -2921,7 +3002,92 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     const next = Math.max(.5, Math.min(1.3, availableWidth / Math.max(1, naturalWidth), availableHeight / Math.max(1, naturalHeight)));
     setCanvasZoom(Number(next.toFixed(2)));
   };
-  const addFaultPath = (step) => {
+  const addFreeformElement = (type, position) => {
+    const step = makeStep(type);
+    const definition = registryOptions.find((option) => option.value === type);
+    if (definition?.label) {
+      step.label = definition.label;
+      step.config.apiName = flowApiName(definition.label);
+    }
+    setWorkflow((current) => ({
+      ...current,
+      steps: [...current.steps, step],
+      actionMetadata: {
+        ...(current.actionMetadata || {}),
+        builderLayout: {
+          ...(current.actionMetadata?.builderLayout || {}),
+          mode: "FREEFORM",
+          positions: {
+            ...(current.actionMetadata?.builderLayout?.positions || {}),
+            [step.id]: { x: Math.max(10, Math.round(position.x)), y: Math.max(10, Math.round(position.y)) },
+          },
+        },
+      },
+    }));
+    setSelectedId(step.id);
+    setInspectorSnapshot(null);
+    setInspectorNewId(step.id);
+    setPropertiesOpen(true);
+  };
+  const freeformEdges = () => {
+    const edges = [];
+    const addChain = (ids, sourceId = null) => {
+      const clean = (ids || []).map(String).filter((id) => workflow.steps.some((step) => String(step.id) === id));
+      if (sourceId && clean[0]) edges.push([String(sourceId), clean[0]]);
+      clean.forEach((id, index) => { if (clean[index + 1]) edges.push([id, clean[index + 1]]); });
+    };
+    const owned = new Set();
+    workflow.steps.forEach((owner) => {
+      const config = owner.config || {};
+      if (owner.type === "CONDITION") {
+        const outcomes = Array.isArray(config.outcomes) && config.outcomes.length ? config.outcomes : [{ branch: config.ifBranch || [] }];
+        outcomes.forEach((outcome) => { (outcome.branch || []).forEach((id) => owned.add(String(id))); addChain(outcome.branch, owner.id); });
+        const defaultIds = config.defaultBranch || config.elseBranch || [];
+        defaultIds.forEach((id) => owned.add(String(id)));
+        addChain(defaultIds, owner.id);
+      }
+      if (owner.type === "LOOP") {
+        (config.bodyBranch || []).forEach((id) => owned.add(String(id)));
+        addChain(config.bodyBranch || [], owner.id);
+      }
+      if (["ROUTE","RETRY"].includes(String(config.faultMode || "FAIL").toUpperCase())) {
+        (config.faultBranch || []).forEach((id) => owned.add(String(id)));
+        addChain(config.faultBranch || [], owner.id);
+      }
+      if (owner.type === "SCHEDULE_PATH") {
+        (config.branch || []).forEach((id) => owned.add(String(id)));
+        addChain(config.branch || [], "__start__");
+      }
+    });
+    const top = workflow.steps.filter((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true && !owned.has(String(step.id)));
+    if (top.length) edges.push(["__start__", String(top[0].id)]);
+    top.forEach((step, index) => { if (top[index + 1]) edges.push([String(step.id), String(top[index + 1].id)]); });
+    return edges;
+  };
+  const onFreeformDrop = (event) => {
+    event.preventDefault();
+    const type = event.dataTransfer.getData("application/x-oneengine-flow-element");
+    if (!type) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    addFreeformElement(type, {
+      x: (event.clientX - rect.left + event.currentTarget.scrollLeft) / Math.max(.1, canvasZoom) - 125,
+      y: (event.clientY - rect.top + event.currentTarget.scrollTop) / Math.max(.1, canvasZoom) - 32,
+    });
+  };
+  const onFreeformDragEnd = (event, stepId, index) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return;
+    const rect = canvas.getBoundingClientRect();
+    const current = getFreeformPosition(stepId, index);
+    const x = (event.clientX - rect.left + canvas.scrollLeft) / Math.max(.1, canvasZoom) - 125;
+    const y = (event.clientY - rect.top + canvas.scrollTop) / Math.max(.1, canvasZoom) - 32;
+    if (event.clientX === 0 && event.clientY === 0) {
+      setFreeformPosition(stepId, current);
+      return;
+    }
+    setFreeformPosition(stepId, { x, y });
+  };
+    const addFaultPath = (step) => {
     const index = workflow.steps.findIndex((item) => item.id === step.id);
     if (index < 0 || !flowElementSupportsFaultPath(step.type)) return;
     updateStep(index, { config: { ...(step.config || {}), faultMode: "ROUTE", faultBranch: step.config?.faultBranch || [] } });
@@ -3122,7 +3288,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
         {paletteTab === "elements" ? (
           <>
-            <p className="workflow-palette-help">{branchTarget ? "Choose an element for this path." : insertAt == null ? "Use a + insertion point on the canvas to choose where the element belongs." : "Choose an element to insert at the selected point."}</p>
+            <p className="workflow-palette-help">{layoutMode === "FREEFORM" ? "Drag an element onto the canvas." : branchTarget ? "Choose an element for this path." : insertAt == null ? "Use a + insertion point on the canvas to choose where the element belongs." : "Choose an element to insert at the selected point."}</p>
             <div className="workflow-palette-scroll">
               {Object.entries(paletteGroups).map(([category, options]) => (
                 <div key={category}>
@@ -3133,9 +3299,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                       type="button"
                       title={option.description || option.label}
                       aria-label={option.label || option.value}
-                      onClick={() => { if (paletteInsertionActive) addFromPalette(option.value, insertAt == null ? workflow.steps.length : insertAt); }}
-                      disabled={!paletteInsertionActive}
-                      className={`workflow-palette-item ${!paletteInsertionActive ? "is-browse-only" : ""}`}
+                      onClick={() => { if (layoutMode !== "FREEFORM" && paletteInsertionActive) addFromPalette(option.value, insertAt == null ? workflow.steps.length : insertAt); }}
+                      draggable={layoutMode === "FREEFORM"}
+                      onDragStart={(event) => { if (layoutMode === "FREEFORM") event.dataTransfer.setData("application/x-oneengine-flow-element", option.value); }}
+                      disabled={layoutMode !== "FREEFORM" && !paletteInsertionActive}
+                      className={`workflow-palette-item ${layoutMode !== "FREEFORM" && !paletteInsertionActive ? "is-browse-only" : ""}`}
                     >
                       <span className="workflow-palette-icon" style={{ background: flowElementVisual(option.value).color }}>{flowElementVisual(option.value).icon}</span>
                       <span className="workflow-palette-item-copy">
@@ -3232,8 +3400,12 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </>
         )}
       </aside> : null}
-      <main ref={canvasRef} className="workflow-canvas-surface">
+      <main ref={canvasRef} className="workflow-canvas-surface" onDragOver={(event) => { if (layoutMode === "FREEFORM") event.preventDefault(); }} onDrop={(event) => { if (layoutMode === "FREEFORM") onFreeformDrop(event); }}>
         <div className="workflow-canvas-toolbar">
+          <span className="workflow-layout-toggle" aria-label="Canvas layout">
+            <button type="button" className={layoutMode === "AUTO" ? "is-active" : ""} onClick={() => setLayoutMode("AUTO")}>Auto-Layout</button>
+            <button type="button" className={layoutMode === "FREEFORM" ? "is-active" : ""} onClick={() => { setLayoutMode("FREEFORM"); setPaletteOpen(true); setPaletteTab("elements"); }}>Free-Form</button>
+          </span>
           <button type="button" title="Undo" onClick={undoFlowChange}>↶</button>
           <button type="button" title="Redo" onClick={redoFlowChange}>↷</button>
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.5, Number((value - .1).toFixed(1))))}>−</button>
@@ -3341,6 +3513,60 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             </div>
           </div>
         ) : null}
+        {layoutMode === "FREEFORM" ? (
+          <div ref={laneRef} className="workflow-freeform-canvas" style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top left" }}>
+            <svg className="workflow-freeform-svg" aria-hidden="true">
+              {freeformEdges().map(([fromId, toId], edgeIndex) => {
+                const fromIndex = workflow.steps.findIndex((step) => String(step.id) === String(fromId));
+                const toIndex = workflow.steps.findIndex((step) => String(step.id) === String(toId));
+                const from = getFreeformPosition(fromId, fromIndex < 0 ? 0 : fromIndex);
+                const to = getFreeformPosition(toId, toIndex < 0 ? 0 : toIndex);
+                const fromWidth = fromId === "__start__" ? 220 : 250;
+                const startX = from.x + fromWidth / 2;
+                const startY = from.y + 70;
+                const endX = to.x + 125;
+                const endY = to.y;
+                const midY = startY + Math.max(28, (endY - startY) / 2);
+                return <path key={`${fromId}-${toId}-${edgeIndex}`} d={`M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`} fill="none" stroke="#8fa6bf" strokeWidth="1.5" />;
+              })}
+            </svg>
+            {(() => {
+              const pos = getFreeformPosition("__start__", 0);
+              return <div className="workflow-freeform-start" style={{ left: pos.x, top: pos.y }} draggable onDragEnd={(event) => onFreeformDragEnd(event, "__start__", 0)}>
+                <button type="button" className="workflow-start-node" onClick={inspectStart} title="Configure when this flow starts">
+                  <span className="workflow-start-icon">▶</span>
+                  <span className="workflow-start-title">Start</span>
+                  <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}</span>
+                </button>
+              </div>;
+            })()}
+            {managerElementSteps.map(({ step, index }) => {
+              const visual = flowElementVisual(step.type);
+              const pos = getFreeformPosition(step.id, index);
+              const elementKind = SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action";
+              return <div key={step.id} className="workflow-freeform-node" style={{ left: pos.x, top: pos.y }} draggable onDragEnd={(event) => onFreeformDragEnd(event, step.id, index)}>
+                <div className="workflow-node-row">
+                  <button type="button" onClick={() => inspectStep(step.id)} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""}`}>
+                    <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
+                    <span className="workflow-node-kind">{elementKind}</span>
+                    <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
+                    {step.config?.description ? <span className="workflow-node-description" title={step.config.description}>ⓘ</span> : null}
+                  </button>
+                  <details className="workflow-node-menu">
+                    <summary aria-label={`Open actions for ${step.label || getActionLabel(step.type)}`} title="Element actions">⋮</summary>
+                    <div className="workflow-node-menu-popover">
+                      <button type="button" onClick={() => inspectStep(step.id)}>Edit Element</button>
+                      <button type="button" onClick={() => copyStep(step)}>Copy Element</button>
+                      <button type="button" onClick={() => requestCutStep(step)}>Cut Element</button>
+                      {flowElementSupportsFaultPath(step.type) ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
+                      <button type="button" className="is-danger" onClick={() => requestDeleteStep(step)}>Delete Element</button>
+                    </div>
+                  </details>
+                </div>
+              </div>;
+            })}
+          </div>
+        ) : (
         <div ref={laneRef} className="workflow-canvas-lane" style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top center" }}>
           <button type="button" className="workflow-start-node" onClick={inspectStart} title="Configure when this flow starts">
             <span className="workflow-start-icon">▶</span>
@@ -3427,6 +3653,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           {!visibleCanvasSteps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => { setInsertAt(0); setBranchTarget(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+ Add Element</button> : null}
           <div className="workflow-end-node"><span>■</span><strong>End</strong></div>
         </div>
+        )}
       </main>
       {propertiesOpen ? <aside className="workflow-properties-panel">
         <div className="workflow-properties-tabs">
@@ -3558,6 +3785,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       apiName: initialWorkflow.action?.apiName || initialWorkflow.apiName || flowApiName(initialWorkflow.name || "Flow"),
       description: initialWorkflow.action?.description || initialWorkflow.description || "",
       ui: initialWorkflow.action?.ui || null,
+      builderLayout: initialWorkflow.action?.builderLayout || initialWorkflow.actionMetadata?.builderLayout || { mode: "AUTO", positions: {} },
     },
     steps: (initialWorkflow.steps || initialWorkflow.action?.actions || []).map((step) => ({
       ...makeStep(step.type || step.key || "CREATE_RECORD"),
@@ -4108,6 +4336,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         ...(workflow.actionMetadata?.templateKey ? { templateKey: workflow.actionMetadata.templateKey } : {}),
         ...(workflow.actionMetadata?.defaultForNewDevices ? { defaultForNewDevices: true } : {}),
         ...(workflow.actionMetadata?.ui ? { ui: workflow.actionMetadata.ui } : {}),
+        builderLayout: workflow.actionMetadata?.builderLayout || { mode: "AUTO", positions: {} },
         match: workflow.match || "all",
         entryTransition: workflow.entryTransition || "EVERY_TIME",
         actions: workflow.steps.filter((step) => step.enabled !== false).map((step) => {
