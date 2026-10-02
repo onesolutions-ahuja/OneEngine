@@ -3192,3 +3192,35 @@
     bottom: max(8px, env(safe-area-inset-bottom));
   }
 }
+
+
+/* Login refresh/autofill polish + One Solutions startup mark */
+.login-avatar--brand{
+  width:88px;
+  height:88px;
+  border:0;
+  border-radius:0;
+  background:transparent !important;
+  box-shadow:none;
+  backdrop-filter:none;
+}
+.login-avatar--brand .login-brand-mark{
+  width:78px;
+  height:78px;
+  display:block;
+  object-fit:contain;
+  filter:drop-shadow(0 8px 18px rgba(4,37,89,.26));
+}
+.company-context-loading__brand{
+  display:grid;
+  place-items:center;
+  font-size:0;
+  letter-spacing:0;
+}
+.company-context-loading__logo{
+  width:96px;
+  height:112px;
+  display:block;
+  object-fit:contain;
+  filter:drop-shadow(0 10px 24px rgba(0,0,0,.28));
+}
