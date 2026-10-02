@@ -593,7 +593,8 @@ export const platformSchema = `
     ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     ADD COLUMN IF NOT EXISTS visibility_scope VARCHAR(20) NOT NULL DEFAULT 'company',
-    ADD COLUMN IF NOT EXISTS shared_role_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ADD COLUMN IF NOT EXISTS shared_role_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS filter_model JSONB NOT NULL DEFAULT '{}'::jsonb;
   DO $ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint WHERE conname='platform_list_views_visibility_scope_check'
