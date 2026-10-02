@@ -889,6 +889,18 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     return await resolveAnalyticsPrincipalAccess(db, folder.access, folder.created_by, req.user, minimum) ? folder : null;
   }
 
+  async function filterReportsByFolderAccess(req, rows = []) {
+    if (await canManageReports(req)) return rows;
+    const cache = new Map();
+    const visible = [];
+    for (const row of rows) {
+      if (!row.folder_id) { visible.push(row); continue; }
+      const key = String(row.folder_id);
+      if (!cache.has(key)) cache.set(key, Boolean(await visibleFolder(req, row.folder_id, "VIEW")));
+      if (cache.get(key)) visible.push(row);
+    }
+    return visible;
+  }
   async function executeCustomDefinition(req, inputDefinition, { preview = false } = {}) {
     const definition = validateCustomReportDefinition(inputDefinition);
     const executeBase = async (baseDefinition) => {
@@ -1017,7 +1029,8 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
          ORDER BY COALESCE(rup.last_viewed_at,cr.updated_at) DESC`,
         [req.user.companyId, req.user.id, await canManageReports(req)]
       );
-      res.json({ success: true, data: { favourites: result.rows.filter((row) => row.favourite === true), recent: result.rows.filter((row) => row.last_viewed_at).slice(0,20) } });
+      const visibleRows = await filterReportsByFolderAccess(req, result.rows || []);
+      res.json({ success: true, data: { favourites: visibleRows.filter((row) => row.favourite === true), recent: visibleRows.filter((row) => row.last_viewed_at).slice(0,20) } });
     } catch (error) { res.status(500).json({ success: false, message: "Unable to load report navigation" }); }
   });
 
@@ -1040,7 +1053,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         filters: CUSTOM_DATE_FILTERS,
         stores: stores.rows,
         users: users.rows,
-        reports: reports.rows,
+        reports: await filterReportsByFolderAccess(req, reports.rows || []),
         reportTypes: await (async () => {
           const visible = [];
           for (const row of reportTypes.rows || []) if (await reportTypeIsVisible(req, row)) visible.push(row);
@@ -1065,7 +1078,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
          GROUP BY cr.id,u.full_name ORDER BY cr.updated_at DESC`,
         [req.user.companyId, manage, req.user.id]
       );
-      res.json({ success:true,data:result.rows });
+      res.json({ success:true,data:await filterReportsByFolderAccess(req,result.rows||[]) });
     } catch (error) { res.status(500).json({ success:false,message:"Unable to load custom reports" }); }
   });
 
