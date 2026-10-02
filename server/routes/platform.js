@@ -1291,6 +1291,48 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     });
   });
 
+  router.get("/platform/runtime/ui-context", authenticate, async (req, res) => {
+    try {
+      const [rolePermissionsResult, permissionSets, entitlements] = await Promise.all([
+        req.user.roleId
+          ? db(
+              `SELECT p.code
+                 FROM role_permissions rp
+                 JOIN permissions p ON p.id=rp.permission_id
+                WHERE rp.role_id=$1
+                ORDER BY p.code`,
+              [req.user.roleId]
+            )
+          : Promise.resolve({ rows: [] }),
+        loadEffectivePermissionSets(db, req.user, req),
+        getCompanyEntitlements(db, req.user.companyId),
+      ]);
+      const permissions = [...new Set([
+        ...rolePermissionsResult.rows.map((row) => row.code),
+        ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+      ])].sort();
+      const enabledEntitlements = Object.entries(entitlements || {})
+        .filter(([, enabled]) => enabled === true)
+        .map(([key]) => key)
+        .sort();
+      res.json({
+        success: true,
+        data: {
+          userId: req.user.id || null,
+          companyId: req.user.companyId || null,
+          roleId: req.user.roleId || null,
+          storeId: req.user.storeId || null,
+          permissions,
+          entitlements: enabledEntitlements,
+          entitlementMap: entitlements || {},
+        },
+      });
+    } catch (error) {
+      console.error("Platform UI context load error:", error);
+      res.status(500).json({ success: false, message: "Unable to load runtime UI context" });
+    }
+  });
+
   router.get("/platform/permission-catalog", ...manage, async (req, res) => {
     const result = await db("SELECT code FROM permissions ORDER BY code", []);
     res.json({ success: true, data: result.rows.map((row) => row.code) });
