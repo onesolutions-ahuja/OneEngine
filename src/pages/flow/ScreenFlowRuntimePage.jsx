@@ -79,6 +79,38 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
 
   const setValue = (name, value) => setValues((current) => ({ ...current, [name]: value }))
 
+  const renderRegisteredComponent = (component) => {
+    const key = String(component.registryKey || '')
+    const config = component.registryConfig || {}
+    const value = values[component.name]
+    const inputClass = "w-full rounded-lg border border-slate-300 px-3 py-2"
+    if (key === 'header' || key === 'modern_section_header') {
+      return <div><h2 className="text-lg font-semibold text-slate-900">{config.title || component.label}</h2>{config.subtitle ? <p className="mt-1 text-sm text-slate-500">{config.subtitle}</p> : null}</div>
+    }
+    if (key === 'text') return <div className="text-sm leading-6 text-slate-700">{config.content || config.text || component.label}</div>
+    if (key === 'divider') return <hr className="border-slate-200" />
+    if (key === 'spacer') return <div style={{ minHeight: Number(config.height || 24) }} />
+    if (key === 'text_input') return <input className={inputClass} type={config.inputType || 'text'} value={value ?? ''} placeholder={config.placeholder || component.placeholder || ''} onChange={(event) => setValue(component.name, event.target.value)} />
+    if (key === 'long_text') return <textarea className={inputClass} rows={Number(config.rows || 4)} value={value ?? ''} placeholder={config.placeholder || component.placeholder || ''} onChange={(event) => setValue(component.name, event.target.value)} />
+    if (key === 'number' || key === 'currency') return <input className={inputClass} type="number" step={key === 'currency' ? (config.step || '0.01') : (config.step || 'any')} min={config.min} max={config.max} value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)} />
+    if (key === 'date' || key === 'datetime') return <input className={inputClass} type={key === 'datetime' ? 'datetime-local' : 'date'} value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)} />
+    if (key === 'checkbox') return <label className="flex items-center gap-2"><input type="checkbox" checked={Boolean(value)} onChange={(event) => setValue(component.name, event.target.checked)} /><span>{config.label || component.label}</span></label>
+    if (key === 'picklist') {
+      const options = Array.isArray(config.options) ? config.options : []
+      return <select className={inputClass} value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)}><option value="">{config.placeholder || 'Select…'}</option>{options.map((option, index) => {
+        const item = typeof option === 'object' ? option : { label: String(option), value: option }
+        return <option key={item.value ?? index} value={item.value ?? item.label}>{item.label ?? item.value}</option>
+      })}</select>
+    }
+    if (key === 'lookup') return <input className={inputClass} value={value ?? ''} placeholder={config.placeholder || 'Record ID or lookup value'} onChange={(event) => setValue(component.name, event.target.value)} />
+    if (key === 'signature') return <textarea className={inputClass} rows={3} value={value ?? ''} placeholder="Signature / acknowledgement" onChange={(event) => setValue(component.name, event.target.value)} />
+    if (key === 'clock_widget') return <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-medium text-slate-700">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: config.showSeconds ? '2-digit' : undefined })}</div>
+    if (key === 'calendar_widget') return <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-medium text-slate-700">{new Date().toLocaleDateString([], { weekday: config.showWeekday === false ? undefined : 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+    if (key === 'modern_data_card') return <div className="rounded-xl border border-slate-200 p-4"><div className="text-xs text-slate-500">{config.title || component.label}</div><div className="mt-1 text-xl font-semibold text-slate-900">{config.value ?? value ?? ''}</div>{config.meta ? <div className="mt-1 text-xs text-slate-500">{config.meta}</div> : null}</div>
+    if (key === 'icon_action_tile') return <button type="button" className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left text-sm font-semibold text-slate-800" onClick={() => component.name && setValue(component.name, config.action || true)}>{config.label || component.label}</button>
+    return <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Registered component “{component.registryKey}” has no Screen renderer.</div>
+  }
+
   const submit = async (navigation) => {
     if (busy) return
     setBusy(true)
@@ -198,7 +230,8 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       </header> : null}
       <section className="grid grid-cols-12 gap-4 p-6">
         {components.filter((component) => componentVisible(component, values)).map((component, index) => {
-          if (component.type === 'SECTION') return <div key={component.id || index} className="col-span-12 border-b border-slate-200 pb-2 text-sm font-semibold text-slate-800">{component.label}</div>
+          if (component.type === 'CUSTOM_COMPONENT') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}>{renderRegisteredComponent(component)}</div>
+                    if (component.type === 'SECTION') return <div key={component.id || index} className="col-span-12 border-b border-slate-200 pb-2 text-sm font-semibold text-slate-800">{component.label}</div>
           if (component.type === 'COLUMNS') return <div key={component.id || index} className="col-span-12 grid grid-cols-12 gap-4" />
           if (component.type === 'DISPLAY_TEXT') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)} text-sm leading-6 text-slate-700`}>{component.text || component.label}</div>
           if (component.type === 'IMAGE') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}><img src={component.src || component.url || ''} alt={component.alt || component.label || ''} className="max-h-80 max-w-full rounded-lg object-contain" /></div>
