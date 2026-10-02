@@ -46,6 +46,7 @@ export default function createDebugCodesRouter({ authenticate, authorize, db }) 
       `SELECT code,category,title,user_message AS "userMessage",
               internal_description AS "internalDescription",severity,retryable,active,
               built_in AS "builtIn",match_pattern AS "matchPattern",
+              subsystem_key AS "subsystemKey",cause_key AS "causeKey",legacy_code AS "legacyCode",
               created_at AS "createdAt",updated_at AS "updatedAt"
          FROM oneengine_debug_codes
         ORDER BY category,sort_order,code`
