@@ -42,6 +42,7 @@ export function readRoute() {
   if (parts[0] === 'dashboard') return { app: 'dashboard', section: null }
   if (parts[0] === 'till') return { app: 'till', section: null }
   if (parts[0] === 'customer-display') return { app: 'customer-display', section: null }
+  if (parts[0] === 'flow' && parts[1]) return { app: 'flow-runtime', section: null, sessionId: decodeURIComponent(parts[1]) }
   if (parts[0] === 'profile') return { app: 'profile', section: null }
   if (parts[0] === 'sales') return { app: 'sales', section: null }
   if (parts[0] === 'returns') return { app: 'returns', section: null }
@@ -95,6 +96,8 @@ export function setRoute(app, section = null, options = {}) {
       ? `${base}/dashboard`
     : app === 'till'
       ? `${base}/till`
+      : app === 'flow-runtime'
+        ? `${base}/flow/${encodeURIComponent(options?.sessionId || '')}`
       : app === 'profile'
         ? `${base}/profile`
       : app === 'sales'
