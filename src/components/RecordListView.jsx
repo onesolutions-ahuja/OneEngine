@@ -112,6 +112,9 @@ export default function RecordListView({
   onFiltersChange,
   pageInfo = null,
   onPageChange = null,
+  onInlineEdit = null,
+  onBulkEdit = null,
+  onBulkDelete = null,
 }) {
   const [localQuery, setLocalQuery] = useState('')
   const [localSort, setLocalSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
@@ -138,6 +141,8 @@ export default function RecordListView({
   }
   const [filterOpen, setFilterOpen] = useState(null)
   const [draggingKey, setDraggingKey] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [editingCell, setEditingCell] = useState(null)
   const [dataLoaderMode, setDataLoaderMode] = useState(null)
   const [columnOrder, setColumnOrder] = useState(() => {
     try {
@@ -148,6 +153,11 @@ export default function RecordListView({
     }
   })
   const filterAreaRef = useRef(null)
+
+  useEffect(() => {
+    const visible = new Set((rows || []).map((row) => String(row.id)))
+    setSelectedIds((current) => current.filter((id) => visible.has(String(id))))
+  }, [rows])
 
   useEffect(() => {
     const close = (event) => {
@@ -296,6 +306,79 @@ export default function RecordListView({
     ? subtitle({ filteredCount: filtered.length, totalCount: rows.length })
     : subtitle
 
+  const selectionEnabled = Boolean(onBulkEdit || onBulkDelete)
+  const visibleIds = filtered.map((row) => String(row.id))
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id))
+
+  const toggleAllVisible = () => {
+    setSelectedIds((current) => {
+      const currentSet = new Set(current.map(String))
+      if (allVisibleSelected) visibleIds.forEach((id) => currentSet.delete(id))
+      else visibleIds.forEach((id) => currentSet.add(id))
+      return [...currentSet]
+    })
+  }
+
+  const toggleSelected = (id) => {
+    const key = String(id)
+    setSelectedIds((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
+  }
+
+  const beginInlineEdit = (row, column) => {
+    if (!canEdit || !onInlineEdit || column.editable === false) return
+    const type = String(column.fieldType || 'text').toLowerCase()
+    if (['lookup','multiselect','formula','rollup','json'].includes(type)) return
+    setEditingCell({ rowId: String(row.id), key: column.key, value: row?.[column.key] ?? '' })
+  }
+
+  const commitInlineEdit = async (row, column, value) => {
+    setEditingCell(null)
+    if (!onInlineEdit) return
+    await onInlineEdit(row, column, value)
+  }
+
+  const inlineEditor = (row, column) => {
+    const type = String(column.fieldType || 'text').toLowerCase()
+    const value = editingCell?.value ?? ''
+    const setValue = (next) => setEditingCell((current) => current ? { ...current, value: next } : current)
+    if (type === 'boolean') {
+      return <input autoFocus type="checkbox" checked={Boolean(value)} onChange={(event) => { const next = event.target.checked; setValue(next); void commitInlineEdit(row, column, next) }} onClick={(event) => event.stopPropagation()} />
+    }
+    if (['picklist','select'].includes(type)) {
+      const options = Array.isArray(column.options) ? column.options : []
+      return (
+        <select autoFocus value={value ?? ''} onChange={(event) => { const next = event.target.value; setValue(next); void commitInlineEdit(row, column, next) }} onBlur={() => setEditingCell(null)} onClick={(event) => event.stopPropagation()}>
+          <option value="">Select…</option>
+          {options.filter((option) => option?.active !== false).map((option) => {
+            const optionValue = typeof option === 'object' ? option.value ?? option.key ?? option.label : option
+            const optionLabel = typeof option === 'object' ? option.label ?? option.name ?? optionValue : option
+            return <option key={String(optionValue)} value={String(optionValue)}>{String(optionLabel)}</option>
+          })}
+        </select>
+      )
+    }
+    const htmlType = ['number','decimal','currency'].includes(type) ? 'number'
+      : type === 'date' ? 'date'
+        : type === 'datetime' ? 'datetime-local'
+          : type === 'email' ? 'email'
+            : type === 'phone' ? 'tel'
+              : 'text'
+    return (
+      <input
+        autoFocus
+        type={htmlType}
+        value={value ?? ''}
+        onChange={(event) => setValue(event.target.value)}
+        onClick={(event) => event.stopPropagation()}
+        onBlur={() => void commitInlineEdit(row, column, editingCell?.value ?? '')}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') { event.preventDefault(); setEditingCell(null) }
+          if (event.key === 'Enter') { event.preventDefault(); void commitInlineEdit(row, column, editingCell?.value ?? '') }
+        }}
+      />
+    )
+  }
+
   return (
     <div className="record-list-view">
       <div className="record-list-header">
@@ -393,6 +476,15 @@ export default function RecordListView({
         </label>
       </div>
 
+      {selectionEnabled && selectedIds.length ? (
+        <div className="record-list-bulk-actions">
+          <strong>{selectedIds.length} selected</strong>
+          {onBulkEdit && canEdit ? <button type="button" onClick={() => onBulkEdit([...selectedIds])}>Edit selected</button> : null}
+          {onBulkDelete ? <button type="button" onClick={() => onBulkDelete([...selectedIds])}>Delete selected</button> : null}
+          <button type="button" onClick={() => setSelectedIds([])}>Clear</button>
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="record-list-state">Loading…</div>
       ) : error ? (
@@ -406,6 +498,11 @@ export default function RecordListView({
           <table className="record-list-table">
             <thead>
               <tr>
+                {selectionEnabled ? (
+                  <th className="record-list-select-head">
+                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible records" />
+                  </th>
+                ) : null}
                 {canEdit ? <th className="record-list-edit-head"></th> : null}
                 {orderedColumns.map((column) => {
                   const activeSort = sort.key === column.key
@@ -547,6 +644,17 @@ export default function RecordListView({
                     onRowSelect(row)
                   }}
                 >
+                  {selectionEnabled ? (
+                    <td className="record-list-select-cell">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(String(row.id))}
+                        onChange={() => toggleSelected(row.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`Select ${row.name || row.full_name || row.username || 'record'}`}
+                      />
+                    </td>
+                  ) : null}
                   {canEdit ? (
                     <td className="record-list-edit-cell">
                       <button
@@ -559,16 +667,25 @@ export default function RecordListView({
                       </button>
                     </td>
                   ) : null}
-                  {orderedColumns.map((column) => (
-                    <td key={column.key} className="record-list-value-cell" data-label={column.label}>
-                      {column.render ? column.render(row) : (row?.[column.key] ?? '—')}
-                    </td>
-                  ))}
+                  {orderedColumns.map((column) => {
+                    const isEditing = editingCell?.rowId === String(row.id) && editingCell?.key === column.key
+                    return (
+                      <td
+                        key={column.key}
+                        className={`record-list-value-cell${canEdit && onInlineEdit && column.editable !== false ? ' is-inline-editable' : ''}`}
+                        data-label={column.label}
+                        onDoubleClick={(event) => { event.stopPropagation(); beginInlineEdit(row, column) }}
+                        title={canEdit && onInlineEdit && column.editable !== false ? 'Double-click to edit' : undefined}
+                      >
+                        {isEditing ? inlineEditor(row, column) : (column.render ? column.render(row) : (row?.[column.key] ?? '—'))}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={orderedColumns.length + (canEdit ? 1 : 0)} className="record-list-empty">
+                  <td colSpan={orderedColumns.length + (canEdit ? 1 : 0) + (selectionEnabled ? 1 : 0)} className="record-list-empty">
                     {emptyText}
                   </td>
                 </tr>
