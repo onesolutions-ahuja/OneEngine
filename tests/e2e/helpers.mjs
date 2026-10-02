@@ -92,7 +92,10 @@ export function watchRuntimeFailures(page) {
   page.on("response", (response) => {
     const status = response.status();
     const url = response.url();
-    if (status >= 500 && !/google|gstatic|fonts\.googleapis/i.test(url)) {
+    // Include 4xx URLs as well as 5xx. Chromium's console message for a failed
+    // resource omits the URL, which made CI report an unactionable generic 404.
+    // Ignore only known third-party resources; application/API failures remain fatal.
+    if (status >= 400 && !/google|gstatic|fonts\.googleapis/i.test(url)) {
       failures.push(`HTTP ${status}: ${url}`);
     }
   });
