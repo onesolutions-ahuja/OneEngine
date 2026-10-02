@@ -11,6 +11,7 @@ const routes = [
   "suppliers",
   "customers",
   "reports",
+  "settings/security-identity",
   "developer/objects",
   "developer/workflow-builder",
   "developer/approval-builder",
@@ -152,5 +153,21 @@ test("approval inbox uses business language and dated delegation", async ({ page
   await expect(page.getByText("My delegate",{exact:true})).toBeVisible();
   await expect(page.getByText("From",{exact:true})).toBeVisible();
   await expect(page.getByText("Until",{exact:true})).toBeVisible();
+  expect(failures,failures.join("\n")).toEqual([]);
+});
+
+
+test("security settings expose phase-one Salesforce parity controls", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("settings/security-identity");
+  await expect(page.getByRole("tab",{name:"Password Policies"})).toBeVisible({timeout:30_000});
+  await expect(page.getByRole("tab",{name:"Session Settings"})).toBeVisible();
+  await expect(page.getByRole("tab",{name:"Login Access Policies"})).toBeVisible();
+  await expect(page.getByRole("tab",{name:"Network Access"})).toBeVisible();
+  await expect(page.getByRole("tab",{name:"Login History"})).toBeVisible();
+  await expect(page.getByRole("tab",{name:"Active Sessions"})).toBeVisible();
+  await page.getByRole("tab",{name:"Session Settings"}).click();
+  await expect(page.getByText("Enforce login IP ranges on every request",{exact:true})).toBeVisible();
+  await expect(page.getByText("Lock sessions to originating IP",{exact:true})).toBeVisible();
   expect(failures,failures.join("\n")).toEqual([]);
 });
