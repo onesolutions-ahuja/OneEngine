@@ -50,24 +50,34 @@ export default function createIdentitySecurityRouter({ authenticate, authorize, 
       passwordComplexity: complexity,
       maximumInvalidLoginAttempts: int(body.maximumInvalidLoginAttempts, current.maximum_invalid_login_attempts, 0, 100),
       lockoutMinutes: int(body.lockoutMinutes, current.lockout_minutes, 0, 10080),
+      lockoutForever: bool(body.lockoutForever, current.lockout_forever),
       minimumPasswordLifetimeHours: int(body.minimumPasswordLifetimeHours, current.minimum_password_lifetime_hours, 0, 720),
       sessionInactivityMinutes: int(body.sessionInactivityMinutes, current.session_inactivity_minutes, 0, 10080),
       maximumSessionHours: int(body.maximumSessionHours, current.maximum_session_hours, 1, 720),
       enforceLoginIpEveryRequest: bool(body.enforceLoginIpEveryRequest, current.enforce_login_ip_every_request),
       lockSessionToIp: bool(body.lockSessionToIp, current.lock_session_to_ip),
+      lockSessionToDomain: bool(body.lockSessionToDomain, current.lock_session_to_domain),
+      forceLogoutOnTimeout: bool(body.forceLogoutOnTimeout, current.force_logout_on_timeout),
+      sessionTimeoutWarningMinutes: int(body.sessionTimeoutWarningMinutes, current.session_timeout_warning_minutes, 0, 60),
       terminateSessionsOnPasswordReset: bool(body.terminateSessionsOnPasswordReset, current.terminate_sessions_on_password_reset),
     };
+    if (values.passwordExpiryDays > 0 && values.passwordHistoryCount === 0) {
+      return res.status(400).json({ success:false, code:"PASSWORD_HISTORY_REQUIRED", message:"Password history cannot be disabled while password expiration is enabled." });
+    }
+    if (values.lockoutForever) values.lockoutMinutes = 0;
     const result = await db(
       `UPDATE identity_security_settings SET
         password_expiry_days=$1,password_history_count=$2,minimum_password_length=$3,password_complexity=$4,
-        maximum_invalid_login_attempts=$5,lockout_minutes=$6,minimum_password_lifetime_hours=$7,
-        session_inactivity_minutes=$8,maximum_session_hours=$9,enforce_login_ip_every_request=$10,
-        lock_session_to_ip=$11,terminate_sessions_on_password_reset=$12,updated_by=$13,updated_at=NOW()
-       WHERE company_id=$14 RETURNING *`,
+        maximum_invalid_login_attempts=$5,lockout_minutes=$6,lockout_forever=$7,minimum_password_lifetime_hours=$8,
+        session_inactivity_minutes=$9,maximum_session_hours=$10,enforce_login_ip_every_request=$11,
+        lock_session_to_ip=$12,lock_session_to_domain=$13,force_logout_on_timeout=$14,session_timeout_warning_minutes=$15,
+        terminate_sessions_on_password_reset=$16,updated_by=$17,updated_at=NOW()
+       WHERE company_id=$18 RETURNING *`,
       [values.passwordExpiryDays,values.passwordHistoryCount,values.minimumPasswordLength,values.passwordComplexity,
-       values.maximumInvalidLoginAttempts,values.lockoutMinutes,values.minimumPasswordLifetimeHours,
+       values.maximumInvalidLoginAttempts,values.lockoutMinutes,values.lockoutForever,values.minimumPasswordLifetimeHours,
        values.sessionInactivityMinutes,values.maximumSessionHours,values.enforceLoginIpEveryRequest,
-       values.lockSessionToIp,values.terminateSessionsOnPasswordReset,req.user.id,req.user.companyId]
+       values.lockSessionToIp,values.lockSessionToDomain,values.forceLogoutOnTimeout,values.sessionTimeoutWarningMinutes,
+       values.terminateSessionsOnPasswordReset,req.user.id,req.user.companyId]
     );
     await writeAudit?.(req.user.companyId, req.user.id, "security.settings_updated", "identity_security_settings", req.user.companyId, values);
     res.json({ success: true, data: result.rows[0] });
@@ -76,7 +86,7 @@ export default function createIdentitySecurityRouter({ authenticate, authorize, 
   router.get("/security/principals", ...manage, async (req, res) => {
     const [roles, users] = await Promise.all([
       db("SELECT id,name FROM roles WHERE company_id=$1 ORDER BY name", [req.user.companyId]),
-      db(`SELECT u.id,u.username,u.full_name,u.email,s.failed_login_attempts,s.locked_until
+      db(`SELECT u.id,u.username,u.full_name,u.email,s.failed_login_attempts,s.locked_until,s.locked_indefinitely
             FROM users u LEFT JOIN identity_user_security_state s ON s.user_id=u.id
            WHERE u.company_id=$1 AND u.active=TRUE ORDER BY u.full_name,u.username`, [req.user.companyId]),
     ]);
@@ -161,17 +171,46 @@ export default function createIdentitySecurityRouter({ authenticate, authorize, 
     res.json({success:true});
   });
 
-  router.get("/security/login-history", ...manage, async(req,res)=>{
-    const limit=Math.min(500,Math.max(1,Number(req.query.limit)||100));
+  async function loadLoginHistory(req, limitOverride = null) {
+    const limit=Math.min(20000,Math.max(1,limitOverride || Number(req.query.limit)||100));
+    const status=String(req.query.status||"").toUpperCase();
+    const authMethod=String(req.query.authMethod||"").toUpperCase();
+    const userId=String(req.query.userId||"").trim()||null;
+    const from=String(req.query.from||"").trim()||null;
+    const to=String(req.query.to||"").trim()||null;
+    const ip=String(req.query.ip||"").trim()||null;
     const r=await db(`SELECT h.*,u.username,u.full_name FROM identity_login_history h
       LEFT JOIN users u ON u.id=h.user_id
-      WHERE h.company_id=$1 ORDER BY h.occurred_at DESC LIMIT $2`,[req.user.companyId,limit]);
-    res.json({success:true,data:r.rows});
+      WHERE h.company_id=$1
+        AND ($2='' OR h.status=$2)
+        AND ($3='' OR h.auth_method=$3)
+        AND ($4::uuid IS NULL OR h.user_id=$4)
+        AND ($5::timestamptz IS NULL OR h.occurred_at >= $5::timestamptz)
+        AND ($6::timestamptz IS NULL OR h.occurred_at <= $6::timestamptz)
+        AND ($7::text IS NULL OR h.ip_address::text=$7 OR h.forwarded_for ILIKE '%'||$7||'%')
+      ORDER BY h.occurred_at DESC LIMIT $8`,[req.user.companyId,status,authMethod,userId,from,to,ip,limit]);
+    return r.rows;
+  }
+
+  router.get("/security/login-history", ...manage, async(req,res)=>{
+    res.json({success:true,data:await loadLoginHistory(req)});
+  });
+
+  router.get("/security/login-history/export.csv", ...manage, async(req,res)=>{
+    const rows=await loadLoginHistory(req,20000);
+    const columns=["occurred_at","username","full_name","login_identifier","status","reason","ip_address","forwarded_for","auth_method","application","login_url","tls_protocol","platform","browser","user_agent"];
+    const csv=[columns.join(","),...rows.map(row=>columns.map(key=>{
+      const value=String(row[key]??"").replace(/"/g,'""');
+      return `"${value}"`;
+    }).join(","))].join("\n");
+    res.setHeader("Content-Type","text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition",`attachment; filename="oneengine-login-history.csv"`);
+    res.send(csv);
   });
 
   router.get("/security/sessions", ...manage, async(req,res)=>{
     const r=await db(`SELECT s.id,s.user_id,u.username,u.full_name,s.issued_at,s.last_seen_at,s.expires_at,
-      s.ip_address::text,s.user_agent,s.auth_method,s.revoked_at,s.revoke_reason
+      s.ip_address::text,s.origin_host,s.user_agent,s.auth_method,s.revoked_at,s.revoke_reason
       FROM identity_sessions s JOIN users u ON u.id=s.user_id
       WHERE s.company_id=$1 ORDER BY s.issued_at DESC LIMIT 500`,[req.user.companyId]);
     res.json({success:true,data:r.rows});
@@ -188,9 +227,9 @@ export default function createIdentitySecurityRouter({ authenticate, authorize, 
   router.post("/security/users/:userId/unlock", ...manage, async(req,res)=>{
     const user=await db("SELECT id FROM users WHERE id=$1 AND company_id=$2",[req.params.userId,req.user.companyId]);
     if(!user.rows.length)return res.status(404).json({success:false,message:"User not found"});
-    await db(`INSERT INTO identity_user_security_state(user_id,company_id,failed_login_attempts,locked_until,updated_at)
-      VALUES($1,$2,0,NULL,NOW())
-      ON CONFLICT(user_id) DO UPDATE SET failed_login_attempts=0,locked_until=NULL,updated_at=NOW()`,[req.params.userId,req.user.companyId]);
+    await db(`INSERT INTO identity_user_security_state(user_id,company_id,failed_login_attempts,locked_until,locked_indefinitely,updated_at)
+      VALUES($1,$2,0,NULL,FALSE,NOW())
+      ON CONFLICT(user_id) DO UPDATE SET failed_login_attempts=0,locked_until=NULL,locked_indefinitely=FALSE,updated_at=NOW()`,[req.params.userId,req.user.companyId]);
     await writeAudit?.(req.user.companyId,req.user.id,"security.user_unlocked","user",req.params.userId,{});
     res.json({success:true});
   });
