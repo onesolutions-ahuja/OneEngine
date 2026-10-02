@@ -148,27 +148,17 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
         {canManageEngine ? (
           <div className="oneengine-client-selector">
             <span>Client</span>
-            <div className="oneengine-client-selector-control">
+            <label className="oneengine-client-selector-control">
               <Building2 size={14}/>
-              <input
-                list="oneengine-client-options"
-                value={clientQuery || clients.find((client) => String(client.id) === String(selectedClient))?.name || ''}
-                onChange={(event) => {
-                  const value = event.target.value
-                  setClientQuery(value)
-                  const match = clients.find((client) => String(client.name || '').toLowerCase() === value.trim().toLowerCase())
-                  if (match) {
-                    void chooseClient(match.id)
-                    setClientQuery('')
-                  }
-                }}
-                placeholder="Choose client…"
+              <select
+                value={selectedClient}
+                onChange={(event) => void chooseClient(event.target.value)}
                 aria-label="Choose client"
-              />
-              <datalist id="oneengine-client-options">
-                {visibleClients.map((client) => <option key={client.id} value={client.name}>{String(client.id).slice(0, 8)}</option>)}
-              </datalist>
-            </div>
+              >
+                <option value="" disabled>Choose client…</option>
+                {visibleClients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+              </select>
+            </label>
           </div>
         ) : null}
         <div className="settings-window-title">OneDeveloper</div>
@@ -198,7 +188,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
       </aside>
 
       <div className="settings-content" key={contentKey}>
-        <div className="settings-content-header"><h2>{current.label}</h2></div>
         <div className="settings-content-body">
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading ? <div className="settings-state-card">Resolving client context…</div>
