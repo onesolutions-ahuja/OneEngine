@@ -74,7 +74,7 @@ export function settingsSectionAllowed(section, { permissions = [] } = {}) {
     case "settings-manage": return codes.has("settings.manage");
     case "mfa-manage": return codes.has("settings.manage") || codes.has("security.mfa.manage");
     case "verification-history-view": return codes.has("settings.manage") || codes.has("security.mfa.manage") || codes.has("security.identity_verification_history.view");
-    case "security-governance": return codes.has("settings.manage") || codes.has("security.governance.manage") || codes.has("security.health.view") || codes.has("security.vault.manage");
+    case "security-governance": return codes.has("settings.manage") || codes.has("security.governance.manage");
     case "oneengine-manage": return codes.has("oneengine.manage");
     default: return true;
   }
