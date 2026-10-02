@@ -1223,6 +1223,142 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-subflow-interface[open] { padding: 9px 11px 11px !important; }
   .workflow-subflow-interface[open] > p { margin-top: 6px !important; font-size: 9px !important; }
 
+  /* Decision connector geometry: local branches split from the owning
+     Decision, stay inside the canvas, and merge back into the main lane. */
+  .workflow-node-wrap.has-branching { overflow: visible; }
+  .workflow-decision-map {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    width: min(520px, calc(100vw - 670px)) !important;
+    min-width: 286px;
+    max-width: 520px !important;
+    margin: 0 50% !important;
+    transform: translateX(-50%);
+    gap: 18px !important;
+    overflow: visible !important;
+    padding: 24px 8px 24px !important;
+    align-items: stretch;
+  }
+  .workflow-decision-map::before,
+  .workflow-decision-map::after {
+    content: "";
+    position: absolute;
+    left: var(--workflow-branch-edge, 25%);
+    right: var(--workflow-branch-edge, 25%);
+    height: 1.5px;
+    background: #8fa6bf;
+    pointer-events: none;
+  }
+  .workflow-decision-map::before { top: 11px; }
+  .workflow-decision-map::after { bottom: 11px; }
+  .workflow-decision-map > .workflow-branch-path {
+    min-width: 0 !important;
+    width: auto;
+    padding: 0 3px 14px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    align-self: stretch;
+    overflow: visible;
+  }
+  .workflow-decision-map > .workflow-branch-path::before,
+  .workflow-decision-map > .workflow-branch-path::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    width: 1.5px;
+    transform: translateX(-50%);
+    background: #8fa6bf;
+    pointer-events: none;
+  }
+  .workflow-decision-map > .workflow-branch-path::before {
+    top: -13px;
+    height: 17px;
+  }
+  .workflow-decision-map > .workflow-branch-path::after {
+    bottom: -13px;
+    height: 27px;
+  }
+  .workflow-decision-map .workflow-branch-line { display: none; }
+  .workflow-decision-map .workflow-branch-label,
+  .workflow-decision-map .workflow-branch-label-input {
+    position: relative;
+    z-index: 2;
+    width: auto;
+    max-width: 100%;
+    margin: 0 0 7px;
+    border: 0;
+    border-radius: 999px;
+    background: #eef4fb;
+    padding: 3px 8px;
+    color: #3f5268;
+    font-size: 8px;
+    line-height: 14px;
+    font-weight: 700;
+    text-align: center;
+  }
+  .workflow-decision-map .workflow-branch-path:first-child .workflow-branch-label,
+  .workflow-decision-map .workflow-branch-path:first-child .workflow-branch-label-input {
+    background: #e9f8ef;
+    color: #237a43;
+  }
+  .workflow-decision-map .workflow-branch-stack {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    min-height: 47px;
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+  .workflow-decision-map .workflow-branch-path.is-empty .workflow-branch-stack {
+    min-height: 36px;
+    justify-content: flex-start;
+  }
+  .workflow-decision-map .workflow-branch-node-row { width: 100%; }
+  .workflow-decision-map .workflow-branch-node-card {
+    width: 100%;
+    min-height: 44px;
+    border-color: #d7e1ec;
+    border-radius: 7px;
+    box-shadow: 0 2px 7px rgba(15,23,42,.05);
+  }
+  .workflow-decision-map .workflow-owned-step {
+    width: 100%;
+    min-width: 0;
+  }
+  .workflow-decision-map + .workflow-node-connector {
+    margin-top: -1px;
+  }
+  .workflow-node-wrap.has-branching > .workflow-node-row + .workflow-decision-map::before {
+    box-shadow: 0 -12px 0 -0.25px #8fa6bf;
+  }
+  .workflow-nested-map.workflow-decision-map {
+    width: min(430px, 100%) !important;
+    min-width: 260px;
+    margin: 4px 0 0 !important;
+    transform: none;
+  }
+
+  @media (max-width: 1280px) {
+    .workflow-decision-map {
+      width: min(470px, calc(100vw - 610px)) !important;
+      gap: 12px !important;
+    }
+  }
+  @media (max-width: 1050px) {
+    .workflow-decision-map {
+      width: min(500px, calc(100vw - 270px)) !important;
+    }
+  }
+  @media (max-width: 760px) {
+    .workflow-decision-map {
+      width: min(92vw, 460px) !important;
+      min-width: 250px;
+      gap: 8px !important;
+    }
+  }
+
 `;
 
 const SCREEN_COMPONENT_TYPES = [
@@ -4698,7 +4834,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   function renderOwnedPath({ ownerId, kind, ids = [], label, outcomeId = null, tone = "", depth = 0, ancestry = [] }) {
     const children = ids.map((id) => branchStepById.get(String(id))).filter(Boolean);
     return (
-      <div key={`${ownerId}-${kind}-${outcomeId || label}`} className={`workflow-branch-path ${tone ? `is-${tone}` : ""} ${highlightedPathKey === `${ownerId}:${kind}:${outcomeId || label}` ? "is-highlighted" : ""}`} onClick={() => setHighlightedPathKey(`${ownerId}:${kind}:${outcomeId || label}`)}>
+      <div key={`${ownerId}-${kind}-${outcomeId || label}`} className={`workflow-branch-path ${!children.length ? "is-empty" : ""} ${tone ? `is-${tone}` : ""} ${highlightedPathKey === `${ownerId}:${kind}:${outcomeId || label}` ? "is-highlighted" : ""}`} onClick={() => setHighlightedPathKey(`${ownerId}:${kind}:${outcomeId || label}`)}>
         <span className="workflow-branch-line" />
         {kind === "decision" ? <input className="workflow-branch-label-input" aria-label={`Decision path ${label}`} value={label} onClick={(event) => event.stopPropagation()} onChange={(event) => renameDecisionPath(ownerId, outcomeId, event.target.value)} /> : <span className="workflow-branch-label">{label}</span>}
         <div className="workflow-branch-stack">
@@ -4748,7 +4884,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         : [{ id: "outcome-1", label: "Outcome 1", branch: owner.config?.ifBranch || [] }];
       const paths = outcomes.map((outcome, i) => ({ id: outcome.id || `outcome-${i + 1}`, label: outcome.label || `Outcome ${i + 1}`, ids: outcome.branch || [] }));
       paths.push({ id: "__default__", label: owner.config?.defaultLabel || "Default Outcome", ids: owner.config?.defaultBranch || owner.config?.elseBranch || [] });
-      blocks.push(<div key="decision" className="workflow-branch-map workflow-nested-map">{paths.map((p) => renderOwnedPath({ ownerId: owner.id, kind: "decision", outcomeId: p.id, ids: p.ids, label: p.label, depth, ancestry: next }))}</div>);
+      blocks.push(<div key="decision" className="workflow-branch-map workflow-decision-map workflow-nested-map" style={{ "--workflow-branch-edge": `${50 / Math.max(1, paths.length)}%` }}>{paths.map((p) => renderOwnedPath({ ownerId: owner.id, kind: "decision", outcomeId: p.id, ids: p.ids, label: p.label, depth, ancestry: next }))}</div>);
     }
     if (owner.type === "LOOP" && !collapsed) {
       blocks.push(<div key="loop" className="workflow-branch-map workflow-branch-map-single workflow-nested-map">{renderOwnedPath({ ownerId: owner.id, kind: "loop", ids: owner.config?.bodyBranch || [], label: "For Each Item", depth, ancestry: next })}</div>);
@@ -5213,7 +5349,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 </div>
 
                 {step.type === "CONDITION" && !collapsed ? (
-                  <div className="workflow-branch-map" aria-label="Decision paths">
+                  <div className="workflow-branch-map workflow-decision-map" aria-label="Decision paths" style={{ "--workflow-branch-edge": `${50 / Math.max(1, decisionPaths.length)}%` }}>
                     {decisionPaths.map((p) => renderOwnedPath({ ownerId: step.id, kind: "decision", outcomeId: p.id, ids: p.ids, label: p.label, ancestry: [String(step.id)] }))}
                   </div>
                 ) : null}
