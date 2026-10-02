@@ -25,6 +25,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0032_identity_multiple_passkeys",
   "0033_identity_verification_history",
   "0034_oneengine_debug_system",
+  "0035_security_governance",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -138,6 +139,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "OneEngine global debug codes and diagnostic events",
     up: client => client.query(
       readFileSync(new URL("./migrations/0034_oneengine_debug_system.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0035_security_governance",
+    version: "35",
+    name: "Security governance, connected apps and trusted origins",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0035_security_governance.sql", import.meta.url), "utf8")
     ),
   },
 ]);
