@@ -32,7 +32,7 @@ const TABS = [
   ['list-views', 'List Views'],
   ['validation', 'Validation Rules'],
   ['duplicates', 'Duplicate Management'],
-  ['actions', 'Actions & Bindings'],
+  ['actions', 'Actions'],
   ['automation', 'Automation / Flows'],
   ['approvals', 'Approval Processes'],
   ['assignment', 'Assignment Rules'],
@@ -411,7 +411,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
     ['layouts', 'Layouts'],
     ['list-views', 'List Views'],
     ['validation', 'Validation Rules'],
-    ['actions', 'Actions & Bindings'],
+    ['actions', 'Actions'],
   ]
   const moreTabs = TABS.filter(([key]) => !mainTabs.some(([mainKey]) => mainKey === key))
 
@@ -865,10 +865,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                       actionLabel="Action"
                       onAdd={() => setEditor({ kind: 'object-action', item: null })}
                       onRowClick={(row) => setEditor({ kind: 'object-action', item: row })} />
-                    <ObjectDataList title="Action Bindings" rows={objectData.actionBindings}
-                      primary={(row) => row.event_key || row.action_key || 'Binding'}
-                      secondary={(row) => row.action_key || ''}
-                      meta={(row) => `Order ${row.execution_order ?? 100}`} />
+                    <div className="objects-detail-placeholder">Place actions on record or list experiences from Buttons, Links & Actions and Forms / Layouts. Automatic record events belong in Automation / Flows.</div>
                   </div>
                 ) : null}
 
