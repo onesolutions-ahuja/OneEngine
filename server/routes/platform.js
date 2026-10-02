@@ -4463,12 +4463,29 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   const validateScreenSubmission = (screen, values = {}) => {
     const errors = {};
+    const resourceValue = (path) => {
+      if (!path) return undefined;
+      const raw = String(path);
+      if (raw.startsWith("variables.")) return raw.slice("variables.".length).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], values);
+      if (Object.prototype.hasOwnProperty.call(values || {}, raw)) return values[raw];
+      return undefined;
+    };
+    const isVisible = (component) => {
+      if (component?.visible === false) return false;
+      if (!component?.visibilityResource) return true;
+      const localValue = resourceValue(component.visibilityResource);
+      const actual = localValue === undefined ? component.visibilityInitialValue : localValue;
+      const operator = component.visibilityOperator || "truthy";
+      if (operator === "falsy") return actual == null || actual === "" || actual === false || (Array.isArray(actual) && actual.length === 0);
+      if (operator === "equals") return String(actual ?? "") === String(component.visibilityValue ?? "");
+      if (operator === "not_equals") return String(actual ?? "") !== String(component.visibilityValue ?? "");
+      return !(actual == null || actual === "" || actual === false || (Array.isArray(actual) && actual.length === 0));
+    };
     for (const component of Array.isArray(screen?.components) ? screen.components : []) {
       const name = String(component?.name || "").trim();
       if (!name || component?.input === false) continue;
       const value = values?.[name];
-      const hidden = component?.visible === false;
-      if (hidden) continue;
+      if (!isVisible(component)) continue;
       const empty = value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
       if (component?.required === true && empty) {
         errors[name] = component.requiredMessage || `${component.label || name} is required`;
@@ -4477,11 +4494,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (!empty && component?.type === "EMAIL" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) {
         errors[name] = component.validationMessage || "Enter a valid email address";
       }
-      if (!empty && component?.type === "NUMBER") {
+      if (!empty && ["NUMBER","SLIDER"].includes(component?.type)) {
         const numeric = Number(value);
         if (!Number.isFinite(numeric)) errors[name] = component.validationMessage || "Enter a valid number";
-        if (Number.isFinite(numeric) && component.min != null && numeric < Number(component.min)) errors[name] = component.validationMessage || `Enter a value of at least ${component.min}`;
-        if (Number.isFinite(numeric) && component.max != null && numeric > Number(component.max)) errors[name] = component.validationMessage || `Enter a value no greater than ${component.max}`;
+        if (Number.isFinite(numeric) && component.min !== "" && component.min != null && numeric < Number(component.min)) errors[name] = component.validationMessage || `Enter a value of at least ${component.min}`;
+        if (Number.isFinite(numeric) && component.max !== "" && component.max != null && numeric > Number(component.max)) errors[name] = component.validationMessage || `Enter a value no greater than ${component.max}`;
+      }
+      if (!empty && ["TEXT","TEXT_AREA","EMAIL","PASSWORD"].includes(component?.type)) {
+        const length = String(value).length;
+        if (component.minLength !== "" && component.minLength != null && length < Number(component.minLength)) errors[name] = component.validationMessage || `Enter at least ${component.minLength} characters`;
+        if (component.maxLength !== "" && component.maxLength != null && length > Number(component.maxLength)) errors[name] = component.validationMessage || `Enter no more than ${component.maxLength} characters`;
       }
       if (!empty && component?.pattern) {
         try {
