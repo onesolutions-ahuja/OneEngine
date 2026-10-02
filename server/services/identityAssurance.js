@@ -225,6 +225,17 @@ export async function activeTemporaryVerificationCode(db,{companyId,userId}){
   return r.rows[0]||null;
 }
 
+export async function writeVerificationHistory(db,{companyId,userId,eventType,method=null,status="SUCCESS",challengeType=null,assuranceLevel=null,ip=null,userAgent=null,sessionId=null,details={}}){
+  try{
+    await db(`INSERT INTO identity_verification_history(company_id,user_id,event_type,method,status,challenge_type,assurance_level,ip_address,user_agent,session_id,details)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8::inet,$9,$10,$11::jsonb)`,
+      [companyId,userId||null,String(eventType||"VERIFICATION"),method?String(method):null,String(status||"SUCCESS"),challengeType?String(challengeType):null,
+       assuranceLevel?String(assuranceLevel):null,ip||null,userAgent||null,sessionId||null,JSON.stringify(details||{})]);
+  }catch(error){
+    console.error("identity verification history write failed",error?.message||error);
+  }
+}
+
 export function mfaMethodPriority(method){
   if(method?.method_type==="PASSKEY"&&method?.authenticator_kind==="PLATFORM")return 1;
   if(method?.method_type==="PASSKEY"&&method?.authenticator_kind==="SECURITY_KEY")return 2;
