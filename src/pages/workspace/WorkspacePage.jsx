@@ -186,6 +186,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const searchTimerRef = useRef(null)
   const relatedSearchTimerRef = useRef(null)
   const pendingRecordIdRef = useRef('')
+  const relatedRequestRef = useRef(0)
 
   useEffect(() => {
     let live = true
@@ -775,6 +776,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
   const loadRelated = async (relationship, overrides = {}) => {
     if (!selectedObject || !selectedId || !relationship?.relationship_key) return
+    const requestId = ++relatedRequestRef.current
     setDetailTab('related')
     const changingRelationship = relatedState.key !== relationship.relationship_key
     const search = overrides.search !== undefined ? overrides.search : (changingRelationship ? '' : relatedState.search)
@@ -810,6 +812,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       const response = await apiRequest(
         `/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/related/${encodeURIComponent(relationship.relationship_key)}?${params.toString()}`,
       )
+      if (requestId !== relatedRequestRef.current) return
       setRelatedState((current) => ({
         ...current,
         key: relationship.relationship_key,
@@ -830,6 +833,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         },
       }))
     } catch (err) {
+      if (requestId !== relatedRequestRef.current) return
       setRelatedState((current) => ({
         ...current,
         key: relationship.relationship_key,
@@ -1126,9 +1130,24 @@ function WorkspaceLookupField({ field, value, onChange }) {
   const targetKey = field?.config?.relatedObjectKey || field?.config?.related_object_key || ''
   const [text, setText] = useState('')
   const [options, setOptions] = useState([])
+  const [targetFields, setTargetFields] = useState([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const lookupTimerRef = useRef(null)
+
+  useEffect(() => {
+    if (!targetKey) {
+      setTargetFields([])
+      return
+    }
+    let live = true
+    cachedGet(`/api/platform/runtime/objects/${encodeURIComponent(targetKey)}/workspace`, { cacheKey: `workspace:lookup-meta:${targetKey}` })
+      .then((response) => {
+        if (live) setTargetFields(Array.isArray(response?.data?.fields) ? response.data.fields : [])
+      })
+      .catch(() => live && setTargetFields([]))
+    return () => { live = false }
+  }, [targetKey])
 
   useEffect(() => {
     if (!value || !targetKey) {
@@ -1174,7 +1193,7 @@ function WorkspaceLookupField({ field, value, onChange }) {
 
   const choose = (record) => {
     onChange(record.id)
-    setText(recordTitle(record, []))
+    setText(recordTitle(record, targetFields))
     setOpen(false)
   }
 
@@ -1196,7 +1215,7 @@ function WorkspaceLookupField({ field, value, onChange }) {
           <div className="workspace-lookup-results">
             {loading ? <div>Searching…</div> : options.length ? options.map((record) => (
               <button key={record.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => choose(record)}>
-                <strong>{recordTitle(record, [])}</strong>
+                <strong>{recordTitle(record, targetFields)}</strong>
                 <small>{record.id}</small>
               </button>
             )) : <div>No matching records.</div>}
