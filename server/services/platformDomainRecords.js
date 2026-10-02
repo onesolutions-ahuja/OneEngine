@@ -209,7 +209,11 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
   await validateExtensionUniqueness(candidate);
   const persisted = await db("INSERT INTO platform_record_associations (object_id,record_id,company_id,record_type_id,custom_values) VALUES ($1,$2,$3,$4,$5::jsonb) ON CONFLICT (object_id,record_id) DO UPDATE SET record_type_id=EXCLUDED.record_type_id,custom_values=EXCLUDED.custom_values,updated_at=NOW() WHERE platform_record_associations.company_id=EXCLUDED.company_id RETURNING record_id", [object.id, record.id, req.user.companyId, typeId, JSON.stringify(custom)]);
   if (!persisted.rows.length) throw new PlatformRecordError("Record association ownership mismatch", 403);
-  for (const field of fields.filter(field => !isCalculatedField(field))) {
+  for (const field of fields.filter(field => {
+    if (isCalculatedField(field)) return false;
+    const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+    return config.trackHistory !== false && config.track_history !== false;
+  })) {
     const oldValue = previous ? before[field.api_name] ?? null : null;
     const newValue = candidate[field.api_name] ?? null;
     if (JSON.stringify(oldValue) === JSON.stringify(newValue)) continue;
