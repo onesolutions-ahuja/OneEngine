@@ -37,7 +37,8 @@ export const SETTINGS_SECTIONS = [
   { key: "connections", label: "Connection Health", groupKey: "hardware", order: 20, iconKey: "cable", description: "Device and integration health at a glance.", action: { type: "tab", tab: "Connections" } },
 
   { key: "security-identity", label: "Security & Identity", groupKey: "security-identity", order: 10, iconKey: "shield", description: "Login IP ranges, trusted networks, login hours, password and session policies, login history and active sessions.", gate: "settings-manage", action: { type: "tab", tab: "Security & Identity" } },
-  { key: "mfa-administration", label: "MFA Administration", groupKey: "security-identity", order: 20, iconKey: "shield", description: "Delegated MFA support, temporary verification codes, trusted devices and identity verification history.", gate: "mfa-manage", action: { type: "tab", tab: "MFA Administration" } },
+  { key: "mfa-administration", label: "MFA Administration", groupKey: "security-identity", order: 20, iconKey: "shield", description: "Delegated MFA support, temporary verification codes and trusted devices.", gate: "mfa-manage", action: { type: "tab", tab: "MFA Administration" } },
+  { key: "identity-verification-history", label: "Identity Verification History", groupKey: "security-identity", order: 30, iconKey: "shield", description: "Audit MFA, step-up and device identity verification attempts separately from login history.", gate: "verification-history-view", action: { type: "tab", tab: "Identity Verification History" } },
 
   { key: "users", label: "Users", groupKey: "users", order: 10, iconKey: "shield", description: "People who can sign in and what they can access.", action: { type: "tab", tab: "Users" } },
   { key: "roles-permissions", label: "Roles & Permissions", groupKey: "users", order: 20, iconKey: "shield", description: "Roles and the permissions each role holds.", action: { type: "tab", tab: "Roles & Permissions" } },
@@ -70,7 +71,8 @@ export function settingsSectionAllowed(section, { permissions = [] } = {}) {
   const codes = new Set(Array.isArray(permissions) ? permissions : []);
   switch (section.gate) {
     case "settings-manage": return codes.has("settings.manage");
-    case "mfa-manage": return codes.has("settings.manage") || codes.has("security.mfa.manage") || codes.has("security.identity_verification_history.view");
+    case "mfa-manage": return codes.has("settings.manage") || codes.has("security.mfa.manage");
+    case "verification-history-view": return codes.has("settings.manage") || codes.has("security.mfa.manage") || codes.has("security.identity_verification_history.view");
     case "oneengine-manage": return codes.has("oneengine.manage");
     default: return true;
   }
