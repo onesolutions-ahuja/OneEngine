@@ -3,6 +3,12 @@ import { apiRequest, getPasskeyOptions, startPasskeyRegistration, verifyMfa, ver
 
 const STEP_UP_RESOURCES = [
   ['REPORTS_DASHBOARDS','Reports and dashboards'],
+  ['MANAGE_LOGIN_ACCESS_POLICIES','Manage login access policies'],
+  ['MANAGE_PASSWORD_POLICIES','Manage password policies'],
+  ['MANAGE_PERMISSION_SETS_PROFILES','Manage permission sets and profiles'],
+  ['MANAGE_ROLES','Manage roles'],
+  ['MANAGE_SHARING','Manage sharing'],
+  ['MANAGE_MFA_UI','Manage multi-factor authentication'],
   ['MANAGE_ENCRYPTION_KEYS','Manage encryption keys'],
   ['MANAGE_AUTH_PROVIDERS','Manage authentication providers'],
   ['MANAGE_CERTIFICATES','Manage certificates and keys'],
