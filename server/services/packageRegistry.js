@@ -3598,6 +3598,60 @@ export async function removePackageMetadata(db, { companyId, packageId }) {
   }
 }
 
+export async function verifyPublicPackageRegistry(queryTarget) {
+  const query = typeof queryTarget === "function"
+    ? queryTarget
+    : queryTarget?.query?.bind(queryTarget);
+  if (typeof query !== "function") throw new Error("Package registry verification requires a query function");
+
+  const expected = packageDefinitions()
+    .filter((definition) =>
+      definition?.manifest?.visibility !== "HIDDEN" &&
+      definition?.manifest?.systemOnly !== true &&
+      (definition?.manifest?.lifecycleState || "PUBLISHED") === "PUBLISHED"
+    )
+    .map((definition) => ({
+      packageKey: definition.packageKey,
+      version: definition.version,
+      name: definition.name,
+    }));
+
+  if (!expected.length) {
+    return { healthy: true, expectedCount: 0, actualCount: 0, missing: [], stale: [] };
+  }
+
+  const keys = expected.map((item) => item.packageKey);
+  const result = await query(
+    `SELECT package_key,name,version,visible,system_only,publication_state,active
+       FROM package_registry
+      WHERE package_key=ANY($1::text[])`,
+    [keys]
+  );
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  const byKey = new Map(rows.map((row) => [row.package_key, row]));
+  const missing = expected.filter((item) => !byKey.has(item.packageKey)).map((item) => item.packageKey);
+  const stale = expected.flatMap((item) => {
+    const row = byKey.get(item.packageKey);
+    if (!row) return [];
+    const reasons = [];
+    if (row.visible !== true) reasons.push("not_visible");
+    if (row.system_only === true) reasons.push("system_only");
+    if (String(row.publication_state || "").toUpperCase() !== "PUBLISHED") reasons.push("not_published");
+    if (row.active !== true) reasons.push("inactive");
+    if (String(row.version || "") !== String(item.version || "")) reasons.push("version_mismatch");
+    if (String(row.name || "") !== String(item.name || "")) reasons.push("name_mismatch");
+    return reasons.length ? [{ packageKey: item.packageKey, reasons }] : [];
+  });
+
+  return {
+    healthy: missing.length === 0 && stale.length === 0,
+    expectedCount: expected.length,
+    actualCount: rows.length,
+    missing,
+    stale,
+  };
+}
+
 export function seedPackageRegistry(pool) {
   return (async () => {
     const definitions = packageDefinitions();
