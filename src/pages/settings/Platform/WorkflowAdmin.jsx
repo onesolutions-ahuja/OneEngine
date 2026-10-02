@@ -1343,6 +1343,9 @@ function workflowActionIssue(step, definition = null) {
     if (!config.object) return "Choose an object for the Record Choice Set.";
     if (!config.choiceLabelField) return "Choose a label field.";
     if (!config.choiceValueField) return "Choose a value field.";
+    if (Array.isArray(config.filters) && config.filters.some((filter) => !String(filter?.field || "").trim())) return "Choose a field for every Record Choice filter.";
+    if (Array.isArray(config.filters) && config.filters.some((filter) => !["is_empty","is_not_empty"].includes(filter?.operator) && (filter?.value === undefined || filter?.value === null || String(filter.value).trim() === ""))) return "Enter a value for every Record Choice filter.";
+    if (!Number.isInteger(Number(config.limit || 50)) || Number(config.limit || 50) < 1 || Number(config.limit || 50) > 200) return "Record Choice maximum choices must be between 1 and 200.";
   }
   if (step.type === "PICKLIST_CHOICE_SET") {
     if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid Picklist Choice Set API Name.";
@@ -1356,6 +1359,8 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "STAGE") {
     if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid Stage API Name.";
     if (!String(config.stageLabel || "").trim()) return "Enter a Stage label.";
+    if (!String(config.stageValue || "").trim()) return "Enter a Stage value.";
+    if (!Number.isInteger(Number(config.stageOrder)) || Number(config.stageOrder) < 1) return "Stage order must be 1 or greater.";
   }
   if (step.type === "SCREEN") {
     const screen = config.screen || {};
@@ -2108,18 +2113,64 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <label className="block text-xs font-medium text-slate-600">Data Type<select className={inputClass} value={step.config?.choiceDataType || "text"} onChange={(event) => updateConfig({ choiceDataType: event.target.value })}><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
           </div>
         );
-      case "RECORD_CHOICE_SET":
+      case "RECORD_CHOICE_SET": {
+        const filters = Array.isArray(step.config?.filters) ? step.config.filters : [];
         return (
           <div className="space-y-3">
             <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label>
-            <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, choiceLabelField: "", choiceValueField: "id", filters: [] })} />
+            <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, choiceLabelField: "", choiceValueField: "id", filters: [], sortField: "" })} />
             <div className="grid gap-2 md:grid-cols-2">
               <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.choiceLabelField || ""} label="Choice Label Field" onChange={(choiceLabelField) => updateConfig({ choiceLabelField })} />
               <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.choiceValueField || "id"} label="Choice Value Field" onChange={(choiceValueField) => updateConfig({ choiceValueField })} />
             </div>
-            <label className="block text-xs font-medium text-slate-600">Maximum Choices<input className={inputClass} type="number" min="1" max="200" value={Number(step.config?.limit || 50)} onChange={(event) => updateConfig({ limit: Math.max(1, Math.min(200, Number(event.target.value || 50))) })} /></label>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <strong className="text-xs text-slate-700">Filter Records</strong>
+                <select className={inputClass} value={step.config?.match || "all"} onChange={(event) => updateConfig({ match: event.target.value })}>
+                  <option value="all">Match all conditions</option>
+                  <option value="any">Match any condition</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                {filters.map((filter, index) => (
+                  <div key={filter.id || index} className="grid gap-2 md:grid-cols-[1.1fr_.8fr_1fr_auto]">
+                    <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={filter.field || ""} label={index === 0 ? "Field" : ""} onChange={(field) => {
+                      const next = [...filters]; next[index] = { ...filter, field }; updateConfig({ filters: next });
+                    }} />
+                    <label className="block text-xs font-medium text-slate-600">{index === 0 ? "Operator" : ""}
+                      <select className={inputClass} value={filter.operator || "equals"} onChange={(event) => {
+                        const next = [...filters]; next[index] = { ...filter, operator: event.target.value }; updateConfig({ filters: next });
+                      }}>
+                        <option value="equals">Equals</option>
+                        <option value="not_equals">Not equal</option>
+                        <option value="greater_than">Greater than</option>
+                        <option value="greater_than_or_equal">Greater than or equal</option>
+                        <option value="less_than">Less than</option>
+                        <option value="less_than_or_equal">Less than or equal</option>
+                        <option value="contains">Contains</option>
+                        <option value="is_empty">Is empty</option>
+                        <option value="is_not_empty">Is not empty</option>
+                      </select>
+                    </label>
+                    {["is_empty","is_not_empty"].includes(filter.operator) ? <div /> : <ResourceOrLiteralInput label={index === 0 ? "Value" : ""} value={filter.value ?? ""} onChange={(value) => {
+                      const next = [...filters]; next[index] = { ...filter, value }; updateConfig({ filters: next });
+                    }} rootObjectKey={rootObjectKey} extraResources={extraResources} />}
+                    <button type="button" className="self-end rounded border border-slate-200 px-2 py-2 text-xs text-red-600" onClick={() => updateConfig({ filters: filters.filter((_, itemIndex) => itemIndex !== index) })}>Remove</button>
+                  </div>
+                ))}
+                <button type="button" className="text-xs text-blue-700" onClick={() => updateConfig({ filters: [...filters, { id: Date.now() + Math.random(), field: "", operator: "equals", value: "" }] })}>+ Add filter</button>
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
+              <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.sortField || ""} label="Sort Field (optional)" onChange={(sortField) => updateConfig({ sortField })} />
+              <label className="block text-xs font-medium text-slate-600">Sort Direction
+                <select className={inputClass} value={step.config?.sortDirection || "asc"} onChange={(event) => updateConfig({ sortDirection: event.target.value })}><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+              </label>
+              <label className="block text-xs font-medium text-slate-600">Maximum Choices<input className={inputClass} type="number" min="1" max="200" value={Number(step.config?.limit || 50)} onChange={(event) => updateConfig({ limit: Math.max(1, Math.min(200, Number(event.target.value || 50))) })} /></label>
+            </div>
           </div>
         );
+      }
       case "PICKLIST_CHOICE_SET":
         return (
           <div className="space-y-3">
@@ -2145,10 +2196,12 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label>
             <label className="block text-xs font-medium text-slate-600">Stage Label<input className={inputClass} value={step.config?.stageLabel || ""} onChange={(event) => updateConfig({ stageLabel: event.target.value })} /></label>
             <div className="grid gap-2 md:grid-cols-2">
-              <label className="block text-xs font-medium text-slate-600">Stage Value<input className={inputClass} value={step.config?.stageValue || ""} onChange={(event) => updateConfig({ stageValue: event.target.value })} /></label>
+              <label className="block text-xs font-medium text-slate-600">Stage Value<input className={inputClass} value={step.config?.stageValue || ""} onChange={(event) => updateConfig({ stageValue: event.target.value })} placeholder="qualification" /></label>
               <label className="block text-xs font-medium text-slate-600">Order<input className={inputClass} type="number" min="1" value={Number(step.config?.stageOrder || 1)} onChange={(event) => updateConfig({ stageOrder: Math.max(1, Number(event.target.value || 1)) })} /></label>
             </div>
+            <label className="block text-xs font-medium text-slate-600">Description<textarea className={inputClass} rows={2} value={step.config?.description || ""} onChange={(event) => updateConfig({ description: event.target.value })} placeholder="Explain what this stage means to the user." /></label>
             <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.stageActive !== false} onChange={(event) => updateConfig({ stageActive: event.target.checked })} /> Active by default</label>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">Stage resources can drive a Screen Progress Indicator or be selected as the Screen's current stage resource.</div>
           </div>
         );
       case "RECOMMENDATION_ASSIGNMENT": {
@@ -2281,11 +2334,15 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <label className="block text-xs font-medium text-slate-600">Description
               <textarea className={inputClass} rows={2} value={screen.description || ""} onChange={(event) => updateScreen({ description: event.target.value })} />
             </label>
-            <div className="grid gap-2 md:grid-cols-4">
-              <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowBack !== false} onChange={(event) => updateConfig({ allowBack: event.target.checked })} /> Allow Previous</label>
-              <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowFinish !== false} onChange={(event) => updateConfig({ allowFinish: event.target.checked })} /> Allow Finish</label>
-              <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowPause === true} onChange={(event) => updateConfig({ allowPause: event.target.checked })} /> Allow Pause</label>
-              <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.showFooter !== false} onChange={(event) => updateConfig({ showFooter: event.target.checked })} /> Show footer</label>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 text-xs font-semibold text-slate-700">Screen Properties</div>
+              <div className="grid gap-2 md:grid-cols-5">
+                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={screen.showHeader !== false} onChange={(event) => updateScreen({ showHeader: event.target.checked })} /> Show header</label>
+                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowBack !== false} onChange={(event) => updateConfig({ allowBack: event.target.checked })} /> Allow Previous</label>
+                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowFinish !== false} onChange={(event) => updateConfig({ allowFinish: event.target.checked })} /> Allow Finish</label>
+                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowPause === true} onChange={(event) => updateConfig({ allowPause: event.target.checked })} /> Allow Pause</label>
+                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.showFooter !== false} onChange={(event) => updateConfig({ showFooter: event.target.checked })} /> Show footer</label>
+              </div>
             </div>
             <div className="grid gap-3 md:grid-cols-4">
               <label className="block text-xs font-medium text-slate-600">Next Label<input className={inputClass} value={screen.nextLabel || "Next"} onChange={(event) => updateScreen({ nextLabel: event.target.value })} /></label>
@@ -4446,6 +4503,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                       <div><span>Resource Type</span><strong>{step.type === "ASSIGNMENT" ? "Variable" : getActionLabel(step.type)}</strong></div>
                       <div><span>Data Type</span><strong>{step.type === "ASSIGNMENT" ? (step.config?.variableType || "text") : step.type === "CONSTANT" ? (step.config?.resourceType || "text") : step.type === "FORMULA" ? (step.config?.resultType || "number") : step.type === "STAGE" ? "stage" : ["CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET"].includes(step.type) ? "choice" : "text"}</strong></div>
                       <div><span>Used by</span><strong>{resourceUsageCount(step)} element{resourceUsageCount(step) === 1 ? "" : "s"}</strong></div>
+                      {step.type === "RECORD_CHOICE_SET" ? <div><span>Source</span><strong>{step.config?.object || "Not selected"}</strong></div> : null}
+                      {step.type === "PICKLIST_CHOICE_SET" ? <div><span>Source</span><strong>{[step.config?.object, step.config?.fieldApiName].filter(Boolean).join(".") || "Not selected"}</strong></div> : null}
+                      {step.type === "STAGE" ? <div><span>Stage</span><strong>{step.config?.stageOrder || 1} · {step.config?.stageValue || "No value"}</strong></div> : null}
                       {step.config?.description ? <p>{step.config.description}</p> : null}
                     </div>
                   ) : null}
