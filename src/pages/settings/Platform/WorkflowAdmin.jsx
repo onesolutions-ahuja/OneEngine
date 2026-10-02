@@ -730,6 +730,15 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 10px;
   }
   .workflow-end-node span { font-size: 7px; color: #706e6b; }
+  .workflow-action-picker { overflow: hidden; border: 1px solid #d8dde6; border-radius: 6px; background: #fff; }
+  .workflow-action-picker-search { position: relative; padding: 8px; border-bottom: 1px solid #eef1f6; }
+  .workflow-action-picker-search span { position: absolute; left: 17px; top: 17px; color: #706e6b; font-size: 11px; }
+  .workflow-action-picker-search input { width: 100%; min-height: 34px; box-sizing: border-box; border: 1px solid #c9c7c5; border-radius: 4px; padding: 6px 8px 6px 26px; font-size: 11px; }
+  .workflow-action-picker-scroll { max-height: 290px; overflow: auto; padding: 5px 7px 8px; }
+  .workflow-action-choice { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 4px; background: #fff; padding: 7px; text-align: left; cursor: pointer; }
+  .workflow-action-choice:hover { background: #f3f9ff; }
+  .workflow-action-choice strong { display: block; color: #181818; font-size: 10px; }
+  .workflow-action-choice small { display: block; margin-top: 2px; color: #706e6b; font-size: 8px; line-height: 1.25; }
 
   .workflow-properties-panel {
     padding: 11px;
@@ -1519,7 +1528,15 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const isVariableResource = step.type === "ASSIGNMENT" && step.config?.resourceOnly === true;
   const isResource = ["CONSTANT","FORMULA"].includes(step.type) || isVariableResource;
+  const [actionSearch, setActionSearch] = useState("");
   const actionPickerOptions = registryOptions.filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","SCHEDULE_PATH","WHEN"].includes(option.value));
+  const visibleActionPickerOptions = actionPickerOptions.filter((option) => !actionSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || workflowActionCategory(option.value)}`.toLowerCase().includes(actionSearch.trim().toLowerCase()));
+  const actionPickerGroups = visibleActionPickerOptions.reduce((groups, option) => {
+    const category = option.category || workflowActionCategory(option.value) || "Actions";
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(option);
+    return groups;
+  }, {});
   const extraResources = workflowStepResources(allSteps, index, objectFieldCatalog);
   const registryDefinition = registryOptions.find((option) => option.value === step.type) || null;
   const updateFieldMapping = (key, value) => {
@@ -1561,17 +1578,32 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Action</label>
-              <select className={inputClass} value="" onChange={(event) => {
-                const nextType = event.target.value;
-                if (!nextType) return;
-                const nextDefinition = registryOptions.find((option) => option.value === nextType);
-                const fresh = makeStep(nextType);
-                updateStep(index, { type: nextType, label: nextDefinition?.label || getActionLabel(nextType), config: { ...fresh.config, apiName: flowApiName(nextDefinition?.label || getActionLabel(nextType)) } });
-              }}>
-                <option value="">Choose an action</option>
-                {actionPickerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-              <p className="mt-1 text-[11px] text-slate-500">Choose a registered OneEngine action. The canvas still uses the standard Flow “Action” element.</p>
+              <div className="workflow-action-picker">
+                <div className="workflow-action-picker-search">
+                  <span>⌕</span>
+                  <input value={actionSearch} onChange={(event) => setActionSearch(event.target.value)} placeholder="Search actions..." aria-label="Search actions" />
+                </div>
+                <div className="workflow-action-picker-scroll">
+                  {Object.entries(actionPickerGroups).map(([category, options]) => (
+                    <div key={category}>
+                      <div className="workflow-palette-group-title">{category}</div>
+                      {options.map((option) => {
+                        const optionVisual = flowElementVisual(option.value);
+                        return <button key={option.value} type="button" className="workflow-action-choice" onClick={() => {
+                          const nextType = option.value;
+                          const fresh = makeStep(nextType);
+                          updateStep(index, { type: nextType, label: option.label || getActionLabel(nextType), config: { ...fresh.config, apiName: flowApiName(option.label || getActionLabel(nextType)) } });
+                        }}>
+                          <span className="workflow-palette-icon" style={{ background: optionVisual.color }}>{optionVisual.icon}</span>
+                          <span><strong>{option.label || option.value}</strong>{option.description ? <small>{option.description}</small> : null}</span>
+                        </button>;
+                      })}
+                    </div>
+                  ))}
+                  {!visibleActionPickerOptions.length ? <div className="workflow-palette-empty">No matching actions</div> : null}
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">Actions come from the OneEngine action registry, but they use the standard Flow Action element on the canvas.</p>
             </div>
           </div>
         );
@@ -2289,6 +2321,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [inspectorNewId, setInspectorNewId] = useState(null);
   const [clipboard, setClipboard] = useState(null);
   const [collapsedBranches, setCollapsedBranches] = useState({});
+  const [managerDetailId, setManagerDetailId] = useState(null);
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -2307,6 +2340,26 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     const failedId = workflow.steps.find((step) => debugTrace?.[step.id]?.status === "FAILED")?.id;
     if (failedId) setSelectedId(failedId);
   }, [debugTrace, workflow.steps]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(`oneengine:flow-builder:collapsed:${workflowId || "new"}`);
+      setCollapsedBranches(stored ? JSON.parse(stored) : {});
+    } catch {
+      setCollapsedBranches({});
+    }
+  }, [workflowId]);
+
+  const toggleBranchCollapse = (stepId, collapsed) => {
+    setCollapsedBranches((current) => {
+      const next = { ...current, [stepId]: collapsed };
+      if (typeof window !== "undefined") {
+        try { window.localStorage.setItem(`oneengine:flow-builder:collapsed:${workflowId || "new"}`, JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
+  };
 
   const inspectStep = (stepId) => {
     const current = workflow.steps.find((step) => step.id === stepId);
@@ -2400,14 +2453,23 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         ? [...(decision.config?.defaultBranch || [])]
         : [...(decision.config?.elseBranch || [])];
       const targetIds = branchTarget.outcomeId === "__default__"
-        ? defaultBranch
-        : (outcomes.find((outcome) => String(outcome.id) === String(branchTarget.outcomeId))?.branch || []);
-      const targetIndexes = targetIds.map((id) => current.steps.findIndex((candidate) => candidate.id === id)).filter((itemIndex) => itemIndex >= 0);
-      const branchInsertAt = targetIndexes.length ? Math.max(...targetIndexes) + 1 : decisionIndex + 1;
-      if (branchTarget.outcomeId === "__default__") defaultBranch = [...defaultBranch, step.id];
+        ? [...defaultBranch]
+        : [...(outcomes.find((outcome) => String(outcome.id) === String(branchTarget.outcomeId))?.branch || [])];
+      const requestedPosition = Number.isInteger(branchTarget.position) ? branchTarget.position : targetIds.length;
+      const branchPosition = Math.max(0, Math.min(requestedPosition, targetIds.length));
+      let branchInsertAt = decisionIndex + 1;
+      if (branchPosition > 0) {
+        const previousIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[branchPosition - 1]));
+        if (previousIndex >= 0) branchInsertAt = previousIndex + 1;
+      } else if (targetIds.length) {
+        const firstIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[0]));
+        if (firstIndex >= 0) branchInsertAt = firstIndex;
+      }
+      const nextBranchIds = [...targetIds.slice(0, branchPosition), step.id, ...targetIds.slice(branchPosition)];
+      if (branchTarget.outcomeId === "__default__") defaultBranch = nextBranchIds;
       else {
         const outcomeIndex = outcomes.findIndex((outcome) => String(outcome.id) === String(branchTarget.outcomeId));
-        if (outcomeIndex >= 0) outcomes[outcomeIndex] = { ...outcomes[outcomeIndex], branch: [...(outcomes[outcomeIndex].branch || []), step.id] };
+        if (outcomeIndex >= 0) outcomes[outcomeIndex] = { ...outcomes[outcomeIndex], branch: nextBranchIds };
       }
       const nextSteps = [...current.steps];
       nextSteps[decisionIndex] = {
@@ -2713,7 +2775,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   {step.type === "LOOP" ? <span className="workflow-node-note">For Each Item</span> : null}
                   {step.config?.faultMode && step.config.faultMode !== "FAIL" ? <span className="workflow-fault-badge">Fault path</span> : null}
                 </button>
-                {step.type === "CONDITION" ? <button type="button" className="workflow-decision-toggle" title={branchesCollapsed ? "Expand paths" : "Collapse paths"} aria-label={branchesCollapsed ? "Expand decision paths" : "Collapse decision paths"} onClick={() => setCollapsedBranches((current) => ({ ...current, [step.id]: !branchesCollapsed }))}>{branchesCollapsed ? "▸" : "▾"}</button> : null}
+                {step.type === "CONDITION" ? <button type="button" className="workflow-decision-toggle" title={branchesCollapsed ? "Expand paths" : "Collapse paths"} aria-label={branchesCollapsed ? "Expand decision paths" : "Collapse decision paths"} onClick={() => toggleBranchCollapse(step.id, !branchesCollapsed)}>{branchesCollapsed ? "▸" : "▾"}</button> : null}
                 <details className="workflow-node-menu">
                   <summary aria-label={`Open actions for ${step.label || getActionLabel(step.type)}`} title="Element actions">⋮</summary>
                   <div className="workflow-node-menu-popover">
@@ -2735,27 +2797,30 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                       <span className="workflow-branch-line" />
                       <span className="workflow-branch-label">{outcome.label || (isDefault ? "Default Outcome" : `Outcome ${outcomeIndex + 1}`)}</span>
                       <div className="workflow-branch-stack">
-                        {branchSteps.map((branchStep) => {
+                        <button type="button" className="workflow-branch-add" aria-label={`Add first element to ${outcome.label || (isDefault ? "Default Outcome" : `Outcome ${outcomeIndex + 1}`)}`} onClick={() => { setBranchTarget({ decisionId: step.id, outcomeId: isDefault ? "__default__" : outcome.id, position: 0 }); setInsertAt(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
+                        {branchSteps.map((branchStep, branchStepIndex) => {
                           const branchVisual = flowElementVisual(branchStep.type);
                           const branchIndex = workflow.steps.findIndex((candidate) => candidate.id === branchStep.id);
-                          return <div key={branchStep.id} className="workflow-branch-node-row">
-                            <button type="button" className={`workflow-branch-node-card ${selectedId === branchStep.id ? "is-selected" : ""}`} onClick={() => inspectStep(branchStep.id)}>
-                              <span className="workflow-branch-node-icon" style={{ background: branchVisual.color }}>{branchVisual.icon}</span>
-                              <span><small>{SALESFORCE_CORE_ELEMENT_TYPES.has(branchStep.type) ? getActionLabel(branchStep.type) : "Action"}</small><strong>{branchStep.label || getActionLabel(branchStep.type)}</strong></span>
-                            </button>
-                            <details className="workflow-node-menu branch-menu">
-                              <summary aria-label={`Open actions for ${branchStep.label || getActionLabel(branchStep.type)}`}>⋮</summary>
-                              <div className="workflow-node-menu-popover">
-                                <button type="button" onClick={() => inspectStep(branchStep.id)}>Edit Element</button>
-                                <button type="button" onClick={() => copyStep(branchStep)}>Copy Element</button>
-                                <button type="button" onClick={() => cutStep(branchStep)}>Cut Element</button>
-                                <button type="button" onClick={() => addFaultPath(branchStep)}>Add Fault Path</button>
-                                <button type="button" className="is-danger" onClick={() => removeStep(branchIndex)}>Delete Element</button>
-                              </div>
-                            </details>
+                          return <div key={branchStep.id} className="contents">
+                            <div className="workflow-branch-node-row">
+                              <button type="button" className={`workflow-branch-node-card ${selectedId === branchStep.id ? "is-selected" : ""}`} onClick={() => inspectStep(branchStep.id)}>
+                                <span className="workflow-branch-node-icon" style={{ background: branchVisual.color }}>{branchVisual.icon}</span>
+                                <span><small>{SALESFORCE_CORE_ELEMENT_TYPES.has(branchStep.type) ? getActionLabel(branchStep.type) : "Action"}</small><strong>{branchStep.label || getActionLabel(branchStep.type)}</strong></span>
+                              </button>
+                              <details className="workflow-node-menu branch-menu">
+                                <summary aria-label={`Open actions for ${branchStep.label || getActionLabel(branchStep.type)}`}>⋮</summary>
+                                <div className="workflow-node-menu-popover">
+                                  <button type="button" onClick={() => inspectStep(branchStep.id)}>Edit Element</button>
+                                  <button type="button" onClick={() => copyStep(branchStep)}>Copy Element</button>
+                                  <button type="button" onClick={() => cutStep(branchStep)}>Cut Element</button>
+                                  <button type="button" onClick={() => addFaultPath(branchStep)}>Add Fault Path</button>
+                                  <button type="button" className="is-danger" onClick={() => removeStep(branchIndex)}>Delete Element</button>
+                                </div>
+                              </details>
+                            </div>
+                            <button type="button" className="workflow-branch-add" aria-label={`Add element after ${branchStep.label || getActionLabel(branchStep.type)}`} onClick={() => { setBranchTarget({ decisionId: step.id, outcomeId: isDefault ? "__default__" : outcome.id, position: branchStepIndex + 1 }); setInsertAt(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
                           </div>;
                         })}
-                        <button type="button" className="workflow-branch-add" aria-label={`Add element to ${outcome.label || (isDefault ? "Default Outcome" : `Outcome ${outcomeIndex + 1}`)}`} onClick={() => { setBranchTarget({ decisionId: step.id, outcomeId: isDefault ? "__default__" : outcome.id }); setInsertAt(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
                       </div>
                     </div>;
                   })}
