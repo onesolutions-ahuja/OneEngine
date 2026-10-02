@@ -35,6 +35,8 @@ export default function MetadataResourcePicker({ objectKey = "", value = "", onC
       { value: "$previous", label: "Previous Record", type: "record" },
       { value: "$user.id", label: "Current User → User ID", type: "global" },
       { value: "$now", label: "Current Date/Time", type: "global" },
+      { value: "$Flow.CurrentStage", label: "Flow → Current Stage", type: "stage" },
+      { value: "$Flow.ActiveStages", label: "Flow → Active Stages", type: "collection" },
     ] : [];
     const extras = (Array.isArray(extraResources) ? extraResources : []).filter((item) => item?.value).map((item) => ({
       value: item.value,
