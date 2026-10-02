@@ -69,6 +69,13 @@ jobs:
         run: |
           set -euo pipefail
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f server/database/schema.sql
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+          import { initializePlatformMetadata } from "./server/services/platformMetadata.js";
+          const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+          await initializePlatformMetadata(pool, { includeOperationalObjects: true });
+          await pool.end();
+          NODE
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO companies (name, legal_name, email, currency, timezone, active)
           SELECT 'onePOS Demo', 'onePOS Demo Ltd', 'demo@onepos.com', 'GBP', 'Europe/London', TRUE
