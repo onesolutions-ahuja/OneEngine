@@ -737,6 +737,25 @@ export default function ObjectPage({
     setRecordModal(null);
     await loadRecords();
   }
+  async function updateProcessStage(fieldKey, nextValue) {
+    const recordKey = selectedRecord?.id || selectedRecord?.record_id;
+    if (!recordKey || !fieldKey || !canWriteRecords) return;
+    setExecutingAction(`process:${fieldKey}`);
+    setError("");
+    try {
+      const response = await apiRequest(
+        `/api/platform/objects/${encodeURIComponent(getObjectKey(objectMetadata))}/records/${encodeURIComponent(recordKey)}`,
+        { method: "PUT", body: JSON.stringify({ data: { [fieldKey]: nextValue } }) }
+      );
+      if (response?.data) setSelectedRecord((current) => ({ ...(current || {}), ...response.data }));
+      await loadRecords();
+    } catch (err) {
+      setError(err?.message || "Unable to update process stage.");
+    } finally {
+      setExecutingAction("");
+    }
+  }
+
 
   async function deleteSelectedRecord() {
     const id = selectedRecord?.id || selectedRecord?.record_id;
@@ -1449,6 +1468,8 @@ export default function ObjectPage({
                 definition={selfServiceView ? null : (detailLayout?.definition || null)}
                 onEdit={canWriteRecords ? () => setRecordModal({ type: "edit" }) : undefined}
                 contextValues={runtimeVisibilityContext}
+                canEditProcessPath={canWriteRecords && executingAction === ""}
+                onProcessStageChange={updateProcessStage}
               />
               {detailLayout?.definition?.components
                 ?.filter((component) => component.type === "related_list" && component.visible !== false)
