@@ -18,7 +18,8 @@
     "express": "^4.22.3",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
-    "@simplewebauthn/server": "^13.2.2"
+    "@simplewebauthn/server": "^13.2.2",
+    "@node-saml/node-saml": "^5.1.1"
   },
   "devDependencies": {}
 }
