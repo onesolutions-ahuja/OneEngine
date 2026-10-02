@@ -5637,6 +5637,12 @@ export async function executeWorkflowActions({ actions, ...context }) {
             result: redact(result),
             retryAttempts,
             irreversible: IRREVERSIBLE_ACTIONS.has(resolveWorkflowActionType(item)),
+            ...(context.debugMode === true ? {
+              resourceSnapshot: redact({
+                variables: { ...(workflowVariables.variables || {}) },
+                stepResult: result,
+              }),
+            } : {}),
           },
         });
       }
@@ -5655,7 +5661,14 @@ export async function executeWorkflowActions({ actions, ...context }) {
           stepRunId: stepRun.id,
           status: "FAILED",
           errorText: details.message,
-          metadata: { error: details, friendlyError, retryAttempts },
+          metadata: {
+            error: details,
+            friendlyError,
+            retryAttempts,
+            ...(context.debugMode === true ? {
+              resourceSnapshot: redact({ variables: { ...(workflowVariables.variables || {}) } }),
+            } : {}),
+          },
         });
       }
       const faultMode = String(item.faultMode || (Array.isArray(item.faultBranch) && item.faultBranch.length ? "ROUTE" : "FAIL")).toUpperCase();
