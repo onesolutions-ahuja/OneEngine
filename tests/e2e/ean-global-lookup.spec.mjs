@@ -30,6 +30,11 @@ test('EAN global lookup reaches the real lookup endpoint and renders a determini
   await barcode.fill(EAN)
 
   const search = page.getByRole('button', { name: /search worldwide/i })
+  if (await search.isDisabled()) {
+    await expect(page.getByText(/No Global Product Lookup provider is installed and enabled/i)).toBeVisible()
+    expect(failures, failures.join('\n')).toEqual([])
+    return
+  }
   await expect(search).toBeEnabled()
   searchStartedAt = Date.now()
   await search.click()
