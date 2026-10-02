@@ -2553,14 +2553,14 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     }
     return step;
   };
-  const insertPreparedStep = (step, index = workflow.steps.length) => {
+  const insertPreparedStep = (step, index = workflow.steps.length, extraSteps = []) => {
     setWorkflow((current) => {
       if (!branchTarget) {
-        return { ...current, steps: [...current.steps.slice(0, index), step, ...current.steps.slice(index)] };
+        return { ...current, steps: [...current.steps.slice(0, index), step, ...extraSteps, ...current.steps.slice(index)] };
       }
       if (branchTarget.kind && branchTarget.ownerId) {
         const ownerIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(branchTarget.ownerId));
-        if (ownerIndex < 0) return { ...current, steps: [...current.steps, step] };
+        if (ownerIndex < 0) return { ...current, steps: [...current.steps, step, ...extraSteps] };
         const owner = current.steps[ownerIndex];
         const key = branchTarget.kind === "loop" ? "bodyBranch" : branchTarget.kind === "scheduled" ? "branch" : "faultBranch";
         const targetIds = [...(owner.config?.[key] || [])];
@@ -2584,11 +2584,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             ...(branchTarget.kind === "fault" ? { faultMode: ["ROUTE","RETRY"].includes(String(owner.config?.faultMode || "").toUpperCase()) ? owner.config.faultMode : "ROUTE" } : {}),
           },
         };
-        nextSteps.splice(branchInsertAt, 0, step);
+        nextSteps.splice(branchInsertAt, 0, step, ...extraSteps);
         return { ...current, steps: nextSteps };
       }
       const decisionIndex = current.steps.findIndex((candidate) => candidate.id === branchTarget.decisionId);
-      if (decisionIndex < 0) return { ...current, steps: [...current.steps, step] };
+      if (decisionIndex < 0) return { ...current, steps: [...current.steps, step, ...extraSteps] };
       const decision = current.steps[decisionIndex];
       const outcomes = Array.isArray(decision.config?.outcomes) && decision.config.outcomes.length
         ? decision.config.outcomes.map((outcome) => ({ ...outcome, branch: [...(outcome.branch || [])] }))
@@ -2625,7 +2625,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         ...decision,
         config: { ...(decision.config || {}), outcomes, defaultBranch, condition: null, ifBranch: [], elseBranch: [] },
       };
-      nextSteps.splice(branchInsertAt, 0, step);
+      nextSteps.splice(branchInsertAt, 0, step, ...extraSteps);
       return { ...current, steps: nextSteps };
     });
     setSelectedId(step.id);
@@ -2859,9 +2859,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <div className="workflow-node-menu-popover">
                       <button type="button" onClick={() => inspectStep(child.id)}>Edit Element</button>
                       <button type="button" onClick={() => copyStep(child)}>Copy Element</button>
-                      <button type="button" onClick={() => cutStep(child)}>Cut Element</button>
+                      <button type="button" onClick={() => requestCutStep(child)}>Cut Element</button>
                       {flowElementSupportsFaultPath(child.type) ? <button type="button" onClick={() => addFaultPath(child)}>Add Fault Path</button> : null}
-                      <button type="button" className="is-danger" onClick={() => removeStep(childIndexInFlow)}>Delete Element</button>
+                      <button type="button" className="is-danger" onClick={() => requestDeleteStep(child)}>Delete Element</button>
                     </div>
                   </details>
                 </div>
@@ -3123,9 +3123,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <div className="workflow-node-menu-popover">
                       <button type="button" onClick={() => inspectStep(step.id)}>Edit Element</button>
                       <button type="button" onClick={() => copyStep(step)}>Copy Element</button>
-                      <button type="button" onClick={() => cutStep(step)}>Cut Element</button>
+                      <button type="button" onClick={() => requestCutStep(step)}>Cut Element</button>
                       {flowElementSupportsFaultPath(step.type) ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
-                      <button type="button" className="is-danger" onClick={() => removeStep(index)}>Delete Element</button>
+                      <button type="button" className="is-danger" onClick={() => requestDeleteStep(step)}>Delete Element</button>
                     </div>
                   </details>
                 </div>
