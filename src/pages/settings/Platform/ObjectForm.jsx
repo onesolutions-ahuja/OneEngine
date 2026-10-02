@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
-import { evaluateFieldCondition } from "../../../utils/platformConditions.js";
+import { evaluateFieldCondition, evaluatePlatformCondition } from "../../../utils/platformConditions.js";
 import { isUuid, parseBooleanValue } from "../../../utils/recordDisplay.js";
 import { apiRequest } from "../../../services/api.js";
 import BooleanField from "../../../components/records/BooleanField.jsx";
@@ -319,7 +319,7 @@ export default function ObjectForm({
     () =>
       activeFields.filter((field) => {
         try {
-          return evaluateFieldCondition(field, "visibilityCondition", conditionFields || activeFields, { ...contextValues, ...values });
+          return evaluateFieldCondition(field, "visibilityCondition", conditionFields || activeFields, values, contextValues);
         } catch {
           return false;
         }
@@ -328,11 +328,14 @@ export default function ObjectForm({
   );
   const visibleFieldKeys = useMemo(() => new Set(visibleFields.map(getFieldKey)), [visibleFields]);
   const visibleSections = useMemo(
-    () => (Array.isArray(sections) ? sections.map((section) => ({
-      ...section,
-      fields: (section.fields || []).filter((field) => visibleFieldKeys.has(getFieldKey(field))),
-    })).filter((section) => section.fields.length) : []),
-    [sections, visibleFieldKeys]
+    () => (Array.isArray(sections) ? sections
+      .filter((section) => evaluatePlatformCondition(section?.visibilityCondition, conditionFields || activeFields, { ...contextValues, record: values }))
+      .map((section) => ({
+        ...section,
+        fields: (section.fields || []).filter((field) => visibleFieldKeys.has(getFieldKey(field))),
+      }))
+      .filter((section) => section.fields.length) : []),
+    [sections, visibleFieldKeys, conditionFields, activeFields, contextValues, values]
   );
 
   function updateValue(field, value) {
@@ -383,7 +386,7 @@ export default function ObjectForm({
       let conditionallyRequired = false;
       try {
         conditionallyRequired = Boolean(field?.config?.requiredCondition) &&
-          evaluateFieldCondition(field, "requiredCondition", activeFields, values);
+          evaluateFieldCondition(field, "requiredCondition", activeFields, values, contextValues);
       } catch {
         conditionallyRequired = false;
       }
