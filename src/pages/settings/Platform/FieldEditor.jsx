@@ -151,7 +151,7 @@ export default function FieldEditor({
   }
 
   useEffect(() => {
-    if (!["picklist", "select"].includes(form.field_type)) return;
+    if (!["picklist", "select", "multiselect"].includes(form.field_type)) return;
     apiRequest("/api/platform/value-sets")
       .then((response) => setValueSets(Array.isArray(response?.data) ? response.data : []))
       .catch((err) => setError(err?.message || "Unable to load reusable value sets."));
@@ -459,7 +459,7 @@ export default function FieldEditor({
           ...(!["formula", "rollup"].includes(form.field_type) ? { duplicateMatching: form.duplicateMatching } : {}),
           ...(form.visibilityCondition ? { visibilityCondition: form.visibilityCondition } : {}),
           ...(form.requiredCondition ? { requiredCondition: form.requiredCondition } : {}),
-          ...(form.field_type === "picklist" || form.field_type === "select"
+          ...(["picklist", "select", "multiselect"].includes(form.field_type)
             ? {
                 ...(form.valueSource === "reusable" ? { valueSetId: form.valueSetId } : {}),
                 ...(form.dependentPicklist?.controllingField ? {
@@ -471,7 +471,7 @@ export default function FieldEditor({
               }
             : {}),
         },
-        options: (form.field_type === "picklist" || form.field_type === "select") && form.valueSource === "local" ? form.options : [],
+        options: ["picklist", "select", "multiselect"].includes(form.field_type) && form.valueSource === "local" ? form.options : [],
       };
 
       const fieldId = field?.id || field?.field_id;
@@ -647,7 +647,7 @@ export default function FieldEditor({
             </fieldset>
           )}
 
-          {["picklist", "select"].includes(form.field_type) ? (
+          {["picklist", "select", "multiselect"].includes(form.field_type) ? (
             <fieldset className="platform-field-editor-wide">
               <legend>Picklist values</legend>
               <label>
@@ -735,6 +735,7 @@ export default function FieldEditor({
                   ) : <small>Configure active values on both picklists before building the dependency matrix.</small>;
                 })() : null}
                 <small>When a controlling value changes, users only see the dependent values enabled in this matrix. The server enforces the same mapping.</small>
+                {form.dependentPicklist?.controllingField ? <small>Dependent picklists do not use a default value; the controlling value and record type determine the choices.</small> : null}
               </div>
             </fieldset>
           ) : null}
@@ -936,8 +937,12 @@ export default function FieldEditor({
             <fieldset className="platform-field-editor-wide">
               <legend>Field behaviour</legend>
               <label className="platform-field-editor-wide"><span>Help text</span><input value={form.helpText || ""} maxLength={255} onChange={(event) => update("helpText", event.target.value)} placeholder="Guidance shown below the field to users" /></label>
-              {!["lookup","address","location","json","multiselect"].includes(form.field_type) ? (
-                <label><span>Default value</span><input type={["number","decimal","currency","percent"].includes(form.field_type) ? "number" : form.field_type === "date" ? "date" : form.field_type === "datetime" ? "datetime-local" : "text"} value={form.defaultValue ?? ""} onChange={(event) => update("defaultValue", event.target.value)} /></label>
+              {["picklist","select"].includes(form.field_type) && !form.dependentPicklist?.controllingField ? (
+                <label><span>Default value</span><select value={form.defaultValue ?? ""} onChange={(event) => update("defaultValue", event.target.value)}><option value="">No default</option>{(form.valueSource === "local" ? picklistOptions({ options: form.options }) : picklistOptions(valueSets.find((valueSet) => String(valueSet.id) === String(form.valueSetId || "")) || field)).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+              ) : form.field_type === "boolean" ? (
+                <label className="platform-checkbox"><input type="checkbox" checked={form.defaultValue === true || form.defaultValue === "true"} onChange={(event) => update("defaultValue", event.target.checked)} /><span><strong>Default checked</strong><small>New records start enabled unless a record type or caller supplies another value.</small></span></label>
+              ) : !["lookup","address","location","json","multiselect"].includes(form.field_type) ? (
+                <label><span>Default value</span><input type={["number","decimal","currency","percent"].includes(form.field_type) ? "number" : form.field_type === "date" ? "date" : form.field_type === "datetime" ? "datetime-local" : form.field_type === "time" ? "time" : "text"} value={form.defaultValue ?? ""} onChange={(event) => update("defaultValue", event.target.value)} /></label>
               ) : null}
               {["text","long_text","rich_text","url","email","phone"].includes(form.field_type) ? (
                 <label><span>Maximum length</span><input type="number" min="1" max="100000" value={form.maxLength ?? ""} onChange={(event) => update("maxLength", event.target.value)} placeholder="No additional limit" /></label>
