@@ -126,7 +126,7 @@ export default function SecurityIdentitySettings() {
 
   if(loading&&!data)return <div className="settings-card settings-state-card">Loading Security & Identity…</div>
 
-  const tabs=[['password','Password Policies'],['session','Session Settings'],['mfa','MFA & Assurance'],['providers','Authentication Providers'],['access','Login Access Policies'],['network','Network Access'],['history','Login History'],['sessions','Active Sessions']]
+  const tabs=[['password','Password Policies'],['session','Session Settings'],['mfa','MFA & Assurance'],['providers','Authentication Providers'],['verification-history','Verification History'],['access','Login Access Policies'],['network','Network Access'],['history','Login History'],['sessions','Active Sessions']]
 
   return <div className="space-y-4 min-w-0">
     {error?<div className="settings-error">{error}</div>:null}
@@ -162,6 +162,8 @@ export default function SecurityIdentitySettings() {
     {tab==='mfa'?<IdentityAssuranceSettings mode="assurance"/>:null}
 
     {tab==='providers'?<IdentityAssuranceSettings mode="providers"/>:null}
+
+    {tab==='verification-history'?<IdentityAssuranceSettings mode="history"/>:null}
 
     {tab==='access'?<div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
       <section className="settings-card">
