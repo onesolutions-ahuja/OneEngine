@@ -66,11 +66,13 @@ export default function createDataProtectionRouter({authenticate,authorize,db,wr
   router.put("/security/data/export-settings",...dataManage,async(req,res)=>{
     const frequency=String(req.body?.frequency||"MANUAL").toUpperCase();
     if(!["MANUAL","WEEKLY","MONTHLY"].includes(frequency))return res.status(400).json({success:false,message:"Invalid export frequency"});
+    const enabled=req.body?.enabled===true;
+    const nextRunAt=req.body?.nextRunAt||(!enabled||frequency==="MANUAL"?null:new Date(Date.now()+(frequency==="WEEKLY"?7:30)*24*60*60*1000).toISOString());
     const r=await db(`INSERT INTO data_export_settings(company_id,enabled,frequency,include_attachments,include_audit_logs,next_run_at,updated_by)
       VALUES($1,$2,$3,$4,$5,$6,$7)
       ON CONFLICT(company_id) DO UPDATE SET enabled=EXCLUDED.enabled,frequency=EXCLUDED.frequency,include_attachments=EXCLUDED.include_attachments,
       include_audit_logs=EXCLUDED.include_audit_logs,next_run_at=EXCLUDED.next_run_at,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING *`,
-      [req.user.companyId,req.body?.enabled===true,frequency,req.body?.includeAttachments===true,req.body?.includeAuditLogs!==false,req.body?.nextRunAt||null,req.user.id]);
+      [req.user.companyId,enabled,frequency,req.body?.includeAttachments===true,req.body?.includeAuditLogs!==false,nextRunAt,req.user.id]);
     await audit(req,"security.data_export_settings_updated","data_export_settings",req.user.companyId,{frequency});
     res.json({success:true,data:r.rows[0]});
   });
