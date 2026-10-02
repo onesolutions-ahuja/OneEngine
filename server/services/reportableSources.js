@@ -238,14 +238,19 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
       throw new Error("Cross-filter relationship mapping is invalid");
     }
     const alias = `xf${where.length + 1}`;
+    const relatedFieldKey = (value) => {
+      const raw = String(value || "");
+      const prefix = `${crossFilter.relationshipKey}.`;
+      return raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
+    };
     const subfilters = [];
     for (const raw of crossFilter.subfilters || []) {
       const subfilter = normalizeAdvancedFieldFilter(raw);
-      const targetField = (relationship.fields || []).find((candidate) => fieldKey(candidate) === subfilter.field);
+      const targetField = (relationship.fields || []).find((candidate) => fieldKey(candidate) === relatedFieldKey(subfilter.field));
       if (!targetField) throw new Error(`Invalid cross-filter field ${subfilter.field}`);
       const expression = fieldExpression({ ...targetField, relationshipKey: null }, alias, {});
       if (subfilter.compareField) {
-        const comparison = (relationship.fields || []).find((candidate) => fieldKey(candidate) === subfilter.compareField);
+        const comparison = (relationship.fields || []).find((candidate) => fieldKey(candidate) === relatedFieldKey(subfilter.compareField));
         if (!comparison) throw new Error("Invalid cross-filter comparison field");
         subfilters.push(fieldComparisonSql(subfilter.operator, expression, fieldExpression({ ...comparison, relationshipKey: null }, alias, {})));
         continue;
