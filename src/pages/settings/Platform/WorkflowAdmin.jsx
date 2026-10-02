@@ -2248,9 +2248,9 @@ const WORKFLOW_VISUAL_CSS = `
 
   /* FlowPattern canvas pass — presentation only. Keep palette, properties and workflow semantics unchanged. */
   .workflow-builder-page {
-    --wf-flow-canvas: #344054;
-    --wf-flow-dot: rgba(255,255,255,.16);
-    --wf-flow-edge: rgba(226,232,240,.82);
+    --wf-flow-canvas: #ffffff;
+    --wf-flow-dot: rgba(148,163,184,.32);
+    --wf-flow-edge: #7b8797;
     --wf-flow-card: #ffffff;
     --wf-flow-card-border: #dbe3ed;
   }
@@ -2401,7 +2401,7 @@ const WORKFLOW_VISUAL_CSS = `
   }
   .workflow-decision-map .workflow-branch-path:first-child .workflow-branch-label,
   .workflow-decision-map .workflow-branch-path:first-child .workflow-branch-label-input {
-    color: #dcfce7 !important;
+    color: #2f7b4a !important;
   }
   .workflow-end-node {
     border-color: rgba(255,255,255,.30) !important;
