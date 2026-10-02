@@ -40,12 +40,13 @@ function normalizeSection(value) {
 }
 
 export default function OneDeveloperPage({ initialSection = 'objects', onSectionChange }) {
+  const loggedInCompanyId = String(getStoredUser()?.companyId || getStoredUser()?.company_id || getStoredUser()?.company?.id || '')
   const [active, setActive] = useState(() => normalizeSection(initialSection))
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   const [clients, setClients] = useState([])
   const [clientQuery, setClientQuery] = useState('')
-  const [selectedClient, setSelectedClient] = useState(() => getActingCompanyId() || '')
+  const [selectedClient, setSelectedClient] = useState(() => loggedInCompanyId || getActingCompanyId() || '')
   const [canManageEngine, setCanManageEngine] = useState(false)
   const [clientsLoading, setClientsLoading] = useState(true)
 
@@ -67,17 +68,20 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
         setCanManageEngine(true)
         setClients(rows)
         const current = getActingCompanyId()
-        const valid = rows.some((row) => String(row.id) === String(current))
-        if (!valid && rows[0]) {
-          await apiRequest('/api/platform/developer/acting-company', {
-            method: 'PUT',
-            body: JSON.stringify({ actingCompanyId: rows[0].id }),
-          })
-          setActingCompanyId(rows[0].id)
-          clearSettingsContextCache()
-          setSelectedClient(String(rows[0].id))
-        } else if (valid) {
-          setSelectedClient(String(current))
+        const ownCompany = rows.find((row) => loggedInCompanyId && String(row.id) === String(loggedInCompanyId))
+        const storedCompany = rows.find((row) => current && String(row.id) === String(current))
+        const preferred = ownCompany || storedCompany || rows[0] || null
+        if (preferred) {
+          const preferredId = String(preferred.id)
+          if (preferredId !== String(current || '')) {
+            await apiRequest('/api/platform/developer/acting-company', {
+              method: 'PUT',
+              body: JSON.stringify({ actingCompanyId: preferred.id }),
+            })
+            setActingCompanyId(preferred.id)
+            clearSettingsContextCache()
+          }
+          setSelectedClient(preferredId)
         }
       } catch (e) {
         if (!alive) return
