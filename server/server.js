@@ -78,7 +78,9 @@ import createPlatformRouter from "./routes/platform.js";
 import createPlatformDeploymentsRouter from "./routes/platformDeployments.js";
 import createPlatformSecurityRouter from "./routes/platformSecurity.js";
 import createIdentitySecurityRouter from "./routes/identitySecurity.js";
+import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
+import { assuranceSatisfies, createPendingChallenge, listMfaMethods, loadEffectiveAssurance } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
 import createOwnDeliveryRouter from "./routes/ownDelivery.js";
@@ -959,7 +961,27 @@ app.get("/api/auth/google/callback", async (req, res) => {
     }
     await clearFailedLogin(googleDb, user);
     await pool.query("UPDATE users SET last_login_at=NOW() WHERE id=$1", [user.id]);
+    const googleAssurancePolicy = await loadEffectiveAssurance(googleDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id });
+    const googleBaseAssurance = googleAssurancePolicy.effective.trustSsoMfa ? "HIGH" : googleAssurancePolicy.effective.ssoAssurance;
+    const googleNeedsOneEngineMfa = googleAssurancePolicy.effective.mfaRequired && !googleAssurancePolicy.effective.trustSsoMfa
+      || googleAssurancePolicy.effective.phishingResistantRequired
+      || !assuranceSatisfies(googleBaseAssurance, googleAssurancePolicy.effective.requiredLoginAssurance);
+    if (googleNeedsOneEngineMfa) {
+      const methods = await listMfaMethods(googleDb, { companyId: user.company_id, userId: user.id });
+      const usable = methods.filter((method) => !googleAssurancePolicy.effective.phishingResistantRequired || method.phishing_resistant === true);
+      const challenge = await createPendingChallenge(googleDb, {
+        companyId: user.company_id,
+        userId: user.id,
+        type: "LOGIN",
+        context: { authMethod: "GOOGLE", phishingResistantRequired: googleAssurancePolicy.effective.phishingResistantRequired === true },
+        minutes: 10,
+      });
+      const target = new URL(returnTo);
+      target.hash = `google_mfa_challenge=${encodeURIComponent(challenge.id)}&google_mfa_enroll=${usable.length ? "0" : "1"}&google_mfa_phishing_resistant=${googleAssurancePolicy.effective.phishingResistantRequired ? "1" : "0"}`;
+      return res.redirect(target.toString());
+    }
     const sessionId = await createTrackedSession(googleDb, { user, ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", settings: googleSettings, originHost: String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase() || null });
+    await googleDb("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW(),mfa_method=$3 WHERE id=$1", [sessionId, googleBaseAssurance, googleBaseAssurance === "HIGH" ? "SSO_MFA" : null]);
     user.session_id = sessionId;
     const token = createToken(user);
     await writeLoginHistory(googleDb, { user, identifier: email, status: "SUCCESS", ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", sessionId, req });
@@ -1163,6 +1185,39 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     ])];
     markLoginTiming("permissions_ms", stepStartedAt);
 
+    const assurancePolicy = user.company_id
+      ? await loadEffectiveAssurance(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
+      : null;
+    const effectiveAssurance = assurancePolicy?.effective || { mfaRequired: false, phishingResistantRequired: false, requiredLoginAssurance: "STANDARD", passwordAssurance: "STANDARD" };
+    const requiresSecondFactor = effectiveAssurance.mfaRequired
+      || effectiveAssurance.phishingResistantRequired
+      || !assuranceSatisfies(effectiveAssurance.passwordAssurance, effectiveAssurance.requiredLoginAssurance);
+    if (requiresSecondFactor) {
+      const methods = await listMfaMethods(loginDb, { companyId: user.company_id, userId: user.id });
+      const usable = methods.filter((method) => !effectiveAssurance.phishingResistantRequired || method.phishing_resistant === true);
+      const challenge = await createPendingChallenge(loginDb, {
+        companyId: user.company_id,
+        userId: user.id,
+        type: "LOGIN",
+        context: { authMethod: "PASSWORD", phishingResistantRequired: effectiveAssurance.phishingResistantRequired === true },
+        minutes: 10,
+      });
+      return res.status(202).json({
+        success: true,
+        mfaRequired: true,
+        challengeId: challenge.id,
+        enrollmentRequired: usable.length === 0,
+        phishingResistantRequired: effectiveAssurance.phishingResistantRequired === true,
+        availableMethods: usable.map((method) => ({
+          id: method.id,
+          type: method.method_type,
+          label: method.label || method.method_type,
+          phishingResistant: method.phishing_resistant === true,
+        })),
+        user: { id: user.id, name: user.full_name, username: user.username, companyId: user.company_id },
+      });
+    }
+
     const sessionId = await createTrackedSession(loginDb, {
       user,
       ip: requestIp,
@@ -1171,6 +1226,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       settings: securitySettings,
       originHost: String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase() || null,
     });
+    await loginDb("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW() WHERE id=$1", [sessionId, effectiveAssurance.passwordAssurance]);
     user.session_id = sessionId;
     const token = createToken(user);
     await writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId, req });
@@ -1638,6 +1694,7 @@ app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canVie
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
 app.use("/api", createIdentitySecurityRouter({ authenticate, authorize, db, writeAudit }));
+app.use("/api", createIdentityAssuranceRouter({ authenticate, authorize, db, createToken, encryptCredentials, decryptCredentials, writeAudit }));
 app.use("/api", createHospitalityRouter({ authenticate, authorize, db, pool, canAccessStore }));
 app.use("/api", createClientWebShopRouter({
   authenticate,
