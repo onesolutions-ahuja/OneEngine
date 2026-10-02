@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
 import PlatformFieldPicker from "./PlatformFieldPicker.jsx";
 import MetadataResourcePicker from "./MetadataResourcePicker.jsx";
@@ -2462,8 +2462,29 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [pathActionDialog, setPathActionDialog] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedElementIds, setSelectedElementIds] = useState([]);
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const canvasRef = useRef(null);
+  const laneRef = useRef(null);
+  const historyRef = useRef([]);
+  const historyIndexRef = useRef(-1);
+  const applyingHistoryRef = useRef(false);
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
+
+  useEffect(() => {
+    const snapshot = JSON.stringify(workflow);
+    if (applyingHistoryRef.current) {
+      applyingHistoryRef.current = false;
+      return;
+    }
+    const current = historyRef.current[historyIndexRef.current];
+    if (current?.snapshot === snapshot) return;
+    const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
+    nextHistory.push({ snapshot, value: JSON.parse(snapshot) });
+    if (nextHistory.length > 100) nextHistory.shift();
+    historyRef.current = nextHistory;
+    historyIndexRef.current = nextHistory.length - 1;
+  }, [workflow]);
 
   useEffect(() => {
     if (selectedId === "__start__") return;
@@ -2800,8 +2821,46 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         || target.tagName === "SELECT"
         || target.isContentEditable
       );
-      if (editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
       const key = String(event.key || "").toLowerCase();
+      if (!editable && (event.ctrlKey || event.metaKey) && event.altKey) {
+        if (key === "=" || key === "+") {
+          event.preventDefault();
+          setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))));
+          return;
+        }
+        if (key === "-") {
+          event.preventDefault();
+          setCanvasZoom((value) => Math.max(.5, Number((value - .1).toFixed(1))));
+          return;
+        }
+        if (key === "1") {
+          event.preventDefault();
+          zoomToFit();
+          return;
+        }
+        if (key === "0") {
+          event.preventDefault();
+          setCanvasZoom(1);
+          return;
+        }
+      }
+      if (!editable && (event.ctrlKey || event.metaKey) && !event.altKey && key === "/") {
+        event.preventDefault();
+        setShortcutHelpOpen(true);
+        return;
+      }
+      if (editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redoFlowChange();
+        else undoFlowChange();
+        return;
+      }
+      if (key === "y") {
+        event.preventDefault();
+        redoFlowChange();
+        return;
+      }
       if (key === "c" && selectedStep) {
         event.preventDefault();
         copyStep(selectedStep);
@@ -2838,6 +2897,30 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedStep, selectedIndex, clipboard, branchTarget, insertAt, workflow.steps]);
+  const undoFlowChange = () => {
+    if (historyIndexRef.current <= 0) return;
+    historyIndexRef.current -= 1;
+    applyingHistoryRef.current = true;
+    setWorkflow(JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current].value)));
+  };
+  const redoFlowChange = () => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current += 1;
+    applyingHistoryRef.current = true;
+    setWorkflow(JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current].value)));
+  };
+  const zoomToFit = () => {
+    const canvas = canvasRef.current;
+    const lane = laneRef.current;
+    if (!canvas || !lane) return;
+    const currentZoom = canvasZoom || 1;
+    const naturalWidth = lane.scrollWidth / currentZoom;
+    const naturalHeight = lane.scrollHeight / currentZoom;
+    const availableWidth = Math.max(1, canvas.clientWidth - 40);
+    const availableHeight = Math.max(1, canvas.clientHeight - 70);
+    const next = Math.max(.5, Math.min(1.3, availableWidth / Math.max(1, naturalWidth), availableHeight / Math.max(1, naturalHeight)));
+    setCanvasZoom(Number(next.toFixed(2)));
+  };
   const addFaultPath = (step) => {
     const index = workflow.steps.findIndex((item) => item.id === step.id);
     if (index < 0 || !flowElementSupportsFaultPath(step.type)) return;
@@ -3149,11 +3232,15 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </>
         )}
       </aside> : null}
-      <main className="workflow-canvas-surface">
+      <main ref={canvasRef} className="workflow-canvas-surface">
         <div className="workflow-canvas-toolbar">
-          <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.7, Number((value - .1).toFixed(1))))}>−</button>
+          <button type="button" title="Undo" onClick={undoFlowChange}>↶</button>
+          <button type="button" title="Redo" onClick={redoFlowChange}>↷</button>
+          <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.5, Number((value - .1).toFixed(1))))}>−</button>
           <button type="button" aria-label="Reset zoom" title="Reset zoom" onClick={() => setCanvasZoom(1)}>{Math.round(canvasZoom * 100)}%</button>
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))))}>+</button>
+          <button type="button" title="Zoom to Fit" onClick={zoomToFit}>Fit</button>
+          <button type="button" title="Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(true)}>⌨</button>
           {selectionMode ? (
             <>
               <button type="button" disabled={!selectedElementIds.length} title="Copy selected elements" onClick={copySelectedElements}>Copy {selectedElementIds.length || ""} Element{selectedElementIds.length === 1 ? "" : "s"}</button>
@@ -3163,6 +3250,27 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" title="Toggle Toolbox" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide Toolbox" : "Show Toolbox"}</button>
           <button type="button" title="Toggle Properties" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide Properties" : "Show Properties"}</button>
         </div>
+        {shortcutHelpOpen ? (
+          <div className="workflow-path-action-panel" role="dialog" aria-label="Keyboard Shortcuts">
+            <div className="workflow-add-element-head">
+              <div><strong>Keyboard Shortcuts</strong><small>Flow Builder canvas</small></div>
+              <button type="button" aria-label="Close Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(false)}>×</button>
+            </div>
+            <div className="workflow-path-action-body">
+              <div className="space-y-2 text-[11px] text-slate-700">
+                <div className="flex justify-between gap-4"><span>Undo</span><strong>Ctrl/Cmd + Z</strong></div>
+                <div className="flex justify-between gap-4"><span>Redo</span><strong>Ctrl/Cmd + Shift + Z</strong></div>
+                <div className="flex justify-between gap-4"><span>Copy selected element</span><strong>Ctrl/Cmd + C</strong></div>
+                <div className="flex justify-between gap-4"><span>Cut selected element</span><strong>Ctrl/Cmd + X</strong></div>
+                <div className="flex justify-between gap-4"><span>Paste</span><strong>Ctrl/Cmd + V</strong></div>
+                <div className="flex justify-between gap-4"><span>Zoom in / out</span><strong>Ctrl/Cmd + Alt + = / -</strong></div>
+                <div className="flex justify-between gap-4"><span>Zoom to fit</span><strong>Ctrl/Cmd + Alt + 1</strong></div>
+                <div className="flex justify-between gap-4"><span>Reset zoom</span><strong>Ctrl/Cmd + Alt + 0</strong></div>
+                <div className="flex justify-between gap-4"><span>Shortcut help</span><strong>Ctrl/Cmd + /</strong></div>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {pathActionDialog && pathActionStep ? (
           <div className="workflow-path-action-panel" role="dialog" aria-label={pathActionDialog.mode === "cut" ? "Cut Element" : "Delete Element"}>
             <div className="workflow-add-element-head">
@@ -3233,7 +3341,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             </div>
           </div>
         ) : null}
-        <div className="workflow-canvas-lane" style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top center" }}>
+        <div ref={laneRef} className="workflow-canvas-lane" style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top center" }}>
           <button type="button" className="workflow-start-node" onClick={inspectStart} title="Configure when this flow starts">
             <span className="workflow-start-icon">▶</span>
             <span className="workflow-start-title">Start</span>
