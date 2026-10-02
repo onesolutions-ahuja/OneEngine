@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppWindow, BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
-  Pencil, Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
+  ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
 } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
@@ -120,6 +120,7 @@ function GenericProperties({ item, fields = [], actionRegistry = [], roles = [],
 export default function OneBuilder({ initialTab = 'workflow', singleBuilder = false, initialWorkflowId = '', onWorkflowOpen, onWorkflowClose }) {
   const [tab, setTab] = useState(initialTab)
   const [listQuery, setListQuery] = useState('')
+  const [expandedWorkflowGroups, setExpandedWorkflowGroups] = useState({})
   const [componentRegistry, setComponentRegistry] = useState([])
   const [actionRegistry, setActionRegistry] = useState([])
   const [reportRegistry, setReportRegistry] = useState([])
@@ -536,13 +537,21 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
           <div className="onebuilder-list-body">
             {(loading || listLoading) ? <div className="onebuilder-list-empty">Loading existing definitions…</div> : null}
             {!loading && !listLoading && visibleListRows.length ? (
-              tab === 'workflow' ? workflowGroups.map((group) => (
-                <section key={group.label} className="onebuilder-workflow-group">
-                  <div className="onebuilder-workflow-group-head">
+              tab === 'workflow' ? workflowGroups.map((group) => {
+                const expanded = expandedWorkflowGroups[group.label] === true
+                return (
+                <section key={group.label} className={`onebuilder-workflow-group ${expanded ? 'is-expanded' : 'is-collapsed'}`}>
+                  <button
+                    type="button"
+                    className="onebuilder-workflow-group-head"
+                    onClick={() => setExpandedWorkflowGroups((current) => ({ ...current, [group.label]: !expanded }))}
+                    aria-expanded={expanded}
+                  >
+                    <span className="onebuilder-workflow-group-toggle">{expanded ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}</span>
                     <span>{group.label}</span>
                     <small>{group.rows.length}</small>
-                  </div>
-                  {group.rows.map((item) => (
+                  </button>
+                  {expanded ? group.rows.map((item) => (
                     <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
                       <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
                       <span className="onebuilder-list-row-copy">
@@ -552,9 +561,10 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
                       <span className="onebuilder-list-row-state">{item.active === false ? 'Inactive' : ''}</span>
                       <span className="onebuilder-list-row-edit" title="Open editor" aria-label="Open editor"><Pencil size={13}/></span>
                     </button>
-                  ))}
+                  )) : null}
                 </section>
-              )) : visibleListRows.map((item) => (
+                )
+              }) : visibleListRows.map((item) => (
                 <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
                   <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
                   <span className="onebuilder-list-row-copy">
