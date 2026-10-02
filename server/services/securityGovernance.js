@@ -24,7 +24,7 @@ export async function loadApiPolicy(db,companyId){
   };
 }
 
-export async function connectedAppDecision(db,{companyId,appKey,connectionId=null,requestedScopes=[]}){
+export async function connectedAppDecision(db,{companyId,appKey,connectionId=null,userId=null,requestedScopes=[],grantType="authorization_code"}){
   const api=await loadApiPolicy(db,companyId);
   if(!api.enforce_connected_app_policy)return {allowed:true,reason:"POLICY_NOT_ENFORCED",policy:null,api};
   const r=await db(`SELECT * FROM security_connected_app_policies
@@ -33,6 +33,14 @@ export async function connectedAppDecision(db,{companyId,appKey,connectionId=nul
     [companyId,String(appKey||"").toLowerCase(),connectionId||null]);
   const policy=r.rows[0];
   if(!policy)return {allowed:false,reason:"CONNECTED_APP_NOT_APPROVED",policy:null,api};
+  const grants=normalizeScopes(api.allowed_grant_types||[]);
+  if(grants.length&&!grants.includes(String(grantType||"authorization_code")))return {allowed:false,reason:"OAUTH_GRANT_NOT_APPROVED",policy,api};
+  if(policy.permitted_user_mode==="ADMIN_APPROVED"){
+    if(!userId)return {allowed:false,reason:"CONNECTED_APP_USER_NOT_APPROVED",policy,api};
+    const assignment=await db(`SELECT 1 FROM security_connected_app_user_assignments
+      WHERE company_id=$1 AND connected_app_policy_id=$2 AND user_id=$3 AND active=TRUE LIMIT 1`,[companyId,policy.id,userId]);
+    if(!assignment.rows.length)return {allowed:false,reason:"CONNECTED_APP_USER_NOT_APPROVED",policy,api};
+  }
   const allowed=normalizeScopes(policy.allowed_scopes||[]);
   const requested=normalizeScopes(requestedScopes);
   const missing=allowed.length?requested.filter(scope=>!allowed.includes(scope)):[];
