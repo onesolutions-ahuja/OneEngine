@@ -1042,6 +1042,7 @@ const SCREEN_COMPONENT_TYPES = [
   { value: "LINK", label: "Link", input: false },
   { value: "SECTION", label: "Section", input: false },
   { value: "COLUMNS", label: "Columns", input: false },
+  { value: "CUSTOM_COMPONENT", label: "Registered Component" },
 ];
 
 const actionOptions = [
@@ -1892,7 +1893,7 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
   );
 }
 
-function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
+function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], platformComponents = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const isVariableResource = step.type === "ASSIGNMENT" && step.config?.resourceOnly === true;
   const isResource = ["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(step.type) || isVariableResource;
@@ -2234,6 +2235,28 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                       </div>
                       {component.type === "DISPLAY_TEXT" ? (
                         <label className="block text-xs font-medium text-slate-600">Content<textarea className={inputClass} rows={4} value={component.text || ""} onChange={(event) => updateComponent(componentIndex, { text: event.target.value })} /></label>
+                      ) : null}
+                      {component.type === "CUSTOM_COMPONENT" ? (
+                        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <label className="block text-xs font-medium text-slate-600">Registered Component
+                            <select className={inputClass} value={component.registryKey || ""} onChange={(event) => {
+                              const registryKey = event.target.value;
+                              const definition = platformComponents.find((item) => item.key === registryKey);
+                              updateComponent(componentIndex, { registryKey, registryConfig: {}, label: definition?.label || component.label });
+                            }}>
+                              <option value="">Select component</option>
+                              {platformComponents.filter((item) => !item.reserved && item.key !== "jarves").map((item) => <option key={item.key} value={item.key}>{item.label} · {item.category || item.kind || "component"}</option>)}
+                            </select>
+                          </label>
+                          {component.registryKey ? <label className="block text-xs font-medium text-slate-600">Component Configuration (JSON)
+                            <textarea className={inputClass} rows={5} value={JSON.stringify(component.registryConfig || {}, null, 2)} onChange={(event) => {
+                              try { updateComponent(componentIndex, { registryConfig: JSON.parse(event.target.value || "{}"), registryConfigError: "" }); }
+                              catch { updateComponent(componentIndex, { registryConfigError: "Enter valid JSON." }); }
+                            }} />
+                            {component.registryConfigError ? <span className="mt-1 block text-[11px] text-red-600">{component.registryConfigError}</span> : null}
+                          </label> : null}
+                          <p className="text-[11px] text-slate-500">Uses the canonical OneEngine component registry. No Salesforce Lightning/Aura component branding is copied.</p>
+                        </div>
                       ) : null}
                       {component.input !== false ? <>
                         <div className="grid gap-2 md:grid-cols-2">
@@ -3107,6 +3130,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedElementIds, setSelectedElementIds] = useState([]);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [platformComponents, setPlatformComponents] = useState([]);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [infoDialog, setInfoDialog] = useState(null);
   const [managerFilter, setManagerFilter] = useState("all");
@@ -3196,6 +3220,14 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       setStartSnapshot(JSON.parse(JSON.stringify(workflow)));
     }
   }, [selectedId, propertiesOpen]);
+
+  useEffect(() => {
+    let live = true;
+    apiRequest("/api/platform/component-registry")
+      .then((response) => { if (live) setPlatformComponents(Array.isArray(response?.data) ? response.data : []); })
+      .catch(() => { if (live) setPlatformComponents([]); });
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -4723,7 +4755,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <button type="button" className="workflow-save-button" onClick={finishInspector}>Done</button>
             </div>
           </div>
-        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
+        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} platformComponents={platformComponents} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
       </aside> : null}
     </div>
   );
