@@ -955,10 +955,10 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             FROM platform_approval_processes p WHERE p.id=r.process_id AND r.process_version=1;
         `);
       },
-    }
+    },
     {
-      key: "0034_user_store_assignment_permission",
-      version: "34",
+      key: "0035_user_store_assignment_permission",
+      version: "35",
       name: "Add explicit user store assignment authority",
       up: async client => {
         await client.query(
