@@ -990,7 +990,7 @@ export default function FieldEditor({
               {["number","decimal","currency","percent"].includes(form.field_type) ? (
                 <>
                   <label><span>Precision (total digits)</span><input type="number" min="1" max="18" value={form.precision ?? ""} onChange={(event) => update("precision", event.target.value)} placeholder="Digits" /></label>
-                  <label><span>Decimal places</span><input type="number" min="0" max="18" value={form.scale ?? ""} onChange={(event) => update("scale", event.target.value)} placeholder="Scale" /></label>
+                  <label><span>Decimal places</span><input type="number" min="0" max="17" value={form.scale ?? ""} onChange={(event) => update("scale", event.target.value)} placeholder="Scale" /></label>
                 </>
               ) : null}
               <label className="platform-checkbox"><input type="checkbox" checked={form.trackHistory === true} onChange={(event) => update("trackHistory", event.target.checked)} /><span><strong>Track History</strong><small>Store field changes in the record history timeline. Leave off for fields that do not need audit history.</small></span></label>
