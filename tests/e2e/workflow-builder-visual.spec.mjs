@@ -7,7 +7,12 @@ async function proxyApiForLocalPreview(page) {
   await page.route(`${API_BASE}/**`, async (route) => {
     const request = route.request();
     try {
-      const response = await route.fetch();
+      const forwardedHeaders = {
+        ...request.headers(),
+        origin: "https://onesolutions-ahuja.github.io",
+        referer: "https://onesolutions-ahuja.github.io/OneEngine/",
+      };
+      const response = await route.fetch({ headers: forwardedHeaders });
       const headers = { ...response.headers() };
       headers["access-control-allow-origin"] = "http://127.0.0.1:4173";
       headers["access-control-allow-credentials"] = "true";
