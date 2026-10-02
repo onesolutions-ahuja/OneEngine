@@ -561,44 +561,141 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 8px;
     font-weight: 650;
   }
-  .workflow-branch-map {
+  .workflow-node-row { position: relative; width: 100%; }
+  .workflow-node-card::before { content: none !important; }
+  .workflow-node-icon {
     position: absolute;
-    top: calc(100% + 10px);
-    left: 50%;
-    z-index: 2;
-    display: flex;
-    width: min(620px, calc(100vw - 620px));
-    min-width: 360px;
-    transform: translateX(-50%);
-    justify-content: center;
-    gap: 10px;
-    pointer-events: none;
-  }
-  .workflow-branch-path { position: relative; min-width: 78px; padding-top: 19px; text-align: center; pointer-events: auto; }
-  .workflow-branch-line { position: absolute; top: 0; left: 50%; width: 1px; height: 17px; background: #8fa6bf; }
-  .workflow-branch-label { display: block; overflow: hidden; color: #64748b; font-size: 8px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-  .workflow-branch-add { width: 22px; height: 22px; margin-top: 5px; border: 1px solid #8fa6bf; border-radius: 999px; background: #fff; color: #2563eb; font-size: 15px; line-height: 18px; cursor: pointer; }
-  .workflow-node-wrap:has(.workflow-branch-map) { margin-bottom: 72px; }
-  .workflow-node-delete {
-    position: absolute;
-    top: 8px;
-    right: 9px;
-    z-index: 3;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 0;
+    left: 13px;
+    top: 50%;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    transform: translateY(-50%);
     border-radius: 7px;
-    background: transparent;
-    color: #94a3b8;
+    color: #fff;
     font-size: 16px;
-    line-height: 1;
+    font-weight: 800;
+    box-shadow: 0 3px 8px rgba(15,23,42,.13);
+  }
+  .workflow-node-card.is-debug-failed .workflow-node-icon { background: #ef4444 !important; }
+  .workflow-node-card.is-debug-completed .workflow-node-icon { background: #22c55e !important; }
+  .workflow-node-menu {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    z-index: 9;
+  }
+  .workflow-node-menu > summary {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    color: #706e6b;
+    font-size: 18px;
+    cursor: pointer;
+    list-style: none;
+  }
+  .workflow-node-menu > summary::-webkit-details-marker { display: none; }
+  .workflow-node-menu > summary:hover { background: #f3f3f3; }
+  .workflow-node-menu-popover {
+    position: absolute;
+    top: 28px;
+    right: 0;
+    z-index: 30;
+    width: 154px;
+    overflow: hidden;
+    border: 1px solid #c9c7c5;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 5px 16px rgba(0,0,0,.16);
+  }
+  .workflow-node-menu-popover button {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: #fff;
+    padding: 8px 11px;
+    color: #181818;
+    font-size: 10px;
+    text-align: left;
     cursor: pointer;
   }
-  .workflow-node-delete:hover {
-    background: #fee2e2;
-    color: #b91c1c;
+  .workflow-node-menu-popover button:hover { background: #f3f3f3; }
+  .workflow-node-menu-popover button.is-danger { color: #ba0517; }
+  .workflow-decision-toggle {
+    position: absolute;
+    left: -31px;
+    top: 22px;
+    width: 24px;
+    height: 24px;
+    border: 1px solid #c9c7c5;
+    border-radius: 999px;
+    background: #fff;
+    color: #444;
+    cursor: pointer;
   }
+  .workflow-branch-map {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    width: min(860px, calc(100vw - 590px));
+    max-width: calc(100vw - 80px);
+    margin: 10px 50% 0;
+    transform: translateX(-50%);
+    gap: 12px;
+    overflow-x: auto;
+    padding: 18px 8px 4px;
+    align-items: flex-start;
+  }
+  .workflow-branch-path {
+    position: relative;
+    min-width: 150px;
+    flex: 1 0 150px;
+    padding-top: 12px;
+    text-align: center;
+  }
+  .workflow-branch-line { position: absolute; top: -18px; left: 50%; width: 1px; height: 28px; background: #8fa6bf; }
+  .workflow-branch-label { display: block; overflow: hidden; margin-bottom: 8px; color: #3e3e3c; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-branch-stack { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .workflow-branch-node-row { position: relative; width: 100%; }
+  .workflow-branch-node-card {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 25px minmax(0,1fr);
+    gap: 7px;
+    align-items: center;
+    border: 1px solid #d8dde6;
+    border-radius: 5px;
+    background: #fff;
+    padding: 7px 27px 7px 7px;
+    color: #181818;
+    text-align: left;
+    box-shadow: 0 1px 2px rgba(0,0,0,.06);
+    cursor: pointer;
+  }
+  .workflow-branch-node-card.is-selected { border-color: #0176d3; box-shadow: 0 0 0 1px #0176d3; }
+  .workflow-branch-node-icon { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 4px; color: #fff; font-size: 11px; font-weight: 800; }
+  .workflow-branch-node-card small { display: block; color: #706e6b; font-size: 7px; font-weight: 700; text-transform: uppercase; }
+  .workflow-branch-node-card strong { display: block; overflow: hidden; margin-top: 1px; color: #181818; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-node-menu.branch-menu { top: 4px; right: 3px; }
+  .workflow-node-menu.branch-menu > summary { width: 22px; height: 22px; font-size: 15px; }
+  .workflow-branch-add { width: 24px; height: 24px; border: 1px solid #8fa6bf; border-radius: 999px; background: #fff; color: #0176d3; font-size: 16px; line-height: 20px; cursor: pointer; }
+  .workflow-branch-add:hover { border-color: #0176d3; background: #f3f9ff; }
+  .workflow-end-node {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 3px;
+    border: 1px solid #c9c7c5;
+    border-radius: 999px;
+    background: #fff;
+    padding: 6px 13px;
+    color: #3e3e3c;
+    font-size: 10px;
+  }
+  .workflow-end-node span { font-size: 7px; color: #706e6b; }
 
   .workflow-properties-panel {
     padding: 11px;
@@ -2156,6 +2253,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [resourceMenuOpen, setResourceMenuOpen] = useState(false);
   const [inspectorSnapshot, setInspectorSnapshot] = useState(null);
   const [inspectorNewId, setInspectorNewId] = useState(null);
+  const [clipboard, setClipboard] = useState(null);
+  const [collapsedBranches, setCollapsedBranches] = useState({});
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -2182,9 +2281,32 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setSelectedId(stepId);
     setPropertiesOpen(true);
   };
+  const stripStepReferences = (config = {}, stepId) => {
+    const prune = (items) => (Array.isArray(items) ? items.filter((id) => String(id) !== String(stepId)) : items);
+    return {
+      ...config,
+      ...(Array.isArray(config.outcomes) ? { outcomes: config.outcomes.map((outcome) => ({ ...outcome, branch: prune(outcome.branch) || [] })) } : {}),
+      ...(Array.isArray(config.defaultBranch) ? { defaultBranch: prune(config.defaultBranch) } : {}),
+      ...(Array.isArray(config.ifBranch) ? { ifBranch: prune(config.ifBranch) } : {}),
+      ...(Array.isArray(config.elseBranch) ? { elseBranch: prune(config.elseBranch) } : {}),
+      ...(Array.isArray(config.bodyBranch) ? { bodyBranch: prune(config.bodyBranch) } : {}),
+      ...(Array.isArray(config.faultBranch) ? { faultBranch: prune(config.faultBranch) } : {}),
+      ...(Array.isArray(config.branch) ? { branch: prune(config.branch) } : {}),
+    };
+  };
+  const removeStepById = (stepId) => {
+    setWorkflow((current) => ({
+      ...current,
+      steps: current.steps
+        .filter((step) => String(step.id) !== String(stepId))
+        .map((step) => ({ ...step, config: stripStepReferences(step.config || {}, stepId) })),
+    }));
+  };
   const removeStep = (index) => {
+    const stepId = workflow.steps[index]?.id;
+    if (!stepId) return;
     const nextId = workflow.steps[index + 1]?.id || workflow.steps[index - 1]?.id || "__start__";
-    deleteStep(index);
+    removeStepById(stepId);
     setSelectedId(nextId);
     setInspectorSnapshot(null);
     setInspectorNewId(null);
@@ -2196,8 +2318,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   };
   const cancelInspector = () => {
     if (inspectorNewId && selectedId === inspectorNewId) {
-      const index = workflow.steps.findIndex((step) => step.id === inspectorNewId);
-      if (index >= 0) deleteStep(index);
+      removeStepById(inspectorNewId);
       setSelectedId("__start__");
     } else if (inspectorSnapshot) {
       const snapshot = JSON.parse(JSON.stringify(inspectorSnapshot));
@@ -2207,18 +2328,31 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setInspectorNewId(null);
     setPropertiesOpen(false);
   };
-  const addFromPalette = (type, index = workflow.steps.length) => {
-    const step = makeStep(type);
-    const definition = registryOptions.find((option) => option.value === type);
-    if (definition?.label) step.label = definition.label;
+  const prepareCopiedStep = (source, preservePaths = false) => {
+    const step = JSON.parse(JSON.stringify(source));
+    step.id = `step-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    step.label = source.label || getActionLabel(source.type);
+    step.config = { ...(step.config || {}), apiName: flowApiName(`${step.label}_Copy`) };
+    if (!preservePaths) {
+      step.config.faultBranch = [];
+      step.config.bodyBranch = [];
+      step.config.branch = [];
+      step.config.ifBranch = [];
+      step.config.elseBranch = [];
+      step.config.defaultBranch = [];
+      if (Array.isArray(step.config.outcomes)) {
+        step.config.outcomes = step.config.outcomes.map((outcome) => ({ ...outcome, branch: [] }));
+      }
+    }
+    return step;
+  };
+  const insertPreparedStep = (step, index = workflow.steps.length) => {
     setWorkflow((current) => {
       if (!branchTarget) {
         return { ...current, steps: [...current.steps.slice(0, index), step, ...current.steps.slice(index)] };
       }
       const decisionIndex = current.steps.findIndex((candidate) => candidate.id === branchTarget.decisionId);
-      if (decisionIndex < 0) {
-        return { ...current, steps: [...current.steps, step] };
-      }
+      if (decisionIndex < 0) return { ...current, steps: [...current.steps, step] };
       const decision = current.steps[decisionIndex];
       const outcomes = Array.isArray(decision.config?.outcomes) && decision.config.outcomes.length
         ? decision.config.outcomes.map((outcome) => ({ ...outcome, branch: [...(outcome.branch || [])] }))
@@ -2236,25 +2370,16 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         : (outcomes.find((outcome) => String(outcome.id) === String(branchTarget.outcomeId))?.branch || []);
       const targetIndexes = targetIds.map((id) => current.steps.findIndex((candidate) => candidate.id === id)).filter((itemIndex) => itemIndex >= 0);
       const branchInsertAt = targetIndexes.length ? Math.max(...targetIndexes) + 1 : decisionIndex + 1;
-      if (branchTarget.outcomeId === "__default__") {
-        defaultBranch = [...defaultBranch, step.id];
-      } else {
+      if (branchTarget.outcomeId === "__default__") defaultBranch = [...defaultBranch, step.id];
+      else {
         const outcomeIndex = outcomes.findIndex((outcome) => String(outcome.id) === String(branchTarget.outcomeId));
         if (outcomeIndex >= 0) outcomes[outcomeIndex] = { ...outcomes[outcomeIndex], branch: [...(outcomes[outcomeIndex].branch || []), step.id] };
       }
-      const nextDecision = {
-        ...decision,
-        config: {
-          ...(decision.config || {}),
-          outcomes,
-          defaultBranch,
-          condition: null,
-          ifBranch: [],
-          elseBranch: [],
-        },
-      };
       const nextSteps = [...current.steps];
-      nextSteps[decisionIndex] = nextDecision;
+      nextSteps[decisionIndex] = {
+        ...decision,
+        config: { ...(decision.config || {}), outcomes, defaultBranch, condition: null, ifBranch: [], elseBranch: [] },
+      };
       nextSteps.splice(branchInsertAt, 0, step);
       return { ...current, steps: nextSteps };
     });
@@ -2264,6 +2389,36 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setInsertAt(null);
     setBranchTarget(null);
     setPropertiesOpen(true);
+  };
+  const addFromPalette = (type, index = workflow.steps.length) => {
+    const step = makeStep(type);
+    const definition = registryOptions.find((option) => option.value === type);
+    if (definition?.label) {
+      step.label = definition.label;
+      step.config.apiName = flowApiName(definition.label);
+    }
+    insertPreparedStep(step, index);
+  };
+  const copyStep = (step) => setClipboard({ mode: "copy", step: JSON.parse(JSON.stringify(step)) });
+  const cutStep = (step) => {
+    setClipboard({ mode: "cut", step: JSON.parse(JSON.stringify(step)) });
+    removeStepById(step.id);
+    if (selectedId === step.id) {
+      setSelectedId("__start__");
+      setPropertiesOpen(false);
+    }
+  };
+  const pasteClipboard = (index = workflow.steps.length) => {
+    if (!clipboard?.step) return;
+    const step = prepareCopiedStep(clipboard.step, clipboard.mode === "cut");
+    insertPreparedStep(step, index);
+    if (clipboard.mode === "cut") setClipboard(null);
+  };
+  const addFaultPath = (step) => {
+    const index = workflow.steps.findIndex((item) => item.id === step.id);
+    if (index < 0) return;
+    updateStep(index, { config: { ...(step.config || {}), faultMode: "ROUTE", faultBranch: step.config?.faultBranch || [] } });
+    inspectStep(step.id);
   };
   const dropAt = (event, index) => {
     event.preventDefault();
@@ -2302,12 +2457,21 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   ];
   const stepResources = workflowStepResources(workflow.steps, workflow.steps.length, objectFieldCatalog);
   const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA"].includes(step.type) || (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true));
+  const managerElementSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true);
   const scheduledPathSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => step.type === "SCHEDULE_PATH");
   const faultTargetIds = new Set(workflow.steps.flatMap((step) => {
     const mode = String(step.config?.faultMode || "FAIL").toUpperCase();
     return ["ROUTE","RETRY"].includes(mode) ? (step.config?.faultBranch || []).map(String) : [];
   }));
-  const visibleCanvasSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true);
+  const decisionBranchTargetIds = new Set(workflow.steps.flatMap((step) => {
+    if (step.type !== "CONDITION") return [];
+    const outcomes = Array.isArray(step.config?.outcomes) && step.config.outcomes.length
+      ? step.config.outcomes
+      : [{ branch: step.config?.ifBranch || [] }];
+    return [...outcomes.flatMap((outcome) => outcome.branch || []), ...(step.config?.defaultBranch || step.config?.elseBranch || [])].map(String);
+  }));
+  const visibleCanvasSteps = managerElementSteps.filter(({ step }) => !decisionBranchTargetIds.has(String(step.id)));
+  const branchStepById = new Map(workflow.steps.map((step) => [String(step.id), step]));
   const addScheduledPath = () => {
     const path = makeStep("SCHEDULE_PATH");
     path.label = "Scheduled Path";
@@ -2396,8 +2560,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               ) : null}
             </div>
             <div className="workflow-palette-scroll">
-              {visibleCanvasSteps.length ? <div className="workflow-palette-group-title">Elements</div> : null}
-              {visibleCanvasSteps.map(({ step, index }) => (
+              {managerElementSteps.length ? <div className="workflow-palette-group-title">Elements</div> : null}
+              {managerElementSteps.map(({ step, index }) => (
                 <button key={step.id} type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
                   <span className="workflow-palette-item-copy">
                     <strong>{step.label || getActionLabel(step.type)}</strong>
@@ -2459,6 +2623,17 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder="Search elements..." autoFocus />
             </div>
             <div className="workflow-add-element-groups">
+              {clipboard?.step ? (
+                <div className="workflow-add-element-group">
+                  <div className="workflow-palette-group-title">Clipboard</div>
+                  <div className="workflow-add-element-grid">
+                    <button type="button" onClick={() => pasteClipboard(insertAt == null ? workflow.steps.length : insertAt)}>
+                      <span className="workflow-add-element-icon" style={{ background: flowElementVisual(clipboard.step.type).color }}>⧉</span>
+                      <span><strong>Paste Element</strong><small>{clipboard.step.label || getActionLabel(clipboard.step.type)} · {clipboard.mode === "cut" ? "Cut" : "Copied"}</small></span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               {Object.entries(paletteGroups).map(([category, options]) => (
                 <div key={category} className="workflow-add-element-group">
                   <div className="workflow-palette-group-title">{category}</div>
@@ -2483,23 +2658,80 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}{workflow.conditions?.length ? ` · ${workflow.conditions.length} condition${workflow.conditions.length === 1 ? "" : "s"}` : ""}{scheduledPathSteps.length ? ` · ${scheduledPathSteps.length} scheduled path${scheduledPathSteps.length === 1 ? "" : "s"}` : ""}</span>
           </button>
           <div className="workflow-node-connector"><button type="button" className="workflow-insert-button" aria-label="Add element after Start" onClick={() => { setBranchTarget(null); setInsertAt(0); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button></div>
-          {visibleCanvasSteps.map(({ step, index }) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
-            <button type="button" className="workflow-node-delete" title="Remove step" aria-label={`Remove ${step.label || getActionLabel(step.type)}`} onClick={(event) => { event.stopPropagation(); removeStep(index); }}>×</button>
-            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
-              <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : getActionLabel(step.type)}</span>
-              <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
-              {step.type === "CONDITION" ? <div className="workflow-decision-preview">{(Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? step.config.outcomes : [{ label: "Outcome 1" }]).slice(0, 3).map((outcome, outcomeIndex) => <span key={outcome.id || outcomeIndex}>{outcome.label || `Outcome ${outcomeIndex + 1}`}</span>)}<span>Default Outcome</span></div> : null}
-              {step.type === "CONDITION" ? <div className="workflow-branch-map" aria-label="Decision paths">{[...(Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? step.config.outcomes : [{ label: "Outcome 1" }]).slice(0, 3), { id: "__default__", label: "Default Outcome" }].map((outcome, outcomeIndex, all) => <div key={outcome.id || outcomeIndex} className="workflow-branch-path"><span className="workflow-branch-line" /><span className="workflow-branch-label">{outcome.label || `Outcome ${outcomeIndex + 1}`}</span><button type="button" className="workflow-branch-add" aria-label={`Add element to ${outcome.label || `Outcome ${outcomeIndex + 1}`}`} onClick={(event) => { event.stopPropagation(); setBranchTarget({ decisionId: step.id, outcomeId: outcome.id || (outcomeIndex === all.length - 1 ? "__default__" : `outcome-${outcomeIndex + 1}`) }); setInsertAt(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button></div>)}</div> : null}
-              {step.type === "LOOP" ? <span className="workflow-node-note">Runs selected body steps once per collection item.</span> : null}
-              {step.config?.faultMode && step.config.faultMode !== "FAIL" ? (
-                <span className="workflow-fault-badge">↳ On Error · {String(step.config.faultMode).toLowerCase().replace("_"," ")}{Array.isArray(step.config?.faultBranch) && step.config.faultBranch.length ? ` · ${step.config.faultBranch.length} recovery step${step.config.faultBranch.length === 1 ? "" : "s"}` : ""}</span>
+          {visibleCanvasSteps.map(({ step, index }) => {
+            const visual = flowElementVisual(step.type);
+            const elementKind = SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action";
+            const decisionOutcomes = step.type === "CONDITION"
+              ? (Array.isArray(step.config?.outcomes) && step.config.outcomes.length
+                  ? step.config.outcomes
+                  : [{ id: "outcome-1", label: "Outcome 1", branch: step.config?.ifBranch || [] }])
+              : [];
+            const decisionPaths = step.type === "CONDITION"
+              ? [...decisionOutcomes, { id: "__default__", label: "Default Outcome", branch: step.config?.defaultBranch || step.config?.elseBranch || [] }]
+              : [];
+            const branchesCollapsed = collapsedBranches[step.id] === true;
+            return <div key={step.id} className={`workflow-node-wrap ${step.type === "CONDITION" ? "has-decision" : ""}`} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
+              <div className="workflow-node-row">
+                <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { inspectStep(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
+                  <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
+                  <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : elementKind}</span>
+                  <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
+                  {step.type === "LOOP" ? <span className="workflow-node-note">For Each Item</span> : null}
+                  {step.config?.faultMode && step.config.faultMode !== "FAIL" ? <span className="workflow-fault-badge">Fault path</span> : null}
+                </button>
+                {step.type === "CONDITION" ? <button type="button" className="workflow-decision-toggle" title={branchesCollapsed ? "Expand paths" : "Collapse paths"} aria-label={branchesCollapsed ? "Expand decision paths" : "Collapse decision paths"} onClick={() => setCollapsedBranches((current) => ({ ...current, [step.id]: !branchesCollapsed }))}>{branchesCollapsed ? "▸" : "▾"}</button> : null}
+                <details className="workflow-node-menu">
+                  <summary aria-label={`Open actions for ${step.label || getActionLabel(step.type)}`} title="Element actions">⋮</summary>
+                  <div className="workflow-node-menu-popover">
+                    <button type="button" onClick={() => inspectStep(step.id)}>Edit Element</button>
+                    <button type="button" onClick={() => copyStep(step)}>Copy Element</button>
+                    <button type="button" onClick={() => cutStep(step)}>Cut Element</button>
+                    {step.type !== "STOP" ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
+                    <button type="button" className="is-danger" onClick={() => removeStep(index)}>Delete Element</button>
+                  </div>
+                </details>
+              </div>
+              {step.type === "CONDITION" && !branchesCollapsed ? (
+                <div className="workflow-branch-map" aria-label="Decision paths">
+                  {decisionPaths.map((outcome, outcomeIndex) => {
+                    const isDefault = outcome.id === "__default__";
+                    const branchIds = outcome.branch || [];
+                    const branchSteps = branchIds.map((id) => branchStepById.get(String(id))).filter(Boolean);
+                    return <div key={outcome.id || outcomeIndex} className="workflow-branch-path">
+                      <span className="workflow-branch-line" />
+                      <span className="workflow-branch-label">{outcome.label || (isDefault ? "Default Outcome" : `Outcome ${outcomeIndex + 1}`)}</span>
+                      <div className="workflow-branch-stack">
+                        {branchSteps.map((branchStep) => {
+                          const branchVisual = flowElementVisual(branchStep.type);
+                          const branchIndex = workflow.steps.findIndex((candidate) => candidate.id === branchStep.id);
+                          return <div key={branchStep.id} className="workflow-branch-node-row">
+                            <button type="button" className={`workflow-branch-node-card ${selectedId === branchStep.id ? "is-selected" : ""}`} onClick={() => inspectStep(branchStep.id)}>
+                              <span className="workflow-branch-node-icon" style={{ background: branchVisual.color }}>{branchVisual.icon}</span>
+                              <span><small>{SALESFORCE_CORE_ELEMENT_TYPES.has(branchStep.type) ? getActionLabel(branchStep.type) : "Action"}</small><strong>{branchStep.label || getActionLabel(branchStep.type)}</strong></span>
+                            </button>
+                            <details className="workflow-node-menu branch-menu">
+                              <summary aria-label={`Open actions for ${branchStep.label || getActionLabel(branchStep.type)}`}>⋮</summary>
+                              <div className="workflow-node-menu-popover">
+                                <button type="button" onClick={() => inspectStep(branchStep.id)}>Edit Element</button>
+                                <button type="button" onClick={() => copyStep(branchStep)}>Copy Element</button>
+                                <button type="button" onClick={() => cutStep(branchStep)}>Cut Element</button>
+                                <button type="button" onClick={() => addFaultPath(branchStep)}>Add Fault Path</button>
+                                <button type="button" className="is-danger" onClick={() => removeStep(branchIndex)}>Delete Element</button>
+                              </div>
+                            </details>
+                          </div>;
+                        })}
+                        <button type="button" className="workflow-branch-add" aria-label={`Add element to ${outcome.label || (isDefault ? "Default Outcome" : `Outcome ${outcomeIndex + 1}`)}`} onClick={() => { setBranchTarget({ decisionId: step.id, outcomeId: isDefault ? "__default__" : outcome.id }); setInsertAt(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
+                      </div>
+                    </div>;
+                  })}
+                </div>
               ) : null}
-              {faultTargetIds.has(String(step.id)) ? <span className="workflow-node-note">Error recovery path</span> : null}
-            </button>
-            {<div className="workflow-node-connector"><button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setBranchTarget(null); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button></div>}
-          </div>)}
-          {!visibleCanvasSteps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => addFromPalette("CREATE_RECORD")}>+ Add first element</button> : null}
-          <div className="mt-3 text-center text-xs text-slate-400">Drop elements here to append · drag nodes to reorder</div>
+              <div className="workflow-node-connector"><button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setBranchTarget(null); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button></div>
+            </div>;
+          })}
+          {!visibleCanvasSteps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => { setInsertAt(0); setBranchTarget(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+ Add Element</button> : null}
+          <div className="workflow-end-node"><span>■</span><strong>End</strong></div>
         </div>
       </main>
       {propertiesOpen ? <aside className="workflow-properties-panel">
