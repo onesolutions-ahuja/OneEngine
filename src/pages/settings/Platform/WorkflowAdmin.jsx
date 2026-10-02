@@ -2427,6 +2427,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [managerDetailId, setManagerDetailId] = useState(null);
   const [startSnapshot, setStartSnapshot] = useState(null);
   const [pathActionDialog, setPathActionDialog] = useState(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedElementIds, setSelectedElementIds] = useState([]);
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -2611,7 +2613,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           const firstIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[0]));
           if (firstIndex >= 0) branchInsertAt = firstIndex;
         }
-        const nextBranch = [...targetIds.slice(0, branchPosition), step.id, ...targetIds.slice(branchPosition)];
+        const insertedIds = [step.id, ...extraSteps.map((item) => item.id)];
+        const nextBranch = [...targetIds.slice(0, branchPosition), ...insertedIds, ...targetIds.slice(branchPosition)];
         const nextSteps = [...current.steps];
         nextSteps[ownerIndex] = {
           ...owner,
@@ -2651,7 +2654,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         const firstIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[0]));
         if (firstIndex >= 0) branchInsertAt = firstIndex;
       }
-      const nextBranchIds = [...targetIds.slice(0, branchPosition), step.id, ...targetIds.slice(branchPosition)];
+      const insertedIds = [step.id, ...extraSteps.map((item) => item.id)];
+      const nextBranchIds = [...targetIds.slice(0, branchPosition), ...insertedIds, ...targetIds.slice(branchPosition)];
       if (branchTarget.outcomeId === "__default__") defaultBranch = nextBranchIds;
       else {
         const outcomeIndex = outcomes.findIndex((outcome) => String(outcome.id) === String(branchTarget.outcomeId));
@@ -2681,7 +2685,19 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     }
     insertPreparedStep(step, index);
   };
-  const copyStep = (step) => setClipboard({ mode: "copy", step: JSON.parse(JSON.stringify(step)), bundle: [] });
+  const copyStep = (step) => setClipboard({ mode: "copy", step: JSON.parse(JSON.stringify(step)), steps: [JSON.parse(JSON.stringify(step))], bundle: [] });
+  const toggleElementSelection = (stepId) => {
+    const key = String(stepId);
+    setSelectedElementIds((current) => current.includes(key) ? current.filter((id) => id !== key) : [...current, key]);
+  };
+  const copySelectedElements = () => {
+    const selected = new Set(selectedElementIds.map(String));
+    const steps = workflow.steps.filter((step) => selected.has(String(step.id))).map((step) => JSON.parse(JSON.stringify(step)));
+    if (!steps.length) return;
+    setClipboard({ mode: "copy", step: steps[0], steps, bundle: [] });
+    setSelectionMode(false);
+    setSelectedElementIds([]);
+  };
   const removeStepSet = (ids) => {
     const remove = new Set([...ids].map(String));
     setWorkflow((current) => ({
@@ -2716,7 +2732,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     keepIds.forEach((id) => cutIds.delete(String(id)));
     let clipboardStep = keepPath ? clearOwnedPath(step, keepPath) : JSON.parse(JSON.stringify(step));
     const bundle = workflow.steps.filter((item) => cutIds.has(String(item.id))).map((item) => JSON.parse(JSON.stringify(item)));
-    setClipboard({ mode: "cut", step: clipboardStep, bundle });
+    setClipboard({ mode: "cut", step: clipboardStep, steps: [clipboardStep], bundle });
     removeStepSet(new Set([String(step.id), ...cutIds]));
     setSelectedId("__start__");
     setPropertiesOpen(false);
@@ -2734,8 +2750,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   };
   const pasteClipboard = (index = workflow.steps.length) => {
     if (!clipboard?.step) return;
-    const step = prepareCopiedStep(clipboard.step, clipboard.mode === "cut");
-    insertPreparedStep(step, index, clipboard.mode === "cut" ? (clipboard.bundle || []) : []);
+    const sources = Array.isArray(clipboard.steps) && clipboard.steps.length ? clipboard.steps : [clipboard.step];
+    const prepared = sources.map((source) => prepareCopiedStep(source, clipboard.mode === "cut"));
+    const first = prepared[0];
+    const extras = [...prepared.slice(1), ...(clipboard.mode === "cut" ? (clipboard.bundle || []) : [])];
+    insertPreparedStep(first, index, extras);
     if (clipboard.mode === "cut") setClipboard(null);
   };
   useEffect(() => {
@@ -2924,7 +2943,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             return (
               <div key={child.id} className="workflow-owned-step">
                 <div className="workflow-branch-node-row">
-                  <button type="button" className={`workflow-branch-node-card ${selectedId === child.id ? "is-selected" : ""}`} onClick={() => inspectStep(child.id)}>
+                  <button type="button" className={`workflow-branch-node-card ${selectedId === child.id || selectedElementIds.includes(String(child.id)) ? "is-selected" : ""}`} onClick={() => selectionMode ? toggleElementSelection(child.id) : inspectStep(child.id)}>
                     <span className="workflow-branch-node-icon" style={{ background: childVisual.color }}>{childVisual.icon}</span>
                     <span><small>{SALESFORCE_CORE_ELEMENT_TYPES.has(child.type) ? getActionLabel(child.type) : "Action"}</small><strong>{child.label || getActionLabel(child.type)}</strong></span>
                   </button>
@@ -3101,6 +3120,12 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.7, Number((value - .1).toFixed(1))))}>−</button>
           <button type="button" aria-label="Reset zoom" title="Reset zoom" onClick={() => setCanvasZoom(1)}>{Math.round(canvasZoom * 100)}%</button>
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))))}>+</button>
+          {selectionMode ? (
+            <>
+              <button type="button" disabled={!selectedElementIds.length} title="Copy selected elements" onClick={copySelectedElements}>Copy {selectedElementIds.length || ""} Element{selectedElementIds.length === 1 ? "" : "s"}</button>
+              <button type="button" title="Cancel element selection" onClick={() => { setSelectionMode(false); setSelectedElementIds([]); }}>Cancel Selection</button>
+            </>
+          ) : <button type="button" title="Select multiple elements" onClick={() => { setSelectionMode(true); setSelectedElementIds([]); setPropertiesOpen(false); }}>Select Elements</button>}
           <button type="button" title="Toggle Toolbox" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide Toolbox" : "Show Toolbox"}</button>
           <button type="button" title="Toggle Properties" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide Properties" : "Show Properties"}</button>
         </div>
@@ -3152,7 +3177,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   <div className="workflow-add-element-grid">
                     <button type="button" onClick={() => pasteClipboard(insertAt == null ? workflow.steps.length : insertAt)}>
                       <span className="workflow-add-element-icon" style={{ background: flowElementVisual(clipboard.step.type).color }}>⧉</span>
-                      <span><strong>Paste 1 Element</strong><small>{clipboard.step.label || getActionLabel(clipboard.step.type)} · {clipboard.mode === "cut" ? "Cut" : "Copied"}</small></span>
+                      <span><strong>Paste {Array.isArray(clipboard.steps) && clipboard.steps.length ? clipboard.steps.length : 1} Element{(Array.isArray(clipboard.steps) && clipboard.steps.length ? clipboard.steps.length : 1) === 1 ? "" : "s"}</strong><small>{(Array.isArray(clipboard.steps) && clipboard.steps.length > 1) ? `${clipboard.steps.length} selected elements` : (clipboard.step.label || getActionLabel(clipboard.step.type))} · {clipboard.mode === "cut" ? "Cut" : "Copied"}</small></span>
                     </button>
                   </div>
                 </div>
@@ -3213,7 +3238,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             return (
               <div key={step.id} className={`workflow-node-wrap ${canCollapse ? "has-branching" : ""}`}>
                 <div className="workflow-node-row">
-                  <button type="button" onClick={() => { inspectStep(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
+                  <button type="button" onClick={() => { if (selectionMode) { toggleElementSelection(step.id); return; } inspectStep(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id || selectedElementIds.includes(String(step.id)) ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
                     <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
                     <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : elementKind}</span>
                     <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
