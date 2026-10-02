@@ -79,6 +79,7 @@ import createPlatformDeploymentsRouter from "./routes/platformDeployments.js";
 import createPlatformSecurityRouter from "./routes/platformSecurity.js";
 import createIdentitySecurityRouter from "./routes/identitySecurity.js";
 import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
+import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, listMfaMethods, loadEffectiveAssurance } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
@@ -1695,6 +1696,7 @@ app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, w
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
 app.use("/api", createIdentitySecurityRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createIdentityAssuranceRouter({ authenticate, authorize, db, createToken, encryptCredentials, decryptCredentials, writeAudit }));
+app.use("/api", createIdentityProviderLoginRouter({ db, createToken, decryptCredentials, encryptCredentials }));
 app.use("/api", createHospitalityRouter({ authenticate, authorize, db, pool, canAccessStore }));
 app.use("/api", createClientWebShopRouter({
   authenticate,
