@@ -77,6 +77,8 @@ import createSuperadminRouter from "./routes/superadmin.js";
 import createPlatformRouter from "./routes/platform.js";
 import createPlatformDeploymentsRouter from "./routes/platformDeployments.js";
 import createPlatformSecurityRouter from "./routes/platformSecurity.js";
+import createIdentitySecurityRouter from "./routes/identitySecurity.js";
+import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
 import createOwnDeliveryRouter from "./routes/ownDelivery.js";
@@ -151,6 +153,8 @@ express.Router = function onePosAsyncSafeRouter(...args) {
 Object.assign(express.Router, originalExpressRouter);
 
 const app = express();
+// Render terminates TLS in front of Node. Trust exactly one proxy hop so req.ip is the authoritative client IP.
+app.set("trust proxy", 1);
 
 const PORT = process.env.PORT || 10000;
 
@@ -439,6 +443,15 @@ const baseAuthenticate = createAuthenticate({
 const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error) => {
   if (error) return next(error);
   try {
+    const securityDecision = await enforceTrackedSession(db, req);
+    if (!securityDecision.allowed) {
+      const status = securityDecision.code?.startsWith("SESSION_") ? 401 : 403;
+      return res.status(status).json({
+        success: false,
+        code: securityDecision.code || "SECURITY_POLICY_BLOCKED",
+        message: securityDecision.reason || "Access denied by security policy",
+      });
+    }
     const requestedStoreId = String(req.headers?.["x-store-id"] || "").trim();
     if (requestedStoreId) {
       const allowed = await canAccessStore(req.user, requestedStoreId);
@@ -997,6 +1010,20 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     }
 
     const user = result.rows[0];
+    const loginDb = (sql, params = []) => loginPool.query(sql, params);
+    const requestIp = clientIp(req);
+    const requestUserAgent = req.get("user-agent") || null;
+    const securitySettings = user.company_id ? await loadSecuritySettings(loginDb, user.company_id) : null;
+    const state = await loginState(loginDb, user.id);
+    if (state?.locked_until && new Date(state.locked_until).getTime() > Date.now()) {
+      await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: "ACCOUNT_LOCKED", ip: requestIp, userAgent: requestUserAgent });
+      return res.status(403).json({
+        success: false,
+        code: "ACCOUNT_LOCKED",
+        message: "User account is temporarily locked due to invalid login attempts",
+        lockedUntil: state.locked_until,
+      });
+    }
 
     if (!user.active) {
       return res.status(403).json({
@@ -1027,10 +1054,37 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     markLoginTiming("bcrypt_ms", stepStartedAt);
 
     if (!validPassword) {
-      return res.status(401).json({
+      const nextState = await registerFailedLogin(loginDb, { user, settings: securitySettings });
+      await writeLoginHistory(loginDb, { user, identifier: email, status: "FAILURE", reason: "INVALID_PASSWORD", ip: requestIp, userAgent: requestUserAgent });
+      const locked = nextState?.locked_until && new Date(nextState.locked_until).getTime() > Date.now();
+      return res.status(locked ? 403 : 401).json({
         success: false,
-        message: "Invalid username or password",
+        code: locked ? "ACCOUNT_LOCKED" : "INVALID_CREDENTIALS",
+        message: locked ? "User account is temporarily locked due to invalid login attempts" : "Invalid username or password",
+        ...(locked ? { lockedUntil: nextState.locked_until } : {}),
       });
+    }
+
+    const access = await accessDecision(loginDb, {
+      companyId: user.company_id,
+      userId: user.id,
+      roleId: user.role_id,
+      ip: requestIp,
+    });
+    if (!access.allowed) {
+      await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: access.code, ip: requestIp, userAgent: requestUserAgent });
+      return res.status(403).json({ success: false, code: access.code, message: access.reason });
+    }
+    await clearFailedLogin(loginDb, user);
+
+    let passwordExpired = false;
+    if (securitySettings && Number(securitySettings.password_expiry_days || 0) > 0) {
+      const changedAt = state?.password_changed_at;
+      if (!changedAt || Date.now() - new Date(changedAt).getTime() >= Number(securitySettings.password_expiry_days) * 86400000) {
+        passwordExpired = true;
+        await loginDb("UPDATE users SET must_change_password=TRUE WHERE id=$1", [user.id]);
+        user.must_change_password = true;
+      }
     }
 
     stepStartedAt = Date.now();
@@ -1055,7 +1109,6 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
      * enforce authorization independently.
      */
     stepStartedAt = Date.now();
-    const loginDb = (sql, params = []) => loginPool.query(sql, params);
     const rolePermissionResult = user.role_id
       ? await loginPool.query(
           `SELECT p.code
@@ -1076,7 +1129,16 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     ])];
     markLoginTiming("permissions_ms", stepStartedAt);
 
+    const sessionId = await createTrackedSession(loginDb, {
+      user,
+      ip: requestIp,
+      userAgent: requestUserAgent,
+      authMethod: "PASSWORD",
+      settings: securitySettings,
+    });
+    user.session_id = sessionId;
     const token = createToken(user);
+    await writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId });
     loginTimings.total_ms = Date.now() - loginStartedAt;
     console.log("onePOS: auth login timings", {
       ...loginTimings,
@@ -1473,6 +1535,7 @@ app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseR
 app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasPermission }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
+app.use("/api", createIdentitySecurityRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createHospitalityRouter({ authenticate, authorize, db, pool, canAccessStore }));
 app.use("/api", createClientWebShopRouter({
   authenticate,
