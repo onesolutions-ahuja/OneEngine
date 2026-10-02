@@ -285,6 +285,7 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
     where.push(crossFilter.type === "WITHOUT" ? `NOT ${exists}` : exists);
   }
   const selected = normalized.fields.map((key) => `${fieldExpression(fieldMap.get(key), "r", relationshipAliases)} AS "${key}"`);
+  if (scope.includeRecordId === true) selected.unshift(`r."id" AS "__recordId"`);
   const groupKeys = [...new Set([
     ...normalized.rowGroups,
     ...normalized.columnGroups,

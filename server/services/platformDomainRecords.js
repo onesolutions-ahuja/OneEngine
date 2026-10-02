@@ -34,7 +34,7 @@ export async function withDomainSave({ pool, db, savePlatformRecord, key, req, i
 
 export async function domainMetadata(db, key, req) {
   if (!req.user?.companyId) throw new PlatformRecordError("A company session is required", 403);
-  const result = await db("SELECT * FROM platform_objects WHERE object_key=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [key, req.user.companyId]);
+  const result = await db("SELECT o.*, COALESCE(o.config,'{}'::jsonb) || COALESCE(s.config,'{}'::jsonb) AS config FROM platform_objects o LEFT JOIN platform_object_settings s ON s.object_id=o.id AND s.company_id=$2 WHERE o.object_key=$1 AND o.active=true AND (o.company_id IS NULL OR o.company_id=$2)", [key, req.user.companyId]);
   const object = result.rows[0];
   if (!object || systemObject(object)?.table !== object.source_table) throw new PlatformRecordError("System object is unavailable", 404);
   const resultFields = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order, label", [object.id, req.user.companyId]);
@@ -275,10 +275,11 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
   await validateExtensionUniqueness(candidate);
   const persisted = await db("INSERT INTO platform_record_associations (object_id,record_id,company_id,record_type_id,custom_values) VALUES ($1,$2,$3,$4,$5::jsonb) ON CONFLICT (object_id,record_id) DO UPDATE SET record_type_id=EXCLUDED.record_type_id,custom_values=EXCLUDED.custom_values,updated_at=NOW() WHERE platform_record_associations.company_id=EXCLUDED.company_id RETURNING record_id", [object.id, record.id, req.user.companyId, typeId, JSON.stringify(custom)]);
   if (!persisted.rows.length) throw new PlatformRecordError("Record association ownership mismatch", 403);
-  for (const field of (object.config?.trackHistory === false ? [] : fields).filter(field => {
+  const historicalTrendingFields = new Set(object?.config?.historicalTrending?.enabled === true && Array.isArray(object?.config?.historicalTrending?.fields) ? object.config.historicalTrending.fields.map(String) : []);
+  for (const field of (object.config?.trackHistory === false && !historicalTrendingFields.size ? [] : fields).filter(field => {
     if (isCalculatedField(field)) return false;
     const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
-    return config.trackHistory === true || config.track_history === true;
+    return historicalTrendingFields.has(String(field.api_name)) || config.trackHistory === true || config.track_history === true;
   })) {
     const oldValue = previous ? before[field.api_name] ?? null : null;
     const newValue = candidate[field.api_name] ?? null;

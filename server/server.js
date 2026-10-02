@@ -17,6 +17,8 @@ import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime 
 import { validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
 import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
 import { claimDueScheduledWorkflows, completeScheduledWorkflow, failScheduledWorkflow } from "./services/platformSchedules.js";
+import { claimDueReportSubscriptions } from "./services/reportSubscriptionScheduler.js";
+import { processReportSubscriptionDeliveryJob } from "./services/reportSubscriptionRuntime.js";
 import { deliverPlatformWebhook, verifyWebhookSignature } from "./services/platformEvents.js";
 import { decryptSecret, encryptSecret } from "./services/onlineOrders/platformConfig.js";
 import { decryptCredentials, encryptCredentials } from "./services/integrationCredentials.js";
@@ -2704,6 +2706,15 @@ async function startServer() {
             if (job.kind === "PLATFORM_SCHEDULED_WORKFLOW" && failed?.status === "FAILED") {
               await failScheduledWorkflow({ db, payload: job.payload || {}, error: failed.last_error });
             }
+            if (job.kind === "REPORT_SUBSCRIPTION_DELIVERY" && failed?.status === "FAILED") {
+              const subscriptionId = job.payload?.subscriptionId || null;
+              if (subscriptionId) {
+                await db(
+                  "UPDATE report_subscriptions SET last_run_at=NOW(),last_status='FAILED',updated_at=NOW() WHERE id=$1 AND company_id=$2",
+                  [subscriptionId, job.company_id]
+                );
+              }
+            }
             if (["QUICKBOOKS_PROVIDER_SYNC", "SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
               await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
                 kind: job.kind,
@@ -3192,6 +3203,12 @@ async function startServer() {
                 client.release();
               }
             }
+            if (job.kind === "REPORT_SUBSCRIPTION_DELIVERY") {
+              return processReportSubscriptionDeliveryJob({
+                db,
+                payload: { ...(payload || {}), companyId: job.company_id },
+              });
+            }
             if (job.kind === "PLATFORM_WEBHOOK_DELIVERY") {
               return deliverPlatformWebhook({
                 db,
@@ -3500,6 +3517,7 @@ async function startServer() {
           },
         });
         await claimDueScheduledWorkflows({ db, limit: 10 });
+        await claimDueReportSubscriptions({ db, limit: 50 });
       } catch (error) {
         console.error("Platform job worker error:", error.message);
       } finally {

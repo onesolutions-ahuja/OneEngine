@@ -2,159 +2,17 @@ import express from "express";
 import { valuationRow } from "../services/inventoryValuation.js";
 import { buildPlatformObjectQuery, STANDARD_REPORT_SOURCES, validatePlatformReportDefinition } from "../services/reportableSources.js";
 import { loadPlatformReportContext } from "../services/platformReportSecurity.js";
-import { compileFilterLogic, normalizeAdvancedReportDefinition, reportCapabilities } from "../services/reportAnalyticsDefinition.js";
+import { reportCapabilities } from "../services/reportAnalyticsDefinition.js";
 import { executeAnalyticsDefinition } from "../services/reportExecution.js";
+import { reconstructHistoricalRows, validateHistoricalTrendForObject } from "../services/reportHistoricalTrend.js";
 import { normalizeFolder, normalizeSubscription, subscriptionConditionMatches, subscriptionIsDue } from "../services/analyticsManagement.js";
 import { normalizeReportType } from "../services/reportTypeDefinition.js";
 import { normalizeHistoricalTrend, normalizePreviewPreference, normalizeReportExport, normalizeReportTypeExperience } from "../services/reportExperience.js";
 import { buildDetailsCsv, buildFormattedXlsx } from "../services/reportExport.js";
+import { CUSTOM_DATE_FILTERS, CUSTOM_REPORT_FIELDS, buildCustomSalesQuery, customDateRange, validateCustomReportDefinition } from "../services/reportSalesDefinition.js";
 import { resolveAnalyticsPrincipalAccess } from "../services/analyticsSecurity.js";
-import { publishPlatformEvent } from "../services/platformEvents.js";
-
-export const CUSTOM_REPORT_FIELDS = [
-  { key: "date", label: "Date", sql: "(s.created_at AT TIME ZONE c.timezone)::date", groupable: true },
-  { key: "store", label: "Store", sql: "st.name", groupable: true },
-  { key: "user", label: "Operator", sql: "COALESCE(u.full_name, u.username, 'Unknown')", groupable: true },
-  { key: "product", label: "Product", sql: "p.name", groupable: true },
-  { key: "category", label: "Category", sql: "COALESCE(pc.name, 'Uncategorised')", groupable: true },
-  { key: "method", label: "Payment method", sql: "COALESCE(pay.payment_method, 'Unknown')", groupable: true },
-  { key: "sku", label: "SKU", sql: "p.sku", groupable: true },
-  { key: "quantity", label: "Quantity sold", sql: "COALESCE(SUM(si.quantity), 0)", aggregate: true },
-  { key: "gross_sales", label: "Gross sales", sql: "COALESCE(SUM(si.total), 0)", aggregate: true },
-  { key: "net_sales", label: "Net sales", sql: "COALESCE(SUM(si.total - si.tax), 0)", aggregate: true },
-  { key: "total", label: "Total", sql: "COALESCE(SUM(pay.amount), 0)", aggregate: true },
-  { key: "vat", label: "VAT", sql: "COALESCE(SUM(si.tax), 0)", aggregate: true },
-  { key: "discount", label: "Discounts", sql: "COALESCE(SUM(si.discount), 0)", aggregate: true },
-  { key: "transactions", label: "Transactions", sql: "COUNT(DISTINCT s.id)", aggregate: true },
-];
-const CUSTOM_FIELD_MAP = new Map(CUSTOM_REPORT_FIELDS.map((field) => [field.key, field]));
-const CUSTOM_DATE_FILTERS = [
-  { key: "all_time", label: "All time" },
-  { key: "today", label: "Today" }, { key: "yesterday", label: "Yesterday" },
-  { key: "this_week", label: "This week" }, { key: "last_7_days", label: "Last 7 days" },
-  { key: "this_month", label: "This month" }, { key: "this_quarter", label: "This quarter" },
-  { key: "fiscal_year", label: "Fiscal year" }, { key: "custom", label: "Custom dates" },
-];
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function validateUuidList(values, label) {
-  const normalized = [...new Set(
-    (Array.isArray(values) ? values : [])
-      .filter((value) => value !== null && value !== undefined)
-      .map((value) => String(value).trim())
-      .filter(Boolean)
-  )];
-  if (normalized.some((value) => !UUID_RE.test(value))) {
-    throw new Error(`Invalid ${label} identifier`);
-  }
-  return normalized;
-}
-
-function customDateRange(filters = []) {
-  const dateFilter = filters.find((filter) => filter && filter.field === "date");
-  const operator = dateFilter?.operator || "this_week";
-  const now = new Date();
-  const iso = (date) => date.toISOString().slice(0, 10);
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  if (operator === "all_time") return { from: null, to: null };
-  if (operator === "custom") return { from: dateFilter.from || dateFilter.dateFrom || null, to: dateFilter.to || dateFilter.dateTo || null };
-  if (operator === "today") return { from: iso(start), to: iso(start) };
-  if (operator === "yesterday") { start.setUTCDate(start.getUTCDate() - 1); return { from: iso(start), to: iso(start) }; }
-  if (operator === "last_7_days") { start.setUTCDate(start.getUTCDate() - 6); return { from: iso(start), to: iso(new Date()) }; }
-  if (operator === "this_month") return { from: iso(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))), to: iso(new Date()) };
-  if (operator === "this_quarter") {
-    const quarterStartMonth = Math.floor(now.getUTCMonth() / 3) * 3;
-    return { from: iso(new Date(Date.UTC(now.getUTCFullYear(), quarterStartMonth, 1))), to: iso(new Date()) };
-  }
-  if (operator === "fiscal_year") return { from: iso(new Date(Date.UTC(now.getUTCFullYear(), 0, 1))), to: iso(new Date()) };
-  const day = start.getUTCDay() || 7;
-  start.setUTCDate(start.getUTCDate() - day + 1);
-  return { from: iso(start), to: iso(new Date()) };
-}
-
-export function validateCustomReportDefinition(input = {}) {
-  const source = input || {};
-  if (source.dataSource && !["sales", "platform_object"].includes(source.dataSource)) throw new Error("Unsupported report data source");
-  const advanced = normalizeAdvancedReportDefinition(source);
-  if (source.dataSource === "platform_object") {
-    return { ...advanced, dataSource: "platform_object", objectId: String(source.objectId || ""), reportTypeId: source.reportTypeId || source.report_type_id || null };
-  }
-  const fields = advanced.fields;
-  if (!fields.length || fields.some((field) => !CUSTOM_FIELD_MAP.has(field))) throw new Error("Select at least one valid report field");
-  const rowGroups = advanced.rowGroups;
-  const columnGroups = advanced.columnGroups;
-  for (const field of [...rowGroups, ...columnGroups]) {
-    if (!CUSTOM_FIELD_MAP.has(field) || !CUSTOM_FIELD_MAP.get(field).groupable) throw new Error("Invalid grouping field");
-    if (!fields.includes(field)) throw new Error("Grouped fields must be selected");
-  }
-  if (advanced.sort.some((item) => !item || !CUSTOM_FIELD_MAP.has(String(item.field)) || !fields.includes(String(item.field)))) throw new Error("Invalid sort field");
-  for (const filter of advanced.filters) {
-    if (!filter || (filter.field && !["date", "store", "user", "product"].includes(String(filter.field)))) throw new Error("Invalid report filter");
-    if (filter.field === "date" && filter.operator && !CUSTOM_DATE_FILTERS.some((item) => item.key === filter.operator) && filter.operator !== "relative_date") throw new Error("Invalid date filter");
-    if (filter.field && filter.field !== "date" && !["equals", "in"].includes(filter.operator)) throw new Error("Invalid report filter operator");
-  }
-  return {
-    ...advanced,
-    dataSource: "sales",
-    groupBy: rowGroups,
-    storeIds: validateUuidList(source.storeIds, "store"),
-    userIds: validateUuidList(source.userIds, "user"),
-  };
-}
-
-export function buildCustomSalesQuery(definition, dateRange, storeIds, userIds) {
-  const params = [dateRange.from || null, dateRange.to || null];
-  const where = [
-    "s.company_id = $3", "s.status = 'completed'",
-    "($1::date IS NULL OR (s.created_at AT TIME ZONE c.timezone)::date >= $1::date)",
-    "($2::date IS NULL OR (s.created_at AT TIME ZONE c.timezone)::date <= $2::date)",
-  ];
-  params.push(null); // company id is supplied by the caller after query construction
-  let next = 4;
-  if (storeIds.length) { where.push(`s.store_id = ANY($${next}::uuid[])`); params.push(storeIds); next += 1; }
-  if (userIds.length) { where.push(`s.user_id = ANY($${next}::uuid[])`); params.push(userIds); next += 1; }
-  const filterClauses = [];
-  for (const filter of definition.filters) {
-    if (!filter || filter.field === "date" || !["store", "user", "product"].includes(filter.field)) continue;
-    const values = (Array.isArray(filter.value) ? filter.value : [filter.value]).filter(Boolean).map(String);
-    if (!values.length) continue;
-    const column = filter.field === "store" ? "s.store_id" : filter.field === "user" ? "s.user_id" : "si.product_id";
-    filterClauses.push(`${column} ${filter.operator === "in" ? `= ANY($${next}::uuid[])` : `= $${next}`}`);
-    params.push(filter.operator === "in" ? values : values[0]); next += 1;
-  }
-  if (filterClauses.length) {
-    const mode = String(definition.filterLogic || "all").toLowerCase();
-    const logic = mode === "all" || mode === "any"
-      ? filterClauses.join(mode === "any" ? " OR " : " AND ")
-      : compileFilterLogic(definition.filterLogic, filterClauses);
-    where.push(`(${logic})`);
-  }
-  const fields = definition.fields.map((key) => CUSTOM_FIELD_MAP.get(key));
-  const needsPayments = definition.fields.includes("method") || definition.fields.includes("total");
-  const select = fields.map((field) => `${field.sql} AS "${field.key}"`);
-  const explicitGroups = [...new Set([...(definition.rowGroups || definition.groupBy || []), ...(definition.columnGroups || [])])].map((key) => CUSTOM_FIELD_MAP.get(key).sql);
-  const groupByExprs = new Set(explicitGroups);
-  for (const field of fields) {
-    if (field.groupable && !field.aggregate && !groupByExprs.has(field.sql)) {
-      groupByExprs.add(field.sql);
-    }
-  }
-  const groups = [...groupByExprs];
-  const order = (definition.sort.length ? definition.sort : [{ field: (definition.rowGroups || definition.groupBy || [])[0] || definition.fields[0], direction: "desc" }])
-    .map((item) => `"${item.field}" ${item.direction === "asc" ? "ASC" : "DESC"}`).join(", ");
-  const sql = `SELECT ${select.join(", ")} FROM sales s
-    INNER JOIN companies c ON c.id=s.company_id
-    INNER JOIN sale_items si ON si.sale_id=s.id
-    INNER JOIN products p ON p.id=si.product_id
-    LEFT JOIN categories pc ON pc.id=p.category_id
-    ${needsPayments ? "LEFT JOIN payments pay ON pay.sale_id=s.id AND pay.status='completed'" : ""}
-    LEFT JOIN users u ON u.id=s.user_id
-    INNER JOIN stores st ON st.id=s.store_id
-    WHERE ${where.join(" AND ")}
-    ${groups.length ? `GROUP BY ${groups.join(", ")}` : ""}
-    ORDER BY ${order} LIMIT ${Math.min(Math.max(Number(definition.rowLimit || 1000),1),1000)}`;
-  return { sql, params };
-}
+import { claimDueReportSubscriptions } from "../services/reportSubscriptionScheduler.js";
+import { loadReportSubscriptionExecutionUser, resolveReportSubscriptionRecipients } from "../services/reportSubscriptionDelivery.js";
 
 function customReportVisibility(user, report) {
   return String(report.created_by) === String(user.id) || report.mapped === true;
@@ -921,23 +779,46 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       if (baseDefinition.dataSource === "platform_object") {
         const reportType = await resolveCustomReportType(req, baseDefinition.reportTypeId || baseDefinition.report_type_id || null);
         const context = reportType?.context || await platformReportContext(req, baseDefinition.objectId);
-        const validated = validatePlatformReportDefinition(baseDefinition, context.object, context.fields, context.relationships);
+        const historical = validateHistoricalTrendForObject(baseDefinition.historicalTrend || {}, context.object, context.fields);
+        const historicalFields = historical.enabled ? historical.trackedFields : [];
+        if (historical.enabled) {
+          if (String(baseDefinition.format || "").toLowerCase() !== "matrix") throw new Error("Historical Trending reports must use matrix format");
+          if ((baseDefinition.buckets || []).length) throw new Error("Historical Trending reports do not support bucket fields");
+          const selectedDirectFields = (baseDefinition.fields || []).map((key) => context.fields.find((field) => String(field.api_name) === String(key))).filter(Boolean);
+          if (selectedDirectFields.some((field) => ["formula","rollup"].includes(String(field.field_type || "").toLowerCase()))) throw new Error("Historical Trending reports do not support formula fields");
+        }
+        const queryDefinition = historical.enabled ? {
+          ...baseDefinition,
+          fields: [...new Set([...(baseDefinition.fields || []), ...historicalFields, ...(baseDefinition.summaries || []).map((summary) => summary.field).filter(Boolean)])],
+          rowGroups: [], groupBy: [], columnGroups: [], summaries: [], sort: [], rowFormulas: [], historicalTrend: { enabled: false },
+        } : baseDefinition;
+        const validated = validatePlatformReportDefinition(queryDefinition, context.object, context.fields, context.relationships);
         const built = buildPlatformObjectQuery(validated, context.object, context.fields, req.user.companyId, preview ? 100 : 1000, {
           storeId: req.user.storeId,
           visibilitySql: context.visibilitySql,
           visibilityParams: context.visibilityParams,
+          includeRecordId: historical.enabled,
         }, context.relationships);
         const result = await db(built.sql, built.params);
+        const rows = historical.enabled ? await reconstructHistoricalRows({ db, companyId: req.user.companyId, objectId: context.object.id, currentRows: result.rows, trend: historical }) : result.rows;
+        const baseColumns = validated.fields.map((key) => {
+          const direct = context.fields.find((field) => field.api_name === key);
+          if (direct) return { key, label: direct.label || key };
+          const [relationshipKey, ...fieldParts] = String(key).split(".");
+          const related = context.relationships.find((relationship) => String(relationship.relationship_key) === relationshipKey);
+          const relatedField = related?.fields?.find((field) => String(field.api_name) === fieldParts.join("."));
+          return { key, label: relatedField ? `${related.label || related.target_object_key || relationshipKey} · ${relatedField.label || relatedField.api_name}` : key };
+        });
         return {
-          columns: validated.fields.map((key) => {
-            const direct = context.fields.find((field) => field.api_name === key);
-            if (direct) return { key, label: direct.label || key };
-            const [relationshipKey, ...fieldParts] = String(key).split(".");
-            const related = context.relationships.find((relationship) => String(relationship.relationship_key) === relationshipKey);
-            const relatedField = related?.fields?.find((field) => String(field.api_name) === fieldParts.join("."));
-            return { key, label: relatedField ? `${related.label || related.target_object_key || relationshipKey} · ${relatedField.label || relatedField.api_name}` : key };
-          }),
-          rows: result.rows,
+          columns: historical.enabled ? [
+            { key: "__snapshotDate", label: "Snapshot Date" },
+            ...baseColumns,
+            ...historicalFields.map((key) => {
+              const field = context.fields.find((candidate) => candidate.api_name === key);
+              return { key: `${key}__historical`, label: `${field?.label || key} (Historical)` };
+            }),
+          ] : baseColumns,
+          rows,
         };
       }
       const stores = await accessibleStores(req, requestedStoreIds(baseDefinition));
@@ -952,7 +833,8 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const result = await db(built.sql, built.params);
       return { columns: baseDefinition.fields.map((key) => ({ key, label: CUSTOM_FIELD_MAP.get(key)?.label || key })), rows: result.rows };
     };
-    return executeAnalyticsDefinition(definition, executeBase, { preview });
+    const analyticsDefinition = definition.historicalTrend?.enabled === true ? { ...definition, rowGroups: ["__snapshotDate", ...(definition.rowGroups || []).filter((field) => field !== "__snapshotDate")], groupBy: ["__snapshotDate", ...(definition.rowGroups || []).filter((field) => field !== "__snapshotDate")] } : definition;
+    return executeAnalyticsDefinition(analyticsDefinition, executeBase, { preview });
   }
 
   async function recordReportView(req, reportId) {
@@ -1087,7 +969,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
             WHERE cr.company_id=$1 AND cr.archived_at IS NULL AND ($2 OR cr.created_by=$3 OR EXISTS(SELECT 1 FROM custom_report_users x WHERE x.report_id=cr.id AND x.user_id=$3))
             GROUP BY cr.id,u.full_name ORDER BY cr.updated_at DESC`, [req.user.companyId, manage, req.user.id]),
         db("SELECT * FROM custom_report_types WHERE company_id=$1 AND active=TRUE ORDER BY lower(label)", [req.user.companyId]),
-        db("SELECT id,object_key,label,source_table,company_id FROM platform_objects WHERE active=true AND source_table IS NOT NULL AND (company_id IS NULL OR company_id=$1) ORDER BY label", [req.user.companyId]),
+        db("SELECT o.id,o.object_key,o.label,o.source_table,o.company_id,COALESCE(o.config,'{}'::jsonb) || COALESCE(s.config,'{}'::jsonb) AS config FROM platform_objects o LEFT JOIN platform_object_settings s ON s.object_id=o.id AND s.company_id=$1 WHERE o.active=true AND o.source_table IS NOT NULL AND (o.company_id IS NULL OR o.company_id=$1) ORDER BY o.label", [req.user.companyId]),
       ]);
       res.json({ success: true, data: {
         fields: CUSTOM_REPORT_FIELDS.map(({ key,label,groupable,aggregate }) => ({ key,label,groupable:!!groupable,aggregate:!!aggregate,type:aggregate?"number":key==="date"?"date":"text" })),
@@ -1146,47 +1028,9 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
 
   router.post("/reports/custom/subscriptions/run-due", authenticate, authorize("reports.custom.manage"), async (req,res)=>{
     try {
-      const now=new Date();
-      const due=await db("SELECT rs.*,cr.definition AS report_definition FROM report_subscriptions rs JOIN custom_reports cr ON cr.id=rs.report_id WHERE rs.company_id=$1 AND rs.active=TRUE",[req.user.companyId]);
-      const executed=[];
-      for(const row of due.rows||[]){
-        const subscription=normalizeSubscription(row.definition);
-        if(!subscriptionIsDue(subscription,now))continue;
-        try {
-          const actorResult=await db(
-            "SELECT u.id,u.company_id,u.role_id,u.username,u.full_name FROM users u WHERE u.id=$1 AND u.company_id=$2 AND u.active=TRUE",
-            [row.user_id,row.company_id]
-          );
-          const actor=actorResult.rows[0];
-          if(!actor) throw new Error("Subscription owner is unavailable");
-          const storeResult=await db(
-            `SELECT us.store_id
-               FROM user_stores us
-               JOIN stores s ON s.id=us.store_id
-              WHERE us.user_id=$1 AND us.active=TRUE AND s.company_id=$2 AND s.active=TRUE
-              ORDER BY s.name,us.store_id LIMIT 1`,
-            [actor.id,actor.company_id]
-          );
-          const syntheticReq=Object.create(req);
-          syntheticReq.user={...req.user,id:actor.id,companyId:actor.company_id,roleId:actor.role_id,username:actor.username,full_name:actor.full_name,storeId:storeResult.rows?.[0]?.store_id||null};
-          if(hasSystemPermission && !(await hasSystemPermission(syntheticReq,"reports.custom.view"))) {
-            throw new Error("Subscription owner no longer has reports.custom.view");
-          }
-          const data=await executeCustomDefinition(syntheticReq,row.report_definition||{});
-          const matched=subscriptionConditionMatches(subscription,data);
-          let event=null;
-          if(matched){
-            event=await publishPlatformEvent({db,companyId:row.company_id,eventType:"report.subscription_due",actorUserId:actor.id,idempotencyKey:`report-subscription:${row.id}:${now.toISOString().slice(0,16)}`,payload:{subscriptionId:row.id,reportId:row.report_id,userId:row.user_id,delivery:subscription.delivery,recipients:subscription.recipients,condition:subscription.condition,result:{format:data.format,columns:data.columns,totals:data.totals||{},rowCount:(data.rows||[]).length,rows:(data.rows||[]).slice(0,100)}}});
-          }
-          await db("UPDATE report_subscriptions SET last_run_at=NOW(),last_delivery_at=CASE WHEN $2 THEN NOW() ELSE last_delivery_at END,last_status=$3 WHERE id=$1",[row.id,matched,matched?"QUEUED":"SKIPPED"]);
-          executed.push({id:row.id,reportId:row.report_id,userId:row.user_id,matched,eventId:event?.event?.id||null,status:matched?"QUEUED":"SKIPPED"});
-        } catch(subscriptionError) {
-          await db("UPDATE report_subscriptions SET last_run_at=NOW(),last_status='FAILED' WHERE id=$1",[row.id]);
-          executed.push({id:row.id,reportId:row.report_id,userId:row.user_id,matched:false,status:"FAILED",error:subscriptionError?.message||"Subscription execution failed"});
-        }
-      }
-      res.json({success:true,data:executed});
-    } catch(error){res.status(500).json({success:false,message:error.message||"Unable to run due subscriptions"});}
+      const jobs=await claimDueReportSubscriptions({db,now:new Date(),companyId:req.user.companyId});
+      res.json({success:true,data:jobs.map((job)=>({id:job.id,kind:job.kind,status:job.status||"PENDING"}))});
+    } catch(error){res.status(500).json({success:false,message:error.message||"Unable to queue due subscriptions"});}
   });
 
   router.get("/reports/custom/:id/export", authenticate, authorize("reports.custom.view"), async (req,res)=>{
@@ -1194,6 +1038,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const report=await reportById(req,req.params.id);
       if(!report)return res.status(404).json({success:false,message:"Custom report not found"});
       const definition=validateCustomReportDefinition(report.definition||{});
+      if(definition.historicalTrend?.enabled===true)return res.status(400).json({success:false,message:"Historical Trending reports do not support export"});
       const exportConfig=normalizeReportExport({view:req.query.view,format:req.query.format},definition.format||"tabular");
       const data=await executeCustomDefinition(req,definition);
       const payload={report:{id:report.id,name:report.name,description:report.description,format:definition.format||"tabular"},columns:data.columns||[],rows:data.rows||[],totals:data.totals||{},groups:data.groups||[],rowGroups:data.rowGroups||definition.rowGroups||[],columnGroups:data.columnGroups||definition.columnGroups||[],filters:definition.filters||[]};
@@ -1207,10 +1052,9 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     try {
       const report=await reportById(req,req.params.id);
       if(!report)return res.status(404).json({success:false,message:"Custom report not found"});
-      const trend=normalizeHistoricalTrend(req.query?.trend?JSON.parse(String(req.query.trend)):{});
-      const result=await db("SELECT id,captured_at,period_key,summary,row_count FROM report_snapshots WHERE report_id=$1 AND company_id=$2 ORDER BY captured_at DESC LIMIT 50",[req.params.id,req.user.companyId]);
-      const snapshots=trend.snapshotDates.length?result.rows.filter((snapshot)=>trend.snapshotDates.includes(String(snapshot.period_key||snapshot.captured_at))).slice(0,5):result.rows.slice(0,5);
-      res.json({success:true,data:{trend,snapshots}});
+      const requestedTrend=req.query?.trend?normalizeHistoricalTrend(JSON.parse(String(req.query.trend))):normalizeHistoricalTrend(report.definition?.historicalTrend||{});
+      const data=await executeCustomDefinition(req,{...(report.definition||{}),historicalTrend:requestedTrend});
+      res.json({success:true,data});
     } catch(error){res.status(400).json({success:false,message:error.message||"Unable to compare historical report data"});}
   });
 
@@ -1238,6 +1082,18 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       if(reportDefinition.format==="joined")return res.status(400).json({success:false,message:"Joined reports do not support subscriptions"});
       if(reportDefinition.historicalTrend?.enabled===true)return res.status(400).json({success:false,message:"Historical trend reports do not support subscriptions"});
       const definition=normalizeSubscription(req.body);
+      const executionUser=await loadReportSubscriptionExecutionUser(db,{companyId:req.user.companyId,ownerUserId:req.user.id,runAsUserId:definition.runAsUserId});
+      const executionReq=Object.create(req);
+      executionReq.user={...req.user,id:executionUser.id,companyId:executionUser.company_id,roleId:executionUser.role_id,username:executionUser.username,full_name:executionUser.full_name};
+      if(hasSystemPermission&&!(await hasSystemPermission(executionReq,"reports.custom.view")))return res.status(400).json({success:false,message:"Running user does not have reports.custom.view"});
+      if(!(await reportById(executionReq,req.params.id)))return res.status(400).json({success:false,message:"Running user cannot access this report"});
+      const resolvedRecipients=await resolveReportSubscriptionRecipients(db,{companyId:req.user.companyId,principals:definition.recipientPrincipals});
+      for(const recipient of resolvedRecipients){
+        const recipientReq=Object.create(req);
+        recipientReq.user={...req.user,id:recipient.id,companyId:recipient.company_id,roleId:recipient.role_id,username:recipient.username,full_name:recipient.full_name};
+        if(hasSystemPermission&&!(await hasSystemPermission(recipientReq,"reports.custom.view")))return res.status(400).json({success:false,message:"One or more recipients do not have reports.custom.view"});
+        if(!(await reportById(recipientReq,req.params.id)))return res.status(400).json({success:false,message:"One or more recipients cannot access this report"});
+      }
       const result=await db("INSERT INTO report_subscriptions(company_id,report_id,user_id,definition,active) VALUES($1,$2,$3,$4::jsonb,$5) RETURNING *",[req.user.companyId,req.params.id,req.user.id,JSON.stringify(definition),definition.active]);
       res.status(201).json({success:true,data:result.rows[0]});
     } catch(error){res.status(400).json({success:false,message:error.message||"Unable to create subscription"});}
@@ -1332,7 +1188,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const data=await executeCustomDefinition(req,definition);
       await recordReportView(req,req.params.id);
       const normalized=validateCustomReportDefinition(definition);
-      if(normalized.snapshot===true||normalized.historicalTrend?.enabled===true){
+      if(normalized.snapshot===true&&normalized.historicalTrend?.enabled!==true){
         await db("INSERT INTO report_snapshots(company_id,report_id,period_key,summary,row_count) VALUES($1,$2,$3,$4::jsonb,$5)",
           [req.user.companyId,req.params.id,String(normalized.snapshotPeriod||new Date().toISOString().slice(0,10)),JSON.stringify(data.totals||{}),(data.rows||[]).length]);
       }

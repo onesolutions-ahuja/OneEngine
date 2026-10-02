@@ -1131,7 +1131,24 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           CREATE INDEX IF NOT EXISTS idx_report_subscriptions_due
             ON report_subscriptions(company_id, active, updated_at);
 
-          CREATE TABLE IF NOT EXISTS report_snapshots (
+          CREATE TABLE IF NOT EXISTS report_subscription_deliveries (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+              subscription_id UUID NOT NULL REFERENCES report_subscriptions(id) ON DELETE CASCADE,
+              occurrence_key VARCHAR(80) NOT NULL,
+              recipient_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              channel VARCHAR(20) NOT NULL CHECK (channel IN ('IN_APP','EMAIL')),
+              status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+              last_error VARCHAR(1000),
+              delivered_at TIMESTAMPTZ,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE(subscription_id, occurrence_key, recipient_user_id, channel)
+          );
+          CREATE INDEX IF NOT EXISTS idx_report_subscription_deliveries_status
+          ON report_subscription_deliveries(company_id, status, updated_at);
+          
+                    CREATE TABLE IF NOT EXISTS report_snapshots (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
             report_id UUID NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,

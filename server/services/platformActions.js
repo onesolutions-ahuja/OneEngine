@@ -182,6 +182,7 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
             to: recipient,
             subject: renderTemplate(action.subject || template?.subject || "onePOS notification", action.templateContext || {}),
             body,
+            attachments: Array.isArray(action.attachments) ? action.attachments : [],
           })
         : runtime.provider === "smsgate"
           ? await (async()=>{

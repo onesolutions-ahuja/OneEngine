@@ -39,17 +39,56 @@ export function normalizeAccess(input = []) {
 export function normalizeSubscription(input = {}) {
   const cadence = String(input.cadence || "DAILY").toUpperCase();
   const delivery = arr(input.delivery || ["IN_APP"], 2).map((value) => String(value).toUpperCase());
-  const condition = String(input.condition?.type || "ALWAYS").toUpperCase();
   if (!CADENCE.has(cadence)) throw new Error("Invalid subscription cadence");
   if (!delivery.length || delivery.some((value) => !DELIVERY.has(value))) throw new Error("Invalid subscription delivery channel");
-  if (!CONDITION.has(condition)) throw new Error("Invalid subscription condition");
   const hour = Math.min(Math.max(Number(input.hour ?? 8), 0), 23);
   const minute = Math.min(Math.max(Number(input.minute ?? 0), 0), 59);
   const weekday = cadence === "WEEKLY" ? Math.min(Math.max(Number(input.weekday ?? 1), 0), 6) : null;
   const monthday = cadence === "MONTHLY" ? Math.min(Math.max(Number(input.monthday ?? 1), 1), 28) : null;
-  return { active: input.active !== false, cadence, hour, minute, weekday, monthday, timezone: String(input.timezone || "Europe/London").slice(0, 80), delivery,
+
+  const principalRecipients = arr(input.recipientPrincipals || input.recipient_principals, 50).map((item, index) => {
+    const principalType = String(item?.principalType || item?.principal_type || "").toUpperCase();
+    const principalId = String(item?.principalId || item?.principal_id || "").trim();
+    if (!["USER","ROLE","PUBLIC_GROUP"].includes(principalType)) throw new Error(`Invalid subscription recipient type at row ${index + 1}`);
+    if (!principalId) throw new Error(`Missing subscription recipient at row ${index + 1}`);
+    return { principalType, principalId };
+  });
+  const recipientPrincipals = [...new Map(principalRecipients.map((item) => [`${item.principalType}:${item.principalId}`, item])).values()];
+
+  const sourceConditions = Array.isArray(input.conditions) ? input.conditions : input.condition ? [input.condition] : [{ type: "ALWAYS" }];
+  const conditions = arr(sourceConditions, 5).map((entry, index) => {
+    const type = String(entry?.type || "ALWAYS").toUpperCase();
+    if (!CONDITION.has(type)) throw new Error(`Invalid subscription condition at row ${index + 1}`);
+    return { type, field: entry?.field ? String(entry.field) : null, value: entry?.value ?? null };
+  });
+  if (!conditions.length) conditions.push({ type: "ALWAYS", field: null, value: null });
+  if (conditions.some((entry) => entry.type === "ALWAYS") && conditions.length > 1) throw new Error("Always cannot be combined with other subscription conditions");
+
+  const attachmentInput = input.attachment && typeof input.attachment === "object" ? input.attachment : {};
+  const attachment = {
+    enabled: attachmentInput.enabled === true,
+    view: String(attachmentInput.view || "FORMATTED").toUpperCase() === "DETAILS" ? "DETAILS" : "FORMATTED",
+    format: String(attachmentInput.format || "XLSX").toUpperCase() === "CSV" ? "CSV" : "XLSX",
+  };
+  if (attachment.enabled && attachment.view === "FORMATTED") attachment.format = "XLSX";
+  if (attachment.enabled && attachment.view === "DETAILS") attachment.format = "CSV";
+
+  return {
+    active: input.active !== false,
+    cadence,
+    hour,
+    minute,
+    weekday,
+    monthday,
+    timezone: String(input.timezone || "Europe/London").slice(0, 80),
+    delivery,
+    runAsUserId: input.runAsUserId || input.run_as_user_id ? String(input.runAsUserId || input.run_as_user_id) : null,
+    recipientPrincipals,
     recipients: [...new Set(arr(input.recipients, 50).map(String).filter(Boolean))],
-    condition: { type: condition, field: input.condition?.field ? String(input.condition.field) : null, value: input.condition?.value ?? null } };
+    conditions,
+    condition: conditions[0],
+    attachment,
+  };
 }
 
 export function subscriptionIsDue(subscription, now = new Date()) {
@@ -63,18 +102,23 @@ export function subscriptionIsDue(subscription, now = new Date()) {
 }
 
 export function subscriptionConditionMatches(subscription, result = {}) {
-  const condition = subscription?.condition || { type: "ALWAYS" };
-  if (condition.type === "ALWAYS") return true;
-  if (condition.type === "ROW_COUNT_GT") return (result.rows || []).length > Number(condition.value || 0);
-  if (condition.type === "ROW_COUNT_EQ") return (result.rows || []).length === Number(condition.value || 0);
-  const value = result.totals?.[condition.field] ?? result.rows?.[0]?.[condition.field];
-  const left = Number(value), right = Number(condition.value);
-  if (!Number.isFinite(left) || !Number.isFinite(right)) return false;
-  if (condition.type === "VALUE_GT") return left > right;
-  if (condition.type === "VALUE_GTE") return left >= right;
-  if (condition.type === "VALUE_LT") return left < right;
-  if (condition.type === "VALUE_LTE") return left <= right;
-  return false;
+  const conditions = Array.isArray(subscription?.conditions) && subscription.conditions.length
+    ? subscription.conditions
+    : [subscription?.condition || { type: "ALWAYS" }];
+  const matches = (condition) => {
+    if (condition.type === "ALWAYS") return true;
+    if (condition.type === "ROW_COUNT_GT") return (result.rows || []).length > Number(condition.value || 0);
+    if (condition.type === "ROW_COUNT_EQ") return (result.rows || []).length === Number(condition.value || 0);
+    const value = result.totals?.[condition.field] ?? result.rows?.[0]?.[condition.field];
+    const left = Number(value), right = Number(condition.value);
+    if (!Number.isFinite(left) || !Number.isFinite(right)) return false;
+    if (condition.type === "VALUE_GT") return left > right;
+    if (condition.type === "VALUE_GTE") return left >= right;
+    if (condition.type === "VALUE_LT") return left < right;
+    if (condition.type === "VALUE_LTE") return left <= right;
+    return false;
+  };
+  return conditions.slice(0, 5).every(matches);
 }
 
 export function normalizeDashboardGlobalFilters(filters = []) {

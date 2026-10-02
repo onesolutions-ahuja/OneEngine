@@ -128,7 +128,15 @@ export const platformSchema = `
   ALTER TABLE IF EXISTS platform_message_templates ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE;
   UPDATE platform_objects SET api_name=object_key WHERE api_name IS NULL;
   CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_objects_company_api_name ON platform_objects(company_id, api_name) WHERE company_id IS NOT NULL;
-  CREATE TABLE IF NOT EXISTS platform_fields (
+  CREATE TABLE IF NOT EXISTS platform_object_settings (
+      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
+      config JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (company_id, object_id)
+  );
+    CREATE TABLE IF NOT EXISTS platform_fields (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
     api_name VARCHAR(100) NOT NULL,

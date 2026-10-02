@@ -205,7 +205,7 @@ export async function sendSmsViaProvider({ endpoint, apiKey, authScheme, senderI
 }
 
 /** POST the email payload. Returns { ok, httpStatus, reference?, errorText? }. */
-export async function sendEmailViaProvider({ endpoint, apiKey, authScheme, from, to, subject, body }) {
+export async function sendEmailViaProvider({ endpoint, apiKey, authScheme, from, to, subject, body, attachments = [] }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
   try {
@@ -214,7 +214,7 @@ export async function sendEmailViaProvider({ endpoint, apiKey, authScheme, from,
     const response = await fetch(endpoint, {
       method: "POST",
       headers,
-      body: JSON.stringify({ from, to, subject, text: body }),
+      body: JSON.stringify({ from, to, subject, text: body, ...(attachments.length ? { attachments } : {}) }),
       signal: controller.signal,
     });
     const respBody = await response.json().catch(() => ({}));

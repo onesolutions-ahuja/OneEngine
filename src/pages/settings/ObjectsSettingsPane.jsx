@@ -125,6 +125,8 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
     allowReports: true,
     allowSearch: true,
     trackHistory: true,
+    historicalTrendingEnabled: false,
+    historicalTrendingFields: [],
   })
 
   useEffect(() => {
@@ -435,6 +437,8 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
       allowReports: true,
       allowSearch: true,
       trackHistory: true,
+      historicalTrendingEnabled: false,
+      historicalTrendingFields: [],
     })
   }
 
@@ -452,6 +456,8 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
       allowReports: selected.config?.allowReports !== false,
       allowSearch: selected.config?.allowSearch !== false,
       trackHistory: selected.config?.trackHistory !== false,
+      historicalTrendingEnabled: selected.config?.historicalTrending?.enabled === true,
+      historicalTrendingFields: Array.isArray(selected.config?.historicalTrending?.fields) ? selected.config.historicalTrending.fields : [],
     })
   }
 
@@ -461,10 +467,10 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
     setError('')
     try {
       const creating = objectModal === 'create'
-      const response = await apiRequest(
-        creating ? '/api/platform/objects' : `/api/platform/objects/${encodeURIComponent(selectedId)}`,
-        {
-          method: creating ? 'POST' : 'PUT',
+      let response = null
+      if (creating) {
+        response = await apiRequest('/api/platform/objects', {
+          method: 'POST',
           body: JSON.stringify({
             label: objectForm.label,
             pluralLabel: objectForm.pluralLabel || undefined,
@@ -477,9 +483,37 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
             allowSearch: objectForm.allowSearch,
             trackHistory: objectForm.trackHistory,
           }),
-        },
-      )
-      const saved = response?.data || null
+        })
+      } else {
+        if (selected?.company_id !== null) {
+          response = await apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              label: objectForm.label,
+              pluralLabel: objectForm.pluralLabel || undefined,
+              objectKey: objectForm.objectKey || undefined,
+              apiName: objectForm.apiName || undefined,
+              description: objectForm.description || undefined,
+              sourceTable: objectForm.sourceTable || null,
+              active: objectForm.active,
+              allowReports: objectForm.allowReports,
+              allowSearch: objectForm.allowSearch,
+              trackHistory: objectForm.trackHistory,
+            }),
+          })
+        }
+        const settingsResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/settings`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            historicalTrending: {
+              enabled: objectForm.historicalTrendingEnabled === true,
+              fields: objectForm.historicalTrendingEnabled ? objectForm.historicalTrendingFields.slice(0, 8) : [],
+            },
+          }),
+        })
+        response = response || settingsResponse
+      }
+      const saved = response?.data || selected
       await refreshObjects(saved ? objectKey(saved) : objectKey(selected))
       setObjectModal(null)
     } catch (err) {
@@ -1055,7 +1089,18 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                 <label className="record-dialog-checkbox"><input type="checkbox" checked={objectForm.allowReports} onChange={(event) => setObjectForm((current) => ({ ...current, allowReports: event.target.checked }))}/><span><strong>Available for reports</strong><small>Expose this object to OneEngine report definitions.</small></span></label>
                 <label className="record-dialog-checkbox"><input type="checkbox" checked={objectForm.allowSearch} onChange={(event) => setObjectForm((current) => ({ ...current, allowSearch: event.target.checked }))}/><span><strong>Allow global search</strong><small>Include records from this object in Platform search.</small></span></label>
                 <label className="record-dialog-checkbox"><input type="checkbox" checked={objectForm.trackHistory} onChange={(event) => setObjectForm((current) => ({ ...current, trackHistory: event.target.checked }))}/><span><strong>Enable field history</strong><small>Field-level Track History selections only write history while this is enabled.</small></span></label>
+                <label className="record-dialog-checkbox"><input type="checkbox" disabled={objectModal === 'create'} checked={objectForm.historicalTrendingEnabled === true} onChange={(event) => setObjectForm((current) => ({ ...current, historicalTrendingEnabled: event.target.checked, historicalTrendingFields: event.target.checked ? current.historicalTrendingFields : [] }))}/><span><strong>Historical Trending</strong><small>{objectModal === 'create' ? 'Create the object first, then select up to 8 historical fields.' : 'Track reportable historical values for up to 8 eligible fields.'}</small></span></label>
               </div>
+              {objectModal === 'edit' && objectForm.historicalTrendingEnabled ? <div className="record-dialog-feature-grid">
+                <div style={{gridColumn:'1 / -1'}}><strong>Historical fields</strong><small style={{display:'block'}}>Choose up to 8 Number, Currency, Date, Picklist or Lookup fields. Selected fields are captured automatically even if their ordinary Track History checkbox is off.</small></div>
+                {fields.filter((field) => ['number','decimal','currency','date','picklist','select','lookup'].includes(String(field.field_type || field.type || '').toLowerCase()) && field.active !== false).map((field) => {
+                  const key = field.api_name || field.apiName
+                  const selectedField = objectForm.historicalTrendingFields.includes(key)
+                  const limitReached = !selectedField && objectForm.historicalTrendingFields.length >= 8
+                  return <label key={field.id || key} className="record-dialog-checkbox"><input type="checkbox" checked={selectedField} disabled={limitReached} onChange={(event) => setObjectForm((current) => ({ ...current, historicalTrendingFields: event.target.checked ? [...new Set([...current.historicalTrendingFields, key])].slice(0, 8) : current.historicalTrendingFields.filter((item) => item !== key) }))}/><span><strong>{field.label || key}</strong><small>{key} · {field.field_type || field.type}</small></span></label>
+                })}
+                <div style={{gridColumn:'1 / -1'}}><small>{objectForm.historicalTrendingFields.length}/8 selected</small></div>
+              </div> : null}
             </div>
             <div className="record-dialog-footer">
               <button type="button" className="record-dialog-secondary" onClick={() => setObjectModal(null)}>Cancel</button>

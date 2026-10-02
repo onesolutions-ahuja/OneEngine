@@ -78,6 +78,30 @@ function validLayoutInput(body) {
     && PAGE_TYPES.has(pageType) && body.definition && Array.isArray(body.definition.components);
 }
 
+const HISTORICAL_TREND_FIELD_TYPES = new Set(["number","decimal","currency","date","picklist","select","lookup"]);
+
+async function normalizeHistoricalTrendingConfig(db, objectId, companyId, input) {
+  if (input === undefined) return undefined;
+  const enabled = input?.enabled === true;
+  const requested = [...new Set((Array.isArray(input?.fields) ? input.fields : []).map((value) => String(value).trim()).filter(Boolean))];
+  if (requested.length > 8) throw Object.assign(new Error("Historical Trending supports up to 8 fields per object"), { status: 400 });
+  if (!enabled) return { enabled: false, fields: [] };
+  if (!objectId) {
+    if (requested.length) throw Object.assign(new Error("Historical fields can be selected after the object is created"), { status: 400 });
+    return { enabled: true, fields: [] };
+  }
+  const result = requested.length ? await db(
+    "SELECT api_name,field_type FROM platform_fields WHERE object_id=$1 AND active=true AND api_name=ANY($2::text[]) AND (company_id IS NULL OR company_id=$3)",
+    [objectId, requested, companyId]
+  ) : { rows: [] };
+  if (result.rows.length !== requested.length) throw Object.assign(new Error("One or more Historical Trending fields are unavailable"), { status: 400 });
+  const byKey = new Map(result.rows.map((field) => [String(field.api_name), String(field.field_type || "").toLowerCase()]));
+  for (const key of requested) {
+    if (!HISTORICAL_TREND_FIELD_TYPES.has(byKey.get(key))) throw Object.assign(new Error(`Field ${key} is not eligible for Historical Trending`), { status: 400 });
+  }
+  return { enabled: true, fields: requested };
+}
+
 async function validateLayoutRole(db, roleId, req) {
   if (!roleId) return true;
   const result = await db("SELECT id FROM roles WHERE id=$1 AND company_id=$2", [roleId, req.user.companyId]);
@@ -1108,7 +1132,10 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   async function getObject(objectId, req, { forMutation = false, includeInactive = false } = {}) {
     const result = await db(
-      `SELECT * FROM platform_objects WHERE id=$1 AND ${includeInactive ? "TRUE" : "active=true"} AND (company_id IS NULL OR company_id=$2)`,
+      `SELECT o.*, COALESCE(o.config,'{}'::jsonb) || COALESCE(s.config,'{}'::jsonb) AS config
+         FROM platform_objects o
+         LEFT JOIN platform_object_settings s ON s.object_id=o.id AND s.company_id=$2
+        WHERE o.id=$1 AND ${includeInactive ? "TRUE" : "o.active=true"} AND (o.company_id IS NULL OR o.company_id=$2)`,
       [objectId, req.user.companyId]
     );
     const object = result.rows[0];
@@ -1620,7 +1647,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   router.get("/platform/objects", ...manage, async (req, res) => {
     const scope = visibilityClause("o", req);
-    const result = await db(`SELECT * FROM platform_objects o WHERE ${scope.sql} ORDER BY o.label`, scope.params);
+    const result = await db(`SELECT o.*, COALESCE(o.config,'{}'::jsonb) || COALESCE(s.config,'{}'::jsonb) AS config FROM platform_objects o LEFT JOIN platform_object_settings s ON s.object_id=o.id AND s.company_id=$1 WHERE ${scope.sql} ORDER BY o.label`, scope.params);
     res.json({ success: true, data: result.rows });
   });
 
@@ -2172,8 +2199,10 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         const module = await db("SELECT id FROM platform_modules WHERE id=$1", [moduleId]);
         if (!module.rows.length) return res.status(400).json({ success: false, message: "Module not found" });
       }
+      const rawObjectConfig = req.body?.config && typeof req.body.config === "object" && !Array.isArray(req.body.config) ? req.body.config : {};
+      const { historicalTrending: _tenantHistoricalTrending, ...baseObjectConfig } = rawObjectConfig;
       const objectConfig = {
-        ...(req.body?.config && typeof req.body.config === "object" && !Array.isArray(req.body.config) ? req.body.config : {}),
+        ...baseObjectConfig,
         allowReports: req.body?.allowReports !== false,
         allowSearch: req.body?.allowSearch !== false,
         trackHistory: req.body?.trackHistory !== false,
@@ -2199,6 +2228,28 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     }
   });
 
+  router.put("/platform/objects/:objectId/settings", ...manage, async (req, res) => {
+    const object = await getObject(req.params.objectId, req, { includeInactive: true });
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    try {
+      const historicalTrending = await normalizeHistoricalTrendingConfig(db, object.id, req.user.companyId, req.body?.historicalTrending);
+      if (historicalTrending === undefined) return res.status(400).json({ success: false, message: "Historical Trending settings are required" });
+      if (historicalTrending.enabled === true) historicalTrending.enabledAt = object?.config?.historicalTrending?.enabled === true && object.config.historicalTrending.enabledAt ? object.config.historicalTrending.enabledAt : new Date().toISOString();
+      const result = await db(
+        `INSERT INTO platform_object_settings(company_id,object_id,config,updated_at)
+         VALUES($1,$2,$3::jsonb,NOW())
+         ON CONFLICT(company_id,object_id)
+         DO UPDATE SET config=COALESCE(platform_object_settings.config,'{}'::jsonb) || EXCLUDED.config,updated_at=NOW()
+         RETURNING *`,
+        [req.user.companyId, object.id, JSON.stringify({ historicalTrending })]
+      );
+      res.json({ success: true, data: { ...object, config: { ...(object.config || {}), historicalTrending }, settings: result.rows[0] } });
+    } catch (error) {
+      const status = Number(error?.status || 400);
+      res.status(status).json({ success: false, message: error.message || "Unable to save object settings" });
+    }
+  });
+
   router.put("/platform/objects/:objectId", ...manage, async (req, res) => {
     const object = await getObject(req.params.objectId, req, { forMutation: true, includeInactive: true });
     if (!object) return res.status(404).json({ success: false, message: "Object not found or not editable" });
@@ -2211,10 +2262,13 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         const blockers = await objectDeactivationBlockers(db, object, req.user.companyId);
         if (blockers.length) return res.status(409).json({ success: false, code: "OBJECT_IN_USE", message: `Object cannot be deactivated while active dependencies remain: ${blockers.join(", ")}` });
       }
-      const currentConfig = object.config && typeof object.config === "object" && !Array.isArray(object.config) ? object.config : {};
+      const mergedCurrentConfig = object.config && typeof object.config === "object" && !Array.isArray(object.config) ? object.config : {};
+      const { historicalTrending: _tenantHistoricalTrending, ...currentConfig } = mergedCurrentConfig;
+      const rawRequestConfig = req.body?.config && typeof req.body.config === "object" && !Array.isArray(req.body.config) ? req.body.config : {};
+      const { historicalTrending: _ignoredHistoricalTrending, ...requestConfig } = rawRequestConfig;
       const nextConfig = {
         ...currentConfig,
-        ...(req.body?.config && typeof req.body.config === "object" && !Array.isArray(req.body.config) ? req.body.config : {}),
+        ...requestConfig,
         ...(req.body.allowReports === undefined ? {} : { allowReports: req.body.allowReports === true }),
         ...(req.body.allowSearch === undefined ? {} : { allowSearch: req.body.allowSearch === true }),
         ...(req.body.trackHistory === undefined ? {} : { trackHistory: req.body.trackHistory === true }),
@@ -7973,9 +8027,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   }
 
   async function writeRecordHistory(object, recordId, fields, oldRecord, newRecord, action, req) {
+    const trendingFields = new Set(object?.config?.historicalTrending?.enabled === true && Array.isArray(object?.config?.historicalTrending?.fields) ? object.config.historicalTrending.fields.map(String) : []);
     const changes = fields.filter((field) => {
       const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
-      if (!field.api_name || config.trackHistory === false || config.track_history === false) return false;
+      if (!field.api_name) return false;
+      if (!trendingFields.has(String(field.api_name)) && (config.trackHistory === false || config.track_history === false)) return false;
       return action !== "update" ||
         JSON.stringify(oldRecord?.[field.api_name] ?? null) !== JSON.stringify(newRecord?.[field.api_name] ?? null);
     });

@@ -58,9 +58,7 @@ export function normalizeHistoricalTrend(input = {}) {
     field: String(filter?.field || ""),
     operator: String(filter?.operator || "equals"),
     value: filter?.value ?? null,
-    snapshotMode: ["ANY", "ALL", "SPECIFIC"].includes(String(filter?.snapshotMode || "").toUpperCase())
-      ? String(filter.snapshotMode).toUpperCase()
-      : "SPECIFIC",
+    snapshotMode: ["ANY", "ALL"].includes(String(filter?.snapshotMode || "").toUpperCase()) ? "ANY" : "SPECIFIC",
     snapshotDate: filter?.snapshotDate ? String(filter.snapshotDate) : null,
   })).filter((filter) => filter.field);
   return {
@@ -68,17 +66,6 @@ export function normalizeHistoricalTrend(input = {}) {
     snapshotDates,
     historicalFilters,
   };
-}
-
-export function selectHistoricalSnapshots(allSnapshots = [], trend = {}) {
-  const normalized = normalizeHistoricalTrend(trend);
-  if (!normalized.enabled) return [];
-  if (!normalized.snapshotDates.length) return allSnapshots.slice(0, 5);
-  const wanted = new Set(normalized.snapshotDates);
-  return allSnapshots.filter((snapshot) => {
-    const key = String(snapshot.period_key || snapshot.snapshot_date || snapshot.captured_at || "");
-    return wanted.has(key);
-  }).slice(0, 5);
 }
 
 export function normalizeReportExport(input = {}, reportFormat = "tabular") {

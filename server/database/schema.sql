@@ -479,6 +479,23 @@ CREATE TABLE IF NOT EXISTS report_subscriptions (
 );
 CREATE INDEX IF NOT EXISTS idx_report_subscriptions_due ON report_subscriptions(company_id, active, updated_at);
 
+CREATE TABLE IF NOT EXISTS report_subscription_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    subscription_id UUID NOT NULL REFERENCES report_subscriptions(id) ON DELETE CASCADE,
+    occurrence_key VARCHAR(80) NOT NULL,
+    recipient_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    channel VARCHAR(20) NOT NULL CHECK (channel IN ('IN_APP','EMAIL')),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    last_error VARCHAR(1000),
+    delivered_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(subscription_id, occurrence_key, recipient_user_id, channel)
+);
+CREATE INDEX IF NOT EXISTS idx_report_subscription_deliveries_status
+ON report_subscription_deliveries(company_id, status, updated_at);
+
 CREATE TABLE IF NOT EXISTS report_snapshots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -2870,6 +2887,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_objects_company_api_name
 
 CREATE INDEX IF NOT EXISTS idx_platform_objects_package ON platform_objects(package_id);
 
+CREATE TABLE IF NOT EXISTS platform_object_settings (
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
+    config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (company_id, object_id)
+);
 CREATE TABLE IF NOT EXISTS platform_fields (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
