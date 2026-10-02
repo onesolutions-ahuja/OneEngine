@@ -13,6 +13,7 @@ const routes = [
   "reports",
   "settings/security-identity",
   "settings/mfa-administration",
+  "settings/identity-verification-history",
   "developer/objects",
   "developer/workflow-builder",
   "developer/approval-builder",
@@ -193,5 +194,12 @@ test("phase-two identity assurance controls are available", async ({ page }) => 
   await expect(page.getByText("Reports and dashboards",{exact:true})).toBeVisible();
   await expect(page.getByText("Manage authentication providers",{exact:true})).toBeVisible();
   await expect(page.getByText("Unlock users and reset passwords",{exact:true})).toBeVisible();
+  await expect(page.getByText("Manage login access policies",{exact:true})).toBeVisible();
+  await expect(page.getByText("Manage password policies",{exact:true})).toBeVisible();
+  await expect(page.getByText("Manage permission sets and profiles",{exact:true})).toBeVisible();
+  await page.getByRole("tab",{name:"Authentication Providers"}).click();
+  await expect(page.getByText("Discovery URL",{exact:true})).toBeVisible();
+  await expect(page.getByText("Issuer",{exact:true})).toBeVisible();
+  await expect(page.getByText("JWKS URI",{exact:true})).toBeVisible();
   expect(failures,failures.join("\n")).toEqual([]);
 });
