@@ -126,6 +126,59 @@ function formatValue(value, field) {
   return formatRecordDisplayValue(value, field);
 }
 
+function ObjectKanban({ records, fields, onSelect, onMove, canEdit }) {
+  const groupField = fields.find((field) => ["select", "picklist"].includes(field?.field_type));
+  if (!groupField) {
+    return <div className="platform-object-empty compact"><strong>Kanban needs a picklist field</strong><span>Add or expose a picklist field to group records into columns.</span></div>;
+  }
+  const key = getFieldKey(groupField);
+  const options = Array.isArray(groupField.options) ? groupField.options : [];
+  const groups = options.length
+    ? options.map((option) => ({ value: typeof option === "object" ? option.value ?? option.key ?? option.label : option, label: typeof option === "object" ? option.label ?? option.name ?? option.value : option }))
+    : [...new Set(records.map((record) => record?.[key]).filter((value) => value !== null && value !== undefined && value !== ""))].map((value) => ({ value, label: value }));
+  const titleField = fields.find((field) => !["boolean", "formula", "rollup"].includes(field?.field_type)) || fields[0];
+
+  return (
+    <div className="platform-kanban">
+      {groups.map((group) => {
+        const cards = records.filter((record) => String(record?.[key] ?? "") === String(group.value ?? ""));
+        return (
+          <section
+            className="platform-kanban-column"
+            key={String(group.value)}
+            onDragOver={(event) => { if (canEdit) event.preventDefault(); }}
+            onDrop={(event) => {
+              if (!canEdit || !onMove) return;
+              event.preventDefault();
+              const recordId = event.dataTransfer.getData("text/plain");
+              const record = records.find((item) => String(item?.id || item?.record_id) === String(recordId));
+              if (record) onMove(record, groupField, group.value);
+            }}
+          >
+            <header><strong>{String(group.label)}</strong><span>{cards.length}</span></header>
+            <div className="platform-kanban-cards">
+              {cards.map((record) => (
+                <button
+                  type="button"
+                  draggable={canEdit}
+                  key={record.id || record.record_id}
+                  className="platform-kanban-card"
+                  onDragStart={(event) => event.dataTransfer.setData("text/plain", String(record.id || record.record_id))}
+                  onClick={() => onSelect?.(record)}
+                >
+                  <strong>{formatRecordDisplayValue(getFieldValue(record, titleField), titleField)}</strong>
+                  <span>{getFieldLabel(groupField)} · {String(group.label)}</span>
+                </button>
+              ))}
+              {!cards.length ? <div className="platform-kanban-empty">No records</div> : null}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ObjectPage({
   objectKey,
   objectId,
@@ -727,7 +780,7 @@ export default function ObjectPage({
       ) : null}
 
 
-      <div className={`platform-object-layout ${displayMode === "table" ? "platform-object-layout-table" : ""}`}>
+      <div className={`platform-object-layout ${displayMode !== "split" ? "platform-object-layout-table" : ""}`}>
         <section className="platform-object-records">
           <div className="platform-section-header">
             <div className="platform-list-view-heading">
@@ -749,6 +802,7 @@ export default function ObjectPage({
                 <div className="platform-list-mode" role="group" aria-label="Record display">
                   <button type="button" className={displayMode === "table" ? "active" : ""} onClick={() => setDisplayMode("table")}>Table</button>
                   <button type="button" className={displayMode === "split" ? "active" : ""} onClick={() => setDisplayMode("split")}>Split</button>
+                  {activeFields.some((field) => ["select", "picklist"].includes(field?.field_type)) ? <button type="button" className={displayMode === "kanban" ? "active" : ""} onClick={() => setDisplayMode("kanban")}>Kanban</button> : null}
                 </div>
               ) : null}
             </div>
@@ -782,54 +836,65 @@ export default function ObjectPage({
             </RecordModal>
           ) : null}
 
-          <RecordListView
-            title={objectLabel}
-            subtitle={() => activeListViewId ? (listViews.find((view) => String(view.id) === String(activeListViewId))?.description || "Saved list view") : "All records"}
-            rows={records}
-            columns={(activeListViewId && listViews.find((view) => String(view.id) === String(activeListViewId))?.columns?.length
-              ? listViews.find((view) => String(view.id) === String(activeListViewId)).columns
-                  .map((key) => activeFields.find((field) => getFieldKey(field) === key))
-                  .filter(Boolean)
-              : activeFields
-            ).map((field) => ({
-              key: getFieldKey(field),
-              label: getFieldLabel(field),
-              render: (row) => formatRecordDisplayValue(getFieldValue(row, field), field),
-              editable: canWriteRecords && field.writable !== false && !["formula", "rollup", "lookup"].includes(field.field_type),
-              editorType: ["select", "picklist"].includes(field.field_type) ? "select"
-                : field.field_type === "boolean" ? "boolean"
-                : ["number", "decimal", "currency"].includes(field.field_type) ? "number"
-                : field.field_type === "date" ? "date"
-                : field.field_type === "datetime" ? "datetime"
-                : "text",
-              options: field.options || [],
-            }))}
-            searchKeys={activeFields.map(getFieldKey)}
-            searchValue={search}
-            onSearchChange={(value) => setSearch(value)}
-            createLabel="New Record"
-            canCreate={canWriteRecords}
-            canEdit={canWriteRecords}
-            onCreate={() => setRecordModal({ type: "create" })}
-            onEdit={(record) => { setSelectedRecord(record); setRecordModal({ type: "edit" }); }}
-            onInlineEdit={canWriteRecords ? inlineEditRecord : undefined}
-            loading={recordsLoading}
-            error={error}
-            emptyText="No matching records."
-            objectKey={resolvedObjectKey}
-            objectLabel={objectLabel}
-            onDataChanged={loadRecords}
-            selectedRowId={selectedRecord?.id || selectedRecord?.record_id || null}
-            onRowSelect={(record) => handleRecordSelect(record)}
-            selectable={canWriteRecords}
-            selectedRowIds={selectedRowIds}
-            onSelectionChange={setSelectedRowIds}
-            bulkActions={canWriteRecords ? [{ key: "delete", label: "Delete", onClick: deleteSelectedRecords }] : []}
-            page={page}
-            pageSize={pageSize}
-            total={recordTotal}
-            onPageChange={(nextPage) => setPage(nextPage)}
-          />
+          {displayMode === "kanban" ? (
+            <ObjectKanban
+              records={records}
+              fields={activeFields}
+              canEdit={canWriteRecords}
+              onSelect={handleRecordSelect}
+              onMove={(record, field, value) => inlineEditRecord(record, { key: getFieldKey(field) }, value)}
+            />
+          ) : (
+                      <RecordListView
+                        title={objectLabel}
+                        subtitle={() => activeListViewId ? (listViews.find((view) => String(view.id) === String(activeListViewId))?.description || "Saved list view") : "All records"}
+                        rows={records}
+                        columns={(activeListViewId && listViews.find((view) => String(view.id) === String(activeListViewId))?.columns?.length
+                          ? listViews.find((view) => String(view.id) === String(activeListViewId)).columns
+                              .map((key) => activeFields.find((field) => getFieldKey(field) === key))
+                              .filter(Boolean)
+                          : activeFields
+                        ).map((field) => ({
+                          key: getFieldKey(field),
+                          label: getFieldLabel(field),
+                          render: (row) => formatRecordDisplayValue(getFieldValue(row, field), field),
+                          editable: canWriteRecords && field.writable !== false && !["formula", "rollup", "lookup"].includes(field.field_type),
+                          editorType: ["select", "picklist"].includes(field.field_type) ? "select"
+                            : field.field_type === "boolean" ? "boolean"
+                            : ["number", "decimal", "currency"].includes(field.field_type) ? "number"
+                            : field.field_type === "date" ? "date"
+                            : field.field_type === "datetime" ? "datetime"
+                            : "text",
+                          options: field.options || [],
+                        }))}
+                        searchKeys={activeFields.map(getFieldKey)}
+                        searchValue={search}
+                        onSearchChange={(value) => setSearch(value)}
+                        createLabel="New Record"
+                        canCreate={canWriteRecords}
+                        canEdit={canWriteRecords}
+                        onCreate={() => setRecordModal({ type: "create" })}
+                        onEdit={(record) => { setSelectedRecord(record); setRecordModal({ type: "edit" }); }}
+                        onInlineEdit={canWriteRecords ? inlineEditRecord : undefined}
+                        loading={recordsLoading}
+                        error={error}
+                        emptyText="No matching records."
+                        objectKey={resolvedObjectKey}
+                        objectLabel={objectLabel}
+                        onDataChanged={loadRecords}
+                        selectedRowId={selectedRecord?.id || selectedRecord?.record_id || null}
+                        onRowSelect={(record) => handleRecordSelect(record)}
+                        selectable={canWriteRecords}
+                        selectedRowIds={selectedRowIds}
+                        onSelectionChange={setSelectedRowIds}
+                        bulkActions={canWriteRecords ? [{ key: "delete", label: "Delete", onClick: deleteSelectedRecords }] : []}
+                        page={page}
+                        pageSize={pageSize}
+                        total={recordTotal}
+                        onPageChange={(nextPage) => setPage(nextPage)}
+                      />
+            
+          )}
           {canWriteRecords ? (
             <div className="platform-quick-create-row">
               <button type="button" className="platform-secondary-button" onClick={() => setRecordModal({ type: "quick_create" })}>Quick Create</button>
@@ -837,7 +902,7 @@ export default function ObjectPage({
           ) : null}
         </section>
 
-        <aside className={`platform-object-detail ${displayMode === "table" ? "platform-object-detail-hidden" : ""}`}>
+        <aside className={`platform-object-detail ${displayMode !== "split" ? "platform-object-detail-hidden" : ""}`}>
           <div className="platform-section-header">
             <div>
               <h3>Record</h3>
@@ -913,12 +978,23 @@ export default function ObjectPage({
                     </div>
                     {related?.loading ? <span>Loading related records...</span> : null}
                     {related?.error ? <span className="platform-field-error">{related.error}</span> : null}
-                    {!related?.loading && !related?.error && (related?.records || []).map((record, index) => (
-                      <button type="button" className="platform-related-record-row" key={record.id || index} onClick={() => onSelectRecord?.(record, related.relationship?.child_object_key)}>
-                        {(columns || []).map((field) => `${getFieldLabel(field)}: ${formatValue(getFieldValue(record, field), field)}`).join(" · ")}
-                      </button>
-                    ))}
-                    {!related?.loading && !related?.error && related && !related.records.length ? <span>No related records.</span> : null}
+                    {!related?.loading && !related?.error ? (
+                      <RecordListView
+                        title={component.label || component.relationship_key}
+                        rows={related?.records || []}
+                        columns={(columns || []).map((field) => ({
+                          key: getFieldKey(field),
+                          label: getFieldLabel(field),
+                          render: (row) => formatValue(getFieldValue(row, field), field),
+                        }))}
+                        searchKeys={(columns || []).map(getFieldKey)}
+                        canCreate={false}
+                        canEdit={false}
+                        emptyText="No related records."
+                        selectedRowId={null}
+                        onRowSelect={(record) => onSelectRecord?.(record, related.relationship?.child_object_key)}
+                      />
+                    ) : null}
                   </section>
                 );
               })}
@@ -1180,6 +1256,69 @@ export default function ObjectPage({
         .platform-object-layout-table {
           grid-template-columns: minmax(0, 1fr);
         }
+
+        .platform-kanban {
+          display: grid;
+          grid-auto-flow: column;
+          grid-auto-columns: minmax(240px, 1fr);
+          gap: 10px;
+          overflow-x: auto;
+          padding: 12px;
+        }
+
+        .platform-kanban-column {
+          min-width: 0;
+          border: 1px solid var(--border-color, #e2e8f0);
+          border-radius: 10px;
+          background: var(--muted-background, #f8fafc);
+        }
+
+        .platform-kanban-column > header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          padding: 9px 10px;
+          border-bottom: 1px solid var(--border-color, #e2e8f0);
+          font-size: 11px;
+        }
+
+        .platform-kanban-column > header span {
+          display: inline-grid;
+          place-items: center;
+          min-width: 20px;
+          height: 20px;
+          border-radius: 999px;
+          background: var(--card-background, #fff);
+          color: var(--text-secondary, #64748b);
+          font-size: 9px;
+        }
+
+        .platform-kanban-cards {
+          display: flex;
+          min-height: 80px;
+          flex-direction: column;
+          gap: 7px;
+          padding: 8px;
+        }
+
+        .platform-kanban-card {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          border: 1px solid var(--border-color, #e2e8f0);
+          border-radius: 8px;
+          background: var(--card-background, #fff);
+          padding: 9px;
+          color: var(--text-primary, #1f2937);
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .platform-kanban-card strong { font-size: 11px; }
+        .platform-kanban-card span, .platform-kanban-empty { color: var(--text-secondary, #64748b); font-size: 9px; }
+        .platform-kanban-empty { padding: 10px; text-align: center; }
+
 
         .platform-object-detail-hidden {
           display: none;
