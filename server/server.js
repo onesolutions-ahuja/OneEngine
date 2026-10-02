@@ -2525,7 +2525,7 @@ async function startServer() {
             catch { return {}; }
           })();
           const webhookToken = String(secrets.webhookToken || "").trim() || randomBytes(32).toString("hex");
-          const webhookUrl = `${String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || "https://onepos.onrender.com").replace(/\/$/, "")}/api/smsgate/webhook/${row.id}/${webhookToken}`;
+          const webhookUrl = `${String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || "https://oneengine.onrender.com").replace(/\/$/, "")}/api/smsgate/webhook/${row.id}/${webhookToken}`;
 
           const webhook = await configureSmsGateInboundWebhook(
             { ...configuration, ...secrets },
