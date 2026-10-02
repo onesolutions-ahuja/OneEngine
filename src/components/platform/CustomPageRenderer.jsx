@@ -524,13 +524,88 @@ function TreeViewView({ node, builderMode, onRecordClick, data }) {
   );
 }
 
-function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data }) {
+function ProcessPathView({ node, builderMode, data }) {
+  const state = data?.[node.id] || {};
+  const config = node.config || {};
+  const record = state.records?.[0] || null;
+  const statusField = config.statusField || "status";
+  const titleField = config.titleField || "";
+  const stages = Array.isArray(config.stages) ? config.stages.filter(Boolean) : [];
+  const [optimisticStage, setOptimisticStage] = useState("");
+  const [savingStage, setSavingStage] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setOptimisticStage(record?.[statusField] == null ? "" : String(record[statusField]));
+  }, [record?.id, record?.[statusField], statusField]);
+
+  const current = optimisticStage || (record?.[statusField] == null ? "" : String(record[statusField]));
+  const stageList = stages.length ? stages : (current ? [current] : []);
+
+  const changeStage = async (stage) => {
+    if (builderMode || config.allowStageChange !== true || !record?.id || !node.collection?.objectKey || stage === current) return;
+    setSavingStage(stage);
+    setMessage("");
+    try {
+      await apiRequest(
+        `/api/platform/objects/${encodeURIComponent(node.collection.objectKey)}/records/${encodeURIComponent(record.id)}`,
+        { method: "PUT", body: JSON.stringify({ data: { [statusField]: stage } }) },
+      );
+      setOptimisticStage(stage);
+      setMessage("Stage updated.");
+    } catch (error) {
+      setMessage(error?.message || "Unable to update stage.");
+    } finally {
+      setSavingStage("");
+    }
+  };
+
+  if (state.loading) return <div className="cpb-empty">Loading process path…</div>;
+  if (state.error && !record) return <div className="cpb-empty">{state.error}</div>;
+  if (!record && !builderMode) return <div className="cpb-empty">No record available for this path.</div>;
+
+  return (
+    <div className="space-y-3">
+      {titleField && record?.[titleField] ? <div className="text-sm font-semibold" style={{ color: "var(--text-primary,#111827)" }}>{String(record[titleField])}</div> : null}
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto pb-1" role="list" aria-label={node.label || "Process Path"}>
+        {(stageList.length ? stageList : ["Stage 1", "Stage 2", "Stage 3"]).map((stage, index) => {
+          const activeIndex = stageList.indexOf(current);
+          const completed = activeIndex >= 0 && index < activeIndex;
+          const active = String(stage) === String(current);
+          return (
+            <button
+              key={String(stage)}
+              type="button"
+              role="listitem"
+              disabled={builderMode || config.allowStageChange !== true || savingStage !== ""}
+              onClick={() => changeStage(String(stage))}
+              className={`min-w-[120px] flex-1 rounded-lg border px-3 py-2 text-left text-xs ${active ? "font-semibold" : ""}`}
+              style={{
+                borderColor: active ? "var(--primary-color,#176f6a)" : "var(--border-color,#d1d5db)",
+                background: active ? "color-mix(in srgb, var(--primary-color,#176f6a) 10%, white)" : completed ? "var(--muted-background,#f8fafc)" : "var(--card-background,#fff)",
+                color: active ? "var(--primary-color,#176f6a)" : "var(--text-primary,#334155)",
+              }}
+              title={savingStage === String(stage) ? "Updating…" : String(stage)}
+            >
+              <span className="block text-[10px] uppercase tracking-wide" style={{ color: "var(--text-secondary,#64748b)" }}>{index + 1}</span>
+              <span className="block truncate">{String(stage).replaceAll("_", " ")}</span>
+            </button>
+          );
+        })}
+      </div>
+      {message ? <p role="status" className="text-[11px]" style={{ color: message === "Stage updated." ? "var(--primary-color,#176f6a)" : "#b91c1c" }}>{message}</p> : null}
+      {builderMode ? <p className="text-[11px]" style={{ color: "var(--text-secondary,#64748b)" }}>Runtime highlights the current stage from {statusField}.</p> : null}
+    </div>
+  );
+}
+
+function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverride }) {
   const key = node.componentKey;
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
   if (key === "container") {
     return (
       <div className="cpb-container-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, node.columns || 2)}, minmax(0, 1fr))`, gap: (node.spacing || 3) * 4 }}>
-        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={onRecordClick} onButtonClick={onButtonClick} data={data} />)}
+        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={onRecordClick} onButtonClick={onButtonClick} data={data} runtimeOverride={runtimeOverride?.[child.id]} />)}
       </div>
     );
   }
@@ -542,6 +617,9 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   }
   if (key === "tree_view") {
     return <TreeViewView node={node} builderMode={builderMode} onRecordClick={onRecordClick} data={data} />;
+  }
+  if (key === "process_path") {
+    return <ProcessPathView node={node} builderMode={builderMode} data={data} />;
   }
   if (key === "button") {
     const variantClass = { primary: "onepos-btn-primary", secondary: "onepos-btn-secondary", ghost: "onepos-btn-secondary", danger: "onepos-btn-danger" }[node.variant || "primary"] || "onepos-btn-primary";
@@ -560,7 +638,10 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   if (key === "divider") return <hr style={{ borderColor: "var(--border-color, #e5e7eb)", margin: 0 }} />;
   if (key === "spacer") return <div style={{ height: 16 + (Number(node.spacing) || 3) * 6 }} aria-hidden="true" />;
   if (key === "related_list") return <div className="cpb-empty">Related list{node.relationshipKey ? ` · ${node.relationshipKey}` : ""}</div>;
-  if (key === "field_value") return <div className="text-sm" style={{ color: "var(--text-primary, #374151)" }}>{node.field ? `${String(node.field).replace(/_/g, " ")}` : "Field value"}</div>;
+  if (key === "field_value") {
+    const value = runtimeOverride?.value;
+    return <div className="text-sm" style={{ color: "var(--text-primary, #374151)" }}>{value !== undefined ? formatRecordValue(value) : node.field ? `${String(node.field).replace(/_/g, " ")}` : "Field value"}</div>;
+  }
   return <div className="text-sm" style={{ color: "var(--text-secondary, #64748b)" }}>{nodeLabel(node)}</div>;
 }
 
@@ -571,9 +652,17 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
  * the shared renderer — so MultiContainer, Table and future record components
  * stay in perfect sync without extra wiring.
  */
-function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeState, setPage, children }) {
-  const collection = ADVANCED_RECORD_COMPONENTS.includes(node.componentKey) ? advancedCollection(node) : (node.collection || {});
-  const isRecordBound = ["multi_container", "table", "tree_view", ...ADVANCED_RECORD_COMPONENTS].includes(node.componentKey);
+function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeState, setPage, runtimeOverride, children }) {
+  const baseCollection = ADVANCED_RECORD_COMPONENTS.includes(node.componentKey) ? advancedCollection(node) : (node.collection || {});
+  const dynamicFilter = runtimeOverride?.filter?.field
+    ? [{ field: runtimeOverride.filter.field, operator: "equals", value: runtimeOverride.filter.value }]
+    : [];
+  const collection = {
+    ...baseCollection,
+    conditions: [...(baseCollection.conditions || []), ...dynamicFilter],
+    __refreshNonce: runtimeOverride?.refreshNonce || 0,
+  };
+  const isRecordBound = ["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS].includes(node.componentKey);
   const page = pageByNode[node.id] || 1;
   const live = useRecordCollection(collection, {
     enabled: isRecordBound && Boolean(collection.objectKey),
@@ -613,13 +702,50 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
    */
   const [collectionState, setCollectionState] = useState({});
   const [pageByNode, setPageByNode] = useState({});
+  const [runtimeOverrides, setRuntimeOverrides] = useState({});
+
+  const applyComponentInteraction = ({ record = null, node }) => {
+    const interaction = node?.interaction;
+    if (!interaction || interaction.type !== "component" || !interaction.targetNodeId) return false;
+    const targetId = String(interaction.targetNodeId);
+    setRuntimeOverrides((current) => {
+      const existing = current[targetId] || {};
+      const operation = interaction.operation || "set_record";
+      if (operation === "set_record") {
+        return { ...current, [targetId]: { ...existing, record: record || null } };
+      }
+      if (operation === "filter_collection") {
+        const sourceField = interaction.sourceField || "id";
+        const targetField = interaction.targetField || sourceField;
+        return { ...current, [targetId]: { ...existing, filter: { field: targetField, value: record?.[sourceField] ?? null }, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
+      }
+      if (operation === "set_value") {
+        const sourceField = interaction.sourceField || "";
+        const value = sourceField ? record?.[sourceField] : record;
+        return { ...current, [targetId]: { ...existing, value, valueKey: interaction.targetField || "value" } };
+      }
+      if (operation === "refresh") {
+        return { ...current, [targetId]: { ...existing, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
+      }
+      return current;
+    });
+    return true;
+  };
+
+  const handleRecordClick = (payload) => {
+    if (!applyComponentInteraction(payload)) onRecordClick?.(payload);
+  };
+
+  const handleButtonClick = (node) => {
+    if (!applyComponentInteraction({ record: null, node })) onButtonClick?.(node);
+  };
 
   const recordNodes = useMemo(() => {
     const nodes = [];
     for (const section of sections) {
       const visit = (list) => {
         for (const node of list || []) {
-          if (["multi_container", "table", "tree_view", ...ADVANCED_RECORD_COMPONENTS].includes(node.componentKey)) nodes.push(node);
+          if (["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS].includes(node.componentKey)) nodes.push(node);
           if (Array.isArray(node.children)) visit(node.children);
         }
       };
@@ -643,8 +769,19 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                 style={{ minWidth: 0 }}
                 className={`${builderMode && selectedId === node.id ? "cpb-selected" : ""}`}
               >
-                <RecordBoundNodeBoundary node={node} collectionState={collectionState} pageByNode={pageByNode} setNodeState={setNodeState} setPage={setPageByNode}>
-                  <NodeView node={node} sectionWidth={section.width} device={device} builderMode={builderMode} onRecordClick={onRecordClick} onButtonClick={onButtonClick} data={collectionState} />
+                <RecordBoundNodeBoundary node={node} collectionState={collectionState} pageByNode={pageByNode} setNodeState={setNodeState} setPage={setPageByNode} runtimeOverride={runtimeOverrides[node.id]}>
+                  <NodeView
+                    node={node}
+                    sectionWidth={section.width}
+                    device={device}
+                    builderMode={builderMode}
+                    onRecordClick={handleRecordClick}
+                    onButtonClick={handleButtonClick}
+                    data={runtimeOverrides[node.id]?.record
+                      ? { ...collectionState, [node.id]: { ...(collectionState[node.id] || {}), records: [runtimeOverrides[node.id].record], total: 1, loading: false, error: "", placeholder: false } }
+                      : collectionState}
+                    runtimeOverride={runtimeOverrides}
+                  />
                 </RecordBoundNodeBoundary>
               </div>
             ))}
