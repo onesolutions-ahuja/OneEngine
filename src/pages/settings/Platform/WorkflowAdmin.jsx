@@ -1059,6 +1059,7 @@ const actionOptions = [
   { value: "COLLECTION_SORT", label: "Collection Sort" },
   { value: "TRANSFORM", label: "Transform" },
   { value: "RECOMMENDATION_ASSIGNMENT", label: "Recommendation Assignment" },
+  { value: "LIMIT_REPETITIONS", label: "Limit Repetitions" },
   { value: "RUN_AGENT", label: "Run Agent" },
   { value: "SCREEN", label: "Screen" },
   { value: "LOOP", label: "Loop" },
@@ -1091,7 +1092,7 @@ const actionOptions = [
 ];
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
-  "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","RUN_AGENT","SCREEN","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
+  "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","LIMIT_REPETITIONS","RUN_AGENT","SCREEN","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
   "CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","EMAIL_ALERT","RUN_SUBFLOW",
 ]);
 
@@ -1101,6 +1102,7 @@ const FLOW_ELEMENT_VISUALS = {
   COLLECTION_SORT: { icon: "⇅", color: "#fe9339", family: "Logic" },
   TRANSFORM: { icon: "⇄", color: "#e83e8c", family: "Data" },
   RECOMMENDATION_ASSIGNMENT: { icon: "★", color: "#fe9339", family: "Logic" },
+  LIMIT_REPETITIONS: { icon: "≦", color: "#fe9339", family: "Logic" },
   RUN_AGENT: { icon: "✦", color: "#0b5cab", family: "Interaction" },
   SCREEN: { icon: "▤", color: "#0b5cab", family: "Interaction" },
   LOOP: { icon: "↻", color: "#fe9339", family: "Logic" },
@@ -1179,6 +1181,10 @@ function makeStep(type = "CREATE_RECORD") {
       outputName: "",
       transformMappings: {},
       recommendationMappings: {},
+      repetitionReactions: ["ACCEPTED"],
+      repetitionCount: 1,
+      repetitionDays: 30,
+      repetitionScope: "USER_OR_RECORD",
       agentPrompt: "",
       agentContext: {},
       agentOutputVariable: "agentResponse",
@@ -1255,7 +1261,7 @@ function getActionLabel(type) {
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(key)) return "Resources";
-  if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
+  if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","LIMIT_REPETITIONS","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (["RUN_SUBFLOW","SCREEN","RUN_AGENT"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["EMAIL_ALERT","SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
@@ -1371,6 +1377,12 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "RECOMMENDATION_ASSIGNMENT") {
     if (!config.collection) return "Choose the source collection.";
     if (!config.recommendationMappings || !Object.keys(config.recommendationMappings).length) return "Map at least one recommendation field.";
+  }
+  if (step.type === "LIMIT_REPETITIONS") {
+    if (!config.collection) return "Choose the recommendation collection.";
+    if (!Array.isArray(config.repetitionReactions) || !config.repetitionReactions.length) return "Choose at least one response to limit.";
+    if (!Number.isInteger(Number(config.repetitionCount)) || Number(config.repetitionCount) < 1) return "Enter a reaction count of 1 or greater.";
+    if (!Number.isInteger(Number(config.repetitionDays)) || Number(config.repetitionDays) < 1) return "Enter a day window of 1 or greater.";
   }
   if (step.type === "RUN_AGENT") {
     if (!String(config.agentPrompt || "").trim()) return "Enter instructions or a prompt for the agent.";
@@ -1692,6 +1704,11 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
       resources.push(
         { value: `variables.${resourceName}`, label: `${resourceName} · Recommendation Collection`, type: "collection" },
         { value: `${prefix}.recommendations`, label: `${label} → Recommendations`, type: "collection" },
+        { value: `${prefix}.count`, label: `${label} → Recommendation Count`, type: "number" },
+      );
+    } else if (step.type === "LIMIT_REPETITIONS") {
+      resources.push(
+        { value: `${prefix}.recommendations`, label: `${label} → Limited Recommendations`, type: "collection" },
         { value: `${prefix}.count`, label: `${label} → Recommendation Count`, type: "number" },
       );
     } else if (step.type === "RUN_AGENT") {
@@ -2133,6 +2150,37 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           </div>
         );
       }
+      case "LIMIT_REPETITIONS":
+        return (
+          <div className="space-y-3">
+            <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "collection" || String(resource.value || "").endsWith(".recommendations") || String(resource.value || "").endsWith(".collection"))} label="Recommendation Collection" value={step.config?.collection || ""} onChange={(collection) => updateConfig({ collection })} />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 text-xs font-semibold text-slate-700">Limit after these responses</div>
+              <div className="flex gap-4">
+                {["ACCEPTED","REJECTED"].map((reaction) => <label key={reaction} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={(step.config?.repetitionReactions || []).includes(reaction)} onChange={(event) => {
+                  const current = step.config?.repetitionReactions || [];
+                  updateConfig({ repetitionReactions: event.target.checked ? [...new Set([...current, reaction])] : current.filter((item) => item !== reaction) });
+                }} /> {reaction === "ACCEPTED" ? "Accepted" : "Rejected"}</label>)}
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-600">Number of Responses
+                <input className={inputClass} type="number" min="1" value={Number(step.config?.repetitionCount || 1)} onChange={(event) => updateConfig({ repetitionCount: Math.max(1, Number(event.target.value || 1)) })} />
+              </label>
+              <label className="block text-xs font-medium text-slate-600">Look Within This Many Days
+                <input className={inputClass} type="number" min="1" value={Number(step.config?.repetitionDays || 30)} onChange={(event) => updateConfig({ repetitionDays: Math.max(1, Number(event.target.value || 1)) })} />
+              </label>
+            </div>
+            <label className="block text-xs font-medium text-slate-600">Scope
+              <select className={inputClass} value={step.config?.repetitionScope || "USER_OR_RECORD"} onChange={(event) => updateConfig({ repetitionScope: event.target.value })}>
+                <option value="USER_OR_RECORD">Same user or same record</option>
+                <option value="USER">Same user</option>
+                <option value="RECORD">Same record</option>
+              </select>
+            </label>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">Recommendations whose response count reaches the limit are removed from the output collection for the configured day window.</div>
+          </div>
+        );
       case "RUN_AGENT":
         return (
           <div className="space-y-3">
