@@ -1,0 +1,87 @@
+name: OneEngine Cypress Deep E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "server/**"
+      - "cypress/**"
+      - "cypress.config.mjs"
+      - ".github/workflows/cypress-deep-e2e.yml"
+
+concurrency:
+  group: oneengine-cypress-deep-e2e
+  cancel-in-progress: true
+
+jobs:
+  deep-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      ONEPOS_E2E_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
+      ONEPOS_E2E_API_BASE_URL: https://oneengine.onrender.com
+      ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
+      ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
+      CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Wait for deployed frontend and API
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..30}; do
+            FRONT=0
+            API=0
+            curl -fsSL "$ONEPOS_E2E_BASE_URL" >/dev/null && FRONT=1 || true
+            curl -fsSL "$ONEPOS_E2E_API_BASE_URL/api/health" >/dev/null && API=1 || true
+            if [ "$FRONT" = "1" ] && [ "$API" = "1" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Frontend or API did not become ready in time."
+          exit 1
+
+      - name: Verify credentials are configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ONEPOS_E2E_USERNAME" || { echo "::error::ONEPOS_PLAYWRIGHT_USERNAME repository variable is missing."; exit 1; }
+          test -n "$ONEPOS_E2E_PASSWORD" || { echo "::error::ONEPOS_PLAYWRIGHT_PASSWORD repository variable is missing."; exit 1; }
+
+      - name: Install Cypress runtime
+        run: npx --yes cypress@15.5.0 verify
+
+      - name: Run deep Cypress suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${CYPRESS_RECORD_KEY:-}" ]; then
+            npx --yes cypress@15.5.0 run --browser chrome --record --key "$CYPRESS_RECORD_KEY"
+          else
+            echo "CYPRESS_RECORD_KEY is not configured; running locally in GitHub Actions without Cypress Cloud recording."
+            npx --yes cypress@15.5.0 run --browser chrome
+          fi
+
+      - name: Upload Cypress evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-deep-e2e-evidence
+          path: |
+            cypress/screenshots/
+            cypress/videos/
+          if-no-files-found: ignore
+          retention-days: 14
