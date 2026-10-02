@@ -1,4 +1,4 @@
-import { assertTrustedJobKind } from "./trustedRuntime.js";
+import { assertTrustedJobKind } from "./trustedJobKinds.js";
 import { classifyDebugCode } from "./debugCodes.js";
 
 const MAX_ATTEMPTS = 5;

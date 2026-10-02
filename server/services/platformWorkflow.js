@@ -2566,6 +2566,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       properties: {
         collection: { type: "string" },
         itemVariable: { type: "string" },
+        iterationOrder: { type: "string", enum: ["FIRST_TO_LAST","LAST_TO_FIRST"] },
         bodyBranch: { type: "array" },
       },
       required: ["collection","itemVariable","bodyBranch"],
@@ -2576,6 +2577,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         throw new Error("Loop requires a valid current item variable name");
       }
       if (!Array.isArray(action.bodyBranch) || !action.bodyBranch.length) throw new Error("Loop requires at least one body step");
+      if (action?.iterationOrder && !["FIRST_TO_LAST","LAST_TO_FIRST"].includes(String(action.iterationOrder).toUpperCase())) {
+        throw new Error("Loop iteration order must be FIRST_TO_LAST or LAST_TO_FIRST");
+      }
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
@@ -2958,17 +2962,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
       const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
       const columns = mappedFields.map((field) => `"${field.source_column}"`);
-      const values = entries.map((_, index) => `${index + 1}`);
+      const values = entries.map((_, index) => `$${index + 1}`);
       const params = entries.map(([, value]) => value);
       if (targetObject.company_scoped) {
         columns.push('"company_id"');
-        values.push(`${params.length + 1}`);
+        values.push(`$${params.length + 1}`);
         params.push(req?.user?.companyId || companyId || null);
       }
       if (targetObject.store_scoped) {
         if (!req?.user?.storeId) throw new Error("A store session is required for this related record");
         columns.push('"store_id"');
-        values.push(`${params.length + 1}`);
+        values.push(`$${params.length + 1}`);
         params.push(req.user.storeId);
       }
       const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
@@ -2994,9 +2998,20 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const table = targetObject.source_table;
       const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
       const hasActive = await db(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'`, [table]);
+      const params = [resolvedRecordId];
+      const clauses = ["id=$1"];
+      if (targetObject.company_scoped) {
+        params.push(req?.user?.companyId || companyId || null);
+        clauses.push(`company_id=$${params.length}`);
+      }
+      if (targetObject.store_scoped) {
+        if (!req?.user?.storeId) throw new Error("A store session is required for this record");
+        params.push(req.user.storeId);
+        clauses.push(`store_id=$${params.length}`);
+      }
       const result = hasActive.rows.length
-        ? await db(`UPDATE "${table}" SET active=false WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [resolvedRecordId, req?.user?.companyId || companyId] : [resolvedRecordId])
-        : await db(`DELETE FROM "${table}" WHERE id=$1${targetObject.company_scoped ? " AND company_id=$2" : ""} RETURNING *`, targetObject.company_scoped ? [resolvedRecordId, req?.user?.companyId || companyId] : [resolvedRecordId]);
+        ? await db(`UPDATE "${table}" SET active=false WHERE ${clauses.join(" AND ")} RETURNING *`, params)
+        : await db(`DELETE FROM "${table}" WHERE ${clauses.join(" AND ")} RETURNING *`, params);
       try {
         if (result.rows[0]) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.deleted", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: resolvedRecordId, record: result.rows[0], archived: hasActive.rows.length > 0 }, actorUserId: req?.user?.id || null });
       } catch (error) { console.error("Platform workflow record event publication error:", error); }
@@ -3815,6 +3830,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       );
       const field = fieldResult.rows?.[0];
       if (!field) throw new Error("Picklist field is unavailable");
+      if (!["picklist","select","multiselect"].includes(String(field.field_type || "").toLowerCase())) throw new Error("Selected field is not picklist-compatible");
+      const secured = req?.user ? await applyFieldSecurity(db, [field], req) : [field];
+      if (!secured.length || secured[0]?.readable === false) throw new Error("Picklist field is not readable for this user");
       const config = field.config && typeof field.config === "object" ? field.config : {};
       const raw = Array.isArray(config.options) ? config.options : Array.isArray(config.values) ? config.values : Array.isArray(config.choices) ? config.choices : [];
       const choices = raw.map((item) => typeof item === "object"
@@ -3847,32 +3865,83 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)`,
         [target.id, tenantId]
       );
-      const fields = metadataResult.rows || [];
-      const labelField = fields.find((field) => String(field.api_name) === String(action.choiceLabelField) || String(field.source_column) === String(action.choiceLabelField));
+      const securedFields = req?.user
+        ? await applyFieldSecurity(db, metadataResult.rows || [], req)
+        : (metadataResult.rows || []);
+      const fields = securedFields.filter((field) => field.readable !== false && isSafeIdentifier(field.source_column || field.api_name || ""));
+      const fieldByKey = new Map();
+      for (const field of fields) {
+        fieldByKey.set(String(field.api_name), field);
+        if (field.source_column) fieldByKey.set(String(field.source_column), field);
+      }
+      const labelField = fieldByKey.get(String(action.choiceLabelField));
       const valueField = String(action.choiceValueField) === "id"
         ? { api_name: "id", source_column: "id" }
-        : fields.find((field) => String(field.api_name) === String(action.choiceValueField) || String(field.source_column) === String(action.choiceValueField));
+        : fieldByKey.get(String(action.choiceValueField));
       const labelColumn = labelField?.source_column || labelField?.api_name;
       const valueColumn = valueField?.source_column || valueField?.api_name;
       if (!isSafeIdentifier(labelColumn) || !isSafeIdentifier(valueColumn)) throw new Error("Record Choice Set fields are unavailable");
+
+      const parameter = (position) => String.fromCharCode(36) + position;
       const params = [];
       const clauses = [];
       if (target.company_scoped !== false) {
         params.push(tenantId);
-        clauses.push(`company_id=${params.length}`);
+        clauses.push('"company_id"=' + parameter(params.length));
       }
       if (target.store_scoped) {
         if (!req?.user?.storeId) throw new Error("Record Choice Set requires an active store");
         params.push(req.user.storeId);
-        clauses.push(`store_id=${params.length}`);
+        clauses.push('"store_id"=' + parameter(params.length));
+      }
+
+      const filterClauses = [];
+      for (const filter of Array.isArray(action.filters) ? action.filters : []) {
+        const metadata = fieldByKey.get(String(filter?.field || ""));
+        if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name)) {
+          throw new Error(`Record Choice Set filter field "${filter?.field || ""}" is unavailable`);
+        }
+        const column = '"' + (metadata.source_column || metadata.api_name) + '"';
+        const operator = String(filter?.operator || "equals").toLowerCase();
+        const value = resolveConfiguredResource(filter?.value, { record: null, previousRecord: null, req, object, workflowVariables });
+        if (operator === "is_empty") {
+          filterClauses.push("(" + column + " IS NULL OR " + column + "::text='')");
+          continue;
+        }
+        if (operator === "is_not_empty") {
+          filterClauses.push("(" + column + " IS NOT NULL AND " + column + "::text<>'')");
+          continue;
+        }
+        params.push(value);
+        const placeholder = parameter(params.length);
+        if (operator === "equals") filterClauses.push(column + "=" + placeholder);
+        else if (operator === "not_equals") filterClauses.push(column + "<>" + placeholder);
+        else if (operator === "greater_than") filterClauses.push(column + ">" + placeholder);
+        else if (operator === "greater_than_or_equal") filterClauses.push(column + ">=" + placeholder);
+        else if (operator === "less_than") filterClauses.push(column + "<" + placeholder);
+        else if (operator === "less_than_or_equal") filterClauses.push(column + "<=" + placeholder);
+        else if (operator === "contains") filterClauses.push(column + "::text ILIKE '%' || " + placeholder + "::text || '%'");
+        else throw new Error(`Record Choice Set uses unsupported operator "${operator}"`);
+      }
+      if (filterClauses.length) {
+        clauses.push("(" + filterClauses.join(String(action.match || "all").toLowerCase() === "any" ? " OR " : " AND ") + ")");
+      }
+
+      let orderBy = ` ORDER BY "${labelColumn}" ASC NULLS LAST`;
+      if (action.sortField) {
+        const sortMetadata = fieldByKey.get(String(action.sortField));
+        if (!sortMetadata || !isSafeIdentifier(sortMetadata.source_column || sortMetadata.api_name)) {
+          throw new Error(`Record Choice Set sort field "${action.sortField}" is unavailable`);
+        }
+        const direction = String(action.sortDirection || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
+        orderBy = ` ORDER BY "${sortMetadata.source_column || sortMetadata.api_name}" ${direction} NULLS LAST`;
       }
       params.push(Math.max(1, Math.min(200, Number(action.limit || 50))));
       const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
       const result = await db(
         `SELECT "${labelColumn}" AS label_value,"${valueColumn}" AS stored_value
-           FROM "${target.source_table}"${where}
-          ORDER BY "${labelColumn}" NULLS LAST
-          LIMIT ${params.length}`,
+           FROM "${target.source_table}"${where}${orderBy}
+          LIMIT ${parameter(params.length)}`,
         params
       );
       const choices = (result.rows || []).map((row) => ({ label: String(row.label_value ?? ""), value: row.stored_value })).filter((choice) => choice.label);
@@ -3887,6 +3956,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     schema: { type: "object", properties: { resourceName: { type: "string" }, stageLabel: { type: "string" }, stageValue: {}, stageOrder: { type: "number" } }, required: ["resourceName","stageLabel"] },
     validation: (action) => {
       if (!action?.resourceName || !String(action.stageLabel || "").trim()) throw new Error("Stage is incomplete");
+      if (!String(action.stageValue || "").trim()) throw new Error("Stage requires a value");
+      if (!Number.isInteger(Number(action.stageOrder)) || Number(action.stageOrder) < 1) throw new Error("Stage order must be 1 or greater");
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
@@ -4100,6 +4171,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       properties: {
         screen: { type: "object" },
         allowBack: { type: "boolean" },
+        allowNext: { type: "boolean" },
         allowFinish: { type: "boolean" },
         showFooter: { type: "boolean" },
       },
@@ -4113,10 +4185,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (!Array.isArray(screen.components)) throw new Error("Screen components must be an array");
       const names = screen.components.map((component) => String(component?.name || "").trim()).filter(Boolean);
       if (new Set(names).size !== names.length) throw new Error("Screen component names must be unique");
+      const visibilityOperators = new Set(["truthy","falsy","is_empty","is_not_empty","equals","not_equals","contains","not_contains","greater_than","greater_or_equal","less_than","less_or_equal"]);
+      const visibilityCompareOperators = new Set(["equals","not_equals","contains","not_contains","greater_than","greater_or_equal","less_than","less_or_equal"]);
+      for (const component of screen.components) {
+        if (!component?.visibilityResource) continue;
+        const operator = component.visibilityOperator || "truthy";
+        if (!visibilityOperators.has(operator)) throw new Error(`Unsupported screen visibility operator: ${operator}`);
+        if (String(component.visibilityResource) === String(component.name || "")) throw new Error("A screen component cannot control its own visibility");
+        if (visibilityCompareOperators.has(operator) && String(component.visibilityValue ?? "").trim() === "") throw new Error("Screen visibility comparison requires a compare value");
+      }
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, workflowVariables = {} }) => {
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, workflowVariables = {}, record = null, object = null }) => {
       const tenantId = companyId || req?.user?.companyId;
       if (!runId) throw new Error("Screen requires a persisted workflow run");
       const rawScreen = action.screen || {};
@@ -4182,7 +4263,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         stages,
         currentStage,
         allowBack: action.allowBack !== false,
-        allowFinish: action.allowFinish !== false,
+        allowNext: action.allowNext !== false,
+        allowFinish: action.allowFinish === true,
         allowPause: action.allowPause === true,
         showFooter: action.showFooter !== false,
       };
@@ -4198,18 +4280,27 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           resumed: false,
         };
       }
+      const initialValues = {};
+      for (const component of components) {
+        const name = String(component?.name || "").trim();
+        if (!name || component?.input === false) continue;
+        if (Object.prototype.hasOwnProperty.call(workflowVariables.variables || {}, name)) {
+          initialValues[name] = workflowVariables.variables[name];
+        }
+      }
       const result = await db(
         `INSERT INTO platform_workflow_screen_sessions
            (company_id,workflow_id,run_id,step_run_id,step_identifier,status,screen,values,workflow_variables,history,actor_user_id,expires_at)
-         SELECT $1,r.workflow_id,r.id,$2,$3,'ACTIVE',$4::jsonb,'{}'::jsonb,$5::jsonb,'[]'::jsonb,$6,NOW() + INTERVAL '24 hours'
+         SELECT $1,r.workflow_id,r.id,$2,$3,'ACTIVE',$4::jsonb,$5::jsonb,$6::jsonb,'[]'::jsonb,$7,NOW() + INTERVAL '24 hours'
          FROM platform_workflow_runs r
-         WHERE r.id=$7 AND r.company_id=$1
+         WHERE r.id=$8 AND r.company_id=$1
          RETURNING *`,
         [
           tenantId,
           stepRunId || null,
           String(action.id || action.screen?.apiName || stepRunId || "screen"),
           JSON.stringify(screen),
+          JSON.stringify(initialValues),
           JSON.stringify(workflowVariables || { variables: {}, steps: {} }),
           req?.user?.id || null,
           runId,
@@ -5698,12 +5789,14 @@ export async function executeWorkflowActions({ actions, ...context }) {
           ? stepRun.metadata.result.loopCollection
           : null;
         const collection = pinnedLoopCollection || (Array.isArray(result?.collection) ? result.collection : []);
+        const iterationOrder = String(item.iterationOrder || "FIRST_TO_LAST").toUpperCase();
+        const iterationCollection = iterationOrder === "LAST_TO_FIRST" ? [...collection].reverse() : collection;
         const itemVariable = String(item.itemVariable || result?.itemVariable || "currentItem");
         const iterations = [];
         const hadPrevious = Object.prototype.hasOwnProperty.call(workflowVariables.variables, itemVariable);
         const previousValue = workflowVariables.variables[itemVariable];
-        for (let loopIndex = 0; loopIndex < collection.length; loopIndex += 1) {
-          workflowVariables.variables[itemVariable] = collection[loopIndex];
+        for (let loopIndex = 0; loopIndex < iterationCollection.length; loopIndex += 1) {
+          workflowVariables.variables[itemVariable] = iterationCollection[loopIndex];
           const iterationResults = await executeWorkflowActions({
             actions: bodyActions,
             ...context,
@@ -5712,7 +5805,11 @@ export async function executeWorkflowActions({ actions, ...context }) {
             branchExecution: true,
             executionScope: `${context.executionScope ? context.executionScope + ":" : ""}${item.id || globalIndex}:loop:${loopIndex}`,
           });
-          iterations.push({ index: loopIndex, results: iterationResults });
+          iterations.push({
+            index: loopIndex,
+            sourceIndex: iterationOrder === "LAST_TO_FIRST" ? collection.length - 1 - loopIndex : loopIndex,
+            results: iterationResults,
+          });
           if (workflowResultsContainStatus(iterationResults, "waiting")) {
             result.status = "waiting";
             result.waitingIteration = loopIndex;

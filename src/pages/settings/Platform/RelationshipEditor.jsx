@@ -330,12 +330,18 @@ export default function RelationshipEditor({
               <input
                 type="text"
                 value={form.name || ""}
-                onChange={(event) =>
-                  update(
-                    "name",
-                    event.target.value
-                  )
-                }
+                onChange={(event) => {
+                  const name = event.target.value;
+                  setForm((current) => {
+                    const previousGenerated = String(current.name || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+                    const nextGenerated = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+                    return {
+                      ...current,
+                      name,
+                      relationship_key: !current.relationship_key || current.relationship_key === previousGenerated ? nextGenerated : current.relationship_key,
+                    };
+                  });
+                }}
                 placeholder="Customer Sales"
                 required
               />

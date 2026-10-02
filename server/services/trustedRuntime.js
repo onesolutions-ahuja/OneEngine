@@ -1,20 +1,8 @@
 import { createHash } from "node:crypto";
 import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
-
-export const TRUSTED_JOB_KINDS = Object.freeze([
-  "WAIT",
-  "APP_RELEASE_UPGRADE",
-  "PLATFORM_WEBHOOK_DELIVERY",
-  "PLATFORM_SCHEDULED_WORKFLOW",
-  "PLATFORM_EVENT_WORKFLOW",
-  "REPORT_SUBSCRIPTION_DELIVERY",
-  "DASHBOARD_SUBSCRIPTION_DELIVERY",
-  "APPROVAL_DUE",
-  "SHOPIFY_WEBHOOK_EVENT",
-  "QUICKBOOKS_PROVIDER_SYNC",
-  "SHOPIFY_PROVIDER_SYNC",
-]);
+import { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
+export { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
 
 const PRIVILEGED_ROUTES = Object.freeze([
   { id: "appointments.manage", prefixes: ["/api/appointments"], methods: ["POST","PUT","PATCH","DELETE"] },
@@ -69,14 +57,6 @@ export function isPrivilegedMutation(path, method = "GET") {
     || pathname.startsWith("/api/payments") || pathname.startsWith("/api/payment")
     || pathname.startsWith("/api/refunds") || pathname.startsWith("/api/returns")
     || pathname.startsWith("/api/exchanges");
-}
-
-export function assertTrustedJobKind(kind) {
-  const key = `job:${String(kind || "")}`;
-  if (!TRUSTED_CAPABILITY_MAP[key]) {
-    throw Object.assign(new Error(`Unregistered platform job kind: ${kind}`), { code: "UNREGISTERED_JOB_KIND", status: 403, retryable: false });
-  }
-  return key;
 }
 
 export function validateTrustedRuntime() {

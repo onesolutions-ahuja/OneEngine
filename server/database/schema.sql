@@ -3082,7 +3082,6 @@ CREATE TABLE IF NOT EXISTS platform_relationships (
     active BOOLEAN NOT NULL DEFAULT TRUE,
     UNIQUE (parent_object_id, relationship_key)
 );
-
 ALTER TABLE platform_relationships ADD COLUMN IF NOT EXISTS label VARCHAR(200);
 ALTER TABLE platform_relationships ADD COLUMN IF NOT EXISTS description TEXT;
 

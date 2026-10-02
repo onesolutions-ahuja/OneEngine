@@ -5,6 +5,7 @@ import { validateConditionalRequired } from "./platformConditions.js";
 import { evaluateValidationRules } from "./platformValidation.js";
 import { executePlatformAutomations } from "./platformAutomation.js";
 import { submitPlatformApproval } from "./platformApprovals.js";
+import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 
 export class PlatformRecordError extends Error {
   constructor(message, status = 422) { super(message); this.status = status; this.code = "PLATFORM_RECORD_INVALID"; }
@@ -247,6 +248,17 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
   }
   await validateExtensionUniqueness({ ...core, ...custom });
   const rules = await db("SELECT * FROM platform_rules WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) AND trigger_key IN ($3,'before_save') AND action->>'type'='validation' ORDER BY id", [object.id, req.user.companyId, previous ? "before_update" : "before_create"]);
+  const [rolePermissionResult, effectivePermissionSets] = await Promise.all([
+    req.user?.roleId
+      ? db("SELECT p.code FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1", [req.user.roleId])
+      : Promise.resolve({ rows: [] }),
+    loadEffectivePermissionSets(db, req.user, req),
+  ]);
+  const validationBypassPermissions = new Set([
+    ...rolePermissionResult.rows.map((row) => row.code),
+    ...effectivePermissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+  ]);
+  const enforceableRules = rules.rows.filter((rule) => !rule.action?.bypassPermission || !validationBypassPermissions.has(rule.action.bypassPermission));
   const calculate = compileFormulas(fields);
   const validate = values => {
     for (const field of fields.filter(isExtensionField)) {
@@ -255,7 +267,7 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
     }
     const conditional = validateConditionalRequired(fields, values);
     if (conditional) throw new PlatformRecordError(conditional);
-    const errors = evaluateValidationRules(rules.rows, fields, values);
+    const errors = evaluateValidationRules(enforceableRules, fields, values);
     if (errors.length) throw new PlatformRecordError(errors.map(error => error.message).join("; "));
   };
   let candidate = calculate({ ...core, ...custom });

@@ -57,6 +57,7 @@ export default function RuleEditor({
     action: rule?.action?.type || (typeof rule?.action === "string" ? rule.action : "validation"),
     message: rule?.action?.message || "",
     match: rule?.action?.match || "all",
+    bypassPermission: rule?.action?.bypassPermission || "",
     errorLocation: rule?.action?.errorLocation || rule?.action?.error_location || "top",
     errorField: rule?.action?.errorField || rule?.action?.error_field || "",
   });
@@ -68,6 +69,7 @@ export default function RuleEditor({
   const [loadingObjects, setLoadingObjects] = useState(false);
   const [loadingFields, setLoadingFields] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [permissionCodes, setPermissionCodes] = useState([]);
   const [error, setError] = useState("");
 
   const ruleId = rule?.id || rule?.rule_id;
@@ -78,6 +80,9 @@ export default function RuleEditor({
     } else {
       loadObjects();
     }
+    apiRequest("/api/platform/permission-catalog")
+      .then((response) => setPermissionCodes(Array.isArray(response?.data) ? response.data : []))
+      .catch(() => setPermissionCodes([]));
   }, [objects]);
 
   useEffect(() => {
@@ -198,7 +203,7 @@ export default function RuleEditor({
         name: form.name,
         objectId: form.object_id,
         triggerKey: form.trigger,
-        action: { ...(typeof rule?.action === "object" ? rule.action : {}), type: form.action, ...(form.action === "validation" ? { message: form.message, match: form.match, errorLocation: form.errorLocation || "top", errorField: form.errorLocation === "field" ? (form.errorField || null) : null } : {}) },
+        action: { ...(typeof rule?.action === "object" ? rule.action : {}), type: form.action, ...(form.action === "validation" ? { message: form.message, match: form.match, bypassPermission: form.bypassPermission || null, errorLocation: form.errorLocation || "top", errorField: form.errorLocation === "field" ? (form.errorField || null) : null } : {}) },
         conditions: Array.isArray(form.conditions)
           ? form.conditions
           : [],
@@ -450,6 +455,14 @@ export default function RuleEditor({
                 <option value="all">All conditions match</option>
                 <option value="any">Any condition matches</option>
               </select>
+            </label>}
+            {form.action === "validation" && <label>
+              <span>Bypass permission</span>
+              <select value={form.bypassPermission || ""} onChange={event => update("bypassPermission", event.target.value)}>
+                <option value="">No bypass — applies to everyone</option>
+                {permissionCodes.map((code) => <option key={code} value={code}>{code}</option>)}
+              </select>
+              <small className="platform-muted">Users granted this system permission through their role or a Permission Set can save without this rule blocking them.</small>
             </label>}
             {form.action === "validation" && <label>
               <span>Error location</span>

@@ -1,5 +1,6 @@
 import { normalizePicklistOptions, localPicklistOptions, fieldValueError, normalizeFieldValue, enrichFields, applyFieldSecurity, resolveEffectiveFieldSecurity, valueSetOptions, formatAutoNumberValue } from "../services/platformFieldValues.js";
 import express from "express";
+import { createHash } from "node:crypto";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
 import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
@@ -47,6 +48,44 @@ const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
 const PAGE_TYPES = new Set(["list", "detail", "view", "compact", "create", "edit", "quick_create"]);
 const RELATIONSHIP_TYPES = new Set(["lookup", "one_to_many", "many_to_many"]);
 const RELATIONSHIP_POLICIES = new Set(["restrict", "cascade", "set_null"]);
+
+function customObjectStorageTable(objectKey) {
+  const safeKey = String(objectKey || "object").replace(/[^A-Za-z0-9_]/g, "_").slice(0, 42) || "object";
+  const digest = createHash("sha1").update(String(objectKey || "object")).digest("hex").slice(0, 10);
+  return `oe_${safeKey}_${digest}`.slice(0, 63);
+}
+
+function customFieldSqlType(fieldType) {
+  if (["number", "decimal", "currency", "percent"].includes(fieldType)) return "NUMERIC";
+  if (fieldType === "boolean") return "BOOLEAN";
+  if (fieldType === "date") return "DATE";
+  if (fieldType === "datetime") return "TIMESTAMPTZ";
+  if (fieldType === "time") return "TIME";
+  if (["address", "location", "json"].includes(fieldType)) return "JSONB";
+  return "TEXT";
+}
+
+async function ensureCustomObjectStorage(db, objectKey) {
+  const table = customObjectStorageTable(objectKey);
+  await db(`CREATE TABLE IF NOT EXISTS "${table}" (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await db(`CREATE INDEX IF NOT EXISTS "${table}_company_idx" ON "${table}" (company_id)`);
+  return table;
+}
+
+async function ensureCustomFieldStorage(db, object, apiName, fieldType) {
+  if (!object?.source_table || !isSafeIdentifier(object.source_table) || !isSafeIdentifier(apiName)) return null;
+  if (["formula", "rollup"].includes(fieldType)) return null;
+  const sqlType = customFieldSqlType(fieldType);
+  // Requiredness is enforced by platform validation. Keep physical columns nullable so
+  // administrators can add a required field to an object that already has records.
+  await db(`ALTER TABLE "${object.source_table}" ADD COLUMN IF NOT EXISTS "${apiName}" ${sqlType}`);
+  return apiName;
+}
 
 function validObjectInput(body) {
   return body && (body.objectKey === undefined || (typeof body.objectKey === "string" && isSafeIdentifier(body.objectKey)))
@@ -1125,8 +1164,11 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const [parent, child] = await Promise.all([getObject(parentObjectId, req), getObject(childObjectId, req)]);
     if (!parent || !child) return "Referenced objects must exist";
     if (childFieldId) {
-      const field = await db("SELECT id FROM platform_fields WHERE id=$1 AND object_id=$2 AND active=true AND (company_id IS NULL OR company_id=$3)", [childFieldId, childObjectId, req.user.companyId]);
+      const field = await db("SELECT id,field_type,source_column,config FROM platform_fields WHERE id=$1 AND object_id=$2 AND active=true AND (company_id IS NULL OR company_id=$3)", [childFieldId, childObjectId, req.user.companyId]);
       if (!field.rows.length) return "The child field does not belong to the child object";
+      const childField = field.rows[0];
+      if (childField.field_type !== "lookup") return "The child field must be a Lookup field";
+      if (!childField.source_column || !isSafeIdentifier(childField.source_column)) return "The child Lookup field must have record storage";
     }
     return null;
   }
@@ -2177,6 +2219,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         const module = await db("SELECT id FROM platform_modules WHERE id=$1", [moduleId]);
         if (!module.rows.length) return res.status(400).json({ success: false, message: "Module not found" });
       }
+      const storageTable = sourceTable || await ensureCustomObjectStorage(db, objectKey);
       const rawObjectConfig = req.body?.config && typeof req.body.config === "object" && !Array.isArray(req.body.config) ? req.body.config : {};
       const { historicalTrending: _tenantHistoricalTrending, ...baseObjectConfig } = rawObjectConfig;
       const objectConfig = {
@@ -2185,7 +2228,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         allowSearch: req.body?.allowSearch !== false,
         trackHistory: req.body?.trackHistory !== false,
       };
-      const result = await db("INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id,config) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *", [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, sourceTable, moduleId, req.user.companyId, JSON.stringify(objectConfig)]);
+      const result = await db("INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id,config) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *", [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, storageTable, moduleId, req.user.companyId, JSON.stringify(objectConfig)]);
       await db(
         `INSERT INTO platform_object_permissions
            (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete,can_import,can_export)
@@ -2309,16 +2352,20 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const { label, fieldType, sourceColumn = null, required = false, writable = false, options = [], config = {}, displayOrder = 0 } = req.body;
     const apiName = req.body.apiName || toSafeApiName(label);
     if (systemObject(object) && sourceColumn) return res.status(400).json({ success: false, message: "Custom fields on system objects use extension storage, not business columns" });
+    const generatedSourceColumn = !systemObject(object) && !["formula", "rollup"].includes(fieldType)
+      ? (sourceColumn || apiName)
+      : sourceColumn;
     const storedConfig = systemObject(object) && !isCalculatedField({ field_type: fieldType }) ? { ...config, storage: "extension" } : config;
     try {
       validateGeneralFieldConfig({ field_type: fieldType, config });
       await validatePicklistDefinition(db, { field_type: fieldType, options, config }, req);
     await validateDependentPicklistDefinition(db, object, { api_name: apiName, field_type: fieldType, options, config }, req);
       await validateLookupConfiguration(object.id, fieldType, config, req);
-      await checkFormulaChange(object.id, { api_name: apiName, field_type: fieldType, source_column: sourceColumn, required, writable, config: storedConfig, active: true, readable: true }, null, req);
+      await checkFormulaChange(object.id, { api_name: apiName, field_type: fieldType, source_column: generatedSourceColumn, required, writable, config: storedConfig, active: true, readable: true }, null, req);
       const names = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id IS NULL OR company_id=$3)", [object.id, apiName, req.user.companyId]);
       if (names.rows.some(field => field.api_name === apiName)) return res.status(409).json({ success: false, message: "A field with this API name already exists" });
-      const result = await db("INSERT INTO platform_fields (object_id,api_name,label,field_type,source_column,required,writable,options,config,display_order,company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11) RETURNING *", [object.id, apiName, label.trim(), fieldType, sourceColumn, required, writable, JSON.stringify(options), JSON.stringify(storedConfig), displayOrder, req.user.companyId]);
+      if (!systemObject(object) && generatedSourceColumn) await ensureCustomFieldStorage(db, object, generatedSourceColumn, fieldType);
+      const result = await db("INSERT INTO platform_fields (object_id,api_name,label,field_type,source_column,required,writable,options,config,display_order,company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11) RETURNING *", [object.id, apiName, label.trim(), fieldType, generatedSourceColumn, required, writable, JSON.stringify(options), JSON.stringify(storedConfig), displayOrder, req.user.companyId]);
       res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (error instanceof FormulaError || error instanceof ConditionError) return res.status(400).json({ success: false, code: error.code, message: error.message });
@@ -2579,7 +2626,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const child = await getObject(childObjectId, req);
     if (!await canManageGlobal(db, req) && (parent.company_id === null || child.company_id === null)) return res.status(403).json({ success: false, message: "oneengine.manage permission is required to change global relationships" });
     try {
-      const result = await db("INSERT INTO platform_relationships (parent_object_id,child_object_id,relationship_key,label,description,relationship_type,child_field_id,on_delete,on_update,active) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *", [parentObjectId, childObjectId, relationshipKey, label || relationshipKey, description || null, relationshipType, childFieldId, onDelete, onUpdate, active !== false]);
+      const result = await db("INSERT INTO platform_relationships (parent_object_id,child_object_id,relationship_key,label,description,relationship_type,child_field_id,on_delete,on_update,active) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *", [parentObjectId, childObjectId, relationshipKey, String(label || relationshipKey).trim(), description || null, relationshipType, childFieldId, onDelete, onUpdate, active !== false]);
       res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (error.code === "23505") return res.status(409).json({ success: false, message: "A relationship with this key already exists" });
@@ -5342,6 +5389,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
     }
     if (!actions.some((action) => action.type === "validation")) return null;
+    const bypassPermission = rule.action?.bypassPermission;
+    if (bypassPermission) {
+      const permission = await db("SELECT 1 FROM permissions WHERE code=$1 LIMIT 1", [bypassPermission]);
+      if (!permission.rows.length) return "Validation bypass permission is not available";
+    }
     return validationRuleError(rule, conditionFields.rows);
   }
 
@@ -5406,8 +5458,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       } else if (type === "DECISION_OUTCOME") {
         const step = traceByStep.get(String(assertion.stepId || ""));
         const result = resultByStep.get(String(assertion.stepId || "")) || step?.metadata?.result || {};
-        actual = result?.outcomeId ?? result?.outcomeLabel ?? result?.branch?.outcome ?? null;
-        passed = String(actual ?? "") === String(assertion.expected ?? "");
+        const isDefaultOutcome = result?.outcomeId == null && (result?.outcomeLabel != null || result?.branch?.outcome != null);
+        actual = isDefaultOutcome ? "__DEFAULT__" : (result?.outcomeId ?? result?.outcomeLabel ?? result?.branch?.outcome ?? null);
+        const expected = String(assertion.expected ?? "");
+        passed = isDefaultOutcome
+          ? ["__DEFAULT__", "Default", "Default Outcome"].includes(expected)
+          : String(actual ?? "") === expected;
       } else if (type === "RESOURCE_EQUALS") {
         actual = resolveWorkflowResource(assertion.resource, {
           record: context.record || null,
@@ -5422,7 +5478,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       } else {
         actual = "Unsupported assertion";
       }
-      return { index, type, passed, expected: assertion?.expected, actual, label: assertion?.label || null };
+      return { index, type, passed, expected: assertion?.expected, actual, label: assertion?.label || null, stepId: assertion?.stepId || null, resource: assertion?.resource || null };
     });
     return { passed: checks.every((check) => check.passed), checks };
   }
@@ -5577,7 +5633,20 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const debugDb = (query, params = []) => client.query(query, params);
       let results = [];
       let debugError = null;
-      const workflowVariables = { variables: {}, steps: {} };
+      const declaredInputs = Array.isArray(workflow.action?.inputContract) ? workflow.action.inputContract : [];
+      const suppliedInputs = req.body?.inputs && typeof req.body.inputs === "object" && !Array.isArray(req.body.inputs) ? req.body.inputs : {};
+      const inputVariables = {};
+      for (const input of declaredInputs) {
+        const name = String(input?.name || "").trim();
+        if (!name) continue;
+        const hasValue = Object.prototype.hasOwnProperty.call(suppliedInputs, name);
+        const value = hasValue ? suppliedInputs[name] : input?.defaultValue;
+        if (input?.required === true && (value === undefined || value === null || String(value).trim() === "")) {
+          throw Object.assign(new Error(`Debug input ${input.label || name} is required`), { status: 422 });
+        }
+        if (value !== undefined) inputVariables[name] = value;
+      }
+      const workflowVariables = { variables: inputVariables, steps: {} };
       try {
         results = await executeWorkflowActions({
           actions,
@@ -5737,7 +5806,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           params.push(req.user.companyId);
           where += ` AND company_id=$${params.length}`;
         }
-        if (object.store_scoped && req.user.storeId) {
+        if (object.store_scoped) {
+          if (!req.user.storeId) throw Object.assign(new Error("A store session is required for this Screen Flow record"), { status: 403 });
           params.push(req.user.storeId);
           where += ` AND store_id=$${params.length}`;
         }
@@ -5757,6 +5827,20 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     };
   };
 
+  const mergeScreenInputValues = (screen, values = {}, workflowVariables = {}) => {
+    const next = workflowVariables && typeof workflowVariables === "object"
+      ? JSON.parse(JSON.stringify(workflowVariables))
+      : { variables: {}, steps: {} };
+    if (!next.variables || typeof next.variables !== "object") next.variables = {};
+    if (!next.steps || typeof next.steps !== "object") next.steps = {};
+    for (const component of Array.isArray(screen?.components) ? screen.components : []) {
+      const name = String(component?.name || "").trim();
+      if (!name || component?.input === false || !Object.prototype.hasOwnProperty.call(values || {}, name)) continue;
+      next.variables[name] = values[name];
+    }
+    return next;
+  };
+
   const validateScreenSubmission = (screen, values = {}) => {
     const errors = {};
     const resourceValue = (path) => {
@@ -5772,17 +5856,39 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const localValue = resourceValue(component.visibilityResource);
       const actual = localValue === undefined ? component.visibilityInitialValue : localValue;
       const operator = component.visibilityOperator || "truthy";
-      if (operator === "falsy") return actual == null || actual === "" || actual === false || (Array.isArray(actual) && actual.length === 0);
-      if (operator === "equals") return String(actual ?? "") === String(component.visibilityValue ?? "");
-      if (operator === "not_equals") return String(actual ?? "") !== String(component.visibilityValue ?? "");
-      return !(actual == null || actual === "" || actual === false || (Array.isArray(actual) && actual.length === 0));
+      const expected = component.visibilityValue;
+      const empty = actual == null || actual === "" || (Array.isArray(actual) && actual.length === 0);
+      const falsy = empty || actual === false;
+      if (operator === "falsy") return falsy;
+      if (operator === "is_empty") return empty;
+      if (operator === "is_not_empty") return !empty;
+      if (operator === "equals") return String(actual ?? "") === String(expected ?? "");
+      if (operator === "not_equals") return String(actual ?? "") !== String(expected ?? "");
+      if (operator === "contains") return Array.isArray(actual) ? actual.map(String).includes(String(expected ?? "")) : String(actual ?? "").includes(String(expected ?? ""));
+      if (operator === "not_contains") return Array.isArray(actual) ? !actual.map(String).includes(String(expected ?? "")) : !String(actual ?? "").includes(String(expected ?? ""));
+      if (["greater_than","greater_or_equal","less_than","less_or_equal"].includes(operator)) {
+        const left = Number(actual);
+        const right = Number(expected);
+        if (!Number.isFinite(left) || !Number.isFinite(right)) return false;
+        if (operator === "greater_than") return left > right;
+        if (operator === "greater_or_equal") return left >= right;
+        if (operator === "less_than") return left < right;
+        return left <= right;
+      }
+      return !falsy;
     };
     for (const component of Array.isArray(screen?.components) ? screen.components : []) {
       const name = String(component?.name || "").trim();
       if (!name || component?.input === false) continue;
       const value = values?.[name];
       if (!isVisible(component)) continue;
-      const empty = value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
+      const empty = value === undefined
+        || value === null
+        || value === ""
+        || (Array.isArray(value) && value.length === 0)
+        || (["CHECKBOX","TOGGLE"].includes(component?.type) && value !== true)
+        || (component?.type === "ADDRESS" && value && typeof value === "object" && !Array.isArray(value)
+          && !Object.values(value).some((part) => String(part ?? "").trim()));
       if (component?.required === true && empty) {
         errors[name] = component.requiredMessage || `${component.label || name} is required`;
         continue;
@@ -5912,10 +6018,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         await db("UPDATE platform_workflow_screen_sessions SET status='EXPIRED',updated_at=NOW() WHERE id=$1", [session.id]);
         return res.status(410).json({ success: false, message: "Screen session has expired" });
       }
-      await db(
-        "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',updated_at=NOW() WHERE id=$1 AND company_id=$2",
+      const resumed = await db(
+        "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',updated_at=NOW() WHERE id=$1 AND company_id=$2 AND status='PAUSED' RETURNING id",
         [session.id, req.user.companyId]
       );
+      if (!resumed.rows?.[0]) return res.status(409).json({ success: false, message: "Screen session was already resumed" });
       await db(
         "UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
         [session.run_id, req.user.companyId]
@@ -5928,6 +6035,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   });
 
     router.post("/platform/flow-sessions/:sessionId/submit", ...workflowExecute, async (req, res) => {
+    let processingClaimed = false;
     try {
       const sessionResult = await db(
         "SELECT * FROM platform_workflow_screen_sessions WHERE id=$1 AND company_id=$2 AND (actor_user_id IS NULL OR actor_user_id=$3) LIMIT 1",
@@ -5943,15 +6051,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       const navigation = String(req.body?.navigation || "NEXT").toUpperCase();
       if (!["NEXT","FINISH","BACK","PAUSE"].includes(navigation)) return res.status(400).json({ success: false, message: "Invalid Screen Flow navigation action" });
-      if (navigation === "FINISH" && session.screen?.allowFinish === false) return res.status(409).json({ success: false, message: "Finish is not available for this screen" });
+      if (navigation === "NEXT" && session.screen?.allowNext === false) return res.status(409).json({ success: false, message: "Next is not available for this screen" });
+      if (navigation === "FINISH" && session.screen?.allowFinish !== true) return res.status(409).json({ success: false, message: "Finish is not available for this screen" });
 
       if (navigation === "PAUSE") {
         if (session.screen?.allowPause !== true) return res.status(409).json({ success: false, message: "Pause is not available for this screen" });
         const values = req.body?.values && typeof req.body.values === "object" && !Array.isArray(req.body.values) ? req.body.values : {};
-        await db(
-          "UPDATE platform_workflow_screen_sessions SET status='PAUSED',values=$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
-          [JSON.stringify(values), session.id, req.user.companyId]
+        const pausedVariables = mergeScreenInputValues(session.screen || {}, values, session.workflow_variables);
+        const paused = await db(
+          "UPDATE platform_workflow_screen_sessions SET status='PAUSED',values=$1::jsonb,workflow_variables=$2::jsonb,updated_at=NOW() WHERE id=$3 AND company_id=$4 AND status='ACTIVE' RETURNING id",
+          [JSON.stringify(values), JSON.stringify(pausedVariables), session.id, req.user.companyId]
         );
+        if (!paused.rows?.[0]) return res.status(409).json({ success: false, message: "Screen session was already submitted" });
         await db(
           "UPDATE platform_workflow_runs SET status='PAUSED',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
           [session.run_id, req.user.companyId]
@@ -5971,10 +6082,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (!previous) return res.status(409).json({ success: false, message: "Back navigation is not available" });
 
         const backValues = req.body?.values && typeof req.body.values === "object" && !Array.isArray(req.body.values) ? req.body.values : {};
-        await db(
-          "UPDATE platform_workflow_screen_sessions SET status='CANCELLED_BACK',values=$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
-          [JSON.stringify(backValues), session.id, req.user.companyId]
+        const backVariables = mergeScreenInputValues(session.screen || {}, backValues, session.workflow_variables);
+        const backed = await db(
+          "UPDATE platform_workflow_screen_sessions SET status='CANCELLED_BACK',values=$1::jsonb,workflow_variables=$2::jsonb,updated_at=NOW() WHERE id=$3 AND company_id=$4 AND status='ACTIVE' RETURNING id",
+          [JSON.stringify(backValues), JSON.stringify(backVariables), session.id, req.user.companyId]
         );
+        if (!backed.rows?.[0]) return res.status(409).json({ success: false, message: "Screen session was already submitted" });
         if (session.step_run_id) {
           await db(
             "UPDATE platform_workflow_step_runs SET status='PENDING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND run_id=$2",
@@ -5982,8 +6095,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           );
         }
         await db(
-          "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',submitted_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
-          [previous.id, req.user.companyId]
+          "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',submitted_at=NULL,workflow_variables=$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
+          [JSON.stringify(backVariables), previous.id, req.user.companyId]
         );
         if (previous.step_run_id) {
           await db(
@@ -6017,18 +6130,15 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const errors = validateScreenSubmission(session.screen || {}, values);
       if (Object.keys(errors).length) return res.status(422).json({ success: false, message: "Complete the required screen values", errors });
 
-      const runtime = await loadScreenFlowRuntime(session, req);
-      const workflowVariables = session.workflow_variables && typeof session.workflow_variables === "object"
-        ? JSON.parse(JSON.stringify(session.workflow_variables))
-        : { variables: {}, steps: {} };
-      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
-      if (!workflowVariables.steps || typeof workflowVariables.steps !== "object") workflowVariables.steps = {};
+      const claimed = await db(
+        "UPDATE platform_workflow_screen_sessions SET status='PROCESSING',updated_at=NOW() WHERE id=$1 AND company_id=$2 AND status='ACTIVE' RETURNING id",
+        [session.id, req.user.companyId]
+      );
+      if (!claimed.rows?.[0]) return res.status(409).json({ success: false, message: "Screen session was already submitted" });
+      processingClaimed = true;
 
-      for (const component of Array.isArray(session.screen?.components) ? session.screen.components : []) {
-        const name = String(component?.name || "").trim();
-        if (!name || component?.input === false || !Object.prototype.hasOwnProperty.call(values, name)) continue;
-        workflowVariables.variables[name] = values[name];
-      }
+      const runtime = await loadScreenFlowRuntime(session, req);
+      const workflowVariables = mergeScreenInputValues(session.screen || {}, values, session.workflow_variables);
 
       const historyEntry = { screen: session.screen || {}, values, submittedAt: new Date().toISOString() };
       await db(
@@ -6038,6 +6148,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           WHERE id=$4 AND company_id=$5`,
         [JSON.stringify(values), JSON.stringify(workflowVariables), JSON.stringify([historyEntry]), session.id, req.user.companyId]
       );
+      processingClaimed = false;
 
       if (session.step_run_id) {
         await db(
@@ -6130,6 +6241,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         },
       });
     } catch (error) {
+      if (processingClaimed) {
+        await db(
+          "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',updated_at=NOW() WHERE id=$1 AND company_id=$2 AND status='PROCESSING'",
+          [req.params.sessionId, req.user.companyId]
+        ).catch(() => {});
+      }
       console.error("Screen Flow submit error:", error);
       return res.status(error.status || 500).json({ success: false, message: error.message || "Unable to continue Screen Flow" });
     }
@@ -6272,6 +6389,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           && !meaningfulEdit
           && !forceNewVersion;
         normalizedNext.version = activatingExistingDraft ? Number(rule.draft_version) : currentMax + 1;
+      }
+
+      if (isWorkflow && requestedLifecycle.lifecycle === "INACTIVE" && req.body.active === false) {
+        const updated = await db(
+          `UPDATE platform_rules
+              SET active=false,lifecycle_status='INACTIVE',user_modified=true,updated_at=NOW()
+            WHERE id=$1 AND company_id=$2
+            RETURNING *`,
+          [rule.id, req.user.companyId]
+        );
+        return res.json({ success: true, data: workflowAuthoringRow(updated.rows[0]) });
       }
 
       if (isWorkflow && requestedLifecycle.lifecycle === "DRAFT" && rule.active === true) {
@@ -6430,6 +6558,29 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   });
 
+  function validateWorkflowTestConfig(config = {}, definition = null) {
+    if (String(config.recordMode || "latest") === "specific" && !String(config.recordId || "").trim()) return "Specific-record tests require a record ID";
+    const assertions = Array.isArray(config.assertions) ? config.assertions : [];
+    if (!assertions.length) return "Saved flow tests require at least one assertion";
+    const actions = Array.isArray(definition?.action?.actions) ? definition.action.actions : [];
+    const byId = new Map(actions.filter((item) => item?.id).map((item) => [String(item.id), item]));
+    for (let index = 0; index < assertions.length; index += 1) {
+      const assertion = assertions[index] || {};
+      const type = String(assertion.type || "RUN_STATUS").toUpperCase();
+      if (!["RUN_STATUS", "STEP_STATUS", "DECISION_OUTCOME", "RESOURCE_EQUALS"].includes(type)) return `Assertion ${index + 1} has an unsupported type`;
+      if (type === "STEP_STATUS" && (!assertion.stepId || !byId.has(String(assertion.stepId)))) return `Assertion ${index + 1} must reference an existing element`;
+      if (type === "DECISION_OUTCOME") {
+        const decision = byId.get(String(assertion.stepId || ""));
+        if (!decision || String(decision.type || decision.key || "").toUpperCase() !== "CONDITION") return `Assertion ${index + 1} must reference a Decision element`;
+        const expected = String(assertion.expected || "");
+        const outcomes = Array.isArray(decision.outcomes) ? decision.outcomes : Array.isArray(decision.config?.outcomes) ? decision.config.outcomes : [];
+        if (!["__DEFAULT__", "Default", "Default Outcome"].includes(expected) && !outcomes.some((outcome) => String(outcome?.id || "") === expected)) return `Assertion ${index + 1} must reference a valid Decision outcome`;
+      }
+      if (type === "RESOURCE_EQUALS" && !String(assertion.resource || "").trim()) return `Assertion ${index + 1} must select a resource`;
+    }
+    return "";
+  }
+
   router.get("/platform/rules/:ruleId/tests", ...manage, async (req, res) => {
     const result = await db(
       "SELECT * FROM platform_workflow_tests WHERE company_id=$1 AND workflow_id=$2 AND active=true ORDER BY created_at DESC",
@@ -6442,8 +6593,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     const name = String(req.body?.name || "").trim();
     const config = req.body?.config && typeof req.body.config === "object" ? req.body.config : {};
     if (!name) return res.status(400).json({ success: false, message: "Test name is required" });
-    const workflow = await db("SELECT id FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1", [req.params.ruleId, req.user.companyId]);
+    const workflow = await db("SELECT id,action FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1", [req.params.ruleId, req.user.companyId]);
     if (!workflow.rows.length) return res.status(404).json({ success: false, message: "Workflow not found" });
+    const configIssue = validateWorkflowTestConfig(config, { action: workflow.rows[0].action || {} });
+    if (configIssue) return res.status(400).json({ success: false, message: configIssue });
     const result = await db(
       "INSERT INTO platform_workflow_tests (company_id,workflow_id,name,config,created_by) VALUES ($1,$2,$3,$4::jsonb,$5) RETURNING *",
       [req.user.companyId, req.params.ruleId, name, JSON.stringify(config), req.user.id]
@@ -6470,6 +6623,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   });
 
   router.put("/platform/rules/:ruleId/tests/:testId", ...manage, async (req, res) => {
+    if (req.body?.config !== undefined) {
+      const workflow = await db("SELECT action FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1", [req.params.ruleId, req.user.companyId]);
+      if (!workflow.rows.length) return res.status(404).json({ success: false, message: "Workflow not found" });
+      const configIssue = validateWorkflowTestConfig(req.body.config || {}, { action: workflow.rows[0].action || {} });
+      if (configIssue) return res.status(400).json({ success: false, message: configIssue });
+    }
     const result = await db(
       `UPDATE platform_workflow_tests SET
          name=COALESCE($1,name),
@@ -8499,7 +8658,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const conditionalError = validateConditionalRequired(fields, resolved);
       if (conditionalError) return { status: 422, code: "CONDITIONAL_REQUIRED", message: conditionalError };
       if (!result.rows.length) return { version: current.__validation_version, current };
-      const errors = evaluateValidationRules(result.rows, fields, resolved);
+      const enforceableRules = [];
+      for (const rule of result.rows) {
+        const bypassPermission = rule.action?.bypassPermission;
+        if (bypassPermission && await hasExecutionPermission(req, bypassPermission)) continue;
+        enforceableRules.push(rule);
+      }
+      const errors = evaluateValidationRules(enforceableRules, fields, resolved);
       if (errors.length) return { status: 422, code: "VALIDATION_RULE_FAILED", message: errors.map(error => error.message).join("; "), errors };
     } catch (error) {
       if (error instanceof ConditionError) return { status: 422, code: error.code, message: error.message };

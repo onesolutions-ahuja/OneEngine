@@ -47,6 +47,7 @@ export function validationRuleError(rule, fields) {
   if (!["before_create", "before_update", "before_save"].includes(rule.trigger_key)) return "Validation rules must run before create, update, or both";
   if (typeof rule.action.message !== "string" || !rule.action.message.trim() || rule.action.message.length > 500) return "Enter a validation message (1–500 characters)";
   if (!["all", "any"].includes(rule.action.match || "all")) return "Condition matching must be all or any";
+  if (rule.action.bypassPermission != null && rule.action.bypassPermission !== "" && (typeof rule.action.bypassPermission !== "string" || !/^[a-z][a-z0-9_.-]{1,139}$/.test(rule.action.bypassPermission))) return "Validation bypass permission is invalid";
   const errorLocation = rule.action.errorLocation || rule.action.error_location || "top";
   if (!["top", "field"].includes(errorLocation)) return "Validation error location must be top or field";
   if (errorLocation === "field") {

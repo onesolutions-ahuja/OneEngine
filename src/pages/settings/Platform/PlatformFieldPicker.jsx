@@ -23,6 +23,7 @@ export default function PlatformFieldPicker({
   includeObjectSelector = false,
   objectOnly = false,
   availableFields = null,
+  allowedFieldTypes = null,
   className = "",
   scopeKey = null,
 }) {
@@ -115,10 +116,16 @@ export default function PlatformFieldPicker({
   }, [objects, objectSearch]);
 
   const filteredFields = useMemo(() => {
+    const allowed = Array.isArray(allowedFieldTypes) && allowedFieldTypes.length
+      ? new Set(allowedFieldTypes.map((type) => String(type).toLowerCase()))
+      : null;
+    const compatible = allowed
+      ? fields.filter((field) => allowed.has(String(field.field_type || field.fieldType || "").toLowerCase()))
+      : fields;
     const query = search.trim().toLowerCase();
-    if (!query) return fields;
-    return fields.filter((field) => `${fieldLabel(field)} ${fieldKey(field)}`.toLowerCase().includes(query));
-  }, [fields, search]);
+    if (!query) return compatible;
+    return compatible.filter((field) => `${fieldLabel(field)} ${fieldKey(field)}`.toLowerCase().includes(query));
+  }, [allowedFieldTypes, fields, search]);
 
   const selectField = (key) => {
     onChange?.(key);

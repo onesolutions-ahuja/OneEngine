@@ -29,10 +29,25 @@ function componentVisible(component, values) {
   const localValue = localResourceValue(component.visibilityResource, values)
   const actual = localValue === undefined ? component.visibilityInitialValue : localValue
   const operator = component.visibilityOperator || 'truthy'
-  if (operator === 'falsy') return actual == null || actual === '' || actual === false || (Array.isArray(actual) && actual.length === 0)
-  if (operator === 'equals') return String(actual ?? '') === String(component.visibilityValue ?? '')
-  if (operator === 'not_equals') return String(actual ?? '') !== String(component.visibilityValue ?? '')
-  return !(actual == null || actual === '' || actual === false || (Array.isArray(actual) && actual.length === 0))
+  const expected = component.visibilityValue
+  const empty = actual == null || actual === '' || (Array.isArray(actual) && actual.length === 0)
+  const falsy = empty || actual === false
+  if (operator === 'falsy') return falsy
+  if (operator === 'is_empty') return empty
+  if (operator === 'is_not_empty') return !empty
+  if (operator === 'equals') return String(actual ?? '') === String(expected ?? '')
+  if (operator === 'not_equals') return String(actual ?? '') !== String(expected ?? '')
+  if (operator === 'contains') return Array.isArray(actual) ? actual.map(String).includes(String(expected ?? '')) : String(actual ?? '').includes(String(expected ?? ''))
+  if (operator === 'not_contains') return Array.isArray(actual) ? !actual.map(String).includes(String(expected ?? '')) : !String(actual ?? '').includes(String(expected ?? ''))
+  if (['greater_than','greater_or_equal','less_than','less_or_equal'].includes(operator)) {
+    const left = Number(actual); const right = Number(expected)
+    if (!Number.isFinite(left) || !Number.isFinite(right)) return false
+    if (operator === 'greater_than') return left > right
+    if (operator === 'greater_or_equal') return left >= right
+    if (operator === 'less_than') return left < right
+    return left <= right
+  }
+  return !falsy
 }
 
 function componentOptions(component, values) {
@@ -55,6 +70,7 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
   const [message, setMessage] = useState('')
   const [recordSearch, setRecordSearch] = useState({})
   const [uploading, setUploading] = useState({})
+  const [collapsedSections, setCollapsedSections] = useState({})
 
   const screen = session?.screen || {}
   const components = useMemo(() => Array.isArray(screen.components) ? screen.components : [], [screen.components])
@@ -129,19 +145,20 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
     }
   }
 
-    const searchRecords = async (component, query) => {
+  const searchRecords = async (component, query) => {
     const name = component?.name
     if (!name) return
     const q = String(query || '').trim()
-    setRecordSearch((current) => ({ ...current, [name]: { query: q, loading: q.length >= 2, results: [] } }))
-    if (q.length < 2) return
+    const minChars = Math.max(1, Math.min(5, Number(component.searchMinChars ?? 2)))
+    setRecordSearch((current) => ({ ...current, [name]: { query: q, loading: q.length >= minChars, results: [], searched: q.length >= minChars } }))
+    if (q.length < minChars) return
     try {
       const response = await apiRequest(`/api/platform/search?q=${encodeURIComponent(q)}`)
       const results = Array.isArray(response?.data?.results) ? response.data.results : []
       const filtered = component.objectKey ? results.filter((item) => String(item.objectApiName) === String(component.objectKey)) : results
-      setRecordSearch((current) => ({ ...current, [name]: { query: q, loading: false, results: filtered } }))
+      setRecordSearch((current) => ({ ...current, [name]: { query: q, loading: false, results: filtered, searched: true } }))
     } catch {
-      setRecordSearch((current) => ({ ...current, [name]: { query: q, loading: false, results: [] } }))
+      setRecordSearch((current) => ({ ...current, [name]: { query: q, loading: false, results: [], searched: true, failed: true } }))
     }
   }
 
@@ -271,14 +288,20 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       </div>
     }
     if (component.type === 'RECORD_PICKER') {
-      const state = recordSearch[component.name] || { query: '', loading: false, results: [] }
+      const minChars = Math.max(1, Math.min(5, Number(component.searchMinChars ?? 2)))
+      const state = recordSearch[component.name] || { query: '', loading: false, results: [], searched: false }
       return <div className="relative">
-        <input {...common} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || 'Search records…'} value={state.query} onChange={(event) => searchRecords(component, event.target.value)} />
+        <div className="flex gap-2">
+          <input {...common} className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || 'Search records…'} value={state.query} onChange={(event) => searchRecords(component, event.target.value)} />
+          {value && component.allowClear !== false ? <button type="button" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50" onClick={() => { setValue(component.name, ''); setRecordSearch((current) => ({ ...current, [component.name]: { query: '', loading: false, results: [], searched: false } })); }}>Clear</button> : null}
+        </div>
+        {state.query.length > 0 && state.query.length < minChars ? <div className="mt-1 text-xs text-slate-500">Type {minChars - state.query.length} more character{minChars - state.query.length === 1 ? '' : 's'} to search.</div> : null}
         {state.loading ? <div className="mt-1 text-xs text-slate-500">Searching…</div> : null}
+        {!state.loading && state.searched && !state.results.length ? <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">{state.failed ? 'Search is temporarily unavailable.' : (component.noResultsMessage || 'No matching records')}</div> : null}
         {state.results.length ? <div className="mt-1 max-h-48 overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
           {state.results.map((item) => <button key={`${item.objectApiName}:${item.recordId}`} type="button" className="block w-full border-b border-slate-100 px-3 py-2 text-left hover:bg-slate-50" onClick={() => {
             setValue(component.name, item.recordId)
-            setRecordSearch((current) => ({ ...current, [component.name]: { query: item.primaryLabel || String(item.recordId), loading: false, results: [] } }))
+            setRecordSearch((current) => ({ ...current, [component.name]: { query: item.primaryLabel || String(item.recordId), loading: false, results: [], searched: false } }))
           }}>
             <div className="text-sm font-medium text-slate-800">{item.primaryLabel || item.recordId}</div>
             <div className="text-xs text-slate-500">{item.objectLabel}{item.secondaryLabel ? ` · ${item.secondaryLabel}` : ''}</div>
@@ -311,6 +334,60 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
     return <input {...common} className="w-full rounded-lg border border-slate-300 px-3 py-2" value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)} />
   }
 
+  const renderScreenComponent = (component, index, { nested = false } = {}) => {
+    if (!componentVisible(component, values)) return null
+    const key = component.id || index
+    const spanClass = nested ? 'col-span-12' : `col-span-12 ${widthClass(component.width)}`
+    const childComponents = component.id
+      ? components.filter((candidate) => candidate?.layoutParentId === component.id && componentVisible(candidate, values))
+      : []
+
+    if (component.type === 'CUSTOM_COMPONENT') return <div key={key} className={spanClass}>{renderRegisteredComponent(component)}</div>
+    if (component.type === 'SECTION') {
+      const isCollapsed = component.collapsible === true && collapsedSections[component.id] === true
+      return <section key={key} className={`${spanClass} overflow-hidden rounded-xl border border-slate-200 bg-white`}>
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="min-w-0"><div className="text-sm font-semibold text-slate-800">{component.heading || component.label || 'Section'}</div>{component.helpText ? <div className="mt-0.5 text-xs text-slate-500">{component.helpText}</div> : null}</div>
+          {component.collapsible ? <button type="button" className="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100" aria-expanded={!isCollapsed} onClick={() => setCollapsedSections((current) => ({ ...current, [component.id]: !isCollapsed }))}>{isCollapsed ? 'Expand' : 'Collapse'}</button> : null}
+        </div>
+        {!isCollapsed ? <div className="grid grid-cols-12 gap-4 p-4">{childComponents.length ? childComponents.map((child) => renderScreenComponent(child, components.indexOf(child))) : <div className="col-span-12 text-xs text-slate-400">No content in this section.</div>}</div> : null}
+      </section>
+    }
+    if (component.type === 'COLUMNS') {
+      const columnCount = Math.max(2, Math.min(4, Number(component.columnCount || 2)))
+      const gap = component.columnGap === 'compact' ? 'gap-2' : component.columnGap === 'wide' ? 'gap-8' : 'gap-4'
+      const buckets = Array.from({ length: columnCount }, () => [])
+      childComponents.forEach((child) => {
+        const requested = Number(child.layoutColumn || 1)
+        const bucket = Math.max(1, Math.min(columnCount, Number.isFinite(requested) ? requested : 1)) - 1
+        buckets[bucket].push(child)
+      })
+      return <div key={key} className={`${spanClass} grid ${gap}`} style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}>
+        {buckets.map((bucket, columnIndex) => <div key={columnIndex} className="grid min-w-0 grid-cols-12 content-start gap-4">{bucket.length ? bucket.map((child) => renderScreenComponent(child, components.indexOf(child), { nested: true })) : <div className="col-span-12 min-h-10 rounded-lg border border-dashed border-slate-200" aria-hidden="true" />}</div>)}
+      </div>
+    }
+    if (component.type === 'DISPLAY_TEXT') return <div key={key} className={`${spanClass} text-sm leading-6 text-slate-700`}>{component.text || component.label}</div>
+    if (component.type === 'PROGRESS') {
+      const stages = Array.isArray(screen.stages) ? screen.stages : []
+      const currentStage = component.resolvedStage ?? screen.currentStage
+      const currentValue = currentStage?.value ?? currentStage
+      const currentOrder = Number(currentStage?.order || 0)
+      return <div key={key} className={spanClass}>
+        {component.progressStyle === 'bar' ? <div><div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-slate-900" style={{ width: `${stages.length ? Math.max(0, Math.min(100, ((Math.max(1, currentOrder || 1)) / stages.length) * 100)) : 0}%` }} /></div>{component.showStageLabels !== false ? <div className="mt-2 text-xs text-slate-600">{currentStage?.label || currentValue || ''}</div> : null}</div>
+        : component.progressStyle === 'compact' ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">{currentStage?.label || currentValue || 'In progress'}</div>
+        : <div className="flex items-center gap-2 overflow-x-auto">{stages.map((stage, stageIndex) => { const active = currentValue != null ? String(stage.value) === String(currentValue) : currentOrder ? Number(stage.order) === currentOrder : stageIndex === 0; const complete = currentOrder ? Number(stage.order) < currentOrder : false; return <div key={stage.value || stage.label || stageIndex} className="flex min-w-0 flex-1 items-center gap-2"><span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold ${active ? 'border-slate-900 bg-slate-900 text-white' : complete ? 'border-slate-400 bg-slate-200 text-slate-700' : 'border-slate-300 bg-white text-slate-500'}`}>{stageIndex + 1}</span>{component.showStageLabels !== false ? <span className={`truncate text-xs ${active ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>{stage.label}</span> : null}</div> })}</div>}
+      </div>
+    }
+    if (component.type === 'IMAGE') return <div key={key} className={spanClass}><img src={component.resolvedSource || component.source || ''} alt={component.altText || component.label || ''} className="max-h-80 max-w-full rounded-lg object-contain" /></div>
+    if (component.type === 'LINK') return <div key={key} className={spanClass}><a href={component.resolvedHref || component.href || '#'} target={component.linkTarget === 'new' ? '_blank' : '_self'} rel={component.linkTarget === 'new' ? 'noreferrer' : undefined} className="text-sm font-medium text-blue-700 underline">{component.label || component.resolvedHref || component.href}</a></div>
+    return <div key={key} className={spanClass}>
+      <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor={component.id || component.name}>{component.label || component.name}{component.required ? <span className="ml-1 text-red-600">*</span> : null}</label>
+      {renderInput(component)}
+      {component.helpText && !['CHECKBOX','TOGGLE'].includes(component.type) ? <p className="mt-1 text-xs text-slate-500">{component.helpText}</p> : null}
+      {errors[component.name] ? <p className="mt-1 text-xs font-medium text-red-600">{errors[component.name]}</p> : null}
+    </div>
+  }
+
   if (!session) return <div className="min-h-screen bg-slate-50 p-8 text-sm text-slate-600">{message || 'Loading flow…'}</div>
   if (session.status === 'PAUSED') return <div className="min-h-screen bg-slate-50 p-8"><div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h1 className="text-xl font-semibold text-slate-900">Flow paused</h1><p className="mt-3 text-sm text-slate-600">{message || 'Resume when you are ready to continue.'}</p><button type="button" className="mt-5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onClick={async () => { try { const response = await apiRequest(`/api/platform/flow-sessions/${encodeURIComponent(session.id)}/resume`, { method: 'POST' }); hydrate(response?.data); setMessage(''); } catch (error) { setMessage(error.message || 'Unable to resume this flow.') } }}>Resume</button></div></div>
   if (session.status !== 'ACTIVE' || !screen) return <div className="min-h-screen bg-slate-50 p-8"><div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h1 className="text-xl font-semibold text-slate-900">Flow</h1><p className="mt-3 text-sm text-slate-600">{message || `This flow session is ${String(session.status || 'closed').toLowerCase()}.`}</p></div></div>
@@ -337,35 +414,7 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
         </div> : null}
       </header> : null}
       <section className="grid grid-cols-12 gap-4 p-6">
-        {components.filter((component) => componentVisible(component, values)).map((component, index) => {
-          if (component.type === 'CUSTOM_COMPONENT') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}>{renderRegisteredComponent(component)}</div>
-          if (component.type === 'SECTION') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)} border-b border-slate-200 pb-2`}><div className="text-sm font-semibold text-slate-800">{component.heading || component.label}</div>{component.collapsible ? <div className="mt-1 text-[11px] text-slate-400">Collapsible section</div> : null}</div>
-          if (component.type === 'COLUMNS') {
-            const columns = Math.max(2, Math.min(4, Number(component.columnCount || 2)))
-            const gap = component.columnGap === 'compact' ? 'gap-2' : component.columnGap === 'wide' ? 'gap-8' : 'gap-4'
-            return <div key={component.id || index} className={`col-span-12 grid ${gap}`} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }} />
-          }
-          if (component.type === 'DISPLAY_TEXT') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)} text-sm leading-6 text-slate-700`}>{component.text || component.label}</div>
-          if (component.type === 'PROGRESS') {
-            const stages = Array.isArray(screen.stages) ? screen.stages : []
-            const currentStage = component.resolvedStage ?? screen.currentStage
-            const currentValue = currentStage?.value ?? currentStage
-            const currentOrder = Number(currentStage?.order || 0)
-            return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}>
-              {component.progressStyle === 'bar' ? <div><div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-slate-900" style={{ width: `${stages.length ? Math.max(0, Math.min(100, ((Math.max(1, currentOrder || 1)) / stages.length) * 100)) : 0}%` }} /></div>{component.showStageLabels !== false ? <div className="mt-2 text-xs text-slate-600">{currentStage?.label || currentValue || ''}</div> : null}</div>
-              : component.progressStyle === 'compact' ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">{currentStage?.label || currentValue || 'In progress'}</div>
-              : <div className="flex items-center gap-2 overflow-x-auto">{stages.map((stage, stageIndex) => { const active = currentValue != null ? String(stage.value) === String(currentValue) : currentOrder ? Number(stage.order) === currentOrder : stageIndex === 0; const complete = currentOrder ? Number(stage.order) < currentOrder : false; return <div key={stage.value || stage.label || stageIndex} className="flex min-w-0 flex-1 items-center gap-2"><span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold ${active ? 'border-slate-900 bg-slate-900 text-white' : complete ? 'border-slate-400 bg-slate-200 text-slate-700' : 'border-slate-300 bg-white text-slate-500'}`}>{stageIndex + 1}</span>{component.showStageLabels !== false ? <span className={`truncate text-xs ${active ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>{stage.label}</span> : null}</div> })}</div>}
-            </div>
-          }
-          if (component.type === 'IMAGE') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}><img src={component.resolvedSource || component.source || ''} alt={component.altText || component.label || ''} className="max-h-80 max-w-full rounded-lg object-contain" /></div>
-          if (component.type === 'LINK') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}><a href={component.resolvedHref || component.href || '#'} target={component.linkTarget === 'new' ? '_blank' : '_self'} rel={component.linkTarget === 'new' ? 'noreferrer' : undefined} className="text-sm font-medium text-blue-700 underline">{component.label || component.resolvedHref || component.href}</a></div>
-          return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}>
-            <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor={component.id || component.name}>{component.label || component.name}{component.required ? <span className="ml-1 text-red-600">*</span> : null}</label>
-            {renderInput(component)}
-            {component.helpText && !['CHECKBOX','TOGGLE'].includes(component.type) ? <p className="mt-1 text-xs text-slate-500">{component.helpText}</p> : null}
-            {errors[component.name] ? <p className="mt-1 text-xs font-medium text-red-600">{errors[component.name]}</p> : null}
-          </div>
-        })}
+        {components.filter((component) => !component?.layoutParentId).map((component, index) => renderScreenComponent(component, index))}
       </section>
       {message ? <div className="mx-6 mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{message}</div> : null}
       {screen.showFooter !== false ? <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
@@ -373,7 +422,7 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
         <div className="flex gap-2">
           {screen.allowPause ? <button type="button" disabled={busy} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50" onClick={() => submit('PAUSE')}>{screen.pauseLabel || 'Pause'}</button> : null}
           {screen.allowFinish ? <button type="button" disabled={busy} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50" onClick={() => submit('FINISH')}>{screen.finishLabel || 'Finish'}</button> : null}
-          <button type="button" disabled={busy} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={() => submit('NEXT')}>{busy ? 'Working…' : (screen.nextLabel || 'Next')}</button>
+          {screen.allowNext !== false ? <button type="button" disabled={busy} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={() => submit('NEXT')}>{busy ? 'Working…' : (screen.nextLabel || 'Next')}</button> : null}
         </div>
       </footer> : null}
     </main>

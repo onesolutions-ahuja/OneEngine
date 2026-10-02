@@ -1,6 +1,6 @@
 import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
-import { TRUSTED_JOB_KINDS } from "./trustedRuntime.js";
+import { TRUSTED_JOB_KINDS } from "./trustedJobKinds.js";
 
 function titleCase(value = "") {
   return String(value)

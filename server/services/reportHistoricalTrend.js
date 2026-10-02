@@ -28,8 +28,8 @@ export function validateHistoricalTrendForObject(trend = {}, object = {}, fields
   const todayEnd = endOfSnapshot(new Date().toISOString().slice(0,10));
   for (const value of snapshotDates) {
     const snapshot = endOfSnapshot(value);
-    if (snapshot < retentionStart) throw new Error("Historical snapshot is outside the retained historical window");
     if (enabledAt && snapshot < enabledAt) throw new Error("Historical snapshot predates Historical Trending enablement");
+    if (snapshot < retentionStart) throw new Error("Historical snapshot is outside the retained historical window");
     if (snapshot > todayEnd) throw new Error("Historical snapshot cannot be in the future");
   }
   const historicalFilters = (Array.isArray(trend.historicalFilters) ? trend.historicalFilters : []).slice(0,4).map((filter) => {
