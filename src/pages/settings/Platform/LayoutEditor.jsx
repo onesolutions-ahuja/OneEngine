@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Lock, Plus, Search, Trash2, X } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
+import { loadRoles } from "../../../services/settings.js";
 import { toSafeApiName, withGeneratedApiName } from "./safeApiName.js";
 import PlatformFieldPicker from "./PlatformFieldPicker.jsx";
 import MetadataResourcePicker from "./MetadataResourcePicker.jsx";
@@ -356,7 +357,13 @@ export default function LayoutEditor({
   useEffect(() => {
     if (roles?.length) {
       setAvailableRoles(roles);
+      return;
     }
+    let cancelled = false;
+    loadRoles()
+      .then((rows) => { if (!cancelled) setAvailableRoles(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (!cancelled) setAvailableRoles([]); });
+    return () => { cancelled = true; };
   }, [roles]);
 
   useEffect(() => {
@@ -439,7 +446,7 @@ export default function LayoutEditor({
       );
       const recordTypesData = await apiRequest(`/api/platform/objects/${objectId}/record-types`);
       const recordTypesLoaded = recordTypesData?.data || [];
-      setRecordTypes(Array.isArray(recordTypesLoaded) ? recordTypesLoaded : []);
+      setRecordTypes(Array.isArray(recordTypesLoaded) ? recordTypesLoaded.filter((recordType) => recordType.active !== false) : []);
       const relationshipsData = await apiRequest("/api/platform/relationships");
       const relationshipRows = relationshipsData?.data || [];
       const scopedRelationships = Array.isArray(relationshipRows)
