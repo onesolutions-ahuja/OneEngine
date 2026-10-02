@@ -7516,7 +7516,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     try {
       const dependentPicklistError = await validateDependentPicklistValues(db, fields, candidate, req);
       if (dependentPicklistError) return { status: 422, code: "DEPENDENT_PICKLIST_INVALID", message: dependentPicklistError };
-      const calculated = compileFormulas(fields)(candidate);
+      const formulaRecords = await calculateFormulaRecords(db, object, fields, [candidate], req);
+      const calculated = formulaRecords[0] || candidate;
       const withRollups = await populateRollups(db, object, fields, [calculated], req);
       const resolved = Array.isArray(withRollups) && withRollups.length ? withRollups[0] : calculated;
       const conditionalError = validateConditionalRequired(fields, resolved);
@@ -7581,15 +7582,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       saved = result.rows[0];
       await writeRecordHistory(object, saved.id, fields, null, saved, "create", req);
     }
-    const calculate = compileFormulas(metadataFields);
+    const calculatedSaved = (await calculateFormulaRecords(db, object, metadataFields, [saved], req))[0] || saved;
     const automation = await executePlatformAutomations({
-      db, object, fields: metadataFields, record: calculate(saved), recordId: saved.id,
+      db, object, fields: metadataFields, record: calculatedSaved, recordId: saved.id,
       trigger: action === "update" ? "after_update" : "after_create",
       previousRecord: action === "update" ? ruleCheck.current : null,
       req,
     });
-    const approval = await submitPlatformApproval({ db, object, fields: metadataFields, recordId: saved.id, record: calculate(automation.record), req });
-    const hydrated = await populateRollups(db, object, metadataFields, [calculate(automation.record)], req);
+    const calculatedAutomationRecord = (await calculateFormulaRecords(db, object, metadataFields, [automation.record], req))[0] || automation.record;
+    const approval = await submitPlatformApproval({ db, object, fields: metadataFields, recordId: saved.id, record: calculatedAutomationRecord, req });
+    const hydrated = await populateRollups(db, object, metadataFields, [calculatedAutomationRecord], req);
     try {
       await publishPlatformEvent({
         db,
@@ -8118,9 +8120,9 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       `SELECT id${columns.length ? `, ${columns.join(", ")}` : ""} FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}${order} LIMIT ${dataParams.length - 1} OFFSET ${dataParams.length}`,
       dataParams
     );
-    const calculate = compileFormulas(childMetadata.fields);
     const hydrated = await hydrateExtensions(db, child, fields, result.rows, req);
-    const calculated = await populateRollups(db, child, childMetadata.fields, hydrated.map((record) => calculate(record)), req);
+    const formulaRecords = await calculateFormulaRecords(db, child, childMetadata.fields, hydrated, req);
+    const calculated = await populateRollups(db, child, childMetadata.fields, formulaRecords, req);
     const records = calculated.map((record) => publicFormulaRecord(fields, record));
     res.json({ success: true, data: records, records, relationship, pageSize: limit, offset, total, page, pages });
   } catch (error) {
@@ -8142,7 +8144,6 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       if (systemObject(object)) object.company_scoped = true;
       const safeFields = safeSystemFields(object, metadataFields.rows);
       const fields = await applyFieldSecurity(db, safeFields, req);
-      const calculate = compileFormulas(safeFields);
       const readableFields = fields.filter((field) => field.readable !== false && field.field_type !== "formula" && field.field_type !== "rollup" && isSafeIdentifier(field.api_name) && Boolean(platformFieldSql(field, object)));
       const listView = req.query.listViewId ? (await db(
         `SELECT * FROM platform_list_views
@@ -8277,7 +8278,8 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const associations = await loadRecordTypeAssociations(object, result.rows.map((record) => record.id), req);
       const typeByRecord = new Map(associations.rows.map((row) => [String(row.record_id), row.record_type_id]));
       const extended = await hydrateExtensions(db, object, fields, result.rows, req);
-      const hydrated = await populateRollups(db, object, fields, extended.map((record) => calculate(record)), req);
+      const formulaRecords = await calculateFormulaRecords(db, object, safeFields, extended, req);
+      const hydrated = await populateRollups(db, object, fields, formulaRecords, req);
       result.rows = hydrated.map((record) => ({ ...publicFormulaRecord(fields, record), recordTypeId: typeByRecord.get(String(record.id)) ?? null }));
       res.json({ success: true, data: result.rows, records: result.rows, page, pageSize, total, pages });
     } catch (error) {
