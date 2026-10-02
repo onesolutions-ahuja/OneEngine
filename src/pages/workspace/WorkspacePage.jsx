@@ -744,7 +744,25 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
                   objectState: editor.targetObject || selectedObject || {},
                 }))
                 .map((field) => (
-                <WorkspaceField key={field.id || field.api_name} field={field} value={editor.values?.[field.api_name]} onChange={(value) => setEditor((current) => ({ ...current, values: { ...current.values, [field.api_name]: value } }))} />
+                <WorkspaceField
+                  key={field.id || field.api_name}
+                  field={field}
+                  value={editor.values?.[field.api_name]}
+                  values={editor.values || {}}
+                  onChange={(value) => setEditor((current) => {
+                    const nextValues = { ...current.values, [field.api_name]: value };
+                    for (const candidate of current.targetFields || fields) {
+                      const dependent = candidate?.config?.dependentPicklist || candidate?.config?.dependent_picklist;
+                      const controllingField = dependent?.controllingField || dependent?.controlling_field;
+                      if (controllingField !== field.api_name) continue;
+                      const currentValue = nextValues[candidate.api_name];
+                      if (currentValue === null || currentValue === undefined || currentValue === "") continue;
+                      const allowed = dependent?.mappings?.[String(currentValue)];
+                      if (!Array.isArray(allowed) || !allowed.map(String).includes(String(value))) nextValues[candidate.api_name] = "";
+                    }
+                    return { ...current, values: nextValues };
+                  })}
+                />
               ))}
             </div>
             <footer><button type="button" onClick={() => setEditor(null)}>Cancel</button><button type="submit" className="workspace-save"><Save size={13}/> Save</button></footer>
@@ -755,14 +773,25 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   )
 }
 
-function WorkspaceField({ field, value, onChange }) {
+function WorkspaceField({ field, value, values = {}, onChange }) {
   const type = String(field.field_type || 'text').toLowerCase()
   if (type === 'boolean') {
     return <label className="workspace-editor-check"><input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} /><span>{field.label || field.api_name}</span></label>
   }
   if (['picklist','select'].includes(type)) {
-    const options = Array.isArray(field.options) ? field.options : []
-    return <label><span>{field.label || field.api_name}</span><select value={value ?? ''} onChange={(e) => onChange(e.target.value)}><option value="">Select…</option>{options.filter((o) => o.active !== false).map((o) => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o.value ?? o}</option>)}</select></label>
+    const dependent = field?.config?.dependentPicklist || field?.config?.dependent_picklist
+    const controllingField = dependent?.controllingField || dependent?.controlling_field || ''
+    const controllingValue = controllingField ? values?.[controllingField] : null
+    const options = (Array.isArray(field.options) ? field.options : [])
+      .filter((option) => option?.active !== false)
+      .filter((option) => {
+        if (!controllingField) return true
+        if (controllingValue === null || controllingValue === undefined || controllingValue === '') return false
+        const optionValue = String(option?.value ?? option?.key ?? option?.label ?? option)
+        const allowed = dependent?.mappings?.[optionValue]
+        return Array.isArray(allowed) && allowed.map(String).includes(String(controllingValue))
+      })
+    return <label><span>{field.label || field.api_name}</span><select value={value ?? ''} onChange={(e) => onChange(e.target.value)}><option value="">Select…</option>{options.map((o) => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o.value ?? o}</option>)}</select></label>
   }
   const htmlType = ['number','decimal','currency'].includes(type) ? 'number' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : type === 'email' ? 'email' : type === 'phone' ? 'tel' : 'text'
   return <label><span>{field.label || field.api_name}</span><input type={htmlType} value={value ?? ''} required={field.required === true} onChange={(e) => onChange(e.target.value)} /></label>
