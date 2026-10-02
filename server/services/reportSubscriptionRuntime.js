@@ -4,7 +4,7 @@ import { executeAnalyticsDefinition } from "./reportExecution.js";
 import { buildPlatformObjectQuery, validatePlatformReportDefinition } from "./reportableSources.js";
 import { loadPlatformReportContext } from "./platformReportSecurity.js";
 import { normalizeReportType } from "./reportTypeDefinition.js";
-import { executeRegisteredAction } from "./platformActions.js";
+import { executeMediatedRegisteredAction } from "./platformWorkflow.js";
 import { buildDetailsCsv, buildFormattedXlsx } from "./reportExport.js";
 import {
   filterReportSubscriptionRecipientsByAccess,
@@ -280,7 +280,7 @@ export async function processReportSubscriptionDeliveryJob({ db, payload = {} } 
       const deliveryId = await deliveryNeeded(recipient.id, "EMAIL");
       if (deliveryId) {
         try {
-          const outcome = await executeRegisteredAction({
+          const outcome = await executeMediatedRegisteredAction({
             db,
             companyId: row.company_id,
             userId: executionUser.id,
