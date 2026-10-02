@@ -270,6 +270,45 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:methodType,trust:methodType==="TEMPORARY_CODE"?false:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
   });
 
+  router.post("/auth/passkey/login/options",async(req,res)=>{
+    const identifier=String(req.body?.identifier||req.body?.email||req.body?.username||"").trim();
+    if(!identifier)return res.status(400).json({success:false,message:"Email or username is required"});
+    const found=await db(`SELECT u.*,r.name role_name,COALESCE(r.default_landing_page,'dashboard') default_landing_page
+      FROM users u LEFT JOIN roles r ON r.id=u.role_id
+      WHERE (LOWER(BTRIM(u.email))=LOWER(BTRIM($1)) OR LOWER(u.username)=LOWER(BTRIM($1)))
+        AND u.active=TRUE LIMIT 1`,[identifier]);
+    const user=found.rows[0];
+    if(!user)return res.status(404).json({success:false,code:"PASSKEY_UNAVAILABLE",message:"Passkey sign-in is not available for this account"});
+    const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    if(!policy.effective.allowPasskeyLogin)return res.status(403).json({success:false,code:"PASSKEY_LOGIN_DISABLED",message:"Passkey sign-in is disabled by company security policy"});
+    const methods=(await listMfaMethods(db,{companyId:user.company_id,userId:user.id})).filter(x=>x.method_type==="PASSKEY"&&mfaMethodAllowed(x,policy.effective));
+    if(!methods.length)return res.status(409).json({success:false,code:"PASSKEY_NOT_ENROLLED",message:"No passkey is enrolled for this account"});
+    const {generateAuthenticationOptions}=await import("@simplewebauthn/server");
+    const rpID=String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0].split(",")[0].trim();
+    const options=await generateAuthenticationOptions({rpID,userVerification:"required",allowCredentials:methods.map(x=>({id:x.credential_id,transports:Array.isArray(x.transports)?x.transports:[]}))});
+    const challenge=await createPendingChallenge(db,{companyId:user.company_id,userId:user.id,type:"PASSKEY_AUTHENTICATION",challenge:options.challenge,context:{rpID,userVerificationRequired:true,authMethod:"PASSKEY"},minutes:5});
+    res.json({success:true,challengeId:challenge.id,data:options});
+  });
+
+  router.post("/auth/passkey/login/verify",async(req,res)=>{
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["PASSKEY_AUTHENTICATION"]);
+    if(!challenge||!user)return res.status(400).json({success:false,code:"PASSKEY_CHALLENGE_EXPIRED",message:"Passkey sign-in challenge is invalid or expired"});
+    const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    if(!policy.effective.allowPasskeyLogin)return res.status(403).json({success:false,code:"PASSKEY_LOGIN_DISABLED",message:"Passkey sign-in is disabled by company security policy"});
+    const credId=String(req.body?.credential?.id||"");
+    const found=await db("SELECT * FROM identity_mfa_methods WHERE company_id=$1 AND user_id=$2 AND method_type='PASSKEY' AND credential_id=$3 AND active=TRUE AND verified=TRUE LIMIT 1",[user.company_id,user.id,credId]);
+    const method=found.rows[0];
+    if(!method||!mfaMethodAllowed(method,policy.effective))return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey is not registered or is disabled"});
+    const {verifyAuthenticationResponse}=await import("@simplewebauthn/server");
+    const rpID=challenge.context?.rpID||String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0];
+    const origin=String(req.headers?.origin||("https://"+rpID));
+    let verification;
+    try{verification=await verifyAuthenticationResponse({response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:true,credential:{id:method.credential_id,publicKey:base64urlBuffer(method.public_key),counter:Number(method.sign_count||0),transports:Array.isArray(method.transports)?method.transports:[]}});}catch{return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});}
+    if(!verification.verified)return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});
+    await db("UPDATE identity_mfa_methods SET sign_count=$2,last_used_at=NOW() WHERE id=$1",[method.id,verification.authenticationInfo?.newCounter||method.sign_count]);
+    const assurance=policy.effective.passkeyAssurance||"HIGH";
+    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+  });
   router.post("/auth/mfa/passkey/registration-options",async(req,res)=>{
     const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
