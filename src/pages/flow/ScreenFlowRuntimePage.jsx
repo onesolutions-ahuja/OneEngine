@@ -220,11 +220,11 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       'aria-invalid': Boolean(errors[component.name]),
     }
     if (component.type === 'TEXT_AREA') {
-      return <textarea {...common} rows={component.rows || 4} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || ''} value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)} />
+      return <textarea {...common} rows={component.rows || 4} minLength={component.minLength === '' || component.minLength == null ? undefined : Number(component.minLength)} maxLength={component.maxLength === '' || component.maxLength == null ? undefined : Number(component.maxLength)} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || ''} value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)} />
     }
     if (['TEXT','EMAIL','PASSWORD','DATE','DATETIME','NUMBER'].includes(component.type)) {
       const type = component.type === 'DATETIME' ? 'datetime-local' : component.type.toLowerCase()
-      return <input {...common} type={type} min={component.min} max={component.max} pattern={component.pattern || undefined} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || ''} value={value ?? ''} onChange={(event) => setValue(component.name, component.type === 'NUMBER' ? event.target.value : event.target.value)} />
+      return <input {...common} type={type} min={component.min} max={component.max} step={component.type === 'NUMBER' ? (component.step || 'any') : undefined} minLength={component.minLength === '' || component.minLength == null ? undefined : Number(component.minLength)} maxLength={component.maxLength === '' || component.maxLength == null ? undefined : Number(component.maxLength)} pattern={component.pattern || undefined} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || ''} value={value ?? ''} onChange={(event) => setValue(component.name, component.type === 'NUMBER' ? event.target.value : event.target.value)} />
     }
     if (['CHECKBOX','TOGGLE'].includes(component.type)) {
       return <label className="flex items-center gap-2"><input {...common} type="checkbox" checked={Boolean(value)} onChange={(event) => setValue(component.name, event.target.checked)} /><span>{component.toggleLabel || component.helpText || component.label}</span></label>
@@ -339,11 +339,26 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       <section className="grid grid-cols-12 gap-4 p-6">
         {components.filter((component) => componentVisible(component, values)).map((component, index) => {
           if (component.type === 'CUSTOM_COMPONENT') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}>{renderRegisteredComponent(component)}</div>
-                    if (component.type === 'SECTION') return <div key={component.id || index} className="col-span-12 border-b border-slate-200 pb-2 text-sm font-semibold text-slate-800">{component.label}</div>
-          if (component.type === 'COLUMNS') return <div key={component.id || index} className="col-span-12 grid grid-cols-12 gap-4" />
+          if (component.type === 'SECTION') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)} border-b border-slate-200 pb-2`}><div className="text-sm font-semibold text-slate-800">{component.heading || component.label}</div>{component.collapsible ? <div className="mt-1 text-[11px] text-slate-400">Collapsible section</div> : null}</div>
+          if (component.type === 'COLUMNS') {
+            const columns = Math.max(2, Math.min(4, Number(component.columnCount || 2)))
+            const gap = component.columnGap === 'compact' ? 'gap-2' : component.columnGap === 'wide' ? 'gap-8' : 'gap-4'
+            return <div key={component.id || index} className={`col-span-12 grid ${gap}`} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }} />
+          }
           if (component.type === 'DISPLAY_TEXT') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)} text-sm leading-6 text-slate-700`}>{component.text || component.label}</div>
-          if (component.type === 'IMAGE') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}><img src={component.src || component.url || ''} alt={component.alt || component.label || ''} className="max-h-80 max-w-full rounded-lg object-contain" /></div>
-          if (component.type === 'LINK') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}><a href={component.url || '#'} target={component.newWindow === false ? '_self' : '_blank'} rel="noreferrer" className="text-sm font-medium text-blue-700 underline">{component.label || component.url}</a></div>
+          if (component.type === 'PROGRESS') {
+            const stages = Array.isArray(screen.stages) ? screen.stages : []
+            const currentStage = component.resolvedStage ?? screen.currentStage
+            const currentValue = currentStage?.value ?? currentStage
+            const currentOrder = Number(currentStage?.order || 0)
+            return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}>
+              {component.progressStyle === 'bar' ? <div><div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-slate-900" style={{ width: `${stages.length ? Math.max(0, Math.min(100, ((Math.max(1, currentOrder || 1)) / stages.length) * 100)) : 0}%` }} /></div>{component.showStageLabels !== false ? <div className="mt-2 text-xs text-slate-600">{currentStage?.label || currentValue || ''}</div> : null}</div>
+              : component.progressStyle === 'compact' ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">{currentStage?.label || currentValue || 'In progress'}</div>
+              : <div className="flex items-center gap-2 overflow-x-auto">{stages.map((stage, stageIndex) => { const active = currentValue != null ? String(stage.value) === String(currentValue) : currentOrder ? Number(stage.order) === currentOrder : stageIndex === 0; const complete = currentOrder ? Number(stage.order) < currentOrder : false; return <div key={stage.value || stage.label || stageIndex} className="flex min-w-0 flex-1 items-center gap-2"><span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold ${active ? 'border-slate-900 bg-slate-900 text-white' : complete ? 'border-slate-400 bg-slate-200 text-slate-700' : 'border-slate-300 bg-white text-slate-500'}`}>{stageIndex + 1}</span>{component.showStageLabels !== false ? <span className={`truncate text-xs ${active ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>{stage.label}</span> : null}</div> })}</div>}
+            </div>
+          }
+          if (component.type === 'IMAGE') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}><img src={component.resolvedSource || component.source || ''} alt={component.altText || component.label || ''} className="max-h-80 max-w-full rounded-lg object-contain" /></div>
+          if (component.type === 'LINK') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}><a href={component.resolvedHref || component.href || '#'} target={component.linkTarget === 'new' ? '_blank' : '_self'} rel={component.linkTarget === 'new' ? 'noreferrer' : undefined} className="text-sm font-medium text-blue-700 underline">{component.label || component.resolvedHref || component.href}</a></div>
           return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)}`}>
             <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor={component.id || component.name}>{component.label || component.name}{component.required ? <span className="ml-1 text-red-600">*</span> : null}</label>
             {renderInput(component)}
