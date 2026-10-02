@@ -3,7 +3,7 @@ import express from "express";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
 import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
-import { compileFormulas, evaluateWorkflowFormula, FormulaError, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS } from "../services/platformFormula.js";
+import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
 import { executePlatformAutomations } from "../services/platformAutomation.js";
 import { hasConfiguredCommunicationProvider } from "../services/platformWorkflow.js";
@@ -1966,7 +1966,58 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         if (!["number", "decimal", "currency", "boolean", "text"].includes(storedType)) throw new FormulaError("Rollup result type is unsupported");
       }
     }
-    if (candidate.field_type === "formula" && candidate.active !== false) compileFormulas([{ ...candidate, active: true }, ...fields.filter(field => field !== candidate)]);
+    if (candidate.field_type === "formula" && candidate.active !== false) {
+      const expression = candidate.config?.expression;
+      const references = formulaReferences(expression);
+      const dotted = references.filter((reference) => reference.includes("."));
+      if (dotted.length) {
+        const [rootResult, objectsResult, allFieldsResult, relationshipsResult] = await Promise.all([
+          db("SELECT * FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [objectId, req.user.companyId]),
+          db("SELECT * FROM platform_objects WHERE active=true AND (company_id IS NULL OR company_id=$1)", [req.user.companyId]),
+          db("SELECT * FROM platform_fields WHERE active=true AND (company_id IS NULL OR company_id=$1)", [req.user.companyId]),
+          db(`SELECT r.*,p.object_key AS parent_object_key,c.object_key AS child_object_key
+                FROM platform_relationships r
+                JOIN platform_objects p ON p.id=r.parent_object_id
+                JOIN platform_objects c ON c.id=r.child_object_id
+               WHERE r.active=true
+                 AND (p.company_id IS NULL OR p.company_id=$1)
+                 AND (c.company_id IS NULL OR c.company_id=$1)`, [req.user.companyId]),
+        ]);
+        const root = rootResult.rows[0];
+        if (!root) throw new FormulaError("Formula object is unavailable");
+        const catalog = buildRecordPathCatalog(
+          { objects: objectsResult.rows, fields: allFieldsResult.rows, relationships: relationshipsResult.rows },
+          root.object_key,
+          6
+        );
+        const fieldById = new Map(allFieldsResult.rows.map((field) => [String(field.id), field]));
+        const pathTypes = {};
+        for (const reference of dotted) {
+          const canonical = reference.startsWith(`${root.object_key}.`) ? reference : `${root.object_key}.${reference}`;
+          const fieldEntry = catalog.find((entry) => entry.kind === "field" && entry.path === canonical);
+          if (!fieldEntry) throw new FormulaError(`Formula record path is unavailable: ${reference}`);
+          const parts = canonical.split(".");
+          for (let index = 2; index < parts.length; index += 1) {
+            const prefix = parts.slice(0, index).join(".");
+            const relationshipEntry = catalog.find((entry) => entry.kind === "relationship" && entry.path === prefix);
+            if (!relationshipEntry || relationshipEntry.direction !== "inverse") {
+              throw new FormulaError(`Formula path must use scalar lookup/parent relationships: ${reference}`);
+            }
+          }
+          const targetField = fieldById.get(String(fieldEntry.fieldId));
+          const targetType = targetField?.field_type === "formula" || targetField?.field_type === "rollup"
+            ? targetField?.config?.resultType || targetField?.config?.result_type
+            : targetField?.field_type;
+          if (!targetType) throw new FormulaError(`Formula record path type is unavailable: ${reference}`);
+          pathTypes[reference] = targetType;
+        }
+        candidate.config = { ...(candidate.config || {}), recordPathTypes: pathTypes };
+      } else if (candidate.config?.recordPathTypes || candidate.config?.record_path_types) {
+        const { recordPathTypes: _oldCamel, record_path_types: _oldSnake, ...rest } = candidate.config;
+        candidate.config = rest;
+      }
+      compileFormulas([{ ...candidate, active: true }, ...fields.filter(field => field !== candidate)]);
+    }
     compileFormulas(fields);
   }
 
