@@ -1181,6 +1181,7 @@ function makeStep(type = "CREATE_RECORD") {
         finishLabel: "Finish",
         showHeader: true,
         showFooter: true,
+        currentStageResource: "",
       },
       allowBack: true,
       allowFinish: true,
@@ -2124,6 +2125,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <label className="block text-xs font-medium text-slate-600">Previous Label<input className={inputClass} value={screen.backLabel || "Previous"} onChange={(event) => updateScreen({ backLabel: event.target.value })} /></label>
               <label className="block text-xs font-medium text-slate-600">Finish Label<input className={inputClass} value={screen.finishLabel || "Finish"} onChange={(event) => updateScreen({ finishLabel: event.target.value })} /></label>
             </div>
+            <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "stage")} label="Current Stage Resource (optional)" value={screen.currentStageResource || ""} onChange={(currentStageResource) => updateScreen({ currentStageResource })} />
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -2182,6 +2184,17 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                           <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="" value={component.visibilityResource || ""} onChange={(visibilityResource) => updateComponent(componentIndex, { visibilityResource })} />
                         </label>
                       </div>
+                      {component.visibilityResource ? <div className="grid gap-2 md:grid-cols-2">
+                        <label className="block text-xs font-medium text-slate-600">Visibility Operator
+                          <select className={inputClass} value={component.visibilityOperator || "truthy"} onChange={(event) => updateComponent(componentIndex, { visibilityOperator: event.target.value })}>
+                            <option value="truthy">Is True / Has Value</option>
+                            <option value="falsy">Is False / Empty</option>
+                            <option value="equals">Equals</option>
+                            <option value="not_equals">Does Not Equal</option>
+                          </select>
+                        </label>
+                        {["equals","not_equals"].includes(component.visibilityOperator) ? <label className="block text-xs font-medium text-slate-600">Compare Value<input className={inputClass} value={component.visibilityValue ?? ""} onChange={(event) => updateComponent(componentIndex, { visibilityValue: event.target.value })} /></label> : <div />}
+                      </div> : null}
                       <div className="flex justify-between gap-2">
                         <div className="flex gap-1">
                           <button type="button" className="rounded border border-slate-200 px-2 py-1 text-xs" disabled={componentIndex === 0} onClick={() => {
