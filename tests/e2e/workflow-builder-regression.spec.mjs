@@ -48,7 +48,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   const workflowWorkspace = page.getByLabel("Workflow Builder workspace");
   await expect(workflowWorkspace.getByRole("button", { name: "Debug", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "View Tests", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Version History", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Edit History", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save As", exact: true })).toBeDisabled();
 
   await workflowWorkspace.getByRole("button", { name: "Debug", exact: true }).click();
@@ -74,10 +74,10 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await savedRow.click();
 
   await expect(page.getByRole("button", { name: "View Tests", exact: true })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Version History", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Edit History", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Save As", exact: true })).toBeEnabled();
 
-  await page.getByRole("button", { name: "Version History", exact: true }).click();
+  await page.getByRole("button", { name: "Edit History", exact: true }).click();
   const versionHistory = page.getByText("Version History", { exact: true });
   await expect(versionHistory).toBeVisible();
   await expect(page.getByText(/^Version \d+$/).first()).toBeVisible();
@@ -174,7 +174,7 @@ test("email provider actions use metadata resources instead of hardcoded recipie
 
   const actionSearch = page.getByLabel("Search actions");
   await actionSearch.fill("Send Email - Brevo");
-  const brevo = page.getByRole("button", { name: "Send Email - Brevo", exact: true });
+  const brevo = page.getByRole("button", { name: /Send Email - Brevo/ }).first();
   await expect(brevo).toBeEnabled();
   await brevo.click();
 
@@ -195,7 +195,7 @@ test("email provider actions use metadata resources instead of hardcoded recipie
   await palette.getByLabel("Search flow elements").fill("Action");
   await palette.getByRole("button", { name: "Action", exact: true }).click();
   await page.getByLabel("Search actions").fill("Send Email - Mailjet");
-  const mailjet = page.getByRole("button", { name: "Send Email - Mailjet", exact: true });
+  const mailjet = page.getByRole("button", { name: /Send Email - Mailjet/ }).first();
   await expect(mailjet).toBeEnabled();
   await mailjet.click();
   await expect(page.getByText("Mailjet", { exact: true })).toBeVisible();
