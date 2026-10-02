@@ -86,8 +86,8 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.status(202).json({success:true,required:true,challengeId:challenge.id,availableMethods:methods.map(publicMethod),
       enrollmentRequired:methods.length===0,requiredAssurance:policy.required_assurance||"HIGH",
       allowedEnrollmentMethods:[
-        ...(assurance.effective.allowPlatformPasskeys?["PLATFORM_PASSKEY"]:[]),
-        ...(assurance.effective.allowSecurityKeys?["SECURITY_KEY"]:[]),
+        ...(assuranceSatisfies(assurance.effective.passkeyAssurance,policy.required_assurance||"HIGH")&&assurance.effective.allowPlatformPasskeys?["PLATFORM_PASSKEY"]:[]),
+        ...(assuranceSatisfies(assurance.effective.passkeyAssurance,policy.required_assurance||"HIGH")&&assurance.effective.allowSecurityKeys?["SECURITY_KEY"]:[]),
         ...(assuranceSatisfies(assurance.effective.totpAssurance,policy.required_assurance||"HIGH")&&assurance.effective.allowTotp?["TOTP"]:[]),
       ]});
   });
