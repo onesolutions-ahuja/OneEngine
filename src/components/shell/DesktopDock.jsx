@@ -94,7 +94,14 @@ export function Dock({ onItemOpen, collapsible = false }) {
     ) : null}
     <div className={`dock-zone ${collapsible ? 'dock-zone--till' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
       <motion.div className="dock" onMouseMove={(event) => mouseX.set(event.clientX)} onMouseLeave={resetMagnification} aria-label="OneEngine dock">
-        <div className="dock-magnify-zone dock-desktop-items" onTouchStart={trackTouch} onTouchMove={trackTouch} onTouchEnd={resetMagnification} onTouchCancel={resetMagnification}>
+        <div
+          className="dock-magnify-zone dock-desktop-items"
+          style={{ '--dock-item-count': Math.min(dockItems.length, 10) }}
+          onTouchStart={trackTouch}
+          onTouchMove={trackTouch}
+          onTouchEnd={resetMagnification}
+          onTouchCancel={resetMagnification}
+        >
           {dockItems.slice(0, 10).map((item) => <DockItem key={item.id} item={item} mouseX={mouseX} onActivate={() => onItemOpen?.(item.id)} />)}
         </div>
         <div className="dock-fixed-zone">
