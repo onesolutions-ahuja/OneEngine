@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: oneengine-validate-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-audit:
     runs-on: ubuntu-latest
