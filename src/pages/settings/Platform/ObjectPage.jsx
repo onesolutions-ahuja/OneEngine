@@ -209,6 +209,7 @@ export default function ObjectPage({
     useState(suppliedRecord || null);
   const [history, setHistory] = useState([]);
   const [detailLayout, setDetailLayout] = useState(null);
+  const [compactLayout, setCompactLayout] = useState(null);
   const [createLayout, setCreateLayout] = useState(null);
   const [editLayout, setEditLayout] = useState(null);
   const [quickCreateLayout, setQuickCreateLayout] = useState(null);
@@ -252,6 +253,18 @@ export default function ObjectPage({
     () => fields.filter((field) => field?.active !== false && !isTechnicalRecordField(field)),
     [fields]
   );
+  const compactHighlightFields = useMemo(() => {
+    const byKey = new Map(activeFields.map((field) => [getFieldKey(field), field]));
+    const configured = Array.isArray(compactLayout?.definition?.components)
+      ? compactLayout.definition.components
+          .filter((component) => component?.type === "field" && component?.visible !== false)
+          .map((component) => byKey.get(component.field_key || component.fieldKey || component.api_name))
+          .filter(Boolean)
+      : [];
+    const fallback = activeFields.filter((field) => field?.readable !== false && !["json", "long_text", "rich_text"].includes(getFieldType(field)));
+    const limit = formFactor === "mobile" ? 10 : 7;
+    return (configured.length ? configured : fallback).slice(0, limit);
+  }, [activeFields, compactLayout, formFactor]);
   const activeListView = useMemo(
     () => listViews.find((view) => String(view.id) === String(activeListViewId)) || null,
     [listViews, activeListViewId]
@@ -621,18 +634,21 @@ export default function ObjectPage({
     if (!objectId) return;
     const recordTypeId = selectedRecord?.recordTypeId || selectedRecord?.record_type_id || "";
     try {
-      const [detailResponse, createResponse, editResponse, quickResponse] = await Promise.all([
+      const [detailResponse, compactResponse, createResponse, editResponse, quickResponse] = await Promise.all([
         apiRequest(effectiveLayoutUrl("detail", recordTypeId)),
+        apiRequest(effectiveLayoutUrl("compact", recordTypeId)),
         apiRequest(effectiveLayoutUrl("create", selectedRecordTypeId || "")),
         apiRequest(effectiveLayoutUrl("edit", recordTypeId)),
         apiRequest(effectiveLayoutUrl("quick_create", selectedRecordTypeId || "")),
       ]);
       setDetailLayout(detailResponse?.data || null);
+      setCompactLayout(compactResponse?.data || null);
       setCreateLayout(createResponse?.data || null);
       setEditLayout(editResponse?.data || null);
       setQuickCreateLayout(quickResponse?.data || null);
     } catch {
       setDetailLayout(null);
+      setCompactLayout(null);
       setCreateLayout(null);
       setEditLayout(null);
       setQuickCreateLayout(null);
@@ -1460,6 +1476,16 @@ export default function ObjectPage({
                 {!approvalState.request && approvalState.availableProcesses?.length ? <div className="mt-3"><textarea className="w-full rounded-lg border p-2 text-sm" rows="2" placeholder="Submission comment (optional)" value={approvalComment} onChange={e=>setApprovalComment(e.target.value)}/><button type="button" className="onepos-btn onepos-btn-primary mt-2" onClick={submitForApproval}>Submit for Approval</button></div>:null}
                 {(approvalState.history?.events?.length||approvalState.history?.actions?.length)?<div className="mt-3 border-t pt-2"><b className="text-xs uppercase text-slate-500">Approval history</b>{[...(approvalState.history.events||[]),...(approvalState.history.actions||[])].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map((entry,index)=><div key={entry.id||index} className="mt-2 text-xs"><b>{entry.event_type||entry.decision}</b>{entry.actor_name?` · ${entry.actor_name}`:""}{entry.comment?<div className="text-slate-500">{entry.comment}</div>:null}</div>)}</div>:null}
               </section>:null}
+              {selectedRecord && compactHighlightFields.length ? (
+                <section className="platform-record-highlights" aria-label="Record highlights">
+                  {compactHighlightFields.map((field, index) => (
+                    <div className={`platform-record-highlight ${index === 0 ? "is-primary" : ""}`} key={field.id || getFieldKey(field)}>
+                      <span>{getFieldLabel(field)}</span>
+                      <strong>{formatValue(getFieldValue(selectedRecord, field), field)}</strong>
+                    </div>
+                  ))}
+                </section>
+              ) : null}
               <ObjectRecordDetail
                 record={selectedRecord}
                 fields={activeFields}
@@ -1948,6 +1974,44 @@ export default function ObjectPage({
         .platform-kanban-card span, .platform-kanban-empty { color: var(--text-secondary, #64748b); font-size: 9px; }
         .platform-kanban-empty { padding: 10px; text-align: center; }
 
+
+        .platform-record-highlights {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+          gap: 1px;
+          margin-bottom: 10px;
+          overflow: hidden;
+          border: 1px solid var(--border-color, #e2e8f0);
+          border-radius: 10px;
+          background: var(--border-color, #e2e8f0);
+        }
+
+        .platform-record-highlight {
+          min-width: 0;
+          padding: 9px 10px;
+          background: var(--card-background, #fff);
+        }
+
+        .platform-record-highlight span {
+          display: block;
+          margin-bottom: 3px;
+          color: var(--text-secondary, #64748b);
+          font-size: 9px;
+          font-weight: 600;
+        }
+
+        .platform-record-highlight strong {
+          display: block;
+          overflow: hidden;
+          color: var(--text-primary, #0f172a);
+          font-size: 11px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .platform-record-highlight.is-primary strong {
+          font-size: 13px;
+        }
 
         .platform-object-detail-hidden {
           display: none;
