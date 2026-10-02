@@ -1122,6 +1122,27 @@ function WorkspaceField({ field, value, onChange }) {
     const options = Array.isArray(field.options) ? field.options : []
     return <label><span>{field.label || field.api_name}</span><select value={value ?? ''} onChange={(e) => onChange(e.target.value)}><option value="">Select…</option>{options.filter((o) => o.active !== false).map((o) => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o.value ?? o}</option>)}</select></label>
   }
+  if (type === 'multiselect') {
+    const options = Array.isArray(field.options) ? field.options : []
+    const selected = Array.isArray(value) ? value.map(String) : []
+    return (
+      <label>
+        <span>{field.label || field.api_name}</span>
+        <select
+          multiple
+          value={selected}
+          required={field.required === true}
+          onChange={(event) => onChange(Array.from(event.target.selectedOptions, (option) => option.value))}
+        >
+          {options.filter((option) => option?.active !== false).map((option) => {
+            const optionValue = typeof option === 'object' ? option.value ?? option.key ?? option.label : option
+            const optionLabel = typeof option === 'object' ? option.label ?? option.name ?? optionValue : option
+            return <option key={String(optionValue)} value={String(optionValue)}>{String(optionLabel)}</option>
+          })}
+        </select>
+      </label>
+    )
+  }
   if (type === 'lookup') {
     return <WorkspaceLookupField field={field} value={value} onChange={onChange} />
   }
