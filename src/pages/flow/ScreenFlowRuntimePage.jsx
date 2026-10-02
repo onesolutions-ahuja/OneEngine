@@ -15,6 +15,25 @@ function widthClass(width) {
   return 'md:col-span-12'
 }
 
+function localResourceValue(path, values) {
+  if (!path) return undefined
+  const raw = String(path)
+  if (raw.startsWith('variables.')) return raw.slice('variables.'.length).split('.').filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], values)
+  if (Object.prototype.hasOwnProperty.call(values || {}, raw)) return values[raw]
+  return undefined
+}
+
+function componentVisible(component, values) {
+  if (component?.visible === false) return false
+  if (!component?.visibilityResource) return true
+  const actual = localResourceValue(component.visibilityResource, values)
+  const operator = component.visibilityOperator || 'truthy'
+  if (operator === 'falsy') return actual == null || actual === '' || actual === false || (Array.isArray(actual) && actual.length === 0)
+  if (operator === 'equals') return String(actual ?? '') === String(component.visibilityValue ?? '')
+  if (operator === 'not_equals') return String(actual ?? '') !== String(component.visibilityValue ?? '')
+  return !(actual == null || actual === '' || actual === false || (Array.isArray(actual) && actual.length === 0))
+}
+
 export default function ScreenFlowRuntimePage({ sessionId }) {
   const [session, setSession] = useState(null)
   const [values, setValues] = useState({})
@@ -141,9 +160,27 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
 
   return <div className="min-h-screen bg-slate-50 px-4 py-8">
     <main className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      {screen.showHeader !== false ? <header className="border-b border-slate-200 px-6 py-5"><h1 className="text-xl font-semibold text-slate-900">{screen.label || 'Flow'}</h1>{screen.description ? <p className="mt-1 text-sm text-slate-500">{screen.description}</p> : null}</header> : null}
+      {screen.showHeader !== false ? <header className="border-b border-slate-200 px-6 py-5">
+        <h1 className="text-xl font-semibold text-slate-900">{screen.label || 'Flow'}</h1>
+        {screen.description ? <p className="mt-1 text-sm text-slate-500">{screen.description}</p> : null}
+        {Array.isArray(screen.stages) && screen.stages.length ? <div className="mt-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {screen.stages.map((stage, index) => {
+              const currentValue = screen.currentStage?.value ?? screen.currentStage
+              const currentOrder = Number(screen.currentStage?.order || 0)
+              const active = currentValue != null ? String(stage.value) === String(currentValue) : currentOrder ? Number(stage.order) === currentOrder : index === 0
+              const complete = currentOrder ? Number(stage.order) < currentOrder : false
+              return <div key={stage.value || stage.label || index} className="flex min-w-0 flex-1 items-center gap-2">
+                <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${active ? 'border-slate-900 bg-slate-900 text-white' : complete ? 'border-slate-400 bg-slate-200 text-slate-700' : 'border-slate-300 bg-white text-slate-500'}`}>{index + 1}</div>
+                <span className={`truncate text-xs ${active ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>{stage.label}</span>
+                {index < screen.stages.length - 1 ? <span className="h-px flex-1 bg-slate-200" /> : null}
+              </div>
+            })}
+          </div>
+        </div> : null}
+      </header> : null}
       <section className="grid grid-cols-12 gap-4 p-6">
-        {components.filter((component) => component.visible !== false).map((component, index) => {
+        {components.filter((component) => componentVisible(component, values)).map((component, index) => {
           if (component.type === 'SECTION') return <div key={component.id || index} className="col-span-12 border-b border-slate-200 pb-2 text-sm font-semibold text-slate-800">{component.label}</div>
           if (component.type === 'COLUMNS') return <div key={component.id || index} className="col-span-12 grid grid-cols-12 gap-4" />
           if (component.type === 'DISPLAY_TEXT') return <div key={component.id || index} className={`col-span-12 ${widthClass(component.width)} text-sm leading-6 text-slate-700`}>{component.text || component.label}</div>
