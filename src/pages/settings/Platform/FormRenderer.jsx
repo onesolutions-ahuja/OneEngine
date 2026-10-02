@@ -24,6 +24,7 @@ export default function FormRenderer({
   className = "",
   formId,
   embedded = false,
+  contextValues = {},
 }) {
   const normalized = useMemo(() => normalizeFormDefinition(definition), [definition]);
   const visibleFields = useMemo(
@@ -41,6 +42,10 @@ export default function FormRenderer({
         const field = fieldMap.get(component.field_key);
         return field ? {
           ...field,
+          config: {
+            ...(field.config || {}),
+            ...(component.visibilityCondition ? { visibilityCondition: component.visibilityCondition } : {}),
+          },
           label: component.label || field.label,
           help_text: component.help_text ?? field.help_text,
           description: component.help_text ?? field.description ?? field.help_text,
@@ -66,6 +71,7 @@ export default function FormRenderer({
           label: section.label,
           description: section.description,
           columns: section.columns,
+          visibilityCondition: section.visibilityCondition || null,
           fields: configured.filter((field) => field.section_id === section.id).sort((a, b) => a.order - b.order),
         })).filter((section) => section.fields.length)
       : [];
@@ -90,6 +96,7 @@ export default function FormRenderer({
           loading={loading}
           error={error}
           embedded={embedded}
+          contextValues={contextValues}
           submitLabel={mode === "quick_create" ? "Quick Create" : "Save"}
         />
       </div>
@@ -114,6 +121,8 @@ export default function FormRenderer({
     <div className={className} data-form-mode={mode}>
       <ObjectLayoutRenderer
         layout={normalized}
+        fields={visibleFields}
+        context={{ ...contextValues, record: initialValues }}
         renderComponent={(component) => {
           if (component.type === "field") {
             const field = fieldMap.get(component.field_key);
