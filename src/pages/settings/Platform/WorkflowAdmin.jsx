@@ -2523,6 +2523,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [managerFilter, setManagerFilter] = useState("all");
   const [highlightedPathKey, setHighlightedPathKey] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [connectFromId, setConnectFromId] = useState(null);
   const paletteRef = useRef(null);
   const canvasRef = useRef(null);
   const propertiesRef = useRef(null);
@@ -3064,7 +3065,78 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     const next = Math.max(.5, Math.min(1.3, availableWidth / Math.max(1, naturalWidth), availableHeight / Math.max(1, naturalHeight)));
     setCanvasZoom(Number(next.toFixed(2)));
   };
-  const addFreeformElement = (type, position) => {
+  const detachStepFromOwnedPaths = (steps, stepId) => steps.map((item) => ({ ...item, config: stripStepReferences(item.config || {}, stepId) }));
+  const connectFreeformElements = (sourceId, targetId) => {
+    if (!sourceId || !targetId || String(sourceId) === String(targetId) || String(targetId) === "__start__") {
+      setConnectFromId(null);
+      return;
+    }
+    setWorkflow((current) => {
+      let steps = detachStepFromOwnedPaths(current.steps, targetId);
+      const targetIndex = steps.findIndex((item) => String(item.id) === String(targetId));
+      if (targetIndex < 0) return current;
+      const target = steps[targetIndex];
+      steps.splice(targetIndex, 1);
+
+      if (String(sourceId) === "__start__") {
+        const firstExecutable = steps.findIndex((item) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(item.type) && item.config?.resourceOnly !== true);
+        const insertAt = firstExecutable < 0 ? steps.length : firstExecutable;
+        steps.splice(insertAt, 0, target);
+        return {
+          ...current,
+          steps,
+          actionMetadata: {
+            ...(current.actionMetadata || {}),
+            builderLayout: {
+              ...(current.actionMetadata?.builderLayout || {}),
+              mode: "FREEFORM",
+              startStepId: target.id,
+            },
+          },
+        };
+      }
+
+      const sourceIndex = steps.findIndex((item) => String(item.id) === String(sourceId));
+      if (sourceIndex < 0) {
+        steps.push(target);
+        return { ...current, steps };
+      }
+      const source = steps[sourceIndex];
+      const sourceType = String(source.type || "").toUpperCase();
+
+      if (sourceType === "CONDITION") {
+        const outcomes = Array.isArray(source.config?.outcomes) && source.config.outcomes.length
+          ? source.config.outcomes.map((outcome) => ({ ...outcome, branch: [...(outcome.branch || [])] }))
+          : [{ id: "outcome-1", label: "Outcome 1", condition: source.config?.condition || { type: "all", rules: [blankCondition()] }, branch: [...(source.config?.ifBranch || [])] }];
+        const choices = [...outcomes.map((outcome, index) => `${index + 1}. ${outcome.label || `Outcome ${index + 1}`}`), `${outcomes.length + 1}. ${source.config?.defaultLabel || "Default Outcome"}`];
+        const raw = typeof window !== "undefined" ? window.prompt(`Connect from which Decision path?\n${choices.join("\n")}`, "1") : "1";
+        const choice = Math.max(1, Math.min(outcomes.length + 1, Number(raw || 1)));
+        let defaultBranch = [...(source.config?.defaultBranch || source.config?.elseBranch || [])];
+        if (choice === outcomes.length + 1) defaultBranch = [...defaultBranch, target.id];
+        else outcomes[choice - 1] = { ...outcomes[choice - 1], branch: [...outcomes[choice - 1].branch, target.id] };
+        steps[sourceIndex] = { ...source, config: { ...(source.config || {}), outcomes, defaultBranch, ifBranch: [], elseBranch: [] } };
+        steps.splice(sourceIndex + 1, 0, target);
+        return { ...current, steps };
+      }
+
+      if (sourceType === "LOOP") {
+        const raw = typeof window !== "undefined" ? window.prompt("Connect Loop path: 1 = For Each Item, 2 = After Last", "1") : "1";
+        if (String(raw || "1") === "1") {
+          steps[sourceIndex] = { ...source, config: { ...(source.config || {}), bodyBranch: [...(source.config?.bodyBranch || []), target.id] } };
+        } else {
+          steps[sourceIndex] = { ...source, config: { ...(source.config || {}), nextStepId: target.id } };
+        }
+        steps.splice(sourceIndex + 1, 0, target);
+        return { ...current, steps };
+      }
+
+      steps[sourceIndex] = { ...source, config: { ...(source.config || {}), nextStepId: target.id } };
+      steps.splice(sourceIndex + 1, 0, target);
+      return { ...current, steps };
+    });
+    setConnectFromId(null);
+  };
+    const addFreeformElement = (type, position) => {
     const step = makeStep(type);
     const definition = registryOptions.find((option) => option.value === type);
     if (definition?.label) {
@@ -3122,8 +3194,14 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       }
     });
     const top = workflow.steps.filter((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true && !owned.has(String(step.id)));
-    if (top.length) edges.push(["__start__", String(top[0].id)]);
-    top.forEach((step, index) => { if (top[index + 1]) edges.push([String(step.id), String(top[index + 1].id)]); });
+    const explicitStart = workflow.actionMetadata?.builderLayout?.startStepId;
+    const startTarget = explicitStart && top.some((step) => String(step.id) === String(explicitStart)) ? explicitStart : top[0]?.id;
+    if (startTarget) edges.push(["__start__", String(startTarget)]);
+    top.forEach((step, index) => {
+      const explicitNext = step.config?.nextStepId;
+      const next = explicitNext && top.some((candidate) => String(candidate.id) === String(explicitNext)) ? explicitNext : top[index + 1]?.id;
+      if (next) edges.push([String(step.id), String(next)]);
+    });
     return edges;
   };
   const onFreeformDrop = (event) => {
@@ -3531,6 +3609,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <button type="button" className={layoutMode === "AUTO" ? "is-active" : ""} onClick={() => setLayoutMode("AUTO")}>Auto-Layout</button>
             <button type="button" className={layoutMode === "FREEFORM" ? "is-active" : ""} onClick={() => { setLayoutMode("FREEFORM"); setPaletteOpen(true); setPaletteTab("elements"); }}>Free-Form</button>
           </span>
+          {layoutMode === "FREEFORM" ? (
+            connectFromId ? <button type="button" title="Cancel connector" onClick={() => setConnectFromId(null)}>Cancel Connect</button>
+              : <button type="button" title="Connect selected element" onClick={() => setConnectFromId(selectedId || "__start__")}>Connect</button>
+          ) : null}
           <button type="button" title="Undo" onClick={undoFlowChange}>↶</button>
           <button type="button" title="Redo" onClick={redoFlowChange}>↷</button>
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.5, Number((value - .1).toFixed(1))))}>−</button>
@@ -3696,7 +3778,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             {(() => {
               const pos = getFreeformPosition("__start__", 0);
               return <div className="workflow-freeform-start" style={{ left: pos.x, top: pos.y }} draggable onDragEnd={(event) => onFreeformDragEnd(event, "__start__", 0)}>
-                <button type="button" className="workflow-start-node" onClick={inspectStart} title="Configure when this flow starts">
+                <button type="button" className="workflow-start-node" onClick={() => { if (connectFromId && connectFromId !== "__start__") connectFreeformElements(connectFromId, "__start__"); else inspectStart(); }} title="Configure when this flow starts">
                   <span className="workflow-start-icon">▶</span>
                   <span className="workflow-start-title">Start</span>
                   <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}</span>
@@ -3709,7 +3791,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               const elementKind = SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action";
               return <div key={step.id} className="workflow-freeform-node" style={{ left: pos.x, top: pos.y }} draggable onDragEnd={(event) => onFreeformDragEnd(event, step.id, index)}>
                 <div className="workflow-node-row">
-                  <button type="button" onClick={(event) => { if (event.shiftKey) { toggleElementSelection(step.id); return; } inspectStep(step.id); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id || selectedElementIds.includes(String(step.id)) ? "is-selected" : ""}`}>
+                  <button type="button" onClick={(event) => { if (connectFromId) { connectFreeformElements(connectFromId, step.id); return; } if (event.shiftKey) { toggleElementSelection(step.id); return; } inspectStep(step.id); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id || selectedElementIds.includes(String(step.id)) ? "is-selected" : ""}`}>
                     <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
                     <span className="workflow-node-kind">{elementKind}</span>
                     <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
@@ -3719,6 +3801,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <summary aria-label={`Open actions for ${step.label || getActionLabel(step.type)}`} title="Element actions">⋮</summary>
                     <div className="workflow-node-menu-popover">
                       <button type="button" onClick={() => inspectStep(step.id)}>Edit Element</button>
+                      <button type="button" onClick={() => { setSelectedId(step.id); setConnectFromId(step.id); }}>Connect To…</button>
                       <button type="button" onClick={() => copyStep(step)}>Copy Element</button>
                       <button type="button" onClick={() => requestCutStep(step)}>Cut Element</button>
                       {flowElementSupportsFaultPath(step.type) ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
