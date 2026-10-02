@@ -36,6 +36,23 @@ test("Welcome Message Customer canvas matches compact split-merge geometry", asy
   await proxyApiForLocalPreview(page);
   await loginIfConfigured(page);
 
+  // Pin Developer context to the authenticated user's tenant so the visual gate
+  // opens the same workflow list deterministically instead of a previously
+  // persisted client selection.
+  const homeCompanyId = await page.evaluate(() => {
+    try {
+      const user = JSON.parse(sessionStorage.getItem("onepos_user") || "{}");
+      return String(user.companyId || user.company_id || "");
+    } catch {
+      return "";
+    }
+  });
+  if (homeCompanyId) {
+    await page.evaluate((companyId) => {
+      sessionStorage.setItem("onepos_developer_target_company_id", companyId);
+    }, homeCompanyId);
+  }
+
   await page.goto("developer/workflow-builder");
   await expect(page.getByRole("button", { name: /new workflow/i })).toBeVisible({ timeout: 20_000 });
 
