@@ -33,6 +33,7 @@ import {
   maskEmail,
   loadInvoiceChannelConfig,
 } from "./onlineOrders/platformConfig.js";
+import { resolveSystemEmailSender } from "./emailSecurity.js";
 
 const PROVIDER_TIMEOUT_MS = 10000;
 const DEFAULT_SMS_TEMPLATE = "Thank you for your purchase. Your invoice{number}: {link}";
@@ -296,11 +297,16 @@ async function deliverViaChannel(db, { channel, saleData, runtime, recipient, sa
     } else {
       const subject = renderTemplate(runtime.configuration.subject_template || DEFAULT_EMAIL_SUBJECT, { company: companyName, number: invoiceNumber, link: link.url });
       const body = renderTemplate(runtime.configuration.message_template || DEFAULT_EMAIL_BODY, { company: companyName, number: invoiceNumber, link: link.url });
+      const senderPolicy=await resolveSystemEmailSender(db,{companyId,requestedFrom:runtime.configuration.from_address||null});
+      if(!senderPolicy.allowed){
+        await logDeliveryOutcome(db,{companyId,userId,saleId,action,deliveryType,trigger,outcome:"skipped",reason:senderPolicy.reason,recipientMasked});
+        return {ok:false,outcome:"skipped",deliveryType,reason:senderPolicy.reason};
+      }
       sendResult = await sendEmailViaProvider({
         endpoint: runtime.endpoint,
         apiKey,
         authScheme,
-        from: runtime.configuration.from_address || undefined,
+        from: senderPolicy.email || undefined,
         to: recipient,
         subject,
         body,
