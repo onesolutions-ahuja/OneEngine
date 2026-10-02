@@ -14,7 +14,8 @@ function fieldLabel(field) {
 }
 
 export default function PlatformFieldPicker({
-  objectKey: selectedObjectKey = "",
+  objectKey = "",
+  selectedObjectKey: legacySelectedObjectKey = "",
   onObjectChange,
   value = "",
   onChange,
@@ -27,6 +28,7 @@ export default function PlatformFieldPicker({
   className = "",
   scopeKey = null,
 }) {
+  const selectedObjectKey = objectKey || legacySelectedObjectKey;
   const [objects, setObjects] = useState([]);
   const [fields, setFields] = useState([]);
   const [search, setSearch] = useState("");
