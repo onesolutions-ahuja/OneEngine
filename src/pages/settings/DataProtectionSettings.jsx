@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { apiFetch, apiRequest } from '../../services/api'
+import { apiFetch, apiRequest, getStoredSessionPermissions } from '../../services/api'
 
-const TABS=[['export','Data Export'],['retention','Data Retention'],['email','Email Security'],['delegated','Delegated Administration']]
+const TAB_DEFS=[['export','Data Export','data.export.manage'],['retention','Data Retention','data.retention.manage'],['email','Email Security','email.security.manage'],['delegated','Delegated Administration','delegated_admin.manage']]
 
 export default function DataProtectionSettings(){
-  const [tab,setTab]=useState('export')
+  const permissionCodes=getStoredSessionPermissions()?.permissions||[]
+  const manageAll=permissionCodes.includes('settings.manage')
+  const tabs=TAB_DEFS.filter(([, ,permission])=>manageAll||permissionCodes.includes(permission))
+  const [tab,setTab]=useState(()=>tabs[0]?.[0]||'export')
   const [exportSettings,setExportSettings]=useState({})
   const [exports,setExports]=useState([])
   const [retention,setRetention]=useState([])
@@ -19,12 +22,13 @@ export default function DataProtectionSettings(){
 
   const load=async()=>{
     setError('')
+    const can=(code)=>manageAll||permissionCodes.includes(code)
     const [s,e,r,m,d]=await Promise.all([
-      apiRequest('/api/security/data/export-settings'),
-      apiRequest('/api/security/data/exports'),
-      apiRequest('/api/security/data/retention'),
-      apiRequest('/api/security/email/settings'),
-      apiRequest('/api/security/delegated-admin'),
+      can('data.export.manage')?apiRequest('/api/security/data/export-settings'):Promise.resolve({data:{}}),
+      can('data.export.manage')?apiRequest('/api/security/data/exports'):Promise.resolve({data:[]}),
+      can('data.retention.manage')?apiRequest('/api/security/data/retention'):Promise.resolve({data:[]}),
+      can('email.security.manage')?apiRequest('/api/security/email/settings'):Promise.resolve({data:{deliverability:{},domains:[],addresses:[],roles:[]}}),
+      can('delegated_admin.manage')?apiRequest('/api/security/delegated-admin'):Promise.resolve({data:{groups:[],users:[],roles:[]}}),
     ])
     setExportSettings(s.data||{});setExports(e.data||[]);setRetention(r.data||[]);setEmail(m.data||{deliverability:{},domains:[],addresses:[],roles:[]});setDelegated(d.data||{groups:[],users:[],roles:[]})
   }
@@ -58,7 +62,7 @@ export default function DataProtectionSettings(){
   const toggle=(list,id)=>list.includes(id)?list.filter(x=>x!==id):[...list,id]
 
   return <div className="space-y-4">
-    <div className="settings-card"><div className="flex flex-wrap gap-2">{TABS.map(([key,label])=><button type="button" key={key} className={tab===key?'is-primary':''} onClick={()=>setTab(key)}>{label}</button>)}</div></div>
+    <div className="settings-card"><div className="flex flex-wrap gap-2">{tabs.map(([key,label])=><button type="button" key={key} className={tab===key?'is-primary':''} onClick={()=>setTab(key)}>{label}</button>)}</div></div>
     {error?<div className="settings-error">{error}</div>:null}
     {notice?<div className="settings-card"><strong>{notice}</strong></div>:null}
 
