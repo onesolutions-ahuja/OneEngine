@@ -586,6 +586,13 @@ const WORKFLOW_VISUAL_CSS = `
     font-weight: 760;
     line-height: 1.25;
   }
+  .workflow-node-description {
+    position: absolute;
+    right: 34px;
+    top: 12px;
+    color: #706e6b;
+    font-size: 10px;
+  }
   .workflow-node-note {
     display: block;
     margin-top: 5px;
@@ -2390,6 +2397,12 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   }, [debugTrace, workflow.steps]);
 
   useEffect(() => {
+    if (selectedId === "__start__" && propertiesOpen && !startSnapshot) {
+      setStartSnapshot(JSON.parse(JSON.stringify(workflow)));
+    }
+  }, [selectedId, propertiesOpen]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     try {
       const stored = window.localStorage.getItem(`oneengine:flow-builder:collapsed:${workflowId || "new"}`);
@@ -2830,7 +2843,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   <div className="workflow-add-element-grid">
                     <button type="button" onClick={() => pasteClipboard(insertAt == null ? workflow.steps.length : insertAt)}>
                       <span className="workflow-add-element-icon" style={{ background: flowElementVisual(clipboard.step.type).color }}>⧉</span>
-                      <span><strong>Paste Element</strong><small>{clipboard.step.label || getActionLabel(clipboard.step.type)} · {clipboard.mode === "cut" ? "Cut" : "Copied"}</small></span>
+                      <span><strong>Paste 1 Element</strong><small>{clipboard.step.label || getActionLabel(clipboard.step.type)} · {clipboard.mode === "cut" ? "Cut" : "Copied"}</small></span>
                     </button>
                   </div>
                 </div>
@@ -2877,6 +2890,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
                   <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : elementKind}</span>
                   <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
+                  {step.config?.description ? <span className="workflow-node-description" title={step.config.description}>ⓘ</span> : null}
                   {step.type === "LOOP" ? <span className="workflow-node-note">For Each Item</span> : null}
                   {step.config?.faultMode && step.config.faultMode !== "FAIL" ? <span className="workflow-fault-badge">Fault path</span> : null}
                 </button>
