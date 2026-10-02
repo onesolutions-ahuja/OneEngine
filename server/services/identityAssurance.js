@@ -23,6 +23,7 @@ export function effectiveAssurance(settings, policy) {
     allowPlatformPasskeys: settings?.allow_platform_passkeys !== false,
     allowSecurityKeys: settings?.allow_security_keys !== false,
     allowRecoveryCodes: settings?.allow_recovery_codes !== false,
+    allowPasskeyLogin: settings?.allow_passkey_login !== false,
   };
 }
 
