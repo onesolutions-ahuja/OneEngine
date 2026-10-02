@@ -120,7 +120,14 @@ export default function RecordListView({
   const sort = sortValue !== undefined ? sortValue : localSort
   const filters = filtersValue !== undefined ? filtersValue : localFilters
   const setQuery = (next) => onSearchChange ? onSearchChange(next) : setLocalQuery(next)
-  const setSort = (next) => onSortChange ? onSortChange(next) : setLocalSort(next)
+  const setSort = (next) => {
+    if (onSortChange) {
+      const resolved = typeof next === 'function' ? next(sort) : next
+      onSortChange(resolved)
+      return
+    }
+    setLocalSort(next)
+  }
   const setFilters = (next) => {
     if (onFiltersChange) {
       const resolved = typeof next === 'function' ? next(filters) : next
@@ -309,9 +316,9 @@ export default function RecordListView({
               </select>
             </label>
           ) : null}
-          {onSaveListView && activeListViewId ? (
+          {onSaveListView ? (
             <div className="record-data-actions" aria-label="List view tools">
-              {canUpdateActiveView ? (
+              {canUpdateActiveView && activeListViewId ? (
                 <button
                   type="button"
                   className="record-data-icon"
