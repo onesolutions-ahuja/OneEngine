@@ -90,6 +90,8 @@ export default function RecordListView({
   onSortChange,
   filterValue = null,
   onFiltersChange,
+  columnOrderValue = null,
+  onColumnOrderChange,
 }) {
   const [query, setQuery] = useState('')
   const resolvedQuery = onSearchChange ? (searchValue ?? '') : query
@@ -138,11 +140,12 @@ export default function RecordListView({
     } catch {}
   }, [columnOrder, title])
 
+  const resolvedColumnOrder = columnOrderValue?.length ? columnOrderValue : columnOrder
   const orderedColumns = useMemo(() => {
     const byKey = new Map(columns.map((column) => [column.key, column]))
-    const order = columnOrder.length ? columnOrder : columns.map((column) => column.key)
+    const order = resolvedColumnOrder.length ? resolvedColumnOrder : columns.map((column) => column.key)
     return order.map((key) => byKey.get(key)).filter(Boolean)
-  }, [columns, columnOrder])
+  }, [columns, resolvedColumnOrder])
 
   const filterOptions = useMemo(() => {
     const result = {}
@@ -250,15 +253,14 @@ export default function RecordListView({
 
   const moveColumn = (fromKey, toKey) => {
     if (!fromKey || !toKey || fromKey === toKey) return
-    setColumnOrder((current) => {
-      const base = current.length ? [...current] : columns.map((column) => column.key)
-      const from = base.indexOf(fromKey)
-      const to = base.indexOf(toKey)
-      if (from < 0 || to < 0) return base
-      const [moved] = base.splice(from, 1)
-      base.splice(to, 0, moved)
-      return base
-    })
+    const base = resolvedColumnOrder.length ? [...resolvedColumnOrder] : columns.map((column) => column.key)
+    const from = base.indexOf(fromKey)
+    const to = base.indexOf(toKey)
+    if (from < 0 || to < 0) return
+    const [moved] = base.splice(from, 1)
+    base.splice(to, 0, moved)
+    if (onColumnOrderChange) onColumnOrderChange(base)
+    else setColumnOrder(base)
   }
 
   const selectedSet = useMemo(() => new Set((selectedRowIds || []).map(String)), [selectedRowIds])
