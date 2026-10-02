@@ -888,9 +888,9 @@ export default function ObjectForm({
 
         {control}
 
-        {(field?.config?.helpText || field?.config?.help_text || field?.description) ? (
+        {(field?.config?.helpText || field?.config?.help_text) ? (
           <div className="platform-form-help">
-            {field?.config?.helpText || field?.config?.help_text || field.description}
+            {field?.config?.helpText || field?.config?.help_text}
           </div>
         ) : null}
 
