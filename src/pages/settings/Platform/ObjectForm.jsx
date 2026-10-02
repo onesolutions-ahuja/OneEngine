@@ -684,7 +684,7 @@ export default function ObjectForm({
             value={value}
             disabled={commonProps.disabled}
             placeholder={field?.placeholder || ""}
-            maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || undefined}
+            maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || 32768}
             onChange={(nextValue) => updateValue(field, nextValue)}
           />
         );
@@ -746,6 +746,7 @@ export default function ObjectForm({
             {...commonProps}
             value={value}
             rows={4}
+            maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || (type === "text_area" ? 255 : 32768)}
             placeholder={
               field?.placeholder || ""
             }
