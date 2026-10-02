@@ -589,6 +589,8 @@ export const platformSchema = `
     parent_object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
     child_object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
     relationship_key VARCHAR(100) NOT NULL,
+    label VARCHAR(200),
+    description TEXT,
     relationship_type VARCHAR(30) NOT NULL CHECK (relationship_type IN ('lookup','one_to_many','many_to_many')),
     child_field_id UUID REFERENCES platform_fields(id) ON DELETE RESTRICT,
     on_delete VARCHAR(20) NOT NULL DEFAULT 'restrict' CHECK (on_delete IN ('restrict','cascade','set_null')),
@@ -596,6 +598,8 @@ export const platformSchema = `
     active BOOLEAN NOT NULL DEFAULT TRUE,
     UNIQUE (parent_object_id, relationship_key)
   );
+  ALTER TABLE platform_relationships ADD COLUMN IF NOT EXISTS label VARCHAR(200);
+  ALTER TABLE platform_relationships ADD COLUMN IF NOT EXISTS description TEXT;
   /* Self-referencing relationships are valid Platform metadata (for example
      sale -> original_transactions, where a return references the sale it came
      from). An earlier revision of this schema forbade a relationship whose
