@@ -127,6 +127,8 @@ import {
 
 const { Pool } = pg;
 
+const PASSWORD_BCRYPT_ROUNDS = Math.max(10, Math.min(12, Number.parseInt(process.env.ONEPOS_BCRYPT_ROUNDS || "10", 10) || 10));
+
 /*
  * Express 4 does not forward rejected promises from async route handlers to
  * error middleware. All onePOS routers are created after this patch, so wrap
@@ -1219,6 +1221,33 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     );
     markLoginTiming("bcrypt_ms", stepStartedAt);
 
+    if (validPassword) {
+      try {
+        const currentRounds = bcrypt.getRounds(user.password_hash);
+        if (currentRounds !== PASSWORD_BCRYPT_ROUNDS) {
+          const previousHash = user.password_hash;
+          const userId = user.id;
+          const passwordForRehash = password;
+          setImmediate(() => {
+            void (async () => {
+              try {
+                const replacementHash = await bcrypt.hash(passwordForRehash, PASSWORD_BCRYPT_ROUNDS);
+                await loginPool.query(
+                  "UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2 AND password_hash=$3",
+                  [replacementHash, userId, previousHash]
+                );
+                console.log(`onePOS: calibrated password hash cost for user ${userId} from ${currentRounds} to ${PASSWORD_BCRYPT_ROUNDS}`);
+              } catch (rehashError) {
+                console.warn("onePOS: password hash calibration failed", rehashError?.message || rehashError);
+              }
+            })();
+          });
+        }
+      } catch (roundError) {
+        console.warn("onePOS: password hash cost inspection skipped", roundError?.message || roundError);
+      }
+    }
+
     if (!validPassword) {
       const nextState = await registerFailedLogin(loginDb, { user, settings: securitySettings });
       await writeLoginHistory(loginDb, { user, identifier: email, status: "FAILURE", reason: "INVALID_PASSWORD", ip: requestIp, userAgent: requestUserAgent, req });
@@ -1442,7 +1471,7 @@ app.post("/api/auth/unlock-pin", authenticate, async (req, res) => {
         if (pin !== String(process.env.SUPERADMIN_BOOTSTRAP_PIN)) {
           return res.status(401).json({ success: false, message: "Incorrect PIN" });
         }
-        const pinHash = await bcrypt.hash(pin, 12);
+        const pinHash = await bcrypt.hash(pin, PASSWORD_BCRYPT_ROUNDS);
         await db(
           "UPDATE users SET pin_hash=$1, updated_at=NOW() WHERE id=$2 AND company_id IS NOT DISTINCT FROM $3",
           [pinHash, req.user.id, req.user.companyId]
