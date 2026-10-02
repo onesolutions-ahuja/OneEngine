@@ -98,6 +98,7 @@ export default function ObjectRecordDetail({
   showHeader = true,
   onEdit,
   onBack,
+  contextValues = {},
 }) {
   const activeFields = useMemo(
     () =>
@@ -163,6 +164,7 @@ export default function ObjectRecordDetail({
             fields={activeFields}
             initialValues={record}
             mode="view"
+            contextValues={contextValues}
           />
         ) : activeFields.length === 0 ? (
           <div className="platform-record-detail-empty compact">
