@@ -12,6 +12,8 @@ export function effectiveAssurance(settings, policy) {
     requiredLoginAssurance: String(pick("required_login_assurance") || "STANDARD").toUpperCase(),
     trustedDeviceDays: Math.max(0, Number(pick("trusted_device_days") ?? 30)),
     trustSsoMfa: pick("trust_sso_mfa") !== false,
+    deviceActivationRequired: pick("device_activation_required") === true,
+    skipDeviceActivationOnTrustedNetwork: pick("skip_device_activation_on_trusted_network") !== false,
     passwordAssurance: String(settings?.password_assurance || "STANDARD").toUpperCase(),
     totpAssurance: String(settings?.totp_assurance || "HIGH").toUpperCase(),
     passkeyAssurance: String(settings?.passkey_assurance || "HIGH").toUpperCase(),
