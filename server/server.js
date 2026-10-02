@@ -986,9 +986,13 @@ app.get("/api/auth/google/callback", async (req, res) => {
     await pool.query("UPDATE users SET last_login_at=NOW() WHERE id=$1", [user.id]);
     const googleAssurancePolicy = await loadEffectiveAssurance(googleDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id });
     const googleBaseAssurance = googleAssurancePolicy.effective.trustSsoMfa ? "HIGH" : googleAssurancePolicy.effective.ssoAssurance;
+    const googleActivationSatisfied = !googleAssurancePolicy.effective.deviceActivationRequired
+      || googleBaseAssurance === "HIGH"
+      || (googleAssurancePolicy.effective.skipDeviceActivationOnTrustedNetwork && googleAccess.trustedNetwork === true);
     const googleNeedsOneEngineMfa = googleAssurancePolicy.effective.mfaRequired && !googleAssurancePolicy.effective.trustSsoMfa
       || googleAssurancePolicy.effective.phishingResistantRequired
-      || !assuranceSatisfies(googleBaseAssurance, googleAssurancePolicy.effective.requiredLoginAssurance);
+      || !assuranceSatisfies(googleBaseAssurance, googleAssurancePolicy.effective.requiredLoginAssurance)
+      || !googleActivationSatisfied;
     if (googleNeedsOneEngineMfa) {
       const methods = await listMfaMethods(googleDb, { companyId: user.company_id, userId: user.id });
       const usable = methods.filter((method) => !googleAssurancePolicy.effective.phishingResistantRequired || method.phishing_resistant === true);
@@ -996,7 +1000,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
         companyId: user.company_id,
         userId: user.id,
         type: "LOGIN",
-        context: { authMethod: "GOOGLE", phishingResistantRequired: googleAssurancePolicy.effective.phishingResistantRequired === true },
+        context: { authMethod: "GOOGLE", phishingResistantRequired: googleAssurancePolicy.effective.phishingResistantRequired === true, activationOnly: !googleActivationSatisfied && !googleAssurancePolicy.effective.mfaRequired },
         minutes: 10,
       });
       const target = new URL(returnTo);
