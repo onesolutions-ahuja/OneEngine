@@ -54,7 +54,7 @@ export function createChangePasswordHandler({ db, bcrypt }) {
     }
 
     // Reuse the same bcrypt hashing used at registration/login
-    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
     await db(
       `
