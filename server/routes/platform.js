@@ -6558,7 +6558,10 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const readableFields = fields.filter((field) => field.readable !== false && field.field_type !== "formula" && field.field_type !== "rollup" && isSafeIdentifier(field.api_name) && Boolean(platformFieldSql(field, object)));
       const listView = req.query.listViewId ? (await db("SELECT * FROM platform_list_views WHERE id=$1 AND object_id=$2 AND company_id=$3 AND active=true", [req.query.listViewId, object.id, req.user.companyId])).rows[0] || null : null;
       const configuredColumns = listView && Array.isArray(listView.columns) ? listView.columns : null;
-      const selectedReadable = configuredColumns ? readableFields.filter((field) => configuredColumns.includes(field.api_name) || configuredColumns.includes(field.id)) : readableFields;
+      // A List View controls presentation, filtering, sorting and page size.
+      // It must not truncate the record payload: selecting a row still needs
+      // every readable field for the shared record-detail and action runtime.
+      const selectedReadable = readableFields;
       const columns = selectedReadable.map((field) => `${platformFieldSql(field, object)} AS "${field.api_name}"`);
       if (!columns.length && !fields.some(field => (field.field_type === "formula" || field.field_type === "rollup") && field.readable !== false)) return res.json({ success: true, data: [], records: [], page: 1, pageSize: 50, total: 0, pages: 0 });
       const fieldByApiName = new Map(readableFields.map((field) => [field.api_name, field]));
