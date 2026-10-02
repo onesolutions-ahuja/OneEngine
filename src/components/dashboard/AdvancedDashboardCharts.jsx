@@ -146,3 +146,33 @@ export function MultiSeriesBarChart({ series = [], categories = [], config = {},
     </div>
   );
 }
+
+export function ComboChart({ rows = [], config = {}, formatValue, onPointClick }) {
+  const categoryField = config.labelField || config.xField;
+  const fields = Array.isArray(config.yFields) && config.yFields.length ? config.yFields : [config.valueField].filter(Boolean);
+  const secondary = new Set(config.secondaryAxisFields || []);
+  if (!categoryField || !fields.length || !rows.length) return null;
+  const primaryFields = fields.filter((field) => !secondary.has(field));
+  const secondaryFields = fields.filter((field) => secondary.has(field));
+  const maxFor = (list) => Math.max(1, ...rows.flatMap((row) => list.map((field) => Math.abs(Number(row?.[field]) || 0))));
+  const primaryMax = maxFor(primaryFields);
+  const secondaryMax = maxFor(secondaryFields);
+  const x = (index) => rows.length === 1 ? 50 : 8 + (index / (rows.length - 1)) * 84;
+  const linePath = (field, max) => rows.map((row, index) => `${index ? "L" : "M"} ${x(index)} ${92 - (Math.abs(Number(row?.[field]) || 0) / max) * 78}`).join(" ");
+  return (
+    <div className="relative h-full min-h-[170px]">
+      <svg viewBox="0 0 100 100" className="h-full w-full" role="img" aria-label="Combo chart">
+        <line x1="6" y1="92" x2="96" y2="92" stroke="var(--onepos-border)" />
+        {primaryFields.map((field, fieldIndex) => rows.map((row, index) => {
+          const value = Number(row?.[field]) || 0;
+          const height = (Math.abs(value) / primaryMax) * 78;
+          const width = Math.max(2, Math.min(8, 72 / Math.max(rows.length, 1) / Math.max(primaryFields.length, 1)));
+          const offset = (fieldIndex - (primaryFields.length - 1) / 2) * (width + 0.8);
+          const label = String(row?.[categoryField] ?? "");
+          return <rect key={`${field}-${index}`} x={x(index) - width / 2 + offset} y={92 - height} width={width} height={height} rx="1" fill={`var(--dash-series-${(fieldIndex % 6) + 1}, var(--onepos-accent-600))`} onClick={() => onPointClick?.({ label, value, field })}><title>{label}: {formatValue(value, config.format)}</title></rect>;
+        }))}
+        {secondaryFields.map((field, index) => <path key={field} d={linePath(field, secondaryMax)} fill="none" stroke={`var(--dash-series-${((primaryFields.length + index) % 6) + 1}, var(--onepos-accent-600))`} strokeWidth="2" vectorEffect="non-scaling-stroke" />)}
+      </svg>
+    </div>
+  );
+}

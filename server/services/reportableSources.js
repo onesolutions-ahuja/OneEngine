@@ -98,6 +98,7 @@ export function validatePlatformReportDefinition(definition, object, fields, rel
   }
   normalized.filters = normalized.filters.map(normalizeAdvancedFieldFilter);
   normalized.crossFilters = normalizeCrossFilters(definition.crossFilters || []);
+  if (normalized.filters.some((filter) => String(filter?.operator || "").endsWith("_field")) && relationships.some((relationship) => String(relationship.reportJoinType || relationship.joinType || "").toUpperCase() === "WITH_OR_WITHOUT")) throw new Error("Field-to-field filters are not available when a report type uses an optional relationship");
   for (const filter of normalized.filters) {
     if (!fieldMap.has(String(filter?.field)) || !OPERATORS.has(String(filter?.operator))) throw new Error("Invalid report filter");
     if (filter.compareField) {
@@ -130,6 +131,15 @@ function fieldExpression(field, alias = "r", relationshipAliases = {}) {
   return `${sourceAlias}."${sourceColumn}"`;
 }
 
+function rebaseReportSqlParams(sql, offset = 0) {
+  if (!sql || !offset) return sql;
+  return String(sql).replace(/\$(\d+)/g, (_, index) => "$" + (Number(index) + Number(offset)));
+}
+
+function aliasReportVisibilitySql(sql, sourceTable, alias) {
+  if (!sql) return sql;
+  return String(sql).split('"' + sourceTable + '"').join(alias);
+}
 export function buildPlatformObjectQuery(definition, object, fields, companyId, limit = 1000, scope = {}, relationships = []) {
   const normalized = validatePlatformReportDefinition(definition, object, fields, relationships);
   const fieldMap = buildFieldMap(fields, relationships);
@@ -173,12 +183,19 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
       conditions.push(`${alias}.store_id = $${next}`);
       next += 1;
     }
-    if (conditions.length) {
-      joins[index] = `${joins[index]} AND ${conditions.join(" AND ")}`;
+    if (relationship.target_visibility_sql) {
+      const aliased = aliasReportVisibilitySql(relationship.target_visibility_sql, relationship.target_source_table || relationship.source_table, alias);
+      const rebased = rebaseReportSqlParams(aliased, params.length);
+      conditions.push(`(${rebased})`);
+      params.push(...(Array.isArray(relationship.target_visibility_params) ? relationship.target_visibility_params : []));
+      next = params.length + 1;
     }
+    if (conditions.length) joins[index] = `${joins[index]} AND ${conditions.join(" AND ")}`;
   }
   if (scope.visibilitySql) {
-    where.push(`(${scope.visibilitySql})`);
+    const aliased = aliasReportVisibilitySql(scope.visibilitySql, object.source_table, "r");
+    const rebased = rebaseReportSqlParams(aliased, params.length);
+    where.push(`(${rebased})`);
     params.push(...(Array.isArray(scope.visibilityParams) ? scope.visibilityParams : []));
     next = params.length + 1;
   }
@@ -277,11 +294,26 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
       params.push(subfilter.value);
       next += 1;
     }
-    const companyClause = relationship.target_company_scoped === true ? ` AND ${alias}.company_id = $1` : "";
     const sourceRelationshipKey = relationship.source_relationship_key || relationship.sourceRelationshipKey || null;
     const sourceAlias = sourceRelationshipKey ? relationshipAliases[sourceRelationshipKey] : "r";
     if (!sourceAlias || !isSafeIdentifier(sourceAlias)) throw new Error("Cross-filter relationship path is invalid");
-    const exists = `EXISTS (SELECT 1 FROM "${targetTable}" ${alias} WHERE ${alias}."${targetColumn}" = ${sourceAlias}."${localColumn}"${companyClause}${subfilters.length ? ` AND ${subfilters.join(" AND ")}` : ""})`;
+    const relationScope = [];
+    if (relationship.target_company_scoped === true) relationScope.push(`${alias}.company_id = $1`);
+    if (relationship.target_store_scoped === true) {
+      if (!scope.storeId) throw new Error("A store session is required to report on this relationship");
+      relationScope.push(`${alias}.store_id = ${next}`);
+      params.push(String(scope.storeId));
+      next += 1;
+    }
+    if (relationship.target_visibility_sql) {
+      const aliased = aliasReportVisibilitySql(relationship.target_visibility_sql, targetTable, alias);
+      const rebased = rebaseReportSqlParams(aliased, params.length);
+      relationScope.push(`(${rebased})`);
+      params.push(...(Array.isArray(relationship.target_visibility_params) ? relationship.target_visibility_params : []));
+      next = params.length + 1;
+    }
+    const allConditions = [...relationScope, ...subfilters];
+    const exists = `EXISTS (SELECT 1 FROM "${targetTable}" ${alias} WHERE ${alias}."${targetColumn}" = ${sourceAlias}."${localColumn}"${allConditions.length ? ` AND ${allConditions.join(" AND ")}` : ""})`;
     where.push(crossFilter.type === "WITHOUT" ? `NOT ${exists}` : exists);
   }
   const selected = normalized.fields.map((key) => `${fieldExpression(fieldMap.get(key), "r", relationshipAliases)} AS "${key}"`);

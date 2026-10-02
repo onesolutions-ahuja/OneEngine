@@ -35,6 +35,7 @@ import { listPlatformComponents } from "../services/platformComponentRegistry.js
 import { BUTTON_VARIANTS, validateButtonDefinition } from "../services/platformButtonRegistry.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "../services/platformPermissionSets.js";
 import { buildPlatformSharingScope } from "../services/platformSharing.js";
+import { hasPlatformObjectPermission } from "../services/platformReportSecurity.js";
 import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, findObjectDuplicateMatches, loadObjectDuplicateRules, resolveDuplicateAction, validateDuplicateRule } from "../services/platformDuplicateMatching.js";
 import { publishPlatformEvent } from "../services/platformEvents.js";
 import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
@@ -3880,6 +3881,33 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({ success: true, data: result.rows });
   });
 
+  router.get("/platform/runtime/layouts/:layoutId", authenticate, async (req, res) => {
+    try {
+      const layoutResult = await db(
+        `SELECT l.*,o.object_key,o.label AS object_label,o.source_table,o.company_scoped,o.store_scoped
+           FROM platform_layouts l
+           JOIN platform_objects o ON o.id=l.object_id
+          WHERE l.id=$1 AND l.active=true AND o.active=true
+            AND (l.company_id IS NULL OR l.company_id=$2)
+            AND (o.company_id IS NULL OR o.company_id=$2)
+          LIMIT 1`,
+        [req.params.layoutId, req.user.companyId]
+      );
+      const layout = layoutResult.rows[0];
+      if (!layout) return res.status(404).json({ success:false, message:"Form layout not found" });
+      const action = ["create","quick_create"].includes(String(layout.page_type)) ? "create" : String(layout.page_type) === "edit" ? "edit" : "view";
+      if (!(await hasPlatformObjectPermission(db, req, layout.object_id, action))) return res.status(403).json({ success:false, message:"You do not have permission to use this form layout" });
+      const fieldResult = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label", [layout.object_id, req.user.companyId]);
+      const object = { id:layout.object_id, object_key:layout.object_key, source_table:layout.source_table, company_scoped:layout.company_scoped, store_scoped:layout.store_scoped };
+      const baseFields = safeSystemFields(object, tenantFields(fieldResult.rows, req.user.companyId));
+      const enriched = await enrichFields(db, baseFields, req);
+      const fields = await applyFieldSecurity(db, enriched, req);
+      res.json({ success:true, data:{ layout, object:{ id:layout.object_id, objectKey:layout.object_key, label:layout.object_label }, fields } });
+    } catch (error) {
+      console.error("Runtime form layout error:", error);
+      res.status(error?.status || error?.statusCode || 500).json({ success:false, message:error?.message || "Unable to load form layout" });
+    }
+  });
   router.get("/platform/layouts/effective", authenticate, async (req, res) => {
     const object = await getObject(req.query.objectId, req);
     if (!object) return res.status(404).json({ success: false, message: "Object not found" });

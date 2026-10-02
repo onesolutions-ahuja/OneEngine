@@ -114,7 +114,7 @@ function normalizeDrillAction(action) {
 function normalizeBlock(block, index) {
   const rawFilters = Array.isArray(block?.filters) ? block.filters : [];
   if (rawFilters.length > 20) throw new Error(`Joined block ${index + 1} can contain up to 20 filters`);
-  if (rawFilters.filter((filter) => String(filter?.operator || "").endsWith("_field")).length > 4) throw new Error(`Joined block ${index + 1} can contain up to 4 field-to-field filters`);
+  if (rawFilters.some((filter) => String(filter?.operator || "").endsWith("_field"))) throw new Error(`Joined block ${index + 1} does not support field-to-field filters`);
   const filters = asArray(rawFilters, 20);
   const summaryFormulas = asArray(block?.summaryFormulas, 10).map((formula, formulaIndex) => normalizeFormula(formula, formulaIndex, "summary"));
   return {
@@ -134,12 +134,28 @@ function normalizeBlock(block, index) {
   };
 }
 
+function normalizeCommonGroups(input = [], blocks = []) {
+  return asArray(input, 10).map((entry, index) => {
+    if (typeof entry === "string") {
+      const field = entry.trim();
+      if (!field) throw new Error(`Common group ${index + 1} needs a field`);
+      return { key: `common_group_${index + 1}`, label: field, mappings: blocks.map((block) => ({ blockKey: block.key, field })) };
+    }
+    const key = String(entry?.key || `common_group_${index + 1}`).trim();
+    if (!API_NAME.test(key)) throw new Error(`Common group ${index + 1} has an invalid key`);
+    const mappings = asArray(entry?.mappings, blocks.length || 5).map((mapping) => ({ blockKey: String(mapping?.blockKey || "").trim(), field: String(mapping?.field || "").trim() })).filter((mapping) => mapping.blockKey && mapping.field);
+    for (const block of blocks) if (!mappings.some((mapping) => mapping.blockKey === block.key)) throw new Error(`Common group ${key} needs a field mapping for ${block.label || block.key}`);
+    return { key, label: String(entry?.label || key).slice(0, 120), mappings };
+  });
+}
 export function normalizeAdvancedReportDefinition(definition = {}) {
   const rawFilters = Array.isArray(definition.filters) ? definition.filters : [];
   if (rawFilters.length > 20) throw new Error("A report can contain up to 20 field filters");
   const filters = asArray(rawFilters, 20);
   if (filters.filter((filter) => String(filter?.operator || "").endsWith("_field")).length > 4) throw new Error("A report can contain up to 4 field-to-field filters");
   const format = REPORT_FORMATS.has(String(definition.format)) ? String(definition.format) : "tabular";
+  if (format === "joined" && filters.some((filter) => String(filter?.operator || "").endsWith("_field"))) throw new Error("Joined reports do not support field-to-field filters");
+  const blocks = format === "joined" ? asArray(definition.blocks, 5).map(normalizeBlock) : [];
   const rowGroups = uniqueStrings(definition.rowGroups || definition.groupBy, 10);
   const columnGroups = uniqueStrings(definition.columnGroups, 10);
   const normalized = { ...definition, schemaVersion: 2, format, fields: uniqueStrings(definition.fields, 100), filters,
@@ -170,7 +186,7 @@ export function normalizeAdvancedReportDefinition(definition = {}) {
       referenceLines: asArray(definition.presentation?.referenceLines, 10).map((line) => ({ label: String(line?.label || "").slice(0, 100), value: Number(line?.value || 0), axis: line?.axis === "secondary" ? "secondary" : "primary" })),
     },
     conditionalFormatting: format === "joined" ? [] : asArray(definition.conditionalFormatting, 30).map(normalizeConditionalRule), drillAction: normalizeDrillAction(definition.drillAction),
-    blocks: format === "joined" ? asArray(definition.blocks, 5).map(normalizeBlock) : [], commonGroups: format === "joined" ? uniqueStrings(definition.commonGroups, 10) : [] };
+    blocks, commonGroups: format === "joined" ? normalizeCommonGroups(definition.commonGroups, blocks) : [] };
   validateFilterLogic(normalized.filterLogic, normalized.filters.length);
   if (format === "matrix" && (!rowGroups.length || !columnGroups.length)) throw new Error("Matrix reports require at least one row group and one column group");
   if (format === "matrix" && !normalized.summaries.length) throw new Error("Matrix reports require at least one summary value");

@@ -194,6 +194,7 @@ export default function DashboardPage({ onOpenBuilder }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [currency, setCurrency] = useState('GBP')
   const [dateRange, setDateRange] = useState('this_month')
   const [globalFilterValues, setGlobalFilterValues] = useState({})
   const [permissionCodes, setPermissionCodes] = useState([])
@@ -219,6 +220,14 @@ export default function DashboardPage({ onOpenBuilder }) {
   const [viewportMode, setViewportMode] = useState(() => (
     typeof window === 'undefined' ? 'desktop' : window.innerWidth < 640 ? 'mobile' : window.innerWidth < 1024 ? 'tablet' : 'desktop'
   ))
+
+  useEffect(() => {
+    let live = true
+    apiRequest('/api/settings').then((response) => {
+      if (live && response?.success) setCurrency(response.data?.company?.currency || 'GBP')
+    }).catch(() => {})
+    return () => { live = false }
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -464,7 +473,7 @@ export default function DashboardPage({ onOpenBuilder }) {
       <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={() => updateGlobalFilters({})}>Reset filters</button>
     </div> : null}
     {error ? <div className="dashboard-inline-error">{error}</div> : null}
-    <DashboardGrid components={components} results={results} loading={loading} />
+    <DashboardGrid components={components} results={results} loading={loading} currency={currency} />
     {loading && definition ? <div className="dashboard-refreshing">Refreshing…</div> : null}
   </section>
 }

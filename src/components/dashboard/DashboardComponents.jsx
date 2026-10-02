@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { DASHBOARD_COMPONENTS } from "./platformDashboard.js";
 import { formatDateValue } from "../../utils/dateFormat.js";
 import {
+  ComboChart,
   FunnelChart,
   GaugeChart,
   LineChart,
@@ -31,13 +32,15 @@ export function displayCellValue(value) {
 
 const PALETTE = ["#176f6a", "#2f8a82", "#82c1bb", "#4fa69e", "#0d3b39", "#7aa7f8", "#c9a227", "#b4553f", "#6b7f3a", "#8a5fb0"];
 
-const CURRENCY = new Intl.NumberFormat(undefined, { style: "currency", currency: "GBP", maximumFractionDigits: 2 });
 const NUMBER = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
-export function formatValue(value, format) {
+export function formatValue(value, format, currency = "GBP") {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
-  if (format === "currency") return CURRENCY.format(n);
+  if (format === "currency") {
+    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "GBP", maximumFractionDigits: 2 }).format(n); }
+    catch { return `${currency || "GBP"} ${n.toFixed(2)}`; }
+  }
   if (format === "percent") return `${NUMBER.format(n)}%`;
   return NUMBER.format(n);
 }
@@ -46,8 +49,9 @@ export function formatValue(value, format) {
    rows the reporting engine returned. */
 export function seriesFrom(config, result) {
   const rows = Array.isArray(result?.data?.rows) ? result.data.rows : [];
-  const valueField = config?.valueField || result?.data?.columns?.find((key) => key !== config?.labelField);
-  const labelField = config?.labelField || result?.data?.columns?.find((key) => key !== valueField);
+  const columns = (result?.data?.columns || []).map((column) => typeof column === "string" ? column : column?.key).filter(Boolean);
+  const valueField = config?.valueField || columns.find((key) => key !== config?.labelField);
+  const labelField = config?.labelField || columns.find((key) => key !== valueField);
   return rows
     .map((row) => ({ label: labelField ? String(displayCellValue(row[labelField]) ?? "—") : "Total", value: Number(row[valueField]) || 0 }))
     .filter((point) => Number.isFinite(point.value));
@@ -115,7 +119,7 @@ function Legend({ arcs, config }) {
       <li key={arc.label} className="flex items-center gap-2 text-xs min-w-0">
         <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: arc.color }} />
         <span className="truncate flex-1" style={{ color: "var(--onepos-text-primary)" }}>{arc.label}</span>
-        <span className="shrink-0 tabular-nums" style={{ color: "var(--onepos-text-muted)" }}>{formatValue(arc.value, config?.format)}</span>
+        <span className="shrink-0 tabular-nums" style={{ color: "var(--onepos-text-muted)" }}>{formatValue(arc.value, config?.format, config?.currency)}</span>
       </li>
     ))}
   </ul>;
@@ -129,9 +133,9 @@ function PieChart({ points, config, donut }) {
   return <div className="h-full flex flex-col items-center justify-center sm:flex-row gap-4">
     <svg viewBox="0 0 100 100" className="h-32 w-32 shrink-0" role="img" aria-label={donut ? "Donut chart" : "Pie chart"}>
       <title>{donut ? "Donut chart" : "Pie chart"}</title>
-      {arcs.map((arc) => <path key={arc.label} d={arc.d} fill={arc.color}><title>{arc.label}: {formatValue(arc.value, config?.format)}</title></path>)}
+      {arcs.map((arc) => <path key={arc.label} d={arc.d} fill={arc.color}><title>{arc.label}: {formatValue(arc.value, config?.format, config?.currency)}</title></path>)}
       {donut && <path d={arcs.map((arc) => arc.inner).join(" ")} fill="var(--onepos-surface-raised)" />}
-      {donut && <text x="50" y="48" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--onepos-text-heading)">{formatValue(total, config?.format)}</text>}
+      {donut && <text x="50" y="48" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--onepos-text-heading)">{formatValue(total, config?.format, config?.currency)}</text>}
       {donut && <text x="50" y="60" textAnchor="middle" fontSize="5.5" fill="var(--onepos-text-muted)">Total</text>}
     </svg>
     <Legend arcs={arcs} config={config} />
@@ -165,19 +169,19 @@ function MetricTile({ points, config }) {
   return <div className="h-full flex flex-col justify-center min-w-0">
     {showLead && <div className="text-sm truncate" style={{ color: "var(--onepos-text-secondary)" }} title={lead.label}>{lead.label}</div>}
     {/* break-words: a wide currency value must wrap rather than clip on phones. */}
-    <div className={`${sizeClass} font-bold tabular-nums mt-1 break-words`} style={{ color: "var(--onepos-text-heading)" }}>{formatValue(showLead ? lead.value : total, config?.format)}</div>
-    {showLead && <div className="text-[11px] mt-0.5" style={{ color: "var(--onepos-text-muted)" }}>{formatValue(lead.value, config?.format)} of {formatValue(total, config?.format)}</div>}
+    <div className={`${sizeClass} font-bold tabular-nums mt-1 break-words`} style={{ color: "var(--onepos-text-heading)" }}>{formatValue(showLead ? lead.value : total, config?.format, config?.currency)}</div>
+    {showLead && <div className="text-[11px] mt-0.5" style={{ color: "var(--onepos-text-muted)" }}>{formatValue(lead.value, config?.format, config?.currency)} of {formatValue(total, config?.format, config?.currency)}</div>}
   </div>;
 }
 
 function RecordTable({ result }) {
-  const columns = Array.isArray(result?.data?.columns) ? result.data.columns : [];
+  const columns = (Array.isArray(result?.data?.columns) ? result.data.columns : []).map((column) => typeof column === "string" ? { key: column, label: column } : column).filter((column) => column?.key);
   const rows = Array.isArray(result?.data?.rows) ? result.data.rows : [];
   if (!rows.length) return <Empty />;
   return <div className="h-full overflow-auto">
     <table className="w-full text-sm">
-      <thead><tr>{columns.map((column) => <th key={column} className="text-left font-semibold pb-2" style={{ color: "var(--onepos-text-secondary)" }}>{column}</th>)}</tr></thead>
-      <tbody>{rows.map((row, index) => <tr key={index} className="border-t" style={{ borderColor: "var(--onepos-border)" }}>{columns.map((column) => <td key={column} className="py-1.5 truncate">{String(displayCellValue(row[column]) ?? "—")}</td>)}</tr>)}</tbody>
+      <thead><tr>{columns.map((column) => <th key={column.key} className="text-left font-semibold pb-2" style={{ color: "var(--onepos-text-secondary)" }}>{column.label || column.key}</th>)}</tr></thead>
+      <tbody>{rows.map((row, index) => <tr key={index} className="border-t" style={{ borderColor: "var(--onepos-border)" }}>{columns.map((column) => <td key={column.key} className="py-1.5 truncate">{String(displayCellValue(row[column.key]) ?? "—")}</td>)}</tr>)}</tbody>
     </table>
   </div>;
 }
@@ -355,17 +359,19 @@ export function renderDashboardComponent(component, result, state) {
       detail: { drill: action, point, componentId: component.id },
     }));
   };
+  const formatter = (value, format) => formatValue(value, format, config.currency);
   const body = {
     kpi: <MetricTile points={points} config={config} />,
     pie: <PieChart points={points} config={config} />,
     donut: <PieChart points={points} config={config} donut />,
     bar: config.seriesField
-      ? <MultiSeriesBarChart series={multi.series} categories={multi.categories} config={config} formatValue={formatValue} onPointClick={drill} />
+      ? <MultiSeriesBarChart series={multi.series} categories={multi.categories} config={config} formatValue={formatter} onPointClick={drill} />
       : <BarChart points={points} config={config} />,
-    line: <LineChart points={points} config={config} formatValue={formatValue} onPointClick={drill} />,
-    gauge: <GaugeChart points={points} config={config} formatValue={formatValue} onPointClick={drill} />,
-    funnel: <FunnelChart points={points} config={config} formatValue={formatValue} onPointClick={drill} />,
-    scatter: <ScatterChart points={points} config={config} formatValue={formatValue} onPointClick={drill} />,
+    line: <LineChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
+    gauge: <GaugeChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
+    funnel: <FunnelChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
+    scatter: <ScatterChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
+    combo: <ComboChart rows={Array.isArray(result?.data?.rows) ? result.data.rows : []} config={config} formatValue={formatter} onPointClick={drill} />,
     table: <RecordTable result={result} />,
   }[type] || <Empty />;
   return <Card component={component} state={state}>{body}</Card>;

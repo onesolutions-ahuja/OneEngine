@@ -79,6 +79,7 @@ export function readRoute() {
   if (parts[0] === 'kiosk') return { app: 'kiosk', section: null }
   if (parts[0] === 'kiosk-display') return { app: 'kiosk-display', section: null }
   if (parts[0] === 'kiosk-devices') return { app: 'kiosk-devices', section: null }
+  if (parts[0] === 'workspace' && parts[1] === 'pages' && parts[2]) return { app: 'custom-page-runtime', section: null, pageKey: decodeURIComponent(parts[2]) }
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
@@ -174,6 +175,8 @@ export function setRoute(app, section = null, options = {}) {
         ? `${base}/licensing`
       : app === 'app-releases'
         ? `${base}/app-releases`
+      : app === 'custom-page-runtime'
+        ? `${base}/workspace/pages/${encodeURIComponent(options?.pageKey || '')}`
       : app === 'workspace'
         ? options?.objectKey
           ? options?.appKey

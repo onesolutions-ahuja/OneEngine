@@ -81,8 +81,8 @@ export async function loadPlatformReportContext(db, req, objectId, relationshipP
     const relatedFields = await applyFieldSecurity(db, relatedFieldsResult.rows, req);
     const targetObject = { id: relationship.target_object_id, object_key: relationship.target_object_key, source_table: relationship.target_source_table, company_scoped: relationship.target_company_scoped, store_scoped: relationship.target_store_scoped };
     const targetSharing = await buildPlatformSharingScope({ db, object: targetObject, fields: relatedFields, req, access: "read", paramsOffset: 0 });
-    if (targetSharing.sql) return null;
-    return { ...relationship, relationship_key: path.alias || relationship.relationship_key, base_relationship_key: relationship.relationship_key, source_relationship_id: path.sourceRelationshipId || null, source_relationship_key: path.sourceRelationshipKey || null, path_depth: Number(path.depth || 1), fields: relatedFields.filter((field) => field.readable !== false && field.source_column && isSafeIdentifier(field.source_column)) };
+    if (targetSharing.sql === "FALSE") return null;
+    return { ...relationship, relationship_key: path.alias || relationship.relationship_key, base_relationship_key: relationship.relationship_key, source_relationship_id: path.sourceRelationshipId || null, source_relationship_key: path.sourceRelationshipKey || null, path_depth: Number(path.depth || 1), target_visibility_sql: targetSharing.sql || null, target_visibility_params: Array.isArray(targetSharing.params) ? targetSharing.params : [], fields: relatedFields.filter((field) => field.readable !== false && field.source_column && isSafeIdentifier(field.source_column)) };
   };
 
   const relationships = [];
@@ -109,7 +109,6 @@ export async function loadPlatformReportContext(db, req, objectId, relationshipP
     }
   }
 
-  const relatedStoreScopes = relationships.filter((relationship) => relationship.target_store_scoped === true).length;
-  const access = await preparePlatformReportSecurity({ db, req, object, fields: safeFields, paramsOffset: 1 + (object.store_scoped === true ? 1 : 0) + relatedStoreScopes });
+  const access = await preparePlatformReportSecurity({ db, req, object, fields: safeFields, paramsOffset: 0 });
   return { object, fields: access.fields.filter((field) => field.readable !== false), relationships, visibilitySql: access.visibilitySql, visibilityParams: access.visibilityParams };
 }

@@ -84,6 +84,7 @@ const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/Conn
 const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
 const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const WorkspacePage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
+const CustomPageRuntimePage = lazyWithRecovery(() => import('./pages/platform/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
 const SalesPage = lazyWithRecovery(() => import('./pages/sales/SalesPage'))
@@ -2470,6 +2471,8 @@ function Desktop({ onLock, onSignOut }) {
             setRoute('settings', 'company')
             setActiveApp('settings')
           }} />
+        ) : activeApp === 'custom-page-runtime' ? (
+          <CustomPageRuntimePage pageKey={routeState.pageKey || ''} />
         ) : activeApp === 'workspace' ? (
           <WorkspacePage
             initialObjectKey={routeState.objectKey || ''}

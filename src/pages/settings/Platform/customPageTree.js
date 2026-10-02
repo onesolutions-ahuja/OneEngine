@@ -35,7 +35,7 @@ export const CONTAINER_SIZES = Object.freeze(["small", "medium", "large"]);
 export const MULTI_GRID_SIZES = Object.freeze(["small", "medium", "large"]);
 export const MAX_RECORD_LIMIT = 50;
 
-export const ON_CLICK_TYPES = Object.freeze(["none", "workflow", "action", "navigate", "form_layout"]);
+export const ON_CLICK_TYPES = Object.freeze(["none", "workflow", "action", "navigate", "form_layout", "component"]);
 
 /** Component Registry keys that may hold children inside a Section. */
 export function isContainerComponentKey(componentKey) {
@@ -152,6 +152,11 @@ function normalizeInteraction(value) {
         : null),
     formLayoutId: safeString(source.formLayoutId ?? source.form_layout_id, 64) || null,
     formPresentation: ["full_screen", "screen_modal", "compact_popup"].includes(source.formPresentation ?? source.form_presentation) ? (source.formPresentation ?? source.form_presentation) : "screen_modal",
+    targetNodeId: safeString(source.targetNodeId ?? source.target_node_id, 100) || null,
+    targetNodeLabel: safeString(source.targetNodeLabel ?? source.target_node_label, 200) || null,
+    operation: ["set_record", "filter_collection", "set_value", "refresh"].includes(source.operation) ? source.operation : "set_record",
+    sourceField: safeApiName(source.sourceField ?? source.source_field) || null,
+    targetField: safeApiName(source.targetField ?? source.target_field) || null,
   };
 }
 

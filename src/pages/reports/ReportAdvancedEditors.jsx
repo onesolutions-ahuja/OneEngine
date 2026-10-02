@@ -123,3 +123,19 @@ export function JoinedBlocksEditor({ blocks=[],onChange,sources=[],objects=[],re
   </fieldset>;
 }
 
+
+export function JoinedCommonGroupsEditor({ groups = [], blocks = [], onChange }) {
+  const normalized = (groups || []).map((group, index) => typeof group === "string"
+    ? { key: `common_group_${index + 1}`, label: group, mappings: (blocks || []).map((block) => ({ blockKey: block.key, field: group })) }
+    : { key: group?.key || `common_group_${index + 1}`, label: group?.label || group?.key || `Common group ${index + 1}`, mappings: Array.isArray(group?.mappings) ? group.mappings : [] });
+  const add = () => onChange([...(normalized || []), { key: `common_group_${normalized.length + 1}`, label: `Common group ${normalized.length + 1}`, mappings: (blocks || []).map((block) => ({ blockKey: block.key, field: block.rowGroups?.[0] || block.fields?.[0] || "" })) }]);
+  const update = (index, patch) => onChange(normalized.map((group, i) => i === index ? { ...group, ...patch } : group));
+  return <fieldset className={CARD} style={border}>
+    <div className="flex items-center justify-between"><legend className="font-medium text-sm">Common groups</legend><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={add} disabled={!blocks.length}>Add common group</button></div>
+    <p className="text-xs" style={{color:"var(--onepos-text-muted)"}}>Map the equivalent grouping field from every joined block.</p>
+    {normalized.map((group,index)=><div key={group.key||index} className="rounded-lg border p-3 space-y-2" style={border}>
+      <div className="grid gap-2 md:grid-cols-[1fr_auto]"><input className={FIELD} value={group.label||""} onChange={(e)=>update(index,{label:e.target.value})}/><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>onChange(normalized.filter((_,i)=>i!==index))}>Remove</button></div>
+      <div className="grid gap-2 md:grid-cols-2">{(blocks||[]).map((block)=>{const mapping=(group.mappings||[]).find((item)=>String(item.blockKey)===String(block.key))||{blockKey:block.key,field:""};const options=[...(block.rowGroups||[]),...(block.fields||[])].filter((value,i,array)=>value&&array.indexOf(value)===i);return <label key={block.key} className="onepos-label">{block.label||block.key}<select className={`${FIELD} mt-1`} value={mapping.field||""} onChange={(e)=>update(index,{mappings:(blocks||[]).map((candidate)=>candidate.key===block.key?{blockKey:block.key,field:e.target.value}:{blockKey:candidate.key,field:(group.mappings||[]).find((item)=>String(item.blockKey)===String(candidate.key))?.field||""})})}><option value="">Select field</option>{options.map((field)=><option key={field} value={field}>{field}</option>)}</select></label>;})}</div>
+    </div>)}
+  </fieldset>;
+}

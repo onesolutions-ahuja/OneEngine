@@ -278,10 +278,18 @@ export function applySummaryFormulas(result, formulas = [], applyToRows = true) 
 
 export function joinReportBlocks(blockResults = [], definition = {}) {
   const commonGroups = definition.commonGroups || [];
+  const fieldFor = (group, block) => {
+    if (typeof group === "string") return group;
+    const mapping = (group?.mappings || []).find((item) => String(item.blockKey) === String(block.key));
+    return mapping?.field || null;
+  };
   const indexes = blockResults.map((block) => {
     const map = new Map();
     for (const row of block.rows || []) {
-      const key = commonGroups.map((field) => String(row[field] ?? "")).join(" | ");
+      const key = commonGroups.map((group) => {
+        const field = fieldFor(group, block);
+        return String(field ? row[field] ?? "" : "");
+      }).join(" | ");
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(row);
     }

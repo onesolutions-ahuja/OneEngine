@@ -12,7 +12,7 @@
  */
 import renderDashboardComponent from "./DashboardComponents.jsx";
 import { dashboardHeightClass, dashboardSpanClass } from "./platformDashboard.js";
-export function DashboardGrid({ components, results, loading = false, className = "", testId = "dashboard-grid" }) {
+export function DashboardGrid({ components, results, loading = false, className = "", testId = "dashboard-grid", currency = "GBP" }) {
   const byId = new Map((results || []).map((result) => [result.id, result]));
   if (!components?.length) {
     return <div data-testid="dashboard-grid-empty" className={`rounded-xl border p-8 text-center text-sm ${className}`} style={{ borderColor: "var(--onepos-border)", color: "var(--onepos-text-muted)" }}>
@@ -27,7 +27,7 @@ export function DashboardGrid({ components, results, loading = false, className 
       const result = byId.get(component.id);
       const state = loading ? "loading" : result?.error ? "error" : "ready";
       return <div key={component.id} data-dashboard-slot={component.id} className={`${dashboardSpanClass(component.layout?.w)} ${dashboardHeightClass(component.layout?.h)} min-w-0`}>
-        {renderDashboardComponent(component, result, state)}
+        {renderDashboardComponent({ ...component, config: { ...(component.config || {}), currency } }, result, state)}
       </div>;
     })}
   </div>;

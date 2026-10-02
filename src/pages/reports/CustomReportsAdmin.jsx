@@ -19,6 +19,7 @@ import {
   DrillActionEditor,
   FormulaEditor,
   JoinedBlocksEditor,
+  JoinedCommonGroupsEditor,
 } from "./ReportAdvancedEditors.jsx";
 import {
   HistoricalTrendEditor,
@@ -27,6 +28,8 @@ import {
 } from "./ReportExperienceControls.jsx";
 import { AdvancedFilterEditor } from "./ReportTypeDesigner.jsx";
 import ReportManagementPanel from "./ReportManagementPanel.jsx";
+import { apiRequest } from "../../services/api.js";
+import renderDashboardComponent from "../../components/dashboard/DashboardComponents.jsx";
 
 const fresh = () => ({
   name: "",
@@ -67,6 +70,7 @@ const fieldLabel = (fields, key) => fields.find((field) => field.key === key)?.l
 
 export default function CustomReportsAdmin({ embedded = false, initialReport = null, onClose, onSaved } = {}) {
   const [reports,setReports]=useState([]);
+  const [reportCurrency,setReportCurrency]=useState("GBP");
   const [metadata,setMetadata]=useState({ fields:[],filters:[],stores:[],users:[],roles:[],publicGroups:[],platformObjects:[],reportTypes:[],sources:[],relationships:[],canManage:false });
   const [platformFields,setPlatformFields]=useState([]);
   const [platformRelationships,setPlatformRelationships]=useState([]);
@@ -95,6 +99,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     }catch(e){setError(errorMessage(e));}finally{setLoading(false);}
   };
   useEffect(()=>{void load();},[]);
+  useEffect(()=>{let live=true;apiRequest("/api/settings").then((response)=>{if(live&&response?.success)setReportCurrency(response.data?.company?.currency||"GBP");}).catch(()=>{});return()=>{live=false;};},[]);
 
   useEffect(()=>{
     const objectId=definition.objectId;
@@ -205,7 +210,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       <fieldset><legend className="text-sm font-medium mb-2">Fields</legend><div className="grid grid-cols-2 md:grid-cols-4 gap-2">{availableFields.map((field)=><label key={field.key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={definition.fields.includes(field.key)} onChange={()=>toggleField(field.key)}/>{field.label}</label>)}</div></fieldset>
       {selectedFields.length?<div className="space-y-1"><div className="text-sm font-medium">Column order</div>{selectedFields.map((field,index)=><div key={field.key} className="flex items-center gap-2 text-sm"><span className="flex-1">{field.label}</span><button type="button" disabled={index===0} onClick={()=>{const next=[...definition.fields];[next[index-1],next[index]]=[next[index],next[index-1]];update({fields:next});}}>↑</button><button type="button" disabled={index===selectedFields.length-1} onClick={()=>{const next=[...definition.fields];[next[index],next[index+1]]=[next[index+1],next[index]];update({fields:next});}}>↓</button></div>)}</div>:null}
 
-      {definition.dataSource==="platform_object"?<AdvancedFilterEditor filters={definition.filters||[]} crossFilters={definition.format==="joined"?[]:(definition.crossFilters||[])} fields={availableFields} relationships={definition.format==="joined"?[]:platformRelationships} onChange={({filters,crossFilters})=>update({filters,crossFilters:definition.format==="joined"?[]:crossFilters})}/>:<div className="grid md:grid-cols-2 gap-3"><label className="onepos-label">Date range<select className="onepos-input mt-1" value={definition.filters?.[0]?.operator||"this_week"} onChange={(e)=>update({filters:[{field:"date",operator:e.target.value}]})}>{metadata.filters.map((item)=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label></div>}
+      {definition.dataSource==="platform_object"?<AdvancedFilterEditor filters={definition.filters||[]} crossFilters={definition.format==="joined"?[]:(definition.crossFilters||[])} fields={availableFields} relationships={definition.format==="joined"?[]:platformRelationships} allowFieldComparisons={definition.format!=="joined"&&!platformRelationships.some((relationship)=>String(relationship.reportJoinType||relationship.joinType||"").toUpperCase()==="WITH_OR_WITHOUT")} onChange={({filters,crossFilters})=>update({filters,crossFilters:definition.format==="joined"?[]:crossFilters})}/>:<div className="grid md:grid-cols-2 gap-3"><label className="onepos-label">Date range<select className="onepos-input mt-1" value={definition.filters?.[0]?.operator||"this_week"} onChange={(e)=>update({filters:[{field:"date",operator:e.target.value}]})}>{metadata.filters.map((item)=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label></div>}
 
       <div className="grid md:grid-cols-3 gap-3">
         <label className="onepos-label">Row groups<select multiple className="onepos-input mt-1 min-h-28" value={definition.rowGroups||[]} onChange={(e)=>{const rowGroups=[...e.target.selectedOptions].map((o)=>o.value);update({rowGroups,groupBy:rowGroups})}}>{selectedFields.map((field)=><option key={field.key} value={field.key}>{field.label}</option>)}</select></label>
@@ -218,7 +223,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       {definition.format!=="joined"&&!historicalEnabled?<BucketEditor buckets={definition.buckets||[]} onChange={(buckets)=>update({buckets})} fields={availableFields}/>:null}
       {definition.format!=="joined"?<FormulaEditor title="Row Formula" formulas={definition.rowFormulas||[]} onChange={(rowFormulas)=>update({rowFormulas})} scope="row" fieldOptions={availableFields.filter((field)=>!historicalEnabled||!String(field.key).endsWith("__historical"))} maxCount={2}/>:null}
       <FormulaEditor title="Summary Formula" formulas={definition.summaryFormulas||[]} onChange={(summaryFormulas)=>update({summaryFormulas})} scope="summary" fieldOptions={[...availableFields,...(definition.summaries||[]).map((s)=>({key:s.alias||`${String(s.aggregate).toLowerCase()}_${s.field}`,label:s.alias||s.field}))]}/>
-      {definition.format==="joined"?<><JoinedBlocksEditor blocks={definition.blocks||[]} onChange={(blocks)=>update({blocks})} sources={metadata.sources} objects={metadata.platformObjects} reportTypes={metadata.reportTypes||[]}/><label className="onepos-label">Common groups<input className="onepos-input mt-1" value={(definition.commonGroups||[]).join(", ")} onChange={(e)=>update({commonGroups:e.target.value.split(",").map((v)=>v.trim()).filter(Boolean)})}/></label><FormulaEditor title="Cross-block Formula" formulas={definition.crossBlockFormulas||[]} onChange={(crossBlockFormulas)=>update({crossBlockFormulas})} scope="cross_block" fieldOptions={[]} maxCount={10}/></>:null}
+      {definition.format==="joined"?<><JoinedBlocksEditor blocks={definition.blocks||[]} onChange={(blocks)=>update({blocks})} sources={metadata.sources} objects={metadata.platformObjects} reportTypes={metadata.reportTypes||[]}/><JoinedCommonGroupsEditor groups={definition.commonGroups||[]} blocks={definition.blocks||[]} onChange={(commonGroups)=>update({commonGroups})}/><FormulaEditor title="Cross-block Formula" formulas={definition.crossBlockFormulas||[]} onChange={(crossBlockFormulas)=>update({crossBlockFormulas})} scope="cross_block" fieldOptions={[]} maxCount={10}/></>:null}
       {definition.format!=="joined"?<ConditionalFormattingEditor rules={definition.conditionalFormatting||[]} onChange={(conditionalFormatting)=>update({conditionalFormatting})} fields={[...availableFields,...(definition.rowFormulas||[]).map((f)=>({key:f.key,label:f.label||f.key})),...(definition.summaryFormulas||[]).map((f)=>({key:f.key,label:f.label||f.key}))]}/>:null}
       <DrillActionEditor action={definition.drillAction} onChange={(drillAction)=>update({drillAction})} reports={reports} fields={availableFields}/>
       {definition.format!=="joined"?<HistoricalTrendEditor value={definition.historicalTrend||{enabled:false,snapshotDates:[],historicalFilters:[]}} onChange={(historicalTrend)=>{const firstHistorical=historicalFields[0]?.key||"";update({historicalTrend,format:historicalTrend.enabled?"matrix":definition.format,buckets:historicalTrend.enabled?[]:definition.buckets,rowGroups:historicalTrend.enabled?["__snapshotDate",...(definition.rowGroups||[]).filter((field)=>field!=="__snapshotDate")]:definition.rowGroups,columnGroups:historicalTrend.enabled&&!(definition.columnGroups||[]).length&&firstHistorical?[firstHistorical]:definition.columnGroups,summaries:historicalTrend.enabled&&!(definition.summaries||[]).length&&firstHistorical?[{aggregate:"COUNT",field:firstHistorical,alias:`count_${firstHistorical}`}]:definition.summaries,snapshot:false});}} fields={historicalFields}/>:null}
@@ -257,6 +262,6 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
 
     {showExport&&editingId?<ReportExportDialog format={definition.format||"tabular"} onClose={()=>setShowExport(false)} onExport={async({view,format})=>{try{const download=await exportCustomReport(editingId,{view,format});const url=URL.createObjectURL(download.blob);const anchor=document.createElement("a");anchor.href=url;anchor.download=download.filename;document.body.appendChild(anchor);anchor.click();anchor.remove();URL.revokeObjectURL(url);setShowExport(false);}catch(e){setError(errorMessage(e));}}}/>:null}
 
-    {results?<section className="onepos-card onepos-card-body overflow-auto"><div className="flex items-center justify-between mb-3"><h2 className="font-semibold">Results</h2>{results.totals&&Object.keys(results.totals).length?<span className="text-xs" style={{color:"var(--onepos-text-muted)"}}>Grand totals available</span>:null}</div><table className="onepos-table w-full"><thead><tr>{outputColumns.map((column)=><th key={column.key}>{column.label||column.key}</th>)}</tr></thead><tbody>{outputRows.map((row,index)=><tr key={index}>{outputColumns.map((column)=><td key={column.key}>{String(row?.[column.key]??"")}</td>)}</tr>)}</tbody></table></section>:null}
+    {results?<section className="onepos-card onepos-card-body overflow-auto"><div className="flex items-center justify-between mb-3"><h2 className="font-semibold">Results</h2>{results.totals&&Object.keys(results.totals).length?<span className="text-xs" style={{color:"var(--onepos-text-muted)"}}>Grand totals available</span>:null}</div>{definition.presentation?.type&&definition.presentation.type!=="table"?<div className="min-h-[260px] mb-5">{renderDashboardComponent({id:"report-result-chart",type:definition.presentation.type==="summary"?"kpi":definition.presentation.type,title:definition.name,config:{...(definition.presentation||{}),labelField:definition.presentation?.xField||definition.rowGroups?.[0]||null,valueField:definition.presentation?.yField||definition.presentation?.yFields?.[0]||null,currency:reportCurrency,drillAction:definition.drillAction}}, {id:"report-result-chart",data:results}, "ready")}</div>:null}<table className="onepos-table w-full"><thead><tr>{outputColumns.map((column)=><th key={column.key}>{column.label||column.key}</th>)}</tr></thead><tbody>{outputRows.map((row,index)=><tr key={index}>{outputColumns.map((column)=><td key={column.key}>{String(row?.[column.key]??"")}</td>)}</tr>)}</tbody></table></section>:null}
   </div>;
 }
