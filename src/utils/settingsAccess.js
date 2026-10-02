@@ -6,6 +6,7 @@ export function settingSectionAccess({
   const oneEngineManage = codes.has('oneengine.manage')
   const mfaManage = settingsManage || codes.has('security.mfa.manage')
   const verificationHistoryView = mfaManage || codes.has('security.identity_verification_history.view')
+  const securityGovernance = settingsManage || codes.has('security.governance.manage') || codes.has('security.health.view') || codes.has('security.vault.manage')
 
   return {
     'Client Web Shop': settingsManage,
@@ -17,6 +18,7 @@ export function settingSectionAccess({
     'Message Templates': settingsManage,
     'MFA Administration': mfaManage,
     'Identity Verification History': verificationHistoryView,
+    'Security Governance': securityGovernance,
   }
 }
 
