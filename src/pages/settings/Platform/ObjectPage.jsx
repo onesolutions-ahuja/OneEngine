@@ -7,6 +7,7 @@ import ObjectHistory from "./ObjectHistory.jsx";
 import ObjectRecordDetail from "./ObjectRecordDetail.jsx";
 import RecordListView from "../../../components/RecordListView.jsx";
 import { formatRecordDisplayValue, isTechnicalRecordField } from "../../../utils/recordDisplay.js";
+import { evaluatePlatformCondition } from "../../../utils/platformConditions.js";
 
 function getObjectKey(object) {
   return (
@@ -219,6 +220,7 @@ export default function ObjectPage({
   const [bulkEditFieldKey, setBulkEditFieldKey] = useState("");
   const [approvalState,setApprovalState]=useState(null);
   const [approvalComment,setApprovalComment]=useState("");
+  const [uiContext, setUiContext] = useState({ permissions: [], entitlements: [] });
 
   const [loading, setLoading] = useState(
     !suppliedObject
@@ -307,6 +309,7 @@ export default function ObjectPage({
   useEffect(() => {
     if (objectMetadata) {
       loadFields();
+      loadUiContext();
       if (!selfServiceView) {
         loadRecordButtons();
         loadListViews();
@@ -433,6 +436,20 @@ export default function ObjectPage({
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadUiContext() {
+    try {
+      const response = await apiRequest("/api/platform/runtime/ui-context");
+      const data = response?.data || {};
+      setUiContext({
+        ...data,
+        permissions: Array.isArray(data.permissions) ? data.permissions : [],
+        entitlements: Array.isArray(data.entitlements) ? data.entitlements : [],
+      });
+    } catch {
+      setUiContext({ permissions: [], entitlements: [] });
     }
   }
 
@@ -1016,6 +1033,28 @@ export default function ObjectPage({
   const hasSelectedRecord =
     Boolean(selectedRecord);
 
+  const runtimeVisibilityContext = {
+    ...uiContext,
+    device: formFactor,
+    formFactor,
+    companyId: uiContext.companyId || null,
+    recordTypeId: selectedRecord?.recordTypeId || selectedRecord?.record_type_id || "",
+    record: selectedRecord || {},
+    object: objectMetadata || {},
+    objectState: objectMetadata || {},
+  };
+
+  const createVisibilityContext = {
+    ...uiContext,
+    device: formFactor,
+    formFactor,
+    companyId: uiContext.companyId || null,
+    recordTypeId: selectedRecordTypeId || "",
+    record: {},
+    object: objectMetadata || {},
+    objectState: objectMetadata || {},
+  };
+
   return (
     <div className="platform-object-page">
       <div className="platform-object-header">
@@ -1235,6 +1274,7 @@ export default function ObjectPage({
                 fields={recordModal.fields || activeFields}
                 initialValues={recordModal.initialValues || {}}
                 mode="create"
+                contextValues={createVisibilityContext}
                 onSubmit={createRecord}
               />
             </div>
@@ -1248,6 +1288,7 @@ export default function ObjectPage({
                 fields={activeFields}
                 initialValues={{}}
                 mode="quick_create"
+                contextValues={createVisibilityContext}
                 onSubmit={createRecord}
               />
             </RecordModal>
@@ -1358,7 +1399,9 @@ export default function ObjectPage({
             </div>
           ) : (
             <div className="platform-field-list">
-              {recordButtons.map((button) => (
+              {recordButtons
+                .filter((button) => evaluatePlatformCondition(button.visibility_rule, activeFields, runtimeVisibilityContext))
+                .map((button) => (
                 <button
                   key={button.id || button.button_key}
                   type="button"
@@ -1369,7 +1412,10 @@ export default function ObjectPage({
                   {executingAction === button.button_key ? "Executing..." : button.label}
                 </button>
               ))}
-              {detailLayout?.definition?.components?.filter((component) => component.type === "action" && component.visible !== false).map((component, index) => (
+              {detailLayout?.definition?.components
+                ?.filter((component) => component.type === "action" && component.visible !== false)
+                .filter((component) => evaluatePlatformCondition(component.visibilityCondition, activeFields, runtimeVisibilityContext))
+                .map((component, index) => (
                 <button key={`${component.action}-${index}`} type="button" className="platform-secondary-button" disabled={executingAction !== ""} onClick={() => handleConfiguredAction(component)}>
                   {executingAction === (component.id || component.key || `${component.action}:${detailLayout.definition.components.indexOf(component)}`) ? "Executing..." : component.label || component.action}
                 </button>
@@ -1380,7 +1426,7 @@ export default function ObjectPage({
               })}
               {recordModal?.type === "edit" ? (
                 <RecordModal open mode="edit" title="Edit record" size="lg" className={layoutPresentationClass(editLayout || createLayout || detailLayout)} onClose={() => setRecordModal(null)} formId="platform-edit-record-form">
-                  <FormRenderer formId="platform-edit-record-form" definition={editLayout?.definition || createLayout?.definition || detailLayout?.definition} fields={activeFields} initialValues={selectedRecord} mode="edit" onSubmit={saveEditedRecord} />
+                  <FormRenderer formId="platform-edit-record-form" definition={editLayout?.definition || createLayout?.definition || detailLayout?.definition} fields={activeFields} initialValues={selectedRecord} mode="edit" contextValues={runtimeVisibilityContext} onSubmit={saveEditedRecord} />
                 </RecordModal>
               ) : null}
               {approvalState ? <section className="rounded-xl border bg-white p-3">
@@ -1396,8 +1442,12 @@ export default function ObjectPage({
                 objectKey={getObjectKey(objectMetadata)}
                 definition={selfServiceView ? null : (detailLayout?.definition || null)}
                 onEdit={canWriteRecords ? () => setRecordModal({ type: "edit" }) : undefined}
+                contextValues={runtimeVisibilityContext}
               />
-              {detailLayout?.definition?.components?.filter((component) => component.type === "related_list" && component.visible !== false).map((component) => {
+              {detailLayout?.definition?.components
+                ?.filter((component) => component.type === "related_list" && component.visible !== false)
+                .filter((component) => evaluatePlatformCondition(component.visibilityCondition, activeFields, runtimeVisibilityContext))
+                .map((component) => {
                 const related = relatedLists[component.relationship_key];
                 const columns = (component.columns || []).length
                   ? related?.fields?.filter((field) => component.columns.includes(field.api_name))
