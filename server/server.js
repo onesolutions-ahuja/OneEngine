@@ -26,6 +26,7 @@ import {
   executeWorkflowActions,
 } from "./services/platformWorkflow.js";
 import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
+import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 import createTillRouter from "./routes/till.js";
@@ -2359,6 +2360,61 @@ async function startServer() {
               );
               const run = runResult.rows[0];
               if (!run) throw Object.assign(new Error("Waiting workflow run no longer exists"), { retryable: false });
+
+              if (payload.waitCondition) {
+                let waitRecord = {};
+                let waitFields = [];
+                if (run.object_id) {
+                  const waitObjectResult = await db(
+                    `SELECT * FROM platform_objects
+                      WHERE id=$1 AND active=TRUE AND (company_id IS NULL OR company_id=$2)
+                      LIMIT 1`,
+                    [run.object_id, job.company_id]
+                  );
+                  const waitObject = waitObjectResult.rows[0] || null;
+                  if (waitObject?.id) {
+                    const waitFieldsResult = await db(
+                      "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
+                      [waitObject.id, job.company_id]
+                    );
+                    waitFields = waitFieldsResult.rows || [];
+                  }
+                  if (waitObject?.source_table && run.record_id) {
+                    const table = String(waitObject.source_table || "");
+                    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) throw Object.assign(new Error("Wait condition record source is invalid"), { retryable: false });
+                    const params = [run.record_id];
+                    let where = "id=$1";
+                    if (waitObject.company_scoped !== false) {
+                      params.push(job.company_id);
+                      where += ` AND company_id=${params.length}`;
+                    }
+                    const waitRecordResult = await db(`SELECT * FROM "${table}" WHERE ${where} LIMIT 1`, params);
+                    waitRecord = waitRecordResult.rows[0] || {};
+                  }
+                }
+                const conditionMet = evaluateCondition(
+                  payload.waitCondition,
+                  waitFields,
+                  waitRecord,
+                  run.metadata?.initialPreviousRecord || null
+                );
+                const maxWaitUntil = payload.maxWaitUntil ? new Date(payload.maxWaitUntil) : null;
+                const timedOut = maxWaitUntil && !Number.isNaN(maxWaitUntil.getTime()) && Date.now() >= maxWaitUntil.getTime();
+                if (!conditionMet && !timedOut) {
+                  const pollSeconds = Math.max(30, Math.min(86400, Number(payload.pollSeconds || 60)));
+                  await db(
+                    "UPDATE platform_action_jobs SET status='PENDING',next_attempt_at=NOW() + ($2 * INTERVAL '1 second'),updated_at=NOW() WHERE id=$1 AND status='RUNNING'",
+                    [job.id, pollSeconds]
+                  );
+                  return { status: "WAITING", deferred: true, conditionMet: false, nextCheckSeconds: pollSeconds };
+                }
+                if (payload.stepRunId) {
+                  await db(
+                    "UPDATE platform_workflow_step_runs SET metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND run_id=$3",
+                    [JSON.stringify({ waitConditionMet: conditionMet, waitConditionTimedOut: Boolean(timedOut), waitConditionCheckedAt: new Date().toISOString() }), payload.stepRunId, run.id]
+                  );
+                }
+              }
 
               const workflowResult = await db(
                 `SELECT * FROM platform_rules
