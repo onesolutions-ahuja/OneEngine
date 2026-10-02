@@ -6676,38 +6676,85 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
     }
     const fields = await applyFieldSecurity(db, childMetadata.fields, req);
     const readableFields = fields.filter((field) => field.readable !== false && isSafeIdentifier(field.api_name) && platformFieldSql(field, child));
+    const fieldByApiName = new Map(readableFields.map((field) => [field.api_name, field]));
     const columns = readableFields.map((field) => `${platformFieldSql(field, child)} AS "${field.api_name}"`);
     const clauses = [`${platformFieldSql(childField, child)}=$1`];
     const params = [req.params.recordId];
     if (child.company_scoped) {
       params.push(req.user.companyId);
-      clauses.push(`company_id=$${params.length}`);
+      clauses.push(`company_id=${params.length}`);
     }
     if (child.store_scoped) {
       if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
       params.push(req.user.storeId);
-      clauses.push(`store_id=$${params.length}`);
+      clauses.push(`store_id=${params.length}`);
     }
     appendSystemReadScope(child, req, clauses, params);
-    const limit = boundedInteger(req.query.limit ?? req.query.pageSize, 25, 100);
-    const offset = Math.max(Number.parseInt(req.query.offset || "0", 10) || 0, 0);
-    const sortField = typeof req.query.sortField === "string"
-      ? readableFields.find((field) => field.api_name === req.query.sortField)
-      : null;
+
+    if (req.query.viewFilters !== undefined) {
+      let parsedViewFilters;
+      try {
+        parsedViewFilters = typeof req.query.viewFilters === "string" ? JSON.parse(req.query.viewFilters) : req.query.viewFilters;
+      } catch {
+        return res.status(400).json({ success: false, message: "viewFilters must be valid JSON" });
+      }
+      appendPlatformRecordFilters({
+        filters: normalizeListViewFilters(parsedViewFilters, fieldByApiName.keys()),
+        fieldByApiName,
+        object: child,
+        clauses,
+        params,
+      });
+    }
+
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    if (search && readableFields.length) {
+      params.push(`%${search}%`);
+      const searchParam = `${params.length}`;
+      clauses.push(`(${readableFields.map((field) => `CAST(${platformFieldSql(field, child)} AS TEXT) ILIKE ${searchParam}`).join(" OR ")})`);
+    }
+
+    const pageSize = boundedInteger(req.query.limit ?? req.query.pageSize, 25, 100);
+    const count = await db(`SELECT COUNT(*)::int AS total FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}`, params);
+    const total = count.rows[0]?.total || 0;
+    const pages = total ? Math.ceil(total / pageSize) : 0;
+    const legacyOffset = Math.max(Number.parseInt(req.query.offset || "0", 10) || 0, 0);
+    const requestedPage = req.query.page !== undefined
+      ? boundedInteger(req.query.page, 1, Math.max(pages, 1))
+      : Math.floor(legacyOffset / pageSize) + 1;
+    const page = pages ? Math.min(requestedPage, pages) : 1;
+    const offset = req.query.page !== undefined ? (page - 1) * pageSize : legacyOffset;
+
+    const requestedSortField = typeof req.query.sortField === "string" && req.query.sortField.trim() ? req.query.sortField.trim() : null;
+    if (requestedSortField && !fieldByApiName.has(requestedSortField)) {
+      return res.status(400).json({ success: false, message: "Sort field is unavailable" });
+    }
+    const sortField = requestedSortField ? fieldByApiName.get(requestedSortField) : null;
     const direction = String(req.query.sortDirection || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
     const order = sortField ? ` ORDER BY ${platformFieldSql(sortField, child)} ${direction}` : " ORDER BY id ASC";
-    const count = await db(`SELECT COUNT(*)::int AS total FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}`, params);
-    const dataParams = [...params, limit, offset];
+
+    const dataParams = [...params, pageSize, offset];
     const result = await db(
-      `SELECT id${columns.length ? `, ${columns.join(", ")}` : ""} FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}${order} LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`,
+      `SELECT id${columns.length ? `, ${columns.join(", ")}` : ""} FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}${order} LIMIT ${dataParams.length - 1} OFFSET ${dataParams.length}`,
       dataParams
     );
     const calculate = compileFormulas(childMetadata.fields);
     const hydrated = await hydrateExtensions(db, child, fields, result.rows, req);
     const calculated = await populateRollups(db, child, childMetadata.fields, hydrated.map((record) => calculate(record)), req);
     const records = calculated.map((record) => publicFormulaRecord(fields, record));
-    const total = count.rows[0]?.total || 0;
-    res.json({ success: true, data: records, records, relationship, pageSize: limit, offset, total });
+    res.json({
+      success: true,
+      data: records,
+      records,
+      relationship,
+      object: { id: child.id, object_key: child.object_key, label: child.label },
+      fields,
+      page,
+      pageSize,
+      pages,
+      offset,
+      total,
+    });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ success: false, message: error.message });
     if (error instanceof FormulaError) return res.status(422).json({ success: false, code: error.code, message: error.message });
