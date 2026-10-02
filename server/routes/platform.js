@@ -35,7 +35,7 @@ import { listPlatformComponents } from "../services/platformComponentRegistry.js
 import { BUTTON_VARIANTS, validateButtonDefinition } from "../services/platformButtonRegistry.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "../services/platformPermissionSets.js";
 import { buildPlatformSharingScope } from "../services/platformSharing.js";
-import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, resolveDuplicateAction } from "../services/platformDuplicateMatching.js";
+import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, findObjectDuplicateMatches, loadObjectDuplicateRules, resolveDuplicateAction } from "../services/platformDuplicateMatching.js";
 import { publishPlatformEvent } from "../services/platformEvents.js";
 import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
 import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";
@@ -6874,16 +6874,28 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   }
 
   async function findDatabaseDuplicateMatches(req, object, fields, input, { allowSameRecordId = false } = {}) {
-    const configured = await findConfiguredDuplicateMatches({
-      db,
-      object,
-      fields,
-      input,
-      companyId: req.user.companyId,
-      storeId: req.user.storeId,
-      excludeRecordId: allowSameRecordId || null,
-    });
-    const configuredFields = new Set(configuredDuplicateRules(fields).flatMap((rule) => rule.fields.map((field) => field.fieldApiName)));
+    const objectRules = await loadObjectDuplicateRules({ db, objectId: object.id, companyId: req.user.companyId });
+    const configured = objectRules.length
+      ? await findObjectDuplicateMatches({
+          db,
+          object,
+          fields,
+          input,
+          companyId: req.user.companyId,
+          storeId: req.user.storeId,
+          excludeRecordId: allowSameRecordId || null,
+        })
+      : await findConfiguredDuplicateMatches({
+          db,
+          object,
+          fields,
+          input,
+          companyId: req.user.companyId,
+          storeId: req.user.storeId,
+          excludeRecordId: allowSameRecordId || null,
+        });
+    const effectiveRules = objectRules.length ? objectRules : configuredDuplicateRules(fields);
+    const configuredFields = new Set(effectiveRules.flatMap((rule) => rule.fields.map((field) => field.fieldApiName)));
     const matches = configured.map((match) => ({
       field: match.fields?.[0] || null,
       fieldLabel: fields.find((field) => field.api_name === match.fields?.[0])?.label || match.fields?.[0] || null,
@@ -6917,7 +6929,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   async function validateImportDuplicateState(req, object, fields, input, { operation, existingId = null, csvSeen = new Map() } = {}) {
     const requested = normalizeRequestedOperation(operation);
     const directId = existingId && recordIdIsValid(String(existingId)) ? String(existingId) : null;
-    const duplicateRules = configuredDuplicateRules(fields);
+    const objectRules = await loadObjectDuplicateRules({ db, objectId: object.id, companyId: req.user.companyId });
+    const duplicateRules = objectRules.length ? objectRules : configuredDuplicateRules(fields);
     const configuredFields = new Set(duplicateRules.flatMap((rule) => rule.fields.map((field) => field.fieldApiName)));
     let warnings = [];
     if (csvSeen && csvSeen instanceof Map) {
