@@ -3333,7 +3333,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       ) : null}
 
       {versionsOpen ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="relative z-20 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">Version History</div>
@@ -3366,7 +3366,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : null}
 
-      <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <details className="relative z-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <summary className="cursor-pointer text-sm font-semibold text-slate-800">Subflow interface</summary>
         <p className="mt-2 text-xs text-slate-500">Optional. Declare typed inputs and outputs when this workflow should be reusable from Run Subflow. Normal trigger-based workflows can leave this empty.</p>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
