@@ -75,16 +75,27 @@ jobs:
           set -euo pipefail
           test -n "$ONEPOS_E2E_USERNAME"
           test -n "$ONEPOS_E2E_PASSWORD"
-          STATUS=$(curl -sS -o /tmp/e2e-login.json -w "%{http_code}" \
-            -H "Content-Type: application/json" \
-            -H "Origin: $ONEPOS_E2E_ORIGIN" \
-            --data-binary "$(node -e 'process.stdout.write(JSON.stringify({username: process.env.ONEPOS_E2E_USERNAME, password: process.env.ONEPOS_E2E_PASSWORD}))')" \
-            "$ONEPOS_API_URL/api/auth/login")
-          if [ "$STATUS" != "200" ]; then
+          for i in {1..60}; do
+            STATUS=$(curl -sS -o /tmp/e2e-login.json -w "%{http_code}" \
+              -H "Content-Type: application/json" \
+              -H "Origin: $ONEPOS_E2E_ORIGIN" \
+              --data-binary "$(node -e 'process.stdout.write(JSON.stringify({username: process.env.ONEPOS_E2E_USERNAME, password: process.env.ONEPOS_E2E_PASSWORD}))')" \
+              "$ONEPOS_API_URL/api/auth/login")
+            if [ "$STATUS" = "200" ]; then
+              exit 0
+            fi
+            MESSAGE=$(node -e 'const fs=require("fs"); try { const x=JSON.parse(fs.readFileSync("/tmp/e2e-login.json","utf8")||"{}"); process.stdout.write(String(x.message||"")); } catch {}')
+            if [ "$STATUS" = "503" ] && echo "$MESSAGE" | grep -qi "starting"; then
+              echo "OneEngine is still starting; retrying authentication readiness..."
+              sleep 5
+              continue
+            fi
             echo "E2E credential verification failed with HTTP $STATUS" >&2
-            node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/e2e-login.json","utf8")||"{}"); console.error(x.message||"Login failed")'
+            echo "$MESSAGE" >&2
             exit 1
-          fi
+          done
+          echo "OneEngine did not become authentication-ready in time" >&2
+          exit 1
       - name: Run Workflow Builder regression
         run: npx playwright test tests/e2e/workflow-builder-regression.spec.mjs --project=desktop-chromium
       - name: Upload Playwright report and traces
