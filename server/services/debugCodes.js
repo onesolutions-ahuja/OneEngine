@@ -1,69 +1,126 @@
 import { randomBytes } from "node:crypto";
 
 export const BUILTIN_DEBUG_CODES = Object.freeze([
-  { code: "OES01", category: "Server", title: "Service starting", userMessage: "OneEngine is starting. Please try again shortly.", internalDescription: "API process is alive but core startup is not complete.", severity: "WARNING", retryable: true, matchPattern: "" },
-  { code: "OES02", category: "Server", title: "Service unavailable", userMessage: "OneEngine is temporarily unavailable.", internalDescription: "Server-side service failure outside a more specific category.", severity: "CRITICAL", retryable: true, matchPattern: "" },
-  { code: "OEN01", category: "Network", title: "API health failed", userMessage: "OneEngine is temporarily unavailable.", internalDescription: "The API responded but /api/health reported an unhealthy platform state that did not map to a more specific OE code.", severity: "ERROR", retryable: true, matchPattern: "" },
-  { code: "OEN02", category: "Network", title: "API host unreachable", userMessage: "OneEngine service could not be reached.", internalDescription: "Browser could not establish a connection to the OneEngine API/Render host.", severity: "CRITICAL", retryable: true, matchPattern: "" },
-  { code: "OEN03", category: "Network", title: "Device offline", userMessage: "This device appears to be offline.", internalDescription: "Browser reports no network connectivity before the API can be contacted.", severity: "WARNING", retryable: true, matchPattern: "" },
-  { code: "OEN04", category: "Network", title: "Request timeout", userMessage: "OneEngine did not respond in time.", internalDescription: "The API/Render request exceeded the configured timeout.", severity: "ERROR", retryable: true, matchPattern: "timeout|timed out" },
-  { code: "OED01", category: "Database", title: "Database unavailable", userMessage: "OneEngine data services are temporarily unavailable.", internalDescription: "Database connection/query infrastructure is unavailable.", severity: "CRITICAL", retryable: true, matchPattern: "ECONNREFUSED|connection terminated|connection refused|database.*unavailable|failed to connect|connect ETIMEDOUT" },
-  { code: "OED02", category: "Database", title: "Database resource limit", userMessage: "OneEngine data services are temporarily unavailable.", internalDescription: "Database provider quota, allowance, compute or resource limit was reached.", severity: "CRITICAL", retryable: false, matchPattern: "quota|allowance|resource limit|usage limit|exhaust|compute.*suspend|project.*suspend|billing.*limit" },
-  { code: "OEA01", category: "API", title: "API unavailable", userMessage: "The requested OneEngine service is unavailable.", internalDescription: "API dependency or route is unavailable.", severity: "ERROR", retryable: true, matchPattern: "" },
-  { code: "OEA02", category: "API", title: "Unexpected API error", userMessage: "OneEngine could not complete this request.", internalDescription: "Unhandled backend exception.", severity: "ERROR", retryable: false, matchPattern: "" },
-  { code: "OEA03", category: "API", title: "Request rate limited", userMessage: "Too many requests. Please try again shortly.", internalDescription: "API rate limit was reached.", severity: "WARNING", retryable: true, matchPattern: "too many requests|rate limit" },
-  { code: "OEA04", category: "API", title: "Endpoint not found", userMessage: "The requested service could not be found.", internalDescription: "API route does not exist.", severity: "ERROR", retryable: false, matchPattern: "" },
-  { code: "OEF01", category: "Frontend", title: "Frontend runtime error", userMessage: "This screen could not be displayed.", internalDescription: "Unhandled browser UI runtime exception.", severity: "ERROR", retryable: true, matchPattern: "" },
-  { code: "OEF02", category: "Frontend", title: "Frontend module load error", userMessage: "This page could not be loaded.", internalDescription: "Lazy JS module/chunk failed to load.", severity: "ERROR", retryable: true, matchPattern: "" },
-  { code: "OER01", category: "Permission", title: "Permission denied", userMessage: "You do not have permission to perform this action.", internalDescription: "RBAC/policy denied the request.", severity: "INFO", retryable: false, matchPattern: "" },
-  { code: "OET01", category: "Tenant", title: "Company context unavailable", userMessage: "Your company context could not be resolved.", internalDescription: "Authenticated company/tenant context is missing or invalid.", severity: "ERROR", retryable: false, matchPattern: "company context|tenant context|acting company" },
-  { code: "OEU01", category: "Session", title: "Authentication required", userMessage: "Please sign in again to continue.", internalDescription: "Authentication/session is missing or expired.", severity: "INFO", retryable: false, matchPattern: "authentication required|session expired" },
-  { code: "OEW01", category: "Workflow", title: "Workflow failed", userMessage: "The automation could not be completed.", internalDescription: "Workflow execution failed.", severity: "ERROR", retryable: false, matchPattern: "workflow.*failed|automation.*failed" },
-  { code: "OEL01", category: "Licence", title: "Licence unavailable", userMessage: "This feature is not currently available.", internalDescription: "Required package licence/entitlement is unavailable.", severity: "INFO", retryable: false, matchPattern: "licen[cs]e|entitlement" },
-  { code: "OEP01", category: "Package", title: "Package operation failed", userMessage: "The app operation could not be completed.", internalDescription: "OneStore/package install, update or lifecycle operation failed.", severity: "ERROR", retryable: false, matchPattern: "package.*failed|install.*failed" },
-  { code: "OEI01", category: "Integration", title: "Integration failed", userMessage: "The connected service could not complete the request.", internalDescription: "External connector/provider operation failed.", severity: "ERROR", retryable: true, matchPattern: "connector.*failed|provider.*failed|integration.*failed" },
-  { code: "OEC01", category: "Cache", title: "Local data unavailable", userMessage: "Local data could not be loaded. Please refresh and try again.", internalDescription: "Browser cache/IndexedDB persistence failed.", severity: "WARNING", retryable: true, matchPattern: "indexeddb|cache.*failed" },
+  { code:"OESB01", legacyCode:"OES01", subsystem:"S", cause:"B", category:"Server", title:"Service bootstrap in progress", userMessage:"OneEngine is starting. Please try again shortly.", internalDescription:"API process is reachable but core startup/bootstrap has not completed.", severity:"WARNING", retryable:true, matchPattern:"bootstrap|starting|initiali[sz]ing" },
+  { code:"OESS01", legacyCode:"OES02", subsystem:"S", cause:"S", category:"Server", title:"Server service unavailable", userMessage:"OneEngine is temporarily unavailable.", internalDescription:"Server-side runtime/service failure outside a more specific subsystem.", severity:"CRITICAL", retryable:true, matchPattern:"" },
+
+  { code:"OENH01", legacyCode:"OEN01", subsystem:"N", cause:"H", category:"Network", title:"API health failed", userMessage:"OneEngine is temporarily unavailable.", internalDescription:"API responded but /api/health reported an unhealthy platform state without a more specific code.", severity:"ERROR", retryable:true, matchPattern:"" },
+  { code:"OENR01", legacyCode:"OEN02", subsystem:"N", cause:"R", category:"Network", title:"API host unreachable", userMessage:"OneEngine service could not be reached.", internalDescription:"Browser could not establish a connection to the OneEngine API host/runtime.", severity:"CRITICAL", retryable:true, matchPattern:"" },
+  { code:"OEND01", legacyCode:"OEN03", subsystem:"N", cause:"D", category:"Network", title:"Device offline", userMessage:"This device appears to be offline.", internalDescription:"Browser reports no network connectivity before the API can be contacted.", severity:"WARNING", retryable:true, matchPattern:"" },
+  { code:"OENT01", legacyCode:"OEN04", subsystem:"N", cause:"T", category:"Network", title:"Request timeout", userMessage:"OneEngine did not respond in time.", internalDescription:"API request exceeded the configured timeout.", severity:"ERROR", retryable:true, matchPattern:"timeout|timed out|ETIMEDOUT" },
+
+  { code:"OEDC01", legacyCode:"OED01", subsystem:"D", cause:"C", category:"Database", title:"Database connection unavailable", userMessage:"OneEngine data services are temporarily unavailable.", internalDescription:"Database connection/query infrastructure is unavailable.", severity:"CRITICAL", retryable:true, matchPattern:"ECONNREFUSED|connection terminated|connection refused|database.*unavailable|failed to connect|too many clients|remaining connection slots" },
+  { code:"OEDQ01", legacyCode:"OED02", subsystem:"D", cause:"Q", category:"Database", title:"Database resource limit", userMessage:"OneEngine data services are temporarily unavailable.", internalDescription:"Database quota, allowance, compute or resource limit was reached.", severity:"CRITICAL", retryable:false, matchPattern:"quota|allowance|resource limit|usage limit|exhaust|compute.*suspend|project.*suspend|billing.*limit" },
+  { code:"OEDX01", subsystem:"D", cause:"X", category:"Database", title:"Database query failed", userMessage:"OneEngine could not complete the data request.", internalDescription:"Database query/constraint/transaction failed without a more specific database classification.", severity:"ERROR", retryable:false, matchPattern:"SQLSTATE|constraint|duplicate key|deadlock|serialization failure" },
+
+  { code:"OEAA01", legacyCode:"OEA01", subsystem:"A", cause:"A", category:"API", title:"API dependency unavailable", userMessage:"The requested OneEngine service is unavailable.", internalDescription:"API dependency/upstream service is unavailable.", severity:"ERROR", retryable:true, matchPattern:"" },
+  { code:"OEAE01", legacyCode:"OEA02", subsystem:"A", cause:"E", category:"API", title:"Unexpected API exception", userMessage:"OneEngine could not complete this request.", internalDescription:"Unhandled backend/API exception.", severity:"ERROR", retryable:false, matchPattern:"" },
+  { code:"OEAR01", legacyCode:"OEA03", subsystem:"A", cause:"R", category:"API", title:"API rate limited", userMessage:"Too many requests. Please try again shortly.", internalDescription:"API rate limit was reached.", severity:"WARNING", retryable:true, matchPattern:"too many requests|rate limit" },
+  { code:"OEAF01", legacyCode:"OEA04", subsystem:"A", cause:"F", category:"API", title:"API endpoint not found", userMessage:"The requested service could not be found.", internalDescription:"API route does not exist.", severity:"ERROR", retryable:false, matchPattern:"" },
+
+  { code:"OEFR01", legacyCode:"OEF01", subsystem:"F", cause:"R", category:"Frontend", title:"Frontend runtime error", userMessage:"This screen could not be displayed.", internalDescription:"Unhandled browser/UI runtime exception.", severity:"ERROR", retryable:true, matchPattern:"" },
+  { code:"OEFL01", legacyCode:"OEF02", subsystem:"F", cause:"L", category:"Frontend", title:"Frontend module load error", userMessage:"This page could not be loaded.", internalDescription:"Lazy JavaScript module/chunk failed to load.", severity:"ERROR", retryable:true, matchPattern:"failed to fetch dynamically imported module|loading chunk|module script failed" },
+  { code:"OEFC01", subsystem:"F", cause:"C", category:"Frontend", title:"Frontend configuration error", userMessage:"This screen is not configured correctly.", internalDescription:"Frontend route/component/configuration is invalid or incomplete.", severity:"ERROR", retryable:false, matchPattern:"frontend.*config|component.*config|route.*config" },
+
+  { code:"OERP01", legacyCode:"OER01", subsystem:"R", cause:"P", category:"Permission", title:"RBAC permission denied", userMessage:"You do not have permission to perform this action.", internalDescription:"RBAC or permission policy denied the request.", severity:"INFO", retryable:false, matchPattern:"permission denied|not authorised|not authorized|RBAC" },
+  { code:"OERS01", subsystem:"R", cause:"S", category:"Permission", title:"Security policy blocked", userMessage:"This action is blocked by security policy.", internalDescription:"Identity/security policy denied an otherwise authenticated request.", severity:"WARNING", retryable:false, matchPattern:"security policy|RESOURCE_BLOCKED|STEP_UP_REQUIRED" },
+
+  { code:"OETC01", legacyCode:"OET01", subsystem:"T", cause:"C", category:"Tenant", title:"Company context unavailable", userMessage:"Your company context could not be resolved.", internalDescription:"Authenticated tenant/company context is missing or invalid.", severity:"ERROR", retryable:false, matchPattern:"company context|tenant context|acting company" },
+  { code:"OETS01", subsystem:"T", cause:"S", category:"Tenant", title:"Store context unavailable", userMessage:"Your store context could not be resolved.", internalDescription:"Required store context is missing, invalid, or not assigned.", severity:"ERROR", retryable:false, matchPattern:"store context|selected store|store.*assigned" },
+
+  { code:"OEUA01", legacyCode:"OEU01", subsystem:"U", cause:"A", category:"Session", title:"Authentication required", userMessage:"Please sign in again to continue.", internalDescription:"Authentication is missing, invalid or expired.", severity:"INFO", retryable:false, matchPattern:"authentication required|session expired|invalid token|jwt expired" },
+  { code:"OEUM01", subsystem:"U", cause:"M", category:"Session", title:"MFA verification failed", userMessage:"Additional verification could not be completed.", internalDescription:"MFA/passkey/TOTP verification failed.", severity:"WARNING", retryable:false, matchPattern:"MFA|TOTP|passkey|verification failed" },
+
+  { code:"OEWE01", legacyCode:"OEW01", subsystem:"W", cause:"E", category:"Workflow", title:"Workflow execution failed", userMessage:"The automation could not be completed.", internalDescription:"Workflow runtime failed outside a more specific workflow cause.", severity:"ERROR", retryable:false, matchPattern:"workflow.*failed|automation.*failed" },
+  { code:"OEWV01", subsystem:"W", cause:"V", category:"Workflow", title:"Workflow validation failed", userMessage:"The automation configuration is invalid.", internalDescription:"Workflow definition/resource/validation failed before execution.", severity:"ERROR", retryable:false, matchPattern:"workflow.*validation|invalid workflow|resource.*unavailable|no executable actions" },
+  { code:"OEWA01", subsystem:"W", cause:"A", category:"Workflow", title:"Workflow action failed", userMessage:"A workflow step could not be completed.", internalDescription:"A registered workflow action returned a failure or threw an exception.", severity:"ERROR", retryable:false, matchPattern:"action failed|workflow action|step.*failed" },
+  { code:"OEWW01", subsystem:"W", cause:"W", category:"Workflow", title:"Workflow wait/resume failed", userMessage:"The automation could not resume.", internalDescription:"WAIT/subflow/scheduled-path resume failed.", severity:"ERROR", retryable:true, matchPattern:"resume.*workflow|scheduled path|WAIT.*failed|subflow.*failed" },
+
+  { code:"OELE01", legacyCode:"OEL01", subsystem:"L", cause:"E", category:"Licence", title:"Licence unavailable or expired", userMessage:"This feature is not currently available.", internalDescription:"Required package licence/entitlement is absent, inactive or expired.", severity:"INFO", retryable:false, matchPattern:"licen[cs]e|entitlement|expired.*package" },
+
+  { code:"OEPI01", legacyCode:"OEP01", subsystem:"P", cause:"I", category:"Package", title:"Package install failed", userMessage:"The app could not be installed.", internalDescription:"OneStore/package installation failed.", severity:"ERROR", retryable:false, matchPattern:"package.*install|install.*failed" },
+  { code:"OEPU01", subsystem:"P", cause:"U", category:"Package", title:"Package update failed", userMessage:"The app could not be updated.", internalDescription:"Package release/upgrade lifecycle failed.", severity:"ERROR", retryable:true, matchPattern:"package.*upgrade|release.*upgrade|update.*failed" },
+  { code:"OEPD01", subsystem:"P", cause:"D", category:"Package", title:"Package dependency missing", userMessage:"A required app dependency is unavailable.", internalDescription:"Package dependency or manifest requirement is missing.", severity:"ERROR", retryable:false, matchPattern:"dependency.*missing|required package|manifest.*missing" },
+
+  { code:"OEIA01", legacyCode:"OEI01", subsystem:"I", cause:"A", category:"Integration", title:"Integration authentication failed", userMessage:"The connected service needs attention.", internalDescription:"Connector/provider authentication or credential validation failed.", severity:"ERROR", retryable:false, matchPattern:"oauth|authentication.*provider|invalid credential|token exchange|unauthorized provider" },
+  { code:"OEIC01", subsystem:"I", cause:"C", category:"Integration", title:"Integration connection failed", userMessage:"The connected service could not be reached.", internalDescription:"Connector/provider network or connection operation failed.", severity:"ERROR", retryable:true, matchPattern:"connector.*failed|provider.*unavailable|integration.*connection" },
+  { code:"OEIR01", subsystem:"I", cause:"R", category:"Integration", title:"Integration rate limited", userMessage:"The connected service is temporarily busy.", internalDescription:"External provider rate limit/throttle response.", severity:"WARNING", retryable:true, matchPattern:"provider.*rate limit|429.*provider|throttl" },
+  { code:"OEIW01", subsystem:"I", cause:"W", category:"Integration", title:"Integration webhook failed", userMessage:"A connected-service event could not be processed.", internalDescription:"Inbound/outbound webhook validation or processing failed.", severity:"ERROR", retryable:true, matchPattern:"webhook.*failed|signature.*invalid" },
+
+  { code:"OECI01", legacyCode:"OEC01", subsystem:"C", cause:"I", category:"Cache", title:"IndexedDB/local cache failed", userMessage:"Local data could not be loaded. Please refresh and try again.", internalDescription:"IndexedDB/local persistence operation failed.", severity:"WARNING", retryable:true, matchPattern:"indexeddb|cache.*failed|local storage.*failed" },
+  { code:"OECS01", subsystem:"C", cause:"S", category:"Cache", title:"Offline sync failed", userMessage:"Offline changes could not be synchronised.", internalDescription:"Offline queue/synchronisation failed.", severity:"ERROR", retryable:true, matchPattern:"offline.*sync|queue.*sync|sync.*failed" },
+
+  { code:"OEXU01", subsystem:"X", cause:"U", category:"Unknown", title:"Unclassified platform error", userMessage:"OneEngine could not complete this request.", internalDescription:"No registered diagnostic rule matched the failure. Use only when a more specific classification is unavailable.", severity:"ERROR", retryable:false, matchPattern:"" },
 ]);
 
-export const DEBUG_CODE_RE = /^OE[A-Z][0-9]{2,3}$/;
+export const DEBUG_CODE_RE = /^OE[A-Z]{2}[0-9]{2}$/;
+export const LEGACY_DEBUG_CODE_RE = /^OE[A-Z][0-9]{2,3}$/;
+
 const byCode = new Map(BUILTIN_DEBUG_CODES.map((item) => [item.code, item]));
+const legacyMap = new Map(BUILTIN_DEBUG_CODES.filter((item) => item.legacyCode).map((item) => [item.legacyCode, item.code]));
 
 export function createDebugReference() {
   return randomBytes(4).toString("hex").toUpperCase();
 }
 
+export function normalizeDebugCode(code) {
+  const value = String(code || "").toUpperCase();
+  if (DEBUG_CODE_RE.test(value)) return value;
+  return legacyMap.get(value) || value;
+}
+
 export function builtinDebugCode(code) {
-  return byCode.get(String(code || "").toUpperCase()) || null;
+  return byCode.get(normalizeDebugCode(code)) || null;
 }
 
 export function classifyDebugCode(error, status = 500) {
-  const explicit = String(error?.oeCode || error?.debugCode || "").toUpperCase();
+  const explicit = normalizeDebugCode(error?.oeCode || error?.debugCode || "");
   if (DEBUG_CODE_RE.test(explicit)) return explicit;
+
   const technicalCode = String(error?.code || "").toUpperCase();
   const message = String(error?.message || error || "");
   const haystack = `${technicalCode} ${message}`;
 
-  if (/quota|allowance|resource limit|usage limit|exhaust|compute.*suspend|project.*suspend|billing.*limit/i.test(haystack)) return "OED02";
-  if (/ECONNREFUSED|connection terminated|connection refused|database.*unavailable|failed to connect|connect ETIMEDOUT|too many clients|remaining connection slots/i.test(haystack)) return "OED01";
-  if (/timeout|timed out|ETIMEDOUT/i.test(haystack)) return "OEN04";
-  if (/company context|tenant context|acting company/i.test(haystack)) return "OET01";
-  if (/workflow.*failed|automation.*failed/i.test(haystack)) return "OEW01";
-  if (/licen[cs]e|entitlement/i.test(haystack)) return "OEL01";
-  if (/package.*failed|install.*failed/i.test(haystack)) return "OEP01";
-  if (/connector.*failed|provider.*failed|integration.*failed/i.test(haystack)) return "OEI01";
-  if (status === 401) return "OEU01";
-  if (status === 403) return "OER01";
-  if (status === 404) return "OEA04";
-  if (status === 429) return "OEA03";
-  if (status === 502 || status === 503 || status === 504) return "OEA01";
-  return status >= 500 ? "OEA02" : "OEA02";
+  if (/quota|allowance|resource limit|usage limit|exhaust|compute.*suspend|project.*suspend|billing.*limit/i.test(haystack)) return "OEDQ01";
+  if (/ECONNREFUSED|connection terminated|connection refused|database.*unavailable|failed to connect|too many clients|remaining connection slots/i.test(haystack)) return "OEDC01";
+  if (/SQLSTATE|constraint|duplicate key|deadlock|serialization failure/i.test(haystack)) return "OEDX01";
+  if (/timeout|timed out|ETIMEDOUT/i.test(haystack)) return "OENT01";
+
+  if (/workflow.*validation|invalid workflow|resource.*unavailable|no executable actions/i.test(haystack)) return "OEWV01";
+  if (/resume.*workflow|scheduled path|WAIT.*failed|subflow.*failed/i.test(haystack)) return "OEWW01";
+  if (/action failed|workflow action|step.*failed/i.test(haystack)) return "OEWA01";
+  if (/workflow.*failed|automation.*failed/i.test(haystack)) return "OEWE01";
+
+  if (/package.*upgrade|release.*upgrade|update.*failed/i.test(haystack)) return "OEPU01";
+  if (/dependency.*missing|required package|manifest.*missing/i.test(haystack)) return "OEPD01";
+  if (/package.*install|install.*failed/i.test(haystack)) return "OEPI01";
+
+  if (/webhook.*failed|signature.*invalid/i.test(haystack)) return "OEIW01";
+  if (/provider.*rate limit|429.*provider|throttl/i.test(haystack)) return "OEIR01";
+  if (/oauth|authentication.*provider|invalid credential|token exchange|unauthorized provider/i.test(haystack)) return "OEIA01";
+  if (/connector.*failed|provider.*unavailable|integration.*connection/i.test(haystack)) return "OEIC01";
+
+  if (/company context|tenant context|acting company/i.test(haystack)) return "OETC01";
+  if (/store context|selected store|store.*assigned/i.test(haystack)) return "OETS01";
+  if (/MFA|TOTP|passkey|verification failed/i.test(haystack)) return "OEUM01";
+  if (/licen[cs]e|entitlement|expired.*package/i.test(haystack)) return "OELE01";
+  if (/indexeddb|cache.*failed|local storage.*failed/i.test(haystack)) return "OECI01";
+  if (/offline.*sync|queue.*sync|sync.*failed/i.test(haystack)) return "OECS01";
+  if (/security policy|RESOURCE_BLOCKED|STEP_UP_REQUIRED/i.test(haystack)) return "OERS01";
+
+  if (status === 401) return "OEUA01";
+  if (status === 403) return "OERP01";
+  if (status === 404) return "OEAF01";
+  if (status === 429) return "OEAR01";
+  if ([502,503,504].includes(status)) return "OEAA01";
+  return status >= 500 ? "OEAE01" : "OEXU01";
 }
 
 export async function resolveDebugDefinition(db, error, status = 500) {
   const technical = `${String(error?.code || "")} ${String(error?.message || error || "")}`;
   try {
     const result = await db(
-      `SELECT code,category,title,user_message,internal_description,severity,retryable,match_pattern
+      `SELECT code,category,title,user_message,internal_description,severity,retryable,match_pattern,subsystem_key,cause_key,legacy_code
          FROM oneengine_debug_codes
         WHERE active=TRUE
         ORDER BY built_in DESC,sort_order,code`
@@ -73,7 +130,7 @@ export async function resolveDebugDefinition(db, error, status = 500) {
       try {
         if (new RegExp(row.match_pattern, "i").test(technical)) {
           return {
-            code: row.code,
+            code: normalizeDebugCode(row.code),
             category: row.category,
             title: row.title,
             userMessage: row.user_message,
@@ -85,9 +142,9 @@ export async function resolveDebugDefinition(db, error, status = 500) {
       } catch {}
     }
     const code = classifyDebugCode(error, status);
-    const row = (result.rows || []).find((item) => item.code === code);
+    const row = (result.rows || []).find((item) => normalizeDebugCode(item.code) === code);
     if (row) return {
-      code: row.code,
+      code,
       category: row.category,
       title: row.title,
       userMessage: row.user_message,
@@ -96,7 +153,7 @@ export async function resolveDebugDefinition(db, error, status = 500) {
       retryable: row.retryable === true,
     };
   } catch {}
-  return builtinDebugCode(classifyDebugCode(error, status)) || builtinDebugCode("OEA02");
+  return builtinDebugCode(classifyDebugCode(error, status)) || builtinDebugCode("OEXU01");
 }
 
 export async function writeDebugEvent(db, {
@@ -121,9 +178,9 @@ export async function writeDebugEvent(db, {
         req?.originalUrl || req?.path || null,
         req?.method || null,
         status || null,
-        error?.code ? String(error.code).slice(0, 160) : null,
-        String(error?.message || error || "").slice(0, 2000),
-        error?.stack ? String(error.stack).slice(0, 12000) : null,
+        error?.code ? String(error.code).slice(0,160) : null,
+        String(error?.message || error || "").slice(0,2000),
+        error?.stack ? String(error.stack).slice(0,12000) : null,
         environment,
       ]
     );
@@ -137,12 +194,12 @@ export async function buildDebugPayload(db, { error, status = 500, req = null } 
   const reference = createDebugReference();
   await writeDebugEvent(db, { reference, definition, error, status, req });
   return {
-    success: false,
-    code: definition.code,
-    oeCode: definition.code,
-    title: definition.title,
-    message: definition.userMessage,
-    retryable: definition.retryable === true,
+    success:false,
+    code:definition.code,
+    oeCode:definition.code,
+    title:definition.title,
+    message:definition.userMessage,
+    retryable:definition.retryable === true,
     reference,
   };
 }
