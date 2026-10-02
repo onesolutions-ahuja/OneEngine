@@ -84,6 +84,40 @@ async function validateLayoutRole(db, roleId, req) {
   return result.rows.length > 0;
 }
 
+async function normalizeLayoutAssignmentDraft(rows, objectId, req) {
+  if (!Array.isArray(rows)) return [];
+  if (rows.length > 100) throw Object.assign(new Error("A layout supports up to 100 assignments"), { status: 400 });
+  const normalized = [];
+  const seen = new Set();
+  for (const row of rows) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) throw Object.assign(new Error("Each assignment must be an object"), { status: 400 });
+    const appId = row.appId || row.app_id || null;
+    const recordTypeId = row.recordTypeId || row.record_type_id || null;
+    const roleId = row.roleId || row.role_id || null;
+    const deviceProfile = String(row.deviceProfile || row.device_profile || "any").toLowerCase();
+    const requiredPermissions = Array.isArray(row.requiredPermissions || row.required_permissions)
+      ? [...new Set((row.requiredPermissions || row.required_permissions).map((value) => String(value).trim()).filter(Boolean))]
+      : [];
+    const priority = Number.isFinite(Number(row.priority)) ? Math.max(-1000, Math.min(1000, Number(row.priority))) : 0;
+    if (!["any","desktop","tablet","mobile"].includes(deviceProfile)) throw Object.assign(new Error("Device must be Any, Desktop, Tablet or Mobile"), { status: 400 });
+    if (requiredPermissions.some((permission) => !/^[A-Za-z0-9_.:-]{1,120}$/.test(permission))) throw Object.assign(new Error("Required permission contains an invalid permission key"), { status: 400 });
+    if (appId) {
+      const app = await db("SELECT id FROM platform_apps WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [appId, req.user.companyId]);
+      if (!app.rows.length) throw Object.assign(new Error("Assigned app is not available"), { status: 400 });
+    }
+    if (recordTypeId) {
+      const recordType = await db("SELECT id FROM platform_record_types WHERE id=$1 AND object_id=$2 AND active=true AND (company_id IS NULL OR company_id=$3)", [recordTypeId, objectId, req.user.companyId]);
+      if (!recordType.rows.length) throw Object.assign(new Error("Assigned record type is not available for this object"), { status: 400 });
+    }
+    if (roleId && !(await validateLayoutRole(db, roleId, req))) throw Object.assign(new Error("Assigned role is not available"), { status: 400 });
+    const signature = JSON.stringify([appId || "", recordTypeId || "", roleId || "", deviceProfile, [...requiredPermissions].sort()]);
+    if (seen.has(signature)) throw Object.assign(new Error("Duplicate layout assignment"), { status: 400 });
+    seen.add(signature);
+    normalized.push({ appId, recordTypeId, roleId, deviceProfile, requiredPermissions, priority });
+  }
+  return normalized;
+}
+
 async function validateLayoutDefinition(db, definition, object, req) {
   const sections = Array.isArray(definition.sections) ? definition.sections : [];
   const components = [
@@ -103,7 +137,7 @@ async function validateLayoutDefinition(db, definition, object, req) {
     const componentId = String(component.id || `${component.type || "component"}-${component.field_key || index + 1}`);
     if (componentIds.has(componentId)) return "Layout components must have unique ids";
     componentIds.add(componentId);
-    if (component.type && !["field", "text", "divider", "spacer", "header", "action", "button", "related_list"].includes(component.type)) {
+    if (component.type && !["field", "text", "divider", "spacer", "header", "action", "button", "related_list", "process_path"].includes(component.type)) {
       return `Unsupported layout component type "${component.type}"`;
     }
     if (component.width && !["full", "1/2", "1/3", "2/3", "1/4"].includes(component.width)) {
