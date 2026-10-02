@@ -148,6 +148,28 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.json({success:true,data:(await listMfaMethods(db,{companyId:req.user.companyId,userId:req.user.id})).map(publicMethod)});
   });
 
+  router.get("/auth/mfa/passkey/policy",authenticate,async(req,res)=>{
+    const policy=await loadEffectiveAssurance(db,{companyId:req.user.companyId,userId:req.user.id,roleId:req.user.roleId});
+    res.json({success:true,data:{
+      allowPasskeyLogin:policy.effective.allowPasskeyLogin===true,
+      allowPlatformPasskeys:policy.effective.allowPlatformPasskeys===true,
+      allowSecurityKeys:policy.effective.allowSecurityKeys===true,
+      passkeyAssurance:policy.effective.passkeyAssurance||"HIGH",
+    }});
+  });
+
+  router.post("/auth/mfa/passkeys/enrollment/start",authenticate,async(req,res)=>{
+    const policy=await loadEffectiveAssurance(db,{companyId:req.user.companyId,userId:req.user.id,roleId:req.user.roleId});
+    if(!policy.effective.allowPlatformPasskeys&&!policy.effective.allowSecurityKeys){
+      return res.status(403).json({success:false,code:"PASSKEY_ENROLLMENT_DISABLED",message:"Passkey enrollment is disabled by company security policy"});
+    }
+    const challenge=await createPendingChallenge(db,{
+      companyId:req.user.companyId,userId:req.user.id,type:"PASSKEY_REGISTRATION",
+      context:{sessionId:req.user.sid||null,authMethod:"SESSION"},minutes:10,
+    });
+    res.status(201).json({success:true,challengeId:challenge.id});
+  });
+
   router.get("/auth/mfa/challenge/:id",async(req,res)=>{
     const {challenge,user}=await pendingUser(req.params.id,["LOGIN","STEP_UP"]);
     if(!challenge||!user)return res.status(404).json({success:false,message:"Verification challenge is invalid or expired"});
@@ -310,7 +332,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
   });
   router.post("/auth/mfa/passkey/registration-options",async(req,res)=>{
-    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP","PASSKEY_REGISTRATION"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
     const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
     const kind=String(req.body?.authenticatorKind||"PLATFORM").toUpperCase()==="SECURITY_KEY"?"SECURITY_KEY":"PLATFORM";
@@ -342,8 +364,8 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   });
 
   router.post("/auth/mfa/passkey/registration-verify",async(req,res)=>{
-    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
-    if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP","PASSKEY_REGISTRATION"]);
+    if(!challenge||!user)return res.status(400).json({success:false,message:"Passkey registration challenge is invalid or expired"});
     const {verifyRegistrationResponse}=await import("@simplewebauthn/server");
     const rpID=challenge.context?.rpID||String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0];
     const origin=String(req.headers?.origin||`https://${rpID}`);
@@ -388,6 +410,10 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       await consumeChallenge(db,challenge.id);
       await db("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW(),mfa_method='PASSKEY' WHERE id=$1 AND user_id=$3",[sid,assurance,user.id]);
       return res.json({success:true,assuranceLevel:assurance,recoveryCodes});
+    }
+    if(challenge.challenge_type==="PASSKEY_REGISTRATION"){
+      await consumeChallenge(db,challenge.id);
+      return res.status(201).json({success:true,message:"Passkey enrolled successfully"});
     }
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
   });
