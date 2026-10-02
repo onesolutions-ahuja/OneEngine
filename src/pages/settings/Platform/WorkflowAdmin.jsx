@@ -347,6 +347,25 @@ const WORKFLOW_VISUAL_CSS = `
     border-radius: 999px;
     background: #fff;
   }
+  .workflow-insert-button {
+    position: absolute;
+    z-index: 4;
+    left: 50%;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    transform: translate(-50%, -50%);
+    border: 1px solid #8fa6bf;
+    border-radius: 999px;
+    background: #fff;
+    color: #2563eb;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 20px;
+    box-shadow: 0 2px 6px rgba(15,23,42,.12);
+    cursor: pointer;
+  }
+  .workflow-insert-button:hover { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 3px rgba(37,99,235,.10); }
   .workflow-node-connector::after {
     content: "";
     position: absolute;
@@ -380,7 +399,7 @@ const WORKFLOW_VISUAL_CSS = `
     transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
   }
   .workflow-node-card::before {
-    content: "◇";
+    content: "⚙";
     position: absolute;
     left: 13px;
     top: 50%;
@@ -396,6 +415,14 @@ const WORKFLOW_VISUAL_CSS = `
     font-weight: 800;
     box-shadow: 0 5px 12px rgba(10,132,255,.18);
   }
+  .workflow-node-card[data-node-type="CONDITION"]::before { content: "◇"; background: #dd7a01; }
+  .workflow-node-card[data-node-type="LOOP"]::before { content: "↻"; background: #8b5cf6; }
+  .workflow-node-card[data-node-type="CREATE_RECORD"]::before { content: "+"; background: #2e844a; }
+  .workflow-node-card[data-node-type="UPDATE_RECORD"]::before { content: "✎"; background: #2e844a; }
+  .workflow-node-card[data-node-type="DELETE_RECORD"]::before { content: "−"; background: #ba0517; }
+  .workflow-node-card[data-node-type="RUN_SUBFLOW"]::before { content: "⇢"; background: #0176d3; }
+  .workflow-node-card[data-node-type="WAIT"]::before { content: "◷"; background: #9050e9; }
+  .workflow-node-card[data-node-type="SEND_EMAIL"]::before { content: "✉"; background: #0176d3; }
   .workflow-node-card:hover {
     transform: translateY(-1px);
     border-color: #9bbce0;
@@ -1949,6 +1976,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [paletteSearch, setPaletteSearch] = useState("");
   const [paletteTab, setPaletteTab] = useState("elements");
+  const [insertAt, setInsertAt] = useState(null);
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -1979,6 +2007,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     if (definition?.label) step.label = definition.label;
     setWorkflow((current) => ({ ...current, steps: [...current.steps.slice(0, index), step, ...current.steps.slice(index)] }));
     setSelectedId(step.id);
+    setInsertAt(null);
+    setPropertiesOpen(true);
   };
   const dropAt = (event, index) => {
     event.preventDefault();
@@ -2046,16 +2076,16 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         <div className="workflow-palette-head">
           <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
             <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${paletteTab === "elements" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setPaletteTab("elements")}>Elements</button>
-            <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${paletteTab === "resources" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setPaletteTab("resources")}>Resources</button>
+            <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${paletteTab === "resources" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setPaletteTab("resources")}>Manager</button>
           </div>
         </div>
         <div className="workflow-palette-search">
           <span>⌕</span>
-          <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder={paletteTab === "elements" ? "Search elements..." : "Search resources..."} aria-label={paletteTab === "elements" ? "Search workflow elements" : "Search workflow resources"} />
+          <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder={paletteTab === "elements" ? "Search elements..." : "Search manager..."} aria-label={paletteTab === "elements" ? "Search workflow elements" : "Search workflow manager"} />
         </div>
         {paletteTab === "elements" ? (
           <>
-            <p className="workflow-palette-help">Drag or click an element to add it to the flow.</p>
+            <p className="workflow-palette-help">{insertAt == null ? "Drag an element to the canvas, or use a + insertion point." : "Choose an element to insert at the selected point."}</p>
             <div className="workflow-palette-scroll">
               {Object.entries(paletteGroups).map(([category, options]) => (
                 <div key={category}>
@@ -2068,7 +2098,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                       title={option.description || option.label}
                       aria-label={option.label || option.value}
                       onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)}
-                      onClick={() => addFromPalette(option.value)}
+                      onClick={() => addFromPalette(option.value, insertAt == null ? workflow.steps.length : insertAt)}
                       className="workflow-palette-item"
                     >
                       <span className="workflow-palette-item-copy">
@@ -2133,10 +2163,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <span className="workflow-start-title">Start</span>
             <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}{workflow.conditions?.length ? ` · ${workflow.conditions.length} condition${workflow.conditions.length === 1 ? "" : "s"}` : ""}{scheduledPathSteps.length ? ` · ${scheduledPathSteps.length} scheduled path${scheduledPathSteps.length === 1 ? "" : "s"}` : ""}</span>
           </button>
-          <div className="workflow-node-connector" />
+          <div className="workflow-node-connector"><button type="button" className="workflow-insert-button" aria-label="Add element after Start" onClick={() => { setInsertAt(0); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button></div>
           {visibleCanvasSteps.map(({ step, index }) => <div key={step.id} className="workflow-node-wrap" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
             <button type="button" className="workflow-node-delete" title="Remove step" aria-label={`Remove ${step.label || getActionLabel(step.type)}`} onClick={(event) => { event.stopPropagation(); removeStep(index); }}>×</button>
-            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
+            <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { setSelectedId(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
               <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : getActionLabel(step.type)}</span>
               <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
               {step.type === "CONDITION" ? <span className="workflow-node-note">{Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? `${step.config.outcomes.length} ordered outcome${step.config.outcomes.length === 1 ? "" : "s"} + Default` : "Decision branches are evaluated from metadata conditions."}</span> : null}
@@ -2146,7 +2176,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               ) : null}
               {faultTargetIds.has(String(step.id)) ? <span className="workflow-node-note">Error recovery path</span> : null}
             </button>
-            {visibleCanvasSteps.findIndex((item) => item.index === index) < visibleCanvasSteps.length - 1 ? <div className="workflow-node-connector" /> : null}
+            {<div className="workflow-node-connector"><button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button></div>}
           </div>)}
           {!visibleCanvasSteps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => addFromPalette("CREATE_RECORD")}>+ Add first element</button> : null}
           <div className="mt-3 text-center text-xs text-slate-400">Drop elements here to append · drag nodes to reorder</div>
