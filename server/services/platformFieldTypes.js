@@ -1,5 +1,6 @@
 export const PLATFORM_FIELD_TYPES = Object.freeze([
   "text",
+  "text_area",
   "long_text",
   "rich_text",
   "url",
