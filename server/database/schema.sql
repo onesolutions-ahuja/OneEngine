@@ -2794,7 +2794,7 @@ CREATE TABLE IF NOT EXISTS platform_fields (
     object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
     api_name VARCHAR(100) NOT NULL,
     label VARCHAR(200) NOT NULL,
-    field_type VARCHAR(30) NOT NULL CHECK (field_type IN ('text','number','decimal','currency','boolean','date','datetime','email','phone','select','picklist','multiselect','lookup','formula','rollup','json')),
+    field_type VARCHAR(30) NOT NULL CHECK (field_type IN ('text','text_area','number','decimal','currency','boolean','date','datetime','email','phone','select','picklist','multiselect','lookup','formula','rollup','json')),
     source_column VARCHAR(100),
     required BOOLEAN NOT NULL DEFAULT FALSE,
     readable BOOLEAN NOT NULL DEFAULT TRUE,
