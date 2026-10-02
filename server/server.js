@@ -2136,7 +2136,15 @@ async function startServer() {
         await initializeStandardObjectEcosystem(pool);
         bootstrapRan = true;
       } else {
-        console.log("onePOS: platform bootstrap metadata unchanged; skipping heavy bootstrap");
+        const initialRegistryHealth = await verifyPublicPackageRegistry(pool);
+        if (!initialRegistryHealth.healthy) {
+          console.warn("onePOS: package registry drift detected; repairing from source catalogue");
+          await initializePlatformMetadata(pool, { includeOperationalObjects: true });
+          await initializeStandardObjectEcosystem(pool);
+          bootstrapRan = true;
+        } else {
+          console.log("onePOS: platform bootstrap metadata unchanged; registry verified");
+        }
       }
 
       const registryHealth = await verifyPublicPackageRegistry(pool);
