@@ -6705,10 +6705,10 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       if (!filters) return res.status(400).json({ success: false, message: "filter must be a JSON object" });
       const requestedFilterModel = parseRecordFilterModel(req.query);
       if (!requestedFilterModel) return res.status(400).json({ success: false, message: "filterModel must be a JSON object" });
-      const filterModel = {
-        ...((listView?.filter_model && typeof listView.filter_model === "object" && !Array.isArray(listView.filter_model)) ? listView.filter_model : {}),
-        ...requestedFilterModel,
-      };
+      const hasRequestedFilterModel = req.query?.filterModel !== undefined || req.query?.filter_model !== undefined;
+      const filterModel = hasRequestedFilterModel
+        ? requestedFilterModel
+        : ((listView?.filter_model && typeof listView.filter_model === "object" && !Array.isArray(listView.filter_model)) ? listView.filter_model : {});
       const clauses = [];
       const params = [];
       if (object.company_scoped) {
