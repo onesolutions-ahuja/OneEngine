@@ -311,10 +311,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const id=cred?.id||req.body?.credential?.id;
     const publicKey=Buffer.from(cred.publicKey).toString("base64url");
     await db(`INSERT INTO identity_mfa_methods(company_id,user_id,method_type,label,credential_id,public_key,sign_count,transports,aaguid,discoverable,authenticator_kind,phishing_resistant,verified)
-      VALUES($1,$2,'PASSKEY',$3,$4,$5,$6,$7::jsonb,$8,$9,$10,TRUE,TRUE)
-      ON CONFLICT(user_id,method_type,label) DO UPDATE SET credential_id=EXCLUDED.credential_id,public_key=EXCLUDED.public_key,
-       sign_count=EXCLUDED.sign_count,transports=EXCLUDED.transports,aaguid=EXCLUDED.aaguid,discoverable=EXCLUDED.discoverable,
-       authenticator_kind=EXCLUDED.authenticator_kind,verified=TRUE,active=TRUE`,
+      VALUES($1,$2,'PASSKEY',$3,$4,$5,$6,$7::jsonb,$8,$9,$10,TRUE,TRUE)`,
       [user.company_id,user.id,String(req.body?.label||(challenge.context?.authenticatorKind==="SECURITY_KEY"?"Security Key":"Built-in Passkey")),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice",challenge.context?.authenticatorKind||"PLATFORM"]);
     const recoveryCodes=challenge.challenge_type==="LOGIN"&&effectivePolicy.effective.allowRecoveryCodes ? await ensureRecoveryCodes(user.company_id,user.id) : [];
     const assurance=effectivePolicy.effective.passkeyAssurance;
