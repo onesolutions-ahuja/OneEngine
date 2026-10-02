@@ -62,8 +62,18 @@ export const PLATFORM_COMPONENTS = Object.freeze([
 
 const COMPONENT_MAP = new Map(PLATFORM_COMPONENTS.map((component) => [component.key, component]));
 
+const FLOW_SCREEN_RENDERABLE_COMPONENTS = new Set([
+  "header","text","divider","spacer",
+  "text_input","long_text","number","currency","date","datetime","checkbox","picklist","lookup",
+  "signature","clock_widget","calendar_widget","modern_section_header","modern_data_card","icon_action_tile",
+]);
+
 export function listPlatformComponents() {
-  return PLATFORM_COMPONENTS.map((component) => ({ ...component, fieldTypes: component.fieldTypes ? [...component.fieldTypes] : undefined }));
+  return PLATFORM_COMPONENTS.map((component) => ({
+    ...component,
+    fieldTypes: component.fieldTypes ? [...component.fieldTypes] : undefined,
+    flowScreenSupported: FLOW_SCREEN_RENDERABLE_COMPONENTS.has(component.key) || component.supportedBuilders?.includes("FLOW"),
+  }));
 }
 
 export function getPlatformComponent(key) {
