@@ -1501,18 +1501,19 @@ export default function createConnectorsRouter({
       );
       const instance = instanceResult.rows[0];
       if (!instance) return res.status(404).json({ success: false, message: "Connector instance not found" });
-      if (instance.connector_package_key !== "brevo_connector") {
-        return res.status(400).json({ success: false, message: "This test is only available for Brevo" });
+      if (!["brevo_connector", "mailjet_connector"].includes(instance.connector_package_key)) {
+        return res.status(400).json({ success: false, message: "This test is only available for supported email connectors" });
       }
+      const providerLabel = instance.connector_package_key === "mailjet_connector" ? "Mailjet" : "Brevo";
 
       const lastTest = jsonValue(instance.last_test_result, {});
       if (lastTest?.success !== true || String(instance.connection_status || "").toUpperCase() !== "CONNECTED") {
-        return res.status(409).json({ success: false, message: "Run a successful Brevo connection test before sending email" });
+        return res.status(409).json({ success: false, message: `Run a successful ${providerLabel} connection test before sending email` });
       }
 
       const driver = drivers?.get(instance.connector_package_key);
       if (!driver || !driver.capabilities?.has?.("email.send")) {
-        return res.status(409).json({ success: false, message: "Brevo email send capability is unavailable" });
+        return res.status(409).json({ success: false, message: `${providerLabel} email send capability is unavailable` });
       }
 
       const configuration = {
@@ -1533,7 +1534,7 @@ export default function createConnectorsRouter({
 
       const connection = await service.connect();
       if (!connection.healthy) {
-        return res.status(409).json({ success: false, message: connection.lastError || "Brevo is not healthy" });
+        return res.status(409).json({ success: false, message: connection.lastError || `${providerLabel} is not healthy` });
       }
 
       const result = await service.execute("email.send", {
@@ -1560,15 +1561,15 @@ export default function createConnectorsRouter({
         data: {
           status: result?.status || "SENT",
           providerMessageId: result?.providerMessageId || null,
-          message: "Test email submitted to Brevo",
+          message: `Test email submitted to ${providerLabel}`,
         },
       });
     } catch (error) {
-      console.error("Send Brevo test email error:", error);
+      console.error("Send email connector test error:", error);
       return res.status(error?.status || 500).json({
         success: false,
         code: error?.code || undefined,
-        message: error?.message || "Unable to send Brevo test email",
+        message: error?.message || "Unable to send test email",
       });
     }
   });
