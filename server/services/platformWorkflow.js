@@ -3424,6 +3424,84 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "SCREEN",
+    displayName: "Screen",
+    description: "Pause a flow and present a metadata-defined interactive screen.",
+    schema: {
+      type: "object",
+      properties: {
+        screen: { type: "object" },
+        allowBack: { type: "boolean" },
+        allowFinish: { type: "boolean" },
+        showFooter: { type: "boolean" },
+      },
+      required: ["screen"],
+    },
+    validation: (action) => {
+      const screen = action?.screen;
+      if (!screen || typeof screen !== "object" || Array.isArray(screen)) throw new Error("Screen requires a screen definition");
+      if (!String(screen.label || "").trim()) throw new Error("Screen requires a label");
+      if (!String(screen.apiName || "").trim()) throw new Error("Screen requires an API Name");
+      if (!Array.isArray(screen.components)) throw new Error("Screen components must be an array");
+      const names = screen.components.map((component) => String(component?.name || "").trim()).filter(Boolean);
+      if (new Set(names).size !== names.length) throw new Error("Screen component names must be unique");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, workflowVariables = {} }) => {
+      const tenantId = companyId || req?.user?.companyId;
+      if (!runId) throw new Error("Screen requires a persisted workflow run");
+      const screen = {
+        ...(action.screen || {}),
+        allowBack: action.allowBack !== false,
+        allowFinish: action.allowFinish !== false,
+        showFooter: action.showFooter !== false,
+      };
+      const existing = await db(
+        "SELECT * FROM platform_workflow_screen_sessions WHERE run_id=$1 AND step_identifier=$2 AND status='ACTIVE' ORDER BY created_at DESC LIMIT 1",
+        [runId, String(action.id || action.screen?.apiName || stepRunId || "screen")]
+      );
+      if (existing.rows?.[0]) {
+        return {
+          status: "waiting",
+          screenSessionId: existing.rows[0].id,
+          screen: existing.rows[0].screen,
+          resumed: false,
+        };
+      }
+      const result = await db(
+        `INSERT INTO platform_workflow_screen_sessions
+           (company_id,workflow_id,run_id,step_run_id,step_identifier,status,screen,values,workflow_variables,history,actor_user_id,expires_at)
+         SELECT $1,r.workflow_id,r.id,$2,$3,'ACTIVE',$4::jsonb,'{}'::jsonb,$5::jsonb,'[]'::jsonb,$6,NOW() + INTERVAL '24 hours'
+         FROM platform_workflow_runs r
+         WHERE r.id=$7 AND r.company_id=$1
+         RETURNING *`,
+        [
+          tenantId,
+          stepRunId || null,
+          String(action.id || action.screen?.apiName || stepRunId || "screen"),
+          JSON.stringify(screen),
+          JSON.stringify(workflowVariables || { variables: {}, steps: {} }),
+          req?.user?.id || null,
+          runId,
+        ]
+      );
+      const session = result.rows?.[0];
+      if (!session) throw new Error("Unable to create Screen session");
+      if (stepRunId) {
+        await db(
+          "UPDATE platform_workflow_step_runs SET status='WAITING',metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2",
+          [JSON.stringify({ screenSessionId: session.id, screenApiName: screen.apiName || null }), stepRunId]
+        );
+      }
+      await db(
+        "UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+        [runId, tenantId]
+      );
+      return { status: "waiting", screenSessionId: session.id, screen, resumed: false };
+    },
+  },
+  {
     key: "WAIT_FOR_CONDITIONS",
     displayName: "Wait for Conditions",
     description: "Pause a workflow until record conditions are met.",
