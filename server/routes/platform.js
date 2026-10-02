@@ -35,7 +35,7 @@ import { listPlatformComponents } from "../services/platformComponentRegistry.js
 import { BUTTON_VARIANTS, validateButtonDefinition } from "../services/platformButtonRegistry.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "../services/platformPermissionSets.js";
 import { buildPlatformSharingScope } from "../services/platformSharing.js";
-import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, findObjectDuplicateMatches, loadObjectDuplicateRules, resolveDuplicateAction } from "../services/platformDuplicateMatching.js";
+import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, findObjectDuplicateMatches, loadObjectDuplicateRules, resolveDuplicateAction, validateDuplicateRule } from "../services/platformDuplicateMatching.js";
 import { publishPlatformEvent } from "../services/platformEvents.js";
 import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
 import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";
@@ -3647,6 +3647,183 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
+  });
+
+  router.get("/platform/objects/:objectId/duplicate-management", ...manage, async (req, res) => {
+    const object = await getObject(req.params.objectId, req);
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    const [matching, duplicate] = await Promise.all([
+      db(
+        `SELECT * FROM platform_matching_rules
+          WHERE object_id=$1 AND company_id=$2 AND active=true
+          ORDER BY label,id`,
+        [object.id, req.user.companyId]
+      ),
+      db(
+        `SELECT d.*,m.label AS matching_rule_label,m.rule_key AS matching_rule_key
+          FROM platform_duplicate_rules d
+          JOIN platform_matching_rules m ON m.id=d.matching_rule_id
+          WHERE d.object_id=$1 AND d.company_id=$2 AND d.active=true
+          ORDER BY d.label,d.id`,
+        [object.id, req.user.companyId]
+      ),
+    ]);
+    res.json({ success: true, data: { matchingRules: matching.rows, duplicateRules: duplicate.rows } });
+  });
+
+  router.post("/platform/objects/:objectId/matching-rules", ...manage, async (req, res) => {
+    const object = await getObject(req.params.objectId, req);
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    const label = String(req.body?.label || "").trim();
+    const ruleKey = String(req.body?.ruleKey || req.body?.rule_key || toSafeApiName(label, "matching_rule")).trim();
+    const matchMode = String(req.body?.matchMode || req.body?.match_mode || "ALL").toUpperCase();
+    const fields = Array.isArray(req.body?.fields) ? req.body.fields : [];
+    if (!label || !isSafeIdentifier(ruleKey)) return res.status(400).json({ success: false, message: "Matching rule label and safe API key are required" });
+    try {
+      validateDuplicateRule({ action: "ALLOW", matchMode, fields });
+      const fieldNames = [...new Set(fields.map((field) => String(field.fieldApiName)))];
+      const available = fieldNames.length
+        ? await db(
+            "SELECT api_name FROM platform_fields WHERE object_id=$1 AND api_name=ANY($2::text[]) AND active=true AND (company_id IS NULL OR company_id=$3)",
+            [object.id, fieldNames, req.user.companyId]
+          )
+        : { rows: [] };
+      if (available.rows.length !== fieldNames.length) {
+        return res.status(400).json({ success: false, message: "Matching rules can only reference active fields on this object" });
+      }
+      const result = await db(
+        `INSERT INTO platform_matching_rules
+          (company_id,object_id,rule_key,label,description,match_mode,fields,active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,true)
+         RETURNING *`,
+        [req.user.companyId, object.id, ruleKey, label, req.body?.description || null, matchMode, JSON.stringify(fields)]
+      );
+      res.status(201).json({ success: true, data: result.rows[0] });
+    } catch (error) {
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "A matching rule with this API key already exists" });
+      if (!error.code) return res.status(400).json({ success: false, message: error.message });
+      throw error;
+    }
+  });
+
+  router.put("/platform/matching-rules/:ruleId", ...manage, async (req, res) => {
+    const existing = await db(
+      "SELECT * FROM platform_matching_rules WHERE id=$1 AND company_id=$2 AND active=true",
+      [req.params.ruleId, req.user.companyId]
+    );
+    const rule = existing.rows[0];
+    if (!rule) return res.status(404).json({ success: false, message: "Matching rule not found" });
+    const label = String(req.body?.label ?? rule.label).trim();
+    const ruleKey = String(req.body?.ruleKey ?? req.body?.rule_key ?? rule.rule_key).trim();
+    const matchMode = String(req.body?.matchMode ?? req.body?.match_mode ?? rule.match_mode).toUpperCase();
+    const fields = req.body?.fields === undefined ? rule.fields : req.body.fields;
+    if (!label || !isSafeIdentifier(ruleKey) || !Array.isArray(fields)) return res.status(400).json({ success: false, message: "Matching rule definition is invalid" });
+    try {
+      validateDuplicateRule({ action: "ALLOW", matchMode, fields });
+      const fieldNames = [...new Set(fields.map((field) => String(field.fieldApiName)))];
+      const available = fieldNames.length
+        ? await db(
+            "SELECT api_name FROM platform_fields WHERE object_id=$1 AND api_name=ANY($2::text[]) AND active=true AND (company_id IS NULL OR company_id=$3)",
+            [rule.object_id, fieldNames, req.user.companyId]
+          )
+        : { rows: [] };
+      if (available.rows.length !== fieldNames.length) return res.status(400).json({ success: false, message: "Matching rules can only reference active fields on this object" });
+      const result = await db(
+        `UPDATE platform_matching_rules
+            SET rule_key=$1,label=$2,description=$3,match_mode=$4,fields=$5::jsonb,updated_at=NOW()
+          WHERE id=$6 AND company_id=$7 RETURNING *`,
+        [ruleKey, label, req.body?.description ?? rule.description, matchMode, JSON.stringify(fields), rule.id, req.user.companyId]
+      );
+      res.json({ success: true, data: result.rows[0] });
+    } catch (error) {
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "A matching rule with this API key already exists" });
+      if (!error.code) return res.status(400).json({ success: false, message: error.message });
+      throw error;
+    }
+  });
+
+  router.delete("/platform/matching-rules/:ruleId", ...manage, async (req, res) => {
+    const linked = await db(
+      "SELECT id FROM platform_duplicate_rules WHERE matching_rule_id=$1 AND company_id=$2 AND active=true LIMIT 1",
+      [req.params.ruleId, req.user.companyId]
+    );
+    if (linked.rows.length) return res.status(409).json({ success: false, message: "Deactivate linked duplicate rules before removing this matching rule" });
+    const result = await db(
+      "UPDATE platform_matching_rules SET active=false,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",
+      [req.params.ruleId, req.user.companyId]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: "Matching rule not found" });
+    res.json({ success: true });
+  });
+
+  router.post("/platform/objects/:objectId/duplicate-rules", ...manage, async (req, res) => {
+    const object = await getObject(req.params.objectId, req);
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    const label = String(req.body?.label || "").trim();
+    const ruleKey = String(req.body?.ruleKey || req.body?.rule_key || toSafeApiName(label, "duplicate_rule")).trim();
+    const matchingRuleId = req.body?.matchingRuleId || req.body?.matching_rule_id;
+    const action = String(req.body?.action || "BLOCK").toUpperCase();
+    if (!label || !isSafeIdentifier(ruleKey) || !recordIdIsValid(String(matchingRuleId || "")) || !["ALLOW","WARN","BLOCK"].includes(action)) {
+      return res.status(400).json({ success: false, message: "Duplicate rule definition is invalid" });
+    }
+    const matching = await db(
+      "SELECT id FROM platform_matching_rules WHERE id=$1 AND object_id=$2 AND company_id=$3 AND active=true",
+      [matchingRuleId, object.id, req.user.companyId]
+    );
+    if (!matching.rows.length) return res.status(400).json({ success: false, message: "Matching rule is not available for this object" });
+    try {
+      const result = await db(
+        `INSERT INTO platform_duplicate_rules
+          (company_id,object_id,matching_rule_id,rule_key,label,description,action,active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,true)
+         RETURNING *`,
+        [req.user.companyId, object.id, matchingRuleId, ruleKey, label, req.body?.description || null, action]
+      );
+      res.status(201).json({ success: true, data: result.rows[0] });
+    } catch (error) {
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "A duplicate rule with this API key already exists" });
+      throw error;
+    }
+  });
+
+  router.put("/platform/duplicate-rules/:ruleId", ...manage, async (req, res) => {
+    const existing = await db(
+      "SELECT * FROM platform_duplicate_rules WHERE id=$1 AND company_id=$2 AND active=true",
+      [req.params.ruleId, req.user.companyId]
+    );
+    const rule = existing.rows[0];
+    if (!rule) return res.status(404).json({ success: false, message: "Duplicate rule not found" });
+    const matchingRuleId = req.body?.matchingRuleId ?? req.body?.matching_rule_id ?? rule.matching_rule_id;
+    const action = String(req.body?.action ?? rule.action).toUpperCase();
+    const label = String(req.body?.label ?? rule.label).trim();
+    const ruleKey = String(req.body?.ruleKey ?? req.body?.rule_key ?? rule.rule_key).trim();
+    if (!label || !isSafeIdentifier(ruleKey) || !["ALLOW","WARN","BLOCK"].includes(action)) return res.status(400).json({ success: false, message: "Duplicate rule definition is invalid" });
+    const matching = await db(
+      "SELECT id FROM platform_matching_rules WHERE id=$1 AND object_id=$2 AND company_id=$3 AND active=true",
+      [matchingRuleId, rule.object_id, req.user.companyId]
+    );
+    if (!matching.rows.length) return res.status(400).json({ success: false, message: "Matching rule is not available for this object" });
+    try {
+      const result = await db(
+        `UPDATE platform_duplicate_rules
+            SET matching_rule_id=$1,rule_key=$2,label=$3,description=$4,action=$5,updated_at=NOW()
+          WHERE id=$6 AND company_id=$7 RETURNING *`,
+        [matchingRuleId, ruleKey, label, req.body?.description ?? rule.description, action, rule.id, req.user.companyId]
+      );
+      res.json({ success: true, data: result.rows[0] });
+    } catch (error) {
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "A duplicate rule with this API key already exists" });
+      throw error;
+    }
+  });
+
+  router.delete("/platform/duplicate-rules/:ruleId", ...manage, async (req, res) => {
+    const result = await db(
+      "UPDATE platform_duplicate_rules SET active=false,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",
+      [req.params.ruleId, req.user.companyId]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: "Duplicate rule not found" });
+    res.json({ success: true });
   });
 
   router.get("/platform/objects/:objectId/configuration", ...manage, async (req, res) => {
