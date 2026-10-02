@@ -2007,7 +2007,11 @@ function Desktop({ onLock, onSignOut }) {
   )
 
   const openRoutePath = (route) => {
-    const value = String(route || '').split('?')[0].trim()
+    const rawValue = String(route || '').trim()
+    if (!rawValue) return
+    const queryIndex = rawValue.indexOf('?')
+    const value = (queryIndex >= 0 ? rawValue.slice(0, queryIndex) : rawValue).trim()
+    const searchParams = new URLSearchParams(queryIndex >= 0 ? rawValue.slice(queryIndex + 1) : '')
     if (!value) return
     setTopPanel('')
     setLauncherOpen(false)
@@ -2043,6 +2047,19 @@ function Desktop({ onLock, onSignOut }) {
         setRouteState({ app: 'connector-settings', section: null, packageKey })
         setActiveApp('connector-settings')
       }
+      return
+    }
+    const objectsIndex = parts.indexOf('objects')
+    if (objectsIndex >= 0 && parts[objectsIndex + 1]) {
+      const objectKey = decodeURIComponent(parts[objectsIndex + 1] || '')
+      const recordId = parts[objectsIndex + 2] === 'records' && parts[objectsIndex + 3]
+        ? decodeURIComponent(parts[objectsIndex + 3])
+        : ''
+      const appKey = searchParams.get('appKey') || ''
+      const next = { app: 'workspace', section: null, objectKey, recordId, appKey }
+      setRoute('workspace', null, { objectKey, recordId, appKey })
+      setRouteState(next)
+      setActiveApp('workspace')
       return
     }
     const appIndex = parts.indexOf('app')
@@ -2405,11 +2422,13 @@ function Desktop({ onLock, onSignOut }) {
           <WorkspacePage
             initialObjectKey={routeState.objectKey || ''}
             initialRecordId={routeState.recordId || ''}
+            appKey={routeState.appKey || ''}
             onNavigate={openItem}
             onRouteChange={(objectKey, recordId) => {
-              const next = { app: 'workspace', section: null, objectKey, recordId }
+              const appKey = routeState.appKey || ''
+              const next = { app: 'workspace', section: null, objectKey, recordId, appKey }
               setRouteState(next)
-              setRoute('workspace', null, { objectKey, recordId })
+              setRoute('workspace', null, { objectKey, recordId, appKey })
             }}
           />
         ) : (
