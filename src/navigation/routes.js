@@ -81,7 +81,14 @@ export function readRoute() {
   if (parts[0] === 'workspace') {
     const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
     const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
-    return { app: 'workspace', section: null, objectKey, recordId }
+    return { app: 'workspace', section: null, objectKey, recordId, appKey: '' }
+  }
+  if (parts[0] === 'objects') {
+    const objectKey = parts[1] ? decodeURIComponent(parts[1]) : ''
+    const recordId = parts[2] === 'records' && parts[3] ? decodeURIComponent(parts[3]) : ''
+    const params = new URLSearchParams(window.location.search || '')
+    const appKey = params.get('appKey') || ''
+    return { app: 'workspace', section: null, objectKey, recordId, appKey }
   }
   return { app: 'home', section: null }
 }
@@ -168,7 +175,9 @@ export function setRoute(app, section = null, options = {}) {
         ? `${base}/app-releases`
       : app === 'workspace'
         ? options?.objectKey
-          ? `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
+          ? options?.appKey
+            ? `${base}/objects/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}?appKey=${encodeURIComponent(options.appKey)}`
+            : `${base}/workspace/${encodeURIComponent(options.objectKey)}${options.recordId ? `/records/${encodeURIComponent(options.recordId)}` : ''}`
           : `${base}/workspace`
         : `${base}/`
   try { sessionStorage.setItem('onepos.lastRoute', next) } catch {}
