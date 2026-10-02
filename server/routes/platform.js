@@ -7363,7 +7363,76 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return { matches: unique, ambiguous: unique.length > 1, reason: unique.length > 1 ? "ambiguous" : null };
   }
 
-  async function validateLookupReference(field, value, req) {
+  const LOOKUP_FILTER_OPERATORS = new Set(["equals", "not_equals", "greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal", "contains", "is_empty", "is_not_empty"]);
+  const LOOKUP_FILTER_SOURCES = new Set(["literal", "source_field", "user"]);
+
+  function lookupFilterConfig(fieldOrConfig) {
+    const config = fieldOrConfig?.config && typeof fieldOrConfig.config === "object" ? fieldOrConfig.config : fieldOrConfig;
+    const filter = config?.lookupFilter || config?.lookup_filter;
+    if (!filter || typeof filter !== "object" || Array.isArray(filter) || filter.active === false) return null;
+    return {
+      active: true,
+      required: filter.required !== false,
+      match: filter.match === "any" ? "any" : "all",
+      conditions: Array.isArray(filter.conditions) ? filter.conditions : [],
+    };
+  }
+
+  function lookupFilterValue(condition, sourceRecord, req) {
+    const source = condition.valueSource || condition.value_source || "literal";
+    if (source === "source_field") return sourceRecord?.[condition.sourceField || condition.source_field];
+    if (source === "user") {
+      const key = condition.userField || condition.user_field || "id";
+      if (key === "id") return req.user?.id;
+      if (key === "roleId") return req.user?.roleId;
+      if (key === "companyId") return req.user?.companyId;
+      if (key === "storeId") return req.user?.storeId;
+      return null;
+    }
+    return condition.value;
+  }
+
+  function lookupFilterConditionMatches(condition, targetRecord, sourceRecord, req) {
+    const left = targetRecord?.[condition.targetField || condition.target_field];
+    const operator = condition.operator || "equals";
+    if (operator === "is_empty") return left === null || left === undefined || left === "";
+    if (operator === "is_not_empty") return left !== null && left !== undefined && left !== "";
+    const right = lookupFilterValue(condition, sourceRecord, req);
+    if (operator === "equals") return String(left ?? "") === String(right ?? "");
+    if (operator === "not_equals") return String(left ?? "") !== String(right ?? "");
+    if (operator === "contains") return String(left ?? "").toLowerCase().includes(String(right ?? "").toLowerCase());
+    if (left === null || left === undefined || right === null || right === undefined) return false;
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    const numeric = Number.isFinite(leftNumber) && Number.isFinite(rightNumber);
+    const a = numeric ? leftNumber : String(left);
+    const b = numeric ? rightNumber : String(right);
+    if (operator === "greater_than") return a > b;
+    if (operator === "greater_than_or_equal") return a >= b;
+    if (operator === "less_than") return a < b;
+    if (operator === "less_than_or_equal") return a <= b;
+    return false;
+  }
+
+  async function lookupFilterAllows(field, targetObject, targetFields, targetRecordId, sourceRecord, req) {
+    const filter = lookupFilterConfig(field);
+    if (!filter || !filter.conditions.length || filter.required === false) return true;
+    const scope = ["id=$1"];
+    const params = [targetRecordId];
+    if (targetObject.company_scoped) { params.push(req.user.companyId); scope.push(`company_id=${params.length}`); }
+    if (targetObject.store_scoped) {
+      if (!req.user.storeId) return false;
+      params.push(req.user.storeId); scope.push(`store_id=${params.length}`);
+    }
+    const result = await db(`SELECT * FROM "${targetObject.source_table}" WHERE ${scope.join(" AND ")} LIMIT 1`, params);
+    if (!result.rows.length) return false;
+    const hydrated = await hydrateExtensions(db, targetObject, targetFields, result.rows, req);
+    const targetRecord = hydrated[0] || result.rows[0];
+    const matches = filter.conditions.map((condition) => lookupFilterConditionMatches(condition, targetRecord, sourceRecord, req));
+    return filter.match === "any" ? matches.some(Boolean) : matches.every(Boolean);
+  }
+
+  async function validateLookupReference(field, value, req, sourceRecord = {}) {
     if (field.field_type !== "lookup" || !field.config || typeof field.config !== "object") return { value };
     const targetKey = field.config.relatedObjectKey || field.config.related_object_key || field.config.objectKey;
     let targetObject = null;
@@ -7383,7 +7452,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     const matchResult = await resolveImportLookupMatches(targetObject, targetFields, value, req);
     if (!matchResult.matches.length) return { error: `${field.label} references a record that does not exist` };
     if (matchResult.ambiguous) return { error: `${field.label} match is ambiguous; multiple records satisfy the configured relationship key` };
-    return { value: matchResult.matches[0] };
+    const resolvedId = matchResult.matches[0];
+    if (!(await lookupFilterAllows(field, targetObject, targetFields, resolvedId, sourceRecord, req))) {
+      return { error: `${field.label} does not match the configured lookup filter` };
+    }
+    return { value: resolvedId };
   }
 
   async function validateLookupConfiguration(objectId, fieldType, config, req) {
@@ -7401,6 +7474,33 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       : current.parent_object_key;
     if (config.relatedObjectKey && config.relatedObjectKey !== targetObjectKey) {
       throw new ConditionError("Lookup target does not match the selected relationship");
+    }
+    const filter = lookupFilterConfig(config);
+    if (!filter) return;
+    if (!filter.conditions.length || filter.conditions.length > 10) throw new ConditionError("Lookup filters require between 1 and 10 conditions");
+    const [sourceFieldsResult, targetObjectResult] = await Promise.all([
+      db("SELECT api_name FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [objectId, req.user.companyId]),
+      db("SELECT id FROM platform_objects WHERE object_key=$1 AND active=true AND (company_id IS NULL OR company_id=$2) LIMIT 1", [targetObjectKey, req.user.companyId]),
+    ]);
+    const targetObjectId = targetObjectResult.rows[0]?.id;
+    const targetFieldsResult = targetObjectId
+      ? await db("SELECT api_name FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [targetObjectId, req.user.companyId])
+      : { rows: [] };
+    const sourceFields = new Set(sourceFieldsResult.rows.map((item) => item.api_name));
+    const targetFields = new Set(targetFieldsResult.rows.map((item) => item.api_name));
+    for (const condition of filter.conditions) {
+      const targetField = condition?.targetField || condition?.target_field;
+      const valueSource = condition?.valueSource || condition?.value_source || "literal";
+      if (!isSafeIdentifier(targetField) || !targetFields.has(targetField)) throw new ConditionError("Lookup filter must reference an active target field");
+      if (!LOOKUP_FILTER_OPERATORS.has(condition?.operator || "equals")) throw new ConditionError("Lookup filter uses an unsupported operator");
+      if (!LOOKUP_FILTER_SOURCES.has(valueSource)) throw new ConditionError("Lookup filter uses an unsupported value source");
+      if (valueSource === "source_field") {
+        const sourceField = condition?.sourceField || condition?.source_field;
+        if (!isSafeIdentifier(sourceField) || !sourceFields.has(sourceField)) throw new ConditionError("Lookup filter must reference an active source field");
+      }
+      if (valueSource === "user" && !["id", "roleId", "companyId", "storeId"].includes(condition?.userField || condition?.user_field || "id")) {
+        throw new ConditionError("Lookup filter uses an unsupported user field");
+      }
     }
   }
 
@@ -7556,11 +7656,25 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return generated;
   }
 
-  async function validateRecordInput(req, object, fields, input, { requireRequired = false } = {}) {
+  async function validateRecordInput(req, object, fields, input, { requireRequired = false, recordId = null } = {}) {
     if (!input || typeof input !== "object" || Array.isArray(input)) return { error: "Record data must be an object" };
     const activeFields = fields.filter((field) => field.active === true);
     const activeByName = new Map(activeFields.map((field) => [field.api_name, field]));
     const allByName = new Map(fields.map((field) => [field.api_name, field]));
+    const sourceRecord = { ...input };
+    if (recordId && recordIdIsValid(String(recordId)) && object?.source_table && isSafeIdentifier(object.source_table)) {
+      const params = [recordId];
+      const scope = ["id=$1"];
+      if (object.company_scoped) { params.push(req.user.companyId); scope.push(`company_id=${params.length}`); }
+      if (object.store_scoped) { params.push(req.user.storeId); scope.push(`store_id=${params.length}`); }
+      const current = await db(`SELECT * FROM "${object.source_table}" WHERE ${scope.join(" AND ")} LIMIT 1`, params);
+      if (current.rows[0]) {
+        for (const candidate of activeFields) {
+          if (sourceRecord[candidate.api_name] !== undefined || !candidate.source_column || !isSafeIdentifier(candidate.source_column)) continue;
+          sourceRecord[candidate.api_name] = current.rows[0][candidate.source_column];
+        }
+      }
+    }
     const values = [];
     for (const [apiName, value] of Object.entries(input)) {
       const field = activeByName.get(apiName);
@@ -7582,7 +7696,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const valid = options.some((option) => option.active !== false && option.value === String(value));
         if (!valid) return { error: `${field.label} must be one of the active configured options` };
       }
-      const lookup = await validateLookupReference(field, value, req);
+      const lookup = await validateLookupReference(field, value, req, sourceRecord);
       if (lookup.error) return { error: lookup.error };
       values.push({ field, column, value: normalizeFieldValue(field, lookup.value) });
     }
@@ -7633,7 +7747,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     for (const field of fields) {
       if (!field || !field.active || !field.api_name || !metadataColumn(field)) continue;
       const config = field.config && typeof field.config === "object" ? field.config : {};
-      const isUnique = field.unique === true || config.unique === true || config.businessKey === true || config.business_key === true || config.uniqueBusinessKey === true || config.unique_business_key === true || config.externalId === true || config.external_id === true;
+      const isUnique = field.unique === true || config.unique === true || config.businessKey === true || config.business_key === true || config.uniqueBusinessKey === true || config.unique_business_key === true;
       const api = String(field.api_name).toLowerCase();
       if (isUnique || /(?:sku|barcode|code|external|serial|reference|number|identifier)$/.test(api) || /(?:sku|barcode|code|external|serial|reference|number|identifier)/.test(String(field.label || "").toLowerCase())) {
         byName.set(api, field);
@@ -7888,7 +8002,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       result.message = "Update target was not found";
       return result;
     }
-    const validation = await validateRecordInput(req, object, fields, input, { requireRequired: canonicalAction === "create" });
+    const validation = await validateRecordInput(req, object, fields, input, { requireRequired: canonicalAction === "create", recordId: canonicalAction === "update" ? targetId : null });
     if (validation.error) {
       result.status = "error";
       result.code = "FIELD_VALIDATION_FAILED";
@@ -7961,12 +8075,25 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return { version: current.__validation_version, current };
   }
 
+  function applyFieldDefaults(fields, input) {
+    const values = { ...(input || {}) };
+    for (const field of fields || []) {
+      if (!field?.active || !field.api_name || !metadataColumn(field) || ["formula", "rollup", "auto_number"].includes(field.field_type)) continue;
+      if (Object.prototype.hasOwnProperty.call(values, field.api_name)) continue;
+      const config = field.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+      if (config.defaultValue !== undefined) values[field.api_name] = config.defaultValue;
+      else if (config.default_value !== undefined) values[field.api_name] = config.default_value;
+    }
+    return values;
+  }
+
   async function executeCanonicalRecordWrite({ req, object, metadataFields, fields, input, action, recordId = null }) {
     const permissionAction = action === "update" ? "edit" : "create";
     if (!(await hasPlatformObjectPermission(db, req, object.id, permissionAction))) {
       return { status: 403, code: "IMPORT_PERMISSION_REQUIRED", message: `${permissionAction} permission is required` };
     }
-    const validation = await validateRecordInput(req, object, fields, input, { requireRequired: action === "create" });
+    const effectiveInput = action === "create" ? applyFieldDefaults(fields, input) : input;
+    const validation = await validateRecordInput(req, object, fields, effectiveInput, { requireRequired: action === "create", recordId });
     if (validation.error) return { status: 400, code: "FIELD_VALIDATION_FAILED", message: validation.error };
     if (action === "create") {
       const generated = await generateAutoNumberValues(req, fields);
@@ -7975,7 +8102,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     const trigger = action === "update" ? "before_update" : "before_create";
     const ruleCheck = await recordRuleCheck(req, object, fields, validation.values, trigger, action === "update" ? recordId : null);
     if (ruleCheck.status) return { status: ruleCheck.status, code: ruleCheck.code, message: ruleCheck.message, errors: ruleCheck.errors };
-    const duplicateMatches = await findDatabaseDuplicateMatches(req, object, fields, input, { allowSameRecordId: action === "update" ? recordId : false });
+    const duplicateMatches = await findDatabaseDuplicateMatches(req, object, fields, effectiveInput, { allowSameRecordId: action === "update" ? recordId : false });
     const duplicateAction = resolveDuplicateAction(duplicateMatches);
     if (duplicateAction === "BLOCK") return {
       status: 409,
