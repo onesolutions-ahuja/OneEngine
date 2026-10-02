@@ -2728,6 +2728,42 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     insertPreparedStep(step, index, clipboard.mode === "cut" ? (clipboard.bundle || []) : []);
     if (clipboard.mode === "cut") setClipboard(null);
   };
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const onKeyDown = (event) => {
+      const target = event.target;
+      const editable = target && (
+        target.tagName === "INPUT"
+        || target.tagName === "TEXTAREA"
+        || target.tagName === "SELECT"
+        || target.isContentEditable
+      );
+      if (editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = String(event.key || "").toLowerCase();
+      if (key === "c" && selectedStep) {
+        event.preventDefault();
+        copyStep(selectedStep);
+        return;
+      }
+      if (key === "x" && selectedStep) {
+        event.preventDefault();
+        requestCutStep(selectedStep);
+        return;
+      }
+      if (key === "v" && clipboard?.step) {
+        event.preventDefault();
+        if (branchTarget || insertAt != null) {
+          pasteClipboard(insertAt == null ? workflow.steps.length : insertAt);
+          return;
+        }
+        const selectedIsTopLevel = selectedStep && visibleCanvasSteps.some(({ step }) => String(step.id) === String(selectedStep.id));
+        const pasteIndex = selectedIsTopLevel && selectedIndex >= 0 ? selectedIndex + 1 : workflow.steps.length;
+        pasteClipboard(pasteIndex);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedStep, selectedIndex, clipboard, branchTarget, insertAt, workflow.steps.length, visibleCanvasSteps]);
   const addFaultPath = (step) => {
     const index = workflow.steps.findIndex((item) => item.id === step.id);
     if (index < 0 || !flowElementSupportsFaultPath(step.type)) return;
