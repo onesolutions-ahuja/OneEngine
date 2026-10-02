@@ -1326,6 +1326,58 @@
   background:white;
 }
 .workspace-record-pane .record-list-table-wrap { max-height:calc(100vh - 245px); }
+.workspace-page.workspace-mode-table,
+.workspace-page.workspace-mode-kanban {
+  grid-template-columns: 220px minmax(0,1fr);
+}
+.record-list-view-picker select {
+  min-height: 30px;
+  max-width: 190px;
+  border: 1px solid rgba(0,0,0,.09);
+  border-radius: 7px;
+  background: white;
+  padding: 0 8px;
+  font-size: 10px;
+}
+.record-list-pagination,
+.record-list-bulk-actions {
+  min-height: 34px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:5px 9px;
+  border-top:1px solid rgba(0,0,0,.055);
+  font-size:10px;
+}
+.record-list-bulk-actions { justify-content:flex-start; border-top:0; border-bottom:1px solid rgba(0,0,0,.055); }
+.record-list-bulk-actions button { min-height:26px; border:1px solid rgba(0,0,0,.08); border-radius:6px; background:white; padding:0 8px; font-size:9.5px; }
+.record-list-select-head,
+.record-list-select-cell { width:30px; text-align:center; }
+.record-list-value-cell.is-inline-editable { cursor:text; }
+.record-list-value-cell input,
+.record-list-value-cell select { width:100%; min-height:28px; box-sizing:border-box; }
+.record-kanban-wrap { min-height:0; flex:1 1 auto; overflow:auto; padding:8px; }
+.record-kanban-board { min-width:max-content; display:flex; align-items:flex-start; gap:9px; }
+.record-kanban-column { width:260px; max-height:calc(100vh - 260px); display:flex; flex-direction:column; overflow:hidden; border:1px solid rgba(0,0,0,.07); border-radius:9px; background:#f6f6f7; }
+.record-kanban-column > header { min-height:34px; padding:6px 8px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(0,0,0,.06); font-size:10px; }
+.record-kanban-stack { min-height:50px; overflow:auto; padding:7px; display:grid; gap:6px; }
+.record-kanban-card { display:grid; gap:4px; padding:8px; border:1px solid rgba(0,0,0,.07); border-radius:8px; background:white; cursor:pointer; }
+.record-kanban-card.is-selected { outline:2px solid rgba(10,132,255,.35); }
+.record-kanban-card strong { font-size:10.5px; }
+.record-kanban-card span { color:rgba(0,0,0,.55); font-size:9px; }
+.record-kanban-card span b { color:rgba(0,0,0,.7); }
+.record-kanban-empty { padding:14px 8px; color:rgba(0,0,0,.4); font-size:9.5px; text-align:center; }
+.workspace-related-list-card .record-list-view { max-height:calc(100vh - 230px); border:0; }
+.workspace-related-list-card .record-list-table-wrap { max-height:calc(100vh - 390px); }
+.workspace-lookup-field { position:relative; }
+.workspace-lookup-input { position:relative; }
+.workspace-lookup-input > button { position:absolute; right:4px; top:4px; min-height:25px; }
+.workspace-lookup-results { position:absolute; z-index:20; left:0; right:0; top:calc(100% + 3px); max-height:220px; overflow:auto; border:1px solid rgba(0,0,0,.1); border-radius:8px; background:white; box-shadow:0 12px 28px rgba(0,0,0,.14); }
+.workspace-lookup-results > button { width:100%; min-height:38px; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; border:0; border-bottom:1px solid rgba(0,0,0,.05); border-radius:0; }
+.workspace-lookup-results > button strong { font-size:10px; }
+.workspace-lookup-results > button small { color:rgba(0,0,0,.45); font-size:8px; }
+.workspace-lookup-results > div { padding:10px; font-size:9.5px; }
 .record-list-table tbody tr { cursor:pointer; }
 .record-list-table tbody tr.is-selected { background:rgba(10,132,255,.10); }
 .record-list-table tbody tr.is-selected:hover { background:rgba(10,132,255,.14); }
