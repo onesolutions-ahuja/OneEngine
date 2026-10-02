@@ -2154,7 +2154,13 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         const module = await db("SELECT id FROM platform_modules WHERE id=$1", [moduleId]);
         if (!module.rows.length) return res.status(400).json({ success: false, message: "Module not found" });
       }
-      const result = await db("INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8) RETURNING *", [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, sourceTable, moduleId, req.user.companyId]);
+      const objectConfig = {
+        ...(req.body?.config && typeof req.body.config === "object" && !Array.isArray(req.body.config) ? req.body.config : {}),
+        allowReports: req.body?.allowReports !== false,
+        allowSearch: req.body?.allowSearch !== false,
+        trackHistory: req.body?.trackHistory !== false,
+      };
+      const result = await db("INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id,config) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *", [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, sourceTable, moduleId, req.user.companyId, JSON.stringify(objectConfig)]);
       await db(
         `INSERT INTO platform_object_permissions
            (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete,can_import,can_export)
@@ -2187,7 +2193,15 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         const blockers = await objectDeactivationBlockers(db, object, req.user.companyId);
         if (blockers.length) return res.status(409).json({ success: false, code: "OBJECT_IN_USE", message: `Object cannot be deactivated while active dependencies remain: ${blockers.join(", ")}` });
       }
-      const result = await db("UPDATE platform_objects SET object_key=COALESCE($1,object_key), api_name=COALESCE($2,api_name), label=COALESCE($3,label), plural_label=COALESCE($4,plural_label), description=COALESCE($5,description), source_table=$6, active=COALESCE($7,active), user_modified=true,updated_at=NOW() WHERE id=$8 AND (company_id=$9 OR (company_id IS NULL AND $10=true)) RETURNING *", [req.body.objectKey, req.body.apiName, req.body.label, req.body.pluralLabel, req.body.description, req.body.sourceTable === undefined ? object.source_table : req.body.sourceTable, req.body.active, object.id, req.user.companyId, await canManageGlobal(db, req)]);
+      const currentConfig = object.config && typeof object.config === "object" && !Array.isArray(object.config) ? object.config : {};
+      const nextConfig = {
+        ...currentConfig,
+        ...(req.body?.config && typeof req.body.config === "object" && !Array.isArray(req.body.config) ? req.body.config : {}),
+        ...(req.body.allowReports === undefined ? {} : { allowReports: req.body.allowReports === true }),
+        ...(req.body.allowSearch === undefined ? {} : { allowSearch: req.body.allowSearch === true }),
+        ...(req.body.trackHistory === undefined ? {} : { trackHistory: req.body.trackHistory === true }),
+      };
+      const result = await db("UPDATE platform_objects SET object_key=COALESCE($1,object_key), api_name=COALESCE($2,api_name), label=COALESCE($3,label), plural_label=COALESCE($4,plural_label), description=COALESCE($5,description), source_table=$6, active=COALESCE($7,active), config=$8::jsonb, user_modified=true,updated_at=NOW() WHERE id=$9 AND (company_id=$10 OR (company_id IS NULL AND $11=true)) RETURNING *", [req.body.objectKey, req.body.apiName, req.body.label, req.body.pluralLabel, req.body.description, req.body.sourceTable === undefined ? object.source_table : req.body.sourceTable, req.body.active, JSON.stringify(nextConfig), object.id, req.user.companyId, await canManageGlobal(db, req)]);
       res.json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (error.code === "23505") return res.status(409).json({ success: false, message: "An object with this key already exists" });
