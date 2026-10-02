@@ -459,6 +459,8 @@ export default function FieldEditor({
             suffix: form.autoNumberSuffix || "",
             start: Math.max(1, Number(form.autoNumberStart || 1)),
             padding: Math.max(0, Math.min(20, Number(form.autoNumberPadding || 0))),
+            externalId: form.externalId === true,
+            trackHistory: form.trackHistory === true,
           } : {}),
           ...(!["formula", "rollup"].includes(form.field_type) ? { duplicateMatching: form.duplicateMatching } : {}),
           ...(form.visibilityCondition ? { visibilityCondition: form.visibilityCondition } : {}),
@@ -751,7 +753,9 @@ export default function FieldEditor({
               <label><span>Start at</span><input type="number" min="1" value={form.autoNumberStart || 1} onChange={(event) => update("autoNumberStart", Number(event.target.value || 1))} /></label>
               <label><span>Minimum digits</span><input type="number" min="0" max="20" value={form.autoNumberPadding || 0} onChange={(event) => update("autoNumberPadding", Number(event.target.value || 0))} /></label>
               <label><span>Suffix</span><input value={form.autoNumberSuffix || ""} onChange={(event) => update("autoNumberSuffix", event.target.value)} placeholder="" /></label>
-              <small>Generated atomically when a record is created. Users and imports cannot override this field.</small>
+              <label className="platform-checkbox"><input type="checkbox" checked={form.externalId === true} onChange={(event) => update("externalId", event.target.checked)} /><span><strong>External ID</strong><small>Allow Data Loader/API upserts to match this generated value.</small></span></label>
+              <label className="platform-checkbox"><input type="checkbox" checked={form.trackHistory === true} onChange={(event) => update("trackHistory", event.target.checked)} /><span><strong>Track History</strong><small>Include the generated identifier in record history.</small></span></label>
+              <small>Generated atomically when a record is created. Supports date tokens &#123;YYYY&#125;, &#123;YY&#125;, &#123;MM&#125;, &#123;DD&#125;. Maximum generated value: 30 characters.</small>
             </fieldset>
           ) : null}
 
@@ -949,7 +953,7 @@ export default function FieldEditor({
                 <label><span>Default value</span><input type={["number","decimal","currency","percent"].includes(form.field_type) ? "number" : form.field_type === "date" ? "date" : form.field_type === "datetime" ? "datetime-local" : form.field_type === "time" ? "time" : "text"} value={form.defaultValue ?? ""} onChange={(event) => update("defaultValue", event.target.value)} /></label>
               ) : null}
               {["text","long_text","rich_text","url","email","phone"].includes(form.field_type) ? (
-                <label><span>Maximum length</span><input type="number" min="1" max="100000" value={form.maxLength ?? ""} onChange={(event) => update("maxLength", event.target.value)} placeholder="No additional limit" /></label>
+                <label><span>Maximum length</span><input type="number" min={["long_text","rich_text"].includes(form.field_type) ? 256 : 1} max={["long_text","rich_text"].includes(form.field_type) ? 131072 : 255} value={form.maxLength ?? ""} onChange={(event) => update("maxLength", event.target.value)} placeholder={["long_text","rich_text"].includes(form.field_type) ? "256–131072" : "1–255"} /></label>
               ) : null}
               {["number","decimal","currency","percent"].includes(form.field_type) ? (
                 <>
