@@ -2419,7 +2419,325 @@ const WORKFLOW_VISUAL_CSS = `
       max-width: 220px !important;
     }
   }
+
+  /* SFDC SURROUNDING BUILDER UI — do not alter the React Flow canvas/node/edge presentation. */
+  .workflow-builder-page {
+    --sfdc-blue: #0176d3;
+    --sfdc-border: #c9c7c5;
+    --sfdc-bg: #f3f3f3;
+    --sfdc-text: #181818;
+    color: var(--sfdc-text);
+  }
+  .workflow-builder-header {
+    min-height: 52px;
+    padding: 7px 10px;
+    border: 1px solid #d8dde6;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  }
+  .workflow-builder-header button,
+  .workflow-header-more > summary,
+  .workflow-canvas-toolbar button,
+  .workflow-cancel-button,
+  .workflow-save-button {
+    min-height: 30px;
+    border-radius: 4px !important;
+    font-size: 11px !important;
+    font-weight: 600;
+  }
+  .workflow-save-button {
+    border-color: var(--sfdc-blue) !important;
+    background: var(--sfdc-blue) !important;
+  }
+  .workflow-node-palette,
+  .workflow-properties-panel {
+    border-color: var(--sfdc-border) !important;
+    border-radius: 4px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+  .workflow-node-palette { width: 248px; }
+  .workflow-palette-head,
+  .workflow-properties-tabs {
+    min-height: 38px;
+    padding: 7px 10px !important;
+    border-bottom: 1px solid #e5e5e5;
+    background: #fff;
+  }
+  .workflow-palette-head button {
+    min-height: 26px;
+    border-radius: 3px !important;
+  }
+  .workflow-palette-search {
+    margin: 8px 9px 4px;
+    border: 1px solid var(--sfdc-border);
+    border-radius: 4px !important;
+    background: #fff;
+  }
+  .workflow-palette-search input { min-height: 30px; font-size: 11px; }
+  .workflow-palette-group-title {
+    margin-top: 10px !important;
+    color: #444;
+    font-size: 9px !important;
+    font-weight: 700;
+    letter-spacing: .04em;
+  }
+  .workflow-palette-item {
+    min-height: 34px !important;
+    margin-bottom: 2px !important;
+    border-radius: 4px !important;
+    border-color: transparent !important;
+    background: #fff !important;
+  }
+  .workflow-palette-item:hover { background: #f3f3f3 !important; border-color: #e5e5e5 !important; }
+  .workflow-palette-icon {
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 3px !important;
+  }
+  .workflow-palette-item-copy strong { font-size: 10.5px !important; }
+  .workflow-palette-item-copy small { font-size: 8.5px !important; }
+
+  .workflow-properties-panel {
+    width: 338px;
+    padding: 0 10px 10px !important;
+    overflow-y: auto;
+  }
+  .workflow-properties-tab {
+    padding: 8px 2px 7px !important;
+    color: var(--sfdc-blue) !important;
+    border-bottom: 2px solid var(--sfdc-blue);
+    font-size: 11px !important;
+    font-weight: 700;
+  }
+  .workflow-properties-panel .space-y-4 { gap: 10px !important; }
+  .workflow-properties-panel label { color: #444 !important; font-size: 10.5px !important; }
+  .workflow-properties-panel input,
+  .workflow-properties-panel select,
+  .workflow-properties-panel textarea {
+    min-height: 32px !important;
+    border-color: var(--sfdc-border) !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    font-size: 11px !important;
+  }
+  .workflow-properties-panel textarea { padding-top: 7px !important; }
+  .workflow-properties-panel .rounded-xl,
+  .workflow-properties-panel .rounded-lg {
+    border-radius: 4px !important;
+  }
+  .workflow-properties-panel [class*="bg-slate-50"] { background: #f7f7f7 !important; }
+
+  .workflow-canvas-toolbar {
+    background: rgba(255,255,255,.96) !important;
+    border: 1px solid #d8dde6;
+    border-radius: 4px;
+    padding: 3px !important;
+  }
+  .workflow-layout-toggle { border-radius: 3px !important; }
+  .workflow-layout-toggle button[aria-pressed="true"],
+  .workflow-layout-toggle .is-active { color: var(--sfdc-blue) !important; background: #eef4ff !important; }
+
+  .workflow-sfdc-drawer {
+    position: fixed;
+    top: 96px;
+    right: 16px;
+    bottom: 82px;
+    z-index: 2200;
+    width: min(430px, calc(100vw - 32px));
+    overflow-y: auto;
+    padding: 0 14px 16px;
+    border: 1px solid var(--sfdc-border);
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 8px 28px rgba(0,0,0,.18);
+  }
+  .workflow-sfdc-drawer > div:first-child {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin: 0 -14px;
+    padding: 11px 14px 10px;
+    border-bottom: 1px solid #e5e5e5;
+    background: #fff;
+  }
+  .workflow-sfdc-drawer .workflow-cancel-button,
+  .workflow-sfdc-drawer .workflow-save-button { min-height: 30px; padding: 0 10px; }
+  .workflow-sfdc-drawer .mt-4 { margin-top: 10px !important; }
+  .workflow-sfdc-drawer .p-4 { padding: 12px !important; }
+  .workflow-sfdc-drawer .p-3 { padding: 9px !important; }
+  .workflow-sfdc-drawer input,
+  .workflow-sfdc-drawer select,
+  .workflow-sfdc-drawer textarea {
+    min-height: 32px !important;
+    border-color: var(--sfdc-border) !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    font-size: 11px !important;
+  }
+
+  .workflow-record-picker { position: relative; min-width: 0; }
+  .workflow-record-picker-input {
+    min-height: 32px;
+    display: grid;
+    grid-template-columns: 18px minmax(0,1fr) auto;
+    align-items: center;
+    gap: 5px;
+    padding: 0 8px;
+    border: 1px solid var(--sfdc-border);
+    border-radius: 4px;
+    background: #fff;
+  }
+  .workflow-record-picker-input > span { color: #706e6b; }
+  .workflow-record-picker-input input {
+    min-width: 0;
+    min-height: 30px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    outline: 0;
+  }
+  .workflow-record-picker-input small { color: #706e6b; font-size: 9px; }
+  .workflow-record-picker-input button {
+    border: 0;
+    background: transparent;
+    color: var(--sfdc-blue);
+    font-size: 9px;
+    cursor: pointer;
+  }
+  .workflow-record-picker-menu {
+    position: absolute;
+    inset: calc(100% + 3px) 0 auto;
+    z-index: 50;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--sfdc-border);
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 5px 16px rgba(0,0,0,.16);
+  }
+  .workflow-record-picker-menu button {
+    width: 100%;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 0;
+    border-bottom: 1px solid #eee;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+  }
+  .workflow-record-picker-menu button:hover { background: #f3f3f3; }
+  .workflow-record-picker-menu strong { color: #181818; font-size: 10.5px; }
+  .workflow-record-picker-menu small { color: #706e6b; font-size: 8.5px; }
+  .workflow-record-picker-empty { padding: 12px; color: #706e6b; font-size: 10px; }
+
+  .workflow-debug-timeline {
+    margin-top: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    background: #fff;
+  }
+  .workflow-debug-timeline-title {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e5e5e5;
+    color: #181818;
+    font-size: 10.5px;
+    font-weight: 700;
+  }
+  .workflow-debug-timeline-row {
+    width: 100%;
+    min-height: 44px;
+    padding: 7px 9px;
+    display: grid;
+    grid-template-columns: 10px minmax(0,1fr) 22px;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-bottom: 1px solid #eee;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+  }
+  .workflow-debug-timeline-row:last-child { border-bottom: 0; }
+  .workflow-debug-timeline-row:hover { background: #f7f7f7; }
+  .workflow-debug-status-dot { width: 8px; height: 8px; border-radius: 999px; background: #747474; }
+  .workflow-debug-timeline-row.is-completed .workflow-debug-status-dot { background: #2e844a; }
+  .workflow-debug-timeline-row.is-failed .workflow-debug-status-dot { background: #ba0517; }
+  .workflow-debug-timeline-row.is-fault_handled .workflow-debug-status-dot { background: #fe9339; }
+  .workflow-debug-step-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .workflow-debug-step-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+  .workflow-debug-step-copy small { color: #706e6b; font-size: 8.5px; }
+  .workflow-debug-step-index { color: #706e6b; font-size: 9px; text-align: right; }
+
+  @media (max-width: 760px) {
+    .workflow-sfdc-drawer { top: 76px; right: 6px; bottom: 72px; width: calc(100vw - 12px); }
+    .workflow-properties-panel { width: min(338px, 100vw); }
+  }
+
 `;
+
+function WorkflowRecordPicker({ objectKey, value, onChange, ariaLabel = "Search records" }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const text = String(query || "").trim();
+    if (!objectKey || text.length < 2) {
+      setResults([]);
+      return undefined;
+    }
+    const timer = window.setTimeout(async () => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams({ page: "1", pageSize: "12", search: text });
+        const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey)}/records?${params.toString()}`);
+        const rows = response?.records || response?.data?.records || response?.data || [];
+        setResults(Array.isArray(rows) ? rows : []);
+        setOpen(true);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [objectKey, query]);
+
+  const labelFor = (record) => record?.name || record?.title || record?.display_name || record?.reference || record?.code || record?.email || record?.id || record?.record_id || "Record";
+  const idFor = (record) => record?.id || record?.record_id || "";
+
+  return (
+    <div className="workflow-record-picker">
+      <div className="workflow-record-picker-input">
+        <span aria-hidden="true">⌕</span>
+        <input
+          aria-label={ariaLabel}
+          value={query}
+          onFocus={() => { if (results.length) setOpen(true); }}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={value ? `Selected: ${value}` : "Search records by name, reference or ID…"}
+        />
+        {loading ? <small>Searching…</small> : value ? <button type="button" onClick={() => { onChange?.(""); setQuery(""); setOpen(false); }}>Clear</button> : null}
+      </div>
+      {open && (query.trim().length >= 2) ? (
+        <div className="workflow-record-picker-menu">
+          {results.length ? results.map((record) => {
+            const id = idFor(record);
+            return <button key={id} type="button" onClick={() => { onChange?.(String(id)); setQuery(String(labelFor(record))); setOpen(false); }}>
+              <strong>{labelFor(record)}</strong>
+              <small>{id}</small>
+            </button>;
+          }) : !loading ? <div className="workflow-record-picker-empty">No matching records</div> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 const SCREEN_COMPONENT_TYPES = [
   { value: "DISPLAY_TEXT", label: "Display Text", input: false, group: "Display", description: "Rich instructional or informational text." },
@@ -5339,6 +5657,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const canvasRef = useRef(null);
   const propertiesRef = useRef(null);
   const laneRef = useRef(null);
+  const reactFlowRef = useRef(null);
   const historyRef = useRef([]);
   const historyIndexRef = useRef(-1);
   const applyingHistoryRef = useRef(false);
@@ -6871,10 +7190,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </div>
         </div>
         <div className="workflow-canvas-zoom" aria-label="Canvas zoom controls">
-          <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.5, Number((value - .1).toFixed(1))))}>−</button>
-          <button type="button" aria-label="Reset zoom" title="Reset zoom" onClick={() => setCanvasZoom(1)}>{Math.round(canvasZoom * 100)}%</button>
-          <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))))}>+</button>
-          <button type="button" title="Zoom to Fit" onClick={zoomToFit}>Fit</button>
+          <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => layoutMode === "AUTO" ? reactFlowRef.current?.zoomOut?.({ duration: 160 }) : setCanvasZoom((value) => Math.max(.5, Number((value - .1).toFixed(1))))}>−</button>
+          <button type="button" aria-label="Reset zoom" title="Reset zoom" onClick={() => layoutMode === "AUTO" ? reactFlowRef.current?.setViewport?.({ x: 0, y: 0, zoom: 1 }, { duration: 180 }) : setCanvasZoom(1)}>{Math.round(canvasZoom * 100)}%</button>
+          <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => layoutMode === "AUTO" ? reactFlowRef.current?.zoomIn?.({ duration: 160 }) : setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))))}>+</button>
+          <button type="button" title="Zoom to Fit" onClick={() => layoutMode === "AUTO" ? reactFlowRef.current?.fitView?.({ padding: .25, duration: 220 }) : zoomToFit()}>Fit</button>
         </div>
         {inspectorTransition ? (
           <div className="workflow-path-action-panel" role="dialog" aria-modal="true" aria-label="Unsaved Element Changes">
@@ -7158,6 +7477,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               openPath(pathTarget(kind, ownerId, outcomeId, index));
             }}
             onDelete={requestDeleteStep}
+            onReady={(instance) => { reactFlowRef.current = instance; setCanvasZoom(instance.getZoom?.() || 1); }}
+            onViewportChange={(zoom) => setCanvasZoom(Number(zoom || 1))}
           />
         )}
       </main>
@@ -8641,7 +8962,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : null}
       {testsOpen ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="workflow-sfdc-drawer workflow-tests-drawer">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">Saved Tests</div>
@@ -8656,7 +8977,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <option value="latest">Use latest record</option>
                 <option value="specific">Use specific record</option>
               </select>
-              {testDraft.recordMode === "specific" ? <input className={inputClass} value={testDraft.recordId} onChange={(event) => setTestDraft((current) => ({ ...current, recordId: event.target.value }))} placeholder="Record ID" /> : <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">Uses the latest accessible record in the current store/company.</div>}
+              {testDraft.recordMode === "specific" ? <WorkflowRecordPicker objectKey={workflow.object} value={testDraft.recordId} onChange={(recordId) => setTestDraft((current) => ({ ...current, recordId }))} ariaLabel="Search test record" /> : <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">Uses the latest accessible record in the current store/company.</div>}
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -8814,7 +9135,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       </details>
 
       {debugOpen ? (
-        <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
+        <div className="workflow-sfdc-drawer workflow-debug-drawer">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -8861,7 +9182,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <option value="latest">Use latest record</option>
                 <option value="specific">Use specific record</option>
               </select>
-              {debugRecordMode === "specific" ? <input className={inputClass} value={debugRecordId} onChange={(event) => setDebugRecordId(event.target.value)} placeholder="Record ID" /> : <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">The most recent record in the current company/store will be used.</div>}
+              {debugRecordMode === "specific" ? <WorkflowRecordPicker objectKey={workflow.object} value={debugRecordId} onChange={setDebugRecordId} ariaLabel="Search debug record" /> : <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">The most recent record in the current company/store will be used.</div>}
               <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue) || Boolean(debugMissingInput) || (workflow.object && debugRecordMode === "specific" && !debugRecordId.trim())} onClick={runDebug}>{debugRunning ? "Running…" : debugMode === "test" ? "Run Test" : "Run Debug"}</button>
             </div>
           ) : (
@@ -8935,6 +9256,27 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               ) : (
                 <p className="mt-2 text-sm text-emerald-800">{debugMode === "test" ? "The flow passed this test record. Green steps ran successfully; dashed green steps were safely simulated." : "Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action."}</p>
               )}
+              {Array.isArray(debugResult.steps) && debugResult.steps.length ? (
+                <div className="workflow-debug-timeline">
+                  <div className="workflow-debug-timeline-title">Execution Details</div>
+                  {debugResult.steps.map((stepRun, index) => {
+                    const stepId = String(stepRun.step_identifier || "").split("@")[0];
+                    const step = workflow.steps.find((item) => String(item.id) === stepId);
+                    const status = String(stepRun.metadata?.result?.faultHandled === true ? "FAULT_HANDLED" : stepRun.status || "UNKNOWN").toUpperCase();
+                    const result = stepRun.metadata?.result || {};
+                    return (
+                      <button key={`${stepId || "step"}-${index}`} type="button" className={`workflow-debug-timeline-row is-${status.toLowerCase()}`} onClick={() => stepId && focusStepById(stepId)}>
+                        <span className="workflow-debug-status-dot" aria-hidden="true" />
+                        <span className="workflow-debug-step-copy">
+                          <strong>{step?.label || stepRun.action_type || stepRun.step_identifier || `Step ${index + 1}`}</strong>
+                          <small>{status.replaceAll("_", " ")}{result?.simulated === true ? " · Simulated" : ""}{result?.outcomeLabel ? ` · ${result.outcomeLabel}` : result?.outcome ? ` · ${result.outcome}` : ""}</small>
+                        </span>
+                        <span className="workflow-debug-step-index">{index + 1}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               {Array.isArray(debugResult.resourceHistory) && debugResult.resourceHistory.length ? (
                 <details className="mt-3 rounded-lg border border-slate-200 bg-white/80 p-3">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-700">Resource history · {debugResult.resourceHistory.length} step{debugResult.resourceHistory.length === 1 ? "" : "s"}</summary>
