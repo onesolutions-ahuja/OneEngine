@@ -173,7 +173,7 @@ export default function OneKioskPage({ publicMode = false }) {
     if (demoMode) {
       setProducts(DEMO_PRODUCTS);
       setCurrency("GBP");
-      apiRequest("/api/kiosk/flows")
+      apiRequest(demoMode ? "/api/kiosk/flows?demo=1" : "/api/kiosk/flows")
         .then((response) => {
           const flows = Array.isArray(response?.data) ? response.data : [];
           const requested = String(demoFlowKey || "").trim().toLowerCase();
