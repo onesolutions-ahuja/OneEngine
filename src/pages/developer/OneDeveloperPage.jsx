@@ -39,7 +39,7 @@ function normalizeSection(value) {
   return DEVELOPER_ITEMS.some((item) => item.key === raw) ? raw : 'objects'
 }
 
-export default function OneDeveloperPage({ initialSection = 'objects', onSectionChange }) {
+export default function OneDeveloperPage({ initialSection = 'objects', initialWorkflowId = '', onSectionChange }) {
   const loggedInCompanyId = String(getStoredUser()?.companyId || getStoredUser()?.company_id || getStoredUser()?.company?.id || '')
   const [active, setActive] = useState(() => normalizeSection(initialSection))
   const [query, setQuery] = useState('')
@@ -144,26 +144,33 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
 
   return (
     <section className="settings-page onedeveloper-page">
-      {canManageEngine ? (
-        <aside className="oneengine-client-pane">
-          <div className="oneengine-pane-title"><Building2 size={16}/> Clients</div>
-          <label className="settings-search">
-            <Search size={15}/>
-            <input value={clientQuery} onChange={(event) => setClientQuery(event.target.value)} placeholder="Search clients" />
-          </label>
-          {clientsLoading ? <div className="settings-state-card">Loading clients…</div> : null}
-          <div className="oneengine-client-list">
-            {visibleClients.map((client) => (
-              <button key={client.id} type="button" className={String(client.id) === String(selectedClient) ? 'is-active' : ''} onClick={() => chooseClient(client.id)}>
-                <span><strong>{client.name}</strong><small>{String(client.id).slice(0, 8)}</small></span>
-                <ChevronRight size={14}/>
-              </button>
-            ))}
-          </div>
-        </aside>
-      ) : null}
-
       <aside className="settings-sidebar">
+        {canManageEngine ? (
+          <div className="oneengine-client-selector">
+            <span>Client</span>
+            <div className="oneengine-client-selector-control">
+              <Building2 size={14}/>
+              <input
+                list="oneengine-client-options"
+                value={clientQuery || clients.find((client) => String(client.id) === String(selectedClient))?.name || ''}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setClientQuery(value)
+                  const match = clients.find((client) => String(client.name || '').toLowerCase() === value.trim().toLowerCase())
+                  if (match) {
+                    void chooseClient(match.id)
+                    setClientQuery('')
+                  }
+                }}
+                placeholder="Choose client…"
+                aria-label="Choose client"
+              />
+              <datalist id="oneengine-client-options">
+                {visibleClients.map((client) => <option key={client.id} value={client.name}>{String(client.id).slice(0, 8)}</option>)}
+              </datalist>
+            </div>
+          </div>
+        ) : null}
         <div className="settings-window-title">OneDeveloper</div>
         <label className="settings-search">
           <Search size={17}/>
@@ -196,7 +203,13 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading ? <div className="settings-state-card">Resolving client context…</div>
             : current.key === 'objects' ? <ObjectsSettingsPane />
-            : current.key === 'workflow-builder' ? <OneBuilder initialTab="workflow" singleBuilder />
+            : current.key === 'workflow-builder' ? <OneBuilder
+                initialTab="workflow"
+                singleBuilder
+                initialWorkflowId={initialWorkflowId}
+                onWorkflowOpen={(workflowId) => onSectionChange?.('workflow-builder', { workflowId })}
+                onWorkflowClose={() => onSectionChange?.('workflow-builder')}
+              />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
             : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
