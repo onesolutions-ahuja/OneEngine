@@ -1016,6 +1016,208 @@ const WORKFLOW_VISUAL_CSS = `
       min-height: 560px;
     }
   }
+  /* Compact builder pass: keep the full flow visible and prioritize the canvas. */
+  .workflow-builder-page { min-height: 0; }
+  .workflow-builder-header {
+    display: flex;
+    grid-template-columns: none;
+    min-height: 54px;
+    padding: 6px 9px;
+    gap: 10px;
+    border-radius: 9px;
+  }
+  .workflow-builder-heading { min-width: 0; flex: 1 1 auto; gap: 7px; }
+  .workflow-builder-back { width: 30px; height: 30px; flex: 0 0 auto; border-radius: 7px; }
+  .workflow-builder-title-copy {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .workflow-builder-heading h2 { flex: 0 0 auto; font-size: 15px; }
+  .workflow-builder-title-copy small {
+    min-width: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    overflow: hidden;
+    color: #334155;
+    font-size: 10px;
+    text-overflow: ellipsis;
+  }
+  .workflow-builder-status { flex: 0 0 auto; padding: 3px 8px; background: #ecfdf3; color: #237a43; }
+  .workflow-builder-actions { flex: 0 0 auto; flex-wrap: nowrap; gap: 5px; }
+  .workflow-builder-actions .workflow-cancel-button,
+  .workflow-builder-actions .workflow-save-button {
+    min-height: 30px;
+    height: 30px;
+    border-radius: 7px;
+    padding: 0 10px;
+    font-size: 10px;
+    box-shadow: none;
+  }
+  .workflow-builder-actions .workflow-icon-button { width: 30px; padding: 0; }
+  .workflow-header-separator { width: 1px; height: 22px; margin: 0 2px; background: #e2e8f0; }
+  .workflow-header-more, .workflow-canvas-more { position: relative; }
+  .workflow-header-more > summary,
+  .workflow-canvas-more > summary {
+    width: 30px; height: 30px; display: grid; place-items: center;
+    border: 1px solid #e2e8f0; border-radius: 7px; background: #fff;
+    color: #475569; cursor: pointer; list-style: none; font-size: 17px;
+  }
+  .workflow-header-more > summary::-webkit-details-marker,
+  .workflow-canvas-more > summary::-webkit-details-marker { display: none; }
+  .workflow-header-more-menu,
+  .workflow-canvas-more-menu {
+    position: absolute; right: 0; top: 34px; z-index: 50; width: 170px;
+    overflow: hidden; border: 1px solid #d8dde6; border-radius: 8px;
+    background: #fff; box-shadow: 0 10px 30px rgba(15,23,42,.16);
+  }
+  .workflow-header-more-menu button,
+  .workflow-canvas-more-menu button {
+    width: 100%; min-height: 32px; border: 0; border-bottom: 1px solid #eef2f7;
+    background: #fff; padding: 0 10px; color: #334155; font-size: 10px; text-align: left; cursor: pointer;
+  }
+  .workflow-header-more-menu button:last-child,
+  .workflow-canvas-more-menu button:last-child { border-bottom: 0; }
+  .workflow-header-more-menu button:hover,
+  .workflow-canvas-more-menu button:hover { background: #f8fafc; }
+
+  .workflow-visual-shell {
+    grid-template-columns: 232px minmax(420px, 1fr) 300px;
+    gap: 8px;
+    min-height: 0;
+  }
+  .workflow-node-palette, .workflow-properties-panel, .workflow-canvas-surface { border-radius: 9px; }
+  .workflow-node-palette { padding: 8px 8px 7px; }
+  .workflow-palette-head { margin-bottom: 7px; }
+  .workflow-palette-search { margin-bottom: 7px; }
+  .workflow-palette-search input { min-height: 32px; font-size: 10px; }
+  .workflow-palette-help { margin-bottom: 6px; }
+  .workflow-palette-group-title { margin: 8px 4px 4px; font-size: 8px; }
+  .workflow-palette-item {
+    min-height: 31px; margin-bottom: 3px; padding: 4px 6px; gap: 6px; border-radius: 6px;
+  }
+  .workflow-palette-icon { width: 22px; height: 22px; }
+  .workflow-palette-item-copy strong { font-size: 10px; }
+  .workflow-palette-item-copy small { font-size: 8px; }
+
+  .workflow-canvas-surface {
+    min-height: 0;
+    max-height: none;
+    height: 100%;
+    padding: 8px 10px 72px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable both-edges;
+  }
+  .workflow-canvas-toolbar {
+    position: sticky; top: 0; z-index: 15;
+    min-height: 34px; margin: 0 0 5px; padding: 0;
+    align-items: center; justify-content: space-between;
+    background: linear-gradient(180deg, rgba(251,253,255,.98) 75%, rgba(251,253,255,0));
+    pointer-events: auto;
+  }
+  .workflow-canvas-toolbar-right { display: flex; align-items: center; gap: 5px; }
+  .workflow-canvas-toolbar button { height: 28px; padding: 0 8px; border-radius: 6px; font-size: 9px; box-shadow: none; }
+  .workflow-layout-toggle { padding: 2px; border-radius: 6px; }
+  .workflow-layout-toggle button { height: 26px; }
+  .workflow-canvas-checks { background: #fff !important; }
+  .workflow-canvas-zoom {
+    position: sticky;
+    top: calc(100% - 38px);
+    z-index: 14;
+    width: max-content;
+    margin: 0 4px -34px auto;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid #d8dde6;
+    border-radius: 8px;
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 5px 18px rgba(15,23,42,.10);
+  }
+  .workflow-canvas-zoom button {
+    height: 28px; min-width: 30px; border: 0; border-radius: 5px;
+    background: transparent; color: #475569; font-size: 10px; cursor: pointer;
+  }
+  .workflow-canvas-zoom button:hover { background: #f1f5f9; }
+
+  .workflow-canvas-lane {
+    width: min(100%, 680px);
+    margin: 8px auto 0;
+    padding-bottom: 24px;
+  }
+  .workflow-start-node {
+    min-width: 238px; max-width: 280px;
+    grid-template-columns: 30px minmax(0,1fr);
+    column-gap: 8px;
+    padding: 7px 10px;
+    border-radius: 9px;
+  }
+  .workflow-start-icon { width: 30px; height: 30px; border-radius: 7px; font-size: 12px; }
+  .workflow-start-title { font-size: 11px; }
+  .workflow-start-note { margin-top: 2px; font-size: 8px; }
+
+  .workflow-node-wrap { width: min(100%, 290px); }
+  .workflow-node-card {
+    min-height: 54px;
+    padding: 7px 32px 7px 48px;
+    border-radius: 9px;
+    box-shadow: 0 3px 10px rgba(15,23,42,.045);
+  }
+  .workflow-node-card:hover { box-shadow: 0 5px 14px rgba(15,23,42,.07); }
+  .workflow-node-icon { left: 9px; width: 30px; height: 30px; border-radius: 7px; font-size: 13px; }
+  .workflow-node-kind { margin-bottom: 2px; font-size: 7px; }
+  .workflow-node-title { font-size: 10.5px; line-height: 1.15; }
+  .workflow-node-note { margin-top: 3px; font-size: 8px; }
+  .workflow-node-menu { top: 4px; right: 4px; }
+  .workflow-node-menu > summary { width: 24px; height: 24px; font-size: 16px; }
+  .workflow-decision-toggle { left: -27px; top: 15px; width: 21px; height: 21px; font-size: 9px; }
+  .workflow-node-connector { height: 28px; }
+  .workflow-insert-button { width: 22px; height: 22px; font-size: 15px; line-height: 18px; }
+  .workflow-connector-label { left: calc(50% + 15px); font-size: 7px; }
+
+  .workflow-branch-map {
+    width: min(620px, calc(100vw - 780px));
+    margin-top: 4px;
+    gap: 8px;
+    padding: 13px 4px 2px;
+  }
+  .workflow-branch-path { min-width: 130px; flex-basis: 130px; padding-top: 7px; }
+  .workflow-branch-line { top: -13px; height: 19px; }
+  .workflow-branch-label, .workflow-branch-label-input { margin-bottom: 5px; font-size: 8px; }
+  .workflow-branch-stack { gap: 4px; }
+  .workflow-branch-node-card {
+    grid-template-columns: 23px minmax(0,1fr);
+    gap: 6px;
+    padding: 5px 24px 5px 5px;
+    border-radius: 6px;
+  }
+  .workflow-branch-node-icon { width: 23px; height: 23px; font-size: 10px; }
+  .workflow-branch-node-card small { font-size: 6.5px; }
+  .workflow-branch-node-card strong { font-size: 8.5px; }
+  .workflow-branch-add { width: 21px; height: 21px; font-size: 14px; }
+  .workflow-end-node { margin-top: 1px; padding: 5px 10px; font-size: 9px; }
+
+  .workflow-properties-panel { padding: 8px; }
+  .workflow-properties-tabs { min-height: 29px; margin-bottom: 7px; }
+  .workflow-properties-tab { padding-bottom: 7px; font-size: 10px; }
+  .workflow-properties-panel > .rounded-xl { padding: 2px !important; }
+  .workflow-properties-panel .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: .65rem; }
+  .workflow-properties-panel textarea,
+  .workflow-properties-panel input,
+  .workflow-properties-panel select { font-size: 10px; }
+
+  @media (max-width: 1280px) {
+    .workflow-builder-header { align-items: flex-start; }
+    .workflow-builder-actions { overflow-x: auto; padding-bottom: 2px; }
+    .workflow-visual-shell { grid-template-columns: 210px minmax(360px,1fr) 276px; }
+    .workflow-branch-map { width: min(560px, calc(100vw - 690px)); }
+  }
+
 `;
 
 const SCREEN_COMPONENT_TYPES = [
@@ -4682,30 +4884,37 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <button type="button" className={layoutMode === "AUTO" ? "is-active" : ""} onClick={() => setLayoutMode("AUTO")}>Auto-Layout</button>
             <button type="button" className={layoutMode === "FREEFORM" ? "is-active" : ""} onClick={() => { setLayoutMode("FREEFORM"); setPaletteOpen(true); setPaletteTab("elements"); }}>Free-Form</button>
           </span>
-          {layoutMode === "FREEFORM" ? (
-            connectFromId ? <button type="button" title="Cancel connector" onClick={() => setConnectFromId(null)}>Cancel Connect</button>
-              : <button type="button" title="Connect selected element" onClick={() => setConnectFromId(selectedId || "__start__")}>Connect</button>
-          ) : null}
-          <button type="button" title="Undo" onClick={undoFlowChange}>↶</button>
-          <button type="button" title="Redo" onClick={redoFlowChange}>↷</button>
+          <div className="workflow-canvas-toolbar-right">
+            <button type="button" className="workflow-canvas-checks" title={builderErrors.length ? "Show Errors" : "Show Warnings"} onClick={() => setIssuesOpen(true)}>
+              {builderErrors.length ? `Errors ${builderErrors.length}` : builderWarnings.length ? `Warnings ${builderWarnings.length}` : "Checks ✓"}
+            </button>
+            <details className="workflow-canvas-more">
+              <summary aria-label="More canvas actions" title="More canvas actions">⋮</summary>
+              <div className="workflow-canvas-more-menu">
+                {layoutMode === "FREEFORM" ? (
+                  connectFromId ? <button type="button" onClick={() => setConnectFromId(null)}>Cancel Connect</button>
+                    : <button type="button" onClick={() => setConnectFromId(selectedId || "__start__")}>Connect selected</button>
+                ) : null}
+                {autoConnectSourceId ? <button type="button" onClick={() => setAutoConnectSourceId(null)}>Cancel Go To</button> : null}
+                {selectionMode ? (
+                  <>
+                    <button type="button" disabled={!selectedElementIds.length} onClick={copySelectedElements}>Copy {selectedElementIds.length || ""} selected</button>
+                    {layoutMode === "AUTO" ? <button type="button" disabled={!selectedElementIds.length} onClick={createGroupFromSelection}>Group selected</button> : null}
+                    <button type="button" onClick={() => { setSelectionMode(false); setSelectedElementIds([]); }}>Cancel selection</button>
+                  </>
+                ) : <button type="button" onClick={() => { setSelectionMode(true); setSelectedElementIds([]); setPropertiesOpen(false); }}>Select elements</button>}
+                <button type="button" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide Toolbox" : "Show Toolbox"}</button>
+                <button type="button" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide Properties" : "Show Properties"}</button>
+                <button type="button" onClick={() => setShortcutHelpOpen(true)}>Keyboard shortcuts</button>
+              </div>
+            </details>
+          </div>
+        </div>
+        <div className="workflow-canvas-zoom" aria-label="Canvas zoom controls">
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.5, Number((value - .1).toFixed(1))))}>−</button>
           <button type="button" aria-label="Reset zoom" title="Reset zoom" onClick={() => setCanvasZoom(1)}>{Math.round(canvasZoom * 100)}%</button>
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))))}>+</button>
           <button type="button" title="Zoom to Fit" onClick={zoomToFit}>Fit</button>
-          <button type="button" title="Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(true)}>⌨</button>
-          {autoConnectSourceId ? <button type="button" title="Cancel Go To connector" onClick={() => setAutoConnectSourceId(null)}>Cancel Go To</button> : null}
-          <button type="button" title={builderErrors.length ? "Show Errors" : "Show Warnings"} onClick={() => setIssuesOpen(true)}>
-            {builderErrors.length ? `Errors ${builderErrors.length}` : builderWarnings.length ? `Warnings ${builderWarnings.length}` : "Checks ✓"}
-          </button>
-          {selectionMode ? (
-            <>
-              <button type="button" disabled={!selectedElementIds.length} title="Copy selected elements" onClick={copySelectedElements}>Copy {selectedElementIds.length || ""} Element{selectedElementIds.length === 1 ? "" : "s"}</button>
-              {layoutMode === "AUTO" ? <button type="button" disabled={!selectedElementIds.length} title="Create Group from selected elements" onClick={createGroupFromSelection}>Group</button> : null}
-              <button type="button" title="Cancel element selection" onClick={() => { setSelectionMode(false); setSelectedElementIds([]); }}>Cancel Selection</button>
-            </>
-          ) : <button type="button" title="Select multiple elements" onClick={() => { setSelectionMode(true); setSelectedElementIds([]); setPropertiesOpen(false); }}>Select Elements</button>}
-          <button type="button" title="Toggle Toolbox" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide Toolbox" : "Show Toolbox"}</button>
-          <button type="button" title="Toggle Properties" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide Properties" : "Show Properties"}</button>
         </div>
         {issuesOpen ? (
           <div className="workflow-path-action-panel" role="dialog" aria-label="Errors and Warnings">
@@ -6243,14 +6452,20 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         <div className="workflow-builder-actions">
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.past.length} onClick={undoFlowChange} title="Undo" aria-label="Undo">↶</button>
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.future.length} onClick={redoFlowChange} title="Redo" aria-label="Redo">↷</button>
-          <button type="button" className="workflow-cancel-button" onClick={openFlowProperties}>View Properties</button>
+          <span className="workflow-header-separator" aria-hidden="true" />
+          <button type="button" className="workflow-cancel-button" onClick={openFlowProperties}>Properties</button>
           {reviewIssue ? <button type="button" className="workflow-cancel-button workflow-icon-button" title={reviewIssue} aria-label="Show Errors" onClick={() => document.getElementById("workflow-review-section")?.scrollIntoView({ behavior: "smooth", block: "center" })}>!</button> : null}
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Edit History</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>Tests</button>
           <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} title={workflowId ? "Save this flow as a new version" : "Save this flow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>Save As</button>
           <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save</button>
           <button type="button" className="workflow-save-button" disabled={Boolean(reviewIssue)} title={reviewIssue || "Activate flow"} onClick={() => saveWorkflow("ACTIVE")}>Activate</button>
+          <details className="workflow-header-more">
+            <summary aria-label="More Flow actions" title="More">⋮</summary>
+            <div className="workflow-header-more-menu">
+              <button type="button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Edit History</button>
+            </div>
+          </details>
         </div>
       </div>
 
