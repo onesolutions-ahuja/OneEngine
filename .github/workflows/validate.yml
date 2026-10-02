@@ -16,6 +16,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run test:unit
       - run: npm run audit:trusted
       - run: npm run audit:apps
       - run: npm run audit:workflow-coverage:enforce
