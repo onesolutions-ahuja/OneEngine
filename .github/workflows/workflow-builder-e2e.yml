@@ -22,8 +22,8 @@ on:
       - "server/server.js"
 
 concurrency:
-  group: workflow-builder-e2e-${{ github.ref }}
-  cancel-in-progress: true
+  group: oneengine-authenticated-e2e
+  cancel-in-progress: false
 
 permissions:
   contents: read
