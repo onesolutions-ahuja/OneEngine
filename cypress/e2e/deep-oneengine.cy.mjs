@@ -111,7 +111,8 @@ describe("OneEngine deep deployed E2E", () => {
 
     cy.get(".dock-zone:visible").first().then(($dock) => {
       const rect = $dock[0].getBoundingClientRect();
-      const gap = window.innerHeight - rect.bottom;
+      const autWindow = $dock[0].ownerDocument.defaultView;
+      const gap = autWindow.innerHeight - rect.bottom;
       expect(gap, "dock bottom gap").to.be.within(4, 8);
     });
   });
@@ -148,8 +149,7 @@ describe("OneEngine deep deployed E2E", () => {
   it("Workflow Builder left search and Add Element search use independent state", () => {
     visitAuthenticated("developer/workflow-builder");
 
-    cy.get(".onebuilder-workflow-group-head").first().click();
-    cy.get(".onebuilder-workflow-group.is-expanded .onebuilder-list-row").first().click();
+    cy.contains("button", /new workflow/i).click();
 
     cy.get(".workflow-node-palette", { timeout: 30000 }).should("be.visible");
     cy.get('.workflow-node-palette input[aria-label="Search flow elements"]').clear().type("Assignment");
