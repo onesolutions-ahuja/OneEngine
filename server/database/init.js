@@ -984,6 +984,49 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
            ON CONFLICT (role_id,permission_id) DO NOTHING`
         );
       },
+    },
+    {
+      key: "0036_onekiosk_runtime_schema",
+      version: "36",
+      name: "Ensure OneKiosk runtime device schema exists on upgraded databases",
+      up: async client => {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS kiosk_devices (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+            device_key VARCHAR(120) NOT NULL,
+            name VARCHAR(150) NOT NULL,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            workflow_id UUID,
+            payment_terminal_id UUID REFERENCES payment_terminals(id) ON DELETE SET NULL,
+            payment_connector_id UUID REFERENCES integration_connections(id) ON DELETE SET NULL,
+            printer_connector_id UUID REFERENCES integration_connections(id) ON DELETE SET NULL,
+            printer_hardware_id UUID REFERENCES hardware_configurations(id) ON DELETE SET NULL,
+            printer_name VARCHAR(150),
+            printer_connection_type VARCHAR(50),
+            printer_connection_address VARCHAR(500),
+            printer_paper_width VARCHAR(20) NOT NULL DEFAULT '80mm',
+            printer_required BOOLEAN NOT NULL DEFAULT FALSE,
+            payment_required BOOLEAN NOT NULL DEFAULT TRUE,
+            internet_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+            server_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+            payment_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+            printer_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+            last_heartbeat_at TIMESTAMPTZ,
+            last_health_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            assistance_requested_at TIMESTAMPTZ,
+            assistance_note VARCHAR(300),
+            age_approval_requested_at TIMESTAMPTZ,
+            age_approved_until TIMESTAMPTZ,
+            age_approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(company_id, device_key)
+          );
+          CREATE INDEX IF NOT EXISTS idx_kiosk_devices_store ON kiosk_devices(company_id,store_id,active);
+        `);
+      },
     }
   ]);
 
