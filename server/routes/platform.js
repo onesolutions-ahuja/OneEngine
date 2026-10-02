@@ -2715,12 +2715,26 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const record = result.rows[0] || null;
       if (!record) return res.status(404).json({ success: false, message: "Record not found" });
 
+      const association = await db(
+        "SELECT record_type_id FROM platform_record_associations WHERE object_id=$1 AND record_id=$2 AND company_id=$3 LIMIT 1",
+        [object.id, recordId, req.user.companyId]
+      );
+      const recordTypeId = association.rows[0]?.record_type_id || null;
+      const layout = await resolveEffectiveLayoutForRequest({
+        objectId: object.id,
+        pageType: "detail",
+        recordTypeId,
+        req,
+      });
+      const runtimeRecord = { ...record, recordTypeId };
+
       return res.json({
         success: true,
         data: {
           object,
-          record,
+          record: runtimeRecord,
           fields: readable,
+          layout,
           objectKey: object.object_key,
           recordPath: `${OBJECT_RUNTIME_ROUTE_PREFIX}${encodeURIComponent(object.object_key)}/records/${encodeURIComponent(record.id)}`,
         },
