@@ -1057,6 +1057,7 @@ const actionOptions = [
   { value: "COLLECTION_FILTER", label: "Collection Filter" },
   { value: "COLLECTION_SORT", label: "Collection Sort" },
   { value: "TRANSFORM", label: "Transform" },
+  { value: "RECOMMENDATION_ASSIGNMENT", label: "Recommendation Assignment" },
   { value: "SCREEN", label: "Screen" },
   { value: "LOOP", label: "Loop" },
   { value: "SCHEDULE_PATH", label: "Scheduled Path" },
@@ -1087,7 +1088,7 @@ const actionOptions = [
 ];
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
-  "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","SCREEN","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
+  "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","SCREEN","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
   "CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","RUN_SUBFLOW",
 ]);
 
@@ -1096,6 +1097,7 @@ const FLOW_ELEMENT_VISUALS = {
   COLLECTION_FILTER: { icon: "▽", color: "#fe9339", family: "Logic" },
   COLLECTION_SORT: { icon: "⇅", color: "#fe9339", family: "Logic" },
   TRANSFORM: { icon: "⇄", color: "#e83e8c", family: "Data" },
+  RECOMMENDATION_ASSIGNMENT: { icon: "★", color: "#fe9339", family: "Logic" },
   SCREEN: { icon: "▤", color: "#0b5cab", family: "Interaction" },
   LOOP: { icon: "↻", color: "#fe9339", family: "Logic" },
   CONDITION: { icon: "◇", color: "#fe9339", family: "Logic" },
@@ -1171,6 +1173,7 @@ function makeStep(type = "CREATE_RECORD") {
       collection: "",
       outputName: "",
       transformMappings: {},
+      recommendationMappings: {},
       screen: {
         label: "Screen",
         apiName: "Screen",
@@ -1244,7 +1247,7 @@ function getActionLabel(type) {
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(key)) return "Resources";
-  if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
+  if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (["RUN_SUBFLOW","SCREEN"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
@@ -1356,6 +1359,10 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "TRANSFORM") {
     if (!config.collection) return "Choose a source Resource to transform.";
     if (!config.transformMappings || !Object.keys(config.transformMappings).length) return "Add at least one target mapping.";
+  }
+  if (step.type === "RECOMMENDATION_ASSIGNMENT") {
+    if (!config.collection) return "Choose the source collection.";
+    if (!config.recommendationMappings || !Object.keys(config.recommendationMappings).length) return "Map at least one recommendation field.";
   }
     if (step.type === "LOOP") {
     if (!config.collection) return "Choose the collection to loop through.";
@@ -1667,6 +1674,13 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
       resources.push(
         { value: `${prefix}.value`, label: `${label} → Transformed Value`, type: "object" },
         { value: `${prefix}.collection`, label: `${label} → Transformed Collection`, type: "collection" },
+      );
+    } else if (step.type === "RECOMMENDATION_ASSIGNMENT") {
+      const resourceName = step.config?.apiName || flowApiName(step.label || "Recommendations");
+      resources.push(
+        { value: `variables.${resourceName}`, label: `${resourceName} · Recommendation Collection`, type: "collection" },
+        { value: `${prefix}.recommendations`, label: `${label} → Recommendations`, type: "collection" },
+        { value: `${prefix}.count`, label: `${label} → Recommendation Count`, type: "number" },
       );
     } else if (step.type === "LOOP" && step.config?.itemVariable) {
       resources.push(
@@ -2069,6 +2083,34 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
           </div>
         );
+      case "RECOMMENDATION_ASSIGNMENT": {
+        const mappings = step.config?.recommendationMappings || {};
+        const fields = [
+          ["name","Name"],
+          ["description","Description"],
+          ["actionReference","Action Reference"],
+          ["acceptanceLabel","Acceptance Label"],
+          ["rejectionLabel","Rejection Label"],
+          ["imageUrl","Image URL"],
+        ];
+        return (
+          <div className="space-y-3">
+            <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "collection" || String(resource.value || "").endsWith(".records") || String(resource.value || "").endsWith(".collection"))} label="Source Collection" value={step.config?.collection || ""} onChange={(collection) => updateConfig({ collection })} />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 text-xs font-semibold text-slate-700">Recommendation Fields</div>
+              <div className="space-y-2">
+                {fields.map(([key, label]) => <div key={key}>
+                  <ResourceOrLiteralInput label={label} value={mappings[key] ?? ""} onChange={(value) => updateConfig({ recommendationMappings: { ...mappings, [key]: value } })} rootObjectKey={rootObjectKey} extraResources={extraResources} />
+                </div>)}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">To map from each source item, enter item.fieldName. Other Flow resources and literal values are also supported.</p>
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+              Output collection: <strong>{step.config?.apiName || flowApiName(step.label || "Recommendations")}</strong>
+            </div>
+          </div>
+        );
+      }
       case "SCREEN": {
         const screen = step.config?.screen || { label: "Screen", apiName: "Screen", components: [] };
         const components = Array.isArray(screen.components) ? screen.components : [];
@@ -5736,6 +5778,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               }}>
                 <option value="AUTOLAUNCHED">Autolaunched Flow</option>
                 <option value="SCREEN_FLOW">Screen Flow</option>
+                <option value="RECOMMENDATION_STRATEGY">Recommendation Strategy Flow</option>
                 <option value="KIOSK_EXPERIENCE">Kiosk Experience</option>
               </select>
             </label>
