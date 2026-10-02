@@ -9,6 +9,44 @@ export const BUILTIN_DEBUG_CODES = Object.freeze([
   { code:"OEND01", legacyCode:"OEN03", subsystem:"N", cause:"D", category:"Network", title:"Device offline", userMessage:"This device appears to be offline.", internalDescription:"Browser reports no network connectivity before the API can be contacted.", severity:"WARNING", retryable:true, matchPattern:"" },
   { code:"OENT01", legacyCode:"OEN04", subsystem:"N", cause:"T", category:"Network", title:"Request timeout", userMessage:"OneEngine did not respond in time.", internalDescription:"API request exceeded the configured timeout.", severity:"ERROR", retryable:true, matchPattern:"timeout|timed out|ETIMEDOUT" },
 
+  // Seven-character exact root-cause codes keep the existing subsystem/cause
+  // prefix and add a third numeric discriminator. Six-character codes remain
+  // valid for backward compatibility and for causes that are already exact.
+  { code:"OENC101", subsystem:"N", cause:"C", category:"Network", title:"API base configuration mismatch", userMessage:"OneEngine is configured to use the wrong API service.", internalDescription:"The frontend API base/production host does not match the canonical OneEngine API host.", severity:"CRITICAL", retryable:false, matchPattern:"API_BASE_MISMATCH|API base.*mismatch|configured API host" },
+  { code:"OENO101", subsystem:"N", cause:"O", category:"Network", title:"Stale server override", userMessage:"This device is configured to use an unavailable OneEngine server.", internalDescription:"A persisted device/local server override points at a stale or incorrect API host.", severity:"ERROR", retryable:false, matchPattern:"STALE_SERVER_OVERRIDE|server override" },
+  { code:"OENX101", subsystem:"N", cause:"X", category:"Network", title:"CORS request header blocked", userMessage:"OneEngine could not connect because the browser blocked an API request.", internalDescription:"CORS preflight rejected one or more requested headers. Diagnostics record the requested headers and route.", severity:"ERROR", retryable:false, matchPattern:"CORS_HEADER_BLOCKED|not allowed by Access-Control-Allow-Headers|request header field.*not allowed" },
+  { code:"OENX102", subsystem:"N", cause:"X", category:"Network", title:"CORS origin blocked", userMessage:"OneEngine could not connect because this web origin is not allowed.", internalDescription:"The API host is reachable, but CORS rejected the frontend Origin.", severity:"ERROR", retryable:false, matchPattern:"CORS_ORIGIN_BLOCKED|CORS origin not allowed|blocked by CORS policy.*origin" },
+  { code:"OENX103", subsystem:"N", cause:"X", category:"Network", title:"CORS method blocked", userMessage:"OneEngine could not connect because the browser blocked this API method.", internalDescription:"CORS preflight rejected the requested HTTP method.", severity:"ERROR", retryable:false, matchPattern:"CORS_METHOD_BLOCKED|method.*not allowed.*CORS" },
+  { code:"OENX104", subsystem:"N", cause:"X", category:"Network", title:"CORS preflight failed", userMessage:"OneEngine could not connect because the browser preflight check failed.", internalDescription:"The API host is reachable with a simple request, while the preflighted API request fails.", severity:"ERROR", retryable:false, matchPattern:"CORS_PREFLIGHT_FAILED|preflight.*failed" },
+  { code:"OEND101", subsystem:"N", cause:"D", category:"Network", title:"API hostname could not be resolved", userMessage:"The OneEngine service address could not be resolved.", internalDescription:"DNS/hostname resolution failed before an HTTP connection was established.", severity:"CRITICAL", retryable:true, matchPattern:"ENOTFOUND|EAI_AGAIN|ERR_NAME_NOT_RESOLVED|DNS.*fail" },
+  { code:"OENT101", subsystem:"N", cause:"T", category:"Network", title:"TLS certificate or handshake failed", userMessage:"A secure connection to OneEngine could not be established.", internalDescription:"TLS/SSL certificate validation or handshake failed before HTTP.", severity:"CRITICAL", retryable:false, matchPattern:"CERT_|SSL_|TLS_|ERR_CERT|certificate.*invalid|handshake.*fail" },
+  { code:"OENT102", subsystem:"N", cause:"T", category:"Network", title:"API request timed out", userMessage:"OneEngine did not respond in time.", internalDescription:"The client timeout elapsed while waiting for the OneEngine API request.", severity:"ERROR", retryable:true, matchPattern:"API_TIMEOUT|AbortError.*timeout|request timed out" },
+  { code:"OENR101", subsystem:"N", cause:"R", category:"Network", title:"Browser transport failure", userMessage:"OneEngine service could not be reached.", internalDescription:"The browser could not establish transport to the API and did not expose a more specific DNS/TLS/refusal cause.", severity:"CRITICAL", retryable:true, matchPattern:"BROWSER_TRANSPORT_UNREACHABLE" },
+  { code:"OENR102", subsystem:"N", cause:"R", category:"Network", title:"API connection refused", userMessage:"The OneEngine service refused the connection.", internalDescription:"The target host resolved but refused the TCP connection.", severity:"CRITICAL", retryable:true, matchPattern:"ECONNREFUSED|ERR_CONNECTION_REFUSED" },
+  { code:"OENH101", subsystem:"N", cause:"H", category:"Network", title:"API health endpoint unhealthy", userMessage:"OneEngine is reachable but is not healthy.", internalDescription:"The /api/health endpoint returned a non-success HTTP response.", severity:"ERROR", retryable:true, matchPattern:"API_HEALTH_UNHEALTHY" },
+
+  { code:"OESB101", subsystem:"S", cause:"B", category:"Server", title:"Startup database migration failed", userMessage:"OneEngine could not complete platform startup.", internalDescription:"Server startup reached database initialization but a schema migration failed.", severity:"CRITICAL", retryable:false, matchPattern:"STARTUP_MIGRATION_FAILED|migration .* failed" },
+  { code:"OESB102", subsystem:"S", cause:"B", category:"Server", title:"Package registry bootstrap failed", userMessage:"OneEngine could not complete package initialization.", internalDescription:"Startup package catalogue/registry verification failed.", severity:"CRITICAL", retryable:false, matchPattern:"PACKAGE_REGISTRY_BOOTSTRAP_FAILED|package catalogue.*failed|package registry.*failed" },
+  { code:"OESB103", subsystem:"S", cause:"B", category:"Server", title:"Identity bootstrap failed", userMessage:"OneEngine could not complete identity initialization.", internalDescription:"Startup identity/RBAC bootstrap failed.", severity:"CRITICAL", retryable:false, matchPattern:"IDENTITY_BOOTSTRAP_FAILED|identity bootstrap.*failed|Superadmin.*synchron.*failed" },
+  { code:"OESB104", subsystem:"S", cause:"B", category:"Server", title:"Platform metadata bootstrap failed", userMessage:"OneEngine could not complete platform initialization.", internalDescription:"Platform metadata/bootstrap registry initialization failed.", severity:"CRITICAL", retryable:false, matchPattern:"PLATFORM_BOOTSTRAP_FAILED|platform bootstrap.*failed|metadata.*bootstrap.*failed" },
+
+  { code:"OEDC101", subsystem:"D", cause:"C", category:"Database", title:"Database connection refused", userMessage:"OneEngine data services are unavailable.", internalDescription:"Postgres/Neon endpoint refused or terminated the connection.", severity:"CRITICAL", retryable:true, matchPattern:"ECONNREFUSED|connection refused|connection terminated" },
+  { code:"OEDC102", subsystem:"D", cause:"C", category:"Database", title:"Database authentication failed", userMessage:"OneEngine data services could not authenticate.", internalDescription:"Database credentials/user/database authentication was rejected.", severity:"CRITICAL", retryable:false, matchPattern:"password authentication failed|authentication failed for user|28P01" },
+  { code:"OEDP101", subsystem:"D", cause:"P", category:"Database", title:"Database pool exhausted", userMessage:"OneEngine data services are temporarily busy.", internalDescription:"Postgres connection pool or provider connection slots are exhausted.", severity:"CRITICAL", retryable:true, matchPattern:"too many clients|remaining connection slots|pool.*exhaust" },
+  { code:"OEDS101", subsystem:"D", cause:"S", category:"Database", title:"Database storage exhausted", userMessage:"OneEngine data storage capacity has been reached.", internalDescription:"Database/provider storage or disk quota is exhausted.", severity:"CRITICAL", retryable:false, matchPattern:"disk full|no space left|storage quota" },
+  { code:"OEDM101", subsystem:"D", cause:"M", category:"Database", title:"Database migration syntax failed", userMessage:"OneEngine could not complete a database migration.", internalDescription:"Migration SQL failed with a PostgreSQL syntax/parse error.", severity:"CRITICAL", retryable:false, matchPattern:"syntax error at or near|SQLSTATE 42601|code.?42601" },
+  { code:"OEDM102", subsystem:"D", cause:"M", category:"Database", title:"Database migration constraint failed", userMessage:"OneEngine could not complete a database migration.", internalDescription:"Migration failed while creating or validating a schema constraint.", severity:"CRITICAL", retryable:false, matchPattern:"migration.*constraint|cannot alter type of a column used by a constraint|dependent objects" },
+  { code:"OEDT101", subsystem:"D", cause:"T", category:"Database", title:"Database deadlock", userMessage:"The data operation conflicted with another operation. Please retry.", internalDescription:"PostgreSQL detected a deadlock.", severity:"WARNING", retryable:true, matchPattern:"deadlock detected|40P01" },
+  { code:"OEDT102", subsystem:"D", cause:"T", category:"Database", title:"Database serialization conflict", userMessage:"The data operation conflicted with another update. Please retry.", internalDescription:"PostgreSQL serialization failure requires a transaction retry.", severity:"WARNING", retryable:true, matchPattern:"could not serialize|serialization failure|40001" },
+  { code:"OEDX101", subsystem:"D", cause:"X", category:"Database", title:"Unique constraint violation", userMessage:"A record with the same unique value already exists.", internalDescription:"PostgreSQL unique constraint violation.", severity:"ERROR", retryable:false, matchPattern:"duplicate key|unique constraint|23505" },
+  { code:"OEDX102", subsystem:"D", cause:"X", category:"Database", title:"Foreign key constraint violation", userMessage:"This record references data that is unavailable or still in use.", internalDescription:"PostgreSQL foreign-key constraint violation.", severity:"ERROR", retryable:false, matchPattern:"foreign key constraint|23503" },
+  { code:"OEDX103", subsystem:"D", cause:"X", category:"Database", title:"Required database value missing", userMessage:"A required value is missing.", internalDescription:"PostgreSQL NOT NULL constraint violation.", severity:"ERROR", retryable:false, matchPattern:"not-null constraint|violates not-null|23502" },
+
+  { code:"OEFL101", subsystem:"F", cause:"L", category:"Frontend", title:"Frontend chunk/module load failed", userMessage:"This page could not be loaded.", internalDescription:"A deployed JavaScript chunk/module could not be fetched or evaluated.", severity:"ERROR", retryable:true, matchPattern:"failed to fetch dynamically imported module|loading chunk|module script" },
+  { code:"OEFR101", subsystem:"F", cause:"R", category:"Frontend", title:"Frontend runtime exception", userMessage:"This screen could not be displayed.", internalDescription:"Unhandled React/browser runtime exception.", severity:"ERROR", retryable:true, matchPattern:"REACT_RUNTIME_ERROR|render.*exception" },
+  { code:"OEFC101", subsystem:"F", cause:"C", category:"Frontend", title:"Frontend configuration missing", userMessage:"This screen is not configured correctly.", internalDescription:"Required frontend runtime/build configuration is absent or invalid.", severity:"ERROR", retryable:false, matchPattern:"FRONTEND_CONFIG_MISSING|required frontend config" },
+  { code:"OEFC102", subsystem:"F", cause:"C", category:"Frontend", title:"Frontend API configuration stale", userMessage:"This frontend build is configured for an outdated OneEngine API.", internalDescription:"Deployed frontend API base does not match the current production OneEngine service.", severity:"CRITICAL", retryable:false, matchPattern:"FRONTEND_API_CONFIG_STALE|stale API.*config" }
+
   { code:"OEDC01", legacyCode:"OED01", subsystem:"D", cause:"C", category:"Database", title:"Database connection unavailable", userMessage:"OneEngine data services are temporarily unavailable.", internalDescription:"Database connection/query infrastructure is unavailable.", severity:"CRITICAL", retryable:true, matchPattern:"ECONNREFUSED|connection terminated|connection refused|database.*unavailable|failed to connect|too many clients|remaining connection slots" },
   { code:"OEDQ01", legacyCode:"OED02", subsystem:"D", cause:"Q", category:"Database", title:"Database resource limit", userMessage:"OneEngine data services are temporarily unavailable.", internalDescription:"Database quota, allowance, compute or resource limit was reached.", severity:"CRITICAL", retryable:false, matchPattern:"quota|allowance|resource limit|usage limit|exhaust|compute.*suspend|project.*suspend|billing.*limit" },
   { code:"OEDX01", subsystem:"D", cause:"X", category:"Database", title:"Database query failed", userMessage:"OneEngine could not complete the data request.", internalDescription:"Database query/constraint/transaction failed without a more specific database classification.", severity:"ERROR", retryable:false, matchPattern:"SQLSTATE|constraint|duplicate key|deadlock|serialization failure" },
@@ -128,7 +166,7 @@ export const BUILTIN_DEBUG_CODES = Object.freeze([
   { code:"OEXU01", subsystem:"X", cause:"U", category:"Unknown", title:"Unclassified platform error", userMessage:"OneEngine could not complete this request.", internalDescription:"No registered diagnostic rule matched the failure. Use only when a more specific classification is unavailable.", severity:"ERROR", retryable:false, matchPattern:"" },
 ]);
 
-export const DEBUG_CODE_RE = /^OE[A-Z]{2}[0-9]{2}$/;
+export const DEBUG_CODE_RE = /^OE[A-Z]{2}[0-9]{2,3}$/;
 export const LEGACY_DEBUG_CODE_RE = /^OE[A-Z][0-9]{2,3}$/;
 
 const byCode = new Map(BUILTIN_DEBUG_CODES.map((item) => [item.code, item]));
@@ -158,6 +196,12 @@ export function classifyDebugCode(error, status = 500) {
 
   // Exact domain codes take priority over fuzzy message matching.
   const domainCodeMap = {
+    API_BASE_MISMATCH:"OENC101", STALE_SERVER_OVERRIDE:"OENO101",
+    CORS_HEADER_BLOCKED:"OENX101", CORS_ORIGIN_BLOCKED:"OENX102", CORS_METHOD_BLOCKED:"OENX103", CORS_PREFLIGHT_FAILED:"OENX104",
+    DNS_RESOLUTION_FAILED:"OEND101", TLS_HANDSHAKE_FAILED:"OENT101", API_TIMEOUT:"OENT102",
+    BROWSER_TRANSPORT_UNREACHABLE:"OENR101", CONNECTION_REFUSED:"OENR102", API_HEALTH_UNHEALTHY:"OENH101",
+    STARTUP_MIGRATION_FAILED:"OESB101", PACKAGE_REGISTRY_BOOTSTRAP_FAILED:"OESB102",
+    IDENTITY_BOOTSTRAP_FAILED:"OESB103", PLATFORM_BOOTSTRAP_FAILED:"OESB104",
     USER_NOT_FOUND:"OEUF01", INVALID_CREDENTIALS:"OEUP01", INVALID_PASSWORD:"OEUP01",
     ACCOUNT_LOCKED:"OEUL01", USER_DISABLED:"OEUD01", PASSWORD_EXPIRED:"OEUE01",
     MUST_CHANGE_PASSWORD:"OEUC01", PASSWORD_CHANGE_REQUIRED:"OEUC01",
@@ -175,14 +219,22 @@ export function classifyDebugCode(error, status = 500) {
   };
   if (domainCodeMap[technicalCode]) return domainCodeMap[technicalCode];
 
-  if (/too many clients|remaining connection slots|pool.*exhaust|connection pool/i.test(haystack)) return "OEDP01";
-  if (/disk full|no space left|storage.*limit|database.*size.*limit|storage quota/i.test(haystack)) return "OEDS01";
+  if (/syntax error at or near|SQLSTATE 42601|code.?42601/i.test(haystack)) return "OEDM101";
+  if (/password authentication failed|authentication failed for user|28P01/i.test(haystack)) return "OEDC102";
+  if (/too many clients|remaining connection slots|pool.*exhaust|connection pool/i.test(haystack)) return "OEDP101";
+  if (/disk full|no space left|storage.*limit|database.*size.*limit|storage quota/i.test(haystack)) return "OEDS101";
+  if (/deadlock detected|40P01/i.test(haystack)) return "OEDT101";
+  if (/could not serialize|serialization failure|40001/i.test(haystack)) return "OEDT102";
+  if (/duplicate key|unique constraint|23505/i.test(haystack)) return "OEDX101";
+  if (/foreign key constraint|23503/i.test(haystack)) return "OEDX102";
+  if (/not-null constraint|violates not-null|23502/i.test(haystack)) return "OEDX103";
   if (/migration .* failed|schema_migrations|DDL/i.test(haystack)) return "OEDM01";
-  if (/deadlock|serialization failure|lock timeout|could not serialize/i.test(haystack)) return "OEDT01";
   if (/quota|allowance|resource limit|usage limit|exhaust|compute.*suspend|project.*suspend|billing.*limit/i.test(haystack)) return "OEDQ01";
-  if (/ECONNREFUSED|connection terminated|connection refused|database.*unavailable|failed to connect/i.test(haystack)) return "OEDC01";
-  if (/SQLSTATE|constraint|duplicate key/i.test(haystack)) return "OEDX01";
-  if (/timeout|timed out|ETIMEDOUT/i.test(haystack)) return "OENT01";
+  if (/ECONNREFUSED|connection terminated|connection refused|database.*unavailable|failed to connect/i.test(haystack)) return "OEDC101";
+  if (/ERR_NAME_NOT_RESOLVED|ENOTFOUND|EAI_AGAIN|DNS.*fail/i.test(haystack)) return "OEND101";
+  if (/ERR_CERT|CERT_|SSL_|TLS_|certificate.*invalid|handshake.*fail/i.test(haystack)) return "OENT101";
+  if (/ERR_CONNECTION_REFUSED/i.test(haystack)) return "OENR102";
+  if (/timeout|timed out|ETIMEDOUT/i.test(haystack)) return "OENT102";
 
   if (/account is disabled/i.test(haystack)) return "OEUD01";
   if (/LOGIN_HOURS_RESTRICTED|not permitted at this time/i.test(haystack)) return "OEUH01";
@@ -336,5 +388,13 @@ export async function buildDebugPayload(db, { error, status = 500, req = null } 
     message:definition.userMessage,
     retryable:definition.retryable === true,
     reference,
+    rootCause: {
+      code: definition.code,
+      category: definition.category,
+      title: definition.title,
+      stage: req?.path || req?.originalUrl || null,
+      method: req?.method || null,
+      technicalCode: error?.code ? String(error.code).slice(0,160) : null,
+    },
   };
 }

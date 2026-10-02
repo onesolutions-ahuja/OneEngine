@@ -1,4 +1,4 @@
-import { apiUrl } from './api'
+import { apiUrl, diagnoseClientNetworkFailure } from './api'
 
 export const INTERNET_STATES = Object.freeze({ CONNECTED: 'connected', DISCONNECTED: 'disconnected', UNKNOWN: 'unknown' })
 export const SERVER_STATES = Object.freeze({ CONNECTED: 'connected', UNREACHABLE: 'unreachable', UNKNOWN: 'unknown' })
@@ -12,6 +12,7 @@ const state = {
   lastError: null,
   oeCode: null,
   lastServerOkAt: null,
+  lastDiagnostic: null,
 }
 const listeners = new Set()
 let timer = null
@@ -51,7 +52,9 @@ export async function checkConnectivity() {
         state.internet = INTERNET_STATES.DISCONNECTED
         state.oeCode = 'OEND01'
       } else {
-        state.oeCode = error?.name === 'TimeoutError' ? 'OENT01' : 'OENR01'
+        const diagnostic = await diagnoseClientNetworkFailure('/api/health', { method: 'GET', error })
+        state.oeCode = diagnostic.code
+        state.lastDiagnostic = diagnostic
       }
       state.server = SERVER_STATES.UNREACHABLE
       state.database = DB_STATES.UNKNOWN

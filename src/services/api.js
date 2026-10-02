@@ -4,6 +4,7 @@ import { isPrivilegedMutation, resolveTrustedCapability, trustedRuntimeHeaders, 
 export const TRUSTED_RUNTIME_STATE = validateTrustedRuntime()
 
 const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://oneengine.onrender.com').replace(/\/$/, '')
+const CANONICAL_PRODUCTION_API_HOST = 'oneengine.onrender.com'
 export const SERVER_ADDRESS_STORAGE_KEY = 'onepos_server_address'
 export const ACTING_COMPANY_STORAGE_KEY = 'onepos_developer_target_company_id'
 export const SESSION_PERMISSIONS_STORAGE_KEY = 'onepos_session_permissions'
@@ -207,7 +208,93 @@ export async function apiFetch(path, options = {}) {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 12000
 const SAFE_GET_RETRY_STATUSES = new Set([429, 502, 503, 504])
-const OE_CODE_RE = /^OE[A-Z]{2}[0-9]{2}$/
+const OE_CODE_RE = /^OE[A-Z]{2}[0-9]{2,3}$/
+
+function networkFailureSignature(error) {
+  return `${String(error?.code || '')} ${String(error?.name || '')} ${String(error?.message || '')} ${String(error?.cause?.code || '')} ${String(error?.cause?.message || '')}`
+}
+
+export async function diagnoseClientNetworkFailure(path, {
+  method = 'GET',
+  headers = {},
+  error = null,
+  timeoutMs = 2200,
+} = {}) {
+  const signature = networkFailureSignature(error)
+  const apiBase = getApiBase()
+  const diagnostic = {
+    apiBase,
+    route: String(path || ''),
+    method: String(method || 'GET').toUpperCase(),
+    origin: typeof window !== 'undefined' ? window.location.origin : '',
+    requestedHeaders: Object.keys(headers || {}).map((key) => String(key).toLowerCase()).sort(),
+    stage: 'transport',
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { code: 'OEND01', ...diagnostic, cause: 'DEVICE_OFFLINE' }
+  }
+  if (/API_TIMEOUT|TimeoutError|timed out/i.test(signature)) {
+    return { code: 'OENT102', ...diagnostic, cause: 'API_TIMEOUT' }
+  }
+  if (/ENOTFOUND|EAI_AGAIN|ERR_NAME_NOT_RESOLVED/i.test(signature)) {
+    return { code: 'OEND101', ...diagnostic, cause: 'DNS_RESOLUTION_FAILED' }
+  }
+  if (/ERR_CERT|CERT_|SSL_|TLS_|certificate|handshake/i.test(signature)) {
+    return { code: 'OENT101', ...diagnostic, cause: 'TLS_HANDSHAKE_FAILED' }
+  }
+  if (/ECONNREFUSED|ERR_CONNECTION_REFUSED/i.test(signature)) {
+    return { code: 'OENR102', ...diagnostic, cause: 'CONNECTION_REFUSED' }
+  }
+
+  try {
+    const parsed = new URL(apiBase)
+    if (typeof window !== 'undefined' && /\.github\.io$/i.test(window.location.hostname) && parsed.hostname !== CANONICAL_PRODUCTION_API_HOST) {
+      return { code: 'OENC101', ...diagnostic, cause: 'API_BASE_MISMATCH', expectedHost: CANONICAL_PRODUCTION_API_HOST, actualHost: parsed.hostname }
+    }
+  } catch {}
+
+  // A simple CORS GET does not preflight. If it succeeds while the original
+  // request failed, transport is healthy and the failure is in CORS/preflight.
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let health
+    try {
+      health = await fetch(`${apiBase}/api/health`, { method: 'GET', cache: 'no-store', signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+    if (health) {
+      const requested = new Set(diagnostic.requestedHeaders)
+      if (requested.has('x-one-device-key')) {
+        return { code: 'OENX101', ...diagnostic, cause: 'CORS_HEADER_BLOCKED', blockedHeader: 'X-One-Device-Key', healthStatus: health.status }
+      }
+      const simpleMethods = new Set(['GET', 'HEAD', 'POST'])
+      if (!simpleMethods.has(diagnostic.method)) {
+        return { code: 'OENX103', ...diagnostic, cause: 'CORS_METHOD_BLOCKED', healthStatus: health.status }
+      }
+      return { code: 'OENX104', ...diagnostic, cause: 'CORS_PREFLIGHT_FAILED', healthStatus: health.status }
+    }
+  } catch {
+    // no-op: distinguish origin-CORS from lower transport below
+  }
+
+  // no-cors can succeed when CORS blocks JavaScript from reading the response.
+  // If it resolves, the host is reachable and the normal CORS origin is blocked.
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      await fetch(`${apiBase}/api/health`, { method: 'GET', cache: 'no-store', mode: 'no-cors', signal: controller.signal })
+      return { code: 'OENX102', ...diagnostic, cause: 'CORS_ORIGIN_BLOCKED' }
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch {}
+
+  return { code: 'OENR101', ...diagnostic, cause: 'BROWSER_TRANSPORT_UNREACHABLE' }
+}
 
 function clientDebugCode(error, status = 0, payload = null) {
   const explicit = String(payload?.oeCode || payload?.code || error?.oeCode || '').toUpperCase()
@@ -233,6 +320,18 @@ function clientDebugCode(error, status = 0, payload = null) {
 function defaultDebugMessage(code) {
   const messages = {
     OENH01: 'OneEngine is temporarily unavailable.',
+    OENC101: 'OneEngine is configured to use the wrong API service.',
+    OENO101: 'This device is configured to use an unavailable OneEngine server.',
+    OENX101: 'OneEngine could not connect because the browser blocked an API request.',
+    OENX102: 'OneEngine could not connect because this web origin is not allowed.',
+    OENX103: 'OneEngine could not connect because the browser blocked this API method.',
+    OENX104: 'OneEngine could not connect because the browser preflight check failed.',
+    OEND101: 'The OneEngine service address could not be resolved.',
+    OENT101: 'A secure connection to OneEngine could not be established.',
+    OENT102: 'OneEngine did not respond in time.',
+    OENR101: 'OneEngine service could not be reached.',
+    OENR102: 'The OneEngine service refused the connection.',
+    OENH101: 'OneEngine is reachable but is not healthy.',
     OENR01: 'OneEngine service could not be reached.',
     OEND01: 'This device appears to be offline.',
     OENT01: 'OneEngine did not respond in time.',
@@ -368,6 +467,29 @@ export async function apiRequest(path, options = {}) {
 
       return body
     } catch (error) {
+      if (!error?.status && (
+        error?.name === 'TypeError' ||
+        error?.name === 'NetworkError' ||
+        error?.name === 'TimeoutError' ||
+        error?.code === 'API_TIMEOUT' ||
+        /failed to fetch|networkerror|network request failed/i.test(String(error?.message || ''))
+      )) {
+        const requestHeaders = {
+          Accept: 'application/json',
+          ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...trustedRuntimeHeaders(capability),
+          ...contextHeaders(path, fetchOptions.headers),
+        }
+        const diagnostic = await diagnoseClientNetworkFailure(path, {
+          method,
+          headers: requestHeaders,
+          error,
+        })
+        error.oeCode = diagnostic.code
+        error.diagnostic = diagnostic
+        error.code = error.code || diagnostic.cause
+      }
       const normalizedError = normalizeOneEngineError(error, {
         status: error?.status || 0,
         payload: error?.payload || null,

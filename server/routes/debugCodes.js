@@ -8,9 +8,9 @@ function clean(value, max = 500) {
 }
 
 function normalizeBody(body = {}) {
-  const code = clean(body.code, 6).toUpperCase();
+  const code = clean(body.code, 7).toUpperCase();
   const severity = clean(body.severity || "ERROR", 20).toUpperCase();
-  if (!DEBUG_CODE_RE.test(code)) throw Object.assign(new Error("Code must use OE + subsystem + cause + 2 digits, for example OEWA01"), { status: 400 });
+  if (!DEBUG_CODE_RE.test(code)) throw Object.assign(new Error("Code must use OE + subsystem + cause + 2 or 3 digits, for example OEWA01 or OENX101"), { status: 400 });
   if (!SEVERITIES.has(severity)) throw Object.assign(new Error("Invalid severity"), { status: 400 });
   const category = clean(body.category, 80);
   const title = clean(body.title, 160);
@@ -72,7 +72,7 @@ export default function createDebugCodesRouter({ authenticate, authorize, db }) 
   });
 
   router.patch("/platform/developer/debug-codes/:code", ...manage, async (req, res) => {
-    const rawCode = clean(req.params.code, 6).toUpperCase();
+    const rawCode = clean(req.params.code, 7).toUpperCase();
     const code = normalizeDebugCode(rawCode);
     if (!DEBUG_CODE_RE.test(code) && !LEGACY_DEBUG_CODE_RE.test(rawCode)) return res.status(400).json({ success: false, message: "Invalid OneEngine debug code" });
     const current = await db("SELECT * FROM oneengine_debug_codes WHERE code=$1", [code]);

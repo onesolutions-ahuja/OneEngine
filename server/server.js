@@ -215,6 +215,7 @@ app.use(cors({
     "Content-Type",
     "X-Acting-Company-Id",
     "X-Store-Id",
+    "X-One-Device-Key",
     "X-OneEngine-Capability",
     "X-OneEngine-Runtime",
     "X-Requested-With",
@@ -859,6 +860,15 @@ app.get("/api/health", async (req, res) => {
       fingerprint: bootstrap.fingerprint || null,
     },
     packageRegistry,
+    diagnostics: {
+      serviceUrl: process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_API_URL || null,
+      buildCommit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
+      allowedCorsOrigins: [...defaultCorsOrigins],
+      allowedCorsHeaders: [
+        "Authorization","Content-Type","X-Acting-Company-Id","X-Store-Id",
+        "X-One-Device-Key","X-OneEngine-Capability","X-OneEngine-Runtime","X-Requested-With",
+      ],
+    },
     ...(definition ? {
       code: definition.code,
       oeCode: definition.code,

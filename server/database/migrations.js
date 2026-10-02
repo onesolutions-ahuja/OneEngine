@@ -209,6 +209,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
       CREATE INDEX IF NOT EXISTS idx_platform_workflow_step_runs_error_code ON platform_workflow_step_runs(error_code);
     `),
   },
+  {
+    key: "0042_exact_root_cause_diagnostics",
+    version: "42",
+    name: "Exact OneEngine root-cause diagnostic codes",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0042_exact_root_cause_diagnostics.sql", import.meta.url), "utf8")
+    ),
+  },
 ]);
 
 export async function runMigrations(database, migrations) {
