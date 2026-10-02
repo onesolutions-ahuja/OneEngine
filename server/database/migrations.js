@@ -27,6 +27,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0034_oneengine_debug_system",
   "0035_security_governance",
   "0036_connected_app_user_assignments",
+  "0037_data_email_delegated_admin",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -156,6 +157,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Connected-app approved user assignments",
     up: client => client.query(
       readFileSync(new URL("./migrations/0036_connected_app_user_assignments.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0037_data_email_delegated_admin",
+    version: "37",
+    name: "Data protection, email security and delegated administration",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0037_data_email_delegated_admin.sql", import.meta.url), "utf8")
     ),
   },
 ]);
