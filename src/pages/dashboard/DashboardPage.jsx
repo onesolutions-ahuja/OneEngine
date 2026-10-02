@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Bell, CalendarDays, Pencil, RefreshCw, X } from 'lucide-react'
 import { apiRequest, getAvailableStores, loadSessionPermissions } from '../../services/api'
 import DashboardGrid from '../../components/dashboard/DashboardGrid.jsx'
+import { setRoute } from '../../navigation/routes'
 
 const DATE_RANGES = [
   ['all_time', 'All time'],
@@ -332,11 +333,39 @@ export default function DashboardPage({ onOpenBuilder }) {
   }, [dashboardStoreId])
 
   useEffect(() => {
+    const navigate = (app, options = {}) => {
+      setRoute(app, null, options)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }
     const handleDrill = (event) => {
       const drill = event?.detail?.drill
       if (!drill) return
-      if (drill.type === 'url' && drill.targetId) window.open(drill.targetId, '_blank', 'noopener,noreferrer')
-      else window.dispatchEvent(new CustomEvent(`oneengine:open-${drill.type || 'report'}`, { detail: drill }))
+      if (drill.type === 'url' && drill.targetId) {
+        window.open(drill.targetId, '_blank', 'noopener,noreferrer')
+        return
+      }
+      if (drill.type === 'report' && drill.targetId) {
+        try {
+          sessionStorage.setItem('oneengine.reportDrill', JSON.stringify({
+            reportId: String(drill.targetId),
+            filters: Array.isArray(drill.filters) ? drill.filters : [],
+            createdAt: Date.now(),
+          }))
+        } catch {}
+        navigate('custom-reports')
+        return
+      }
+      if (drill.type === 'page' && drill.targetId) {
+        navigate('custom-page-runtime', { pageKey: String(drill.targetId) })
+        return
+      }
+      if (drill.type === 'record' && drill.targetId) {
+        const targetField = String(drill.targetField || 'id')
+        const filters = Array.isArray(drill.filters) ? drill.filters : []
+        const recordFilter = filters.find((filter) => ['id', 'record_id', targetField].includes(String(filter?.field || '')))
+        const recordId = recordFilter?.value == null ? '' : String(recordFilter.value)
+        navigate('workspace', { objectKey: String(drill.targetId), recordId })
+      }
     }
     window.addEventListener('oneengine:analytics-drill', handleDrill)
     return () => window.removeEventListener('oneengine:analytics-drill', handleDrill)
