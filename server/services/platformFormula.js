@@ -6,7 +6,7 @@ const SAFE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*$/;
 const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED = new Set(["id", "company_id", "store_id", "__proto__", "constructor", "prototype"]);
 const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
-const ARITY = { IF: [3, 3], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20] };
+const ARITY = { IF: [3, 3], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2] };
 export const ROLLUP_OPERATIONS = new Set(["COUNT", "SUM", "MIN", "MAX", "AVG"]);
 const baseType = type => ["number", "decimal", "currency", "percent"].includes(type) ? "number" : type;
 const formulaType = type => STRING_TYPES.has(type) ? "string" : baseType(type);
@@ -161,6 +161,13 @@ function infer(node, resolve, depth = 0) {
   if (node.name === "IF") { requireType(types[0], "boolean"); return common(types.slice(1)); }
   if (node.name === "COALESCE") return common(types);
   if (node.name === "CONCAT") return "string";
+  if (["TODAY", "NOW", "ADDDAYS"].includes(node.name)) {
+    if (node.name === "ADDDAYS") {
+      requireType(types[0], "string");
+      requireType(types[1], "number");
+    }
+    return "string";
+  }
   types.forEach(t => requireType(t, "number"));
   return "number";
 }
@@ -194,8 +201,17 @@ function evaluate(node, get) {
   }
   if (node.name === "IF") { const condition = run(node.args[0]); return condition === null ? null : run(node.args[condition ? 1 : 2]); }
   if (node.name === "COALESCE") { for (const arg of node.args) { const value = run(arg); if (value !== null) return value; } return null; }
+  if (node.name === "TODAY") return new Date().toISOString().slice(0, 10);
+  if (node.name === "NOW") return new Date().toISOString();
   const args = node.args.map(run);
   if (node.name === "CONCAT") return args.map(value => value ?? "").join("").slice(0, 10000);
+  if (node.name === "ADDDAYS") {
+    if (args.includes(null) || !Number.isFinite(Number(args[1]))) return null;
+    const date = new Date(args[0]);
+    if (Number.isNaN(date.getTime())) return null;
+    date.setUTCDate(date.getUTCDate() + Number(args[1]));
+    return String(args[0]).includes("T") ? date.toISOString() : date.toISOString().slice(0, 10);
+  }
   if (args.includes(null)) return null;
   switch (node.name) {
     case "ABS": return Math.abs(args[0]); case "MIN": return Math.min(...args); case "MAX": return Math.max(...args);
