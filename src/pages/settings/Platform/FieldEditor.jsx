@@ -95,6 +95,7 @@ export default function FieldEditor({
     unique: field?.config?.unique === true,
     externalId: field?.config?.externalId === true || field?.config?.external_id === true,
     uniqueCaseSensitive: field?.config?.uniqueCaseSensitive === true || field?.config?.unique_case_sensitive === true,
+    trackHistory: field?.config?.trackHistory !== undefined ? field.config.trackHistory === true : !isNew,
     lookupFilter: {
       active: field?.config?.lookupFilter?.active === true || field?.config?.lookup_filter?.active === true,
       required: (field?.config?.lookupFilter?.required ?? field?.config?.lookup_filter?.required) !== false,
@@ -451,6 +452,7 @@ export default function FieldEditor({
             unique: form.unique === true,
             externalId: form.externalId === true,
             uniqueCaseSensitive: form.unique === true && form.uniqueCaseSensitive === true,
+            trackHistory: form.trackHistory === true,
           } : {}),
           ...(form.field_type === "auto_number" ? {
             prefix: form.autoNumberPrefix || "",
@@ -955,6 +957,7 @@ export default function FieldEditor({
                   <label><span>Decimal places</span><input type="number" min="0" max="18" value={form.scale ?? ""} onChange={(event) => update("scale", event.target.value)} placeholder="Scale" /></label>
                 </>
               ) : null}
+              <label className="platform-checkbox"><input type="checkbox" checked={form.trackHistory === true} onChange={(event) => update("trackHistory", event.target.checked)} /><span><strong>Track History</strong><small>Store field changes in the record history timeline. Leave off for fields that do not need audit history.</small></span></label>
               {["text","number","decimal","email","auto_number"].includes(form.field_type) ? (
                 <>
                   <label className="platform-checkbox"><input type="checkbox" checked={form.externalId === true} onChange={(event) => update("externalId", event.target.checked)} /><span><strong>External ID</strong><small>Use this field as an external-system key for Data Loader/API matching. It is not automatically unique.</small></span></label>
