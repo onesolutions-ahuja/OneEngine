@@ -166,8 +166,16 @@ test("security settings expose phase-one Salesforce parity controls", async ({ p
   await expect(page.getByRole("tab",{name:"Network Access"})).toBeVisible();
   await expect(page.getByRole("tab",{name:"Login History"})).toBeVisible();
   await expect(page.getByRole("tab",{name:"Active Sessions"})).toBeVisible();
+  await expect(page.getByRole("tab",{name:"MFA & Assurance"})).toBeVisible();
+  await expect(page.getByRole("tab",{name:"Authentication Providers"})).toBeVisible();
   await page.getByRole("tab",{name:"Session Settings"}).click();
   await expect(page.getByText("Enforce login IP ranges on every request",{exact:true})).toBeVisible();
   await expect(page.getByText("Lock sessions to originating IP",{exact:true})).toBeVisible();
+  await page.getByRole("tab",{name:"MFA & Assurance"}).click();
+  await expect(page.getByText("Require MFA",{exact:true})).toBeVisible();
+  await expect(page.getByText("Require phishing-resistant MFA",{exact:true})).toBeVisible();
+  await expect(page.getByText("Sensitive Operation Policies",{exact:true})).toBeVisible();
+  await page.getByRole("tab",{name:"Authentication Providers"}).click();
+  await expect(page.getByText("Authentication Providers",{exact:true})).toBeVisible();
   expect(failures,failures.join("\n")).toEqual([]);
 });
