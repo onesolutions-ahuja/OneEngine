@@ -3,6 +3,7 @@ import { Box, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } fro
 import { apiRequest } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
+import { evaluatePlatformCondition } from '../../utils/platformConditions.js'
 
 function objectKey(object) {
   return object?.object_key || object?.api_name || object?.key || ''
@@ -102,6 +103,13 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const [relatedState, setRelatedState] = useState({ key: '', loading: false, rows: [], error: '' })
   const [historyState, setHistoryState] = useState({ loading: false, rows: [], error: '' })
   const [actionBusy, setActionBusy] = useState('')
+  const [uiContext, setUiContext] = useState({ permissions: [], entitlements: [] })
+  const [formFactor, setFormFactor] = useState(() => {
+    if (typeof window === 'undefined') return 'desktop'
+    if (window.innerWidth <= 650) return 'mobile'
+    if (window.innerWidth <= 1024) return 'tablet'
+    return 'desktop'
+  })
 
   useEffect(() => {
     let live = true
@@ -134,6 +142,33 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       .catch((err) => live && setError(err?.message || 'Unable to load Workspace objects'))
       .finally(() => live && setLoadingObjects(false))
     return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    let live = true
+    apiRequest('/api/platform/runtime/ui-context')
+      .then((response) => {
+        if (!live) return
+        const data = response?.data || {}
+        setUiContext({
+          ...data,
+          permissions: Array.isArray(data.permissions) ? data.permissions : [],
+          entitlements: Array.isArray(data.entitlements) ? data.entitlements : [],
+        })
+      })
+      .catch(() => live && setUiContext({ permissions: [], entitlements: [] }))
+    return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const update = () => {
+      const next = window.innerWidth <= 650 ? 'mobile' : window.innerWidth <= 1024 ? 'tablet' : 'desktop'
+      setFormFactor((current) => current === next ? current : next)
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
   }, [])
 
   useEffect(() => {
@@ -224,7 +259,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     }
     let live = true
     setLoadingDetail(true)
-    apiRequest(`/api/platform/runtime/record-page?objectKey=${encodeURIComponent(objectKey(selectedObject))}&recordId=${encodeURIComponent(selectedId)}`)
+    apiRequest(`/api/platform/runtime/record-page?objectKey=${encodeURIComponent(objectKey(selectedObject))}&recordId=${encodeURIComponent(selectedId)}&formFactor=${encodeURIComponent(formFactor)}`)
       .then((response) => {
         if (live) setDetail(response?.data || null)
       })
@@ -236,7 +271,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       })
       .finally(() => live && setLoadingDetail(false))
     return () => { live = false }
-  }, [selectedId, selectedKey])
+  }, [selectedId, selectedKey, formFactor])
 
   useEffect(() => {
     if (!selectedObject || !selectedId) {
@@ -270,39 +305,94 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const canDelete = permissions?.can_delete === true
 
   const defaultRecordTypeId = runtimeMeta.recordTypes.find((item) => item.is_default === true)?.id || ''
-  const createLayout = resolveRecordLayout(runtimeMeta.layouts, 'create', defaultRecordTypeId, runtimeMeta.defaultCreateLayout)
-  const quickCreateLayout = resolveRecordLayout(runtimeMeta.layouts, 'quick_create', defaultRecordTypeId, createLayout)
-  const openCreate = () => setEditor({
-    mode: 'create',
-    values: {},
-    recordTypeId: defaultRecordTypeId,
-    targetKey: objectKey(selectedObject),
-    targetLabel: objectLabel(selectedObject),
-    targetFields: fields,
-    targetLayouts: runtimeMeta.layouts,
-    targetRecordTypes: runtimeMeta.recordTypes,
-  })
-  const openQuickCreate = () => setEditor({
-    mode: 'quick_create',
-    values: {},
-    recordTypeId: defaultRecordTypeId,
-    targetKey: objectKey(selectedObject),
-    targetLabel: objectLabel(selectedObject),
-    targetFields: fields,
-    targetLayouts: runtimeMeta.layouts,
-    targetRecordTypes: runtimeMeta.recordTypes,
-  })
-  const openEdit = (row) => setEditor({
-    mode: 'edit',
-    id: row.id,
-    values: { ...row },
-    recordTypeId: row.recordTypeId || row.record_type_id || '',
-    targetKey: objectKey(selectedObject),
-    targetLabel: objectLabel(selectedObject),
-    targetFields: fields,
-    targetLayouts: runtimeMeta.layouts,
-    targetRecordTypes: runtimeMeta.recordTypes,
-  })
+
+  const visibilityContext = {
+    ...uiContext,
+    device: formFactor,
+    formFactor,
+    companyId: uiContext.companyId || null,
+    recordTypeId: detailRecord?.recordTypeId || detailRecord?.record_type_id || '',
+    record: detailRecord || {},
+    object: selectedObject || {},
+    objectState: selectedObject || {},
+  }
+
+  const fetchEffectiveLayout = async (pageType, recordTypeId = '', targetObject = selectedObject) => {
+    if (!targetObject?.id) return null
+    const query = new URLSearchParams({
+      objectId: String(targetObject.id),
+      pageType,
+      formFactor,
+    })
+    if (recordTypeId) query.set('recordTypeId', recordTypeId)
+    const response = await apiRequest(`/api/platform/layouts/effective?${query.toString()}`)
+    return response?.data || null
+  }
+
+  const createLayout = runtimeMeta.defaultCreateLayout || null
+  const quickCreateLayout = createLayout
+
+  const openCreate = async () => {
+    const recordTypeId = defaultRecordTypeId
+    const layout = await fetchEffectiveLayout('create', recordTypeId).catch(() => createLayout)
+    setEditor({
+      mode: 'create',
+      values: {},
+      recordTypeId,
+      resolvedLayout: layout,
+      targetKey: objectKey(selectedObject),
+      targetLabel: objectLabel(selectedObject),
+      targetFields: fields,
+      targetRecordTypes: runtimeMeta.recordTypes,
+      targetObject: selectedObject,
+    })
+  }
+
+  const openQuickCreate = async () => {
+    const recordTypeId = defaultRecordTypeId
+    const layout = await fetchEffectiveLayout('quick_create', recordTypeId).catch(() => quickCreateLayout)
+    setEditor({
+      mode: 'quick_create',
+      values: {},
+      recordTypeId,
+      resolvedLayout: layout || quickCreateLayout,
+      targetKey: objectKey(selectedObject),
+      targetLabel: objectLabel(selectedObject),
+      targetFields: fields,
+      targetRecordTypes: runtimeMeta.recordTypes,
+      targetObject: selectedObject,
+    })
+  }
+
+  const openEdit = async (row) => {
+    const recordTypeId = row.recordTypeId || row.record_type_id || ''
+    const layout = await fetchEffectiveLayout('edit', recordTypeId).catch(() => detailLayout)
+    setEditor({
+      mode: 'edit',
+      id: row.id,
+      values: { ...row },
+      recordTypeId,
+      resolvedLayout: layout || detailLayout,
+      targetKey: objectKey(selectedObject),
+      targetLabel: objectLabel(selectedObject),
+      targetFields: fields,
+      targetRecordTypes: runtimeMeta.recordTypes,
+      targetObject: selectedObject,
+    })
+  }
+
+  const changeEditorRecordType = async (recordTypeId) => {
+    setEditor((current) => current ? { ...current, recordTypeId } : current)
+    if (!editor) return
+    const pageType = editor.mode === 'quick_create' ? 'quick_create' : editor.mode === 'edit' ? 'edit' : 'create'
+    const targetObject = editor.targetObject || selectedObject
+    try {
+      const layout = await fetchEffectiveLayout(pageType, recordTypeId, targetObject)
+      setEditor((current) => current ? { ...current, recordTypeId, resolvedLayout: layout } : current)
+    } catch {
+      setEditor((current) => current ? { ...current, recordTypeId } : current)
+    }
+  }
 
   const saveRecord = async (event) => {
     event.preventDefault()
@@ -346,7 +436,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const detailRecord = detail?.record || rows.find((row) => String(row.id) === String(selectedId)) || null
   const rawDetailFields = detail?.fields || fields
   const detailRecordTypeId = detailRecord?.recordTypeId || detailRecord?.record_type_id || null
-  const detailLayout = resolveRecordLayout(runtimeMeta.layouts, 'detail', detailRecordTypeId, runtimeMeta.defaultDetailLayout)
+  const detailLayout = detail?.layout || resolveRecordLayout(runtimeMeta.layouts, 'detail', detailRecordTypeId, runtimeMeta.defaultDetailLayout)
   const detailFields = fieldsForLayout(rawDetailFields, detailLayout)
   const outboundRelationships = runtimeMeta.relationships.filter((relationship) => String(relationship.parent_object_id) === String(selectedObject?.id))
   const selectedRecordType = runtimeMeta.recordTypes.find((item) => String(item.id) === String(detailRecord?.recordTypeId || detailRecord?.record_type_id || '')) || null
@@ -356,7 +446,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     setActionBusy(button.button_key)
     setError('')
     try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/buttons/${encodeURIComponent(button.button_key)}/execute?formFactor=${encodeURIComponent(formFactor)}`, {
         method: 'POST',
         body: JSON.stringify({}),
       })
@@ -389,7 +479,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     setActionBusy(actionKey)
     setError('')
     try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/actions/${encodeURIComponent(actionKey)}/execute`, {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/actions/${encodeURIComponent(actionKey)}/execute?formFactor=${encodeURIComponent(formFactor)}`, {
         method: 'POST',
         body: JSON.stringify({}),
       })
@@ -416,6 +506,10 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       const childTypes = Array.isArray(meta.recordTypes) ? meta.recordTypes : []
       const childLayouts = Array.isArray(meta.layouts) ? meta.layouts : []
       const recordTypeId = childTypes.find((item) => item.is_default === true)?.id || ''
+      const childObject = meta.object || null
+      const resolvedLayout = childObject?.id
+        ? await fetchEffectiveLayout('create', recordTypeId, childObject).catch(() => meta.defaultCreateLayout || null)
+        : (meta.defaultCreateLayout || null)
       setEditor({
         mode: 'create_related',
         values: { [relationship.child_field_api_name]: selectedId },
@@ -425,6 +519,8 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         targetFields: childFields,
         targetLayouts: childLayouts,
         targetRecordTypes: childTypes,
+        targetObject: childObject,
+        resolvedLayout,
         relatedRelationship: relationship,
       })
     } catch (err) {
@@ -503,7 +599,10 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
               </div>
               <div className="workspace-detail-actions">
                 {canCreate && quickCreateLayout ? <button type="button" onClick={openQuickCreate}><Plus size={13}/> Quick Create</button> : null}
-                {runtimeMeta.buttons.filter((button) => ['record','workspace_record','detail'].includes(button.placement) || !button.placement).map((button) => (
+                {runtimeMeta.buttons
+                  .filter((button) => ['record','workspace_record','detail'].includes(button.placement) || !button.placement)
+                  .filter((button) => evaluatePlatformCondition(button.visibility_rule, fields, visibilityContext))
+                  .map((button) => (
                   <button key={button.id || button.button_key} type="button" disabled={actionBusy === button.button_key} onClick={() => runMetadataButton(button)}>
                     {button.label}
                   </button>
@@ -586,16 +685,24 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             <header><div><strong>{editor.mode === 'edit' ? 'Edit' : editor.mode === 'quick_create' ? 'Quick Create' : 'New'} {editor.targetLabel || objectLabel(selectedObject)}</strong></div><button type="button" onClick={() => setEditor(null)}><X size={15}/></button></header>
             <div className="workspace-editor-body">
               {editor.error ? <div className="workspace-editor-error">{editor.error}</div> : null}
-              {(editor.targetRecordTypes || runtimeMeta.recordTypes).length ? <label><span>Record Type</span><select value={editor.recordTypeId || ''} onChange={(e) => setEditor((current) => ({ ...current, recordTypeId: e.target.value }))}><option value="">Default</option>{(editor.targetRecordTypes || runtimeMeta.recordTypes).map((type) => <option key={type.id} value={type.id}>{type.name || type.label || type.record_type_key}</option>)}</select></label> : null}
+              {(editor.targetRecordTypes || runtimeMeta.recordTypes).length ? <label><span>Record Type</span><select value={editor.recordTypeId || ''} onChange={(e) => void changeEditorRecordType(e.target.value)}><option value="">Default</option>{(editor.targetRecordTypes || runtimeMeta.recordTypes).map((type) => <option key={type.id} value={type.id}>{type.name || type.label || type.record_type_key}</option>)}</select></label> : null}
               {fieldsForLayout(
                 (editor.targetFields || fields).filter((field) => field.active !== false && field.writable !== false && !['formula','rollup'].includes(field.field_type)),
-                resolveRecordLayout(
-                  editor.targetLayouts || runtimeMeta.layouts,
-                  editor.mode === 'quick_create' ? 'quick_create' : editor.mode === 'edit' ? 'edit' : 'create',
-                  editor.recordTypeId,
-                  editor.mode === 'quick_create' ? quickCreateLayout : editor.mode === 'edit' ? detailLayout : createLayout,
+                editor.resolvedLayout || (
+                  editor.mode === 'quick_create' ? quickCreateLayout : editor.mode === 'edit' ? detailLayout : createLayout
                 ),
-              ).map((field) => (
+              )
+                .filter((field) => evaluatePlatformCondition(field?.config?.visibilityCondition, editor.targetFields || fields, {
+                  ...uiContext,
+                  device: formFactor,
+                  formFactor,
+                  companyId: uiContext.companyId || null,
+                  recordTypeId: editor.recordTypeId || '',
+                  record: editor.values || {},
+                  object: editor.targetObject || selectedObject || {},
+                  objectState: editor.targetObject || selectedObject || {},
+                }))
+                .map((field) => (
                 <WorkspaceField key={field.id || field.api_name} field={field} value={editor.values?.[field.api_name]} onChange={(value) => setEditor((current) => ({ ...current, values: { ...current.values, [field.api_name]: value } }))} />
               ))}
             </div>
