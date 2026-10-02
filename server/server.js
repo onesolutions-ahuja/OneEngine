@@ -81,7 +81,7 @@ import createIdentitySecurityRouter from "./routes/identitySecurity.js";
 import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
-import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, listMfaMethods, loadEffectiveAssurance, stepUpRequired } from "./services/identityAssurance.js";
+import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, stepUpRequired } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
 import createOwnDeliveryRouter from "./routes/ownDelivery.js";
@@ -1212,9 +1212,19 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       ? await loadEffectiveAssurance(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
       : null;
     const effectiveAssurance = assurancePolicy?.effective || { mfaRequired: false, phishingResistantRequired: false, requiredLoginAssurance: "STANDARD", passwordAssurance: "STANDARD" };
+    const trustedDevice = user.company_id ? await findTrustedDevice(loginDb, {
+      companyId: user.company_id,
+      userId: user.id,
+      token: req.body?.deviceToken,
+      ip: requestIp,
+    }) : null;
+    const activationSatisfied = !effectiveAssurance.deviceActivationRequired
+      || Boolean(trustedDevice)
+      || (effectiveAssurance.skipDeviceActivationOnTrustedNetwork && access.trustedNetwork === true);
     const requiresSecondFactor = effectiveAssurance.mfaRequired
       || effectiveAssurance.phishingResistantRequired
-      || !assuranceSatisfies(effectiveAssurance.passwordAssurance, effectiveAssurance.requiredLoginAssurance);
+      || !assuranceSatisfies(effectiveAssurance.passwordAssurance, effectiveAssurance.requiredLoginAssurance)
+      || !activationSatisfied;
     if (requiresSecondFactor) {
       const methods = await listMfaMethods(loginDb, { companyId: user.company_id, userId: user.id });
       const usable = methods.filter((method) => !effectiveAssurance.phishingResistantRequired || method.phishing_resistant === true);
@@ -1222,7 +1232,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         companyId: user.company_id,
         userId: user.id,
         type: "LOGIN",
-        context: { authMethod: "PASSWORD", phishingResistantRequired: effectiveAssurance.phishingResistantRequired === true },
+        context: { authMethod: "PASSWORD", phishingResistantRequired: effectiveAssurance.phishingResistantRequired === true, activationOnly: !activationSatisfied && !effectiveAssurance.mfaRequired },
         minutes: 10,
       });
       return res.status(202).json({
