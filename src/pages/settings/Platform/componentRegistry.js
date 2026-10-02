@@ -285,7 +285,7 @@ export function componentKeyForFieldType(fieldType, registry = FALLBACK_COMPONEN
   const type = String(fieldType || "text").toLowerCase();
   const aliases = {
     text: "text_input", email: "text_input", phone: "text_input", url: "text_input", time: "text_input", auto_number: "text_input",
-    long_text: "long_text", rich_text: "long_text", textarea: "long_text",
+    text_area: "long_text", long_text: "long_text", rich_text: "long_text", textarea: "long_text",
     number: "number", percent: "number", decimal: "currency", currency: "currency",
     date: "date", datetime: "datetime", boolean: "checkbox",
     select: "picklist", picklist: "picklist", multiselect: "picklist", multi_select: "picklist", lookup: "lookup",
