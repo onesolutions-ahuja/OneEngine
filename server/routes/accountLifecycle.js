@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import { consumeAccountToken, hashAccountToken, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { assertPasswordAllowed, loadSecuritySettings, recordPasswordChange } from "../services/identitySecurity.js";
 
 export default function createAccountLifecycleRouter({ authenticate, authorize, db }) {
   const router = express.Router();
@@ -92,9 +93,16 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     res.json(generic);
   });
   router.post("/auth/password-reset/complete", async(req,res)=>{
-    const {token,password}=req.body||{}; if(!token||String(password||"").length<8)return res.status(400).json({success:false,message:"A valid token and password of at least 8 characters are required"});
-    // Consume the token in the same SQL statement that changes the password. Merely opening
-    // or abandoning the reset page never consumes the link, while a successful reset does.
+    const {token,password}=req.body||{};
+    if(!token||!password)return res.status(400).json({success:false,message:"A valid token and new password are required"});
+    const tokenHash=hashAccountToken(token);
+    const pending=await db(`SELECT t.company_id,t.user_id,u.password_hash
+      FROM account_action_tokens t JOIN users u ON u.id=t.user_id AND u.company_id=t.company_id
+      WHERE t.token_hash=$1 AND t.purpose='PASSWORD_RESET' AND t.used_at IS NULL AND t.expires_at>NOW() LIMIT 1`,[tokenHash]);
+    const candidate=pending.rows[0];
+    if(!candidate)return res.status(400).json({success:false,message:"Reset link is invalid or expired"});
+    const passwordCheck=await assertPasswordAllowed(db,{companyId:candidate.company_id,userId:candidate.user_id,password,bcrypt,enforceMinimumLifetime:false});
+    if(!passwordCheck.ok)return res.status(400).json({success:false,code:"PASSWORD_POLICY",message:passwordCheck.message});
     const passwordHash=await bcrypt.hash(password,12);
     const completed=await db(`WITH claimed AS (
       UPDATE account_action_tokens SET used_at=NOW()
@@ -103,17 +111,31 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     ), changed AS (
       UPDATE users u SET password_hash=$2,must_change_password=FALSE,updated_at=NOW()
        FROM claimed c WHERE u.id=c.user_id AND u.company_id=c.company_id
-       RETURNING u.id
-    ) SELECT id,company_id,user_id FROM changed`,[hashAccountToken(token),passwordHash]);
+       RETURNING u.id,u.company_id
+    ) SELECT id,company_id FROM changed`,[tokenHash,passwordHash]);
     if(!completed.rows.length)return res.status(400).json({success:false,message:"Reset link is invalid or expired"});
-    await req.ensureBusinessCommandRun?.({ companyId: completed.rows[0].company_id, userId: completed.rows[0].user_id || null });
+    const settings=passwordCheck.settings||await loadSecuritySettings(db,candidate.company_id);
+    await recordPasswordChange(db,{
+      companyId:candidate.company_id,userId:candidate.user_id,previousHash:candidate.password_hash,settings,
+      revokeSessions:settings?.terminate_sessions_on_password_reset===true,
+    });
+    await req.ensureBusinessCommandRun?.({ companyId: candidate.company_id, userId: candidate.user_id || null });
     res.json({success:true});
   });
   router.post("/auth/registration/complete", async(req,res)=>{
-    const {token,password}=req.body||{}; if(!token||String(password||"").length<8)return res.status(400).json({success:false,message:"A valid token and password of at least 8 characters are required"});
+    const {token,password}=req.body||{};
+    if(!token||!password)return res.status(400).json({success:false,message:"A valid token and password are required"});
+    const preview=await db(`SELECT t.company_id,t.user_id,u.password_hash FROM account_action_tokens t
+      JOIN users u ON u.id=t.user_id AND u.company_id=t.company_id
+      WHERE t.token_hash=$1 AND t.purpose='REGISTRATION' AND t.used_at IS NULL AND t.expires_at>NOW() LIMIT 1`,[hashAccountToken(token)]);
+    const candidate=preview.rows[0];
+    if(!candidate)return res.status(400).json({success:false,message:"Registration link is invalid or expired"});
+    const passwordCheck=await assertPasswordAllowed(db,{companyId:candidate.company_id,userId:candidate.user_id,password,bcrypt,enforceMinimumLifetime:false});
+    if(!passwordCheck.ok)return res.status(400).json({success:false,code:"PASSWORD_POLICY",message:passwordCheck.message});
     const t=await consumeAccountToken(db,{token,purpose:"REGISTRATION"}); if(!t)return res.status(400).json({success:false,message:"Registration link is invalid or expired"});
     await req.ensureBusinessCommandRun?.({ companyId: t.company_id, userId: t.user_id || null });
     await db("UPDATE users SET password_hash=$1,active=TRUE,must_change_password=FALSE,updated_at=NOW() WHERE id=$2 AND company_id=$3",[await bcrypt.hash(password,12),t.user_id,t.company_id]);
+    await recordPasswordChange(db,{companyId:t.company_id,userId:t.user_id,previousHash:candidate.password_hash,settings:passwordCheck.settings,revokeSessions:false});
     res.json({success:true,data:{next:"POLICY_ONBOARDING"}});
   });
 
