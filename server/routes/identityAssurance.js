@@ -494,6 +494,11 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.json({success:true});
   });
 
+  router.get("/security/mfa/methods",authenticate,async(req,res)=>{
+    const rows=await listMfaMethods(db,{companyId:req.user.companyId,userId:req.user.id});
+    res.json({success:true,data:rows.map(publicMethod)});
+  });
+
   router.post("/security/mfa/methods/:methodId/disconnect",authenticate,async(req,res)=>{
     const r=await db(`UPDATE identity_mfa_methods SET active=FALSE
       WHERE id=$1 AND company_id=$2 AND user_id=$3 AND active=TRUE RETURNING id,method_type,authenticator_kind`,
