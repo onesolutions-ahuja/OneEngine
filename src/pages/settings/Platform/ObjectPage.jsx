@@ -780,6 +780,12 @@ export default function ObjectPage({
     }
   }
 
+  function runtimeExecutionQuery() {
+    const query = new URLSearchParams({ formFactor });
+    if (appKey) query.set("appKey", appKey);
+    return query.toString();
+  }
+
   async function handleMetadataButton(button) {
     const targetType = button?.target_type || "action";
     const targetKey = button?.target_key || button?.action_key;
@@ -789,7 +795,7 @@ export default function ObjectPage({
     if (!recordKey || !button?.button_key) return setError("A record and registered button are required.");
     setExecutingAction(button.button_key);
     try {
-      await apiRequest(`/api/platform/objects/${encodeURIComponent(getObjectKey(objectMetadata))}/records/${encodeURIComponent(recordKey)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+      await apiRequest(`/api/platform/objects/${encodeURIComponent(getObjectKey(objectMetadata))}/records/${encodeURIComponent(recordKey)}/buttons/${encodeURIComponent(button.button_key)}/execute?${runtimeExecutionQuery()}`, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -821,7 +827,7 @@ export default function ObjectPage({
       setExecutingAction(actionKey);
       try {
         const response = await apiRequest(
-          `/api/platform/objects/${encodeURIComponent(getObjectKey(objectMetadata))}/records/${encodeURIComponent(recordKey)}/actions/${encodeURIComponent(actionKey)}/execute`,
+          `/api/platform/objects/${encodeURIComponent(getObjectKey(objectMetadata))}/records/${encodeURIComponent(recordKey)}/actions/${encodeURIComponent(actionKey)}/execute?${runtimeExecutionQuery()}`,
           { method: "POST", body: JSON.stringify({}) }
         );
         setError("");
@@ -961,7 +967,7 @@ export default function ObjectPage({
     try {
       for (const id of ids) {
         await apiRequest(
-          `/api/platform/objects/${encodeURIComponent(resolvedObjectKey)}/records/${encodeURIComponent(id)}/buttons/${encodeURIComponent(button.button_key)}/execute`,
+          `/api/platform/objects/${encodeURIComponent(resolvedObjectKey)}/records/${encodeURIComponent(id)}/buttons/${encodeURIComponent(button.button_key)}/execute?${runtimeExecutionQuery()}`,
           { method: "POST", body: JSON.stringify({}) }
         );
       }
