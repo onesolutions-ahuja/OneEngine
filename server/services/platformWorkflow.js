@@ -990,8 +990,8 @@ export async function updateWorkflowStepRunStatus({ db, stepRunId, status, error
   if (!db || typeof db !== "function" || !stepRunId) return null;
   const row = await db(
     `UPDATE platform_workflow_step_runs
-        SET status=$1,
-            completed_at=CASE WHEN UPPER($1) IN ('PENDING','RUNNING','WAITING') THEN NULL ELSE COALESCE(completed_at, NOW()) END,
+        SET status=$1::varchar,
+            completed_at=CASE WHEN UPPER($1::varchar) IN ('PENDING','RUNNING','WAITING') THEN NULL ELSE COALESCE(completed_at, NOW()) END,
             error_text=$2,
             metadata=COALESCE(metadata,'{}'::jsonb) || $3::jsonb,
             updated_at=NOW()
