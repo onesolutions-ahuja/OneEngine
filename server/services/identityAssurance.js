@@ -225,6 +225,23 @@ export async function activeTemporaryVerificationCode(db,{companyId,userId}){
   return r.rows[0]||null;
 }
 
+export function mfaMethodPriority(method){
+  if(method?.method_type==="PASSKEY"&&method?.authenticator_kind==="PLATFORM")return 1;
+  if(method?.method_type==="PASSKEY"&&method?.authenticator_kind==="SECURITY_KEY")return 2;
+  if(method?.method_type==="PASSKEY")return 3;
+  if(method?.method_type==="TOTP")return 4;
+  if(method?.method_type==="RECOVERY_CODES")return 5;
+  return 99;
+}
+
+export function sortMfaMethods(methods){
+  return [...(Array.isArray(methods)?methods:[])].sort((a,b)=>{
+    const diff=mfaMethodPriority(a)-mfaMethodPriority(b);
+    if(diff)return diff;
+    return new Date(a.created_at||0)-new Date(b.created_at||0);
+  });
+}
+
 export function mfaMethodAllowed(method,effective){
   if(!method)return false;
   if(method.method_type==="TOTP")return effective?.allowTotp!==false;
