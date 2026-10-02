@@ -79,6 +79,7 @@ export const FALLBACK_COMPONENT_REGISTRY = [
   { key: "related_list", label: "Related List / Table", category: "record", kind: "record", bindable: true },
   { key: "field_value", label: "Field Value", category: "record", kind: "record", bindable: true },
   { key: "tree_view", label: "Tree View", category: "record", kind: "record", bindable: true, recordBound: true },
+  { key: "process_path", label: "Process Path", category: "record", kind: "record", bindable: true, recordBound: true },
   { key: "timeline", label: "Timeline", category: "record", kind: "record", bindable: true, recordBound: true },
   { key: "kanban", label: "Kanban", category: "record", kind: "record", bindable: true, recordBound: true },
   { key: "calendar", label: "Calendar", category: "record", kind: "record", bindable: true, recordBound: true },
@@ -120,6 +121,7 @@ export const COMPONENT_ICONS = {
   related_list: List,
   field_value: Braces,
   tree_view: FolderTree,
+  process_path: Workflow,
   timeline: Clock3,
   clock_widget: Clock3,
   calendar_widget: CalendarRange,
@@ -282,11 +284,12 @@ export function paletteComponents(registry = FALLBACK_COMPONENT_REGISTRY) {
 export function componentKeyForFieldType(fieldType, registry = FALLBACK_COMPONENT_REGISTRY) {
   const type = String(fieldType || "text").toLowerCase();
   const aliases = {
-    text: "text_input", email: "text_input", phone: "text_input",
-    long_text: "long_text", textarea: "long_text",
-    number: "number", decimal: "currency", currency: "currency",
+    text: "text_input", email: "text_input", phone: "text_input", url: "text_input", time: "text_input", auto_number: "text_input",
+    long_text: "long_text", rich_text: "long_text", textarea: "long_text",
+    number: "number", percent: "number", decimal: "currency", currency: "currency",
     date: "date", datetime: "datetime", boolean: "checkbox",
-    select: "picklist", picklist: "picklist", multi_select: "picklist", lookup: "lookup",
+    select: "picklist", picklist: "picklist", multiselect: "picklist", multi_select: "picklist", lookup: "lookup",
+    address: "structured_field", location: "structured_field", json: "structured_field",
   };
   const key = aliases[type] || "text_input";
   return registry.some((component) => component.key === key) ? key : "text_input";
