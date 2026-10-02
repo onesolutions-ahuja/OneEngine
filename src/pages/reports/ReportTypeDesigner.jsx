@@ -229,9 +229,11 @@ export function ReportTypeManager({ reportTypes=[], onRefresh, onClose }) {
   </div>;
 }
 
-export function AdvancedFilterEditor({ filters=[],crossFilters=[],fields=[],relationships=[],onChange }) {
+export function AdvancedFilterEditor({ filters=[],crossFilters=[],fields=[],relationships=[],allowFieldComparisons=true,onChange }) {
+  const baseOperators=[["equals","Equals"],["not_equals","Not equals"],["contains","Contains"],["starts_with","Starts with"],["gt","Greater than"],["gte","Greater/equal"],["lt","Less than"],["lte","Less/equal"],["between","Between"],["is_blank","Blank"],["is_not_blank","Not blank"]];
+  const fieldOperators=[["equals_field","Equals field"],["not_equals_field","Not equals field"],["gt_field","Greater than field"],["gte_field","Greater/equal field"],["lt_field","Less than field"],["lte_field","Less/equal field"]];
+  const fieldComparisonCount=filters.filter((filter)=>String(filter?.operator||"").endsWith("_field")).length;
   const updateFilter=(index,patch)=>onChange({filters:filters.map((item,i)=>i===index?{...item,...patch}:item),crossFilters});
-  const operators=[["equals","Equals"],["not_equals","Not equals"],["contains","Contains"],["starts_with","Starts with"],["gt","Greater than"],["gte","Greater/equal"],["lt","Less than"],["lte","Less/equal"],["between","Between"],["is_blank","Blank"],["is_not_blank","Not blank"],["equals_field","Equals field"],["not_equals_field","Not equals field"],["gt_field","Greater than field"],["gte_field","Greater/equal field"],["lt_field","Less than field"],["lte_field","Less/equal field"],["relative_date","Relative date"]];
   const crossOperators=[["equals","Equals"],["not_equals","Not equals"],["gt","Greater than"],["gte","Greater/equal"],["lt","Less than"],["lte","Less/equal"],["is_blank","Blank"],["is_not_blank","Not blank"],["equals_field","Equals field"],["not_equals_field","Not equals field"],["gt_field","Greater than field"],["gte_field","Greater/equal field"],["lt_field","Less than field"],["lte_field","Less/equal field"],["relative_date","Relative date"]];
   const updateCross=(index,patch)=>onChange({filters,crossFilters:crossFilters.map((item,i)=>i===index?{...item,...patch}:item)});
   return <div className="space-y-4">
