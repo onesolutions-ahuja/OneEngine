@@ -344,14 +344,16 @@ export function objectNavigationEntries({
     }
 
     usedKeys.add(key);
+    const appKey = optionalString(app.app_key, 100);
+    const baseRoute = objectRuntimeRoute(objectKey);
     entries.push({
       key,
       label: optionalString(page.label, 200) || objectKey,
       objectKey,
-      route: objectRuntimeRoute(objectKey),
+      route: appKey ? `${baseRoute}?appKey=${encodeURIComponent(appKey)}` : baseRoute,
       icon: definition.icon || null,
       order: definition.order,
-      appKey: optionalString(app.app_key, 100),
+      appKey,
       appLabel: optionalString(app.label, 200),
     });
   }
