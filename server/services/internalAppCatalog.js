@@ -701,8 +701,8 @@ const CATALOG = [
         }
       ],
       configurationSchema: [
-        { key: "fromEmail", type: "string", required: true, label: "Verified sender email", description: "Use a sender address already verified in Brevo.", helpUrl: "https://app.brevo.com/senders/list", helpLabel: "Open Brevo sender settings" },
-        { key: "fromName", type: "string", label: "Sender name" },
+        { key: "fromEmail", type: "string", required: true, label: "Verified sender email", description: "Use a sender address already verified in Brevo. If you use a Gmail/Yahoo/Outlook address, Brevo may rewrite the From address to a brevosend.com address for deliverability. For a branded From address, verify a domain you own in Brevo and then use an address on that domain.", helpUrl: "https://app.brevo.com/senders/list", helpLabel: "Open Brevo sender settings" },
+        { key: "fromName", type: "string", label: "Sender name", description: "This is the display name recipients see. For branded sending, use a verified sender on your own authenticated domain.", helpUrl: "https://app.brevo.com/senders/domain/list", helpLabel: "Set up sender domain" },
         { key: "apiKey", type: "secret", required: true, label: "Brevo API key", description: "Get this from Brevo > Settings > SMTP & API > API Keys.", helpUrl: "https://app.brevo.com/settings/keys/api", helpLabel: "Open Brevo API keys" }
       ],
     },
