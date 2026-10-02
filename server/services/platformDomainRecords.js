@@ -1,6 +1,6 @@
 import { systemObject, isExtensionField, tenantFields, safeSystemFields, appendSystemReadScope } from "./platformSystemObjects.js";
 import { enrichFields, applyFieldSecurity, fieldValueError, normalizeFieldValue, formatAutoNumberValue } from "./platformFieldValues.js";
-import { compileFormulas, isCalculatedField } from "./platformFormula.js";
+import { compileFormulas, evaluateWorkflowFormula, isCalculatedField } from "./platformFormula.js";
 import { validateConditionalRequired } from "./platformConditions.js";
 import { evaluateValidationRules } from "./platformValidation.js";
 import { executePlatformAutomations } from "./platformAutomation.js";
@@ -129,7 +129,8 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
   if (typeId && !type) throw new PlatformRecordError("Record type is unavailable");
   const restrictions = typeId ? (await db("SELECT field_id,value,active FROM platform_record_type_picklist_values WHERE record_type_id=$1", [typeId])).rows : [];
   if (!previous) {
-    for (const field of fields.filter(isExtensionField)) {
+    const extensionFields = fields.filter(isExtensionField);
+    for (const field of extensionFields) {
       const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
       if (field.field_type === "auto_number" && custom[field.api_name] === undefined) {
         const start = Math.max(1, Number.parseInt(config.start ?? config.startNumber ?? 1, 10) || 1);
@@ -145,9 +146,30 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
         custom[field.api_name] = formatAutoNumberValue(config, sequence);
         continue;
       }
+      if (config.defaultFormula || config.default_formula) continue;
       const defaultValue = config.defaultValue !== undefined ? config.defaultValue : config.default_value;
       if (defaultValue !== undefined && defaultValue !== null && custom[field.api_name] === undefined) {
         custom[field.api_name] = normalizeFieldValue(field, defaultValue);
+      }
+    }
+    for (const field of extensionFields) {
+      if (custom[field.api_name] !== undefined) continue;
+      const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+      const expression = config.defaultFormula || config.default_formula;
+      if (!expression) continue;
+      const coreDefaults = apiValues(fields, record);
+      const inputs = {
+        ...Object.fromEntries(fields.filter((item) => item.api_name).map((item) => [item.api_name, custom[item.api_name] ?? coreDefaults[item.api_name] ?? null])),
+        user_id: req.user?.id ?? null,
+        role_id: req.user?.roleId ?? null,
+        company_id: req.user?.companyId ?? null,
+        store_id: req.user?.storeId ?? null,
+      };
+      try {
+        const value = evaluateWorkflowFormula(expression, inputs);
+        if (value !== undefined && value !== null) custom[field.api_name] = normalizeFieldValue(field, value);
+      } catch (error) {
+        throw new PlatformRecordError(`${field.label} default formula failed: ${error.message}`);
       }
     }
   }
