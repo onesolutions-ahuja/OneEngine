@@ -102,7 +102,7 @@ export function formulaPreviewDependencies(fields, expression) {
   const inputs = new Set();
   const visitedFormulas = new Set();
   const visit = formula => {
-    const ast = parseFormula(formula);
+    const ast = parseFormula(formula, { identifierPattern: SAFE_PATH });
     const walk = node => {
       if (node.kind === "field") {
         const dependency = byName.get(node.name);
