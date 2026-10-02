@@ -26,6 +26,7 @@ import {
   ReportExportDialog,
 } from "./ReportExperienceControls.jsx";
 import { AdvancedFilterEditor, ReportTypeDesigner } from "./ReportTypeDesigner.jsx";
+import ReportManagementPanel from "./ReportManagementPanel.jsx";
 
 const fresh = () => ({
   name: "",
@@ -167,7 +168,16 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     <div className="onepos-page-header"><div><h1 className="onepos-page-title">{embedded?(editingId?"Edit Report":"Create Report"):"Report Builder"}</h1><p className="onepos-page-subtitle">One metadata definition for reports, dashboards and embedded analytics.</p></div><div className="flex gap-2">{metadata.canManage?<button type="button" className="onepos-btn onepos-btn-secondary" onClick={()=>setShowReportTypeDesigner(true)}>Report Types</button>:null}{!embedded?<button type="button" className="onepos-btn onepos-btn-primary" onClick={reset}>Create Report</button>:<button type="button" className="onepos-btn onepos-btn-secondary" onClick={()=>onClose?.()}>Close</button>}</div></div>
     {error?<div className="onepos-alert onepos-alert-error">{error}</div>:null}{notice?<div className="onepos-alert onepos-alert-success">{notice}</div>:null}
 
-    {!embedded?<section className="onepos-card overflow-hidden"><div className="onepos-card-header"><span className="onepos-card-title">Available reports</span></div>{reports.length?reports.map((report)=><div key={report.id} className="p-4 border-b last:border-b-0 flex flex-wrap items-center gap-3"><div className="min-w-[220px] flex-1"><div className="font-medium">{report.name}</div><div className="text-xs" style={{color:"var(--onepos-text-muted)"}}>{report.description||"Report"}{report.created_by_name?` · Created by ${report.created_by_name}`:""}</div></div><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-primary" disabled={running===report.id} onClick={()=>run(report.id)}>{running===report.id?"Running…":"Run"}</button><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>open(report)}>Edit</button><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>duplicate(report)}>Duplicate</button><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>archive(report)}>Archive</button></div>):<div className="onepos-empty">No saved reports yet.</div>}</section>:null}
+    {!embedded?<ReportManagementPanel
+      reports={reports}
+      currentReportId={editingId}
+      canManage={metadata.canManage}
+      onOpenReport={open}
+      onRunReport={run}
+      onDuplicateReport={duplicate}
+      onArchiveReport={archive}
+      onRefresh={load}
+    />:null}
 
     <section className="onepos-card onepos-card-body space-y-5">
       <PreviewControls value={definition.previewPreference||{autoPreview:true,sampleLimit:50}} onChange={(previewPreference)=>update({previewPreference})} onRefresh={preview} refreshing={running==="preview"}/>
