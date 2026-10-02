@@ -938,15 +938,15 @@ app.get("/api/auth/google/callback", async (req, res) => {
       ip: googleIp,
     });
     if (!googleAccess.allowed) {
-      await writeLoginHistory(googleDb, { user, identifier: email, status: "BLOCKED", reason: googleAccess.code, ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE" });
+      await writeLoginHistory(googleDb, { user, identifier: email, status: "BLOCKED", reason: googleAccess.code, ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", req });
       return res.redirect(googleOAuthErrorRedirect(returnTo, String(googleAccess.code || "security_policy_blocked").toLowerCase()));
     }
     await clearFailedLogin(googleDb, user);
     await pool.query("UPDATE users SET last_login_at=NOW() WHERE id=$1", [user.id]);
-    const sessionId = await createTrackedSession(googleDb, { user, ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", settings: googleSettings });
+    const sessionId = await createTrackedSession(googleDb, { user, ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", settings: googleSettings, originHost: String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase() || null });
     user.session_id = sessionId;
     const token = createToken(user);
-    await writeLoginHistory(googleDb, { user, identifier: email, status: "SUCCESS", ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", sessionId });
+    await writeLoginHistory(googleDb, { user, identifier: email, status: "SUCCESS", ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", sessionId, req });
 
     const target = new URL(returnTo);
     target.hash = `google_token=${encodeURIComponent(token)}`;
@@ -1033,8 +1033,8 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const requestUserAgent = req.get("user-agent") || null;
     const securitySettings = user.company_id ? await loadSecuritySettings(loginDb, user.company_id) : null;
     const state = await loginState(loginDb, user.id);
-    if (state?.locked_until && new Date(state.locked_until).getTime() > Date.now()) {
-      await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: "ACCOUNT_LOCKED", ip: requestIp, userAgent: requestUserAgent });
+    if (state?.locked_indefinitely === true || (state?.locked_until && new Date(state.locked_until).getTime() > Date.now())) {
+      await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: "ACCOUNT_LOCKED", ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({
         success: false,
         code: "ACCOUNT_LOCKED",
@@ -1073,8 +1073,8 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
 
     if (!validPassword) {
       const nextState = await registerFailedLogin(loginDb, { user, settings: securitySettings });
-      await writeLoginHistory(loginDb, { user, identifier: email, status: "FAILURE", reason: "INVALID_PASSWORD", ip: requestIp, userAgent: requestUserAgent });
-      const locked = nextState?.locked_until && new Date(nextState.locked_until).getTime() > Date.now();
+      await writeLoginHistory(loginDb, { user, identifier: email, status: "FAILURE", reason: "INVALID_PASSWORD", ip: requestIp, userAgent: requestUserAgent, req });
+      const locked = nextState?.locked_indefinitely === true || (nextState?.locked_until && new Date(nextState.locked_until).getTime() > Date.now());
       return res.status(locked ? 403 : 401).json({
         success: false,
         code: locked ? "ACCOUNT_LOCKED" : "INVALID_CREDENTIALS",
@@ -1090,7 +1090,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       ip: requestIp,
     });
     if (!access.allowed) {
-      await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: access.code, ip: requestIp, userAgent: requestUserAgent });
+      await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: access.code, ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({ success: false, code: access.code, message: access.reason });
     }
     await clearFailedLogin(loginDb, user);
@@ -1153,10 +1153,11 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       userAgent: requestUserAgent,
       authMethod: "PASSWORD",
       settings: securitySettings,
+      originHost: String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase() || null,
     });
     user.session_id = sessionId;
     const token = createToken(user);
-    await writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId });
+    await writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId, req });
     loginTimings.total_ms = Date.now() - loginStartedAt;
     console.log("onePOS: auth login timings", {
       ...loginTimings,
