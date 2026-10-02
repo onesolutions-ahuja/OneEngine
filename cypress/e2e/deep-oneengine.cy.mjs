@@ -155,7 +155,7 @@ describe("OneEngine deep deployed E2E", () => {
     cy.get('.workflow-node-palette input[aria-label="Search flow elements"]').clear().type("Assignment");
     cy.get('.workflow-node-palette input[aria-label="Search flow elements"]').should("have.value", "Assignment");
 
-    cy.get(".workflow-insert-button").first().click({ force: true });
+    cy.get('button[aria-label^="Add element after "]').first().click({ force: true });
     cy.get(".workflow-add-element-popover", { timeout: 10000 }).should("be.visible");
     cy.get(".workflow-add-element-search input").should("have.value", "").type("Decision");
     cy.get('.workflow-node-palette input[aria-label="Search flow elements"]').should("have.value", "Assignment");
