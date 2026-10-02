@@ -374,6 +374,88 @@ function normalizeListViewSort(value) {
   return { field, direction };
 }
 
+const LIST_VIEW_FILTER_OPERATORS = new Set([
+  "equals", "not_equals", "contains", "not_contains", "starts_with",
+  "greater_than", "less_than", "greater_or_equal", "less_or_equal",
+  "is_blank", "is_not_blank", "in",
+]);
+
+function normalizeListViewFilters(value, validFields = null) {
+  const allowed = validFields ? new Set(validFields) : null;
+  const normalize = (field, operator, rawValue) => {
+    if (typeof field !== "string" || !isSafeIdentifier(field) || (allowed && !allowed.has(field))) return null;
+    const normalizedOperator = LIST_VIEW_FILTER_OPERATORS.has(String(operator || "equals").toLowerCase())
+      ? String(operator || "equals").toLowerCase()
+      : "equals";
+    if (["is_blank", "is_not_blank"].includes(normalizedOperator)) return { field, operator: normalizedOperator, value: null };
+    if (normalizedOperator === "in") {
+      const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+      return values.length ? { field, operator: normalizedOperator, value: values.slice(0, 100) } : null;
+    }
+    if (rawValue === undefined) return null;
+    return { field, operator: normalizedOperator, value: rawValue };
+  };
+
+  if (Array.isArray(value)) {
+    return value.map((item) => item && typeof item === "object"
+      ? normalize(item.field || item.apiName || item.api_name, item.operator, item.value)
+      : null).filter(Boolean).slice(0, 50);
+  }
+
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).map(([field, raw]) => {
+    if (raw && typeof raw === "object" && !Array.isArray(raw) && ("operator" in raw || "value" in raw)) {
+      return normalize(field, raw.operator, raw.value);
+    }
+    return normalize(field, Array.isArray(raw) ? "in" : "equals", raw);
+  }).filter(Boolean).slice(0, 50);
+}
+
+function appendPlatformRecordFilters({ filters, fieldByApiName, object, clauses, params }) {
+  for (const filter of filters || []) {
+    const field = fieldByApiName.get(filter.field);
+    if (!field) continue;
+    const sql = platformFieldSql(field, object);
+    if (!sql) continue;
+
+    const operator = filter.operator || "equals";
+    if (operator === "is_blank") {
+      clauses.push(`(${sql} IS NULL OR CAST(${sql} AS TEXT)='')`);
+      continue;
+    }
+    if (operator === "is_not_blank") {
+      clauses.push(`(${sql} IS NOT NULL AND CAST(${sql} AS TEXT)<>'')`);
+      continue;
+    }
+    if (operator === "in") {
+      const values = Array.isArray(filter.value) ? filter.value : [filter.value];
+      if (!values.length) continue;
+      const placeholders = values.map((item) => {
+        params.push(item);
+        return `${params.length}`;
+      });
+      clauses.push(`${sql} IN (${placeholders.join(",")})`);
+      continue;
+    }
+
+    let parameterValue = filter.value;
+    if (operator === "contains" || operator === "not_contains") parameterValue = `%${String(parameterValue ?? "")}%`;
+    if (operator === "starts_with") parameterValue = `${String(parameterValue ?? "")}%`;
+    params.push(parameterValue);
+    const placeholder = `${params.length}`;
+
+    if (operator === "equals") clauses.push(`${sql}=${placeholder}`);
+    else if (operator === "not_equals") clauses.push(`(${sql} IS NULL OR ${sql}<>${placeholder})`);
+    else if (operator === "contains") clauses.push(`CAST(${sql} AS TEXT) ILIKE ${placeholder}`);
+    else if (operator === "not_contains") clauses.push(`COALESCE(CAST(${sql} AS TEXT),'') NOT ILIKE ${placeholder}`);
+    else if (operator === "starts_with") clauses.push(`CAST(${sql} AS TEXT) ILIKE ${placeholder}`);
+    else if (operator === "greater_than") clauses.push(`${sql}>${placeholder}`);
+    else if (operator === "less_than") clauses.push(`${sql}<${placeholder}`);
+    else if (operator === "greater_or_equal") clauses.push(`${sql}>=${placeholder}`);
+    else if (operator === "less_or_equal") clauses.push(`${sql}<=${placeholder}`);
+  }
+}
+
 function normalizeAppConfig(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return { defaultPage: null, theme: { primary: "#0f172a" } };
   return {
@@ -1884,16 +1966,52 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     res.json({ success: true, data: result.rows[0] });
   });
 
-  router.get("/platform/objects/:objectId/list-views", ...manage, async (req, res) => {
+  async function canManageSharedListViews(req) {
+    return (await hasExecutionPermission(req, "settings.manage")) || (await hasOneEngineManageAccess(req));
+  }
+
+  async function accessibleListView(req, listViewId) {
+    const result = await db(
+      `SELECT * FROM platform_list_views
+        WHERE id=$1 AND company_id=$2 AND active=true
+          AND (owner_user_id IS NULL OR owner_user_id=$3)`,
+      [listViewId, req.user.companyId, req.user.id]
+    );
+    return result.rows[0] || null;
+  }
+
+  router.get("/platform/objects/:objectId/list-views", authenticate, async (req, res) => {
     const object = await getObject(req.params.objectId, req);
     if (!object) return res.status(404).json({ success: false, message: "Object not found" });
-    const result = await db("SELECT * FROM platform_list_views WHERE object_id=$1 AND company_id=$2 AND active=true ORDER BY label", [object.id, req.user.companyId]);
-    res.json({ success: true, data: result.rows });
+    if (!(await hasPlatformObjectPermission(db, req, object.id, "view"))) {
+      return res.status(403).json({ success: false, message: "You do not have permission to view this object" });
+    }
+    const result = await db(
+      `SELECT * FROM platform_list_views
+        WHERE object_id=$1 AND company_id=$2 AND active=true
+          AND (owner_user_id IS NULL OR owner_user_id=$3)
+        ORDER BY CASE WHEN owner_user_id=$3 THEN 0 ELSE 1 END,is_default DESC,label`,
+      [object.id, req.user.companyId, req.user.id]
+    );
+    res.json({
+      success: true,
+      data: result.rows.map((view) => ({ ...view, scope: view.owner_user_id ? "PERSONAL" : "SHARED" })),
+    });
   });
 
-  router.post("/platform/objects/:objectId/list-views", ...manage, async (req, res) => {
-    const object = await getObject(req.params.objectId, req, { forMutation: true });
-    if (!object) return res.status(404).json({ success: false, message: "Object not found or not editable" });
+  router.post("/platform/objects/:objectId/list-views", authenticate, async (req, res) => {
+    const object = await getObject(req.params.objectId, req);
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    if (!(await hasPlatformObjectPermission(db, req, object.id, "view"))) {
+      return res.status(403).json({ success: false, message: "You do not have permission to view this object" });
+    }
+
+    const scope = String(req.body?.scope || "PERSONAL").toUpperCase();
+    if (!["PERSONAL", "SHARED"].includes(scope)) return res.status(400).json({ success: false, message: "List view scope must be PERSONAL or SHARED" });
+    if (scope === "SHARED" && !(await canManageSharedListViews(req))) {
+      return res.status(403).json({ success: false, message: "Shared list views require settings.manage permission" });
+    }
+
     const fields = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order", [object.id, req.user.companyId]);
     const validFields = new Set(fields.rows.map((field) => field.api_name));
     const columns = Array.isArray(req.body?.columns) ? req.body.columns.filter((column) => typeof column === "string" && validFields.has(column)) : [];
@@ -1901,44 +2019,97 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       return res.status(400).json({ success: false, message: "A label and at least one valid column are required" });
     }
     const viewKey = req.body.viewKey || toSafeApiName(req.body.label, "list_view");
+    if (!isSafeIdentifier(viewKey)) return res.status(400).json({ success: false, message: "viewKey must be a safe identifier" });
+    const filters = normalizeListViewFilters(req.body.filters, validFields);
+    const sort = normalizeListViewSort(req.body.sort);
+    if (sort.field && !validFields.has(sort.field)) return res.status(400).json({ success: false, message: "List view sort field is unavailable" });
+    const ownerUserId = scope === "PERSONAL" ? req.user.id : null;
+    const isDefault = req.body.isDefault === true;
+
     try {
+      if (isDefault) {
+        await db(
+          `UPDATE platform_list_views SET is_default=false
+            WHERE object_id=$1 AND company_id=$2
+              AND ${ownerUserId ? "owner_user_id=$3" : "owner_user_id IS NULL"}`,
+          ownerUserId ? [object.id, req.user.companyId, ownerUserId] : [object.id, req.user.companyId]
+        );
+      }
       const result = await db(
-        "INSERT INTO platform_list_views (object_id,company_id,view_key,label,description,columns,filters,sort,page_size,is_default) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10) RETURNING *",
-        [object.id, req.user.companyId, viewKey, req.body.label.trim(), req.body.description || null, JSON.stringify(columns), JSON.stringify(req.body.filters || {}), JSON.stringify(normalizeListViewSort(req.body.sort)), Number(req.body.pageSize || 50), req.body.isDefault === true]
+        `INSERT INTO platform_list_views
+          (object_id,company_id,owner_user_id,view_key,label,description,columns,filters,sort,page_size,is_default)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11) RETURNING *`,
+        [object.id, req.user.companyId, ownerUserId, viewKey, req.body.label.trim(), req.body.description || null, JSON.stringify(columns), JSON.stringify(filters), JSON.stringify(sort), boundedInteger(req.body.pageSize, 50, 200), isDefault]
       );
-      res.status(201).json({ success: true, data: result.rows[0] });
+      res.status(201).json({ success: true, data: { ...result.rows[0], scope } });
     } catch (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, message: "A list view with this key already exists" });
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "A list view with this key already exists in this scope" });
       console.error("Platform list view create error:", error);
       res.status(500).json({ success: false, message: "Unable to create list view" });
     }
   });
 
-  router.put("/platform/list-views/:listViewId", ...manage, async (req, res) => {
-    const existing = await db("SELECT * FROM platform_list_views WHERE id=$1 AND company_id=$2", [req.params.listViewId, req.user.companyId]);
-    const view = existing.rows[0];
-    if (!view) return res.status(404).json({ success: false, message: "List view not found or not editable" });
+  router.put("/platform/list-views/:listViewId", authenticate, async (req, res) => {
+    const view = await accessibleListView(req, req.params.listViewId);
+    if (!view) return res.status(404).json({ success: false, message: "List view not found" });
+    const personal = Boolean(view.owner_user_id);
+    if (!personal && !(await canManageSharedListViews(req))) {
+      return res.status(403).json({ success: false, message: "Shared list views require settings.manage permission" });
+    }
+
+    const object = await getObject(view.object_id, req);
+    if (!object || !(await hasPlatformObjectPermission(db, req, object.id, "view"))) {
+      return res.status(403).json({ success: false, message: "You do not have permission to view this object" });
+    }
     const fields = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order", [view.object_id, req.user.companyId]);
     const validFields = new Set(fields.rows.map((field) => field.api_name));
     const columns = req.body.columns === undefined ? view.columns : (Array.isArray(req.body.columns) ? req.body.columns.filter((column) => typeof column === "string" && validFields.has(column)) : []);
     if (req.body.columns !== undefined && !columns.length) return res.status(400).json({ success: false, message: "List view columns must include at least one valid field" });
     if (req.body.viewKey !== undefined && !isSafeIdentifier(req.body.viewKey)) return res.status(400).json({ success: false, message: "viewKey must be a safe identifier" });
+    const filters = req.body.filters === undefined ? view.filters : normalizeListViewFilters(req.body.filters, validFields);
+    const sort = req.body.sort === undefined ? normalizeListViewSort(view.sort) : normalizeListViewSort(req.body.sort);
+    if (sort.field && !validFields.has(sort.field)) return res.status(400).json({ success: false, message: "List view sort field is unavailable" });
+
     try {
+      if (req.body.isDefault === true) {
+        await db(
+          `UPDATE platform_list_views SET is_default=false
+            WHERE object_id=$1 AND company_id=$2 AND id<>$3
+              AND ${personal ? "owner_user_id=$4" : "owner_user_id IS NULL"}`,
+          personal ? [view.object_id, req.user.companyId, view.id, view.owner_user_id] : [view.object_id, req.user.companyId, view.id]
+        );
+      }
       const result = await db(
-        "UPDATE platform_list_views SET view_key=COALESCE($1,view_key), label=COALESCE($2,label), description=COALESCE($3,description), active=COALESCE($4,active), columns=COALESCE($5::jsonb,columns), filters=COALESCE($6::jsonb,filters), sort=COALESCE($7::jsonb,sort), page_size=COALESCE($8,page_size), is_default=COALESCE($9,is_default), user_modified=true,updated_at=NOW() WHERE id=$10 RETURNING *",
-        [req.body.viewKey, req.body.label, req.body.description, req.body.active, req.body.columns === undefined ? null : JSON.stringify(columns), req.body.filters === undefined ? null : JSON.stringify(req.body.filters || {}), req.body.sort === undefined ? null : JSON.stringify(normalizeListViewSort(req.body.sort)), req.body.pageSize === undefined ? null : Number(req.body.pageSize), req.body.isDefault, view.id]
+        `UPDATE platform_list_views
+            SET view_key=COALESCE($1,view_key),
+                label=COALESCE($2,label),
+                description=COALESCE($3,description),
+                active=COALESCE($4,active),
+                columns=$5::jsonb,
+                filters=$6::jsonb,
+                sort=$7::jsonb,
+                page_size=COALESCE($8,page_size),
+                is_default=COALESCE($9,is_default),
+                user_modified=true,
+                updated_at=NOW()
+          WHERE id=$10 RETURNING *`,
+        [req.body.viewKey, req.body.label, req.body.description, req.body.active, JSON.stringify(columns), JSON.stringify(filters), JSON.stringify(sort), req.body.pageSize === undefined ? null : boundedInteger(req.body.pageSize, 50, 200), req.body.isDefault, view.id]
       );
-      res.json({ success: true, data: result.rows[0] });
+      res.json({ success: true, data: { ...result.rows[0], scope: personal ? "PERSONAL" : "SHARED" } });
     } catch (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, message: "A list view with this key already exists" });
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "A list view with this key already exists in this scope" });
       console.error("Platform list view update error:", error);
       res.status(500).json({ success: false, message: "Unable to update list view" });
     }
   });
 
-  router.delete("/platform/list-views/:listViewId", ...manage, async (req, res) => {
-    const result = await db("UPDATE platform_list_views SET active=false,user_modified=true WHERE id=$1 AND company_id=$2 RETURNING *", [req.params.listViewId, req.user.companyId]);
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "List view not found or not editable" });
+  router.delete("/platform/list-views/:listViewId", authenticate, async (req, res) => {
+    const view = await accessibleListView(req, req.params.listViewId);
+    if (!view) return res.status(404).json({ success: false, message: "List view not found" });
+    if (!view.owner_user_id && !(await canManageSharedListViews(req))) {
+      return res.status(403).json({ success: false, message: "Shared list views require settings.manage permission" });
+    }
+    const result = await db("UPDATE platform_list_views SET active=false,is_default=false,user_modified=true,updated_at=NOW() WHERE id=$1 RETURNING *", [view.id]);
     res.json({ success: true, data: result.rows[0] });
   });
 
@@ -3179,7 +3350,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       companyId
         ? db("SELECT * FROM platform_assignment_rules WHERE object_id=$1 AND company_id=$2 ORDER BY priority DESC,name", [object.id, companyId])
         : { rows: [] },
-      db("SELECT * FROM platform_list_views WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY is_default DESC,label", [object.id, companyId]),
+      db("SELECT * FROM platform_list_views WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true AND owner_user_id IS NULL ORDER BY is_default DESC,label", [object.id, companyId]),
       db("SELECT * FROM platform_reports WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY label", [object.id, companyId]),
       db("SELECT * FROM platform_layouts WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY page_type,name", [object.id, companyId]),
       db("SELECT * FROM platform_record_types WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY is_default DESC,label", [object.id, companyId]),
@@ -6386,7 +6557,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       const [fieldResult, listViewResult, recordTypeResult, relationshipResult, layoutResult, buttonResult] = await Promise.all([
         db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,api_name", [object.id, req.user.companyId]),
-        db("SELECT * FROM platform_list_views WHERE object_id=$1 AND company_id=$2 AND active=true ORDER BY is_default DESC,label", [object.id, req.user.companyId]),
+        db(`SELECT * FROM platform_list_views
+              WHERE object_id=$1 AND company_id=$2 AND active=true
+                AND (owner_user_id IS NULL OR owner_user_id=$3)
+              ORDER BY CASE WHEN owner_user_id=$3 THEN 0 ELSE 1 END,is_default DESC,label`,
+          [object.id, req.user.companyId, req.user.id]),
         db("SELECT * FROM platform_record_types WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY is_default DESC,label", [object.id, req.user.companyId]),
         db(`SELECT r.*,p.object_key AS parent_object_key,p.label AS parent_object_label,c.object_key AS child_object_key,c.label AS child_object_label,
                    f.api_name AS child_field_api_name
@@ -6415,9 +6590,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (button.required_permission && !(await hasExecutionPermission(req, button.required_permission))) continue;
         buttons.push(button);
       }
-      const listViews = listViewResult.rows || [];
+      const listViews = (listViewResult.rows || []).map((view) => ({ ...view, scope: view.owner_user_id ? "PERSONAL" : "SHARED" }));
       const layouts = layoutResult.rows || [];
-      const defaultListView = listViews.find((view) => view.is_default === true) || listViews[0] || null;
+      const defaultListView = listViews.find((view) => view.owner_user_id && view.is_default === true)
+        || listViews.find((view) => !view.owner_user_id && view.is_default === true)
+        || listViews.find((view) => view.owner_user_id)
+        || listViews[0]
+        || null;
       const detailLayoutRows = layouts.filter((layout) => layout.page_type === "detail");
       const defaultDetailLayout = resolvePageLayout(detailLayoutRows) || null;
       const createLayoutRows = layouts.filter((layout) => layout.page_type === "create");
@@ -6497,38 +6676,91 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
     }
     const fields = await applyFieldSecurity(db, childMetadata.fields, req);
     const readableFields = fields.filter((field) => field.readable !== false && isSafeIdentifier(field.api_name) && platformFieldSql(field, child));
+    const fieldByApiName = new Map(readableFields.map((field) => [field.api_name, field]));
     const columns = readableFields.map((field) => `${platformFieldSql(field, child)} AS "${field.api_name}"`);
     const clauses = [`${platformFieldSql(childField, child)}=$1`];
     const params = [req.params.recordId];
     if (child.company_scoped) {
       params.push(req.user.companyId);
-      clauses.push(`company_id=$${params.length}`);
+      clauses.push(`company_id=${params.length}`);
     }
     if (child.store_scoped) {
       if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
       params.push(req.user.storeId);
-      clauses.push(`store_id=$${params.length}`);
+      clauses.push(`store_id=${params.length}`);
     }
     appendSystemReadScope(child, req, clauses, params);
-    const limit = boundedInteger(req.query.limit ?? req.query.pageSize, 25, 100);
-    const offset = Math.max(Number.parseInt(req.query.offset || "0", 10) || 0, 0);
-    const sortField = typeof req.query.sortField === "string"
-      ? readableFields.find((field) => field.api_name === req.query.sortField)
-      : null;
+
+    if (req.query.viewFilters !== undefined) {
+      let parsedViewFilters;
+      try {
+        parsedViewFilters = typeof req.query.viewFilters === "string" ? JSON.parse(req.query.viewFilters) : req.query.viewFilters;
+      } catch {
+        return res.status(400).json({ success: false, message: "viewFilters must be valid JSON" });
+      }
+      appendPlatformRecordFilters({
+        filters: normalizeListViewFilters(parsedViewFilters, fieldByApiName.keys()),
+        fieldByApiName,
+        object: child,
+        clauses,
+        params,
+      });
+    }
+
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    if (search && readableFields.length) {
+      params.push(`%${search}%`);
+      const searchParam = `${params.length}`;
+      clauses.push(`(${readableFields.map((field) => `CAST(${platformFieldSql(field, child)} AS TEXT) ILIKE ${searchParam}`).join(" OR ")})`);
+    }
+
+    const pageSize = boundedInteger(req.query.limit ?? req.query.pageSize, 25, 100);
+    const count = await db(`SELECT COUNT(*)::int AS total FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}`, params);
+    const total = count.rows[0]?.total || 0;
+    const pages = total ? Math.ceil(total / pageSize) : 0;
+    const legacyOffset = Math.max(Number.parseInt(req.query.offset || "0", 10) || 0, 0);
+    const requestedPage = req.query.page !== undefined
+      ? boundedInteger(req.query.page, 1, Math.max(pages, 1))
+      : Math.floor(legacyOffset / pageSize) + 1;
+    const page = pages ? Math.min(requestedPage, pages) : 1;
+    const offset = req.query.page !== undefined ? (page - 1) * pageSize : legacyOffset;
+
+    const requestedSortField = typeof req.query.sortField === "string" && req.query.sortField.trim() ? req.query.sortField.trim() : null;
+    if (requestedSortField && !fieldByApiName.has(requestedSortField)) {
+      return res.status(400).json({ success: false, message: "Sort field is unavailable" });
+    }
+    const sortField = requestedSortField ? fieldByApiName.get(requestedSortField) : null;
     const direction = String(req.query.sortDirection || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
     const order = sortField ? ` ORDER BY ${platformFieldSql(sortField, child)} ${direction}` : " ORDER BY id ASC";
-    const count = await db(`SELECT COUNT(*)::int AS total FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}`, params);
-    const dataParams = [...params, limit, offset];
+
+    const dataParams = [...params, pageSize, offset];
     const result = await db(
-      `SELECT id${columns.length ? `, ${columns.join(", ")}` : ""} FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}${order} LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`,
+      `SELECT id${columns.length ? `, ${columns.join(", ")}` : ""} FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}${order} LIMIT ${dataParams.length - 1} OFFSET ${dataParams.length}`,
       dataParams
     );
     const calculate = compileFormulas(childMetadata.fields);
     const hydrated = await hydrateExtensions(db, child, fields, result.rows, req);
     const calculated = await populateRollups(db, child, childMetadata.fields, hydrated.map((record) => calculate(record)), req);
     const records = calculated.map((record) => publicFormulaRecord(fields, record));
-    const total = count.rows[0]?.total || 0;
-    res.json({ success: true, data: records, records, relationship, pageSize: limit, offset, total });
+    const [canCreateRelated, canEditRelated, canDeleteRelated] = await Promise.all([
+      hasPlatformObjectPermission(db, req, child.id, "create"),
+      hasPlatformObjectPermission(db, req, child.id, "edit"),
+      hasPlatformObjectPermission(db, req, child.id, "delete"),
+    ]);
+    res.json({
+      success: true,
+      data: records,
+      records,
+      relationship,
+      object: { id: child.id, object_key: child.object_key, label: child.label },
+      fields,
+      permissions: { can_create: canCreateRelated, can_edit: canEditRelated, can_delete: canDeleteRelated },
+      page,
+      pageSize,
+      pages,
+      offset,
+      total,
+    });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ success: false, message: error.message });
     if (error instanceof FormulaError) return res.status(422).json({ success: false, code: error.code, message: error.message });
@@ -6550,7 +6782,10 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const fields = await applyFieldSecurity(db, safeFields, req);
       const calculate = compileFormulas(safeFields);
       const readableFields = fields.filter((field) => field.readable !== false && field.field_type !== "formula" && field.field_type !== "rollup" && isSafeIdentifier(field.api_name) && Boolean(platformFieldSql(field, object)));
-      const listView = req.query.listViewId ? (await db("SELECT * FROM platform_list_views WHERE id=$1 AND object_id=$2 AND company_id=$3 AND active=true", [req.query.listViewId, object.id, req.user.companyId])).rows[0] || null : null;
+      const listView = req.query.listViewId ? (await db(
+        "SELECT * FROM platform_list_views WHERE id=$1 AND object_id=$2 AND company_id=$3 AND active=true AND (owner_user_id IS NULL OR owner_user_id=$4)",
+        [req.query.listViewId, object.id, req.user.companyId, req.user.id]
+      )).rows[0] || null : null;
       const configuredColumns = listView && Array.isArray(listView.columns) ? listView.columns : null;
       const selectedReadable = configuredColumns ? readableFields.filter((field) => configuredColumns.includes(field.api_name) || configuredColumns.includes(field.id)) : readableFields;
       const columns = selectedReadable.map((field) => `${platformFieldSql(field, object)} AS "${field.api_name}"`);
@@ -6570,19 +6805,33 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       }
       const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "read", paramsOffset: params.length });
       if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
-      if (listView && listView.filters && typeof listView.filters === "object" && !Array.isArray(listView.filters)) {
-        for (const [apiName, value] of Object.entries(listView.filters)) {
-          const field = fieldByApiName.get(apiName);
-          if (!field) continue;
-          const values = Array.isArray(value) ? value : [value];
-          if (!values.length) continue;
-          const placeholders = values.map((item) => {
-            params.push(item);
-            return `$${params.length}`;
-          });
-
-          clauses.push(values.length === 1 ? `${platformFieldSql(field, object)}=${placeholders[0]}` : `${platformFieldSql(field, object)} IN (${placeholders.join(",")})`);
+      /* When the runtime sends viewFilters it is the complete editable
+         filter state for the selected view, so it replaces (rather than stacks
+         on top of) the saved filters. This lets users change a saved view and
+         preview the result before saving it again. */
+      if (req.query.viewFilters === undefined && listView?.filters) {
+        appendPlatformRecordFilters({
+          filters: normalizeListViewFilters(listView.filters, fieldByApiName.keys()),
+          fieldByApiName,
+          object,
+          clauses,
+          params,
+        });
+      }
+      if (req.query.viewFilters !== undefined) {
+        let parsedViewFilters;
+        try {
+          parsedViewFilters = typeof req.query.viewFilters === "string" ? JSON.parse(req.query.viewFilters) : req.query.viewFilters;
+        } catch {
+          return res.status(400).json({ success: false, message: "viewFilters must be valid JSON" });
         }
+        appendPlatformRecordFilters({
+          filters: normalizeListViewFilters(parsedViewFilters, fieldByApiName.keys()),
+          fieldByApiName,
+          object,
+          clauses,
+          params,
+        });
       }
       for (const [apiName, value] of Object.entries(filters)) {
         const field = fieldByApiName.get(apiName);
@@ -6607,12 +6856,23 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
       const countResult = await db(`SELECT COUNT(*)::int AS total FROM "${object.source_table}"${where}`, params);
       const total = countResult.rows[0]?.total || 0;
-      const pageSize = listView && Number.isFinite(Number(listView.page_size)) ? Number(listView.page_size) : boundedInteger(req.query.pageSize ?? req.query.limit, 50, 200);
+      const pageSize = req.query.pageSize !== undefined || req.query.limit !== undefined
+        ? boundedInteger(req.query.pageSize ?? req.query.limit, 50, 200)
+        : listView && Number.isFinite(Number(listView.page_size))
+          ? boundedInteger(listView.page_size, 50, 200)
+          : 50;
       const pages = total ? Math.ceil(total / pageSize) : 0;
       const page = pages ? Math.min(boundedInteger(req.query.page, 1, pages), pages) : 1;
       const offset = (page - 1) * pageSize;
       const dataParams = [...params, pageSize, offset];
-      const sort = listView && listView.sort && typeof listView.sort === "object" ? normalizeListViewSort(listView.sort) : { field: null, direction: "asc" };
+      const savedSort = listView && listView.sort && typeof listView.sort === "object" ? normalizeListViewSort(listView.sort) : { field: null, direction: "asc" };
+      const requestedSortField = typeof req.query.sortField === "string" && req.query.sortField.trim() ? req.query.sortField.trim() : null;
+      if (requestedSortField && !fieldByApiName.has(requestedSortField)) {
+        return res.status(400).json({ success: false, message: "Sort field is unavailable" });
+      }
+      const sort = requestedSortField
+        ? { field: requestedSortField, direction: String(req.query.sortDirection || "asc").toLowerCase() === "desc" ? "desc" : "asc" }
+        : savedSort;
       const sortField = sort.field ? fieldByApiName.get(sort.field) : null;
       const orderClause = sortField
         ? ` ORDER BY ${platformFieldSql(sortField, object)} ${sort.direction === "desc" ? "DESC" : "ASC"}`

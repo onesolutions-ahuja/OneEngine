@@ -590,7 +590,23 @@ export const platformSchema = `
     ADD COLUMN IF NOT EXISTS source_package_version VARCHAR(40),
     ADD COLUMN IF NOT EXISTS managed BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS package_required BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE;
+    ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+
+  /* List views are now first-class runtime productivity metadata. Shared views
+     keep owner_user_id NULL; users can create their own private views without
+     colliding with another user's API key. Drop the original company-wide
+     uniqueness constraint and replace it with scoped indexes. */
+  ALTER TABLE platform_list_views
+    DROP CONSTRAINT IF EXISTS platform_list_views_object_id_company_id_view_key_key;
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_list_views_shared_key
+    ON platform_list_views(object_id,company_id,view_key)
+    WHERE owner_user_id IS NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_list_views_personal_key
+    ON platform_list_views(object_id,company_id,owner_user_id,view_key)
+    WHERE owner_user_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_platform_list_views_runtime
+    ON platform_list_views(object_id,company_id,owner_user_id,active,is_default);
   CREATE TABLE IF NOT EXISTS platform_reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,

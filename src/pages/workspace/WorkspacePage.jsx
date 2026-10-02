@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
@@ -79,8 +79,68 @@ function makeColumns(fields, listView = null) {
   return safe.map((field) => ({
     key: field.api_name,
     label: field.label || field.api_name,
+    fieldType: field.field_type || 'text',
+    options: Array.isArray(field.options) ? field.options : [],
+    editable: field.writable !== false && !['formula','rollup','lookup','multiselect','json'].includes(String(field.field_type || '').toLowerCase()),
     render: (row) => readableValue(row?.[field.api_name]),
   }))
+}
+
+function savedViewFiltersToUi(filters) {
+  const normalized = Array.isArray(filters)
+    ? filters
+    : filters && typeof filters === 'object'
+      ? Object.entries(filters).map(([field, value]) => ({
+          field,
+          operator: Array.isArray(value) ? 'in' : 'equals',
+          value,
+        }))
+      : []
+  const result = {}
+  for (const item of normalized) {
+    if (!item?.field) continue
+    const current = result[item.field] || { values: [], operator: '', value: '' }
+    if (item.operator === 'in') {
+      const values = Array.isArray(item.value) ? item.value : [item.value]
+      current.values = values.map((value) => JSON.stringify(value))
+    } else {
+      current.operator = item.operator || 'equals'
+      current.value = ['is_blank','is_not_blank'].includes(current.operator) ? '' : (item.value ?? '')
+    }
+    result[item.field] = current
+  }
+  return result
+}
+
+function uiFiltersToMetadata(filters = {}) {
+  const result = []
+  for (const [field, config] of Object.entries(filters || {})) {
+    const selected = Array.isArray(config?.values) ? config.values : []
+    if (selected.length) {
+      result.push({
+        field,
+        operator: 'in',
+        value: selected.map((item) => {
+          try { return JSON.parse(item) } catch { return item }
+        }),
+      })
+    }
+    if (config?.operator) {
+      result.push({
+        field,
+        operator: config.operator,
+        value: ['is_blank','is_not_blank'].includes(config.operator) ? null : config.value,
+      })
+    }
+  }
+  return result
+}
+
+function savedViewSortToUi(sort) {
+  return {
+    key: typeof sort?.field === 'string' ? sort.field : '',
+    direction: String(sort?.direction || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc',
+  }
 }
 
 export default function WorkspacePage({ initialObjectKey = '', initialRecordId = '', onRouteChange = null }) {
@@ -98,10 +158,35 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [error, setError] = useState('')
   const [editor, setEditor] = useState(null)
+  const [bulkEditor, setBulkEditor] = useState(null)
   const [detailTab, setDetailTab] = useState('details')
-  const [relatedState, setRelatedState] = useState({ key: '', loading: false, rows: [], error: '' })
+  const [relatedState, setRelatedState] = useState({
+    key: '',
+    relationship: null,
+    loading: false,
+    rows: [],
+    fields: [],
+    permissions: null,
+    error: '',
+    search: '',
+    filters: {},
+    sort: { key: '', direction: 'asc' },
+    pageInfo: { page: 1, pageSize: 25, total: 0, pages: 0 },
+  })
   const [historyState, setHistoryState] = useState({ loading: false, rows: [], error: '' })
   const [actionBusy, setActionBusy] = useState('')
+  const [activeListViewId, setActiveListViewId] = useState('')
+  const [listSearch, setListSearch] = useState('')
+  const [listFilters, setListFilters] = useState({})
+  const [listSort, setListSort] = useState({ key: '', direction: 'asc' })
+  const [listDisplayMode, setListDisplayMode] = useState('split')
+  const [kanbanField, setKanbanField] = useState('')
+  const [pageInfo, setPageInfo] = useState({ page: 1, pageSize: 50, total: 0, pages: 0 })
+  const rowRequestRef = useRef(0)
+  const searchTimerRef = useRef(null)
+  const relatedSearchTimerRef = useRef(null)
+  const pendingRecordIdRef = useRef('')
+  const relatedRequestRef = useRef(0)
 
   useEffect(() => {
     let live = true
@@ -154,7 +239,72 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
   const selectedObject = objects.find((item) => objectKey(item) === selectedKey) || null
 
-  const loadObject = async (object = selectedObject, forceRefresh = false) => {
+  useEffect(() => () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (relatedSearchTimerRef.current) clearTimeout(relatedSearchTimerRef.current)
+  }, [])
+
+  const loadRows = async ({
+    object = selectedObject,
+    listViewId = activeListViewId,
+    page = 1,
+    search = listSearch,
+    filters = listFilters,
+    sort = listSort,
+    pageSizeOverride = null,
+  } = {}) => {
+    if (!object) return
+    const requestId = ++rowRequestRef.current
+    const key = objectKey(object)
+    setLoadingRows(true)
+    setError('')
+    try {
+      const params = new URLSearchParams()
+      params.set('page', String(Math.max(1, Number(page) || 1)))
+      if (pageSizeOverride) params.set('pageSize', String(pageSizeOverride))
+      else if (listDisplayMode === 'kanban') params.set('pageSize', '200')
+      if (listViewId) params.set('listViewId', listViewId)
+      if (search?.trim()) params.set('search', search.trim())
+      params.set('viewFilters', JSON.stringify(uiFiltersToMetadata(filters)))
+      if (sort?.key) {
+        params.set('sortField', sort.key)
+        params.set('sortDirection', sort.direction === 'desc' ? 'desc' : 'asc')
+      }
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?${params.toString()}`)
+      if (requestId !== rowRequestRef.current) return
+      const nextRows = Array.isArray(response?.records)
+        ? response.records
+        : Array.isArray(response?.data)
+          ? response.data
+          : []
+      setRows(nextRows)
+      setPageInfo({
+        page: Number(response?.page || page || 1),
+        pageSize: Number(response?.pageSize || 50),
+        total: Number(response?.total || 0),
+        pages: Number(response?.pages || 0),
+      })
+      setSelectedId((current) => {
+        const pending = pendingRecordIdRef.current
+        if (pending) {
+          pendingRecordIdRef.current = ''
+          return pending
+        }
+        if (current && nextRows.some((row) => String(row.id) === String(current))) return current
+        if (initialRecordId && current && String(current) === String(initialRecordId)) return current
+        return nextRows[0]?.id || ''
+      })
+    } catch (err) {
+      if (requestId !== rowRequestRef.current) return
+      setRows([])
+      setPageInfo({ page: 1, pageSize: 50, total: 0, pages: 0 })
+      setError(err?.message || 'Unable to load records')
+    } finally {
+      if (requestId === rowRequestRef.current) setLoadingRows(false)
+    }
+  }
+
+  const loadObject = async (object = selectedObject, forceRefresh = false, preferredListViewId = '') => {
     if (!object) return
     const key = objectKey(object)
     setLoadingRows(true)
@@ -165,26 +315,21 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`),
       ])
       const meta = workspaceRes?.data || {}
-      const listViewId = meta?.defaultListView?.id || ''
-      const recordPath = `/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
-      const recordRes = await cachedGet(recordPath, {
-        cacheKey: `workspace:records:${key}:${listViewId || 'default'}`,
-        forceRefresh,
-        onFresh: (fresh) => {
-          const nextRows = Array.isArray(fresh?.records) ? fresh.records : Array.isArray(fresh?.data) ? fresh.data : []
-          setRows(nextRows)
-        },
-      })
       const nextFields = Array.isArray(meta.fields) ? meta.fields : []
-      const nextRows = Array.isArray(recordRes?.records)
-        ? recordRes.records
-        : Array.isArray(recordRes?.data)
-          ? recordRes.data
-          : []
+      const nextViews = Array.isArray(meta.listViews) ? meta.listViews : []
+      const preferred = nextViews.find((view) => String(view.id) === String(preferredListViewId || activeListViewId || ''))
+      const selectedView = preferred || meta.defaultListView || nextViews[0] || null
+      const nextViewId = selectedView?.id || ''
+      const nextFilters = savedViewFiltersToUi(selectedView?.filters)
+      const nextSort = savedViewSortToUi(selectedView?.sort)
+
       setFields(nextFields)
-      setRows(nextRows)
+      setKanbanField((current) => {
+        const candidates = nextFields.filter((field) => field.readable !== false && field.writable !== false && ['picklist','select','boolean'].includes(String(field.field_type || '').toLowerCase()))
+        return candidates.some((field) => field.api_name === current) ? current : (candidates[0]?.api_name || '')
+      })
       setRuntimeMeta({
-        listViews: meta.listViews || [],
+        listViews: nextViews,
         defaultListView: meta.defaultListView || null,
         recordTypes: meta.recordTypes || [],
         relationships: meta.relationships || [],
@@ -194,21 +339,24 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         buttons: meta.buttons || [],
       })
       setPermissions(permissionRes?.data || null)
-      const first = nextRows[0]?.id || ''
-      setSelectedId((current) => {
-        if (current && nextRows.some((row) => String(row.id) === String(current))) return current
-        if (initialRecordId && nextRows.some((row) => String(row.id) === String(initialRecordId))) return initialRecordId
-        return first
-      })
+      setActiveListViewId(nextViewId)
+      setListSearch('')
+      setListFilters(nextFilters)
+      setListSort(nextSort)
+      await loadRows({ object, listViewId: nextViewId, page: 1, search: '', filters: nextFilters, sort: nextSort })
     } catch (err) {
       setFields([])
       setRows([])
       setPermissions(null)
       setRuntimeMeta({ listViews: [], defaultListView: null, recordTypes: [], relationships: [], layouts: [], buttons: [] })
+      setActiveListViewId('')
+      setListSearch('')
+      setListFilters({})
+      setListSort({ key: '', direction: 'asc' })
+      setPageInfo({ page: 1, pageSize: 50, total: 0, pages: 0 })
       setSelectedId('')
       setDetail(null)
       setError(err?.message || 'Unable to load records')
-    } finally {
       setLoadingRows(false)
     }
   }
@@ -255,6 +403,131 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     return () => { live = false }
   }, [selectedId, selectedKey])
 
+  const handleListViewChange = async (viewId) => {
+    if (!selectedObject) return
+    const view = runtimeMeta.listViews.find((item) => String(item.id) === String(viewId)) || null
+    const nextFilters = savedViewFiltersToUi(view?.filters)
+    const nextSort = savedViewSortToUi(view?.sort)
+    setActiveListViewId(view?.id || '')
+    setListSearch('')
+    setListFilters(nextFilters)
+    setListSort(nextSort)
+    await loadRows({ object: selectedObject, listViewId: view?.id || '', page: 1, search: '', filters: nextFilters, sort: nextSort })
+  }
+
+  const handleListSearchChange = (value) => {
+    setListSearch(value)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      void loadRows({ object: selectedObject, listViewId: activeListViewId, page: 1, search: value, filters: listFilters, sort: listSort })
+    }, 250)
+  }
+
+  const handleListFiltersChange = (next) => {
+    setListFilters(next)
+    void loadRows({ object: selectedObject, listViewId: activeListViewId, page: 1, search: listSearch, filters: next, sort: listSort })
+  }
+
+  const handleListSortChange = (next) => {
+    setListSort(next)
+    void loadRows({ object: selectedObject, listViewId: activeListViewId, page: 1, search: listSearch, filters: listFilters, sort: next })
+  }
+
+  const handlePageChange = (page) => {
+    void loadRows({ object: selectedObject, listViewId: activeListViewId, page, search: listSearch, filters: listFilters, sort: listSort })
+  }
+
+  const saveListView = async (state, mode) => {
+    if (!selectedObject) return
+    const activeView = runtimeMeta.listViews.find((item) => String(item.id) === String(activeListViewId)) || null
+    let label = activeView?.label || 'My View'
+    if (mode === 'new') {
+      label = window.prompt('Name this personal list view', activeView?.label ? `${activeView.label} Copy` : `My ${objectLabel(selectedObject)}`)?.trim()
+      if (!label) return
+    }
+    try {
+      setError('')
+      const payload = {
+        label,
+        columns: state.columns,
+        filters: state.filters,
+        sort: state.sort,
+        pageSize: state.pageSize,
+        ...(mode === 'new' ? { scope: 'PERSONAL' } : {}),
+      }
+      const response = await apiRequest(
+        mode === 'new'
+          ? `/api/platform/objects/${encodeURIComponent(selectedObject.id)}/list-views`
+          : `/api/platform/list-views/${encodeURIComponent(activeListViewId)}`,
+        {
+          method: mode === 'new' ? 'POST' : 'PUT',
+          body: JSON.stringify(payload),
+        },
+      )
+      const saved = response?.data || null
+      await loadObject(selectedObject, true, saved?.id || activeListViewId)
+    } catch (err) {
+      setError(err?.message || 'Unable to save list view')
+    }
+  }
+
+  const manageListView = async (action) => {
+    if (!selectedObject || !activeListViewId) return
+    const view = runtimeMeta.listViews.find((item) => String(item.id) === String(activeListViewId))
+    if (!view || !(view.owner_user_id || view.scope === 'PERSONAL')) return
+    try {
+      setError('')
+      if (action === 'rename') {
+        const label = window.prompt('Rename this list view', view.label || '')?.trim()
+        if (!label || label === view.label) return
+        await apiRequest(`/api/platform/list-views/${encodeURIComponent(view.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ label }),
+        })
+        await loadObject(selectedObject, true, view.id)
+        return
+      }
+      if (action === 'default') {
+        await apiRequest(`/api/platform/list-views/${encodeURIComponent(view.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ isDefault: true }),
+        })
+        await loadObject(selectedObject, true, view.id)
+        return
+      }
+      if (action === 'delete') {
+        if (!window.confirm(`Delete list view “${view.label}”?`)) return
+        await apiRequest(`/api/platform/list-views/${encodeURIComponent(view.id)}`, { method: 'DELETE' })
+        await loadObject(selectedObject, true, '')
+      }
+    } catch (err) {
+      setError(err?.message || 'Unable to manage list view')
+    }
+  }
+
+  const handleDisplayModeChange = (mode) => {
+    if (!['table','split','kanban'].includes(mode)) return
+    setListDisplayMode(mode)
+    const nextKanbanField = kanbanField || fields.find((field) => ['picklist','select','boolean'].includes(String(field.field_type || '').toLowerCase()))?.api_name || ''
+    if (mode === 'kanban' && nextKanbanField && nextKanbanField !== kanbanField) setKanbanField(nextKanbanField)
+    void loadRows({
+      object: selectedObject,
+      listViewId: activeListViewId,
+      page: 1,
+      search: listSearch,
+      filters: listFilters,
+      sort: listSort,
+      pageSizeOverride: mode === 'kanban' ? 200 : Number(activeListView?.page_size || 50),
+    })
+  }
+
+  const handleKanbanMove = async (rowId, fieldKey, value) => {
+    const row = rows.find((item) => String(item.id) === String(rowId))
+    const column = columns.find((item) => item.key === fieldKey)
+    if (!row || !column) return
+    await inlineEditRecord(row, column, value)
+  }
+
   const filteredObjects = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return objects
@@ -263,8 +536,13 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     )
   }, [objects, query])
 
-  const columns = useMemo(() => makeColumns(fields, runtimeMeta.defaultListView), [fields, runtimeMeta.defaultListView])
-  const searchKeys = useMemo(() => columns.map((column) => column.key), [columns])
+  const activeListView = runtimeMeta.listViews.find((item) => String(item.id) === String(activeListViewId)) || runtimeMeta.defaultListView || null
+  const allColumns = useMemo(() => makeColumns(fields), [fields])
+  const columns = useMemo(() => makeColumns(fields, activeListView), [fields, activeListView])
+  const searchKeys = useMemo(() => allColumns.map((column) => column.key), [allColumns])
+  const kanbanFields = useMemo(() => fields
+    .filter((field) => field.readable !== false && field.writable !== false && ['picklist','select','boolean'].includes(String(field.field_type || '').toLowerCase()))
+    .map((field) => ({ key: field.api_name, label: field.label || field.api_name })), [fields])
   const canCreate = permissions?.can_create === true
   const canEdit = permissions?.can_edit === true
   const canDelete = permissions?.can_delete === true
@@ -324,7 +602,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       if (response?.success === false) throw new Error(response.message || 'Unable to save record')
       const relatedToRefresh = editor.relatedRelationship || null
       setEditor(null)
-      await loadObject(selectedObject, true)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
       const savedId = response?.data?.id
       if (savedId && key === objectKey(selectedObject)) setSelectedId(savedId)
       if (relatedToRefresh) await loadRelated(relatedToRefresh)
@@ -333,11 +611,74 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     }
   }
 
+  const inlineEditRecord = async (row, column, value) => {
+    if (!selectedObject || !row?.id || !column?.key || !canEdit) return
+    const type = String(column.fieldType || '').toLowerCase()
+    let nextValue = value
+    if (['number','decimal','currency'].includes(type)) nextValue = value === '' ? null : Number(value)
+    if (value === '') nextValue = null
+    try {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(row.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ data: { [column.key]: nextValue }, recordTypeId: row.recordTypeId || row.record_type_id || null }),
+      })
+      if (response?.success === false) throw new Error(response.message || 'Unable to update record')
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
+      if (String(selectedId) === String(row.id)) {
+        const detailResponse = await apiRequest(`/api/platform/runtime/record-page?objectKey=${encodeURIComponent(objectKey(selectedObject))}&recordId=${encodeURIComponent(row.id)}`)
+        setDetail(detailResponse?.data || null)
+      }
+    } catch (err) {
+      setError(err?.message || 'Unable to update record')
+    }
+  }
+
+  const openBulkEdit = (ids) => {
+    const writable = fields.filter((field) => field.active !== false && field.writable !== false && !['formula','rollup','json'].includes(String(field.field_type || '').toLowerCase()))
+    setBulkEditor({ ids, fieldKey: writable[0]?.api_name || '', value: '', error: '' })
+  }
+
+  const saveBulkEdit = async (event) => {
+    event.preventDefault()
+    if (!selectedObject || !bulkEditor?.ids?.length || !bulkEditor.fieldKey) return
+    const field = fields.find((item) => item.api_name === bulkEditor.fieldKey)
+    if (!field) return
+    let value = bulkEditor.value
+    const type = String(field.field_type || '').toLowerCase()
+    if (['number','decimal','currency'].includes(type)) value = value === '' ? null : Number(value)
+    if (value === '') value = null
+    try {
+      for (const id of bulkEditor.ids) {
+        const row = rows.find((item) => String(item.id) === String(id))
+        await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ data: { [bulkEditor.fieldKey]: value }, recordTypeId: row?.recordTypeId || row?.record_type_id || null }),
+        })
+      }
+      setBulkEditor(null)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
+    } catch (err) {
+      setBulkEditor((current) => ({ ...current, error: err?.message || 'Unable to update selected records' }))
+    }
+  }
+
+  const bulkDeleteRecords = async (ids) => {
+    if (!selectedObject || !ids?.length || !canDelete || !window.confirm(`Delete ${ids.length} selected record${ids.length === 1 ? '' : 's'}?`)) return
+    try {
+      for (const id of ids) {
+        await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      }
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
+    } catch (err) {
+      setError(err?.message || 'Unable to delete selected records')
+    }
+  }
+
   const deleteRecord = async () => {
     if (!selectedObject || !selectedId || !canDelete || !window.confirm('Delete this record?')) return
     try {
       await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}`, { method: 'DELETE' })
-      await loadObject(selectedObject, true)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
     } catch (err) {
       setError(err?.message || 'Unable to delete record')
     }
@@ -361,7 +702,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         body: JSON.stringify({}),
       })
       if (response?.success === false) throw new Error(response.message || 'Action failed')
-      await loadObject(selectedObject, true)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
     } catch (err) {
       setError(err?.message || 'Unable to execute action')
     } finally {
@@ -394,7 +735,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         body: JSON.stringify({}),
       })
       if (response?.success === false) throw new Error(response.message || 'Action failed')
-      await loadObject(selectedObject, true)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
     } catch (err) {
       setError(err?.message || 'Unable to execute configured action')
     } finally {
@@ -434,20 +775,113 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     }
   }
 
-  const loadRelated = async (relationship) => {
+  const loadRelated = async (relationship, overrides = {}) => {
     if (!selectedObject || !selectedId || !relationship?.relationship_key) return
+    const requestId = ++relatedRequestRef.current
     setDetailTab('related')
-    setRelatedState({ key: relationship.relationship_key, loading: true, rows: [], error: '' })
+    const changingRelationship = relatedState.key !== relationship.relationship_key
+    const search = overrides.search !== undefined ? overrides.search : (changingRelationship ? '' : relatedState.search)
+    const filters = overrides.filters !== undefined ? overrides.filters : (changingRelationship ? {} : relatedState.filters)
+    const sort = overrides.sort !== undefined ? overrides.sort : (changingRelationship ? { key: '', direction: 'asc' } : relatedState.sort)
+    const page = overrides.page !== undefined ? overrides.page : (changingRelationship ? 1 : relatedState.pageInfo.page || 1)
+
+    setRelatedState((current) => ({
+      ...current,
+      key: relationship.relationship_key,
+      relationship,
+      loading: true,
+      error: '',
+      ...(changingRelationship ? {
+        rows: [],
+        fields: [],
+        permissions: null,
+        search,
+        filters,
+        sort,
+        pageInfo: { page: 1, pageSize: 25, total: 0, pages: 0 },
+      } : { search, filters, sort }),
+    }))
+
     try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/related/${encodeURIComponent(relationship.relationship_key)}?pageSize=100`)
-      setRelatedState({ key: relationship.relationship_key, loading: false, rows: response?.records || response?.data || [], error: '' })
+      const params = new URLSearchParams({ page: String(Math.max(1, Number(page) || 1)), pageSize: '25' })
+      if (search?.trim()) params.set('search', search.trim())
+      params.set('viewFilters', JSON.stringify(uiFiltersToMetadata(filters)))
+      if (sort?.key) {
+        params.set('sortField', sort.key)
+        params.set('sortDirection', sort.direction === 'desc' ? 'desc' : 'asc')
+      }
+      const response = await apiRequest(
+        `/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/related/${encodeURIComponent(relationship.relationship_key)}?${params.toString()}`,
+      )
+      if (requestId !== relatedRequestRef.current) return
+      setRelatedState((current) => ({
+        ...current,
+        key: relationship.relationship_key,
+        relationship,
+        loading: false,
+        rows: Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [],
+        fields: Array.isArray(response?.fields) ? response.fields : current.fields,
+        permissions: response?.permissions || current.permissions,
+        error: '',
+        search,
+        filters,
+        sort,
+        pageInfo: {
+          page: Number(response?.page || page || 1),
+          pageSize: Number(response?.pageSize || 25),
+          total: Number(response?.total || 0),
+          pages: Number(response?.pages || 0),
+        },
+      }))
     } catch (err) {
-      setRelatedState({ key: relationship.relationship_key, loading: false, rows: [], error: err?.message || 'Unable to load related records' })
+      if (requestId !== relatedRequestRef.current) return
+      setRelatedState((current) => ({
+        ...current,
+        key: relationship.relationship_key,
+        relationship,
+        loading: false,
+        rows: [],
+        error: err?.message || 'Unable to load related records',
+      }))
     }
   }
 
+  const handleRelatedSearchChange = (value) => {
+    const relationship = relatedState.relationship
+    if (!relationship) return
+    setRelatedState((current) => ({ ...current, search: value }))
+    if (relatedSearchTimerRef.current) clearTimeout(relatedSearchTimerRef.current)
+    relatedSearchTimerRef.current = setTimeout(() => {
+      void loadRelated(relationship, { page: 1, search: value })
+    }, 250)
+  }
+
+  const handleRelatedFiltersChange = (filters) => {
+    if (!relatedState.relationship) return
+    setRelatedState((current) => ({ ...current, filters }))
+    void loadRelated(relatedState.relationship, { page: 1, filters })
+  }
+
+  const handleRelatedSortChange = (sort) => {
+    if (!relatedState.relationship) return
+    setRelatedState((current) => ({ ...current, sort }))
+    void loadRelated(relatedState.relationship, { page: 1, sort })
+  }
+
+  const openRelatedRecord = (row) => {
+    const childKey = relatedState.relationship?.child_object_key
+    if (!childKey || !row?.id) return
+    pendingRecordIdRef.current = String(row.id)
+    if (objects.some((item) => objectKey(item) === childKey)) {
+      setSelectedId(row.id)
+      setSelectedKey(childKey)
+      setDetailTab('details')
+    }
+    onRouteChange?.(childKey, row.id)
+  }
+
   return (
-    <section className="workspace-page">
+    <section className={`workspace-page workspace-mode-${listDisplayMode}`}>
       <aside className="workspace-object-pane">
         <div className="workspace-pane-title">
           <div><strong>Workspace</strong><span>{objects.length} objects</span></div>
@@ -471,9 +905,10 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         {selectedObject ? (
           <RecordListView
             title={objectLabel(selectedObject)}
-            subtitle={`${rows.length} records`}
+            subtitle={`${pageInfo.total} records`}
             rows={rows}
             columns={columns}
+            availableColumns={allColumns}
             searchKeys={searchKeys}
             canCreate={canCreate}
             canEdit={canEdit}
@@ -483,14 +918,38 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             error={error}
             objectKey={objectKey(selectedObject)}
             objectLabel={objectLabel(selectedObject)}
-            onDataChanged={() => loadObject(selectedObject, true)}
+            onDataChanged={() => loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })}
             selectedRowId={selectedId}
             onRowSelect={(row) => { setSelectedId(row.id); setDetailTab('details') }}
+            listViews={runtimeMeta.listViews}
+            activeListViewId={activeListViewId}
+            onListViewChange={handleListViewChange}
+            onSaveListView={saveListView}
+            canUpdateActiveView={Boolean(activeListView?.owner_user_id || activeListView?.scope === 'PERSONAL')}
+            serverMode
+            searchValue={listSearch}
+            onSearchChange={handleListSearchChange}
+            sortValue={listSort}
+            onSortChange={handleListSortChange}
+            filtersValue={listFilters}
+            onFiltersChange={handleListFiltersChange}
+            pageInfo={pageInfo}
+            onPageChange={handlePageChange}
+            onInlineEdit={canEdit ? inlineEditRecord : null}
+            onBulkEdit={canEdit ? openBulkEdit : null}
+            onBulkDelete={canDelete ? bulkDeleteRecords : null}
+            onManageListView={manageListView}
+            displayMode={listDisplayMode}
+            onDisplayModeChange={handleDisplayModeChange}
+            kanbanFields={kanbanFields}
+            kanbanField={kanbanField || kanbanFields[0]?.key || ''}
+            onKanbanFieldChange={(fieldKey) => { setKanbanField(fieldKey); void loadRows({ object: selectedObject, listViewId: activeListViewId, page: 1, search: listSearch, filters: listFilters, sort: listSort, pageSizeOverride: 200 }) }}
+            onKanbanMove={canEdit ? handleKanbanMove : null}
           />
         ) : <div className="workspace-state">Select an object.</div>}
       </main>
 
-      <aside className="workspace-detail-pane">
+      {listDisplayMode === 'split' ? <aside className="workspace-detail-pane">
         {!selectedObject ? null : loadingDetail ? (
           <div className="workspace-state">Loading record…</div>
         ) : detailRecord ? (
@@ -529,19 +988,36 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
                 ))}
               </div>
               {detailTab === 'related' ? (
-                <section className="workspace-detail-card">
-                  <div className="workspace-related-heading">
-                    <h3>Related Records</h3>
-                    {(() => {
-                      const relationship = outboundRelationships.find((item) => item.relationship_key === relatedState.key)
-                      return relationship && canCreate ? <button type="button" disabled={Boolean(actionBusy)} onClick={() => createRelatedRecord(relationship)}><Plus size={12}/> New</button> : null
-                    })()}
-                  </div>
-                  {relatedState.loading ? <div className="workspace-state">Loading related records…</div> : relatedState.error ? <div className="workspace-state">{relatedState.error}</div> : relatedState.rows.length ? relatedState.rows.map((row) => (
-                    <button className="workspace-related-row" type="button" key={row.id}>
-                      <strong>{recordTitle(row, fields)}</strong><span>{row.id}</span>
-                    </button>
-                  )) : <div className="workspace-state">No related records.</div>}
+                <section className="workspace-detail-card workspace-related-list-card">
+                  {relatedState.relationship ? (
+                    <RecordListView
+                      title={relatedState.relationship.child_object_label || relatedState.relationship.relationship_key || 'Related Records'}
+                      subtitle={`${relatedState.pageInfo.total || 0} related records`}
+                      rows={relatedState.rows}
+                      columns={makeColumns(relatedState.fields)}
+                      availableColumns={makeColumns(relatedState.fields)}
+                      searchKeys={relatedState.fields.filter((field) => field.readable !== false).map((field) => field.api_name)}
+                      createLabel="New"
+                      canCreate={relatedState.permissions?.can_create === true}
+                      canEdit={false}
+                      onCreate={() => createRelatedRecord(relatedState.relationship)}
+                      loading={relatedState.loading}
+                      error={relatedState.error}
+                      emptyText="No related records."
+                      serverMode
+                      searchValue={relatedState.search}
+                      onSearchChange={handleRelatedSearchChange}
+                      sortValue={relatedState.sort}
+                      onSortChange={handleRelatedSortChange}
+                      filtersValue={relatedState.filters}
+                      onFiltersChange={handleRelatedFiltersChange}
+                      pageInfo={relatedState.pageInfo}
+                      onPageChange={(page) => loadRelated(relatedState.relationship, { page })}
+                      onDataChanged={() => loadRelated(relatedState.relationship, { page: relatedState.pageInfo.page })}
+                      selectedRowId={null}
+                      onRowSelect={openRelatedRecord}
+                    />
+                  ) : <div className="workspace-state">Choose a related list.</div>}
                 </section>
               ) : detailTab === 'history' ? (
                 <section className="workspace-detail-card">
@@ -578,7 +1054,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         ) : (
           <div className="workspace-state">Select a record to see its details.</div>
         )}
-      </aside>
+      </aside> : null}
 
       {editor ? (
         <div className="workspace-editor-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setEditor(null)}>
@@ -603,6 +1079,36 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
           </form>
         </div>
       ) : null}
+
+      {bulkEditor ? (
+        <div className="workspace-editor-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setBulkEditor(null)}>
+          <form className="workspace-editor" onSubmit={saveBulkEdit}>
+            <header>
+              <div><strong>Edit {bulkEditor.ids.length} selected record{bulkEditor.ids.length === 1 ? '' : 's'}</strong></div>
+              <button type="button" onClick={() => setBulkEditor(null)}><X size={15}/></button>
+            </header>
+            <div className="workspace-editor-body">
+              {bulkEditor.error ? <div className="workspace-editor-error">{bulkEditor.error}</div> : null}
+              <label>
+                <span>Field</span>
+                <select value={bulkEditor.fieldKey} onChange={(event) => setBulkEditor((current) => ({ ...current, fieldKey: event.target.value, value: '' }))}>
+                  {fields.filter((field) => field.active !== false && field.writable !== false && !['formula','rollup','json'].includes(String(field.field_type || '').toLowerCase())).map((field) => (
+                    <option key={field.id || field.api_name} value={field.api_name}>{field.label || field.api_name}</option>
+                  ))}
+                </select>
+              </label>
+              {(() => {
+                const field = fields.find((item) => item.api_name === bulkEditor.fieldKey)
+                return field ? <WorkspaceField field={field} value={bulkEditor.value} onChange={(value) => setBulkEditor((current) => ({ ...current, value }))} /> : null
+              })()}
+            </div>
+            <footer>
+              <button type="button" onClick={() => setBulkEditor(null)}>Cancel</button>
+              <button type="submit" className="workspace-save"><Save size={13}/> Apply to selected</button>
+            </footer>
+          </form>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -616,6 +1122,130 @@ function WorkspaceField({ field, value, onChange }) {
     const options = Array.isArray(field.options) ? field.options : []
     return <label><span>{field.label || field.api_name}</span><select value={value ?? ''} onChange={(e) => onChange(e.target.value)}><option value="">Select…</option>{options.filter((o) => o.active !== false).map((o) => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o.value ?? o}</option>)}</select></label>
   }
+  if (type === 'multiselect') {
+    const options = Array.isArray(field.options) ? field.options : []
+    const selected = Array.isArray(value) ? value.map(String) : []
+    return (
+      <label>
+        <span>{field.label || field.api_name}</span>
+        <select
+          multiple
+          value={selected}
+          required={field.required === true}
+          onChange={(event) => onChange(Array.from(event.target.selectedOptions, (option) => option.value))}
+        >
+          {options.filter((option) => option?.active !== false).map((option) => {
+            const optionValue = typeof option === 'object' ? option.value ?? option.key ?? option.label : option
+            const optionLabel = typeof option === 'object' ? option.label ?? option.name ?? optionValue : option
+            return <option key={String(optionValue)} value={String(optionValue)}>{String(optionLabel)}</option>
+          })}
+        </select>
+      </label>
+    )
+  }
+  if (type === 'lookup') {
+    return <WorkspaceLookupField field={field} value={value} onChange={onChange} />
+  }
   const htmlType = ['number','decimal','currency'].includes(type) ? 'number' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : type === 'email' ? 'email' : type === 'phone' ? 'tel' : 'text'
   return <label><span>{field.label || field.api_name}</span><input type={htmlType} value={value ?? ''} required={field.required === true} onChange={(e) => onChange(e.target.value)} /></label>
+}
+
+function WorkspaceLookupField({ field, value, onChange }) {
+  const targetKey = field?.config?.relatedObjectKey || field?.config?.related_object_key || ''
+  const [text, setText] = useState('')
+  const [options, setOptions] = useState([])
+  const [targetFields, setTargetFields] = useState([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const lookupTimerRef = useRef(null)
+
+  useEffect(() => {
+    if (!targetKey) {
+      setTargetFields([])
+      return
+    }
+    let live = true
+    cachedGet(`/api/platform/runtime/objects/${encodeURIComponent(targetKey)}/workspace`, { cacheKey: `workspace:lookup-meta:${targetKey}` })
+      .then((response) => {
+        if (live) setTargetFields(Array.isArray(response?.data?.fields) ? response.data.fields : [])
+      })
+      .catch(() => live && setTargetFields([]))
+    return () => { live = false }
+  }, [targetKey])
+
+  useEffect(() => {
+    if (!value || !targetKey) {
+      setText(value ? String(value) : '')
+      return
+    }
+    let live = true
+    apiRequest(`/api/platform/runtime/record-page?objectKey=${encodeURIComponent(targetKey)}&recordId=${encodeURIComponent(value)}`)
+      .then((response) => {
+        if (!live) return
+        const record = response?.data?.record || null
+        const recordFields = Array.isArray(response?.data?.fields) ? response.data.fields : []
+        if (record && typeof record === 'object') setText(recordTitle(record, recordFields))
+        else setText(String(value))
+      })
+      .catch(() => live && setText(String(value)))
+    return () => { live = false }
+  }, [value, targetKey])
+
+  useEffect(() => () => {
+    if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current)
+  }, [])
+
+  const search = (next) => {
+    setText(next)
+    setOpen(true)
+    if (!targetKey) return
+    if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current)
+    lookupTimerRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const params = new URLSearchParams({ page: '1', pageSize: '20' })
+        if (next.trim()) params.set('search', next.trim())
+        const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(targetKey)}/records?${params.toString()}`)
+        setOptions(Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [])
+      } catch {
+        setOptions([])
+      } finally {
+        setLoading(false)
+      }
+    }, 200)
+  }
+
+  const choose = (record) => {
+    onChange(record.id)
+    setText(recordTitle(record, targetFields))
+    setOpen(false)
+  }
+
+  return (
+    <label className="workspace-lookup-field">
+      <span>{field.label || field.api_name}</span>
+      <div className="workspace-lookup-input">
+        <input
+          type="search"
+          value={text}
+          required={field.required === true}
+          placeholder={targetKey ? `Search ${targetKey}…` : 'Search records…'}
+          onFocus={() => { setOpen(true); if (!options.length) search('') }}
+          onChange={(event) => { onChange(''); search(event.target.value) }}
+          onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false) }}
+        />
+        {value ? <button type="button" onClick={() => { onChange(''); setText(''); setOptions([]) }}>Clear</button> : null}
+        {open ? (
+          <div className="workspace-lookup-results">
+            {loading ? <div>Searching…</div> : options.length ? options.map((record) => (
+              <button key={record.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => choose(record)}>
+                <strong>{recordTitle(record, targetFields)}</strong>
+                <small>{record.id}</small>
+              </button>
+            )) : <div>No matching records.</div>}
+          </div>
+        ) : null}
+      </div>
+    </label>
+  )
 }

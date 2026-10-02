@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Check, FileDown, FileUp, Filter, GripVertical, Pencil, Plus, Search } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Columns3, Copy, FileDown, FileUp, Filter, GripVertical, LayoutList, Pencil, Plus, Save, Search, Star, Trash2 } from 'lucide-react'
 import DataLoaderWindow from './DataLoaderWindow'
 
 const valueFor = (column, row) => {
@@ -46,6 +46,30 @@ const matchesOperator = (raw, operator, expected) => {
   return true
 }
 
+const serializeFilters = (filters = {}) => {
+  const result = []
+  for (const [field, config] of Object.entries(filters || {})) {
+    const selected = Array.isArray(config?.values) ? config.values : []
+    if (selected.length) {
+      result.push({
+        field,
+        operator: 'in',
+        value: selected.map((item) => {
+          try { return JSON.parse(item) } catch { return item }
+        }),
+      })
+    }
+    if (config?.operator) {
+      result.push({
+        field,
+        operator: config.operator,
+        value: ['is_blank', 'is_not_blank'].includes(config.operator) ? null : config.value,
+      })
+    }
+  }
+  return result
+}
+
 const layoutKey = (title) => {
   let userId = 'anonymous'
   try {
@@ -60,6 +84,7 @@ export default function RecordListView({
   subtitle,
   rows = [],
   columns = [],
+  availableColumns = [],
   searchKeys = [],
   createLabel = 'Create New',
   canCreate = false,
@@ -74,12 +99,60 @@ export default function RecordListView({
   onDataChanged,
   selectedRowId = null,
   onRowSelect,
+  listViews = [],
+  activeListViewId = '',
+  onListViewChange = null,
+  onSaveListView = null,
+  canUpdateActiveView = false,
+  serverMode = false,
+  searchValue,
+  onSearchChange,
+  sortValue,
+  onSortChange,
+  filtersValue,
+  onFiltersChange,
+  pageInfo = null,
+  onPageChange = null,
+  onInlineEdit = null,
+  onBulkEdit = null,
+  onBulkDelete = null,
+  onManageListView = null,
+  displayMode = 'table',
+  onDisplayModeChange = null,
+  kanbanFields = [],
+  kanbanField = '',
+  onKanbanFieldChange = null,
+  onKanbanMove = null,
 }) {
-  const [query, setQuery] = useState('')
-  const [sort, setSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
-  const [filters, setFilters] = useState({})
+  const [localQuery, setLocalQuery] = useState('')
+  const [localSort, setLocalSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
+  const [localFilters, setLocalFilters] = useState({})
+  const query = searchValue !== undefined ? searchValue : localQuery
+  const sort = sortValue !== undefined ? sortValue : localSort
+  const filters = filtersValue !== undefined ? filtersValue : localFilters
+  const setQuery = (next) => onSearchChange ? onSearchChange(next) : setLocalQuery(next)
+  const setSort = (next) => {
+    if (onSortChange) {
+      const resolved = typeof next === 'function' ? next(sort) : next
+      onSortChange(resolved)
+      return
+    }
+    setLocalSort(next)
+  }
+  const setFilters = (next) => {
+    if (onFiltersChange) {
+      const resolved = typeof next === 'function' ? next(filters) : next
+      onFiltersChange(resolved)
+      return
+    }
+    setLocalFilters(next)
+  }
   const [filterOpen, setFilterOpen] = useState(null)
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false)
   const [draggingKey, setDraggingKey] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [editingCell, setEditingCell] = useState(null)
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key))
   const [dataLoaderMode, setDataLoaderMode] = useState(null)
   const [columnOrder, setColumnOrder] = useState(() => {
     try {
@@ -92,6 +165,11 @@ export default function RecordListView({
   const filterAreaRef = useRef(null)
 
   useEffect(() => {
+    const visible = new Set((rows || []).map((row) => String(row.id)))
+    setSelectedIds((current) => current.filter((id) => visible.has(String(id))))
+  }, [rows])
+
+  useEffect(() => {
     const close = (event) => {
       if (!filterAreaRef.current?.contains(event.target)) setFilterOpen(null)
     }
@@ -100,13 +178,21 @@ export default function RecordListView({
   }, [])
 
   useEffect(() => {
-    const validKeys = columns.map((column) => column.key)
+    const all = (availableColumns.length ? availableColumns : columns)
+    const validKeys = all.map((column) => column.key)
+    const configuredKeys = columns.map((column) => column.key).filter((key) => validKeys.includes(key))
     setColumnOrder((current) => {
+      if (activeListViewId) return configuredKeys
       const kept = current.filter((key) => validKeys.includes(key))
-      const missing = validKeys.filter((key) => !kept.includes(key))
+      const missing = configuredKeys.filter((key) => !kept.includes(key))
       return [...kept, ...missing]
     })
-  }, [columns])
+    setVisibleColumnKeys((current) => {
+      if (activeListViewId) return configuredKeys
+      const kept = current.filter((key) => validKeys.includes(key))
+      return kept.length ? kept : configuredKeys
+    })
+  }, [columns, availableColumns, activeListViewId])
 
   useEffect(() => {
     if (!columnOrder.length) return
@@ -116,10 +202,14 @@ export default function RecordListView({
   }, [columnOrder, title])
 
   const orderedColumns = useMemo(() => {
-    const byKey = new Map(columns.map((column) => [column.key, column]))
+    const all = availableColumns.length ? availableColumns : columns
+    const byKey = new Map(all.map((column) => [column.key, column]))
+    const visible = new Set(visibleColumnKeys.length ? visibleColumnKeys : columns.map((column) => column.key))
     const order = columnOrder.length ? columnOrder : columns.map((column) => column.key)
-    return order.map((key) => byKey.get(key)).filter(Boolean)
-  }, [columns, columnOrder])
+    const ordered = order.filter((key) => visible.has(key)).map((key) => byKey.get(key)).filter(Boolean)
+    const missing = [...visible].filter((key) => !order.includes(key)).map((key) => byKey.get(key)).filter(Boolean)
+    return [...ordered, ...missing]
+  }, [columns, availableColumns, columnOrder, visibleColumnKeys])
 
   const filterOptions = useMemo(() => {
     const result = {}
@@ -138,6 +228,7 @@ export default function RecordListView({
   }, [rows, columns])
 
   const filtered = useMemo(() => {
+    if (serverMode) return Array.isArray(rows) ? rows : []
     const q = query.trim().toLowerCase()
     let result = !q
       ? rows
@@ -185,7 +276,7 @@ export default function RecordListView({
 
       return sort.direction === 'asc' ? comparison : -comparison
     })
-  }, [rows, query, searchKeys, columns, sort, filters])
+  }, [rows, query, searchKeys, columns, sort, filters, serverMode])
 
   const toggleSort = (column) => {
     if (column.sortable === false) return
@@ -220,6 +311,16 @@ export default function RecordListView({
     })
   }
 
+  const toggleColumnVisibility = (key) => {
+    setVisibleColumnKeys((current) => {
+      const present = current.includes(key)
+      if (present && current.length <= 1) return current
+      if (present) return current.filter((item) => item !== key)
+      setColumnOrder((order) => order.includes(key) ? order : [...order, key])
+      return [...current, key]
+    })
+  }
+
   const moveColumn = (fromKey, toKey) => {
     if (!fromKey || !toKey || fromKey === toKey) return
     setColumnOrder((current) => {
@@ -237,6 +338,97 @@ export default function RecordListView({
     ? subtitle({ filteredCount: filtered.length, totalCount: rows.length })
     : subtitle
 
+  const kanbanColumn = columns.find((column) => column.key === kanbanField) || null
+  const kanbanValues = useMemo(() => {
+    if (!kanbanColumn) return []
+    const configured = Array.isArray(kanbanColumn.options)
+      ? kanbanColumn.options.filter((option) => option?.active !== false).map((option) => ({
+          value: typeof option === 'object' ? option.value ?? option.key ?? option.label : option,
+          label: typeof option === 'object' ? option.label ?? option.name ?? option.value : option,
+        }))
+      : []
+    const seen = new Map(configured.map((option) => [String(option.value), option]))
+    for (const row of filtered) {
+      const raw = row?.[kanbanField]
+      const key = String(raw ?? '')
+      if (!seen.has(key)) seen.set(key, { value: raw ?? '', label: valueLabel(raw) })
+    }
+    return [...seen.values()]
+  }, [filtered, kanbanColumn, kanbanField])
+
+  const selectionEnabled = Boolean(onBulkEdit || onBulkDelete)
+  const visibleIds = filtered.map((row) => String(row.id))
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id))
+
+  const toggleAllVisible = () => {
+    setSelectedIds((current) => {
+      const currentSet = new Set(current.map(String))
+      if (allVisibleSelected) visibleIds.forEach((id) => currentSet.delete(id))
+      else visibleIds.forEach((id) => currentSet.add(id))
+      return [...currentSet]
+    })
+  }
+
+  const toggleSelected = (id) => {
+    const key = String(id)
+    setSelectedIds((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
+  }
+
+  const beginInlineEdit = (row, column) => {
+    if (!canEdit || !onInlineEdit || column.editable === false) return
+    const type = String(column.fieldType || 'text').toLowerCase()
+    if (['lookup','multiselect','formula','rollup','json'].includes(type)) return
+    setEditingCell({ rowId: String(row.id), key: column.key, value: row?.[column.key] ?? '' })
+  }
+
+  const commitInlineEdit = async (row, column, value) => {
+    setEditingCell(null)
+    if (!onInlineEdit) return
+    await onInlineEdit(row, column, value)
+  }
+
+  const inlineEditor = (row, column) => {
+    const type = String(column.fieldType || 'text').toLowerCase()
+    const value = editingCell?.value ?? ''
+    const setValue = (next) => setEditingCell((current) => current ? { ...current, value: next } : current)
+    if (type === 'boolean') {
+      return <input autoFocus type="checkbox" checked={Boolean(value)} onChange={(event) => { const next = event.target.checked; setValue(next); void commitInlineEdit(row, column, next) }} onClick={(event) => event.stopPropagation()} />
+    }
+    if (['picklist','select'].includes(type)) {
+      const options = Array.isArray(column.options) ? column.options : []
+      return (
+        <select autoFocus value={value ?? ''} onChange={(event) => { const next = event.target.value; setValue(next); void commitInlineEdit(row, column, next) }} onBlur={() => setEditingCell(null)} onClick={(event) => event.stopPropagation()}>
+          <option value="">Select…</option>
+          {options.filter((option) => option?.active !== false).map((option) => {
+            const optionValue = typeof option === 'object' ? option.value ?? option.key ?? option.label : option
+            const optionLabel = typeof option === 'object' ? option.label ?? option.name ?? optionValue : option
+            return <option key={String(optionValue)} value={String(optionValue)}>{String(optionLabel)}</option>
+          })}
+        </select>
+      )
+    }
+    const htmlType = ['number','decimal','currency'].includes(type) ? 'number'
+      : type === 'date' ? 'date'
+        : type === 'datetime' ? 'datetime-local'
+          : type === 'email' ? 'email'
+            : type === 'phone' ? 'tel'
+              : 'text'
+    return (
+      <input
+        autoFocus
+        type={htmlType}
+        value={value ?? ''}
+        onChange={(event) => setValue(event.target.value)}
+        onClick={(event) => event.stopPropagation()}
+        onBlur={() => void commitInlineEdit(row, column, editingCell?.value ?? '')}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') { event.preventDefault(); setEditingCell(null) }
+          if (event.key === 'Enter') { event.preventDefault(); void commitInlineEdit(row, column, editingCell?.value ?? '') }
+        }}
+      />
+    )
+  }
+
   return (
     <div className="record-list-view">
       <div className="record-list-header">
@@ -245,6 +437,102 @@ export default function RecordListView({
           {resolvedSubtitle ? <p>{resolvedSubtitle}</p> : null}
         </div>
         <div className="record-list-header-actions">
+          {listViews.length ? (
+            <label className="record-list-view-picker">
+              <span className="sr-only">List view</span>
+              <select value={activeListViewId || ''} onChange={(event) => onListViewChange?.(event.target.value)}>
+                {listViews.map((view) => (
+                  <option key={view.id} value={view.id}>
+                    {view.scope === 'PERSONAL' || view.owner_user_id ? 'My · ' : ''}{view.label}{view.is_default ? ' · Default' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {onSaveListView ? (
+            <div className="record-data-actions" aria-label="List view tools">
+              {canUpdateActiveView && activeListViewId ? (
+                <button
+                  type="button"
+                  className="record-data-icon"
+                  title="Save current view"
+                  aria-label="Save current view"
+                  onClick={() => onSaveListView({
+                    columns: orderedColumns.map((column) => column.key),
+                    filters: serializeFilters(filters),
+                    sort: { field: sort?.key || null, direction: sort?.direction || 'asc' },
+                    pageSize: pageInfo?.pageSize || 50,
+                  }, 'update')}
+                >
+                  <Save size={15} />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="record-data-icon"
+                title="Save as a personal view"
+                aria-label="Save as a personal view"
+                onClick={() => onSaveListView({
+                  columns: orderedColumns.map((column) => column.key),
+                  filters: serializeFilters(filters),
+                  sort: { field: sort?.key || null, direction: sort?.direction || 'asc' },
+                  pageSize: pageInfo?.pageSize || 50,
+                }, 'new')}
+              >
+                <Copy size={15} />
+              </button>
+              {onManageListView && canUpdateActiveView && activeListViewId ? (
+                <>
+                  <button type="button" className="record-data-icon" title="Make this my default view" aria-label="Make this my default view" onClick={() => onManageListView('default')}>
+                    <Star size={15} />
+                  </button>
+                  <button type="button" className="record-data-icon" title="Rename this view" aria-label="Rename this view" onClick={() => onManageListView('rename')}>
+                    <Pencil size={15} />
+                  </button>
+                  <button type="button" className="record-data-icon" title="Delete this view" aria-label="Delete this view" onClick={() => onManageListView('delete')}>
+                    <Trash2 size={15} />
+                  </button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {(availableColumns.length || columns.length) ? (
+            <div className="record-column-picker-wrap">
+              <button type="button" className="record-data-icon" title="Select fields to display" aria-label="Select fields to display" aria-expanded={columnPickerOpen} onClick={() => setColumnPickerOpen((value) => !value)}>
+                <Columns3 size={15} />
+              </button>
+              {columnPickerOpen ? (
+                <div className="record-column-picker" role="dialog" aria-label="Select fields to display">
+                  <strong>Fields to display</strong>
+                  <div>
+                    {(availableColumns.length ? availableColumns : columns).map((column) => {
+                      const checked = visibleColumnKeys.includes(column.key)
+                      return (
+                        <label key={column.key}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleColumnVisibility(column.key)} />
+                          <span>{column.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <button type="button" onClick={() => setColumnPickerOpen(false)}>Done</button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {onDisplayModeChange ? (
+            <div className="record-data-actions" aria-label="Display mode">
+              <button type="button" className={`record-data-icon ${displayMode === 'table' ? 'is-active' : ''}`} title="Table view" aria-label="Table view" onClick={() => onDisplayModeChange('table')}>
+                <LayoutList size={15} />
+              </button>
+              <button type="button" className={`record-data-icon ${displayMode === 'split' ? 'is-active' : ''}`} title="Split view" aria-label="Split view" onClick={() => onDisplayModeChange('split')}>
+                <Columns3 size={15} />
+              </button>
+              <button type="button" className={`record-data-icon ${displayMode === 'kanban' ? 'is-active' : ''}`} title="Kanban view" aria-label="Kanban view" disabled={!kanbanFields.length} onClick={() => onDisplayModeChange('kanban')}>
+                <GripVertical size={15} />
+              </button>
+            </div>
+          ) : null}
           {objectKey ? (
             <div className="record-data-actions" aria-label="Data tools">
               <button
@@ -286,7 +574,24 @@ export default function RecordListView({
             aria-label={`Search ${title}`}
           />
         </label>
+        {displayMode === 'kanban' && kanbanFields.length ? (
+          <label className="record-list-view-picker">
+            <span className="sr-only">Kanban grouping field</span>
+            <select value={kanbanField || ''} onChange={(event) => onKanbanFieldChange?.(event.target.value)}>
+              {kanbanFields.map((field) => <option key={field.key} value={field.key}>Group by {field.label}</option>)}
+            </select>
+          </label>
+        ) : null}
       </div>
+
+      {selectionEnabled && selectedIds.length ? (
+        <div className="record-list-bulk-actions">
+          <strong>{selectedIds.length} selected</strong>
+          {onBulkEdit && canEdit ? <button type="button" onClick={() => onBulkEdit([...selectedIds])}>Edit selected</button> : null}
+          {onBulkDelete ? <button type="button" onClick={() => onBulkDelete([...selectedIds])}>Delete selected</button> : null}
+          <button type="button" onClick={() => setSelectedIds([])}>Clear</button>
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="record-list-state">Loading…</div>
@@ -296,11 +601,59 @@ export default function RecordListView({
           <span>{error}</span>
           {onDataChanged ? <button type="button" onClick={() => onDataChanged()}>Retry</button> : null}
         </div>
+      ) : displayMode === 'kanban' && kanbanColumn ? (
+        <div className="record-kanban-wrap">
+          <div className="record-kanban-board">
+            {kanbanValues.map((group) => {
+              const groupRows = filtered.filter((row) => String(row?.[kanbanField] ?? '') === String(group.value ?? ''))
+              return (
+                <section
+                  className="record-kanban-column"
+                  key={String(group.value)}
+                  onDragOver={(event) => { if (onKanbanMove && canEdit) event.preventDefault() }}
+                  onDrop={(event) => {
+                    if (!onKanbanMove || !canEdit) return
+                    event.preventDefault()
+                    const rowId = event.dataTransfer.getData('application/x-oneengine-record-id')
+                    if (rowId) void onKanbanMove(rowId, kanbanField, group.value)
+                  }}
+                >
+                  <header><strong>{group.label}</strong><span>{groupRows.length}</span></header>
+                  <div className="record-kanban-stack">
+                    {groupRows.map((row) => (
+                      <article
+                        key={row.id}
+                        className={`record-kanban-card ${String(selectedRowId) === String(row.id) ? 'is-selected' : ''}`}
+                        draggable={Boolean(onKanbanMove && canEdit)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = 'move'
+                          event.dataTransfer.setData('application/x-oneengine-record-id', String(row.id))
+                        }}
+                        onClick={() => onRowSelect?.(row)}
+                        tabIndex={0}
+                        onKeyDown={(event) => { if (['Enter',' '].includes(event.key)) { event.preventDefault(); onRowSelect?.(row) } }}
+                      >
+                        <strong>{String(row?.[orderedColumns[0]?.key] ?? row?.name ?? row?.id ?? 'Record')}</strong>
+                        {orderedColumns.slice(1, 4).map((column) => <span key={column.key}><b>{column.label}:</b> {valueLabel(row?.[column.key])}</span>)}
+                      </article>
+                    ))}
+                    {!groupRows.length ? <div className="record-kanban-empty">No records</div> : null}
+                  </div>
+                </section>
+              )
+            })}
+          </div>
+        </div>
       ) : (
         <div className="record-list-table-wrap" ref={filterAreaRef}>
           <table className="record-list-table">
             <thead>
               <tr>
+                {selectionEnabled ? (
+                  <th className="record-list-select-head">
+                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible records" />
+                  </th>
+                ) : null}
                 {canEdit ? <th className="record-list-edit-head"></th> : null}
                 {orderedColumns.map((column) => {
                   const activeSort = sort.key === column.key
@@ -442,6 +795,17 @@ export default function RecordListView({
                     onRowSelect(row)
                   }}
                 >
+                  {selectionEnabled ? (
+                    <td className="record-list-select-cell">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(String(row.id))}
+                        onChange={() => toggleSelected(row.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`Select ${row.name || row.full_name || row.username || 'record'}`}
+                      />
+                    </td>
+                  ) : null}
                   {canEdit ? (
                     <td className="record-list-edit-cell">
                       <button
@@ -454,16 +818,25 @@ export default function RecordListView({
                       </button>
                     </td>
                   ) : null}
-                  {orderedColumns.map((column) => (
-                    <td key={column.key} className="record-list-value-cell" data-label={column.label}>
-                      {column.render ? column.render(row) : (row?.[column.key] ?? '—')}
-                    </td>
-                  ))}
+                  {orderedColumns.map((column) => {
+                    const isEditing = editingCell?.rowId === String(row.id) && editingCell?.key === column.key
+                    return (
+                      <td
+                        key={column.key}
+                        className={`record-list-value-cell${canEdit && onInlineEdit && column.editable !== false ? ' is-inline-editable' : ''}`}
+                        data-label={column.label}
+                        onDoubleClick={(event) => { event.stopPropagation(); beginInlineEdit(row, column) }}
+                        title={canEdit && onInlineEdit && column.editable !== false ? 'Double-click to edit' : undefined}
+                      >
+                        {isEditing ? inlineEditor(row, column) : (column.render ? column.render(row) : (row?.[column.key] ?? '—'))}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={orderedColumns.length + (canEdit ? 1 : 0)} className="record-list-empty">
+                  <td colSpan={orderedColumns.length + (canEdit ? 1 : 0) + (selectionEnabled ? 1 : 0)} className="record-list-empty">
                     {emptyText}
                   </td>
                 </tr>
@@ -472,6 +845,31 @@ export default function RecordListView({
           </table>
         </div>
       )}
+      {pageInfo && Number(pageInfo.pages || 0) > 1 ? (
+        <div className="record-list-pagination" aria-label="Record pages">
+          <button
+            type="button"
+            className="record-data-icon"
+            disabled={Number(pageInfo.page || 1) <= 1}
+            onClick={() => onPageChange?.(Number(pageInfo.page || 1) - 1)}
+            aria-label="Previous page"
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <span>Page {pageInfo.page || 1} of {pageInfo.pages || 1} · {pageInfo.total || 0} records</span>
+          <button
+            type="button"
+            className="record-data-icon"
+            disabled={Number(pageInfo.page || 1) >= Number(pageInfo.pages || 1)}
+            onClick={() => onPageChange?.(Number(pageInfo.page || 1) + 1)}
+            aria-label="Next page"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      ) : pageInfo && Number(pageInfo.total || 0) >= 0 ? (
+        <div className="record-list-pagination"><span>{pageInfo.total || 0} records</span></div>
+      ) : null}
       {dataLoaderMode && objectKey ? (
         <DataLoaderWindow
           objectKey={objectKey}
