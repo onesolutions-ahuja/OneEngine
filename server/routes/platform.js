@@ -1293,7 +1293,11 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   router.get("/platform/objects/:objectId/record-types", ...manage, async (req, res) => {
     const object = await getObject(req.params.objectId, req, { includeInactive: true });
     if (!object) return res.status(404).json({ success: false, message: "Object not found" });
-    const types = await db("SELECT * FROM platform_record_types WHERE object_id=$1 AND company_id=$2 ORDER BY active DESC,is_default DESC,label", [object.id, req.user.companyId]);
+    const includeInactive = ["1","true"].includes(String(req.query?.includeInactive || "").toLowerCase());
+    const types = await db(
+      `SELECT * FROM platform_record_types WHERE object_id=$1 AND company_id=$2 ${includeInactive ? "" : "AND active=true"} ORDER BY active DESC,is_default DESC,label`,
+      [object.id, req.user.companyId]
+    );
     const restrictions = await db("SELECT r.* FROM platform_record_type_picklist_values r JOIN platform_record_types t ON t.id=r.record_type_id WHERE t.object_id=$1 AND t.company_id=$2 AND r.active=true", [object.id, req.user.companyId]);
     const byType = new Map();
     for (const row of restrictions.rows) {
@@ -2325,7 +2329,17 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   }
 
   router.get("/platform/relationships", ...manage, async (req, res) => {
-    const result = await db("SELECT r.*, p.object_key AS parent_object_key, c.object_key AS child_object_key FROM platform_relationships r JOIN platform_objects p ON p.id=r.parent_object_id JOIN platform_objects c ON c.id=r.child_object_id WHERE (p.company_id IS NULL OR p.company_id=$1) ORDER BY r.active DESC,COALESCE(r.label,r.relationship_key),r.relationship_key", [req.user.companyId]);
+    const includeInactive = ["1","true"].includes(String(req.query?.includeInactive || "").toLowerCase());
+    const result = await db(
+      `SELECT r.*, p.object_key AS parent_object_key, c.object_key AS child_object_key
+         FROM platform_relationships r
+         JOIN platform_objects p ON p.id=r.parent_object_id
+         JOIN platform_objects c ON c.id=r.child_object_id
+        WHERE (p.company_id IS NULL OR p.company_id=$1)
+          ${includeInactive ? "" : "AND r.active=true"}
+        ORDER BY r.active DESC,COALESCE(r.label,r.relationship_key),r.relationship_key`,
+      [req.user.companyId]
+    );
     res.json({ success: true, data: result.rows });
   });
 
