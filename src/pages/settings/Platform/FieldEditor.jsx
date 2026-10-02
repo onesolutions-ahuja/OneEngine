@@ -88,7 +88,9 @@ export default function FieldEditor({
     autoNumberStart: Number(field?.config?.start ?? field?.config?.startNumber ?? 1),
     autoNumberPadding: Number(field?.config?.padding ?? 0),
     helpText: field?.config?.helpText || field?.config?.help_text || "",
+    defaultMode: field?.config?.defaultFormula || field?.config?.default_formula ? "formula" : "static",
     defaultValue: field?.config?.defaultValue ?? field?.config?.default_value ?? "",
+    defaultFormula: field?.config?.defaultFormula || field?.config?.default_formula || "",
     maxLength: field?.config?.maxLength ?? field?.config?.max_length ?? "",
     precision: field?.config?.precision ?? "",
     scale: field?.config?.scale ?? field?.config?.decimalPlaces ?? field?.config?.decimal_places ?? "",
@@ -445,7 +447,9 @@ export default function FieldEditor({
           } : {}),
           ...(!["formula", "rollup", "auto_number"].includes(form.field_type) ? {
             helpText: String(form.helpText || "").trim(),
-            ...(form.defaultValue !== "" ? { defaultValue: form.defaultValue } : { defaultValue: null }),
+            ...(form.defaultMode === "formula"
+              ? { defaultValue: null, defaultFormula: String(form.defaultFormula || "").trim() || null }
+              : { defaultFormula: null, ...(form.defaultValue !== "" && !(form.dependentPicklist?.controllingField && ["picklist","select","multiselect"].includes(form.field_type)) ? { defaultValue: form.defaultValue } : { defaultValue: null }) }),
             ...(form.maxLength !== "" ? { maxLength: Math.max(1, Number(form.maxLength)) } : { maxLength: null }),
             ...(form.precision !== "" ? { precision: Math.max(1, Number(form.precision)) } : { precision: null }),
             ...(form.scale !== "" ? { scale: Math.max(0, Number(form.scale)) } : { scale: null }),
@@ -945,11 +949,18 @@ export default function FieldEditor({
             <fieldset className="platform-field-editor-wide">
               <legend>Field behaviour</legend>
               <label className="platform-field-editor-wide"><span>Help text</span><input value={form.helpText || ""} maxLength={255} onChange={(event) => update("helpText", event.target.value)} placeholder="Guidance shown below the field to users" /></label>
-              {["picklist","select"].includes(form.field_type) && !form.dependentPicklist?.controllingField ? (
+              {!["lookup","address","location","json"].includes(form.field_type) && !(form.dependentPicklist?.controllingField && ["picklist","select","multiselect"].includes(form.field_type)) ? (
+                <label><span>Default type</span><select value={form.defaultMode || "static"} onChange={(event) => update("defaultMode", event.target.value)}><option value="static">Static value</option><option value="formula">Formula</option></select></label>
+              ) : null}
+              {form.defaultMode === "formula" && !["lookup","address","location","json"].includes(form.field_type) && !(form.dependentPicklist?.controllingField && ["picklist","select","multiselect"].includes(form.field_type)) ? (
+                <label className="platform-field-editor-wide"><span>Default formula</span><input value={form.defaultFormula || ""} onChange={(event) => update("defaultFormula", event.target.value)} placeholder='Example: IF(store_id == "abc", "priority", "") or ADDDAYS(TODAY(), 7)' /><small>Runs once when a record is created. Available inputs include other supplied/defaulted field API names plus user_id, role_id, company_id and store_id.</small></label>
+              ) : form.defaultMode !== "formula" && ["picklist","select"].includes(form.field_type) && !form.dependentPicklist?.controllingField ? (
                 <label><span>Default value</span><select value={form.defaultValue ?? ""} onChange={(event) => update("defaultValue", event.target.value)}><option value="">No default</option>{(form.valueSource === "local" ? picklistOptions({ options: form.options }) : picklistOptions(valueSets.find((valueSet) => String(valueSet.id) === String(form.valueSetId || "")) || field)).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-              ) : form.field_type === "boolean" ? (
+              ) : form.defaultMode !== "formula" && form.field_type === "multiselect" && !form.dependentPicklist?.controllingField ? (
+                <label><span>Default values</span><select multiple size={Math.min(8, Math.max(3, Number(form.multiSelectVisibleLines || 4)))} value={Array.isArray(form.defaultValue) ? form.defaultValue.map(String) : []} onChange={(event) => update("defaultValue", Array.from(event.target.selectedOptions).map((option) => option.value))}>{(form.valueSource === "local" ? picklistOptions({ options: form.options }) : picklistOptions(valueSets.find((valueSet) => String(valueSet.id) === String(form.valueSetId || "")) || field)).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+              ) : form.defaultMode !== "formula" && form.field_type === "boolean" ? (
                 <label className="platform-checkbox"><input type="checkbox" checked={form.defaultValue === true || form.defaultValue === "true"} onChange={(event) => update("defaultValue", event.target.checked)} /><span><strong>Default checked</strong><small>New records start enabled unless a record type or caller supplies another value.</small></span></label>
-              ) : !["lookup","address","location","json","multiselect"].includes(form.field_type) ? (
+              ) : form.defaultMode !== "formula" && !["lookup","address","location","json","multiselect"].includes(form.field_type) ? (
                 <label><span>Default value</span><input type={["number","decimal","currency","percent"].includes(form.field_type) ? "number" : form.field_type === "date" ? "date" : form.field_type === "datetime" ? "datetime-local" : form.field_type === "time" ? "time" : "text"} value={form.defaultValue ?? ""} onChange={(event) => update("defaultValue", event.target.value)} /></label>
               ) : null}
               {["text","long_text","rich_text","url","email","phone"].includes(form.field_type) ? (
