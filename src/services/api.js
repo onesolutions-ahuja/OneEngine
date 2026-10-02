@@ -301,16 +301,6 @@ export async function login(username, password) {
    * A fresh password login must not inherit an old bearer token from a
    * previous mobile/browser session.
    */
-  if (mfaChallenge) {
-    return {
-      handled: true,
-      mfaRequired: true,
-      challengeId: mfaChallenge,
-      enrollmentRequired: mfaEnroll === '1',
-      phishingResistantRequired: mfaPhishingResistant === '1',
-    }
-  }
-
   clearCompanyContext()
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
@@ -498,6 +488,16 @@ export function consumeGoogleOAuthCallback() {
       google_login_failed: 'Google Sign-In failed. Please try again.',
     }
     return { handled: true, error: messages[error] || 'Google Sign-In failed. Please try again.' }
+  }
+
+  if (mfaChallenge) {
+    return {
+      handled: true,
+      mfaRequired: true,
+      challengeId: mfaChallenge,
+      enrollmentRequired: mfaEnroll === '1',
+      phishingResistantRequired: mfaPhishingResistant === '1',
+    }
   }
 
   clearCompanyContext()
