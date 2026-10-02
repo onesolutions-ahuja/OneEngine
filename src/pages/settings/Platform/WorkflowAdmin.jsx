@@ -1018,6 +1018,32 @@ const WORKFLOW_VISUAL_CSS = `
   }
 `;
 
+const SCREEN_COMPONENT_TYPES = [
+  { value: "DISPLAY_TEXT", label: "Display Text", input: false },
+  { value: "TEXT", label: "Text" },
+  { value: "TEXT_AREA", label: "Text Area" },
+  { value: "EMAIL", label: "Email" },
+  { value: "PASSWORD", label: "Password" },
+  { value: "NUMBER", label: "Number" },
+  { value: "DATE", label: "Date" },
+  { value: "DATETIME", label: "Date/Time" },
+  { value: "CHECKBOX", label: "Checkbox" },
+  { value: "TOGGLE", label: "Toggle" },
+  { value: "RADIO", label: "Radio Buttons" },
+  { value: "CHECKBOX_GROUP", label: "Checkbox Group" },
+  { value: "SELECT", label: "Picklist" },
+  { value: "MULTI_SELECT", label: "Multi-Select Picklist" },
+  { value: "SLIDER", label: "Slider" },
+  { value: "ADDRESS", label: "Address" },
+  { value: "RECORD_PICKER", label: "Record Picker" },
+  { value: "DATA_TABLE", label: "Data Table" },
+  { value: "FILE_UPLOAD", label: "File Upload" },
+  { value: "IMAGE", label: "Image", input: false },
+  { value: "LINK", label: "Link", input: false },
+  { value: "SECTION", label: "Section", input: false },
+  { value: "COLUMNS", label: "Columns", input: false },
+];
+
 const actionOptions = [
   { value: "CONSTANT", label: "Constant" },
   { value: "FORMULA", label: "Formula" },
@@ -1026,6 +1052,7 @@ const actionOptions = [
   { value: "COLLECTION_FILTER", label: "Collection Filter" },
   { value: "COLLECTION_SORT", label: "Collection Sort" },
   { value: "TRANSFORM", label: "Transform" },
+  { value: "SCREEN", label: "Screen" },
   { value: "LOOP", label: "Loop" },
   { value: "SCHEDULE_PATH", label: "Scheduled Path" },
   { value: "GET_RECORDS", label: "Get Records" },
@@ -1055,7 +1082,7 @@ const actionOptions = [
 ];
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
-  "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
+  "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","SCREEN","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
   "CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","RUN_SUBFLOW",
 ]);
 
@@ -1064,6 +1091,7 @@ const FLOW_ELEMENT_VISUALS = {
   COLLECTION_FILTER: { icon: "▽", color: "#fe9339", family: "Logic" },
   COLLECTION_SORT: { icon: "⇅", color: "#fe9339", family: "Logic" },
   TRANSFORM: { icon: "⇄", color: "#e83e8c", family: "Data" },
+  SCREEN: { icon: "▤", color: "#0b5cab", family: "Interaction" },
   LOOP: { icon: "↻", color: "#fe9339", family: "Logic" },
   CONDITION: { icon: "◇", color: "#fe9339", family: "Logic" },
   WAIT: { icon: "◷", color: "#fe9339", family: "Logic" },
@@ -1086,7 +1114,7 @@ function flowElementVisual(type = "") {
 }
 
 function flowElementSupportsFaultPath(type = "") {
-  return !["CONDITION","LOOP","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","ASSIGNMENT","STOP","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
+  return !["CONDITION","LOOP","SCREEN","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","ASSIGNMENT","STOP","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
 }
 
 function flowApiName(label = "") {
@@ -1127,6 +1155,20 @@ function makeStep(type = "CREATE_RECORD") {
       collection: "",
       outputName: "",
       transformMappings: {},
+      screen: {
+        label: "Screen",
+        apiName: "Screen",
+        description: "",
+        components: [],
+        nextLabel: "Next",
+        backLabel: "Previous",
+        finishLabel: "Finish",
+        showHeader: true,
+        showFooter: true,
+      },
+      allowBack: true,
+      allowFinish: true,
+      showFooter: true,
       itemVariable: type === "LOOP" ? "currentItem_Loop" : "currentItem",
       bodyBranch: [],
       recordIds: "",
@@ -1185,7 +1227,7 @@ function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(key)) return "Resources";
   if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
-  if (key === "RUN_SUBFLOW") return "Interaction";
+  if (["RUN_SUBFLOW","SCREEN"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
   return "Actions";
@@ -1252,7 +1294,16 @@ function workflowActionIssue(step, definition = null) {
     if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid text template name.";
     if (!String(config.templateText || "").trim()) return "Enter text for the Text Template.";
   }
-  if (step.type === "COLLECTION_FILTER") {
+  if (step.type === "SCREEN") {
+    const screen = config.screen || {};
+    if (!String(screen.label || "").trim()) return "Enter a Screen label.";
+    if (!String(screen.apiName || "").trim() || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(String(screen.apiName))) return "Enter a valid Screen API Name.";
+    if (!Array.isArray(screen.components)) return "Screen components are invalid.";
+    const names = screen.components.map((component) => String(component?.name || "").trim()).filter(Boolean);
+    if (new Set(names).size !== names.length) return "Screen component API Names must be unique.";
+    if (screen.components.some((component) => component?.input !== false && !String(component?.name || "").trim())) return "Every input component needs an API Name.";
+  }
+    if (step.type === "COLLECTION_FILTER") {
     if (!config.collection) return "Choose the collection to filter.";
     if (!Array.isArray(config.filters) || !config.filters.length) return "Add at least one filter condition.";
     if (config.filters.some((filter) => !String(filter?.field || "").trim())) return "Choose a field or item path for every filter.";
@@ -1534,6 +1585,15 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         label: `${label} → Assigned Value`,
         type: "element output",
       });
+    } else if (step.type === "SCREEN") {
+      for (const component of step.config?.screen?.components || []) {
+        if (!component?.name || component?.input === false) continue;
+        resources.push({
+          value: `variables.${component.name}`,
+          label: `${label} → ${component.label || component.name}`,
+          type: component.dataType || (["NUMBER","SLIDER"].includes(component.type) ? "number" : ["CHECKBOX","TOGGLE"].includes(component.type) ? "boolean" : ["CHECKBOX_GROUP","MULTI_SELECT","DATA_TABLE","FILE_UPLOAD"].includes(component.type) ? "collection" : "text"),
+        });
+      }
     } else if (step.type === "COLLECTION_FILTER") {
       resources.push(
         { value: `${prefix}.collection`, label: `${label} → Filtered Collection`, type: "collection" },
@@ -1899,6 +1959,140 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
           </div>
         );
+      case "SCREEN": {
+        const screen = step.config?.screen || { label: "Screen", apiName: "Screen", components: [] };
+        const components = Array.isArray(screen.components) ? screen.components : [];
+        const updateScreen = (patch) => updateConfig({ screen: { ...screen, ...patch } });
+        const updateComponent = (componentIndex, patch) => {
+          const next = [...components];
+          next[componentIndex] = { ...next[componentIndex], ...patch };
+          updateScreen({ components: next });
+        };
+        const addComponent = (type) => {
+          const definition = SCREEN_COMPONENT_TYPES.find((item) => item.value === type) || { value: type, label: type };
+          const number = components.filter((component) => component.type === type).length + 1;
+          const name = flowApiName(`${definition.label}_${number}`);
+          const component = {
+            id: `screen-component-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            type,
+            label: definition.label,
+            name: definition.input === false ? "" : name,
+            input: definition.input !== false,
+            required: false,
+            defaultValue: "",
+            helpText: "",
+            placeholder: "",
+            options: ["RADIO","CHECKBOX_GROUP","SELECT","MULTI_SELECT"].includes(type) ? [{ label: "Option 1", value: "option_1" }] : [],
+            visible: true,
+            visibility: null,
+            width: "full",
+          };
+          updateScreen({ components: [...components, component] });
+        };
+        return (
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-600">Screen Label
+                <input className={inputClass} value={screen.label || ""} onChange={(event) => {
+                  const label = event.target.value;
+                  const previousGenerated = flowApiName(screen.label || "");
+                  updateScreen({ label, apiName: !screen.apiName || screen.apiName === previousGenerated ? flowApiName(label) : screen.apiName });
+                }} />
+              </label>
+              <label className="block text-xs font-medium text-slate-600">Screen API Name
+                <input className={inputClass} value={screen.apiName || ""} onChange={(event) => updateScreen({ apiName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} />
+              </label>
+            </div>
+            <label className="block text-xs font-medium text-slate-600">Description
+              <textarea className={inputClass} rows={2} value={screen.description || ""} onChange={(event) => updateScreen({ description: event.target.value })} />
+            </label>
+            <div className="grid gap-2 md:grid-cols-3">
+              <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowBack !== false} onChange={(event) => updateConfig({ allowBack: event.target.checked })} /> Allow Previous</label>
+              <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowFinish !== false} onChange={(event) => updateConfig({ allowFinish: event.target.checked })} /> Allow Finish</label>
+              <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.showFooter !== false} onChange={(event) => updateConfig({ showFooter: event.target.checked })} /> Show footer</label>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="block text-xs font-medium text-slate-600">Next Label<input className={inputClass} value={screen.nextLabel || "Next"} onChange={(event) => updateScreen({ nextLabel: event.target.value })} /></label>
+              <label className="block text-xs font-medium text-slate-600">Previous Label<input className={inputClass} value={screen.backLabel || "Previous"} onChange={(event) => updateScreen({ backLabel: event.target.value })} /></label>
+              <label className="block text-xs font-medium text-slate-600">Finish Label<input className={inputClass} value={screen.finishLabel || "Finish"} onChange={(event) => updateScreen({ finishLabel: event.target.value })} /></label>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <strong className="text-xs text-slate-700">Screen Components</strong>
+                <select className={inputClass} defaultValue="" onChange={(event) => { if (event.target.value) addComponent(event.target.value); event.target.value = ""; }}>
+                  <option value="">+ Add Component</option>
+                  {SCREEN_COMPONENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                {components.map((component, componentIndex) => (
+                  <details key={component.id || componentIndex} className="rounded-lg border border-slate-200 bg-white p-3" open={componentIndex === 0}>
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-700">{component.label || component.type} <span className="text-slate-400">· {SCREEN_COMPONENT_TYPES.find((item) => item.value === component.type)?.label || component.type}</span></summary>
+                    <div className="mt-3 space-y-3">
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <label className="block text-xs font-medium text-slate-600">Label<input className={inputClass} value={component.label || ""} onChange={(event) => updateComponent(componentIndex, { label: event.target.value })} /></label>
+                        {component.input !== false ? <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={component.name || ""} onChange={(event) => updateComponent(componentIndex, { name: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label> : <div />}
+                      </div>
+                      {component.type === "DISPLAY_TEXT" ? (
+                        <label className="block text-xs font-medium text-slate-600">Content<textarea className={inputClass} rows={4} value={component.text || ""} onChange={(event) => updateComponent(componentIndex, { text: event.target.value })} /></label>
+                      ) : null}
+                      {component.input !== false ? <>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <label className="block text-xs font-medium text-slate-600">Default Value<input className={inputClass} value={component.defaultValue ?? ""} onChange={(event) => updateComponent(componentIndex, { defaultValue: event.target.value })} /></label>
+                          <label className="block text-xs font-medium text-slate-600">Placeholder<input className={inputClass} value={component.placeholder || ""} onChange={(event) => updateComponent(componentIndex, { placeholder: event.target.value })} /></label>
+                        </div>
+                        <label className="block text-xs font-medium text-slate-600">Help Text<input className={inputClass} value={component.helpText || ""} onChange={(event) => updateComponent(componentIndex, { helpText: event.target.value })} /></label>
+                        <div className="flex flex-wrap gap-4">
+                          <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={component.required === true} onChange={(event) => updateComponent(componentIndex, { required: event.target.checked })} /> Required</label>
+                          <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={component.visible !== false} onChange={(event) => updateComponent(componentIndex, { visible: event.target.checked })} /> Visible</label>
+                        </div>
+                      </> : null}
+                      {["RADIO","CHECKBOX_GROUP","SELECT","MULTI_SELECT"].includes(component.type) ? (
+                        <div className="space-y-2">
+                          <div className="text-[11px] font-semibold text-slate-600">Choices</div>
+                          {(component.options || []).map((option, optionIndex) => <div key={optionIndex} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                            <input className={inputClass} value={option.label || ""} onChange={(event) => {
+                              const options = [...(component.options || [])]; options[optionIndex] = { ...option, label: event.target.value }; updateComponent(componentIndex, { options });
+                            }} placeholder="Label" />
+                            <input className={inputClass} value={option.value || ""} onChange={(event) => {
+                              const options = [...(component.options || [])]; options[optionIndex] = { ...option, value: event.target.value }; updateComponent(componentIndex, { options });
+                            }} placeholder="Value" />
+                            <button type="button" className="text-xs text-red-600" onClick={() => updateComponent(componentIndex, { options: (component.options || []).filter((_, i) => i !== optionIndex) })}>Remove</button>
+                          </div>)}
+                          <button type="button" className="text-xs text-blue-700" onClick={() => updateComponent(componentIndex, { options: [...(component.options || []), { label: `Option ${(component.options || []).length + 1}`, value: `option_${(component.options || []).length + 1}` }] })}>+ Choice</button>
+                        </div>
+                      ) : null}
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <label className="block text-xs font-medium text-slate-600">Width
+                          <select className={inputClass} value={component.width || "full"} onChange={(event) => updateComponent(componentIndex, { width: event.target.value })}>
+                            <option value="full">Full</option><option value="1/2">Half</option><option value="1/3">One third</option><option value="2/3">Two thirds</option>
+                          </select>
+                        </label>
+                        <label className="block text-xs font-medium text-slate-600">Conditional Visibility Resource
+                          <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="" value={component.visibilityResource || ""} onChange={(visibilityResource) => updateComponent(componentIndex, { visibilityResource })} />
+                        </label>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <div className="flex gap-1">
+                          <button type="button" className="rounded border border-slate-200 px-2 py-1 text-xs" disabled={componentIndex === 0} onClick={() => {
+                            const next = [...components]; [next[componentIndex - 1], next[componentIndex]] = [next[componentIndex], next[componentIndex - 1]]; updateScreen({ components: next });
+                          }}>↑</button>
+                          <button type="button" className="rounded border border-slate-200 px-2 py-1 text-xs" disabled={componentIndex === components.length - 1} onClick={() => {
+                            const next = [...components]; [next[componentIndex], next[componentIndex + 1]] = [next[componentIndex + 1], next[componentIndex]]; updateScreen({ components: next });
+                          }}>↓</button>
+                        </div>
+                        <button type="button" className="text-xs text-red-600" onClick={() => updateScreen({ components: components.filter((_, i) => i !== componentIndex) })}>Remove Component</button>
+                      </div>
+                    </div>
+                  </details>
+                ))}
+                {!components.length ? <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4 text-center text-xs text-slate-500">Add components to build this screen.</div> : null}
+              </div>
+            </div>
+          </div>
+        );
+      }
       case "COLLECTION_FILTER": {
         const filters = Array.isArray(step.config?.filters) ? step.config.filters : [];
         const updateFilter = (filterIndex, patch) => {
@@ -3042,6 +3236,13 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     }
     const targetGroupId = groupTargetId;
     insertPreparedStep(step, index);
+    if (type === "SCREEN") {
+      setWorkflow((current) => ({
+        ...current,
+        trigger: "manual",
+        actionMetadata: { ...(current.actionMetadata || {}), flowType: "SCREEN_FLOW" },
+      }));
+    }
     if (targetGroupId) {
       setWorkflow((current) => ({
         ...current,
@@ -4791,6 +4992,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       : `Resource name "${name}" conflicts with another declared resource.`;
     break;
   }
+  const isScreenFlow = String(workflow.actionMetadata?.flowType || "").toUpperCase() === "SCREEN_FLOW";
+  const screenFlowIssue = isScreenFlow && !enabledSteps.some((step) => step.type === "SCREEN")
+    ? "Add at least one Screen element."
+    : "";
   const kioskScreenIssue = isKioskExperience
     ? !(Array.isArray(kioskUi.screens) && kioskUi.screens.length)
       ? "Add at least one kiosk screen."
@@ -4802,7 +5007,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     : "";
   const actionsIssue = isKioskExperience
     ? kioskScreenIssue
-    : resourceConflict
+    : screenFlowIssue
+      ? screenFlowIssue
+      : resourceConflict
       ? resourceConflict
       : !actionSteps.length
         ? "Add at least one element."
@@ -5364,7 +5571,20 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             <label>Description
               <textarea className={inputClass} rows={4} value={workflow.actionMetadata?.description || ""} onChange={(event) => setWorkflow((current) => ({ ...current, actionMetadata: { ...(current.actionMetadata || {}), description: event.target.value } }))} placeholder="Describe what this flow does." />
             </label>
-            <div className="workflow-flow-property-readonly"><span>Type</span><strong>{workflow.actionMetadata?.flowType || "Autolaunched Flow"}</strong></div>
+            <label>Flow Type
+              <select className={inputClass} value={String(workflow.actionMetadata?.flowType || "AUTOLAUNCHED").toUpperCase()} onChange={(event) => {
+                const flowType = event.target.value;
+                setWorkflow((current) => ({
+                  ...current,
+                  trigger: flowType === "SCREEN_FLOW" ? "manual" : current.trigger,
+                  actionMetadata: { ...(current.actionMetadata || {}), flowType },
+                }));
+              }}>
+                <option value="AUTOLAUNCHED">Autolaunched Flow</option>
+                <option value="SCREEN_FLOW">Screen Flow</option>
+                <option value="KIOSK_EXPERIENCE">Kiosk Experience</option>
+              </select>
+            </label>
             <div className="workflow-path-action-buttons">
               <button type="button" className="workflow-cancel-button" onClick={cancelFlowProperties}>Cancel</button>
               <button type="button" className="workflow-save-button" onClick={finishFlowProperties}>Done</button>
