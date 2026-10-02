@@ -3291,3 +3291,109 @@ button.git-control-tile { cursor: pointer; }
   .connector-settings-template--split .connector-settings-fields-grid{grid-template-columns:1fr;padding:14px}
   .connector-settings-template-footer{padding:10px 14px 14px}
 }
+
+
+/* Compact shared settings/test form pattern */
+.connector-settings-standard-wrap{
+  max-width:980px;
+  margin:0 auto;
+}
+.connector-settings-template--compact{
+  width:min(860px,100%);
+}
+.connector-settings-test-area{
+  width:min(860px,100%);
+}
+.connector-settings-test-card{
+  margin:0 !important;
+  padding:16px 18px;
+  border:1px solid rgba(15,23,42,.10);
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 8px 24px rgba(15,23,42,.06);
+}
+.connector-settings-test-card-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+.connector-settings-test-card-head h3{
+  margin:0;
+  font-size:13px;
+  color:#172033;
+}
+.connector-settings-test-card-head p{
+  margin:3px 0 0;
+  font-size:10px;
+  color:#7a8491;
+}
+.connector-settings-test-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px 16px;
+}
+.connector-settings-test-field{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  font-size:10px;
+  font-weight:700;
+  color:#475569;
+}
+.connector-settings-test-field input{
+  width:100%;
+  height:38px;
+  box-sizing:border-box;
+  border:1px solid #d7dce3;
+  border-radius:8px;
+  background:#fff;
+  color:#202938;
+  padding:0 11px;
+  font-size:11px;
+  outline:none;
+}
+.connector-settings-test-field input:focus{
+  border-color:#7ba8df;
+  box-shadow:0 0 0 2px rgba(37,99,235,.08);
+}
+.connector-settings-test-actions{
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid rgba(15,23,42,.08);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.connector-settings-test-actions p{
+  margin:0;
+  font-size:10px;
+}
+.connector-settings-test-actions p.is-success{color:#1f7a43}
+.connector-settings-test-actions p.is-error{color:#b42318}
+.connector-settings-test-actions button{
+  min-width:132px;
+  width:auto;
+  height:34px;
+  padding:0 14px;
+  border:1px solid #2563eb;
+  border-radius:8px;
+  background:#2563eb;
+  color:#fff;
+  font-size:10px;
+  font-weight:700;
+  cursor:pointer;
+}
+.connector-settings-test-actions button:disabled{
+  opacity:.5;
+  cursor:default;
+}
+@media(max-width:760px){
+  .connector-settings-standard-wrap{max-width:none}
+  .connector-settings-test-grid{grid-template-columns:1fr}
+  .connector-settings-test-actions{align-items:stretch;flex-direction:column}
+  .connector-settings-test-actions button{width:100%}
+}
