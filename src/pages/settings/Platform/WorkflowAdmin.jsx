@@ -17,10 +17,10 @@ const WORKFLOW_VISUAL_CSS = `
   }
   .workflow-builder-header {
     display: grid;
-    grid-template-columns: auto minmax(180px, .95fr) minmax(170px, .8fr) minmax(150px, .72fr) auto;
-    gap: 10px;
-    align-items: end;
-    padding: 12px;
+    grid-template-columns: auto minmax(210px, .8fr) minmax(0, 1.2fr);
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
     border: 1px solid var(--wf-border);
     border-radius: 14px;
     background: rgba(255,255,255,.98);
@@ -29,13 +29,45 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-builder-heading {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     margin-right: 4px;
+  }
+  .workflow-builder-back {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #d8dde6;
+    border-radius: 6px;
+    background: #fff;
+    color: #444;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .workflow-builder-title-copy { min-width: 0; }
+  .workflow-builder-title-copy small {
+    display: block;
+    margin-top: 2px;
+    color: #706e6b;
+    font-size: 9px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .workflow-builder-status {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 2px;
+    border-radius: 999px;
+    background: #f3f3f3;
+    padding: 2px 7px;
+    color: #444;
+    font-size: 8px;
+    font-weight: 700;
   }
   .workflow-builder-heading h2 {
     margin: 0;
     color: #13213a;
-    font-size: 21px;
+    font-size: 18px;
     line-height: 1.1;
     font-weight: 760;
     letter-spacing: -.025em;
@@ -56,9 +88,11 @@ const WORKFLOW_VISUAL_CSS = `
   }
   .workflow-builder-actions {
     display: flex;
+    min-width: 0;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
   }
   .workflow-save-button {
     min-height: 38px;
@@ -2241,7 +2275,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 }
 
 
-function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {} }) {
+function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [] }) {
   const [selectedId, setSelectedId] = useState("__start__");
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
@@ -2742,10 +2776,17 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <div className="space-y-4 rounded-xl bg-white p-2">
             <div>
               <div className="text-sm font-semibold text-slate-800">Start</div>
-              <p className="mt-1 text-xs text-slate-500">Define exactly when this workflow is allowed to begin. Entry conditions are evaluated before any action runs.</p>
+              <p className="mt-1 text-xs text-slate-500">Define when the flow starts. Entry conditions are evaluated before any element runs.</p>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Trigger object</label>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Trigger</label>
+              <select aria-label="Flow trigger" className={inputClass} value={workflow.trigger || "manual"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
+                {!triggerOptions.some((option) => option.key === workflow.trigger) && workflow.trigger ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
+                {triggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Object</label>
               <PlatformFieldPicker
                 scopeKey={scopeKey}
                 includeObjectSelector
@@ -2753,10 +2794,6 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 selectedObjectKey={workflow.object || ""}
                 onObjectChange={(object) => setWorkflow((current) => ({ ...current, object }))}
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Trigger</label>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">{getTriggerLabel(workflow.trigger)}</div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -3293,9 +3330,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       : duplicateOutput ? `Subflow output "${duplicateOutput.name}" is declared more than once.`
         : missingOutputSource ? `Choose a Resource for subflow output "${missingOutputSource.label || missingOutputSource.name || "output"}".`
           : "";
-  const reviewIssue = triggerIssue || entryConditionIssue || entryTransitionIssue || conditionIssue || actionsIssue || contractIssue || (!workflow.name ? "Enter a workflow name." : "");
+  const reviewIssue = triggerIssue || entryConditionIssue || entryTransitionIssue || conditionIssue || actionsIssue || contractIssue || (!workflow.name ? "Enter a flow name." : "");
   const guideSteps = [
-    { key: "trigger", label: "Trigger", status: (triggerIssue || entryTransitionIssue) ? "error" : "complete", message: triggerIssue || entryTransitionIssue },
+    { key: "trigger", label: "Start", status: (triggerIssue || entryTransitionIssue) ? "error" : "complete", message: triggerIssue || entryTransitionIssue },
     {
       key: "conditions",
       label: "Conditions",
@@ -3303,7 +3340,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       message: conditionIssue || (conditionSteps.length ? "" : "Optional"),
     },
     { key: "actions", label: "Actions", status: actionsIssue ? "error" : "complete", message: actionsIssue },
-    { key: "review", label: "Review", status: reviewIssue ? "error" : "complete", message: reviewIssue },
+    { key: "review", label: "Save", status: reviewIssue ? "error" : "complete", message: reviewIssue },
   ];
 
   const navigateGuide = (key) => {
@@ -3786,42 +3823,24 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       ) : null}
       <div id="workflow-trigger-section" className="workflow-builder-header">
         <div className="workflow-builder-heading">
-          <span className={`workflow-ready-dot ${reviewIssue ? "has-issue" : ""}`} title={reviewIssue || "Workflow ready"} />
-          <h2>Workflow Builder</h2>
+          <button type="button" className="workflow-builder-back" aria-label="Back to Flows" title="Back to Flows" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>←</button>
+          <span className={`workflow-ready-dot ${reviewIssue ? "has-issue" : ""}`} title={reviewIssue || "Flow ready"} />
+          <div className="workflow-builder-title-copy">
+            <h2>Flow Builder</h2>
+            <small>{workflow.name || "New Flow"} <span className="workflow-builder-status">{workflow.lifecycleStatus || "DRAFT"} · Version {workflow.version || 1}</span></small>
+          </div>
         </div>
         <div className="workflow-builder-field">
-          <label>Workflow name</label>
-          <input className={inputClass} value={workflow.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, name: event.target.value }))} placeholder="Workflow name" />
-        </div>
-        <div className="workflow-builder-field">
-          <label>Trigger object</label>
-          <PlatformFieldPicker
-            scopeKey={scopeKey}
-            includeObjectSelector
-            objectOnly
-            selectedObjectKey={workflow.object || ""}
-            onObjectChange={(object) => setWorkflow((current) => ({ ...current, object }))}
-          />
-        </div>
-        <div className="workflow-builder-field">
-          <label>Trigger</label>
-          <select aria-label="Workflow trigger" className={inputClass} value={workflow.trigger || "after_update"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
-            {scopeKey === "whatsapp_assistant" ? <option value="whatsapp_message_received">WhatsApp message received</option> : null}
-            {workflow.systemGenerated ? <option value="system_function">System function</option> : null}
-            {workflow.systemGenerated ? <option value="system_action">System action</option> : null}
-            {workflow.systemGenerated ? <option value="system_job">System job trigger</option> : null}
-            {isKioskExperience ? <option value="kiosk_experience">Kiosk experience</option> : null}
-            {!scopeKey ? triggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>) : null}
-          </select>
+          <label>Flow Label</label>
+          <input className={inputClass} value={workflow.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, name: event.target.value }))} placeholder="Flow label" />
         </div>
         <div className="workflow-builder-actions">
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>Tests</button>
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Versions</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Version History</button>
           <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} title={workflowId ? "Create an immutable Draft checkpoint" : "Save this workflow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>Save as New Version</button>
-          <button type="button" className="workflow-cancel-button" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>Cancel</button>
-          <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save Draft</button>
-          <button type="button" className="workflow-save-button" disabled={Boolean(reviewIssue)} title={reviewIssue || "Activate workflow"} onClick={() => saveWorkflow("ACTIVE")}>Activate</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} title={workflowId ? "Save this flow as a new version" : "Save this flow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>Save As</button>
+          <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save</button>
+          <button type="button" className="workflow-save-button" disabled={Boolean(reviewIssue)} title={reviewIssue || "Activate flow"} onClick={() => saveWorkflow("ACTIVE")}>Activate</button>
         </div>
       </div>
 
@@ -4360,7 +4379,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : (
         <div id="workflow-canvas-section">
-          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} />
+          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} />
         </div>
       )}
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
