@@ -4014,12 +4014,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   for (const step of enabledSteps) {
     const name = step.type === "ASSIGNMENT"
       ? step.config?.variableName
-      : ["CONSTANT","FORMULA"].includes(step.type)
+      : ["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type)
         ? step.config?.resourceName
         : null;
     if (!name) continue;
     const kind = step.type === "ASSIGNMENT" ? "VARIABLE" : step.type;
-    const type = step.type === "ASSIGNMENT" ? step.config?.variableType : step.type === "CONSTANT" ? step.config?.resourceType : step.config?.resultType;
+    const type = step.type === "ASSIGNMENT" ? step.config?.variableType : step.type === "CONSTANT" ? step.config?.resourceType : step.type === "FORMULA" ? step.config?.resultType : "text";
     const previous = resourceDeclarations.get(name);
     if (!previous) {
       resourceDeclarations.set(name, { kind, type });
