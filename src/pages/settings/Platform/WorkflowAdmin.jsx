@@ -284,6 +284,41 @@ const WORKFLOW_VISUAL_CSS = `
     cursor: pointer;
     pointer-events: auto;
   }
+  .workflow-add-element-popover {
+    position: sticky;
+    top: 42px;
+    z-index: 20;
+    width: min(560px, calc(100% - 36px));
+    max-height: 68vh;
+    margin: 0 auto 16px;
+    overflow: hidden;
+    border: 1px solid #d8dde6;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 14px 40px rgba(15,23,42,.18);
+  }
+  .workflow-add-element-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 14px 9px;
+    border-bottom: 1px solid #eef2f7;
+  }
+  .workflow-add-element-head > div { display: flex; flex-direction: column; gap: 2px; }
+  .workflow-add-element-head strong { color: #181818; font-size: 14px; }
+  .workflow-add-element-head small { color: #706e6b; font-size: 10px; }
+  .workflow-add-element-head button { border: 0; background: transparent; color: #706e6b; font-size: 20px; cursor: pointer; }
+  .workflow-add-element-search { position: relative; padding: 10px 12px 6px; }
+  .workflow-add-element-search span { position: absolute; left: 22px; top: 20px; color: #706e6b; }
+  .workflow-add-element-search input { width: 100%; min-height: 36px; box-sizing: border-box; border: 1px solid #c9c7c5; border-radius: 4px; padding: 7px 10px 7px 30px; font-size: 12px; }
+  .workflow-add-element-groups { max-height: 52vh; overflow: auto; padding: 0 12px 14px; }
+  .workflow-add-element-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .workflow-add-element-grid > button { display: flex; align-items: center; gap: 9px; min-height: 48px; border: 1px solid #e5e5e5; border-radius: 7px; background: #fff; padding: 8px 10px; text-align: left; cursor: pointer; }
+  .workflow-add-element-grid > button:hover { border-color: #1b96ff; background: #f3f9ff; }
+  .workflow-add-element-grid strong { display: block; color: #181818; font-size: 11px; }
+  .workflow-add-element-grid small { display: block; margin-top: 2px; overflow: hidden; color: #706e6b; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-add-element-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 auto; border-radius: 5px; background: #1b96ff; color: #fff; font-size: 14px; }
   .workflow-canvas-lane {
     width: min(100%, 560px);
     margin: 78px auto 0;
@@ -682,11 +717,11 @@ const actionOptions = [
   { value: "SCHEDULE_PATH", label: "Scheduled Path" },
   { value: "GET_RECORDS", label: "Get Records" },
   { value: "BULK_UPDATE_RECORDS", label: "Bulk Update Records" },
-  { value: "CREATE_RECORD", label: "Create Record" },
-  { value: "UPDATE_RECORD", label: "Update Record" },
+  { value: "CREATE_RECORD", label: "Create Records" },
+  { value: "UPDATE_RECORD", label: "Update Records" },
   { value: "UPDATE_RELATED_RECORD", label: "Update Related Record" },
   { value: "CREATE_RELATED_RECORD", label: "Create Related Record" },
-  { value: "DELETE_RECORD", label: "Delete Record" },
+  { value: "DELETE_RECORD", label: "Delete Records" },
   { value: "ASSIGN_RECORD", label: "Assign Record" },
   { value: "ADD_RELATIONSHIP", label: "Add Relationship" },
   { value: "REMOVE_RELATIONSHIP", label: "Remove Relationship" },
@@ -699,7 +734,7 @@ const actionOptions = [
   { value: "RUN_SUBFLOW", label: "Run Subflow" },
   { value: "WEBHOOK", label: "Webhook" },
   { value: "CONDITION", label: "Decision" },
-  { value: "WAIT", label: "Wait" },
+  { value: "WAIT", label: "Pause" },
   { value: "STOP", label: "Stop" },
 ];
 
@@ -778,15 +813,10 @@ function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONSTANT","FORMULA"].includes(key)) return "Resources";
   if (["CONDITION","WAIT","STOP","ASSIGNMENT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
-  if (key === "RUN_SUBFLOW") return "Workflows";
+  if (key === "RUN_SUBFLOW") return "Interaction";
   if (["GET_RECORDS","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
-  if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION"].includes(key)) return "Communication";
-  if (key === "CALL_FUNCTION") return "Advanced";
-  if (key.includes("WEBHOOK") || key === "HTTP_REQUEST" || key.startsWith("CONNECTOR_")) return "Integrations";
-  if (key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER")) return "Hardware & Payments";
-  if (key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_")) return "Connected Apps";
-  if (key.includes("APPOINTMENT")) return "Appointments";
-  return "App Actions";
+  if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
+  return "Actions";
 }
 
 /* Trigger values arrive as machine keys ("after_update"); the canvas Start
@@ -2196,13 +2226,22 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </>
         ) : (
           <>
-            <p className="workflow-palette-help">Create reusable constants and formulas here. They do not clutter the canvas.</p>
+            <p className="workflow-palette-help">View all flow elements and resources. Select any item to inspect it.</p>
             <div className="mb-2 grid grid-cols-2 gap-2">
               <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-[10px] font-semibold text-blue-700" onClick={() => addResource("CONSTANT")}>+ Constant</button>
               <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-[10px] font-semibold text-blue-700" onClick={() => addResource("FORMULA")}>+ Formula</button>
             </div>
             <div className="workflow-palette-scroll">
-              {resourceSteps.length ? <div className="workflow-palette-group-title">Defined resources</div> : null}
+              {visibleCanvasSteps.length ? <div className="workflow-palette-group-title">Elements</div> : null}
+              {visibleCanvasSteps.map(({ step, index }) => (
+                <button key={step.id} type="button" className="workflow-palette-item" onClick={() => { setSelectedId(step.id); setPropertiesOpen(true); }}>
+                  <span className="workflow-palette-item-copy">
+                    <strong>{step.label || getActionLabel(step.type)}</strong>
+                    <small>{getActionLabel(step.type)} · Step {index + 1}</small>
+                  </span>
+                </button>
+              ))}
+              {resourceSteps.length ? <div className="workflow-palette-group-title">Resources</div> : null}
               {resourceSteps.map(({ step, index }) => (
                 <button key={step.id} type="button" className="workflow-palette-item" onClick={() => setSelectedId(step.id)}>
                   <span className="workflow-palette-item-copy">
@@ -2242,6 +2281,37 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide elements" : "Show elements"}</button>
           <button type="button" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide properties" : "Show properties"}</button>
         </div>
+        {(insertAt != null || branchTarget) ? (
+          <div className="workflow-add-element-popover" role="dialog" aria-label="Add Element">
+            <div className="workflow-add-element-head">
+              <div>
+                <strong>Add Element</strong>
+                <small>{branchTarget ? "Choose an element for this decision path" : "Choose an element to insert here"}</small>
+              </div>
+              <button type="button" aria-label="Close Add Element" onClick={() => { setInsertAt(null); setBranchTarget(null); }}>×</button>
+            </div>
+            <div className="workflow-add-element-search">
+              <span>⌕</span>
+              <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder="Search elements..." autoFocus />
+            </div>
+            <div className="workflow-add-element-groups">
+              {Object.entries(paletteGroups).map(([category, options]) => (
+                <div key={category} className="workflow-add-element-group">
+                  <div className="workflow-palette-group-title">{category}</div>
+                  <div className="workflow-add-element-grid">
+                    {options.map((option) => (
+                      <button key={option.value} type="button" onClick={() => addFromPalette(option.value, insertAt == null ? workflow.steps.length : insertAt)}>
+                        <span className="workflow-add-element-icon">{option.value === "CONDITION" ? "◇" : option.value === "LOOP" ? "↻" : option.value === "RUN_SUBFLOW" ? "⇢" : option.value === "WAIT" ? "◷" : "⚙"}</span>
+                        <span><strong>{option.label}</strong>{option.description ? <small>{option.description}</small> : null}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {!palette.length ? <div className="workflow-palette-empty">No matching elements</div> : null}
+            </div>
+          </div>
+        ) : null}
         <div className="workflow-canvas-lane" style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top center" }}>
           <button type="button" className="workflow-start-node" onClick={() => setSelectedId("__start__")} title="Configure when this workflow starts">
             <span className="workflow-start-icon">▶</span>
