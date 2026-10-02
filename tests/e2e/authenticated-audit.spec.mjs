@@ -55,8 +55,11 @@ test("workflow builder can add/select/delete a step without stale selection", as
   const newWorkflow = page.getByRole("button", { name: /new workflow/i });
   await expect(newWorkflow).toBeVisible({ timeout: 30_000 });
   await newWorkflow.click();
+  await expect(page.getByRole("dialog", { name: "New Flow" })).toBeVisible();
+  await page.getByRole("button", { name: "Autolaunched Flow (No Trigger)", exact: true }).click();
 
   await expect(page.getByText("Elements", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Add element after Start", exact: true }).click();
   const palette = page.locator(".workflow-node-palette");
   const paletteSearch = palette.getByLabel("Search flow elements");
   if (await paletteSearch.isVisible().catch(() => false)) await paletteSearch.fill("Create Record");

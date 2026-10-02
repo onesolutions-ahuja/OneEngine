@@ -46,6 +46,8 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   const newWorkflow = page.getByRole("button", { name: /new workflow/i });
   await expect(newWorkflow).toBeVisible({ timeout: 15_000 });
   await newWorkflow.click();
+  await expect(page.getByRole("dialog", { name: "New Flow" })).toBeVisible();
+  await page.getByRole("button", { name: "Autolaunched Flow (No Trigger)", exact: true }).click();
 
   await expect(page.getByText("Elements", { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Manager", { exact: true })).toBeVisible();

@@ -1089,6 +1089,16 @@ const WORKFLOW_VISUAL_CSS = `
     }
   }
 
+  .workflow-builder-page .workflow-sfdc-drawer {
+    border: 1px solid #d8dde6;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(15,23,42,.08);
+  }
+  .workflow-builder-page .workflow-sfdc-drawer h3,
+  .workflow-builder-page .workflow-sfdc-drawer strong {
+    letter-spacing: 0;
+  }
   .workflow-builder-page button:focus-visible,
   .workflow-builder-page [role="button"]:focus-visible,
   .workflow-builder-page summary:focus-visible,
@@ -2742,6 +2752,760 @@ const WORKFLOW_VISUAL_CSS = `
     .workflow-properties-panel { width: min(338px, 100vw); }
   }
 
+
+  /* ======================================================================
+     SALESFORCE FLOW BUILDER SURROUNDING UI PARITY
+     Canvas visuals are intentionally excluded from this block.
+     ====================================================================== */
+  .workflow-builder-page {
+    --sfdc-blue: #0176d3;
+    --sfdc-blue-hover: #014486;
+    --sfdc-border: #c9c7c5;
+    --sfdc-border-soft: #e5e5e5;
+    --sfdc-text: #181818;
+    --sfdc-text-secondary: #444444;
+    --sfdc-text-muted: #706e6b;
+    --sfdc-panel-bg: #ffffff;
+    --sfdc-panel-subtle: #f3f3f3;
+    --sfdc-focus: #1b96ff;
+    --sfdc-radius: 4px;
+    color: var(--sfdc-text);
+  }
+
+  /* ---------- TOP BUTTON BAR ---------- */
+  .workflow-builder-header {
+    min-height: 48px !important;
+    margin: 0 !important;
+    padding: 7px 12px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--sfdc-border) !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    gap: 12px !important;
+  }
+  .workflow-builder-heading {
+    gap: 8px !important;
+    margin-right: 12px !important;
+  }
+  .workflow-builder-back {
+    width: 30px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    border: 1px solid var(--sfdc-border) !important;
+    border-radius: var(--sfdc-radius) !important;
+    background: #fff !important;
+    color: var(--sfdc-blue) !important;
+    box-shadow: none !important;
+    font-size: 15px !important;
+  }
+  .workflow-builder-back:hover {
+    background: #f3f3f3 !important;
+    color: var(--sfdc-blue-hover) !important;
+  }
+  .workflow-ready-dot {
+    width: 8px !important;
+    height: 8px !important;
+    box-shadow: none !important;
+  }
+  .workflow-builder-heading h2 {
+    color: var(--sfdc-text) !important;
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+  }
+  .workflow-builder-title-copy {
+    align-items: baseline !important;
+    gap: 7px !important;
+  }
+  .workflow-builder-title-copy small {
+    color: var(--sfdc-text-muted) !important;
+    font-size: 10px !important;
+    font-weight: 400 !important;
+  }
+  .workflow-builder-status {
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: #eef4ff !important;
+    padding: 2px 7px !important;
+    color: #032d60 !important;
+    font-size: 9px !important;
+    font-weight: 600 !important;
+  }
+  .workflow-builder-actions {
+    gap: 6px !important;
+    flex-wrap: nowrap !important;
+  }
+  .workflow-builder-actions .workflow-cancel-button,
+  .workflow-builder-actions .workflow-save-button,
+  .workflow-header-more > summary {
+    height: 32px !important;
+    min-height: 32px !important;
+    border-radius: var(--sfdc-radius) !important;
+    box-shadow: none !important;
+    font-family: inherit !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+  }
+  .workflow-builder-actions .workflow-cancel-button {
+    border: 1px solid var(--sfdc-border) !important;
+    background: #fff !important;
+    color: var(--sfdc-blue) !important;
+    padding: 0 12px !important;
+  }
+  .workflow-builder-actions .workflow-cancel-button:hover:not(:disabled) {
+    border-color: var(--sfdc-border) !important;
+    background: #f3f3f3 !important;
+    color: var(--sfdc-blue-hover) !important;
+  }
+  .workflow-builder-actions .workflow-save-button {
+    border: 1px solid var(--sfdc-blue) !important;
+    background: var(--sfdc-blue) !important;
+    color: #fff !important;
+    padding: 0 14px !important;
+  }
+  .workflow-builder-actions .workflow-save-button:hover:not(:disabled) {
+    border-color: var(--sfdc-blue-hover) !important;
+    background: var(--sfdc-blue-hover) !important;
+  }
+  .workflow-builder-actions .workflow-icon-button {
+    width: 32px !important;
+    padding: 0 !important;
+    font-size: 15px !important;
+  }
+  .workflow-builder-actions button:disabled,
+  .workflow-header-more button:disabled {
+    border-color: #dddbda !important;
+    background: #fff !important;
+    color: #b0adab !important;
+    opacity: 1 !important;
+  }
+  .workflow-header-separator {
+    height: 24px !important;
+    margin: 0 1px !important;
+    background: #dddbda !important;
+  }
+  .workflow-header-more > summary {
+    width: 32px !important;
+    border: 1px solid var(--sfdc-border) !important;
+    background: #fff !important;
+    color: var(--sfdc-blue) !important;
+  }
+  .workflow-header-more > summary:hover {
+    background: #f3f3f3 !important;
+  }
+  .workflow-header-more-menu {
+    top: 36px !important;
+    width: 190px !important;
+    border: 1px solid var(--sfdc-border) !important;
+    border-radius: var(--sfdc-radius) !important;
+    box-shadow: 0 2px 3px 0 rgba(0,0,0,.16) !important;
+  }
+  .workflow-header-more-menu button {
+    min-height: 32px !important;
+    padding: 0 12px !important;
+    border-bottom: 0 !important;
+    color: var(--sfdc-text) !important;
+    font-size: 12px !important;
+  }
+  .workflow-header-more-menu button:hover {
+    background: #f3f3f3 !important;
+  }
+
+  /* ---------- THREE-COLUMN SHELL: only pane chrome/width, never canvas content ---------- */
+  .workflow-visual-shell {
+    grid-template-columns: 260px minmax(420px, 1fr) 360px !important;
+    gap: 0 !important;
+    border: 0 !important;
+  }
+  .workflow-node-palette,
+  .workflow-properties-panel {
+    border-radius: 0 !important;
+    background: var(--sfdc-panel-bg) !important;
+    box-shadow: none !important;
+  }
+  .workflow-node-palette {
+    padding: 0 !important;
+    border: 0 !important;
+    border-right: 1px solid var(--sfdc-border) !important;
+  }
+  .workflow-properties-panel {
+    padding: 0 !important;
+    border: 0 !important;
+    border-left: 1px solid var(--sfdc-border) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-gutter: stable !important;
+  }
+  .workflow-visual-shell.palette-collapsed {
+    grid-template-columns: minmax(420px, 1fr) 360px !important;
+  }
+  .workflow-visual-shell.properties-collapsed {
+    grid-template-columns: 260px minmax(420px, 1fr) !important;
+  }
+  .workflow-visual-shell.palette-collapsed.properties-collapsed {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* ---------- LEFT TOOLBOX ---------- */
+  .workflow-palette-head {
+    min-height: 43px !important;
+    margin: 0 !important;
+    padding: 0 12px !important;
+    border-bottom: 1px solid var(--sfdc-border-soft) !important;
+    background: #fff !important;
+  }
+  .workflow-palette-tabs {
+    width: 100% !important;
+    height: 43px !important;
+    display: flex !important;
+    align-items: stretch !important;
+    gap: 22px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+  .workflow-palette-tabs > button {
+    position: relative !important;
+    min-height: 43px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 1px !important;
+    color: var(--sfdc-text-secondary) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+  }
+  .workflow-palette-tabs > button.bg-white {
+    color: var(--sfdc-blue) !important;
+  }
+  .workflow-palette-tabs > button.bg-white::after {
+    content: "" !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    height: 3px !important;
+    background: var(--sfdc-blue) !important;
+  }
+  .workflow-palette-search {
+    margin: 12px 12px 8px !important;
+  }
+  .workflow-palette-search span {
+    left: 10px !important;
+    color: #706e6b !important;
+    font-size: 13px !important;
+  }
+  .workflow-palette-search input {
+    height: 32px !important;
+    min-height: 32px !important;
+    border: 1px solid var(--sfdc-border) !important;
+    border-radius: var(--sfdc-radius) !important;
+    background: #fff !important;
+    padding: 0 9px 0 30px !important;
+    color: var(--sfdc-text) !important;
+    font-size: 12px !important;
+    box-shadow: none !important;
+  }
+  .workflow-palette-search input:focus {
+    border-color: var(--sfdc-focus) !important;
+    box-shadow: 0 0 3px #0176d3 !important;
+    outline: 0 !important;
+  }
+  .workflow-palette-help {
+    margin: 0 !important;
+    padding: 0 12px 8px !important;
+    color: var(--sfdc-text-muted) !important;
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+  .workflow-palette-scroll {
+    max-height: calc(100vh - 304px) !important;
+    padding: 0 0 16px !important;
+    scrollbar-width: thin !important;
+  }
+  .workflow-palette-group-title {
+    margin: 0 !important;
+    padding: 11px 12px 5px !important;
+    color: var(--sfdc-text-muted) !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: .03em !important;
+    text-transform: uppercase !important;
+  }
+  .workflow-palette-item {
+    min-height: 42px !important;
+    margin: 0 !important;
+    padding: 6px 12px !important;
+    gap: 9px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    transform: none !important;
+    color: var(--sfdc-text) !important;
+  }
+  .workflow-palette-item:hover {
+    border: 0 !important;
+    background: #f3f3f3 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  .workflow-palette-item::before {
+    color: #706e6b !important;
+    font-size: 9px !important;
+  }
+  .workflow-palette-icon {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: var(--sfdc-radius) !important;
+    box-shadow: none !important;
+  }
+  .workflow-palette-item-copy strong {
+    color: var(--sfdc-text) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+  }
+  .workflow-palette-item-copy small {
+    color: var(--sfdc-text-muted) !important;
+    font-size: 10px !important;
+    font-weight: 400 !important;
+    line-height: 1.2 !important;
+  }
+  .workflow-palette-empty {
+    color: var(--sfdc-text-muted) !important;
+    font-size: 12px !important;
+  }
+  .workflow-new-resource-button {
+    width: calc(100% - 24px) !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    margin: 3px 12px 8px !important;
+    border: 1px solid var(--sfdc-border) !important;
+    border-radius: var(--sfdc-radius) !important;
+    background: #fff !important;
+    color: var(--sfdc-blue) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+  }
+  .workflow-new-resource-button:hover {
+    background: #f3f3f3 !important;
+    color: var(--sfdc-blue-hover) !important;
+  }
+  .workflow-manager-filter {
+    margin: 0 12px 7px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    gap: 12px !important;
+  }
+  .workflow-manager-filter button {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 4px 0 !important;
+    color: var(--sfdc-text-muted) !important;
+    font-size: 10px !important;
+  }
+  .workflow-manager-filter button.bg-white {
+    color: var(--sfdc-blue) !important;
+    text-decoration: underline !important;
+    text-underline-offset: 4px !important;
+  }
+  .workflow-resource-choice {
+    border-radius: 0 !important;
+    padding: 8px 10px !important;
+  }
+  .workflow-resource-choice:hover {
+    background: #f3f3f3 !important;
+  }
+  .workflow-manager-item {
+    border-bottom: 1px solid #f3f3f3 !important;
+  }
+  .workflow-manager-detail {
+    margin: 0 12px 8px 42px !important;
+    border-left: 2px solid #dddbda !important;
+    padding: 5px 8px !important;
+  }
+
+  /* ---------- RIGHT PROPERTIES PANE ---------- */
+  .workflow-properties-tabs {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    padding: 0 16px !important;
+    border-bottom: 1px solid var(--sfdc-border) !important;
+    background: #fff !important;
+  }
+  .workflow-properties-tab {
+    padding: 14px 0 10px !important;
+    color: var(--sfdc-text-secondary) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+  }
+  .workflow-properties-tab.is-active {
+    color: var(--sfdc-blue) !important;
+  }
+  .workflow-properties-tab.is-active::after {
+    height: 3px !important;
+    border-radius: 0 !important;
+    background: var(--sfdc-blue) !important;
+  }
+  .workflow-properties-panel > .rounded-xl,
+  .workflow-properties-panel > .space-y-4,
+  .workflow-properties-panel .rounded-xl.bg-white {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    padding: 16px !important;
+    box-shadow: none !important;
+  }
+  .workflow-properties-panel .text-sm.font-semibold,
+  .workflow-properties-panel .text-base.font-semibold {
+    color: var(--sfdc-text) !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+  }
+  .workflow-properties-panel .text-xs,
+  .workflow-properties-panel .text-\\[11px\\] {
+    color: var(--sfdc-text-muted) !important;
+  }
+  .workflow-properties-panel label {
+    margin-bottom: 4px !important;
+    color: var(--sfdc-text-secondary) !important;
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    line-height: 1.25 !important;
+  }
+  .workflow-properties-panel input:not([type="checkbox"]):not([type="radio"]),
+  .workflow-properties-panel select,
+  .workflow-properties-panel textarea {
+    width: 100% !important;
+    min-height: 32px !important;
+    border: 1px solid var(--sfdc-border) !important;
+    border-radius: var(--sfdc-radius) !important;
+    background: #fff !important;
+    color: var(--sfdc-text) !important;
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    box-shadow: none !important;
+  }
+  .workflow-properties-panel input:not([type="checkbox"]):not([type="radio"]),
+  .workflow-properties-panel select {
+    height: 32px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .workflow-properties-panel textarea {
+    padding: 7px 9px !important;
+  }
+  .workflow-properties-panel input:focus,
+  .workflow-properties-panel select:focus,
+  .workflow-properties-panel textarea:focus {
+    border-color: var(--sfdc-focus) !important;
+    box-shadow: 0 0 3px #0176d3 !important;
+    outline: 0 !important;
+  }
+  .workflow-properties-panel input[type="checkbox"],
+  .workflow-properties-panel input[type="radio"] {
+    accent-color: var(--sfdc-blue) !important;
+  }
+  .workflow-properties-panel .rounded-lg,
+  .workflow-properties-panel .rounded-xl {
+    border-radius: var(--sfdc-radius) !important;
+  }
+  .workflow-properties-panel .bg-slate-50 {
+    background: #f3f3f3 !important;
+  }
+  .workflow-properties-panel .border-slate-200,
+  .workflow-properties-panel .border-slate-100 {
+    border-color: #dddbda !important;
+  }
+  .workflow-properties-panel button:not(.workflow-save-button):not(.workflow-cancel-button) {
+    min-height: 30px !important;
+    border-radius: var(--sfdc-radius) !important;
+    box-shadow: none !important;
+  }
+  .workflow-properties-panel .workflow-cancel-button,
+  .workflow-properties-panel .workflow-save-button {
+    height: 32px !important;
+    min-height: 32px !important;
+    border-radius: var(--sfdc-radius) !important;
+    padding: 0 14px !important;
+    box-shadow: none !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+  }
+  .workflow-properties-panel .workflow-cancel-button {
+    border: 1px solid var(--sfdc-border) !important;
+    background: #fff !important;
+    color: var(--sfdc-blue) !important;
+  }
+  .workflow-properties-panel .workflow-save-button {
+    border: 1px solid var(--sfdc-blue) !important;
+    background: var(--sfdc-blue) !important;
+    color: #fff !important;
+  }
+  .workflow-properties-panel .workflow-cancel-button:hover {
+    background: #f3f3f3 !important;
+  }
+  .workflow-properties-panel .workflow-save-button:hover {
+    border-color: var(--sfdc-blue-hover) !important;
+    background: var(--sfdc-blue-hover) !important;
+  }
+  .workflow-properties-footer {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 8 !important;
+    margin-left: -16px !important;
+    margin-right: -16px !important;
+    margin-bottom: -16px !important;
+    padding: 10px 16px !important;
+    border-top: 1px solid var(--sfdc-border) !important;
+    background: #f3f3f3 !important;
+  }
+
+  /* Condition rows and option cards should read as Salesforce form sections,
+     not rounded OneTheme cards. */
+  .workflow-properties-panel .space-y-3.rounded-lg.border,
+  .workflow-properties-panel .space-y-3.rounded-xl.border {
+    border: 1px solid #dddbda !important;
+    border-radius: var(--sfdc-radius) !important;
+    background: #fff !important;
+  }
+  .workflow-properties-panel button.rounded-lg.border,
+  .workflow-properties-panel button.rounded-xl.border {
+    border-color: var(--sfdc-border) !important;
+    border-radius: var(--sfdc-radius) !important;
+    background: #fff !important;
+  }
+  .workflow-properties-panel button.rounded-lg.border:hover,
+  .workflow-properties-panel button.rounded-xl.border:hover {
+    background: #f3f3f3 !important;
+  }
+
+  /* ---------- DRAWERS / TESTS / DEBUG / PROPERTIES ---------- */
+  .workflow-builder-page .workflow-sfdc-drawer {
+    border: 1px solid var(--sfdc-border) !important;
+    border-radius: var(--sfdc-radius) !important;
+    background: #fff !important;
+    box-shadow: 0 2px 3px rgba(0,0,0,.16) !important;
+  }
+  .workflow-builder-page .workflow-sfdc-drawer .workflow-cancel-button,
+  .workflow-builder-page .workflow-sfdc-drawer .workflow-save-button {
+    height: 32px !important;
+    min-height: 32px !important;
+    border-radius: var(--sfdc-radius) !important;
+    box-shadow: none !important;
+  }
+
+  /* ---------- NEW FLOW MODAL ---------- */
+  .workflow-builder-page [role="dialog"] > div {
+    border-radius: var(--sfdc-radius) !important;
+  }
+  .workflow-builder-page [role="dialog"] button {
+    border-radius: var(--sfdc-radius) !important;
+  }
+
+  @media (max-width: 1350px) {
+    .workflow-visual-shell {
+      grid-template-columns: 240px minmax(380px, 1fr) 330px !important;
+    }
+    .workflow-visual-shell.palette-collapsed { grid-template-columns: minmax(380px, 1fr) 330px !important; }
+    .workflow-visual-shell.properties-collapsed { grid-template-columns: 240px minmax(380px, 1fr) !important; }
+  }
+  @media (max-width: 1050px) {
+    .workflow-builder-header {
+      align-items: flex-start !important;
+      flex-wrap: wrap !important;
+    }
+    .workflow-builder-actions {
+      width: 100% !important;
+      overflow-x: auto !important;
+      justify-content: flex-start !important;
+      padding-bottom: 2px !important;
+    }
+    .workflow-visual-shell {
+      grid-template-columns: 230px minmax(0, 1fr) !important;
+    }
+    .workflow-properties-panel {
+      grid-column: 1 / -1 !important;
+      border-left: 0 !important;
+      border-top: 1px solid var(--sfdc-border) !important;
+    }
+  }
+  @media (max-width: 760px) {
+    .workflow-builder-header {
+      padding: 6px 8px !important;
+    }
+    .workflow-visual-shell {
+      grid-template-columns: 1fr !important;
+    }
+    .workflow-node-palette,
+    .workflow-properties-panel {
+      border-right: 0 !important;
+      border-left: 0 !important;
+      border-bottom: 1px solid var(--sfdc-border) !important;
+    }
+  }
+
+
+  /* ---------- SALESFORCE-LIKE SCROLL CONTAINERS ----------
+     Apply to Builder chrome only. The canvas and React Flow viewport are
+     deliberately excluded so the user's existing canvas UI stays untouched. */
+  .workflow-node-palette {
+    display: flex !important;
+    min-height: 0 !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+  .workflow-palette-head,
+  .workflow-palette-search,
+  .workflow-palette-help,
+  .workflow-new-resource-button,
+  .workflow-manager-filter {
+    flex: 0 0 auto !important;
+  }
+  .workflow-palette-scroll {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scrollbar-gutter: stable !important;
+  }
+  .workflow-properties-panel {
+    overscroll-behavior: contain !important;
+    scrollbar-gutter: stable !important;
+  }
+
+  .workflow-palette-scroll,
+  .workflow-properties-panel,
+  .workflow-add-element-groups,
+  .workflow-action-picker-scroll,
+  .workflow-record-picker-menu,
+  .workflow-sfdc-drawer,
+  .workflow-header-more-menu,
+  .workflow-canvas-more-menu,
+  .workflow-builder-actions {
+    scrollbar-width: thin !important;
+    scrollbar-color: #b0adab #f3f3f3 !important;
+  }
+
+  .workflow-palette-scroll::-webkit-scrollbar,
+  .workflow-properties-panel::-webkit-scrollbar,
+  .workflow-add-element-groups::-webkit-scrollbar,
+  .workflow-action-picker-scroll::-webkit-scrollbar,
+  .workflow-record-picker-menu::-webkit-scrollbar,
+  .workflow-sfdc-drawer::-webkit-scrollbar,
+  .workflow-header-more-menu::-webkit-scrollbar,
+  .workflow-canvas-more-menu::-webkit-scrollbar,
+  .workflow-builder-actions::-webkit-scrollbar {
+    width: 10px !important;
+    height: 10px !important;
+  }
+
+  .workflow-palette-scroll::-webkit-scrollbar-track,
+  .workflow-properties-panel::-webkit-scrollbar-track,
+  .workflow-add-element-groups::-webkit-scrollbar-track,
+  .workflow-action-picker-scroll::-webkit-scrollbar-track,
+  .workflow-record-picker-menu::-webkit-scrollbar-track,
+  .workflow-sfdc-drawer::-webkit-scrollbar-track,
+  .workflow-header-more-menu::-webkit-scrollbar-track,
+  .workflow-canvas-more-menu::-webkit-scrollbar-track,
+  .workflow-builder-actions::-webkit-scrollbar-track {
+    background: #f3f3f3 !important;
+  }
+
+  .workflow-palette-scroll::-webkit-scrollbar-thumb,
+  .workflow-properties-panel::-webkit-scrollbar-thumb,
+  .workflow-add-element-groups::-webkit-scrollbar-thumb,
+  .workflow-action-picker-scroll::-webkit-scrollbar-thumb,
+  .workflow-record-picker-menu::-webkit-scrollbar-thumb,
+  .workflow-sfdc-drawer::-webkit-scrollbar-thumb,
+  .workflow-header-more-menu::-webkit-scrollbar-thumb,
+  .workflow-canvas-more-menu::-webkit-scrollbar-thumb,
+  .workflow-builder-actions::-webkit-scrollbar-thumb {
+    min-height: 28px !important;
+    border: 2px solid #f3f3f3 !important;
+    border-radius: 8px !important;
+    background: #b0adab !important;
+    background-clip: padding-box !important;
+  }
+
+  .workflow-palette-scroll::-webkit-scrollbar-thumb:hover,
+  .workflow-properties-panel::-webkit-scrollbar-thumb:hover,
+  .workflow-add-element-groups::-webkit-scrollbar-thumb:hover,
+  .workflow-action-picker-scroll::-webkit-scrollbar-thumb:hover,
+  .workflow-record-picker-menu::-webkit-scrollbar-thumb:hover,
+  .workflow-sfdc-drawer::-webkit-scrollbar-thumb:hover,
+  .workflow-header-more-menu::-webkit-scrollbar-thumb:hover,
+  .workflow-canvas-more-menu::-webkit-scrollbar-thumb:hover,
+  .workflow-builder-actions::-webkit-scrollbar-thumb:hover {
+    background: #969492 !important;
+    background-clip: padding-box !important;
+  }
+
+  .workflow-palette-scroll::-webkit-scrollbar-corner,
+  .workflow-properties-panel::-webkit-scrollbar-corner,
+  .workflow-add-element-groups::-webkit-scrollbar-corner,
+  .workflow-action-picker-scroll::-webkit-scrollbar-corner,
+  .workflow-record-picker-menu::-webkit-scrollbar-corner,
+  .workflow-sfdc-drawer::-webkit-scrollbar-corner,
+  .workflow-header-more-menu::-webkit-scrollbar-corner,
+  .workflow-canvas-more-menu::-webkit-scrollbar-corner,
+  .workflow-builder-actions::-webkit-scrollbar-corner {
+    background: #f3f3f3 !important;
+  }
+
+  /* Match Salesforce's panel scroll behaviour: pane headers stay fixed while
+     only the pane body scrolls. */
+  .workflow-palette-head {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 12 !important;
+  }
+  .workflow-properties-tabs {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 12 !important;
+  }
+  .workflow-properties-footer {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 12 !important;
+  }
+
+  /* Drop-down/list surfaces use the same compact Salesforce chrome. */
+  .workflow-record-picker-menu,
+  .workflow-action-picker,
+  .workflow-add-element-popover,
+  .workflow-header-more-menu,
+  .workflow-canvas-more-menu {
+    border: 1px solid #c9c7c5 !important;
+    border-radius: 4px !important;
+    background: #fff !important;
+    box-shadow: 0 2px 3px rgba(0,0,0,.16) !important;
+  }
+
+  /* Keep scroll tracks from visually colliding with panel dividers. */
+  .workflow-palette-scroll {
+    padding-right: 0 !important;
+  }
+  .workflow-properties-panel {
+    padding-right: 0 !important;
+  }
+
 `;
 
 function WorkflowRecordPicker({ objectKey, value, onChange, ariaLabel = "Search records" }) {
@@ -2967,7 +3731,9 @@ function createBlankWorkflow(scopeKey = null) {
     actionMetadata: {
       apiName: scopeKey === "whatsapp_assistant" ? "WhatsApp_Assistant_Flow" : "",
       description: "",
-      flowType: null,
+      flowType: scopeKey === "whatsapp_assistant" ? "PLATFORM_EVENT_TRIGGERED" : "AUTOLAUNCHED",
+      optimizeFor: "ACTIONS_AND_RELATED_RECORDS",
+      includeAsyncPath: false,
       schedule: { scheduleType: "DAILY", timezone: "", definition: { time: "" } },
       builderLayout: { mode: "AUTO", positions: {} },
       builderGroups: [],
@@ -2995,6 +3761,8 @@ function persistedWorkflowSignature(workflow = {}) {
     scope: workflow.scope || workflow.action?.scope || null,
     actionMetadata: {
       flowType: workflow.actionMetadata?.flowType || workflow.action?.flowType || null,
+      optimizeFor: workflow.actionMetadata?.optimizeFor || workflow.action?.optimizeFor || "ACTIONS_AND_RELATED_RECORDS",
+      includeAsyncPath: workflow.actionMetadata?.includeAsyncPath === true || workflow.action?.includeAsyncPath === true,
       apiName: workflow.actionMetadata?.apiName || workflow.action?.apiName || "",
       description: workflow.actionMetadata?.description || workflow.action?.description || "",
       templateKey: workflow.actionMetadata?.templateKey || workflow.action?.templateKey || null,
@@ -3167,6 +3935,40 @@ const TRIGGER_LABELS = {
   system_job: "System job trigger",
 };
 const getTriggerLabel = (value) => TRIGGER_LABELS[value] || value || "Manual trigger";
+
+const FLOW_TYPE_OPTIONS = [
+  { key: "SCREEN_FLOW", label: "Screen Flow", icon: "▤", description: "Guide a user through screens and collect input." },
+  { key: "RECORD_TRIGGERED", label: "Record-Triggered Flow", icon: "◉", description: "Run automatically when a record is created, updated, or deleted." },
+  { key: "SCHEDULE_TRIGGERED", label: "Schedule-Triggered Flow", icon: "◷", description: "Run at a specified time and frequency." },
+  { key: "PLATFORM_EVENT_TRIGGERED", label: "Event-Triggered Flow", icon: "⚡", description: "Run when a registered platform or connector event is published." },
+  { key: "AUTOLAUNCHED", label: "Autolaunched Flow (No Trigger)", icon: "▶", description: "Run from another flow, action, API, or application context." },
+  { key: "RECOMMENDATION_STRATEGY", label: "Recommendation Strategy Flow", icon: "★", description: "Build a recommendation strategy with reusable resources and decisions." },
+  { key: "INSTRUCTION_FLOW", label: "Instruction Flow", icon: "✦", description: "Run an instruction-oriented automation without screens." },
+  { key: "KIOSK_EXPERIENCE", label: "Kiosk Experience", icon: "▣", description: "Build a metadata-driven kiosk experience using the same flow runtime." },
+];
+
+const RECORD_TRIGGER_WHEN_OPTIONS = [
+  { key: "created", label: "A record is created" },
+  { key: "updated", label: "A record is updated" },
+  { key: "created_or_updated", label: "A record is created or updated" },
+  { key: "deleted", label: "A record is deleted" },
+];
+
+function recordTriggerWhen(trigger = "") {
+  const value = String(trigger || "").toLowerCase();
+  if (value.includes("delete")) return "deleted";
+  if (["before_create","after_create"].includes(value)) return "created";
+  if (["before_update","after_update","field_changed"].includes(value)) return "updated";
+  return "created_or_updated";
+}
+
+function recordTriggerKey(when = "created_or_updated", optimizeFor = "ACTIONS_AND_RELATED_RECORDS") {
+  const fast = String(optimizeFor || "").toUpperCase() === "FAST_FIELD_UPDATES";
+  if (when === "created") return fast ? "before_create" : "after_create";
+  if (when === "updated") return fast ? "before_update" : "after_update";
+  if (when === "deleted") return "after_delete";
+  return fast ? "before_save" : "after_save";
+}
 
 const RECORD_ACTION_TYPES = new Set([
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
@@ -3506,12 +4308,24 @@ function StepConditionEditor({ value, onChange, objectKey, extraResources = [] }
     <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-slate-700">Condition</span>
-        <select className={inputClass} value={config.type || "all"} onChange={(event) => update({ type: event.target.value })}>
-          <option value="all">IF ALL</option>
-          <option value="any">IF ANY</option>
+        <select aria-label="Condition Requirements" className={inputClass} value={config.type || "all"} onChange={(event) => update({ type: event.target.value })}>
+          <option value="all">All Conditions Are Met (AND)</option>
+          <option value="any">Any Condition Is Met (OR)</option>
+          <option value="custom">Custom Condition Logic Is Met</option>
+          <option value="formula">Formula Evaluates to True</option>
         </select>
       </div>
-      {(config.rules || []).map((rule, index) => (
+      {config.type === "custom" ? (
+        <label className="block text-xs font-medium text-slate-600">Condition Logic
+          <input className={inputClass} value={config.logic || ""} onChange={(event) => update({ logic: event.target.value })} placeholder="Example: 1 AND (2 OR 3)" />
+        </label>
+      ) : null}
+      {config.type === "formula" ? (
+        <label className="block text-xs font-medium text-slate-600">Formula
+          <textarea className={inputClass} rows={4} value={config.formula || ""} onChange={(event) => update({ formula: event.target.value })} placeholder="Enter a formula that evaluates to true" />
+        </label>
+      ) : null}
+      {config.type === "formula" ? null : (config.rules || []).map((rule, index) => (
         <div className="grid gap-2 md:grid-cols-[1.2fr_0.9fr_1fr_auto]" key={rule.id || index}>
           <PlatformFieldPicker objectKey={objectKey} value={rule.field || ""} label="Field" onChange={(field) => {
             const next = [...(config.rules || [])];
@@ -3562,7 +4376,7 @@ function StepConditionEditor({ value, onChange, objectKey, extraResources = [] }
           }}>Remove</button>
         </div>
       ))}
-      <button type="button" className="text-sm text-blue-700" onClick={() => update({ rules: [...(config.rules || []), blankCondition()] })}>+ Add condition</button>
+      {config.type === "formula" ? null : <button type="button" className="text-sm text-blue-700" onClick={() => update({ rules: [...(config.rules || []), blankCondition()] })}>+ Add Condition</button>}
     </div>
   );
 }
@@ -5689,7 +6503,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           </details> : null}
         </div>
       </div>
-      <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
+      <div className="workflow-properties-footer mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
         <button type="button" className="workflow-cancel-button" onClick={onCancel}>Cancel</button>
         <button type="button" className="workflow-save-button" onClick={onDone}>Done</button>
       </div>
@@ -7090,7 +7904,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     <div className={`workflow-visual-shell ${!paletteOpen ? "palette-collapsed" : ""} ${!propertiesOpen ? "properties-collapsed" : ""}`}>
       {paletteOpen ? <aside ref={paletteRef} tabIndex={-1} className="workflow-node-palette">
         <div className="workflow-palette-head">
-          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+          <div className="workflow-palette-tabs inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
             <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${paletteTab === "elements" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setPaletteTab("elements")}>Elements</button>
             <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${paletteTab === "resources" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setPaletteTab("resources")}>Manager</button>
           </div>
@@ -7134,7 +7948,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <>
             <p className="workflow-palette-help">View all flow elements and resources. Select any item to inspect it.</p>
             <div className="relative mb-2">
-              <button type="button" className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-[11px] font-semibold text-blue-700" onClick={() => setResourceMenuOpen((value) => !value)}>New Resource</button>
+              <button type="button" className="workflow-new-resource-button w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-[11px] font-semibold text-blue-700" onClick={() => setResourceMenuOpen((value) => !value)}>New Resource</button>
               {resourceMenuOpen ? (
                 <div className="mt-2 space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
                   <button type="button" className="workflow-resource-choice" onClick={() => addResource("VARIABLE")}><strong>Variable</strong><small>Store a value that can change while the flow runs.</small></button>
@@ -7149,7 +7963,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 </div>
               ) : null}
             </div>
-            <div className="mb-2 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <div className="workflow-manager-filter mb-2 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
               <button type="button" className={`rounded-md px-2 py-1 text-[9px] font-semibold ${managerFilter === "all" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setManagerFilter("all")}>All</button>
               <button type="button" className={`rounded-md px-2 py-1 text-[9px] font-semibold ${managerFilter === "unused" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setManagerFilter("unused")}>Unused</button>
             </div>
@@ -7580,19 +8394,41 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         {selectedId === "__start__" ? (
           <div className="space-y-4 rounded-xl bg-white p-2">
             <div>
-              <div className="text-sm font-semibold text-slate-800">Start</div>
-              <p className="mt-1 text-xs text-slate-500">Define when the flow starts. Entry conditions are evaluated before any element runs.</p>
+              <div className="text-sm font-semibold text-slate-800">Configure Start</div>
+              <p className="mt-1 text-xs text-slate-500">Define how this flow starts, which records qualify, and when the flow should run.</p>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Trigger</label>
-              {startTriggerOptions.length > 8 ? <input className={inputClass} value={startTriggerSearch} onChange={(event) => setStartTriggerSearch(event.target.value)} placeholder="Search triggers or events..." aria-label="Search flow triggers"/> : null}
-              <select aria-label="Flow trigger" className={inputClass} value={workflow.trigger || "manual"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value, entryTransition: "EVERY_TIME" }))}>
-                {!startTriggerOptions.some((option) => option.key === workflow.trigger) && workflow.trigger ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
-                {workflow.trigger && startTriggerOptions.some((option) => option.key === workflow.trigger) && !filteredStartTriggerOptions.some((option) => option.key === workflow.trigger) ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
-                {filteredStartTriggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
-              </select>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <span className="font-semibold text-slate-800">{FLOW_TYPE_OPTIONS.find((item) => item.key === flowType)?.label || flowType}</span>
+              <span className="ml-2">Flow type is selected when the flow is created. Use Properties to change advanced version settings.</span>
             </div>
+            {flowType === "RECORD_TRIGGERED" ? (
+              <div>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Configure Trigger</div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Trigger the Flow When</label>
+                <select aria-label="Flow trigger" className={inputClass} value={recordTriggerWhen(workflow.trigger)} onChange={(event) => {
+                  const when = event.target.value;
+                  setWorkflow((current) => ({
+                    ...current,
+                    trigger: recordTriggerKey(when, current.actionMetadata?.optimizeFor),
+                    entryTransition: "EVERY_TIME",
+                  }));
+                }}>
+                  {RECORD_TRIGGER_WHEN_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">{flowType === "PLATFORM_EVENT_TRIGGERED" ? "Event" : "Trigger"}</label>
+                {startTriggerOptions.length > 8 ? <input className={inputClass} value={startTriggerSearch} onChange={(event) => setStartTriggerSearch(event.target.value)} placeholder="Search triggers or events..." aria-label="Search flow triggers"/> : null}
+                <select aria-label="Flow trigger" className={inputClass} value={workflow.trigger || "manual"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value, entryTransition: "EVERY_TIME" }))}>
+                  {!startTriggerOptions.some((option) => option.key === workflow.trigger) && workflow.trigger ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
+                  {workflow.trigger && startTriggerOptions.some((option) => option.key === workflow.trigger) && !filteredStartTriggerOptions.some((option) => option.key === workflow.trigger) ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
+                  {filteredStartTriggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+                </select>
+              </div>
+            )}
             {["RECORD_TRIGGERED","SCHEDULE_TRIGGERED"].includes(flowType) ? <div>
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Select Object</div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Object {flowType === "SCHEDULE_TRIGGERED" ? "(optional batch source)" : ""}</label>
               <PlatformFieldPicker
                 scopeKey={scopeKey}
@@ -7637,6 +8473,38 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 <p className="text-[11px] text-slate-500">When activated, this Flow runs only from its schedule. If an Object is selected, the scheduler can process matching records as separate interviews.</p>
               </div>;
             })() : null}
+            {flowType === "RECORD_TRIGGERED" && recordTriggerWhen(workflow.trigger) !== "deleted" ? (
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-2 text-xs font-semibold text-slate-700">Optimize the Flow For</div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {[
+                      ["FAST_FIELD_UPDATES", "Fast Field Updates", "Update fields on the record that triggered the flow before the record is saved."],
+                      ["ACTIONS_AND_RELATED_RECORDS", "Actions and Related Records", "Run after the record is saved so the flow can create or update related records and run actions."],
+                    ].map(([value, label, help]) => {
+                      const selected = (workflow.actionMetadata?.optimizeFor || "ACTIONS_AND_RELATED_RECORDS") === value;
+                      return <button key={value} type="button" className={`rounded-lg border p-3 text-left ${selected ? "border-blue-500 bg-blue-50 ring-1 ring-blue-200" : "border-slate-200 bg-white"}`} onClick={() => setWorkflow((current) => {
+                        const when = recordTriggerWhen(current.trigger);
+                        return {
+                          ...current,
+                          trigger: recordTriggerKey(when, value),
+                          actionMetadata: { ...(current.actionMetadata || {}), optimizeFor: value, ...(value === "FAST_FIELD_UPDATES" ? { includeAsyncPath: false } : {}) },
+                        };
+                      })}>
+                        <strong className="block text-xs text-slate-800">{label}</strong>
+                        <span className="mt-1 block text-[11px] leading-4 text-slate-500">{help}</span>
+                      </button>;
+                    })}
+                  </div>
+                </div>
+                {(workflow.actionMetadata?.optimizeFor || "ACTIONS_AND_RELATED_RECORDS") === "ACTIONS_AND_RELATED_RECORDS" ? (
+                  <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
+                    <input type="checkbox" className="mt-0.5" checked={workflow.actionMetadata?.includeAsyncPath === true} onChange={(event) => setWorkflow((current) => ({ ...current, actionMetadata: { ...(current.actionMetadata || {}), includeAsyncPath: event.target.checked } }))} />
+                    <span><strong className="block">Include a Run Asynchronously path</strong><span className="mt-1 block text-[11px] text-slate-500">Use this path for external systems or work that should run only after the triggering transaction is committed.</span></span>
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
             {flowType === "RECORD_TRIGGERED" ? <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
@@ -7678,6 +8546,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <div className="space-y-3">
               {["after_update","after_save","before_update","before_save","field_changed"].includes(workflow.trigger) ? (
                 <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">When to Run the Flow for Updated Records</div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">When conditions become true</label>
                   <select className={inputClass} value={workflow.entryTransition || "EVERY_TIME"} onChange={(event) => setWorkflow((current) => ({ ...current, entryTransition: event.target.value }))}>
                     <option value="EVERY_TIME">Every time the record meets the conditions</option>
@@ -7688,7 +8557,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               ) : null}
               {workflow.object && ["RECORD_TRIGGERED","SCHEDULE_TRIGGERED"].includes(flowType) ? (
                 <div>
-                  <div className="mb-2 text-xs font-semibold text-slate-700">Entry conditions</div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Set Entry Conditions</div>
+                  <div className="mb-2 text-xs font-semibold text-slate-700">Condition Requirements</div>
                   <StepConditionEditor
                     objectKey={workflow.object}
                     value={{ type: workflow.match || "all", rules: workflow.conditions?.length ? workflow.conditions : [blankCondition()] }}
@@ -7702,7 +8572,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 </div>
               ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+            <div className="workflow-properties-footer flex justify-end gap-2 border-t border-slate-100 pt-3">
               <button type="button" className="workflow-cancel-button" onClick={cancelInspector}>Cancel</button>
               <button type="button" className="workflow-save-button" onClick={finishInspector}>Done</button>
             </div>
@@ -7734,7 +8604,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     outputContract: initialWorkflow.action?.outputContract || initialWorkflow.outputContract || [],
     scope: initialWorkflow.scope || initialWorkflow.action?.scope || null,
     actionMetadata: {
-      flowType: initialWorkflow.action?.flowType || null,
+      flowType: initialWorkflow.action?.flowType || initialWorkflow.actionMetadata?.flowType || null,
+      optimizeFor: initialWorkflow.action?.optimizeFor || initialWorkflow.actionMetadata?.optimizeFor || "ACTIONS_AND_RELATED_RECORDS",
+      includeAsyncPath: initialWorkflow.action?.includeAsyncPath === true || initialWorkflow.actionMetadata?.includeAsyncPath === true,
       templateKey: initialWorkflow.action?.templateKey || null,
       defaultForNewDevices: initialWorkflow.action?.defaultForNewDevices === true,
       apiName: initialWorkflow.action?.apiName || initialWorkflow.apiName || flowApiName(initialWorkflow.name || "Flow"),
@@ -7783,6 +8655,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [debugRunning, setDebugRunning] = useState(false);
   const [debugRecordMode, setDebugRecordMode] = useState("latest");
   const [debugRecordId, setDebugRecordId] = useState("");
+  const [debugPathId, setDebugPathId] = useState("immediate");
+  const [debugSkipStartConditions, setDebugSkipStartConditions] = useState(false);
+  const [debugRollbackMode, setDebugRollbackMode] = useState(true);
   const [debugInputs, setDebugInputs] = useState({});
   const [debugResult, setDebugResult] = useState(null);
   const [activeSavedTest, setActiveSavedTest] = useState(null);
@@ -7805,6 +8680,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [pendingRestoreVersion, setPendingRestoreVersion] = useState(null);
   const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
+  const [newFlowChooserOpen, setNewFlowChooserOpen] = useState(false);
 
   const currentDefinitionSignature = persistedWorkflowSignature(workflow);
   const hasUnsavedChanges = currentDefinitionSignature !== savedDefinitionSignature;
@@ -7824,6 +8700,37 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     setVersionsOpen(false);
     setTestsOpen(false);
     setDebugOpen(false);
+  };
+
+  const startNewFlow = (flowType) => {
+    const next = createBlankWorkflow(scopeKey);
+    const type = String(flowType || "AUTOLAUNCHED").toUpperCase();
+    const trigger = type === "RECORD_TRIGGERED" ? "after_save"
+      : type === "SCHEDULE_TRIGGERED" ? "scheduled"
+        : type === "PLATFORM_EVENT_TRIGGERED" ? (triggerOptions.find((option) => option.kind === "event")?.key || next.trigger)
+          : "manual";
+    next.trigger = trigger;
+    next.actionMetadata = {
+      ...(next.actionMetadata || {}),
+      flowType: type,
+      optimizeFor: "ACTIONS_AND_RELATED_RECORDS",
+      includeAsyncPath: false,
+    };
+    setWorkflowId(null);
+    setWorkflow(next);
+    setSavedDefinitionSignature(persistedWorkflowSignature(next));
+    setFlowHistory({ past: [], future: [], last: JSON.stringify(next), applying: false });
+    setWorkflowVersions([]);
+    setSavedTests([]);
+    setCompareVersionId(null);
+    setDebugResult(null);
+    setActiveSavedTest(null);
+    setDebugInputs({});
+    setVersionsOpen(false);
+    setTestsOpen(false);
+    setDebugOpen(false);
+    setNewFlowChooserOpen(false);
+    setShowBuilder(true);
   };
 
   const leaveBuilder = () => {
@@ -8002,6 +8909,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           outputContract: rule.action.outputContract || [],
           actionMetadata: {
             flowType: rule.action?.flowType || null,
+            optimizeFor: rule.action?.optimizeFor || "ACTIONS_AND_RELATED_RECORDS",
+            includeAsyncPath: rule.action?.includeAsyncPath === true,
             templateKey: rule.action?.templateKey || null,
             defaultForNewDevices: rule.action?.defaultForNewDevices === true,
             apiName: rule.action?.apiName || flowApiName(rule.name || "Flow"),
@@ -8360,6 +9269,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           scope: workflow.scope || "system",
         } : {}),
         ...(workflow.actionMetadata?.flowType ? { flowType: workflow.actionMetadata.flowType } : {}),
+        ...(workflow.actionMetadata?.optimizeFor ? { optimizeFor: workflow.actionMetadata.optimizeFor } : {}),
+        ...(workflow.actionMetadata?.includeAsyncPath ? { includeAsyncPath: true } : {}),
         apiName: workflow.actionMetadata?.apiName || flowApiName(workflow.name || "Flow"),
         ...(workflow.actionMetadata?.description ? { description: workflow.actionMetadata.description } : {}),
         ...(workflow.actionMetadata?.templateKey ? { templateKey: workflow.actionMetadata.templateKey } : {}),
@@ -8827,6 +9738,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           definition,
           mode: debugMode,
           inputs: debugInputs,
+          debugOptions: {
+            pathId: debugPathId,
+            skipStartConditionRequirements: debugSkipStartConditions,
+            rollbackMode: debugRollbackMode,
+            recordEvent: flowType === "RECORD_TRIGGERED" ? recordTriggerWhen(workflow.trigger) : null,
+          },
           ...(debugRecordMode === "specific" ? { recordId: debugRecordId.trim() } : {}),
         }),
       });
@@ -8852,12 +9769,45 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   if (!showBuilder && !embedded) {
     return (
       <div className="space-y-4">
+        {newFlowChooserOpen ? (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label="New Flow">
+            <div className="w-full max-w-5xl rounded-lg border border-slate-300 bg-white shadow-2xl">
+              <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">New Flow</h3>
+                  <p className="mt-1 text-sm text-slate-500">Start from scratch, then choose the type of flow you want to build.</p>
+                </div>
+                <button type="button" className="workflow-cancel-button" onClick={() => setNewFlowChooserOpen(false)} aria-label="Close New Flow">×</button>
+              </div>
+              <div className="px-6 py-5">
+                <div className="mb-4 text-sm font-semibold text-slate-800">Start From Scratch</div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {FLOW_TYPE_OPTIONS.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className="group min-h-[150px] rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-blue-500 hover:bg-blue-50 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      onClick={() => startNewFlow(option.key)}
+                    >
+                      <span className="mb-3 grid h-9 w-9 place-items-center rounded bg-blue-600 text-lg font-semibold text-white">{option.icon}</span>
+                      <strong className="block text-sm text-slate-900">{option.label}</strong>
+                      <span className="mt-2 block text-xs leading-5 text-slate-500">{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-end border-t border-slate-200 px-6 py-3">
+                <button type="button" className="workflow-cancel-button" onClick={() => setNewFlowChooserOpen(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold">{title}</h2>
             <p className="text-sm text-slate-500">{description}</p>
           </div>
-          <button type="button" className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => { resetToNewWorkflow(); setShowBuilder(true); }}>+ New Workflow</button>
+          <button type="button" className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => setNewFlowChooserOpen(true)}>+ New Flow</button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -8981,11 +9931,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.past.length} onClick={undoFlowChange} title="Undo" aria-label="Undo">↶</button>
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.future.length} onClick={redoFlowChange} title="Redo" aria-label="Redo">↷</button>
           <span className="workflow-header-separator" aria-hidden="true" />
-          <button type="button" className="workflow-cancel-button" onClick={openFlowProperties}>Properties</button>
+          <button type="button" className="workflow-cancel-button" aria-label="View Properties" onClick={openFlowProperties}>Properties</button>
           {reviewIssue ? <button type="button" className="workflow-cancel-button workflow-icon-button" title={reviewIssue} aria-label="Show Errors" onClick={() => document.getElementById("workflow-review-section")?.scrollIntoView({ behavior: "smooth", block: "center" })}>!</button> : null}
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>Tests</button>
+          <button type="button" className="workflow-cancel-button" aria-label="View Tests" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
           <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId || saveBusy} title={workflowId ? "Create a new immutable version from the current Builder state" : "Save this flow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>{saveBusy ? "Saving…" : "Save As New Version"}</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId || saveBusy} title={workflowId ? "Create a new immutable version from the current Builder state" : "Save this flow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>{saveBusy ? "Saving…" : "Save As"}</button>
           <button type="button" className="workflow-cancel-button" disabled={saveBusy || (Boolean(workflowId) && !hasUnsavedChanges)} title={!hasUnsavedChanges && workflowId ? "No unsaved changes" : "Save draft"} onClick={() => saveWorkflow("DRAFT")}>{saveBusy ? "Saving…" : "Save"}</button>
           {workflow.runtimeActive ? <button type="button" className="workflow-cancel-button" disabled={saveBusy} title="Stop new runs from the currently live version" onClick={() => setDeactivateConfirmOpen(true)}>Deactivate</button> : null}
           <button type="button" className="workflow-save-button" disabled={saveBusy || Boolean(reviewIssue) || (workflow.runtimeActive && !hasUnsavedChanges && !workflow.draftVersion)} title={reviewIssue || (workflow.runtimeActive ? (hasUnsavedChanges || workflow.draftVersion ? "Activate the current draft as the new live version" : "This version is already live") : "Activate flow")} onClick={() => saveWorkflow("ACTIVE")}>{saveBusy ? "Saving…" : workflow.runtimeActive ? (hasUnsavedChanges || workflow.draftVersion ? "Activate Draft" : "Active") : "Activate"}</button>
@@ -9039,7 +9989,16 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                         : flowType === "PLATFORM_EVENT_TRIGGERED"
                           ? (triggerOptions.find((option) => option.kind === "event")?.key || current.trigger)
                           : current.trigger;
-                  return { ...current, trigger: nextTrigger, actionMetadata: { ...(current.actionMetadata || {}), flowType } };
+                  return {
+                    ...current,
+                    trigger: nextTrigger,
+                    actionMetadata: {
+                      ...(current.actionMetadata || {}),
+                      flowType,
+                      optimizeFor: current.actionMetadata?.optimizeFor || "ACTIONS_AND_RELATED_RECORDS",
+                      ...(flowType !== "RECORD_TRIGGERED" ? { includeAsyncPath: false } : {}),
+                    },
+                  };
                 });
               }}>
                 <option value="AUTOLAUNCHED">Autolaunched Flow</option>
@@ -9244,6 +10203,34 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 </div>
               </div>
               <p className="mt-1 text-xs text-slate-500">{debugMode === "debug" ? "Debug shows the path taken and highlights failed steps." : "Test gives a simple pass/fail result using the same safe execution trace."} Database changes are rolled back and external actions such as messages, payments, webhooks and printing are simulated.</p>
+              {flowType === "RECORD_TRIGGERED" ? <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-semibold text-slate-700">Debug Options</div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <label className="text-[11px] font-medium text-slate-600">Path for Debug Run
+                    <select className={inputClass} value={debugPathId} onChange={(event) => setDebugPathId(event.target.value)}>
+                      <option value="immediate">Run Immediately</option>
+                      {scheduledPathSteps.map(({ step }) => <option key={step.id} value={step.id}>{step.config?.pathLabel || step.label || "Scheduled Path"}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[11px] font-medium text-slate-600">Run the Flow As If the Record Is
+                    <select className={inputClass} value={recordTriggerWhen(workflow.trigger) === "created" ? "created" : "updated"} onChange={(event) => {
+                      const when = event.target.value === "created" ? "created" : "updated";
+                      setWorkflow((current) => ({ ...current, trigger: recordTriggerKey(when, current.actionMetadata?.optimizeFor) }));
+                    }}>
+                      <option value="created">Created</option>
+                      <option value="updated">Updated</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="flex items-start gap-2 text-[11px] text-slate-700">
+                  <input type="checkbox" className="mt-0.5" checked={debugSkipStartConditions} onChange={(event) => setDebugSkipStartConditions(event.target.checked)} />
+                  <span><strong className="block">Skip start condition requirements</strong><span className="text-slate-500">Run the selected path even if the triggering record does not meet Start entry criteria.</span></span>
+                </label>
+                <label className="flex items-start gap-2 text-[11px] text-slate-700">
+                  <input type="checkbox" className="mt-0.5" checked={debugRollbackMode} onChange={(event) => setDebugRollbackMode(event.target.checked)} />
+                  <span><strong className="block">Run automation in rollback mode</strong><span className="text-slate-500">Database changes are rolled back after the debug interview. External actions remain simulated.</span></span>
+                </label>
+              </div> : null}
               {workflow.entryTransition === "UPDATED_TO_MEET" ? <p className="mt-1 text-[11px] text-amber-700">For this test, the selected record is treated as the newly matching state. Production still verifies the real previous record did not meet the Start conditions.</p> : null}
             </div>
             <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(false)}>Close</button>

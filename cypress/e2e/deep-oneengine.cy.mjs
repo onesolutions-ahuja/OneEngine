@@ -146,10 +146,49 @@ describe("OneEngine deep deployed E2E", () => {
     cy.get(".onebuilder-workflow-group.is-expanded .onebuilder-list-row").should("have.length.greaterThan", 0);
   });
 
+  it("Workflow Builder surrounding chrome follows Salesforce-style panes and controls", () => {
+    visitAuthenticated("developer/workflow-builder");
+
+    cy.get('button[aria-label="New Workflow"]').click();
+    cy.contains("button", "Record-Triggered Flow").click();
+
+    cy.get(".workflow-node-palette", { timeout: 30000 }).should("be.visible").then(($pane) => {
+      const style = getComputedStyle($pane[0]);
+      expect(style.borderTopLeftRadius).to.equal("0px");
+      expect(style.borderTopRightRadius).to.equal("0px");
+    });
+    cy.get(".workflow-properties-panel").should("be.visible").then(($pane) => {
+      const style = getComputedStyle($pane[0]);
+      expect(style.borderTopLeftRadius).to.equal("0px");
+      expect(style.borderTopRightRadius).to.equal("0px");
+      expect(["auto", "scroll"]).to.include(style.overflowY);
+    });
+    cy.get(".workflow-palette-tabs").should("be.visible");
+    cy.get(".workflow-builder-header").then(($bar) => {
+      const style = getComputedStyle($bar[0]);
+      expect(style.borderTopLeftRadius).to.equal("0px");
+      expect(style.boxShadow).to.match(/none|rgba\(0, 0, 0, 0\)/);
+    });
+    cy.get(".workflow-builder-actions .workflow-cancel-button").first().then(($button) => {
+      const style = getComputedStyle($button[0]);
+      expect(style.borderTopLeftRadius).to.equal("4px");
+      expect(style.height).to.equal("32px");
+    });
+    cy.contains(".workflow-properties-panel", "Configure Start").should("be.visible");
+    cy.contains(".workflow-properties-panel", "Select Object").should("be.visible");
+    cy.contains(".workflow-properties-panel", "Configure Trigger").should("be.visible");
+    cy.get('.workflow-properties-panel select[aria-label="Flow trigger"]')
+      .should("contain.text", "A record is created")
+      .and("contain.text", "A record is updated")
+      .and("contain.text", "A record is created or updated")
+      .and("contain.text", "A record is deleted");
+  });
+
   it("Workflow Builder left search and Add Element search use independent state", () => {
     visitAuthenticated("developer/workflow-builder");
 
     cy.get('button[aria-label="New Workflow"]').click();
+    cy.contains("button", "Autolaunched Flow (No Trigger)").click();
 
     cy.get(".workflow-node-palette", { timeout: 30000 }).should("be.visible");
     cy.get('.workflow-node-palette input[aria-label="Search flow elements"]').clear().type("Assignment");
