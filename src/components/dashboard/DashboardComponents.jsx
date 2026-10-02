@@ -317,6 +317,17 @@ export function renderDashboardComponent(component, result, state) {
   if (component.type === "text") {
     return <Card component={component} state={state}><p className="text-sm" style={{ color: "var(--onepos-text-body)" }}>{component.config?.content}</p></Card>;
   }
+  if (component.type === "image") {
+    const config = component.config || {};
+    const rawSrc = String(config.imageUrl || "").trim();
+    const src = /^(https?:\/\/|\/)/i.test(rawSrc) ? rawSrc : "";
+    const rawLink = String(config.linkUrl || "").trim();
+    const link = /^(https?:\/\/|\/)/i.test(rawLink) ? rawLink : "";
+    const image = src
+      ? <img src={src} alt={config.altText || component.title || "Dashboard image"} className="h-full w-full rounded-lg" style={{ objectFit: config.imageFit === "cover" ? "cover" : "contain" }} />
+      : <Empty>Configure an HTTPS image URL in Properties.</Empty>;
+    return <Card component={component} state={state}>{link && src ? <a href={link} target={link.startsWith("/") ? undefined : "_blank"} rel={link.startsWith("/") ? undefined : "noopener noreferrer"} className="block h-full">{image}</a> : image}</Card>;
+  }
   const config = component.config || {};
   if (["clock_widget", "calendar_widget", "weather_widget"].includes(component.type)) {
     const body = component.type === "clock_widget"

@@ -91,6 +91,28 @@ export function normalizeSubscription(input = {}) {
   };
 }
 
+
+export function normalizeDashboardSubscription(input = {}) {
+  const base = normalizeSubscription({
+    ...input,
+    delivery: ["EMAIL"],
+    conditions: [{ type: "ALWAYS" }],
+    attachment: { enabled: false },
+  });
+  const principals = Array.isArray(base.recipientPrincipals) ? base.recipientPrincipals.slice(0, 50) : [];
+  return {
+    active: base.active,
+    cadence: base.cadence,
+    hour: base.hour,
+    minute: base.minute,
+    weekday: base.weekday,
+    monthday: base.monthday,
+    timezone: base.timezone,
+    delivery: ["EMAIL"],
+    recipientPrincipals: principals,
+  };
+}
+
 export function subscriptionIsDue(subscription, now = new Date()) {
   if (!subscription?.active) return false;
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: subscription.timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(now).reduce((out, part) => ({ ...out, [part.type]: part.value }), {});
@@ -122,13 +144,14 @@ export function subscriptionConditionMatches(subscription, result = {}) {
 }
 
 export function normalizeDashboardGlobalFilters(filters = []) {
-  return arr(filters, 20).map((filter, index) => {
+  if (Array.isArray(filters) && filters.length > 5) throw new Error("A dashboard can contain up to 5 filters");
+  return arr(filters, 5).map((filter, index) => {
     const key = String(filter?.key || `filter_${index + 1}`).trim();
     const label = String(filter?.label || key).slice(0, 120);
     const type = ["date", "select", "multi_select", "number", "boolean"].includes(String(filter?.type)) ? String(filter.type) : "select";
     const mappings = arr(filter?.mappings, 100).map((mapping) => ({ componentId: mapping?.componentId ? String(mapping.componentId) : null, reportField: String(mapping?.reportField || ""), operator: String(mapping?.operator || "equals") })).filter((mapping) => mapping.reportField);
     if (!mappings.length) throw new Error(`Dashboard filter "${label}" needs at least one report mapping`);
-    return { key, label, type, defaultValue: filter?.defaultValue ?? null, allowAll: filter?.allowAll !== false, options: arr(filter?.options, 200).map((option) => ({ value: option?.value ?? option, label: String(option?.label ?? option) })), mappings };
+    return { key, label, type, defaultValue: filter?.defaultValue ?? null, allowAll: filter?.allowAll !== false, options: arr(filter?.options, 50).map((option) => ({ value: option?.value ?? option, label: String(option?.label ?? option) })), mappings };
   });
 }
 

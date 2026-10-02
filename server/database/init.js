@@ -1148,7 +1148,39 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           CREATE INDEX IF NOT EXISTS idx_report_subscription_deliveries_status
           ON report_subscription_deliveries(company_id, status, updated_at);
           
-                    CREATE TABLE IF NOT EXISTS report_snapshots (
+                    CREATE TABLE IF NOT EXISTS dashboard_subscriptions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            dashboard_id UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            last_run_at TIMESTAMPTZ,
+            last_delivery_at TIMESTAMPTZ,
+            last_status VARCHAR(20),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_dashboard_subscriptions_due
+            ON dashboard_subscriptions(company_id,active,updated_at);
+
+          CREATE TABLE IF NOT EXISTS dashboard_subscription_deliveries (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            subscription_id UUID NOT NULL REFERENCES dashboard_subscriptions(id) ON DELETE CASCADE,
+            occurrence_key VARCHAR(80) NOT NULL,
+            recipient_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+            last_error VARCHAR(1000),
+            delivered_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(subscription_id,occurrence_key,recipient_user_id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_dashboard_subscription_deliveries_status
+            ON dashboard_subscription_deliveries(company_id,status,updated_at);
+
+          CREATE TABLE IF NOT EXISTS report_snapshots (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
             report_id UUID NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
@@ -3336,6 +3368,8 @@ async function initializeLegacyDatabase(pool) {
     ["dashboard.manage", "Manage Dashboards"],
     ["dashboard.share", "Share Dashboards"],
     ["dashboard.assign_default", "Assign Default Dashboards"],
+    ["dashboard.subscribe", "Subscribe to Dashboards"],
+    ["dashboard.subscribe.recipients", "Add Dashboard Subscription Recipients"],
     ["report.export", "Export Reports"],
     ["user.manage", "Manage Users"],
     ["role.manage", "Manage Roles"],

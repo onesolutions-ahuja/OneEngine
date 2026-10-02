@@ -534,6 +534,38 @@ CREATE TABLE IF NOT EXISTS dashboards (
 CREATE INDEX IF NOT EXISTS idx_dashboards_company_api_key ON dashboards(company_id,api_key);
 CREATE INDEX IF NOT EXISTS idx_dashboards_company_active ON dashboards(company_id, archived_at, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dashboards_company_name ON dashboards(company_id, lower(name)) WHERE archived_at IS NULL;
+CREATE TABLE IF NOT EXISTS dashboard_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    dashboard_id UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_run_at TIMESTAMPTZ,
+    last_delivery_at TIMESTAMPTZ,
+    last_status VARCHAR(20),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_dashboard_subscriptions_due
+ON dashboard_subscriptions(company_id,active,updated_at);
+
+CREATE TABLE IF NOT EXISTS dashboard_subscription_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    subscription_id UUID NOT NULL REFERENCES dashboard_subscriptions(id) ON DELETE CASCADE,
+    occurrence_key VARCHAR(80) NOT NULL,
+    recipient_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    last_error VARCHAR(1000),
+    delivered_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(subscription_id,occurrence_key,recipient_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dashboard_subscription_deliveries_status
+ON dashboard_subscription_deliveries(company_id,status,updated_at);
+
 CREATE TABLE IF NOT EXISTS dashboard_users (
     dashboard_id UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2541,6 +2573,8 @@ VALUES
 ('dashboard.manage', 'Manage Dashboards', 'Manage dashboard lifecycle and metadata'),
 ('dashboard.share', 'Share Dashboards', 'Manage dashboard access grants'),
 ('dashboard.assign_default', 'Assign Default Dashboards', 'Assign dashboard defaults to principals'),
+('dashboard.subscribe', 'Subscribe to Dashboards', 'Subscribe to static dashboards by email'),
+('dashboard.subscribe.recipients', 'Add Dashboard Subscription Recipients', 'Add users, roles or public groups to dashboard subscriptions'),
 ('report.export', 'Export Reports', 'Export reports to CSV'),
 
 ('user.manage', 'Manage Users', 'Manage users'),

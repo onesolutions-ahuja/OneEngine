@@ -1,59 +1,15 @@
 import express from "express";
 
-import { buildCustomSalesQuery, validateCustomReportDefinition } from "./reports.js";
-
-import { buildPlatformObjectQuery } from "../services/reportableSources.js";
+import { createDashboardExecution } from "../services/dashboardExecution.js";
+import { normalizeDashboardSubscription } from "../services/analyticsManagement.js";
+import { resolveReportSubscriptionRecipients } from "../services/reportSubscriptionDelivery.js";
+import { assertDashboardSubscriptionCompatible } from "../services/dashboardSubscriptionCompatibility.js";
 
 import { toSafeApiName } from "../services/platformMetadata.js";
 import { DATE_RANGES, DEFAULT_DASHBOARD_DEFINITION, mergeDashboardFilters, normalizeDashboardIdentity, validateDashboardDefinition } from "../services/dashboardBuilder.js";
-import { applyDashboardGlobalFilters } from "../services/analyticsManagement.js";
 import { resolveDashboardExecutionUser } from "../services/analyticsSecurity.js";
 import { dashboardAccessAtLeast, dashboardPrincipalExists, loadDashboardPrincipalContext, resolveDashboardAccess, resolveDefaultDashboard } from "../services/dashboardSecurity.js";
-import { loadPlatformReportContext } from "../services/platformReportSecurity.js";
 
-
-
-function customDateRange(filters = []) {
-
-  const dateFilter = filters.find((filter) => filter && filter.field === "date");
-
-  const operator = dateFilter?.operator || "this_week";
-
-  const now = new Date();
-
-  const iso = (date) => date.toISOString().slice(0, 10);
-
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-
-  if (operator === "all_time") return { from: null, to: null };
-
-  if (operator === "custom") return { from: dateFilter.from || dateFilter.dateFrom || null, to: dateFilter.to || dateFilter.dateTo || null };
-
-  if (operator === "today") return { from: iso(start), to: iso(start) };
-
-  if (operator === "yesterday") { start.setUTCDate(start.getUTCDate() - 1); return { from: iso(start), to: iso(start) }; }
-
-  if (operator === "last_7_days") { start.setUTCDate(start.getUTCDate() - 6); return { from: iso(start), to: iso(new Date()) }; }
-
-  if (operator === "this_month") return { from: iso(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))), to: iso(new Date()) };
-
-  if (operator === "this_quarter") {
-
-    const quarterStartMonth = Math.floor(now.getUTCMonth() / 3) * 3;
-
-    return { from: iso(new Date(Date.UTC(now.getUTCFullYear(), quarterStartMonth, 1))), to: iso(new Date()) };
-
-  }
-
-  if (operator === "fiscal_year") return { from: iso(new Date(Date.UTC(now.getUTCFullYear(), 0, 1))), to: iso(new Date()) };
-
-  const day = start.getUTCDay() || 7;
-
-  start.setUTCDate(start.getUTCDate() - day + 1);
-
-  return { from: iso(start), to: iso(new Date()) };
-
-}
 
 
 
@@ -64,9 +20,8 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
   const viewPermission = authorize("dashboard.view");
   const createPermission = authorize("dashboard.create");
   const editPermission = authorize("dashboard.edit");
-  async function platformReportContext(req, objectId) {
-    return loadPlatformReportContext(db, req, objectId);
-  }
+  const subscribePermission = authorize("dashboard.subscribe");
+  const dashboardExecution = createDashboardExecution({ db, canViewCompanyCustomers, canAccessStore, hasPermission });
 
 
 
@@ -108,202 +63,6 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
 
 
 
-  /* Resolve one component's query. A component is either bound to a SAVED
-
-     report (reportId, the original contract) or carries an INLINE report
-
-     definition that Dashboard Builder configures. Both go through the same
-
-     validateCustomReportDefinition + buildCustomSalesQuery /
-
-     buildPlatformObjectQuery pipeline, so there is exactly one query engine. */
-
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-  async function resolveComponentReport(req, component, dashboardFilters) {
-    const config = component?.config || {};
-    const reportId = String(config.reportId || "").trim();
-
-    // Persisted custom reports use UUID primary keys. Shipped/default dashboard
-    // components may carry symbolic keys such as "report_top_product" while
-    // also containing the complete inline report definition. Never send those
-    // symbolic keys to PostgreSQL's UUID column.
-    if (reportId && UUID_RE.test(reportId)) {
-      const report = await db(
-        "SELECT id, created_by, definition FROM custom_reports WHERE id=$1 AND company_id=$2 AND archived_at IS NULL",
-        [reportId, req.user.companyId],
-      );
-
-      if (!report.rows[0]) throw new Error("Saved report unavailable");
-
-      const savedReport = report.rows[0];
-      const companyAdmin = canViewCompanyCustomers
-        ? await canViewCompanyCustomers(req.user)
-        : false;
-
-      if (!companyAdmin && String(savedReport.created_by) !== String(req.user.id)) {
-        const accessResult = await db(
-          "SELECT 1 FROM custom_report_users WHERE report_id=$1 AND user_id=$2",
-          [savedReport.id, req.user.id],
-        );
-        if (!accessResult.rows.length) throw new Error("Saved report unavailable");
-      }
-
-      const savedDefinition = validateCustomReportDefinition(savedReport.definition);
-      return mergeDashboardFilters(savedDefinition, dashboardFilters);
-    }
-
-    // Inline report definitions are authoritative for shipped/default components
-    // and for unsaved Builder previews. This also handles symbolic reportId keys.
-    if (config.report && typeof config.report === "object") {
-      const definition = validateCustomReportDefinition(config.report);
-      const merged = mergeDashboardFilters(definition, dashboardFilters);
-
-      // The component-level date range applies unless a dashboard-level date
-      // filter explicitly overrides it.
-      if (
-        config.dateRange &&
-        DATE_RANGES.includes(config.dateRange) &&
-        !dashboardFilters.some((filter) => filter && filter.field === "date")
-      ) {
-        merged.filters = [
-          { field: "date", operator: config.dateRange },
-          ...merged.filters.filter((filter) => filter && filter.field !== "date"),
-        ];
-      }
-
-      return merged;
-    }
-
-    if (reportId) {
-      throw new Error(`Unknown dashboard report reference: ${reportId}`);
-    }
-
-    throw new Error("No report configured");
-  }
-
-
-  function componentsWithGlobalFilters(components, definitions, values) {
-    return (components || []).map((component) => applyDashboardGlobalFilters(component, definitions || [], values || {}));
-  }
-
-  async function runComponent(req, component, dashboardFilters) {
-
-    if (component.type === "text") return { id: component.id, type: component.type, data: { content: component.config.content } };
-    if (["clock_widget", "calendar_widget", "weather_widget"].includes(component.type)) {
-      return { id: component.id, type: component.type, data: { config: component.config || {} } };
-    }
-
-    try {
-
-      const definition = await resolveComponentReport(req, component, dashboardFilters);
-
-      let built;
-
-      let columns;
-
-      if (definition.dataSource === "platform_object") {
-
-        const context = await platformReportContext(req, definition.objectId);
-
-        if (!context.object) throw new Error("Data source unavailable");
-
-        // Dashboard store selection is security scope, not a reportable object
-        // field. Validate it through the same user_stores access check used by
-        // sales dashboards, then remove the synthetic filter before the generic
-        // platform report validator sees it.
-        const requestedStores = [...new Set([
-          ...(definition.storeIds || []),
-          ...definition.filters
-            .filter((filter) => filter.field === "store")
-            .flatMap((filter) => Array.isArray(filter.value) ? filter.value : [filter.value])
-            .filter(Boolean),
-        ].map(String))];
-        if (requestedStores.length > 1) throw new Error("Platform-object dashboard components support one active store at a time");
-        for (const storeId of requestedStores) {
-          if (!canAccessStore || !(await canAccessStore(req.user, storeId))) throw new Error("You do not have access to one or more stores");
-        }
-        const scopedStoreId = requestedStores[0] || (req.user.storeId ? String(req.user.storeId) : null);
-        if (!requestedStores.length && scopedStoreId
-          && (!canAccessStore || !(await canAccessStore(req.user, scopedStoreId)))) {
-          throw new Error("You do not have access to the current store");
-        }
-        if (context.object.store_scoped === true && !scopedStoreId) {
-          throw new Error("A store assignment is required to run this dashboard");
-        }
-        const platformDefinition = {
-          ...definition,
-          filters: definition.filters.filter((filter) => filter.field !== "store"),
-        };
-
-        built = buildPlatformObjectQuery(platformDefinition, context.object, context.fields, req.user.companyId, 1000, {
-          storeId: scopedStoreId,
-          visibilitySql: context.visibilitySql,
-          visibilityParams: context.visibilityParams,
-        }, context.relationships);
-
-        /* Platform Object reports alias each aggregate as `<aggregate>_<field>`.
-
-           Return the same column keys the runtime reads back so the generic
-
-           renderer needs no knowledge of the aggregation. */
-
-        columns = [
-
-          ...definition.fields,
-
-          ...definition.summaries.map((summary) => `${String(summary.aggregate).toLowerCase()}_${summary.field}`),
-
-        ];
-
-      } else {
-        if (!hasPermission || !(await hasPermission(req, "reports.custom.view"))) {
-          throw Object.assign(new Error("You do not have permission to view this dashboard data source"), { status: 403 });
-        }
-
-        const requestedStores = [...new Set([...(definition.storeIds || []), ...definition.filters.filter((filter) => filter.field === "store").flatMap((filter) => Array.isArray(filter.value) ? filter.value : [filter.value]).filter(Boolean)].map(String))];
-        for (const storeId of requestedStores) {
-          if (!canAccessStore || !(await canAccessStore(req.user, storeId))) throw new Error("You do not have access to one or more stores");
-        }
-        if (!requestedStores.length && req.user.storeId
-          && (!canAccessStore || !(await canAccessStore(req.user, String(req.user.storeId))))) {
-          throw new Error("You do not have access to the current store");
-        }
-        if (!requestedStores.length && !req.user.storeId
-          && !(canViewCompanyCustomers && await canViewCompanyCustomers(req.user))) {
-          throw new Error("A store assignment is required to run this dashboard");
-        }
-        const stores = requestedStores.length ? requestedStores : (req.user.storeId ? [String(req.user.storeId)] : []);
-
-        built = buildCustomSalesQuery(definition, customDateRange(definition.filters), stores, definition.userIds || []);
-
-        built.params[2] = req.user.companyId;
-
-        columns = definition.fields;
-
-      }
-
-      const result = await db(built.sql, built.params);
-
-      return { id: component.id, type: component.type, data: { columns, rows: result.rows } };
-
-    } catch (error) {
-      console.error("Dashboard component error:", {
-        componentId: component.id,
-        componentType: component.type,
-        config: component.config,
-        error: error.message,
-        stack: error.stack,
-      });
-
-      return {
-        id: component.id,
-        type: component.type,
-        error: error.status === 403 ? "You do not have permission to view this data" : error.message || "Unable to load this component",
-      };
-    }
-  }
-
 
 
   router.get("/dashboards/default", authenticate, viewPermission, async (req, res) => {
@@ -335,9 +94,8 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
 
       const definition = validateDashboardDefinition({ ...(req.body || {}), run_as_mode: "VIEWER", run_as_user_id: null });
       const globalValues = req.body?.globalFilterValues && typeof req.body.globalFilterValues === "object" ? req.body.globalFilterValues : {};
-      const components = componentsWithGlobalFilters(definition.components, definition.global_filters, globalValues);
-      const results = await Promise.all(components.map((component) => runComponent(req, component, definition.filters || [])));
-      res.json({ success: true, data: { definition, components: results } });
+      const data = await dashboardExecution.runDashboardDefinition(req, definition, { globalFilterValues: globalValues });
+      res.json({ success: true, data });
 
     } catch (error) { res.status(400).json({ success: false, message: error.message || "Unable to run this dashboard" }); }
 
@@ -349,6 +107,17 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
 
     catch (error) { res.status(500).json({ success: false, message: "Unable to load dashboards" }); }
 
+  });
+
+  router.get("/dashboards/principals", authenticate, authorize("dashboard.manage", "dashboard.share", "dashboard.assign_default", "dashboard.subscribe.recipients"), async (req, res) => {
+    try {
+      const [users, roles, groups] = await Promise.all([
+        db("SELECT id,username,full_name FROM users WHERE company_id=$1 AND active=true ORDER BY full_name,username", [req.user.companyId]),
+        db("SELECT id,name,parent_role_id FROM roles WHERE company_id=$1 ORDER BY name", [req.user.companyId]),
+        db("SELECT id,name,api_key FROM platform_public_groups WHERE company_id=$1 AND active=true ORDER BY name", [req.user.companyId]),
+      ]);
+      res.json({ success: true, data: { users: users.rows, roles: roles.rows, groups: groups.rows, currentUserId: req.user.id, company: { id: req.user.companyId, name: req.user.companyName || "Current company" } } });
+    } catch (error) { res.status(500).json({ success: false, message: "Unable to load dashboard principals" }); }
   });
 
   router.get("/dashboards/:id/state", authenticate, viewPermission, async (req, res) => {
@@ -381,16 +150,7 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
 
   });
 
-  router.get("/dashboards/principals", authenticate, authorize("dashboard.manage", "dashboard.share", "dashboard.assign_default"), async (req, res) => {
-    try {
-      const [users, roles, groups] = await Promise.all([
-        db("SELECT id,username,full_name FROM users WHERE company_id=$1 AND active=true ORDER BY full_name,username", [req.user.companyId]),
-        db("SELECT id,name,parent_role_id FROM roles WHERE company_id=$1 ORDER BY name", [req.user.companyId]),
-        db("SELECT id,name,api_key FROM platform_public_groups WHERE company_id=$1 AND active=true ORDER BY name", [req.user.companyId]),
-      ]);
-      res.json({ success: true, data: { users: users.rows, roles: roles.rows, groups: groups.rows, currentUserId: req.user.id, company: { id: req.user.companyId, name: req.user.companyName || "Current company" } } });
-    } catch (error) { res.status(500).json({ success: false, message: "Unable to load dashboard principals" }); }
-  });
+
 
   router.post("/dashboards", authenticate, createPermission, async (req, res) => {
 
@@ -532,12 +292,67 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
     try {
       const current = await dashboard(req, req.params.id, "EDIT");
       if (!current) return res.status(404).json({ success: false, message: "Dashboard not found" });
-      if (String(req.body?.run_as_mode || "VIEWER").toUpperCase() !== "VIEWER") return res.status(400).json({ success: false, message: "Only Run as Dashboard Viewer is supported" });
+      const mode = String(req.body?.run_as_mode || "VIEWER").toUpperCase();
+      if (!["VIEWER","FIXED_USER"].includes(mode)) return res.status(400).json({ success:false,message:"Invalid dashboard run-as mode" });
+      let runAsUserId = null;
+      if (mode === "FIXED_USER") {
+        if (!(await hasPermission?.(req, "dashboard.manage"))) return res.status(403).json({ success:false,message:"dashboard.manage is required to configure a fixed run-as user" });
+        runAsUserId = String(req.body?.run_as_user_id || "").trim();
+        if (!runAsUserId) return res.status(400).json({ success:false,message:"Select a fixed run-as user" });
+        const user = await db("SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE", [runAsUserId,req.user.companyId]);
+        if (!user.rows.length) return res.status(400).json({ success:false,message:"Run-as user is unavailable" });
+      }
       const previousMode = current.run_as_mode;
-      const result = await db("UPDATE dashboards SET run_as_mode='VIEWER',updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *", [current.id, req.user.companyId]);
-      if (previousMode !== "VIEWER") await auditDashboard(req, "dashboard.run_as.changed", current, { from: previousMode, to: "VIEWER" });
+      const result = await db("UPDATE dashboards SET run_as_mode=$1,run_as_user_id=$2,updated_at=NOW() WHERE id=$3 AND company_id=$4 RETURNING *", [mode,runAsUserId,current.id,req.user.companyId]);
+      if (previousMode !== mode || String(current.run_as_user_id||"") !== String(runAsUserId||"")) await auditDashboard(req, "dashboard.run_as.changed", current, { from: previousMode, to: mode, runAsUserId });
       res.json({ success: true, data: result.rows[0] });
     } catch (error) { res.status(400).json({ success: false, message: error.message || "Unable to update dashboard data visibility" }); }
+  });
+
+
+  async function userCanViewDashboard(row, user) {
+    const requestUser = { id:user.id, companyId:user.company_id, roleId:user.role_id };
+    const principals = await loadDashboardPrincipalContext(db, requestUser);
+    const level = await resolveDashboardAccess(db, row, requestUser, principals);
+    return dashboardAccessAtLeast(level, "VIEW");
+  }
+
+  router.get("/dashboards/:id/subscriptions", authenticate, subscribePermission, async (req,res)=>{
+    try {
+      const current=await dashboard(req,req.params.id,"VIEW");
+      if(!current)return res.status(404).json({success:false,message:"Dashboard not found"});
+      const result=await db("SELECT * FROM dashboard_subscriptions WHERE dashboard_id=$1 AND company_id=$2 AND user_id=$3 ORDER BY updated_at DESC",[current.id,req.user.companyId,req.user.id]);
+      res.json({success:true,data:result.rows});
+    } catch(error){res.status(500).json({success:false,message:"Unable to load dashboard subscriptions"});}
+  });
+
+  router.post("/dashboards/:id/subscriptions", authenticate, subscribePermission, async (req,res)=>{
+    try {
+      const current=await dashboard(req,req.params.id,"VIEW");
+      if(!current)return res.status(404).json({success:false,message:"Dashboard not found"});
+      if(String(current.run_as_mode||"VIEWER").toUpperCase()!=="FIXED_USER")return res.status(400).json({success:false,message:"Dynamic dashboards cannot be subscribed. Configure a fixed run-as user first."});
+      await assertDashboardSubscriptionCompatible(db,current);
+      const definition=normalizeDashboardSubscription(req.body||{});
+      if(!definition.recipientPrincipals.length)definition.recipientPrincipals=[{principalType:"USER",principalId:req.user.id}];
+      const selfOnly=definition.recipientPrincipals.every((principal)=>principal.principalType==="USER"&&String(principal.principalId)===String(req.user.id));
+      if(!selfOnly&&!(await hasPermission?.(req,"dashboard.subscribe.recipients")))return res.status(403).json({success:false,message:"dashboard.subscribe.recipients is required to add other recipients"});
+      const recipients=await resolveReportSubscriptionRecipients(db,{companyId:req.user.companyId,principals:definition.recipientPrincipals});
+      if(recipients.length>500)return res.status(400).json({success:false,message:"A dashboard subscription can contain up to 500 resolved recipients"});
+      if(!recipients.length)return res.status(400).json({success:false,message:"Select at least one active recipient"});
+      for(const recipient of recipients)if(!(await userCanViewDashboard(current,recipient)))return res.status(400).json({success:false,message:"One or more recipients cannot access this dashboard"});
+      const result=await db("INSERT INTO dashboard_subscriptions(company_id,dashboard_id,user_id,definition,active) VALUES($1,$2,$3,$4::jsonb,$5) RETURNING *",[req.user.companyId,current.id,req.user.id,JSON.stringify(definition),definition.active]);
+      res.status(201).json({success:true,data:result.rows[0]});
+    } catch(error){res.status(400).json({success:false,message:error.message||"Unable to create dashboard subscription"});}
+  });
+
+  router.delete("/dashboards/:id/subscriptions/:subscriptionId", authenticate, subscribePermission, async (req,res)=>{
+    try {
+      const current=await dashboard(req,req.params.id,"VIEW");
+      if(!current)return res.status(404).json({success:false,message:"Dashboard not found"});
+      const result=await db("DELETE FROM dashboard_subscriptions WHERE id=$1 AND dashboard_id=$2 AND company_id=$3 AND user_id=$4 RETURNING id",[req.params.subscriptionId,current.id,req.user.companyId,req.user.id]);
+      if(!result.rows.length)return res.status(404).json({success:false,message:"Dashboard subscription not found"});
+      res.json({success:true});
+    } catch(error){res.status(400).json({success:false,message:"Unable to remove dashboard subscription"});}
   });
 
   router.post("/dashboards/:id/duplicate", authenticate, createPermission, async (req, res) => {
@@ -596,9 +411,8 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
         executionReq.user=executionUser;
       }
       const globalValues=req.body?.globalFilterValues&&typeof req.body.globalFilterValues==="object"?req.body.globalFilterValues:{};
-      const components=componentsWithGlobalFilters(definition.components,definition.global_filters,globalValues);
-      const results=await Promise.all(components.map((component)=>runComponent(executionReq,component,definition.filters||[])));
-      res.json({success:true,data:{definition,components:results}});
+      const data=await dashboardExecution.runDashboardDefinition(executionReq,definition,{globalFilterValues:globalValues});
+      res.json({success:true,data});
     } catch(error){res.status(400).json({success:false,message:error.message||"Unable to run this dashboard"});}
   });
 

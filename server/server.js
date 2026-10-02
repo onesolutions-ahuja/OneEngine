@@ -19,6 +19,8 @@ import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
 import { claimDueScheduledWorkflows, completeScheduledWorkflow, failScheduledWorkflow } from "./services/platformSchedules.js";
 import { claimDueReportSubscriptions } from "./services/reportSubscriptionScheduler.js";
 import { processReportSubscriptionDeliveryJob } from "./services/reportSubscriptionRuntime.js";
+import { claimDueDashboardSubscriptions } from "./services/dashboardSubscriptionScheduler.js";
+import { processDashboardSubscriptionDeliveryJob } from "./services/dashboardSubscriptionRuntime.js";
 import { deliverPlatformWebhook, verifyWebhookSignature } from "./services/platformEvents.js";
 import { decryptSecret, encryptSecret } from "./services/onlineOrders/platformConfig.js";
 import { decryptCredentials, encryptCredentials } from "./services/integrationCredentials.js";
@@ -2715,6 +2717,15 @@ async function startServer() {
                 );
               }
             }
+            if (job.kind === "DASHBOARD_SUBSCRIPTION_DELIVERY" && failed?.status === "FAILED") {
+              const subscriptionId = job.payload?.subscriptionId || null;
+              if (subscriptionId) {
+                await db(
+                  "UPDATE dashboard_subscriptions SET last_run_at=NOW(),last_status='FAILED',updated_at=NOW() WHERE id=$1 AND company_id=$2",
+                  [subscriptionId, job.company_id]
+                );
+              }
+            }
             if (["QUICKBOOKS_PROVIDER_SYNC", "SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
               await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
                 kind: job.kind,
@@ -3209,6 +3220,15 @@ async function startServer() {
                 payload: { ...(payload || {}), companyId: job.company_id },
               });
             }
+            if (job.kind === "DASHBOARD_SUBSCRIPTION_DELIVERY") {
+              return processDashboardSubscriptionDeliveryJob({
+                db,
+                payload: { ...(payload || {}), companyId: job.company_id },
+                canViewCompanyCustomers,
+                canAccessStore,
+                hasPermission,
+              });
+            }
             if (job.kind === "PLATFORM_WEBHOOK_DELIVERY") {
               return deliverPlatformWebhook({
                 db,
@@ -3518,6 +3538,7 @@ async function startServer() {
         });
         await claimDueScheduledWorkflows({ db, limit: 10 });
         await claimDueReportSubscriptions({ db, limit: 50 });
+        await claimDueDashboardSubscriptions({ db });
       } catch (error) {
         console.error("Platform job worker error:", error.message);
       } finally {

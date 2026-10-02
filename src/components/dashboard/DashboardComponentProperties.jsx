@@ -87,6 +87,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const isPlatform = report.dataSource === "platform_object";
   const isChart = ["pie","donut","bar","line","gauge","funnel","scatter","chart"].includes(component.type);
   const isUtility = ["clock_widget", "calendar_widget", "weather_widget"].includes(component.type);
+  const isImage = component.type === "image";
   const { objects, error: objectsError } = useObjects();
   const { fields, loading, error: fieldsError } = useFields(isPlatform ? report.objectId : null);
   const choices = platformFieldChoices(fields);
@@ -110,7 +111,14 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const selectAggregate = (value) => { setConfig({ aggregate: value }); if (config.valueField) setReport({ summaries: [{ aggregate: value, field: config.valueField }] }); };
   return <div className="mt-3 grid gap-3 md:grid-cols-2">
     <div className="md:col-span-2"><span className={LABEL}>Title</span><input className={FIELD} style={STYLE} value={component.title || ""} onChange={(event) => onChange({ ...component, title: event.target.value })} /></div>
-    {component.type === "text" ? <div className="md:col-span-2"><span className={LABEL}>Content</span><textarea className={FIELD} rows={3} style={STYLE} value={config.content || ""} onChange={(event) => setConfig({ content: event.target.value })} /></div> : isUtility ? <>
+    {component.type === "text" ? <div className="md:col-span-2"><span className={LABEL}>Content</span><textarea className={FIELD} rows={3} style={STYLE} value={config.content || ""} onChange={(event) => setConfig({ content: event.target.value })} /></div> : isImage ? <>
+      <div className="md:col-span-2"><span className={LABEL}>Image URL</span><input className={FIELD} style={STYLE} value={config.imageUrl || ""} placeholder="https://…" onChange={(event) => setConfig({ imageUrl: event.target.value })} /></div>
+      <div><span className={LABEL}>Alternative text</span><input className={FIELD} style={STYLE} value={config.altText || ""} onChange={(event) => setConfig({ altText: event.target.value })} /></div>
+      <div><span className={LABEL}>Image fit</span><select className={FIELD} style={STYLE} value={config.imageFit || "contain"} onChange={(event) => setConfig({ imageFit: event.target.value })}><option value="contain">Contain</option><option value="cover">Cover</option></select></div>
+      <div className="md:col-span-2"><span className={LABEL}>Click-through URL (optional)</span><input className={FIELD} style={STYLE} value={config.linkUrl || ""} placeholder="https://… or /app/path" onChange={(event) => setConfig({ linkUrl: event.target.value })} /></div>
+      <div><span className={LABEL}>Width (grid columns, 1–12)</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.w ?? 6} onChange={layout("w")} /></div>
+      <div><span className={LABEL}>Height</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.h ?? 4} onChange={layout("h")} /></div>
+    </> : isUtility ? <>
       <div><span className={LABEL}>Time zone</span><input className={FIELD} style={STYLE} value={config.timeZone || ""} placeholder="Browser default" onChange={(event) => setConfig({ timeZone: event.target.value })} /></div>
       {component.type === "clock_widget" ? <>
         <div><span className={LABEL}>Clock format</span><select className={FIELD} style={STYLE} value={config.hour12 === false ? "24" : "12"} onChange={(event) => setConfig({ hour12: event.target.value === "12" })}><option value="24">24 hour</option><option value="12">12 hour</option></select></div>

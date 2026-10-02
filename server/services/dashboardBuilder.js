@@ -7,7 +7,7 @@ import {
   normalizeRunAs,
 } from "./analyticsManagement.js";
 
-export const COMPONENT_TYPES = Object.freeze(["kpi", "chart", "pie", "donut", "bar", "line", "gauge", "funnel", "scatter", "table", "text", "clock_widget", "calendar_widget", "weather_widget", "folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile"]);
+export const COMPONENT_TYPES = Object.freeze(["kpi", "chart", "pie", "donut", "bar", "line", "gauge", "funnel", "scatter", "table", "text", "image", "clock_widget", "calendar_widget", "weather_widget", "folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile"]);
 export const CHART_TYPES = Object.freeze(["bar", "line", "pie", "donut", "gauge", "funnel", "scatter"]);
 export const KPI_SIZES = Object.freeze(["small", "medium", "large"]);
 export const VALUE_FORMATS = Object.freeze(["number", "currency", "percent"]);
@@ -100,6 +100,7 @@ export const DASHBOARD_COMPONENTS = Object.freeze([
   { key: "bar", label: "Bar Chart", kind: "chart", categoryField: true, valueField: true, sort: true, limit: true },
   { key: "table", label: "Table / List", kind: "record" },
   { key: "text", label: "Text", kind: "content" },
+  { key: "image", label: "Image", kind: "content" },
   { key: "clock_widget", label: "Clock / Watch", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
   { key: "calendar_widget", label: "Calendar", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
   { key: "weather_widget", label: "Weather", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
@@ -156,13 +157,15 @@ export function validateDashboardDefinition(input = {}) {
   const access = normalizeDashboardAccess(input.access || input.sharing || input.dashboard_access || []);
   const defaultAssignments = normalizeDashboardDefaultAssignments(input.default_assignments || input.defaultAssignments || []);
   const components = Array.isArray(input.components) ? input.components.slice(0, 50) : [];
+  if (components.filter((component) => String(component?.type || "") === "image").length > 3) throw new Error("A dashboard can contain up to 3 image widgets");
   const normalized = components.map((component, index) => {
     const type = String(component?.type || "");
     if (!COMPONENT_TYPES.includes(type)) throw new Error(`Invalid dashboard component at position ${index + 1}`);
     const config = component?.config && typeof component.config === "object" ? component.config : {};
     const modernComponents = new Set(["folder_card","avatar_group","modern_app_card","modern_kpi_card","modern_section_header","modern_data_card","icon_action_tile"]);
     const utilityComponents = new Set(["clock_widget","calendar_widget","weather_widget"]);
-    if (!modernComponents.has(type) && !utilityComponents.has(type) && type !== "text" && !config.reportId && !config.report) throw new Error(`Component ${index + 1} must reference a report`);
+    const contentComponents = new Set(["text","image"]);
+    if (!modernComponents.has(type) && !utilityComponents.has(type) && !contentComponents.has(type) && !config.reportId && !config.report) throw new Error(`Component ${index + 1} must reference a report`);
     if (config.report) {
       if (config.report.dataSource && !["sales","platform_object"].includes(String(config.report.dataSource))) throw new Error(`Component ${index + 1} uses an unsupported data source`);
       if (!Array.isArray(config.report.fields) || !config.report.fields.length) throw new Error(`Component ${index + 1} must select at least one field`);
@@ -206,6 +209,10 @@ export function validateDashboardDefinition(input = {}) {
         conditionalFormatting: Array.isArray(config.conditionalFormatting) ? config.conditionalFormatting.slice(0,30) : [],
         drillAction: config.drillAction && typeof config.drillAction === "object" ? config.drillAction : null,
         content: type === "text" ? String(config.content || "").slice(0,5000) : null,
+        imageUrl: type === "image" ? String(config.imageUrl || "").slice(0,2000) : null,
+        altText: type === "image" ? String(config.altText || "").slice(0,300) : null,
+        imageFit: type === "image" && ["contain","cover"].includes(String(config.imageFit)) ? String(config.imageFit) : "contain",
+        linkUrl: type === "image" ? String(config.linkUrl || "").slice(0,2000) : null,
         timeZone: utilityComponents.has(type) ? String(config.timeZone || "").slice(0,100) : null,
         hour12: type === "clock_widget" ? config.hour12 !== false : null,
         showSeconds: type === "clock_widget" ? config.showSeconds === true : null,
