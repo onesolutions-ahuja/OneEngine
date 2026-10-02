@@ -39,11 +39,14 @@ test("Welcome Message Customer canvas matches compact split-merge geometry", asy
   await page.goto("developer/workflow-builder");
   await expect(page.getByRole("button", { name: /new workflow/i })).toBeVisible({ timeout: 20_000 });
 
-  const workflowSearch = page.getByPlaceholder(/Search workflows/i);
+  const workflowSearch = page.getByPlaceholder("Search workflows...");
+  await expect(workflowSearch).toBeVisible({ timeout: 20_000 });
   await workflowSearch.fill("Welcome Message Customer");
-  const savedRow = page.locator(".onebuilder-list-row").filter({ hasText: "Welcome Message Customer" }).first();
-  await expect(savedRow).toBeVisible({ timeout: 15_000 });
-  await savedRow.click();
+
+  const namedWorkflow = page.getByText("Welcome Message Customer", { exact: true }).first();
+  await expect(namedWorkflow).toBeVisible({ timeout: 20_000 });
+  const workflowRow = namedWorkflow.locator("xpath=ancestor::div[contains(@class,'border-b')][1]");
+  await workflowRow.getByRole("button", { name: "Edit", exact: true }).click();
 
   const canvas = page.locator(".workflow-canvas-surface");
   await expect(canvas).toBeVisible();
