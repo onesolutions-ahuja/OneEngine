@@ -47,11 +47,11 @@ function DockItem({ item, mouseX, onActivate }) {
     const bounds = ref.current?.getBoundingClientRect() ?? { x: 0, width: 0 }
     return value - bounds.x - bounds.width / 2
   })
-  // Magnify visually without changing layout width. This keeps the divider/Jarvis
-  // reservation fixed so app icons can never push underneath the assistant area.
-  const scaleTarget = useTransform(distance, [-150, 0, 150], [1, 1.7, 1])
-  const scale = useSpring(scaleTarget, { mass: 0.1, stiffness: 150, damping: 12 })
-  return <motion.button ref={ref} type="button" className="dock-item" style={{ scale }} onClick={onActivate} aria-label={item.label} title={item.label}>
+  // Restore the earlier macOS-style magnification: the hovered slot expands,
+  // so neighbouring icons move away instead of only scaling in place.
+  const widthTarget = useTransform(distance, [-150, 0, 150], [40, 76, 40])
+  const width = useSpring(widthTarget, { mass: 0.1, stiffness: 150, damping: 12 })
+  return <motion.button ref={ref} type="button" className="dock-item" style={{ width }} onClick={onActivate} aria-label={item.label} title={item.label}>
     <span className="dock-tooltip" role="tooltip">{item.label}</span>
     <span className="dock-icon-wrap">
       <img className="dock-image dock-image--app" src={item.src} alt="" draggable="false" />

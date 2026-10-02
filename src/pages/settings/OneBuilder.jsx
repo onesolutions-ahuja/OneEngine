@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppWindow, BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
   Pencil, Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
@@ -117,7 +117,7 @@ function GenericProperties({ item, fields = [], actionRegistry = [], roles = [],
   return <div className="onebuilder-properties-form"><label>Title<input value={item.label || ''} onChange={(e) => onChange({ ...item, label: e.target.value })}/></label><label>Configuration<textarea rows="10" value={JSON.stringify(item.config || {}, null, 2)} onChange={(e) => { try { onChange({ ...item, config: JSON.parse(e.target.value) }) } catch {} }}/></label></div>
 }
 
-export default function OneBuilder({ initialTab = 'workflow', singleBuilder = false }) {
+export default function OneBuilder({ initialTab = 'workflow', singleBuilder = false, initialWorkflowId = '', onWorkflowOpen, onWorkflowClose }) {
   const [tab, setTab] = useState(initialTab)
   const [listQuery, setListQuery] = useState('')
   const [componentRegistry, setComponentRegistry] = useState([])
@@ -144,6 +144,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const [listLoading, setListLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const openedRouteWorkflowRef = useRef('')
 
   const loadBase = async () => {
     setLoading(true)
@@ -297,6 +298,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   }
 
   const newDefinition = () => {
+    if (tab === 'workflow') onWorkflowClose?.()
     setMode('builder')
     setSideTab('components')
     setSelectedSavedId('')
@@ -343,10 +345,20 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
       }
       setSelectedSavedId(id)
       setSelectedNodeId('')
+      if (tab === 'workflow') onWorkflowOpen?.(id)
     } catch (err) {
       setError(err?.message || 'Unable to open definition')
     }
   }
+
+  useEffect(() => {
+    if (tab !== 'workflow' || !initialWorkflowId || loading || listLoading) return
+    if (openedRouteWorkflowRef.current === String(initialWorkflowId)) return
+    const exists = saved.workflow.some((item) => String(item.id) === String(initialWorkflowId))
+    if (!exists) return
+    openedRouteWorkflowRef.current = String(initialWorkflowId)
+    void openSaved(initialWorkflowId)
+  }, [tab, initialWorkflowId, loading, listLoading, saved.workflow])
 
   const saveDefinition = async () => {
     setError('')
@@ -404,6 +416,35 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     return listRows.filter((item) => `${rowTitle(item)} ${rowSubtitle(item)} ${item?.id || ''}`.toLowerCase().includes(query))
   }, [listRows, listQuery, tab])
 
+  const workflowObjectKey = (item) => String(
+    item?.object || item?.object_key || item?.objectKey || item?.trigger_object ||
+    item?.action?.object || item?.action?.objectKey || item?.definition?.object || ''
+  ).trim()
+
+  const workflowGroups = useMemo(() => {
+    if (tab !== 'workflow') return []
+    const objectLabelByKey = new Map()
+    objects.forEach((object) => {
+      const key = String(object?.object_key || object?.api_name || object?.key || object?.id || '').trim()
+      if (key) objectLabelByKey.set(key, object?.label || object?.name || key)
+      if (object?.id) objectLabelByKey.set(String(object.id), object?.label || object?.name || key || String(object.id))
+    })
+    const groups = new Map()
+    visibleListRows.forEach((item) => {
+      const key = workflowObjectKey(item)
+      const label = key ? (objectLabelByKey.get(key) || key) : 'System / No Object'
+      if (!groups.has(label)) groups.set(label, [])
+      groups.get(label).push(item)
+    })
+    return [...groups.entries()]
+      .map(([label, rows]) => ({ label, rows: [...rows].sort((a, b) => rowTitle(a).localeCompare(rowTitle(b))) }))
+      .sort((a, b) => {
+        if (a.label === 'System / No Object') return 1
+        if (b.label === 'System / No Object') return -1
+        return a.label.localeCompare(b.label)
+      })
+  }, [tab, visibleListRows, objects])
+
   if (tab === 'workflow' && mode === 'builder') {
     return (
       <div className="onebuilder-workflow-workspace" role="dialog" aria-modal="true" aria-label="Workflow Builder workspace">
@@ -419,6 +460,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
               setSelectedNodeId('')
               setSideTab('components')
               setError('')
+              onWorkflowClose?.()
               void loadSavedDefinitions('workflow')
             }}
             onSaved={() => {
@@ -427,6 +469,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
               setSelectedSavedId('')
               setSelectedNodeId('')
               setSideTab('components')
+              onWorkflowClose?.()
               void loadSavedDefinitions('workflow')
             }}
           />
@@ -492,17 +535,37 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
           </label>
           <div className="onebuilder-list-body">
             {(loading || listLoading) ? <div className="onebuilder-list-empty">Loading existing definitions…</div> : null}
-            {!loading && !listLoading && visibleListRows.length ? visibleListRows.map((item) => (
-              <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
-                <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
-                <span className="onebuilder-list-row-copy">
-                  <strong>{rowTitle(item)}</strong>
-                  <small>{rowSubtitle(item)}</small>
-                </span>
-                <span className="onebuilder-list-row-state">{item.active === false ? 'Inactive' : ''}</span>
-                <span className="onebuilder-list-row-edit" title="Open editor" aria-label="Open editor"><Pencil size={13}/></span>
-              </button>
-            )) : null}
+            {!loading && !listLoading && visibleListRows.length ? (
+              tab === 'workflow' ? workflowGroups.map((group) => (
+                <section key={group.label} className="onebuilder-workflow-group">
+                  <div className="onebuilder-workflow-group-head">
+                    <span>{group.label}</span>
+                    <small>{group.rows.length}</small>
+                  </div>
+                  {group.rows.map((item) => (
+                    <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
+                      <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
+                      <span className="onebuilder-list-row-copy">
+                        <strong>{rowTitle(item)}</strong>
+                        <small>{rowSubtitle(item)}</small>
+                      </span>
+                      <span className="onebuilder-list-row-state">{item.active === false ? 'Inactive' : ''}</span>
+                      <span className="onebuilder-list-row-edit" title="Open editor" aria-label="Open editor"><Pencil size={13}/></span>
+                    </button>
+                  ))}
+                </section>
+              )) : visibleListRows.map((item) => (
+                <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
+                  <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
+                  <span className="onebuilder-list-row-copy">
+                    <strong>{rowTitle(item)}</strong>
+                    <small>{rowSubtitle(item)}</small>
+                  </span>
+                  <span className="onebuilder-list-row-state">{item.active === false ? 'Inactive' : ''}</span>
+                  <span className="onebuilder-list-row-edit" title="Open editor" aria-label="Open editor"><Pencil size={13}/></span>
+                </button>
+              ))
+            ) : null}
             {!loading && !listLoading && !visibleListRows.length ? (
               <div className="onebuilder-list-empty">
                 <ActiveTabIcon size={28}/>

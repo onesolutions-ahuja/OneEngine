@@ -255,6 +255,8 @@ export default function WorkflowReactFlowCanvas(props) {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onInit={(instance) => props.onReady?.(instance)}
+        onMoveEnd={(_, viewport) => props.onViewportChange?.(viewport?.zoom || 1)}
         nodesConnectable={false}
         fitView
         fitViewOptions={{ padding: 0.25, minZoom: 0.45, maxZoom: 1 }}

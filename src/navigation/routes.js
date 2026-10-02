@@ -39,7 +39,11 @@ export function readRoute() {
     if (DEVELOPER_SETTINGS_KEYS.has(section)) return { app: 'developer', section: section === 'platform' ? 'workflow-builder' : section }
     return { app: 'settings', section }
   }
-  if (parts[0] === 'developer') return { app: 'developer', section: parts[1] || 'objects' }
+  if (parts[0] === 'developer') {
+    const section = parts[1] || 'objects'
+    const workflowId = section === 'workflow-builder' && parts[2] ? decodeURIComponent(parts[2]) : ''
+    return { app: 'developer', section, workflowId }
+  }
   if (parts[0] === 'dashboard') return { app: 'dashboard', section: null }
   if (parts[0] === 'till') return { app: 'till', section: null }
   if (parts[0] === 'customer-display') return { app: 'customer-display', section: null }
@@ -100,7 +104,7 @@ export function setRoute(app, section = null, options = {}) {
   const next = app === 'settings'
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
     : app === 'developer'
-      ? `${base}/developer${section && section !== 'objects' ? `/${section}` : ''}`
+      ? `${base}/developer${section && section !== 'objects' ? `/${section}` : ''}${section === 'workflow-builder' && options?.workflowId ? `/${encodeURIComponent(options.workflowId)}` : ''}`
     : app === 'dashboard'
       ? `${base}/dashboard`
     : app === 'till'
