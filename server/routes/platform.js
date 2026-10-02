@@ -8139,14 +8139,34 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return { version: current.__validation_version, current };
   }
 
-  function applyFieldDefaults(fields, input) {
+  async function applyFieldDefaults(fields, input, req) {
     const values = { ...(input || {}) };
-    for (const field of fields || []) {
-      if (!field?.active || !field.api_name || !metadataColumn(field) || ["formula", "rollup", "auto_number"].includes(field.field_type)) continue;
+    const eligible = (fields || []).filter((field) => field?.active && field.api_name && metadataColumn(field) && !["formula", "rollup", "auto_number"].includes(field.field_type));
+    for (const field of eligible) {
       if (Object.prototype.hasOwnProperty.call(values, field.api_name)) continue;
       const config = field.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
-      if (config.defaultValue !== undefined) values[field.api_name] = config.defaultValue;
-      else if (config.default_value !== undefined) values[field.api_name] = config.default_value;
+      if (config.defaultFormula || config.default_formula) continue;
+      if (config.defaultValue !== undefined && config.defaultValue !== null) values[field.api_name] = config.defaultValue;
+      else if (config.default_value !== undefined && config.default_value !== null) values[field.api_name] = config.default_value;
+    }
+    const formulaInputs = () => ({
+      ...Object.fromEntries(eligible.map((field) => [field.api_name, values[field.api_name] ?? null])),
+      user_id: req.user?.id ?? null,
+      role_id: req.user?.roleId ?? null,
+      company_id: req.user?.companyId ?? null,
+      store_id: req.user?.storeId ?? null,
+    });
+    for (const field of eligible) {
+      if (Object.prototype.hasOwnProperty.call(values, field.api_name)) continue;
+      const config = field.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+      const expression = config.defaultFormula || config.default_formula;
+      if (!expression) continue;
+      try {
+        const value = evaluateWorkflowFormula(expression, formulaInputs());
+        if (value !== undefined && value !== null) values[field.api_name] = value;
+      } catch (error) {
+        return { __defaultError: `${field.label} default formula failed: ${error.message}`, ...values };
+      }
     }
     return values;
   }
@@ -8156,7 +8176,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (!(await hasPlatformObjectPermission(db, req, object.id, permissionAction))) {
       return { status: 403, code: "IMPORT_PERMISSION_REQUIRED", message: `${permissionAction} permission is required` };
     }
-    const effectiveInput = action === "create" ? applyFieldDefaults(fields, input) : input;
+    const effectiveInput = action === "create" ? await applyFieldDefaults(fields, input, req) : input;
+    if (effectiveInput?.__defaultError) return { status: 400, code: "FIELD_DEFAULT_FAILED", message: effectiveInput.__defaultError };
     const validation = await validateRecordInput(req, object, fields, effectiveInput, { requireRequired: action === "create", recordId });
     if (validation.error) return { status: 400, code: "FIELD_VALIDATION_FAILED", message: validation.error };
     if (action === "create") {
