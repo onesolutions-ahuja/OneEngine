@@ -20,6 +20,11 @@ function safeProvider(row){
   };
 }
 function base64urlBuffer(value){return Buffer.from(String(value||""),"base64url");}
+function methodAssurance(method,effective){
+  if(method?.method_type==="PASSKEY")return effective?.passkeyAssurance||"HIGH";
+  if(method?.method_type==="TOTP")return effective?.totpAssurance||"STANDARD";
+  return "STANDARD";
+}
 
 export default function createIdentityAssuranceRouter({authenticate,authorize,db,createToken,encryptCredentials,decryptCredentials,writeAudit}) {
   const router=express.Router();
@@ -63,10 +68,14 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(!policy||policy.action==="ALLOW")return res.json({success:true,required:false,assuranceLevel:req.authSession?.assurance_level||"STANDARD"});
     if(policy.action==="BLOCK")return res.status(403).json({success:false,code:"RESOURCE_BLOCKED",message:"This operation is blocked by security policy"});
     if(!stepUpRequired({session:req.authSession,policy,defaultMinutes:15}))return res.json({success:true,required:false,assuranceLevel:req.authSession?.assurance_level||"HIGH"});
-    const methods=await listMfaMethods(db,{companyId:req.user.companyId,userId:req.user.id});
+    const assurance=await loadEffectiveAssurance(db,{companyId:req.user.companyId,userId:req.user.id,roleId:req.user.roleId});
+    const methods=(await listMfaMethods(db,{companyId:req.user.companyId,userId:req.user.id}))
+      .filter((method)=>mfaMethodAllowed(method,assurance.effective))
+      .filter((method)=>assuranceSatisfies(methodAssurance(method,assurance.effective),policy.required_assurance||"HIGH"));
     const challenge=await createPendingChallenge(db,{companyId:req.user.companyId,userId:req.user.id,type:"STEP_UP",
       context:{sessionId:req.user.sid,resourceKey},minutes:10});
-    res.status(202).json({success:true,required:true,challengeId:challenge.id,availableMethods:methods.map(publicMethod)});
+    res.status(202).json({success:true,required:true,challengeId:challenge.id,availableMethods:methods.map(publicMethod),
+      enrollmentRequired:methods.length===0,requiredAssurance:policy.required_assurance||"HIGH"});
   });
 
   router.get("/security/assurance",...manage,async(req,res)=>{
@@ -137,6 +146,11 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       enrollmentRequired:usable.length===0 && !temporaryCode,
       phishingResistantRequired:policy.effective.phishingResistantRequired===true,
       availableMethods,
+      allowedEnrollmentMethods:[
+        ...(!policy.effective.phishingResistantRequired&&policy.effective.allowTotp?["TOTP"]:[]),
+        ...(policy.effective.allowPlatformPasskeys?["PLATFORM_PASSKEY"]:[]),
+        ...(policy.effective.allowSecurityKeys?["SECURITY_KEY"]:[]),
+      ],
       user:{id:user.id,name:user.full_name,username:user.username},
     }});
   });
@@ -283,9 +297,41 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   });
 
   router.get("/security/mfa/users/:userId/methods",...manage,async(req,res)=>{
-    const r=await db(`SELECT id,method_type,label,phishing_resistant,verified,active,created_at,last_used_at
-      FROM identity_mfa_methods WHERE company_id=$1 AND user_id=$2 ORDER BY created_at`,[req.user.companyId,req.params.userId]);
-    res.json({success:true,data:r.rows});
+    const [r,temp]=await Promise.all([
+      db(`SELECT id,method_type,label,authenticator_kind,phishing_resistant,verified,active,created_at,last_used_at
+        FROM identity_mfa_methods WHERE company_id=$1 AND user_id=$2 ORDER BY created_at`,[req.user.companyId,req.params.userId]),
+      activeTemporaryVerificationCode(db,{companyId:req.user.companyId,userId:req.params.userId}),
+    ]);
+    const rows=[...r.rows];
+    if(temp)rows.push({id:temp.id,method_type:"TEMPORARY_CODE",label:"Temporary Verification Code",active:true,verified:true,expires_at:temp.expires_at,created_at:temp.generated_at});
+    res.json({success:true,data:rows});
+  });
+
+  router.post("/security/mfa/users/:userId/temporary-code",...manage,async(req,res)=>{
+    if(!req.authSession||!assuranceSatisfies(req.authSession.assurance_level,"HIGH")){
+      return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"USER_ADMIN",message:"High-Assurance verification is required to generate a temporary MFA code"});
+    }
+    const user=(await db("SELECT id,role_id,active FROM users WHERE id=$1 AND company_id=$2",[req.params.userId,req.user.companyId])).rows[0];
+    if(!user?.active)return res.status(404).json({success:false,message:"Active user not found"});
+    const policy=await loadEffectiveAssurance(db,{companyId:req.user.companyId,userId:user.id,roleId:user.role_id});
+    if(!policy.effective.mfaRequired)return res.status(409).json({success:false,message:"Temporary verification codes are available only for users who require MFA"});
+    try{
+      const code=await generateTemporaryVerificationCode(db,{companyId:req.user.companyId,userId:user.id,generatedBy:req.user.id,expiresHours:req.body?.expiresHours});
+      await writeAudit?.(req.user.companyId,req.user.id,"security.temp_mfa_code_generated","user",user.id,{expiresAt:code.expires_at});
+      res.status(201).json({success:true,data:{code:code.code,expiresAt:code.expires_at}});
+    }catch(error){
+      if(error?.status)return res.status(error.status).json({success:false,code:error.code,message:error.message});
+      throw error;
+    }
+  });
+
+  router.post("/security/mfa/users/:userId/temporary-code/expire",...manage,async(req,res)=>{
+    if(!req.authSession||!assuranceSatisfies(req.authSession.assurance_level,"HIGH")){
+      return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"USER_ADMIN",message:"High-Assurance verification is required to expire a temporary MFA code"});
+    }
+    await db("UPDATE identity_temporary_verification_codes SET expired_at=NOW() WHERE company_id=$1 AND user_id=$2 AND expired_at IS NULL",[req.user.companyId,req.params.userId]);
+    await writeAudit?.(req.user.companyId,req.user.id,"security.temp_mfa_code_expired","user",req.params.userId,{});
+    res.json({success:true});
   });
 
   router.post("/security/mfa/users/:userId/methods/:methodId/disconnect",...manage,async(req,res)=>{
