@@ -1,6 +1,6 @@
 // Small, bounded expression language. Never evaluate JavaScript or generate SQL.
-const TYPES = new Set(["number", "decimal", "currency", "percent", "text", "long_text", "rich_text", "url", "time", "auto_number", "boolean", "date", "datetime", "email", "phone", "select", "picklist"]);
-const STRING_TYPES = new Set(["text", "long_text", "rich_text", "url", "time", "auto_number", "date", "datetime", "email", "phone", "select", "picklist"]);
+const TYPES = new Set(["number", "decimal", "currency", "percent", "text", "text_area", "long_text", "rich_text", "url", "time", "auto_number", "boolean", "date", "datetime", "email", "phone", "select", "picklist"]);
+const STRING_TYPES = new Set(["text", "text_area", "long_text", "rich_text", "url", "time", "auto_number", "date", "datetime", "email", "phone", "select", "picklist"]);
 const SAFE = /^[a-z_][a-z0-9_]*$/;
 const SAFE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*$/;
 const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
