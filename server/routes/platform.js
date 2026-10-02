@@ -1884,10 +1884,16 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     res.json({ success: true, data: result.rows[0] });
   });
 
-  router.get("/platform/objects/:objectId/list-views", ...manage, async (req, res) => {
+  router.get("/platform/objects/:objectId/list-views", authenticate, async (req, res) => {
     const object = await getObject(req.params.objectId, req);
     if (!object) return res.status(404).json({ success: false, message: "Object not found" });
-    const result = await db("SELECT * FROM platform_list_views WHERE object_id=$1 AND company_id=$2 AND active=true ORDER BY label", [object.id, req.user.companyId]);
+    if (!(await hasPlatformObjectPermission(db, req, object.id, "view"))) {
+      return res.status(403).json({ success: false, message: "You do not have permission to view list views for this object" });
+    }
+    const result = await db(
+      "SELECT * FROM platform_list_views WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY is_default DESC,label",
+      [object.id, req.user.companyId]
+    );
     res.json({ success: true, data: result.rows });
   });
 
