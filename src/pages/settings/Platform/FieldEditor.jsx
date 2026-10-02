@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
-import { compileFormulas, formulaPreviewDependencies } from "../../../../server/services/platformFormula.js";
+import { compileFormulas, formulaPreviewDependencies, formulaReferences } from "../../../../server/services/platformFormula.js";
 import { toSafeApiName, withGeneratedApiName } from "./safeApiName.js";
 
 const FIELD_TYPES = [
@@ -92,14 +92,26 @@ export default function FieldEditor({
   const [valueSets, setValueSets] = useState([]);
   const [relationships, setRelationships] = useState([]);
   const [formulaPreviewValues, setFormulaPreviewValues] = useState({});
+  const [formulaPathPreviewValues, setFormulaPathPreviewValues] = useState({});
+  const [recordPaths, setRecordPaths] = useState({ rootObjectKey: "", items: [] });
 
   let formulaDependencies = [];
+  let formulaPathReferences = [];
   let formulaPreviewValue = null;
   let formulaPreviewError = "";
   if (form.field_type === "formula") {
     try {
       const apiName = form.apiName || "formula_preview";
       const existingFields = fields.filter((item) => item.api_name !== apiName && item.api_name !== field?.api_name);
+      const refs = formulaReferences(form.expression);
+      const dotted = refs.filter((reference) => reference.includes("."));
+      formulaPathReferences = dotted;
+      const pathTypes = {};
+      for (const reference of dotted) {
+        const canonical = reference.startsWith(`${recordPaths.rootObjectKey}.`) ? reference : `${recordPaths.rootObjectKey}.${reference}`;
+        const match = recordPaths.items.find((item) => item.kind === "field" && item.path === canonical);
+        if (match?.fieldType) pathTypes[reference] = match.fieldType;
+      }
       const candidate = {
         ...(field || {}),
         api_name: apiName,
@@ -109,10 +121,13 @@ export default function FieldEditor({
         writable: false,
         readable: true,
         active: true,
-        config: { expression: form.expression, resultType: form.resultType },
+        config: { expression: form.expression, resultType: form.resultType, ...(Object.keys(pathTypes).length ? { recordPathTypes: pathTypes } : {}) },
       };
       formulaDependencies = formulaPreviewDependencies(existingFields, form.expression);
-      formulaPreviewValue = compileFormulas([...existingFields, candidate])(formulaPreviewValues)[apiName];
+      formulaPreviewValue = compileFormulas([...existingFields, candidate])({
+        ...formulaPreviewValues,
+        __formulaPathValues: formulaPathPreviewValues,
+      })[apiName];
     } catch (previewError) {
       formulaPreviewError = previewError.message || "Formula preview is unavailable.";
     }
@@ -124,6 +139,16 @@ export default function FieldEditor({
       .then((response) => setValueSets(Array.isArray(response?.data) ? response.data : []))
       .catch((err) => setError(err?.message || "Unable to load reusable value sets."));
   }, [form.field_type]);
+
+  useEffect(() => {
+    if (form.field_type !== "formula" || !object?.id) return;
+    apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/record-paths?depth=6`)
+      .then((response) => setRecordPaths({
+        rootObjectKey: response?.rootObjectKey || object?.object_key || "",
+        items: Array.isArray(response?.data) ? response.data : [],
+      }))
+      .catch((err) => setError(err?.message || "Unable to load formula record paths."));
+  }, [form.field_type, object?.id]);
 
   useEffect(() => {
     if (form.field_type !== "lookup" || !object?.id) return;
@@ -692,6 +717,28 @@ export default function FieldEditor({
               <small>Use field API names. Functions: IF, COALESCE, CONCAT, ROUND, ABS, MIN, MAX. Example: CONCAT(name, " - ", sku). Calculated from this record; never stored or editable. Blank inputs and division by zero return blank; use COALESCE for defaults.</small>
             </label>
             <fieldset className="platform-field-editor-wide">
+              <legend>Record Paths</legend>
+              <label>
+                <span>Insert related field</span>
+                <select
+                  value=""
+                  onChange={(event) => {
+                    const path = event.target.value;
+                    if (!path) return;
+                    const prefix = recordPaths.rootObjectKey ? `${recordPaths.rootObjectKey}.` : "";
+                    const reference = path.startsWith(prefix) ? path.slice(prefix.length) : path;
+                    update("expression", form.expression ? `${form.expression} ${reference}` : reference);
+                  }}
+                >
+                  <option value="">Choose a scalar related field…</option>
+                  {recordPaths.items
+                    .filter((item) => item.kind === "field" && item.path.split(".").length > 2)
+                    .map((item) => <option key={item.path} value={item.path}>{item.path} · {item.label}</option>)}
+                </select>
+              </label>
+              <small>Only scalar lookup/parent paths are accepted when the field is saved. Child collection paths are rejected.</small>
+            </fieldset>
+            <fieldset className="platform-field-editor-wide">
               <legend>Formula preview</legend>
               {formulaDependencies.map((dependency) => {
                 const type = dependency.field_type;
@@ -719,6 +766,15 @@ export default function FieldEditor({
                   </label>
                 );
               })}
+              {formulaPathReferences.map((path) => (
+                <label key={path}>
+                  <span>{path} sample value</span>
+                  <input
+                    value={formulaPathPreviewValues[path] ?? ""}
+                    onChange={(event) => setFormulaPathPreviewValues((current) => ({ ...current, [path]: event.target.value }))}
+                  />
+                </label>
+              ))}
               <output className={formulaPreviewError ? "onepos-alert onepos-alert-error" : "onepos-alert"} aria-live="polite">
                 {formulaPreviewError
                   ? `Preview unavailable: ${formulaPreviewError}`
