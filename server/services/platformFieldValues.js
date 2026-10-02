@@ -71,8 +71,8 @@ export function fieldValueError(field, value) {
   if (["number", "decimal", "currency", "percent"].includes(type) && (!((typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isFinite(Number(value))))) return `${field.label} must be a valid number`;
   if (type === "boolean" && ![true, false, 0, 1, "true", "false", "0", "1"].includes(value)) return `${field.label} must be boolean`;
   if (["date", "datetime"].includes(type) && Number.isNaN(new Date(value).getTime())) return `${field.label} must be a valid ${type}`;
-  if (type === "time" && !/^([01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d{1,3})?)?$/.test(String(value))) return `${field.label} must be a valid time`;
-  if (type === "email" && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(value))) return `${field.label} must be a valid email address`;
+  if (type === "time" && !/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?$/.test(String(value))) return `${field.label} must be a valid time`;
+  if (type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) return `${field.label} must be a valid email address`;
   if (type === "url") {
     try { new URL(String(value)); } catch { return `${field.label} must be a valid URL`; }
   }
