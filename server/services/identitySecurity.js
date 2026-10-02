@@ -151,15 +151,16 @@ export function passwordPolicyError(password, settings) {
   const minimum = Math.max(8, Number(settings?.minimum_password_length || 12));
   if (value.length < minimum) return `Password must be at least ${minimum} characters`;
   const mode = settings?.password_complexity || "THREE_OF_FOUR";
-  const groups = [
-    /[a-z]/.test(value),
-    /[A-Z]/.test(value),
-    /[0-9]/.test(value),
-    /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/.test(value),
-  ].filter(Boolean).length;
-  if (mode === "LETTER_NUMBER" && (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value))) return "Password must include letters and numbers";
+  const lower = /[a-z]/.test(value);
+  const upper = /[A-Z]/.test(value);
+  const number = /[0-9]/.test(value);
+  const special = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/.test(value);
+  const groups = [lower, upper, number, special].filter(Boolean).length;
+  if (mode === "ALPHA_NUMERIC" && (!/[A-Za-z]/.test(value) || !number)) return "Password must include alphabetic and numeric characters";
+  if (mode === "ALPHA_NUMERIC_SPECIAL" && (!/[A-Za-z]/.test(value) || !number || !special)) return "Password must include alphabetic, numeric, and special characters";
+  if (mode === "NUM_UPPER_LOWER" && (!number || !upper || !lower)) return "Password must include a number, uppercase letter, and lowercase letter";
+  if (mode === "NUM_UPPER_LOWER_SPECIAL" && (!number || !upper || !lower || !special)) return "Password must include a number, uppercase letter, lowercase letter, and special character";
   if (mode === "THREE_OF_FOUR" && groups < 3) return "Password must include at least 3 of: lowercase, uppercase, number, special character";
-  if (mode === "ALL_FOUR" && groups < 4) return "Password must include lowercase, uppercase, number, and special character";
   return null;
 }
 
@@ -167,6 +168,10 @@ export async function assertPasswordAllowed(db, { companyId, userId, password, b
   const settings = await loadSecuritySettings(db, companyId);
   const error = passwordPolicyError(password, settings);
   if (error) return { ok: false, message: error, settings };
+  const currentPassword = await db("SELECT password_hash FROM users WHERE id=$1 AND company_id=$2 LIMIT 1", [userId, companyId]);
+  if (currentPassword.rows[0]?.password_hash && await bcrypt.compare(password, currentPassword.rows[0].password_hash)) {
+    return { ok: false, message: "New password must be different from the current password", settings };
+  }
   const state = await db("SELECT password_changed_at FROM identity_user_security_state WHERE user_id=$1", [userId]);
   const changedAt = state.rows[0]?.password_changed_at;
   if (enforceMinimumLifetime && changedAt && Number(settings.minimum_password_lifetime_hours || 0) > 0) {
