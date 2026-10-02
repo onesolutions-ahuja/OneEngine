@@ -1115,7 +1115,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
 
   async function validateReferences(req, parentObjectId, childObjectId, childFieldId = null) {
     const [parent, child] = await Promise.all([getObject(parentObjectId, req), getObject(childObjectId, req)]);
-    if (!parent || !child || parent.id === child.id) return "Referenced objects must exist and be different";
+    if (!parent || !child) return "Referenced objects must exist";
     if (childFieldId) {
       const field = await db("SELECT id FROM platform_fields WHERE id=$1 AND object_id=$2 AND active=true AND (company_id IS NULL OR company_id=$3)", [childFieldId, childObjectId, req.user.companyId]);
       if (!field.rows.length) return "The child field does not belong to the child object";
@@ -2325,12 +2325,12 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   }
 
   router.get("/platform/relationships", ...manage, async (req, res) => {
-    const result = await db("SELECT r.*, p.object_key AS parent_object_key, c.object_key AS child_object_key FROM platform_relationships r JOIN platform_objects p ON p.id=r.parent_object_id JOIN platform_objects c ON c.id=r.child_object_id WHERE r.active=true AND (p.company_id IS NULL OR p.company_id=$1) ORDER BY r.relationship_key", [req.user.companyId]);
+    const result = await db("SELECT r.*, p.object_key AS parent_object_key, c.object_key AS child_object_key FROM platform_relationships r JOIN platform_objects p ON p.id=r.parent_object_id JOIN platform_objects c ON c.id=r.child_object_id WHERE (p.company_id IS NULL OR p.company_id=$1) ORDER BY r.active DESC,COALESCE(r.label,r.relationship_key),r.relationship_key", [req.user.companyId]);
     res.json({ success: true, data: result.rows });
   });
 
   router.post("/platform/relationships", ...manage, async (req, res) => {
-    const { parentObjectId, childObjectId, relationshipKey, relationshipType = "lookup", childFieldId = null, onDelete = "restrict", onUpdate = "restrict" } = req.body || {};
+    const { parentObjectId, childObjectId, relationshipKey, label = null, description = null, relationshipType = "lookup", childFieldId = null, onDelete = "restrict", onUpdate = "restrict", active = true } = req.body || {};
     if (!relationshipKey || !RELATIONSHIP_TYPES.has(relationshipType) || !RELATIONSHIP_POLICIES.has(onDelete) || !RELATIONSHIP_POLICIES.has(onUpdate)) return res.status(400).json({ success: false, message: "Invalid relationship type or policy" });
     const referenceError = await validateReferences(req, parentObjectId, childObjectId, childFieldId);
     if (referenceError) return res.status(400).json({ success: false, message: referenceError });
@@ -2338,7 +2338,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const child = await getObject(childObjectId, req);
     if (!await canManageGlobal(db, req) && (parent.company_id === null || child.company_id === null)) return res.status(403).json({ success: false, message: "oneengine.manage permission is required to change global relationships" });
     try {
-      const result = await db("INSERT INTO platform_relationships (parent_object_id,child_object_id,relationship_key,relationship_type,child_field_id,on_delete,on_update) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *", [parentObjectId, childObjectId, relationshipKey, relationshipType, childFieldId, onDelete, onUpdate]);
+      const result = await db("INSERT INTO platform_relationships (parent_object_id,child_object_id,relationship_key,label,description,relationship_type,child_field_id,on_delete,on_update,active) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *", [parentObjectId, childObjectId, relationshipKey, label || relationshipKey, description || null, relationshipType, childFieldId, onDelete, onUpdate, active !== false]);
       res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
       if (error.code === "23505") return res.status(409).json({ success: false, message: "A relationship with this key already exists" });
@@ -2363,7 +2363,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const onDelete = req.body.onDelete || relationship.on_delete;
     const onUpdate = req.body.onUpdate || relationship.on_update;
     if (!RELATIONSHIP_TYPES.has(relationshipType) || !RELATIONSHIP_POLICIES.has(onDelete) || !RELATIONSHIP_POLICIES.has(onUpdate)) return res.status(400).json({ success: false, message: "Invalid relationship type or policy" });
-    const updated = await db("UPDATE platform_relationships SET parent_object_id=$1,child_object_id=$2,relationship_key=COALESCE($3,relationship_key),relationship_type=$4,child_field_id=$5,on_delete=$6,on_update=$7,active=COALESCE($8,active),user_modified=true WHERE id=$9 RETURNING *", [parentId, childId, req.body.relationshipKey, relationshipType, childFieldId, onDelete, onUpdate, req.body.active, relationship.id]);
+    const updated = await db("UPDATE platform_relationships SET parent_object_id=$1,child_object_id=$2,relationship_key=COALESCE($3,relationship_key),label=COALESCE($4,label),description=COALESCE($5,description),relationship_type=$6,child_field_id=$7,on_delete=$8,on_update=$9,active=COALESCE($10,active),user_modified=true WHERE id=$11 RETURNING *", [parentId, childId, req.body.relationshipKey, req.body.label, req.body.description, relationshipType, childFieldId, onDelete, onUpdate, req.body.active, relationship.id]);
     res.json({ success: true, data: updated.rows[0] });
   });
 
