@@ -145,6 +145,38 @@ export const platformSchema = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (object_id, api_name)
   );
+  CREATE TABLE IF NOT EXISTS platform_matching_rules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
+    rule_key VARCHAR(120) NOT NULL,
+    label VARCHAR(200) NOT NULL,
+    description TEXT,
+    match_mode VARCHAR(10) NOT NULL DEFAULT 'ALL' CHECK (match_mode IN ('ANY','ALL')),
+    fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (company_id, object_id, rule_key)
+  );
+  CREATE TABLE IF NOT EXISTS platform_duplicate_rules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
+    matching_rule_id UUID NOT NULL REFERENCES platform_matching_rules(id) ON DELETE CASCADE,
+    rule_key VARCHAR(120) NOT NULL,
+    label VARCHAR(200) NOT NULL,
+    description TEXT,
+    action VARCHAR(10) NOT NULL DEFAULT 'BLOCK' CHECK (action IN ('ALLOW','WARN','BLOCK')),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (company_id, object_id, rule_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_platform_matching_rules_object
+    ON platform_matching_rules(company_id, object_id, active);
+  CREATE INDEX IF NOT EXISTS idx_platform_duplicate_rules_object
+    ON platform_duplicate_rules(company_id, object_id, active);
   CREATE TABLE IF NOT EXISTS platform_field_security (
     id UUID NOT NULL DEFAULT gen_random_uuid(),
     field_id UUID NOT NULL REFERENCES platform_fields(id) ON DELETE CASCADE,
