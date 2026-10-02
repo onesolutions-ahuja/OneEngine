@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
 import ObjectSearch from "./ObjectSearch.jsx";
 import FormRenderer from "./FormRenderer.jsx";
@@ -211,6 +211,7 @@ export default function ObjectPage({
   const [editLayout, setEditLayout] = useState(null);
   const [quickCreateLayout, setQuickCreateLayout] = useState(null);
   const [relatedLists, setRelatedLists] = useState({});
+  const relatedSearchTimers = useRef({});
   const [executingAction, setExecutingAction] = useState("");
   const [recordButtons, setRecordButtons] = useState([]);
   const [listButtons, setListButtons] = useState([]);
@@ -574,28 +575,94 @@ export default function ObjectPage({
     }
   }
 
-  async function loadRelatedList(component) {
+  async function loadRelatedList(component, options = {}) {
     const relationshipKey = component?.relationship_key;
     const parentId = selectedRecord?.id || selectedRecord?.record_id;
     if (!relationshipKey || !parentId || !objectMetadata?.object_key) return;
-    setRelatedLists((current) => ({
-      ...current,
-      [relationshipKey]: { ...(current[relationshipKey] || {}), loading: true, error: "" },
+    const current = relatedLists[relationshipKey] || {};
+    const page = Math.max(1, Number(options.page ?? current.page ?? 1) || 1);
+    const pageSize = Math.min(Math.max(Number(component.limit || current.pageSize || 25) || 25, 1), 100);
+    const search = options.search !== undefined ? options.search : (current.search || "");
+    const sort = options.sort || current.sort || {
+      key: component.sort_field || "",
+      direction: component.sort_direction === "desc" ? "desc" : "asc",
+    };
+    const filters = options.filters || current.filters || {};
+    setRelatedLists((state) => ({
+      ...state,
+      [relationshipKey]: {
+        ...(state[relationshipKey] || {}),
+        loading: true,
+        error: "",
+        page,
+        pageSize,
+        search,
+        sort,
+        filters,
+      },
     }));
     try {
+      const query = new URLSearchParams();
+      query.set("page", String(page));
+      query.set("pageSize", String(pageSize));
+      query.set("filterModel", JSON.stringify(filters || {}));
+      if (search.trim()) query.set("search", search.trim());
+      if (sort?.key) {
+        query.set("sortField", sort.key);
+        query.set("sortDirection", sort.direction || "asc");
+      }
       const response = await apiRequest(
-        `/api/platform/objects/${encodeURIComponent(getObjectKey(objectMetadata))}/records/${parentId}/related/${encodeURIComponent(relationshipKey)}?limit=${Math.min(Number(component.limit) || 25, 100)}${component.sort_field ? `&sortField=${encodeURIComponent(component.sort_field)}&sortDirection=${encodeURIComponent(component.sort_direction || "asc")}` : ""}`
+        `/api/platform/objects/${encodeURIComponent(getObjectKey(objectMetadata))}/records/${encodeURIComponent(parentId)}/related/${encodeURIComponent(relationshipKey)}?${query.toString()}`
       );
       const records = response?.records || response?.data || [];
       const relationship = response?.relationship || {};
-      const childFieldsResponse = await apiRequest(`/api/platform/objects/${relationship.child_object_id}/fields`);
-      const childFields = childFieldsResponse?.data || [];
-      setRelatedLists((current) => ({ ...current, [relationshipKey]: { records: Array.isArray(records) ? records : [], fields: childFields, relationship, loading: false, error: "" } }));
+      let childFields = current.fields || [];
+      if (!childFields.length && relationship.child_object_id) {
+        const childFieldsResponse = await apiRequest(`/api/platform/objects/${relationship.child_object_id}/fields`);
+        childFields = childFieldsResponse?.data || [];
+      }
+      setRelatedLists((state) => ({
+        ...state,
+        [relationshipKey]: {
+          records: Array.isArray(records) ? records : [],
+          fields: childFields,
+          relationship,
+          loading: false,
+          error: "",
+          total: Number(response?.total ?? records?.length ?? 0),
+          page: Number(response?.page ?? page),
+          pageSize: Number(response?.pageSize ?? pageSize),
+          search,
+          sort,
+          filters,
+        },
+      }));
     } catch (error) {
-      setRelatedLists((current) => ({ ...current, [relationshipKey]: { ...(current[relationshipKey] || {}), loading: false, error: error?.message || "Unable to load related records." } }));
+      setRelatedLists((state) => ({
+        ...state,
+        [relationshipKey]: {
+          ...(state[relationshipKey] || {}),
+          loading: false,
+          error: error?.message || "Unable to load related records.",
+        },
+      }));
       throw error;
     }
   }
+
+  function changeRelatedSearch(component, value) {
+    const key = component?.relationship_key;
+    if (!key) return;
+    setRelatedLists((current) => ({
+      ...current,
+      [key]: { ...(current[key] || {}), search: value, page: 1 },
+    }));
+    if (relatedSearchTimers.current[key]) window.clearTimeout(relatedSearchTimers.current[key]);
+    relatedSearchTimers.current[key] = window.setTimeout(() => {
+      loadRelatedList(component, { page: 1, search: value }).catch((err) => setError(err?.message || "Unable to search related records."));
+    }, 220);
+  }
+
 
   async function saveEditedRecord(values) {
     const id = selectedRecord?.id || selectedRecord?.record_id;
@@ -1311,6 +1378,17 @@ export default function ObjectPage({
                         emptyText="No related records."
                         selectedRowId={null}
                         onRowSelect={(record) => onSelectRecord?.(record, related.relationship?.child_object_key)}
+                        searchValue={related?.search || ""}
+                        onSearchChange={(value) => changeRelatedSearch(component, value)}
+                        remoteMode
+                        sortValue={related?.sort || { key: "", direction: "asc" }}
+                        onSortChange={(sort) => loadRelatedList(component, { page: 1, sort }).catch((err) => setError(err?.message || "Unable to sort related records."))}
+                        filterValue={related?.filters || {}}
+                        onFiltersChange={(filters) => loadRelatedList(component, { page: 1, filters }).catch((err) => setError(err?.message || "Unable to filter related records."))}
+                        page={related?.page || 1}
+                        pageSize={related?.pageSize || Math.min(Number(component.limit) || 25, 100)}
+                        total={related?.total ?? related?.records?.length ?? 0}
+                        onPageChange={(page) => loadRelatedList(component, { page }).catch((err) => setError(err?.message || "Unable to load related records."))}
                       />
                     ) : null}
                   </section>
