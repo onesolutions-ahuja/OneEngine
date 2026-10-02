@@ -95,6 +95,22 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.json({success:true,data:(await listMfaMethods(db,{companyId:req.user.companyId,userId:req.user.id})).map(publicMethod)});
   });
 
+  router.get("/auth/mfa/challenge/:id",async(req,res)=>{
+    const {challenge,user}=await pendingUser(req.params.id,["LOGIN","STEP_UP"]);
+    if(!challenge||!user)return res.status(404).json({success:false,message:"Verification challenge is invalid or expired"});
+    const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    const methods=await listMfaMethods(db,{companyId:user.company_id,userId:user.id});
+    const usable=methods.filter((method)=>!policy.effective.phishingResistantRequired||method.phishing_resistant===true);
+    res.json({success:true,data:{
+      challengeId:challenge.id,
+      challengeType:challenge.challenge_type,
+      enrollmentRequired:usable.length===0,
+      phishingResistantRequired:policy.effective.phishingResistantRequired===true,
+      availableMethods:usable.map(publicMethod),
+      user:{id:user.id,name:user.full_name,username:user.username},
+    }});
+  });
+
   router.post("/auth/mfa/totp/start",async(req,res)=>{
     const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
