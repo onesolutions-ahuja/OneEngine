@@ -1023,6 +1023,9 @@ const actionOptions = [
   { value: "FORMULA", label: "Formula" },
   { value: "TEXT_TEMPLATE", label: "Text Template" },
   { value: "ASSIGNMENT", label: "Assignment" },
+  { value: "COLLECTION_FILTER", label: "Collection Filter" },
+  { value: "COLLECTION_SORT", label: "Collection Sort" },
+  { value: "TRANSFORM", label: "Transform" },
   { value: "LOOP", label: "Loop" },
   { value: "SCHEDULE_PATH", label: "Scheduled Path" },
   { value: "GET_RECORDS", label: "Get Records" },
@@ -1049,12 +1052,15 @@ const actionOptions = [
 ];
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
-  "ASSIGNMENT","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
+  "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
   "CONDITION","WAIT","RUN_SUBFLOW",
 ]);
 
 const FLOW_ELEMENT_VISUALS = {
   ASSIGNMENT: { icon: "=", color: "#fe9339", family: "Logic" },
+  COLLECTION_FILTER: { icon: "▽", color: "#fe9339", family: "Logic" },
+  COLLECTION_SORT: { icon: "⇅", color: "#fe9339", family: "Logic" },
+  TRANSFORM: { icon: "⇄", color: "#e83e8c", family: "Data" },
   LOOP: { icon: "↻", color: "#fe9339", family: "Logic" },
   CONDITION: { icon: "◇", color: "#fe9339", family: "Logic" },
   WAIT: { icon: "◷", color: "#fe9339", family: "Logic" },
@@ -1112,6 +1118,8 @@ function makeStep(type = "CREATE_RECORD") {
       formulaInputs: {},
       templateText: "",
       collection: "",
+      outputName: "",
+      transformMappings: {},
       itemVariable: type === "LOOP" ? "currentItem_Loop" : "currentItem",
       bodyBranch: [],
       recordIds: "",
@@ -1163,9 +1171,9 @@ function getActionLabel(type) {
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(key)) return "Resources";
-  if (["CONDITION","WAIT","STOP","ASSIGNMENT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
+  if (["CONDITION","WAIT","STOP","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (key === "RUN_SUBFLOW") return "Interaction";
-  if (["GET_RECORDS","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
+  if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
   return "Actions";
 }
@@ -1231,7 +1239,20 @@ function workflowActionIssue(step, definition = null) {
     if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid text template name.";
     if (!String(config.templateText || "").trim()) return "Enter text for the Text Template.";
   }
-  if (step.type === "LOOP") {
+  if (step.type === "COLLECTION_FILTER") {
+    if (!config.collection) return "Choose the collection to filter.";
+    if (!Array.isArray(config.filters) || !config.filters.length) return "Add at least one filter condition.";
+    if (config.filters.some((filter) => !String(filter?.field || "").trim())) return "Choose a field or item path for every filter.";
+  }
+  if (step.type === "COLLECTION_SORT") {
+    if (!config.collection) return "Choose the collection to sort.";
+    if (!String(config.sortField || "").trim()) return "Choose a field or item path to sort by.";
+  }
+  if (step.type === "TRANSFORM") {
+    if (!config.collection) return "Choose a source Resource to transform.";
+    if (!config.transformMappings || !Object.keys(config.transformMappings).length) return "Add at least one target mapping.";
+  }
+    if (step.type === "LOOP") {
     if (!config.collection) return "Choose the collection to loop through.";
     if (!config.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.itemVariable))) return "The Loop Current Item resource could not be generated.";
     if (!Array.isArray(config.bodyBranch) || !config.bodyBranch.length) return "Add at least one element to the For Each Item path.";
@@ -1487,6 +1508,21 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         label: `${label} → Assigned Value`,
         type: "element output",
       });
+    } else if (step.type === "COLLECTION_FILTER") {
+      resources.push(
+        { value: `${prefix}.collection`, label: `${label} → Filtered Collection`, type: "collection" },
+        { value: `${prefix}.count`, label: `${label} → Item Count`, type: "number" },
+      );
+    } else if (step.type === "COLLECTION_SORT") {
+      resources.push(
+        { value: `${prefix}.collection`, label: `${label} → Sorted Collection`, type: "collection" },
+        { value: `${prefix}.count`, label: `${label} → Item Count`, type: "number" },
+      );
+    } else if (step.type === "TRANSFORM") {
+      resources.push(
+        { value: `${prefix}.value`, label: `${label} → Transformed Value`, type: "object" },
+        { value: `${prefix}.collection`, label: `${label} → Transformed Collection`, type: "collection" },
+      );
     } else if (step.type === "LOOP" && step.config?.itemVariable) {
       resources.push(
         {
@@ -1837,6 +1873,81 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
           </div>
         );
+      case "COLLECTION_FILTER": {
+        const filters = Array.isArray(step.config?.filters) ? step.config.filters : [];
+        const updateFilter = (filterIndex, patch) => {
+          const next = [...filters];
+          next[filterIndex] = { ...next[filterIndex], ...patch };
+          updateConfig({ filters: next });
+        };
+        return (
+          <div className="space-y-3">
+            <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "collection" || String(resource.value || "").endsWith(".records") || String(resource.value || "").endsWith(".collection") || String(resource.value || "").startsWith("variables."))} label="Collection" value={step.config?.collection || ""} onChange={(collection) => updateConfig({ collection })} />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <strong className="text-xs text-slate-700">Filter conditions</strong>
+                <select className={inputClass} value={step.config?.match || "all"} onChange={(event) => updateConfig({ match: event.target.value })}>
+                  <option value="all">Match ALL</option><option value="any">Match ANY</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                {filters.map((filter, filterIndex) => <div key={filter.id || filterIndex} className="grid gap-2 md:grid-cols-[1fr_.8fr_1fr_auto]">
+                  <input className={inputClass} value={filter.field || ""} onChange={(event) => updateFilter(filterIndex, { field: event.target.value })} placeholder="Item field/path" />
+                  <select className={inputClass} value={filter.operator || "equals"} onChange={(event) => updateFilter(filterIndex, { operator: event.target.value })}>
+                    <option value="equals">Equals</option><option value="not_equals">Not equal</option><option value="greater_than">Greater than</option><option value="greater_than_or_equal">Greater than or equal</option><option value="less_than">Less than</option><option value="less_than_or_equal">Less than or equal</option><option value="contains">Contains</option><option value="is_empty">Is empty</option><option value="is_not_empty">Is not empty</option>
+                  </select>
+                  {["is_empty","is_not_empty"].includes(filter.operator) ? <div /> : <ResourceOrLiteralInput label="" value={filter.value ?? ""} onChange={(value) => updateFilter(filterIndex, { value })} rootObjectKey={rootObjectKey} extraResources={extraResources} />}
+                  <button type="button" className="rounded border border-slate-200 px-2 text-xs text-red-600" onClick={() => updateConfig({ filters: filters.filter((_, i) => i !== filterIndex) })}>Remove</button>
+                </div>)}
+              </div>
+              <button type="button" className="mt-2 text-sm text-blue-700" onClick={() => updateConfig({ filters: [...filters, { id: `filter-${Date.now()}`, field: "", operator: "equals", value: "" }] })}>+ Add condition</button>
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">Outputs a new collection containing only items that match the criteria.</div>
+          </div>
+        );
+      }
+      case "COLLECTION_SORT":
+        return (
+          <div className="space-y-3">
+            <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "collection" || String(resource.value || "").endsWith(".records") || String(resource.value || "").endsWith(".collection") || String(resource.value || "").startsWith("variables."))} label="Collection" value={step.config?.collection || ""} onChange={(collection) => updateConfig({ collection })} />
+            <label className="block text-xs font-medium text-slate-600">Sort field / item path
+              <input className={inputClass} value={step.config?.sortField || ""} onChange={(event) => updateConfig({ sortField: event.target.value })} placeholder="e.g. total or customer.name" />
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-600">Direction
+                <select className={inputClass} value={step.config?.sortDirection || "asc"} onChange={(event) => updateConfig({ sortDirection: event.target.value })}><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+              </label>
+              <label className="block text-xs font-medium text-slate-600">Limit items
+                <input className={inputClass} type="number" min="0" max="10000" value={Number(step.config?.limit || 0)} onChange={(event) => updateConfig({ limit: Math.max(0, Number(event.target.value || 0)) })} />
+              </label>
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">Reorders the collection and can optionally keep only the first N items.</div>
+          </div>
+        );
+      case "TRANSFORM": {
+        const mappings = Object.entries(step.config?.transformMappings || {});
+        return (
+          <div className="space-y-3">
+            <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Source Resource" value={step.config?.collection || ""} onChange={(collection) => updateConfig({ collection })} />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 text-xs font-semibold text-slate-700">Map source data to target fields</div>
+              <div className="space-y-2">
+                {mappings.map(([target, source], mappingIndex) => <div key={`${target}-${mappingIndex}`} className="grid gap-2 md:grid-cols-[1fr_1.2fr_auto]">
+                  <input className={inputClass} value={target} onChange={(event) => {
+                    const next = { ...(step.config?.transformMappings || {}) }; const value = next[target]; delete next[target]; next[event.target.value] = value; updateConfig({ transformMappings: next });
+                  }} placeholder="Target field" />
+                  <ResourceOrLiteralInput label="" value={source} onChange={(value) => updateConfig({ transformMappings: { ...(step.config?.transformMappings || {}), [target]: value } })} rootObjectKey={rootObjectKey} extraResources={extraResources} />
+                  <button type="button" className="rounded border border-slate-200 px-2 text-xs text-red-600" onClick={() => { const next = { ...(step.config?.transformMappings || {}) }; delete next[target]; updateConfig({ transformMappings: next }); }}>Remove</button>
+                </div>)}
+              </div>
+              <button type="button" className="mt-2 text-sm text-blue-700" onClick={() => {
+                const next = { ...(step.config?.transformMappings || {}) }; let key = `field_${Object.keys(next).length + 1}`; while (Object.prototype.hasOwnProperty.call(next, key)) key += "_"; next[key] = ""; updateConfig({ transformMappings: next });
+              }}>+ Add mapping</button>
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">Maps one record/object or every item in a collection into a new target shape.</div>
+          </div>
+        );
+      }
       case "LOOP":
         return (
           <div className="space-y-3">
