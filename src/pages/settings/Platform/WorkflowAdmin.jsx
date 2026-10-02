@@ -2756,14 +2756,26 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           pasteClipboard(insertAt == null ? workflow.steps.length : insertAt);
           return;
         }
-        const selectedIsTopLevel = selectedStep && visibleCanvasSteps.some(({ step }) => String(step.id) === String(selectedStep.id));
-        const pasteIndex = selectedIsTopLevel && selectedIndex >= 0 ? selectedIndex + 1 : workflow.steps.length;
+        const selectedIsOwnedPath = selectedStep && workflow.steps.some((owner) => {
+          const config = owner.config || {};
+          const references = [
+            ...(Array.isArray(config.outcomes) ? config.outcomes.flatMap((outcome) => outcome?.branch || []) : []),
+            ...(config.defaultBranch || []),
+            ...(config.ifBranch || []),
+            ...(config.elseBranch || []),
+            ...(config.bodyBranch || []),
+            ...(config.faultBranch || []),
+            ...(config.branch || []),
+          ];
+          return references.some((id) => String(id) === String(selectedStep.id));
+        });
+        const pasteIndex = selectedStep && !selectedIsOwnedPath && selectedIndex >= 0 ? selectedIndex + 1 : workflow.steps.length;
         pasteClipboard(pasteIndex);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedStep, selectedIndex, clipboard, branchTarget, insertAt, workflow.steps.length, visibleCanvasSteps]);
+  }, [selectedStep, selectedIndex, clipboard, branchTarget, insertAt, workflow.steps]);
   const addFaultPath = (step) => {
     const index = workflow.steps.findIndex((item) => item.id === step.id);
     if (index < 0 || !flowElementSupportsFaultPath(step.type)) return;
