@@ -20,27 +20,11 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
   {
-    key: "0025_identity_lockout_forever",
-    version: "25",
-    name: "Support indefinite account lockout",
+    key: "0020_tenant_engine_manager_identity",
+    version: "20",
+    name: "Correct tenant OneEngine manager identity and RBAC authority",
     up: client => client.query(
-      readFileSync(new URL("./migrations/0025_identity_lockout_forever.sql", import.meta.url), "utf8")
-    ),
-  },
-  {
-    key: "0024_identity_security_phase1_final",
-    version: "24",
-    name: "Complete phase-one identity session and login history controls",
-    up: client => client.query(
-      readFileSync(new URL("./migrations/0024_identity_security_phase1_final.sql", import.meta.url), "utf8")
-    ),
-  },
-  {
-    key: "0023_identity_security_alignment",
-    version: "23",
-    name: "Align identity password policy and preserve existing users",
-    up: client => client.query(
-      readFileSync(new URL("./migrations/0023_identity_security_alignment.sql", import.meta.url), "utf8")
+      readFileSync(new URL("./migrations/0020_tenant_engine_manager_identity.sql", import.meta.url), "utf8")
     ),
   },
   {
@@ -52,11 +36,27 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     ),
   },
   {
-    key: "0020_tenant_engine_manager_identity",
-    version: "20",
-    name: "Correct tenant OneEngine manager identity and RBAC authority",
+    key: "0023_identity_security_alignment",
+    version: "23",
+    name: "Align identity password policy and preserve existing users",
     up: client => client.query(
-      readFileSync(new URL("./migrations/0020_tenant_engine_manager_identity.sql", import.meta.url), "utf8")
+      readFileSync(new URL("./migrations/0023_identity_security_alignment.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0024_identity_security_phase1_final",
+    version: "24",
+    name: "Complete phase-one identity session and login history controls",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0024_identity_security_phase1_final.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0025_identity_lockout_forever",
+    version: "25",
+    name: "Support indefinite account lockout",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0025_identity_lockout_forever.sql", import.meta.url), "utf8")
     ),
   },
 ]);
