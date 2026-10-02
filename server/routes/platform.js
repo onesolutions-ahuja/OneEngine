@@ -43,7 +43,7 @@ import { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.j
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const FIELD_TYPES = PLATFORM_FIELD_TYPE_SET;
-const PAGE_TYPES = new Set(["list", "detail", "view", "create", "edit", "quick_create"]);
+const PAGE_TYPES = new Set(["list", "detail", "view", "compact", "create", "edit", "quick_create"]);
 const RELATIONSHIP_TYPES = new Set(["lookup", "one_to_many", "many_to_many"]);
 const RELATIONSHIP_POLICIES = new Set(["restrict", "cascade", "set_null"]);
 
