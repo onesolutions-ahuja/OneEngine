@@ -189,6 +189,7 @@ export default function LayoutEditor({
   const [permissionCatalog, setPermissionCatalog] = useState([]);
   const [layoutAssignments, setLayoutAssignments] = useState([]);
   const [assignmentsTouched, setAssignmentsTouched] = useState(false);
+  const [assignmentPreview, setAssignmentPreview] = useState(null);
   const [loadingObjects, setLoadingObjects] =
     useState(false);
   const [loadingFields, setLoadingFields] =
@@ -666,6 +667,38 @@ export default function LayoutEditor({
   function removeLayoutAssignment(index) {
     setLayoutAssignments((current) => current.filter((_, rowIndex) => rowIndex !== index));
     setAssignmentsTouched(true);
+  }
+
+  async function testLayoutAssignment(index) {
+    const assignment = layoutAssignments[index];
+    if (!assignment || !layoutId || !form.object_id) return;
+    setAssignmentPreview({ index, loading: true, error: "", winner: null });
+    try {
+      const response = await apiRequest("/api/platform/layouts/resolve-preview", {
+        method: "POST",
+        body: JSON.stringify({
+          objectId: form.object_id,
+          pageType: form.page_type || "detail",
+          appId: assignment.appId || null,
+          recordTypeId: assignment.recordTypeId || null,
+          roleId: assignment.roleId || null,
+          deviceProfile: assignment.deviceProfile === "any" ? device : (assignment.deviceProfile || device),
+          permissionKeys: assignment.requiredPermissions || [],
+          candidateLayoutId: layoutId,
+          candidateAssignment: assignment,
+        }),
+      });
+      const winner = response?.data?.layout || null;
+      setAssignmentPreview({
+        index,
+        loading: false,
+        error: "",
+        winner,
+        matchesCurrent: Boolean(winner && String(winner.id) === String(layoutId)),
+      });
+    } catch (err) {
+      setAssignmentPreview({ index, loading: false, winner: null, error: err?.message || "Unable to test activation." });
+    }
   }
 
   function renderVisibilityEditor({ value, onChange, editorKey, excludeFieldKey = "" }) {
@@ -1408,9 +1441,31 @@ export default function LayoutEditor({
                 <span className="pfb-field-label">Priority</span>
                 <input className="onepos-input" type="number" min="-1000" max="1000" value={assignment.priority ?? 0} onChange={(event) => updateLayoutAssignment(index, "priority", Number(event.target.value || 0))} />
               </label>
+              <div className="pfb-activation-row-actions">
+                <button
+                  type="button"
+                  className="onepos-btn onepos-btn-sm onepos-btn-secondary"
+                  disabled={!layoutId || assignmentPreview?.loading === true}
+                  title={!layoutId ? "Save the layout before testing activation" : "Resolve the effective layout for this assignment"}
+                  onClick={() => testLayoutAssignment(index)}
+                >
+                  {assignmentPreview?.index === index && assignmentPreview?.loading ? "Testing…" : "Test"}
+                </button>
               <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary pfb-activation-remove" onClick={() => removeLayoutAssignment(index)}>
                 <Trash2 size={12} aria-hidden="true" /> Remove
               </button>
+              </div>
+              {assignmentPreview?.index === index && !assignmentPreview?.loading ? (
+                <div className={`pfb-activation-preview ${assignmentPreview.error ? "is-error" : assignmentPreview.matchesCurrent ? "is-success" : "is-warning"}`}>
+                  {assignmentPreview.error
+                    ? assignmentPreview.error
+                    : assignmentPreview.matchesCurrent
+                      ? "This layout wins for the tested context."
+                      : assignmentPreview.winner
+                        ? `Another layout wins: ${assignmentPreview.winner.name || assignmentPreview.winner.layout_key}`
+                        : "No active layout matches this context."}
+                </div>
+              ) : null}
             </div>
           )) : (
             <p className="pfb-note">No explicit assignments. The legacy Record Type / Role fields above remain the fallback until you add an assignment.</p>
@@ -1879,8 +1934,13 @@ export default function LayoutEditor({
         .pfb-activation-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:10px; border:1px solid var(--border-color,#e5e7eb); border-radius:9px; background:var(--muted-background,#f8fafc); }
         .pfb-activation-permissions { grid-column:1 / -1; }
         .pfb-activation-permissions select { min-height:78px; }
-        .pfb-activation-remove { justify-self:end; grid-column:1 / -1; }
-        @media (max-width:760px) { .pfb-activation-row { grid-template-columns:1fr; } .pfb-activation-permissions,.pfb-activation-remove { grid-column:auto; } }
+        .pfb-activation-row-actions { grid-column:1 / -1; display:flex; justify-content:flex-end; gap:6px; }
+        .pfb-activation-remove { justify-self:end; }
+        .pfb-activation-preview { grid-column:1 / -1; border-radius:7px; padding:7px 9px; font-size:10px; line-height:1.4; }
+        .pfb-activation-preview.is-success { background:#ecfdf5; color:#047857; }
+        .pfb-activation-preview.is-warning { background:#fffbeb; color:#92400e; }
+        .pfb-activation-preview.is-error { background:#fef2f2; color:#b91c1c; }
+        @media (max-width:760px) { .pfb-activation-row { grid-template-columns:1fr; } .pfb-activation-permissions,.pfb-activation-row-actions,.pfb-activation-preview { grid-column:auto; } }
       `}</style>
       {diagnostics.length ? (
         <div className="onepos-alert onepos-alert-warning pfb-alert" role="status">
