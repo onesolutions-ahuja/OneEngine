@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, FileDown, FileUp, Filter, GripVertical, Pencil, Plus, Save, Search } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Columns3, Copy, FileDown, FileUp, Filter, GripVertical, LayoutList, Pencil, Plus, Save, Search, Star, Trash2 } from 'lucide-react'
 import DataLoaderWindow from './DataLoaderWindow'
 
 const valueFor = (column, row) => {
@@ -115,6 +115,13 @@ export default function RecordListView({
   onInlineEdit = null,
   onBulkEdit = null,
   onBulkDelete = null,
+  onManageListView = null,
+  displayMode = 'table',
+  onDisplayModeChange = null,
+  kanbanFields = [],
+  kanbanField = '',
+  onKanbanFieldChange = null,
+  onKanbanMove = null,
 }) {
   const [localQuery, setLocalQuery] = useState('')
   const [localSort, setLocalSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
@@ -306,6 +313,24 @@ export default function RecordListView({
     ? subtitle({ filteredCount: filtered.length, totalCount: rows.length })
     : subtitle
 
+  const kanbanColumn = columns.find((column) => column.key === kanbanField) || null
+  const kanbanValues = useMemo(() => {
+    if (!kanbanColumn) return []
+    const configured = Array.isArray(kanbanColumn.options)
+      ? kanbanColumn.options.filter((option) => option?.active !== false).map((option) => ({
+          value: typeof option === 'object' ? option.value ?? option.key ?? option.label : option,
+          label: typeof option === 'object' ? option.label ?? option.name ?? option.value : option,
+        }))
+      : []
+    const seen = new Map(configured.map((option) => [String(option.value), option]))
+    for (const row of filtered) {
+      const raw = row?.[kanbanField]
+      const key = String(raw ?? '')
+      if (!seen.has(key)) seen.set(key, { value: raw ?? '', label: valueLabel(raw) })
+    }
+    return [...seen.values()]
+  }, [filtered, kanbanColumn, kanbanField])
+
   const selectionEnabled = Boolean(onBulkEdit || onBulkDelete)
   const visibleIds = filtered.map((row) => String(row.id))
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id))
@@ -431,6 +456,32 @@ export default function RecordListView({
               >
                 <Copy size={15} />
               </button>
+              {onManageListView && canUpdateActiveView && activeListViewId ? (
+                <>
+                  <button type="button" className="record-data-icon" title="Make this my default view" aria-label="Make this my default view" onClick={() => onManageListView('default')}>
+                    <Star size={15} />
+                  </button>
+                  <button type="button" className="record-data-icon" title="Rename this view" aria-label="Rename this view" onClick={() => onManageListView('rename')}>
+                    <Pencil size={15} />
+                  </button>
+                  <button type="button" className="record-data-icon" title="Delete this view" aria-label="Delete this view" onClick={() => onManageListView('delete')}>
+                    <Trash2 size={15} />
+                  </button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {onDisplayModeChange ? (
+            <div className="record-data-actions" aria-label="Display mode">
+              <button type="button" className={`record-data-icon ${displayMode === 'table' ? 'is-active' : ''}`} title="Table view" aria-label="Table view" onClick={() => onDisplayModeChange('table')}>
+                <LayoutList size={15} />
+              </button>
+              <button type="button" className={`record-data-icon ${displayMode === 'split' ? 'is-active' : ''}`} title="Split view" aria-label="Split view" onClick={() => onDisplayModeChange('split')}>
+                <Columns3 size={15} />
+              </button>
+              <button type="button" className={`record-data-icon ${displayMode === 'kanban' ? 'is-active' : ''}`} title="Kanban view" aria-label="Kanban view" disabled={!kanbanFields.length} onClick={() => onDisplayModeChange('kanban')}>
+                <GripVertical size={15} />
+              </button>
             </div>
           ) : null}
           {objectKey ? (
@@ -474,6 +525,14 @@ export default function RecordListView({
             aria-label={`Search ${title}`}
           />
         </label>
+        {displayMode === 'kanban' && kanbanFields.length ? (
+          <label className="record-list-view-picker">
+            <span className="sr-only">Kanban grouping field</span>
+            <select value={kanbanField || ''} onChange={(event) => onKanbanFieldChange?.(event.target.value)}>
+              {kanbanFields.map((field) => <option key={field.key} value={field.key}>Group by {field.label}</option>)}
+            </select>
+          </label>
+        ) : null}
       </div>
 
       {selectionEnabled && selectedIds.length ? (
@@ -492,6 +551,49 @@ export default function RecordListView({
           <strong>Unable to load records</strong>
           <span>{error}</span>
           {onDataChanged ? <button type="button" onClick={() => onDataChanged()}>Retry</button> : null}
+        </div>
+      ) : displayMode === 'kanban' && kanbanColumn ? (
+        <div className="record-kanban-wrap">
+          <div className="record-kanban-board">
+            {kanbanValues.map((group) => {
+              const groupRows = filtered.filter((row) => String(row?.[kanbanField] ?? '') === String(group.value ?? ''))
+              return (
+                <section
+                  className="record-kanban-column"
+                  key={String(group.value)}
+                  onDragOver={(event) => { if (onKanbanMove && canEdit) event.preventDefault() }}
+                  onDrop={(event) => {
+                    if (!onKanbanMove || !canEdit) return
+                    event.preventDefault()
+                    const rowId = event.dataTransfer.getData('application/x-oneengine-record-id')
+                    if (rowId) void onKanbanMove(rowId, kanbanField, group.value)
+                  }}
+                >
+                  <header><strong>{group.label}</strong><span>{groupRows.length}</span></header>
+                  <div className="record-kanban-stack">
+                    {groupRows.map((row) => (
+                      <article
+                        key={row.id}
+                        className={`record-kanban-card ${String(selectedRowId) === String(row.id) ? 'is-selected' : ''}`}
+                        draggable={Boolean(onKanbanMove && canEdit)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = 'move'
+                          event.dataTransfer.setData('application/x-oneengine-record-id', String(row.id))
+                        }}
+                        onClick={() => onRowSelect?.(row)}
+                        tabIndex={0}
+                        onKeyDown={(event) => { if (['Enter',' '].includes(event.key)) { event.preventDefault(); onRowSelect?.(row) } }}
+                      >
+                        <strong>{String(row?.[orderedColumns[0]?.key] ?? row?.name ?? row?.id ?? 'Record')}</strong>
+                        {orderedColumns.slice(1, 4).map((column) => <span key={column.key}><b>{column.label}:</b> {valueLabel(row?.[column.key])}</span>)}
+                      </article>
+                    ))}
+                    {!groupRows.length ? <div className="record-kanban-empty">No records</div> : null}
+                  </div>
+                </section>
+              )
+            })}
+          </div>
         </div>
       ) : (
         <div className="record-list-table-wrap" ref={filterAreaRef}>
