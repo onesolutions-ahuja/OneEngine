@@ -3,6 +3,11 @@ import { Eye, EyeOff } from 'lucide-react'
 import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeAuthenticationProviderCallback, consumeGoogleOAuthCallback, getPasskeyOptions, getStoredUser, hasSession, loadAuthenticationProviders, login, startAuthenticationProvider, startGoogleLogin, startPasskeyLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPasskeyLogin, verifyPin } from '../../services/api'
 import { useClock } from './DesktopDock'
 
+function normalizeResetEmail(value) {
+  const email = String(value || '').trim().toLowerCase()
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : ''
+}
+
 function isMobilePasskeyDevice() {
   if (typeof navigator === 'undefined') return false
   const ua = String(navigator.userAgent || '')
@@ -16,7 +21,7 @@ export function CompanyContextLoading() {
   return (
     <main className="screen company-context-loading" role="status" aria-live="polite" aria-label="Setting up your workspace">
       <div className="company-context-loading__brand" aria-hidden="true">
-        <img className="company-context-loading__logo" src={`${import.meta.env.BASE_URL}icons/one-solutions-mark.svg`} alt="" />
+        <img className="company-context-loading__logo" src={`${import.meta.env.BASE_URL}icons/one-solutions-logo.webp`} alt="" />
       </div>
       <div className="company-context-loading__pulse" aria-hidden="true" />
       <strong>Setting up your workspace…</strong>
@@ -42,6 +47,12 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const [trustDevice, setTrustDevice] = useState(false)
   const [providers, setProviders] = useState([])
   const [recoveryCodes, setRecoveryCodes] = useState([])
+  const [resetStage, setResetStage] = useState('')
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetOtp, setResetOtp] = useState('')
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('')
+  const [resetNotice, setResetNotice] = useState('')
   const mobilePasskeyDevice = useMemo(() => isMobilePasskeyDevice(), [])
 
   useEffect(() => {
@@ -285,6 +296,38 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
     }
   }
 
+  const requestPasswordReset = async () => {
+    try {
+      const email = normalizeResetEmail(resetEmail || username)
+      if (!email) { setError('Enter your email address.'); return }
+      setSubmitting(true); setError(''); setResetNotice('')
+      await apiRequest('/api/auth/password-reset/request', { method:'POST', body:JSON.stringify({ email }) })
+      setResetEmail(email)
+      setResetStage('verify')
+      setResetNotice('If the account is eligible, a 6-digit code has been sent. It expires in 10 minutes.')
+    } catch (err) {
+      setError(err?.message || 'Unable to request a reset code')
+    } finally { setSubmitting(false) }
+  }
+
+  const completePasswordReset = async () => {
+    try {
+      if (resetOtp.length !== 6) { setError('Enter the 6-digit code.'); return }
+      if (!resetPassword) { setError('Enter a new password.'); return }
+      if (resetPassword !== resetPasswordConfirm) { setError('Passwords do not match.'); return }
+      setSubmitting(true); setError(''); setResetNotice('')
+      await apiRequest('/api/auth/password-reset/complete', {
+        method:'POST',
+        body:JSON.stringify({ email: resetEmail, otp: resetOtp, password: resetPassword }),
+      })
+      setResetStage('')
+      setResetOtp(''); setResetPassword(''); setResetPasswordConfirm('')
+      setResetNotice('Password reset successfully. Sign in with your new password.')
+    } catch (err) {
+      setError(err?.message || 'Unable to reset password')
+    } finally { setSubmitting(false) }
+  }
+
   const submitGoogle = async () => {
     try {
       setSubmitting(true)
@@ -308,10 +351,14 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
         <div className="lock-date">{date}</div>
         <div className="lock-time">{time}</div>
 
-        <form className="login-glass-card" onSubmit={submit}>
+        <form className="login-glass-card" onSubmit={(event) => {
+          if (!resetStage) return submit(event)
+          event.preventDefault()
+          return resetStage === 'request' ? requestPasswordReset() : completePasswordReset()
+        }}>
           <div className={`profile-avatar login-avatar${sessionMode ? '' : ' login-avatar--brand'}`} aria-label={sessionMode ? `${displayName} profile` : 'One Solutions'}>
             {sessionMode ? initial : (
-              <img className="login-brand-mark" src={`${import.meta.env.BASE_URL}icons/one-solutions-lockup.svg`} alt="One Solutions" />
+              <img className="login-brand-mark" src={`${import.meta.env.BASE_URL}icons/one-solutions-logo.webp`} alt="One Solutions" />
             )}
           </div>
 
@@ -431,7 +478,32 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
             </>
           ) : (
             <>
-              <div className="login-subtitle login-subtitle--brand">Sign in with your account</div>
+              {resetStage ? (
+                <>
+                  <div className="login-subtitle login-subtitle--brand">{resetStage === 'request' ? 'Reset your password' : 'Enter the email code'}</div>
+                  {resetStage === 'request' ? (
+                    <>
+                      <input className="login-field" value={resetEmail} onChange={(e)=>setResetEmail(e.target.value)} placeholder="Email address" type="email" autoComplete="email" autoFocus />
+                      {error ? <div className="login-error">{error}</div> : null}
+                      <button className="login-submit" type="submit" disabled={submitting}>{submitting ? 'Sending…' : 'Send 6-digit code'}</button>
+                    </>
+                  ) : (
+                    <>
+                      {resetNotice ? <div className="login-subtitle">{resetNotice}</div> : null}
+                      <input className="login-field login-pin-field" value={resetOtp} onChange={(e)=>setResetOtp(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" autoFocus />
+                      <input className="login-field" value={resetPassword} onChange={(e)=>setResetPassword(e.target.value)} placeholder="New password" type="password" autoComplete="new-password" />
+                      <input className="login-field" value={resetPasswordConfirm} onChange={(e)=>setResetPasswordConfirm(e.target.value)} placeholder="Confirm new password" type="password" autoComplete="new-password" />
+                      {error ? <div className="login-error">{error}</div> : null}
+                      <button className="login-submit" type="submit" disabled={submitting || resetOtp.length!==6}>{submitting ? 'Resetting…' : 'Reset password'}</button>
+                      <button className="lock-signout" type="button" disabled={submitting} onClick={requestPasswordReset}>Send a new code</button>
+                    </>
+                  )}
+                  <button className="lock-signout" type="button" disabled={submitting} onClick={()=>{setResetStage('');setError('');setResetNotice('')}}>Back to sign in</button>
+                </>
+              ) : (
+                <>
+                  <div className="login-subtitle login-subtitle--brand">Sign in with your account</div>
+                  {resetNotice ? <div className="login-subtitle">{resetNotice}</div> : null}
 
               <input
                 className="login-field"
@@ -527,6 +599,9 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
                 </svg>
                 Continue with Google
               </button>
+              <button className="lock-signout" type="button" disabled={submitting} onClick={()=>{setResetEmail(normalizeResetEmail(username));setResetStage('request');setError('');setResetNotice('')}}>Forgot password?</button>
+                </>
+              )}
             </>
           )}
         </form>

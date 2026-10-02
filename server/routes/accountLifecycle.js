@@ -1,10 +1,10 @@
 import express from "express";
 import bcrypt from "bcryptjs";
-import { consumeAccountToken, hashAccountToken, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
+import { consumeAccountToken, hashAccountToken, issueAccountOtp, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { assertPasswordAllowed, loadSecuritySettings, recordPasswordChange } from "../services/identitySecurity.js";
 
-export default function createAccountLifecycleRouter({ authenticate, authorize, db }) {
+export default function createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit = null }) {
   const router = express.Router();
 
   router.get("/account/onboarding", authenticate, async (req,res) => {
@@ -73,55 +73,91 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
   });
 
   router.post("/auth/password-reset/request", async(req,res)=>{
-    const email=normalizeEmail(req.body?.email); const generic={success:true,message:"If the account is eligible, password reset instructions will be sent."};
+    const email=normalizeEmail(req.body?.email);
+    const generic={success:true,message:"If the account is eligible, a 6-digit reset code will be sent by email."};
     if(!email)return res.json(generic);
-    const r=await db(`SELECT u.id,u.company_id,cs.password_reset_email_enabled,cs.password_reset_expiry_minutes FROM users u
-      JOIN company_settings cs ON cs.company_id=u.company_id WHERE LOWER(u.email)=LOWER($1) AND u.active=TRUE LIMIT 1`,[email]);
-    const u=r.rows[0]; if(!u?.password_reset_email_enabled)return res.json(generic);
-    const tokenExecution=await executeSystemWorkflow({
-      db,
-      companyId:u.company_id,
-      userId:u.id,
-      systemKey:"function:account.password_reset.token.issue",
-      req,
-      input:{userId:u.id,expiresMinutes:u.password_reset_expiry_minutes},
-      source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"account.password_reset.token.issue"},
-    });
-    const token=tokenExecution.result;
-    // Production workflow consumes this event/token and sends the configured message template; public response remains generic.
-    req.app.emit?.("onepos:workflow-event",{type:"PASSWORD_RESET_REQUESTED",companyId:u.company_id,userId:u.id,email,token});
+    const r=await db(`SELECT u.id,u.company_id,cs.password_reset_email_enabled FROM users u
+      JOIN company_settings cs ON cs.company_id=u.company_id
+      WHERE LOWER(u.email)=LOWER($1) AND u.active=TRUE LIMIT 1`,[email]);
+    const u=r.rows[0];
+    if(!u?.password_reset_email_enabled)return res.json(generic);
+
+    await writeAudit?.(u.company_id,u.id,"password_reset_otp_requested","user",u.id,{channel:"EMAIL",expiresMinutes:10});
+    const otp=await issueAccountOtp(db,{companyId:u.company_id,userId:u.id,purpose:"PASSWORD_RESET",expiresMinutes:10});
+    try {
+      await executeSystemWorkflow({
+        db,
+        companyId:u.company_id,
+        userId:null,
+        systemKey:"action:SEND_EMAIL",
+        req,
+        input:{
+          recipient:email,
+          to:email,
+          contentMode:"CUSTOM",
+          subject:"Your One Solutions password reset code",
+          body:`Your password reset code is ${otp}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
+          idempotencyKey:`${u.company_id}:password-reset-otp:${u.id}:${Date.now()}`,
+        },
+        source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"password_reset.email_otp"},
+      });
+      await writeAudit?.(u.company_id,u.id,"password_reset_otp_sent","user",u.id,{channel:"EMAIL",expiresMinutes:10});
+    } catch (error) {
+      await writeAudit?.(u.company_id,u.id,"password_reset_otp_send_failed","user",u.id,{channel:"EMAIL",reason:error?.code||"SEND_FAILED"});
+      console.error("Password reset OTP email failed:", error?.message || error);
+    }
     res.json(generic);
   });
+
   router.post("/auth/password-reset/complete", async(req,res)=>{
-    const {token,password}=req.body||{};
-    if(!token||!password)return res.status(400).json({success:false,message:"A valid token and new password are required"});
-    const tokenHash=hashAccountToken(token);
-    const pending=await db(`SELECT t.company_id,t.user_id,u.password_hash
-      FROM account_action_tokens t JOIN users u ON u.id=t.user_id AND u.company_id=t.company_id
-      WHERE t.token_hash=$1 AND t.purpose='PASSWORD_RESET' AND t.used_at IS NULL AND t.expires_at>NOW() LIMIT 1`,[tokenHash]);
-    const candidate=pending.rows[0];
-    if(!candidate)return res.status(400).json({success:false,message:"Reset link is invalid or expired"});
+    const email=normalizeEmail(req.body?.email);
+    const otp=String(req.body?.otp||req.body?.token||"").replace(/\D/g,"").slice(0,6);
+    const password=req.body?.password;
+    if(!email||otp.length!==6||!password)return res.status(400).json({success:false,message:"Email, 6-digit code and new password are required"});
+
+    const tokenHash=hashAccountToken(otp);
+    const lookup=await db(`SELECT t.company_id,t.user_id,t.used_at,t.expires_at,u.password_hash
+      FROM account_action_tokens t
+      JOIN users u ON u.id=t.user_id AND u.company_id=t.company_id
+      WHERE t.token_hash=$1 AND t.purpose='PASSWORD_RESET' AND LOWER(u.email)=LOWER($2)
+      ORDER BY t.created_at DESC LIMIT 1`,[tokenHash,email]);
+    const candidate=lookup.rows[0];
+    if(!candidate){
+      const user=await db("SELECT id,company_id FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1",[email]);
+      if(user.rows[0])await writeAudit?.(user.rows[0].company_id,user.rows[0].id,"password_reset_otp_failed","user",user.rows[0].id,{reason:"INVALID_CODE"});
+      return res.status(400).json({success:false,message:"Reset code is invalid or expired"});
+    }
+    if(candidate.used_at||new Date(candidate.expires_at).getTime()<=Date.now()){
+      await writeAudit?.(candidate.company_id,candidate.user_id,"password_reset_otp_expired","user",candidate.user_id,{reason:candidate.used_at?"ALREADY_USED":"EXPIRED"});
+      return res.status(400).json({success:false,message:"Reset code is invalid or expired"});
+    }
+
     const passwordCheck=await assertPasswordAllowed(db,{companyId:candidate.company_id,userId:candidate.user_id,password,bcrypt,enforceMinimumLifetime:false});
     if(!passwordCheck.ok)return res.status(400).json({success:false,code:"PASSWORD_POLICY",message:passwordCheck.message});
     const passwordHash=await bcrypt.hash(password,12);
     const completed=await db(`WITH claimed AS (
       UPDATE account_action_tokens SET used_at=NOW()
-       WHERE token_hash=$1 AND purpose='PASSWORD_RESET' AND used_at IS NULL AND expires_at>NOW()
+       WHERE token_hash=$1 AND user_id=$2 AND purpose='PASSWORD_RESET' AND used_at IS NULL AND expires_at>NOW()
        RETURNING company_id,user_id
     ), changed AS (
-      UPDATE users u SET password_hash=$2,must_change_password=FALSE,updated_at=NOW()
+      UPDATE users u SET password_hash=$3,must_change_password=FALSE,updated_at=NOW()
        FROM claimed c WHERE u.id=c.user_id AND u.company_id=c.company_id
        RETURNING u.id,u.company_id
-    ) SELECT id,company_id FROM changed`,[tokenHash,passwordHash]);
-    if(!completed.rows.length)return res.status(400).json({success:false,message:"Reset link is invalid or expired"});
+    ) SELECT id,company_id FROM changed`,[tokenHash,candidate.user_id,passwordHash]);
+    if(!completed.rows.length){
+      await writeAudit?.(candidate.company_id,candidate.user_id,"password_reset_otp_failed","user",candidate.user_id,{reason:"CLAIM_FAILED"});
+      return res.status(400).json({success:false,message:"Reset code is invalid or expired"});
+    }
     const settings=passwordCheck.settings||await loadSecuritySettings(db,candidate.company_id);
     await recordPasswordChange(db,{
       companyId:candidate.company_id,userId:candidate.user_id,previousHash:candidate.password_hash,settings,
       revokeSessions:settings?.terminate_sessions_on_password_reset===true,
     });
-    await req.ensureBusinessCommandRun?.({ companyId: candidate.company_id, userId: candidate.user_id || null });
-    res.json({success:true});
+    await req.ensureBusinessCommandRun?.({companyId:candidate.company_id,userId:candidate.user_id||null});
+    await writeAudit?.(candidate.company_id,candidate.user_id,"password_reset_otp_verified","user",candidate.user_id,{channel:"EMAIL"});
+    res.json({success:true,message:"Password reset successfully."});
   });
+
   router.post("/auth/registration/complete", async(req,res)=>{
     const {token,password}=req.body||{};
     if(!token||!password)return res.status(400).json({success:false,message:"A valid token and password are required"});

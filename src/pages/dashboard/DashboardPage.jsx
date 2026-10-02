@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, Pencil, RefreshCw } from 'lucide-react'
-import { apiRequest, getActiveStoreId } from '../../services/api'
+import { apiRequest, getAvailableStores } from '../../services/api'
 
 const DATE_RANGES = [
   ['all_time', 'All time'],
@@ -56,6 +56,18 @@ function mergeCaseInsensitiveSeries(points) {
   return [...merged.values()]
 }
 
+function DashboardClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 30000)
+    return () => window.clearInterval(id)
+  }, [])
+  return <div className="dash-clock">
+    <strong>{new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now)}</strong>
+    <span>{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(now)}</span>
+  </div>
+}
+
 function ComponentCard({ component, result, loading, currency, onRetry }) {
   const config = component?.config || {}
   const type = component?.type === 'chart' ? (config.chartType || 'bar') : component?.type
@@ -66,7 +78,9 @@ function ComponentCard({ component, result, loading, currency, onRetry }) {
   const columns = Array.isArray(result?.data?.columns) ? result.data.columns : []
 
   let body = null
-  if (loading) {
+  if (type === 'clock_widget') {
+    body = <DashboardClock />
+  } else if (loading) {
     body = <div className="dash-skeleton" />
   } else if (result?.error) {
     body = <div className="dashboard-component-error" role="alert"><strong>This component could not be loaded.</strong><span>{result.error}</span><button type="button" onClick={onRetry}>Retry</button></div>
@@ -124,6 +138,11 @@ export default function DashboardPage({ onOpenBuilder }) {
   const [error, setError] = useState('')
   const [dateRange, setDateRange] = useState('this_month')
   const [currency, setCurrency] = useState('GBP')
+  const [dashboardStores, setDashboardStores] = useState(() => getAvailableStores())
+  const [dashboardStoreId, setDashboardStoreId] = useState(() => {
+    const stores = getAvailableStores()
+    return stores.length === 1 ? String(stores[0].id) : ''
+  })
 
   useEffect(() => {
     let live = true
@@ -159,18 +178,18 @@ export default function DashboardPage({ onOpenBuilder }) {
       }
       setDefinition(value)
 
-      // The active store selected by the shell is the authoritative runtime
-      // store context. Dashboard reports previously relied only on the storeId
-      // embedded in the login JWT, so a user mapped through user_stores (or a
-      // multi-store user who switched stores) reached the dashboard with no
-      // store and every component failed. Inject the active store through the
-      // normal dashboard filter pipeline; the backend still validates access
-      // with canAccessStore before executing any report.
-      const activeStoreId = getActiveStoreId()
+      // Dashboard store scope is independent from the store-bound Till runtime.
+      // One mapped store is selected automatically. Multi-store users default
+      // to All mapped stores, and every requested store is still validated by
+      // the backend canAccessStore/RBAC path before a report executes.
+      const stores = dashboardStores.length ? dashboardStores : getAvailableStores()
+      const scopedStoreIds = dashboardStoreId
+        ? [dashboardStoreId]
+        : stores.map((store) => String(store.id)).filter(Boolean)
       const filters = [
         ...(value.filters || []).filter((filter) => filter?.field !== 'date' && filter?.field !== 'store'),
         ...(range ? [{ field: 'date', operator: range }] : (value.filters || []).filter((filter) => filter?.field === 'date')),
-        ...(activeStoreId ? [{ field: 'store', operator: 'in', value: [activeStoreId] }] : []),
+        ...(scopedStoreIds.length ? [{ field: 'store', operator: 'in', value: scopedStoreIds }] : []),
       ]
       const run = await apiRequest('/api/dashboards/run', {
         method: 'POST',
@@ -182,17 +201,31 @@ export default function DashboardPage({ onOpenBuilder }) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [dashboardStoreId, dashboardStores])
 
-  useEffect(() => { void loadDashboard(activeId, dateRange) }, [activeId])
+  useEffect(() => { void loadDashboard(activeId, dateRange) }, [activeId, dashboardStoreId])
   useEffect(() => {
-    const handleStoreChange = () => { void loadDashboard(activeId, dateRange) }
+    const handleStoreChange = () => {
+      const stores = getAvailableStores()
+      setDashboardStores(stores)
+      if (stores.length === 1) setDashboardStoreId(String(stores[0].id))
+      else if (dashboardStoreId && !stores.some((store) => String(store.id) === String(dashboardStoreId))) setDashboardStoreId('')
+    }
+    const handleDashboardScope = (event) => {
+      const requested = String(event?.detail?.storeId || '')
+      const stores = getAvailableStores()
+      if (!requested || stores.some((store) => String(store.id) === requested)) setDashboardStoreId(requested)
+    }
     window.addEventListener('onepos:store-context-changed', handleStoreChange)
-    return () => window.removeEventListener('onepos:store-context-changed', handleStoreChange)
-  }, [activeId, dateRange, loadDashboard])
+    window.addEventListener('onepos:dashboard-store-scope-changed', handleDashboardScope)
+    return () => {
+      window.removeEventListener('onepos:store-context-changed', handleStoreChange)
+      window.removeEventListener('onepos:dashboard-store-scope-changed', handleDashboardScope)
+    }
+  }, [dashboardStoreId])
 
   const ordered = useMemo(() => {
-    const rank = { kpi: 0, modern_kpi_card: 0, text: 1, pie: 2, donut: 2, chart: 2, bar: 2, table: 3 }
+    const rank = { clock_widget: 0, kpi: 0, modern_kpi_card: 0, text: 1, pie: 2, donut: 2, chart: 2, bar: 2, table: 3 }
     return [...(definition?.components || [])].sort((a, b) => (rank[a.type] ?? 9) - (rank[b.type] ?? 9))
   }, [definition])
 

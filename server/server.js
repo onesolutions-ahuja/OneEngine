@@ -1976,7 +1976,7 @@ app.use("/api", createPlatformEventsRouter({
     return false;
   },
 }));
-app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db }));
+app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
 app.use("/api", createSettingsRouter({
   authenticate,

@@ -131,7 +131,6 @@ const OneKioskDevicesPage = lazyWithRecovery(() => import('./pages/kiosk/OneKios
 const PublicAppointmentBookingPage = lazyWithRecovery(() => import('./pages/assistant/PublicAppointmentBookingPage'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
-  Bluetooth,
   LockKeyhole,
   Search,
   SlidersHorizontal,
@@ -1715,22 +1714,29 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
 }
 
 function ConnectionMenu({ health, onRefresh }) {
-  const online = health?.status === 'Connected'
+  const networkOnline = health?.status === 'Connected'
+  const apiOnline = health?.api === 'Connected' || networkOnline
+  const databaseOnline = health?.database === 'Connected'
+  const rows = [
+    ['Network', networkOnline ? 'Connected' : (health?.status || 'Offline'), networkOnline],
+    ['Server / API', apiOnline ? 'Connected' : (health?.api || 'Unavailable'), apiOnline],
+    ['Database', health?.database || 'Unknown', databaseOnline],
+  ]
   return (
     <motion.div className="mac-popover connection-menu git-macos-panel" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
       <div className="git-macos-card">
         <div className="git-macos-row git-macos-row--top">
           <span className="git-macos-icon git-macos-icon--blue"><Wifi size={16} /></span>
-          <div className="git-macos-copy"><strong>Wi-Fi</strong><small>{online ? 'Connected to onePOS network' : 'Wi-Fi is off'}</small></div>
-          <span className={`git-macos-switch ${online ? 'is-on' : ''}`}><i /></span>
+          <div className="git-macos-copy"><strong>One Network</strong><small>Live connectivity and platform health</small></div>
         </div>
-        <div className="git-macos-status"><span className={`git-macos-status-dot ${online ? 'is-online' : ''}`} />{health?.status || 'Unknown'}</div>
       </div>
-      <div className="git-macos-card">
-        <div className="git-macos-row">
-          <span className="git-macos-icon git-macos-icon--gray">DB</span>
-          <div className="git-macos-copy"><strong>Network</strong><small>{health?.database || 'Unknown'}</small></div>
-        </div>
+      <div className="git-macos-card one-network-health-list">
+        {rows.map(([label, value, ok]) => (
+          <div className="git-macos-row one-network-health-row" key={label}>
+            <span className={`git-macos-status-dot ${ok ? 'is-online' : ''}`} />
+            <div className="git-macos-copy"><strong>{label}</strong><small>{value}</small></div>
+          </div>
+        ))}
       </div>
       <button type="button" className="git-macos-footer-button" onClick={onRefresh}><RefreshCw size={13} /> Refresh status</button>
     </motion.div>
@@ -1738,25 +1744,61 @@ function ConnectionMenu({ health, onRefresh }) {
 }
 
 function DevicesMenu({ onOpenSettings }) {
+  const [devices, setDevices] = useState([])
+  const [loadingDevices, setLoadingDevices] = useState(true)
+
+  useEffect(() => {
+    let live = true
+    const storeId = getActiveStoreId()
+    Promise.all([
+      apiRequest('/api/hardware').catch(() => ({ data: [] })),
+      apiRequest('/api/payment-terminals').catch(() => ({ data: [] })),
+    ]).then(([hardwareResponse, terminalResponse]) => {
+      if (!live) return
+      const hardware = (Array.isArray(hardwareResponse?.data) ? hardwareResponse.data : [])
+        .filter((device) => device?.active === true)
+        .map((device) => ({
+          id: `hardware:${device.id || device.device_type}`,
+          name: device.device_name || String(device.device_type || 'Device').replaceAll('_', ' '),
+          type: String(device.device_type || 'Device').replaceAll('_', ' '),
+          status: device.last_test_result || 'Configured and active',
+          icon: device.device_type === 'RECEIPT_PRINTER' ? Printer : MonitorSmartphone,
+        }))
+      const terminals = (Array.isArray(terminalResponse?.data) ? terminalResponse.data : [])
+        .filter((terminal) => terminal?.active === true && (!storeId || String(terminal.store_id || '') === String(storeId)))
+        .map((terminal) => ({
+          id: `terminal:${terminal.id}`,
+          name: terminal.name || terminal.provider || 'Card terminal',
+          type: 'Card machine',
+          status: terminal.last_test_result || 'Configured and active',
+          icon: CreditCard,
+        }))
+      setDevices([...hardware, ...terminals])
+    }).finally(() => { if (live) setLoadingDevices(false) })
+    return () => { live = false }
+  }, [])
+
   return (
     <motion.div className="mac-popover devices-menu git-macos-panel" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
       <div className="git-macos-card">
         <div className="git-macos-row git-macos-row--top">
-          <span className="git-macos-icon git-macos-icon--blue"><Bluetooth size={16} /></span>
-          <div className="git-macos-copy"><strong>Bluetooth</strong><small>This device is discoverable while Bluetooth settings are open.</small></div>
-          <span className="git-macos-switch"><i /></span>
+          <span className="git-macos-icon git-macos-icon--blue"><MonitorSmartphone size={16} /></span>
+          <div className="git-macos-copy"><strong>Connected Devices</strong><small>Configured and active hardware for this store/device.</small></div>
         </div>
       </div>
-      <div className="git-macos-section-title">My Devices</div>
-      <div className="git-macos-card">
-        <div className="git-macos-row">
-          <span className="git-macos-icon git-macos-icon--gray"><Printer size={15} /></span>
-          <div className="git-macos-copy"><strong>POS hardware</strong><small>Scanners, printers and accessories</small></div>
-          <span className="git-macos-chevron">›</span>
-        </div>
+      <div className="git-macos-section-title">Active devices</div>
+      <div className="git-macos-card device-status-list">
+        {loadingDevices ? <div className="git-macos-card--center">Loading configured devices…</div> : devices.length ? devices.map((device) => {
+          const Icon = device.icon
+          return (
+            <div className="git-macos-row device-status-row" key={device.id}>
+              <span className="git-macos-icon git-macos-icon--gray"><Icon size={15} /></span>
+              <div className="git-macos-copy"><strong>{device.name}</strong><small>{device.type} · {device.status}</small></div>
+              <span className="git-macos-status-dot is-online" aria-label="Active" />
+            </div>
+          )
+        }) : <div className="git-macos-card--center">No active devices are linked to this store/device.</div>}
       </div>
-      <div className="git-macos-section-title git-macos-section-title--nearby">Nearby Devices <span className="git-macos-spinner" /></div>
-      <div className="git-macos-card git-macos-card--center">Searching…</div>
       <button type="button" className="git-macos-footer-button" onClick={onOpenSettings}>Open Hardware Settings</button>
     </motion.div>
   )
@@ -1808,12 +1850,12 @@ function ControlCenterMenu({ onOpenWifi, onOpenBluetooth, onLock, onLogout }) {
         <div className="git-control-main">
           <motion.button type="button" className="git-control-line" onClick={onOpenWifi} whileTap={{ scale: .98 }}>
             <span className="git-control-circle is-blue"><Wifi size={16}/></span>
-            <span><strong>Wi-Fi</strong><small>onePOS network</small></span>
+            <span><strong>One Network</strong><small>Network, server and database health</small></span>
             <ChevronRight size={14} className="git-control-row-chevron"/>
           </motion.button>
           <motion.button type="button" className="git-control-line" onClick={onOpenBluetooth} whileTap={{ scale: .98 }}>
-            <span className="git-control-circle is-blue"><Bluetooth size={16}/></span>
-            <span><strong>Bluetooth</strong><small>Devices</small></span>
+            <span className="git-control-circle is-blue"><MonitorSmartphone size={16}/></span>
+            <span><strong>Devices</strong><small>Configured hardware</small></span>
             <ChevronRight size={14} className="git-control-row-chevron"/>
           </motion.button>
         </div>
@@ -1861,9 +1903,10 @@ function Desktop({ onLock, onSignOut }) {
   const [storeAppsLoading, setStoreAppsLoading] = useState(false)
   const [storeAppsError, setStoreAppsError] = useState('')
   const storeRefreshInFlightRef = useRef(null)
-  const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', database: 'Checking…' })
+  const [connectionHealth, setConnectionHealth] = useState({ status: 'Checking…', api: 'Checking…', database: 'Checking…' })
   const [availableStores, setAvailableStores] = useState(() => getAvailableStores())
   const [activeStoreId, setActiveStoreState] = useState(() => getActiveStoreId())
+  const [dashboardStoreId, setDashboardStoreId] = useState('')
   const [desktopPermissions, setDesktopPermissions] = useState(() => {
     const cached = getStoredSessionPermissions()
     return Array.isArray(cached?.permissions) ? cached.permissions : []
@@ -1961,6 +2004,7 @@ function Desktop({ onLock, onSignOut }) {
         document.documentElement.setAttribute('data-onepos-backend', health ? 'connected' : 'offline')
         setConnectionHealth({
           status: health ? 'Connected' : 'Offline',
+          api: health ? 'Connected' : 'Unavailable',
           database: health?.database || (health ? 'Connected' : 'Unavailable'),
         })
       })
@@ -2165,19 +2209,7 @@ function Desktop({ onLock, onSignOut }) {
             onClick={() => { setMessage('Hello.'); setRoute('home'); setActiveApp('home') }}
             aria-label="One Solutions"
           >
-            <svg className="one-logo-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <defs>
-                <linearGradient id="oneLogoGradient" x1="2" y1="3" x2="22" y2="21" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#ff6f61" />
-                  <stop offset="24%" stopColor="#ffb347" />
-                  <stop offset="48%" stopColor="#e34acb" />
-                  <stop offset="72%" stopColor="#7a5cff" />
-                  <stop offset="100%" stopColor="#38bdf8" />
-                </linearGradient>
-              </defs>
-              <path d="M7.35 3.15c-2.3 0-4.2 1.88-4.2 4.2v9.3c0 2.32 1.9 4.2 4.2 4.2h9.3c2.32 0 4.2-1.88 4.2-4.2v-9.3c0-2.32-1.88-4.2-4.2-4.2h-9.3Z" fill="url(#oneLogoGradient)" />
-              <path d="M9.5 7.9 16.3 12 9.5 16.1V7.9Z" fill="#fff" />
-            </svg>
+            <img className="one-logo-play" src={`${import.meta.env.BASE_URL || '/'}icons/one-solutions-mark.svg`} alt="" draggable="false" />
           </button>
 
           <div className="topbar-search-wrap topbar-search-wrap--left">
@@ -2191,8 +2223,8 @@ function Desktop({ onLock, onSignOut }) {
                 value={appSearch}
                 onFocus={() => setTopPanel('apps')}
                 onChange={(event) => { setAppSearch(event.target.value); setTopPanel('apps') }}
-                placeholder="Search apps"
-                aria-label="Search apps"
+                placeholder="Search One Store"
+                aria-label="Search One Store"
               />
             </motion.label>
             <AnimatePresence>
@@ -2235,19 +2267,25 @@ function Desktop({ onLock, onSignOut }) {
 
         <div className="menubar-right">
           {availableStores.length ? (
-            <label className="topbar-store-context" title="Active store">
+            <label className="topbar-store-context" title={activeApp === 'dashboard' ? 'Dashboard store scope' : 'Active store'}>
               <Store size={14} strokeWidth={2.1} />
               <select
-                aria-label="Active store"
-                value={activeStoreId}
+                aria-label={activeApp === 'dashboard' ? 'Dashboard store scope' : 'Active store'}
+                value={activeApp === 'dashboard' && availableStores.length > 1 ? dashboardStoreId : activeStoreId}
                 onChange={(event) => {
                   const nextStoreId = event.target.value
+                  if (activeApp === 'dashboard' && availableStores.length > 1) {
+                    setDashboardStoreId(nextStoreId)
+                    window.dispatchEvent(new CustomEvent('onepos:dashboard-store-scope-changed', { detail: { storeId: nextStoreId } }))
+                    return
+                  }
                   setActiveStoreId(nextStoreId)
                   setActiveStoreState(nextStoreId)
                   const currentUser = getStoredUser()
                   sessionStorage.setItem('onepos_user', JSON.stringify({ ...currentUser, storeId: nextStoreId || null }))
                 }}
               >
+                {activeApp === 'dashboard' && availableStores.length > 1 ? <option value="">All</option> : null}
                 {availableStores.map((store) => (
                   <option key={store.id} value={store.id}>{store.name || store.code || 'Store'}</option>
                 ))}
@@ -2261,13 +2299,13 @@ function Desktop({ onLock, onSignOut }) {
             <AnimatePresence>
               {topPanel === 'wifi' ? <ConnectionMenu health={connectionHealth} onRefresh={async () => {
                 const health = await checkBackend().catch(() => null)
-                setConnectionHealth({ status: health ? 'Connected' : 'Offline', database: health?.database || (health ? 'Connected' : 'Unavailable') })
+                setConnectionHealth({ status: health ? 'Connected' : 'Offline', api: health ? 'Connected' : 'Unavailable', database: health?.database || (health ? 'Connected' : 'Unavailable') })
               }} /> : null}
             </AnimatePresence>
           </div>
           <div className="topbar-status-wrap">
             <button type="button" className={`status-button ${topPanel === 'bluetooth' ? 'is-active' : ''}`} aria-label="Devices" aria-expanded={topPanel === 'bluetooth'} onClick={() => setTopPanel(topPanel === 'bluetooth' ? '' : 'bluetooth')}>
-              <Bluetooth size={17} strokeWidth={2.1} />
+              <MonitorSmartphone size={17} strokeWidth={2.1} />
             </button>
             <AnimatePresence>
               {topPanel === 'bluetooth' ? <DevicesMenu onOpenSettings={() => { setRoute('settings', 'hardware'); setActiveApp('settings'); setTopPanel('') }} /> : null}

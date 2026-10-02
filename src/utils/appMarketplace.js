@@ -6,8 +6,8 @@ const ICON_ALIASES = Object.freeze({
   one_till: 'onetill-new',
   till: 'onetill-new',
   retail_pos: 'onetill-new',
-  one_kiosk: 'default-app',
-  receipt_qr: 'default-app',
+  one_kiosk: 'one-kiosk',
+  receipt_qr: 'one-receipt-qr',
   inventory: 'inventory',
   batch_expiry: 'batch-expiry',
   hospitality: 'hospitality',
@@ -17,8 +17,8 @@ const ICON_ALIASES = Object.freeze({
   suppliers: 'suppliers',
   reports: 'reports',
   platform: 'one-developer',
-  payment_reference: 'default-app',
-  paypal_qr: 'default-app',
+  payment_reference: 'one-payment',
+  paypal_qr: 'one-payment',
   one_connect_google: 'one-connect-google',
   one_connect_dojo: 'dojo',
   dojo: 'dojo',
@@ -28,11 +28,11 @@ const ICON_ALIASES = Object.freeze({
   square: 'square',
   mobile_scanner_connector: 'barcode-scanner-connector-template',
   barcode_scanner_connector_template: 'barcode-scanner-connector-template',
-  receipt_printer_connector_template: 'default-app',
+  receipt_printer_connector_template: 'one-printer',
   kitchen_printer_connector_template: 'kitchen-printer-connector-template',
   cash_drawer_connector_template: 'cash-drawer-connector-template',
   email_connector: 'email',
-  sms_connector: 'default-app',
+  sms_connector: 'one-messaging',
   whatsapp_connector: 'whatsapp',
   whatsapp_assistant: 'whatsapp',
   whatsapp: 'whatsapp',
@@ -47,10 +47,10 @@ const ICON_ALIASES = Object.freeze({
   sage: 'sage',
   sage_accounting: 'sage-business-cloud-accounting',
   sage_business_cloud_accounting: 'sage-business-cloud-accounting',
-  open_food_facts: 'default-app',
+  open_food_facts: 'one-catalogue',
   go_upc: 'go-upc',
   client_web_shop: 'client-web-shop',
-  own_delivery: 'default-app',
+  own_delivery: 'one-delivery',
   prestashop: 'prestashop',
   woocommerce: 'woocommerce',
   wix: 'wix',
@@ -84,6 +84,28 @@ const BRAND_ICON_MATCHES = [
   [/\bvyne\b/i,'one-connect-vyne'],[/\bstripe\b/i,'one-connect-stripe'],[/google/i,'one-connect-google'],
 ]
 
+const ONE_ICON_MATCHES = [
+  [/\bone\s*developer\b|\bdeveloper\b/i,'one-developer'],
+  [/\bone\s*customer\b|\bcustomer\s*credit\b/i,'customers'],
+  [/\bone\s*purchase\b|\bpurchase\b/i,'one-purchase'],
+  [/\bone\s*sales\b|\bsales\b/i,'one-sales'],
+  [/\bone\s*integrations?\b|\bintegrations?\b/i,'one-integrations'],
+  [/\bone\s*assistant\b|\bassistant\b/i,'one-assistant'],
+  [/\bone\s*kiosk\b|\bkiosk\b/i,'one-kiosk'],
+  [/\breceipt\s*qr\b/i,'one-receipt-qr'],
+  [/\bbatch.*expiry\b/i,'batch-expiry'],
+  [/\binventory\b/i,'inventory'],
+  [/\breports?\b/i,'reports'],
+  [/\bhospitality\b/i,'hospitality'],
+  [/\bkds\b/i,'kds'],
+  [/\bopen\s*food\s*facts\b|\bcatalogue\b/i,'one-catalogue'],
+  [/\bown\s*delivery\b/i,'one-delivery'],
+  [/\bpayment\b|\bpaypal\b/i,'one-payment'],
+  [/\bmailjet\b|\bbrevo\b|\bemail\s*connect/i,'email'],
+  [/\bprinter\b/i,'one-printer'],
+  [/\bscanner\b/i,'mobile-scanner'],
+]
+
 export const MARKETPLACE_CACHE_KEY = 'onepos.marketplace.catalog.v1'
 
 export function localAppIcon(assetKey = 'default-app') {
@@ -102,6 +124,8 @@ export function appIconUrl(item) {
     .join(' ')
   const brand = BRAND_ICON_MATCHES.find(([pattern]) => pattern.test(brandText))
   if (brand) return localAppIcon(brand[1])
+  const oneIcon = ONE_ICON_MATCHES.find(([pattern]) => pattern.test(brandText))
+  if (oneIcon) return localAppIcon(oneIcon[1])
 
   const keys = [
     item?.icon_asset_key, item?.iconAssetKey, manifest.iconAssetKey, manifest.icon_asset_key,

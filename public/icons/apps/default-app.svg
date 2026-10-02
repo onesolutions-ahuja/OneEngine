@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect x="9" y="9" width="46" height="46" rx="12" fill="#eef1f2"/>
-  <rect x="18" y="18" width="28" height="28" rx="6" stroke="#59656c" stroke-width="3"/>
-  <path d="M24 28h16M24 35h10" stroke="#59656c" stroke-linecap="round" stroke-width="3"/>
+  <defs><linearGradient id="g" x1="7" y1="6" x2="58" y2="59" gradientUnits="userSpaceOnUse"><stop stop-color="#6B7CFF"/><stop offset=".55" stop-color="#3D9BE9"/><stop offset="1" stop-color="#34C5A7"/></linearGradient></defs>
+  <rect x="5" y="5" width="54" height="54" rx="15" fill="url(#g)"/>
+  <rect x="18" y="18" width="28" height="28" rx="7" stroke="white" stroke-width="3"/>
+  <path d="M24 28h16M24 35h10" stroke="white" stroke-linecap="round" stroke-width="3"/>
 </svg>

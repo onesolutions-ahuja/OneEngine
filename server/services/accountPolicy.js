@@ -11,6 +11,18 @@ export function domainAllowed(email, allowedDomain, enabled = false) {
 }
 export function hashAccountToken(token) { return crypto.createHash("sha256").update(String(token)).digest("hex"); }
 export function createAccountToken() { return crypto.randomBytes(32).toString("base64url"); }
+export function createAccountOtp() { return String(crypto.randomInt(0, 1000000)).padStart(6, "0"); }
+
+export async function issueAccountOtp(db, { companyId, userId, purpose = "PASSWORD_RESET", expiresMinutes = 10 }) {
+  if (!ACCOUNT_TOKEN_PURPOSES.includes(purpose)) throw new Error("Unsupported account token purpose");
+  const otp = createAccountOtp();
+  const tokenHash = hashAccountToken(otp);
+  await db("UPDATE account_action_tokens SET used_at=NOW() WHERE user_id=$1 AND purpose=$2 AND used_at IS NULL", [userId, purpose]);
+  await db(`INSERT INTO account_action_tokens (company_id,user_id,purpose,token_hash,expires_at)
+            VALUES ($1,$2,$3,$4,NOW()+($5::text || ' minutes')::interval)`,
+    [companyId, userId, purpose, tokenHash, Math.max(1, Number(expiresMinutes) || 10)]);
+  return otp;
+}
 
 export async function issueAccountToken(db, { companyId, userId, purpose, expiresMinutes = 60 }) {
   if (!ACCOUNT_TOKEN_PURPOSES.includes(purpose)) throw new Error("Unsupported account token purpose");

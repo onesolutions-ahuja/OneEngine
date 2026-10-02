@@ -3024,7 +3024,7 @@
 
 /* Active store session selector. */
 .topbar-store-context{
-  height:30px;
+  height:24px;
   display:flex;
   align-items:center;
   gap:6px;
@@ -3253,36 +3253,31 @@
 
 
 /* 2026-10-02 dock capacity/alignment correction.
-   Desktop keeps a fixed Jarvis reservation and divides the whole app lane into
-   equal slots based on the number of visible icons (up to ten). The 40px app
-   icons sit exactly 12px from both the top and bottom dock border. The icon
-   lane stays bottom-aligned so the original Framer Motion magnification keeps
-   the same upward "lift" behaviour as before. Mobile keeps Jarvis fixed and
-   scrolls apps. */
+   Desktop reserves ten 40px app slots at 1.6x the former 12px gap (19.2px),
+   then a frozen divider/Jarvis zone. Mobile keeps Jarvis fixed and scrolls apps. */
 @media (min-width: 901px) {
   .dock {
     --dock-icon-size: 40px;
-    width: 768px;
+    --dock-icon-gap: 19.2px;
+    width: 730px;
     max-width: calc(100vw - 24px);
-    height: 64px;
-    min-height: 64px;
-    padding: 12px 18px;
+    height: 82px;
+    min-height: 82px;
+    padding: 18px 18px 10px;
     box-sizing: border-box;
     align-items: flex-end;
     gap: 0;
-    overflow: visible;
   }
 
   .dock-desktop-items {
-    flex: 1 1 auto;
-    width: auto;
+    width: 592px;
+    flex: 0 0 592px;
     min-width: 0;
-    height: var(--dock-icon-size);
-    display: grid;
-    grid-template-columns: repeat(var(--dock-item-count, 1), minmax(0, 1fr));
-    align-items: end;
-    gap: 0;
-    padding: 0;
+    display: flex;
+    align-items: flex-end;
+    gap: var(--dock-icon-gap);
+    padding-left: 8px;
+    padding-right: 8px;
     box-sizing: border-box;
     overflow: visible;
   }
@@ -3291,12 +3286,8 @@
     width: var(--dock-icon-size) !important;
     min-width: var(--dock-icon-size);
     max-width: var(--dock-icon-size);
-    height: var(--dock-icon-size);
-    justify-self: center;
-    align-self: end;
     flex: 0 0 var(--dock-icon-size);
-    transform-origin: bottom center !important;
-    will-change: transform;
+    transform-origin: bottom center;
     z-index: 1;
   }
 
@@ -3309,7 +3300,7 @@
     width: 102px;
     min-width: 102px;
     flex: 0 0 102px;
-    height: 40px;
+    height: 54px;
     margin-left: 18px;
     display: grid;
     grid-template-columns: 1px 82px;
@@ -3323,7 +3314,7 @@
 
   .dock-fixed-zone .dock-separator {
     width: 1px;
-    height: 40px;
+    height: 42px;
     margin: 0;
     align-self: end;
   }
@@ -3332,7 +3323,6 @@
     width: 82px;
     flex: 0 0 82px;
     height: 52px;
-    align-self: end;
   }
 }
 
@@ -3443,4 +3433,26 @@
     gap: 10px;
     padding-left: 4px;
   }
+}
+
+/* Pending OneTheme polish staged without commit. */
+@media (min-width: 901px) {
+  .topbar-search-pill { height: 19.2px; min-height: 19.2px; padding-inline: 8px; }
+  .topbar-store-context { min-height: 24px; }
+}
+.one-logo-play { width: 22px; height: 22px; object-fit: contain; display: block; }
+.one-network-health-list, .device-status-list { display: grid; gap: 8px; }
+.one-network-health-row + .one-network-health-row,
+.device-status-row + .device-status-row { padding-top: 8px; border-top: 1px solid rgba(0,0,0,.055); }
+.login-avatar--brand { background: transparent !important; border: 0; box-shadow: none; overflow: visible; }
+.login-avatar--brand .login-brand-mark { width: 100%; height: 100%; object-fit: contain; }
+.dash-clock { height: 100%; min-height: 72px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
+.dash-clock strong { font-size: 32px; line-height: 1; letter-spacing: -.03em; }
+.dash-clock span { margin-top: 7px; color: rgba(35,49,72,.60); font-size: 11px; }
+
+/* Use the same uncropped canonical One Solutions lockup on refresh/startup. */
+.company-context-loading__logo {
+  width: 220px;
+  height: 108px;
+  object-fit: contain;
 }
