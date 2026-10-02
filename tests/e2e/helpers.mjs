@@ -32,19 +32,19 @@ async function restoreBrowserSession(page) {
     for (const [key, value] of Object.entries(state.local || {})) localStorage.setItem(key, value);
   }, state);
   await page.goto("./");
-  const validation = await page.evaluate(async () => {
+  const apiBaseUrl = String(process.env.ONEPOS_API_URL || "https://onepos.onrender.com").replace(/\/$/, "");
+  const validation = await page.evaluate(async ({ apiBaseUrl }) => {
     const token = sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token");
     if (!token) return { valid: false, status: 0 };
     try {
-      // Use relative URL so it resolves to the current page's origin
-      const response = await fetch("./api/auth/me", {
+      const response = await fetch(`${apiBaseUrl}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       return { valid: response.ok, status: response.status };
     } catch {
       return { valid: false, status: 0 };
     }
-  });
+  }, { apiBaseUrl });
   if (!validation.valid) {
     cachedBrowserSession = null;
     await fs.rm(SESSION_CACHE_FILE, { force: true }).catch(() => {});
@@ -148,7 +148,7 @@ export async function scrollWholePage(page) {
 }
 
 export async function clickSafeControls(page, limit = 30) {
-  const blocked = /delete|remove|disable|deactivate|activate|enable|refund|void|cancel sale|pay|checkout|send|install|uninstall|reset|revoke|disconnect|terminate|expire|unlock|save|create|update|[...]
+  const blocked = /delete|remove|disable|deactivate|activate|enable|refund|void|cancel sale|pay|checkout|send|install|uninstall|reset|revoke|disconnect|terminate|expire|unlock|save|create|update|apply/i;
   const buttons = page.getByRole("button");
   const count = Math.min(await buttons.count(), limit);
   for (let i = 0; i < count; i += 1) {
