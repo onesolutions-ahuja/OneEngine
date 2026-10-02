@@ -7,8 +7,7 @@ export function CompanyContextLoading() {
   return (
     <main className="screen company-context-loading" role="status" aria-live="polite" aria-label="Setting up your workspace">
       <div className="company-context-loading__brand" aria-hidden="true">
-        <span className="company-context-loading__mark">O</span>
-        <span className="company-context-loading__word">ne</span>
+        <img className="company-context-loading__logo" src="./icons/one-solutions-mark.svg" alt="" />
       </div>
       <div className="company-context-loading__pulse" aria-hidden="true" />
       <strong>Setting up your workspace…</strong>
@@ -238,12 +237,9 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
         <div className="lock-time">{time}</div>
 
         <form className="login-glass-card" onSubmit={submit}>
-          <div className="profile-avatar login-avatar" aria-label={sessionMode ? `${displayName} profile` : 'onePOS'}>
+          <div className={`profile-avatar login-avatar${sessionMode ? '' : ' login-avatar--brand'}`} aria-label={sessionMode ? `${displayName} profile` : 'One Solutions'}>
             {sessionMode ? initial : (
-              <svg className="login-brand-mark" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M7.35 3.15c-2.3 0-4.2 1.88-4.2 4.2v9.3c0 2.32 1.9 4.2 4.2 4.2h9.3c2.32 0 4.2-1.88 4.2-4.2v-9.3c0-2.32-1.88-4.2-4.2-4.2h-9.3Z" fill="currentColor"/>
-                <path d="M9.5 7.9 16.3 12 9.5 16.1V7.9Z" fill="white"/>
-              </svg>
+              <img className="login-brand-mark" src="./icons/one-solutions-mark.svg" alt="" aria-hidden="true" />
             )}
           </div>
 
@@ -342,6 +338,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
 
               <input
                 className="login-field"
+                name="username"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 placeholder="Email or username"
@@ -352,6 +349,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
               <div className="login-password-wrap">
                 <input
                   className="login-field"
+                  name="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Password"
@@ -376,7 +374,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
               <button
                 className="login-submit"
                 type="submit"
-                disabled={submitting || preparing || !username.trim() || !password}
+                disabled={submitting || preparing}
               >
                 {preparing ? 'Preparing company context…' : submitting ? 'Signing in…' : 'Sign In'}
               </button>
