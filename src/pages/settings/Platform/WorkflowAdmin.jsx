@@ -1044,7 +1044,7 @@ function makeStep(type = "CREATE_RECORD") {
       expression: "",
       formulaInputs: {},
       collection: "",
-      itemVariable: "currentItem",
+      itemVariable: type === "LOOP" ? "currentItem_Loop" : "currentItem",
       bodyBranch: [],
       recordIds: "",
       pathLabel: "Scheduled Path",
@@ -1161,7 +1161,7 @@ function workflowActionIssue(step, definition = null) {
   }
   if (step.type === "LOOP") {
     if (!config.collection) return "Choose the collection to loop through.";
-    if (!config.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.itemVariable))) return "Enter a valid Current Item variable name.";
+    if (!config.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.itemVariable))) return "The Loop Current Item resource could not be generated.";
     if (!Array.isArray(config.bodyBranch) || !config.bodyBranch.length) return "Choose at least one step for the Loop body.";
   }
   if (step.type === "BULK_UPDATE_RECORDS") {
@@ -1409,12 +1409,12 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
       resources.push(
         {
           value: `variables.${step.config.itemVariable}`,
-          label: `${step.config.itemVariable} · Current Loop Item`,
+          label: `Current Item from ${label}`,
           type: "record",
         },
         {
           value: `variables.${step.config.itemVariable}.id`,
-          label: `${step.config.itemVariable} → Record ID`,
+          label: `Current Item from ${label} → Record ID`,
           type: "record id",
         },
         { value: `${prefix}.count`, label: `${label} → Iteration Count`, type: "number" },
@@ -1690,11 +1690,11 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
         return (
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Constant name</label>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">API Name</label>
               <input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="e.g. vatRate" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Type</label>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Data Type</label>
               <select className={inputClass} value={step.config?.resourceType || "text"} onChange={(event) => updateConfig({ resourceType: event.target.value, value: "" })}>
                 <option value="text">Text</option>
                 <option value="number">Number</option>
@@ -1703,7 +1703,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 <option value="datetime">Date / Time</option>
               </select>
             </div>
-            <ResourceOrLiteralInput label="Fixed value" value={step.config?.value ?? ""} onChange={(value) => updateConfig({ value })} rootObjectKey={rootObjectKey} extraResources={[]} type={step.config?.resourceType || "text"} required allowResource={false} />
+            <ResourceOrLiteralInput label="Value" value={step.config?.value ?? ""} onChange={(value) => updateConfig({ value })} rootObjectKey={rootObjectKey} extraResources={[]} type={step.config?.resourceType || "text"} required allowResource={false} />
             <p className="text-[11px] text-slate-500">Constants keep the same value for the flow run and are available as Resources.</p>
           </div>
         );
@@ -1712,11 +1712,11 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           <div className="space-y-3">
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Formula name</label>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">API Name</label>
                 <input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="e.g. totalWithTax" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Result type</label>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Data Type</label>
                 <select className={inputClass} value={step.config?.resultType || "number"} onChange={(event) => updateConfig({ resultType: event.target.value })}>
                   <option value="number">Number</option>
                   <option value="text">Text</option>
@@ -1727,8 +1727,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Named inputs</label>
-              <MappingEditor value={step.config?.formulaInputs || {}} onChange={(formulaInputs) => updateConfig({ formulaInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Formula name" valueLabel="Map from resource" />
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Formula Resources</label>
+              <MappingEditor value={step.config?.formulaInputs || {}} onChange={(formulaInputs) => updateConfig({ formulaInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Reference Name" valueLabel="Resource" />
               <p className="mt-1 text-[11px] text-slate-500">Use simple names such as amount, tax or customerCount. Those names are what you use in the formula below.</p>
             </div>
             <div>
@@ -1748,10 +1748,9 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               value={step.config?.collection || ""}
               onChange={(collection) => updateConfig({ collection })}
             />
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Current Item variable</label>
-              <input className={inputClass} value={step.config?.itemVariable || "currentItem"} onChange={(event) => updateConfig({ itemVariable: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} />
-              <p className="mt-1 text-[11px] text-slate-500">Steps inside the Loop can use this Resource to access the item being processed.</p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-medium text-slate-700">Current Item from {step.label || "Loop"}</div>
+              <p className="mt-1 text-[11px] text-slate-500">This resource is created automatically and is available to elements on the For Each Item path.</p>
             </div>
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
               Add elements to the <strong>For Each Item</strong> path using the + insertion points on the canvas. The flow continues on <strong>After Last</strong> when the collection is finished.
@@ -2319,12 +2318,17 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               const nextLabel = event.target.value;
               const previousGenerated = flowApiName(step.label || "");
               const nextApiName = !step.config?.apiName || step.config.apiName === previousGenerated ? flowApiName(nextLabel) : step.config.apiName;
-              updateStep(index, { label: nextLabel, config: { ...(step.config || {}), apiName: nextApiName } });
+              const nextConfig = { ...(step.config || {}), apiName: nextApiName };
+              if (step.type === "LOOP" && (!step.config?.itemVariable || step.config.itemVariable === "currentItem" || String(step.config.itemVariable).startsWith("currentItem_"))) nextConfig.itemVariable = `currentItem_${nextApiName || "Loop"}`;
+              updateStep(index, { label: nextLabel, config: nextConfig });
             }} placeholder="Element label" />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">API Name</label>
-            <input className={inputClass} value={step.config?.apiName || ""} onChange={(event) => updateConfig({ apiName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="Element_API_Name" />
+            <input className={inputClass} value={step.config?.apiName || ""} onChange={(event) => {
+              const apiName = event.target.value.replace(/[^A-Za-z0-9_]/g, "");
+              updateConfig({ apiName, ...(step.type === "LOOP" ? { itemVariable: `currentItem_${apiName || "Loop"}` } : {}) });
+            }} placeholder="Element_API_Name" />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Description</label>
