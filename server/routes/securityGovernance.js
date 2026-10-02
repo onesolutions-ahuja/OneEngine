@@ -1,6 +1,7 @@
 import express from "express";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { buildSecurityHealth, certificateMetadata, loadApiPolicy, normalizeScopes, normalizeTrustedOrigin } from "../services/securityGovernance.js";
+import { assuranceSatisfies } from "../services/identityAssurance.js";
 
 export default function createSecurityGovernanceRouter({authenticate,authorize,db,writeAudit}){
   const router=express.Router();
@@ -9,12 +10,19 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
   const vaultManage=[authenticate,authorize("settings.manage","security.governance.manage","security.vault.manage")];
 
   const audit=(req,action,entityType,entityId,details={})=>writeAudit?.(req.user.companyId,req.user.id,action,entityType,entityId,details);
+  const requireGovernanceAssurance=async(req,res,next)=>{
+    const policy=await loadApiPolicy(db,req.user.companyId);
+    if(policy.require_high_assurance_for_app_admin===true&&!assuranceSatisfies(req.authSession?.assurance_level,"HIGH")){
+      return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"MANAGE_CONNECTED_APPS",message:"High-Assurance verification is required for Security Governance changes"});
+    }
+    next();
+  };
 
   router.get("/security/governance/api-policy",...manage,async(req,res)=>{
     res.json({success:true,data:await loadApiPolicy(db,req.user.companyId)});
   });
 
-  router.put("/security/governance/api-policy",...manage,async(req,res)=>{
+  router.put("/security/governance/api-policy",...manage,requireGovernanceAssurance,async(req,res)=>{
     const current=await loadApiPolicy(db,req.user.companyId);
     const allowedGrantTypes=Array.isArray(req.body?.allowedGrantTypes)?normalizeScopes(req.body.allowedGrantTypes):(current.allowed_grant_types||["authorization_code","refresh_token"]);
     if(allowedGrantTypes.some(x=>!["authorization_code","refresh_token","client_credentials"].includes(x)))return res.status(400).json({success:false,message:"Unsupported OAuth grant type"});
@@ -40,7 +48,7 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
     res.json({success:true,data:r.rows});
   });
 
-  router.post("/security/governance/trusted-origins",...manage,async(req,res)=>{
+  router.post("/security/governance/trusted-origins",...manage,requireGovernanceAssurance,async(req,res)=>{
     const origin=normalizeTrustedOrigin(req.body?.origin,{allowLocalhost:process.env.NODE_ENV!=="production"});
     const type=String(req.body?.originType||"CORS").toUpperCase();
     if(!origin||!["CORS","CSP_CONNECT","REDIRECT_URI","WEBHOOK"].includes(type))return res.status(400).json({success:false,message:"A valid trusted origin and type are required"});
@@ -52,7 +60,7 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
     res.status(201).json({success:true,data:r.rows[0]});
   });
 
-  router.delete("/security/governance/trusted-origins/:id",...manage,async(req,res)=>{
+  router.delete("/security/governance/trusted-origins/:id",...manage,requireGovernanceAssurance,async(req,res)=>{
     const r=await db("UPDATE security_trusted_origins SET active=FALSE,updated_by=$3,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",[req.params.id,req.user.companyId,req.user.id]);
     if(!r.rows.length)return res.status(404).json({success:false,message:"Trusted origin not found"});
     await audit(req,"security.trusted_origin_disabled","security_trusted_origin",req.params.id,{});
@@ -69,7 +77,7 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
     res.json({success:true,data:r.rows});
   });
 
-  router.put("/security/governance/connected-apps/:appKey",...manage,async(req,res)=>{
+  router.put("/security/governance/connected-apps/:appKey",...manage,requireGovernanceAssurance,async(req,res)=>{
     const appKey=String(req.params.appKey||"").trim().toLowerCase();
     if(!/^[a-z0-9._:-]{2,120}$/.test(appKey))return res.status(400).json({success:false,message:"Invalid connected-app key"});
     const mode=String(req.body?.permittedUserMode||"ALL_AUTHORISED").toUpperCase();
@@ -104,7 +112,7 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
     res.json({success:true,data:r.rows});
   });
 
-  router.post("/security/governance/vault",...vaultManage,async(req,res)=>{
+  router.post("/security/governance/vault",...vaultManage,requireGovernanceAssurance,async(req,res)=>{
     const name=String(req.body?.name||"").trim(),secret=String(req.body?.secret||"");
     if(!name||!secret)return res.status(400).json({success:false,message:"Vault entry name and secret are required"});
     const ciphertext=encryptCredentials({value:secret});
@@ -120,7 +128,7 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
     res.status(201).json({success:true,data:r.rows[0]});
   });
 
-  router.delete("/security/governance/vault/:id",...vaultManage,async(req,res)=>{
+  router.delete("/security/governance/vault/:id",...vaultManage,requireGovernanceAssurance,async(req,res)=>{
     const r=await db("UPDATE security_vault_entries SET active=FALSE,updated_by=$3,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",[req.params.id,req.user.companyId,req.user.id]);
     if(!r.rows.length)return res.status(404).json({success:false,message:"Vault entry not found"});
     await audit(req,"security.vault_secret_disabled","security_vault_entry",req.params.id,{});
@@ -133,7 +141,7 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
     res.json({success:true,data:r.rows});
   });
 
-  router.post("/security/governance/certificates",...manage,async(req,res)=>{
+  router.post("/security/governance/certificates",...manage,requireGovernanceAssurance,async(req,res)=>{
     const name=String(req.body?.name||"").trim(),pem=String(req.body?.certificatePem||"").trim();
     if(!name||!pem)return res.status(400).json({success:false,message:"Certificate name and PEM are required"});
     let meta;try{meta=certificateMetadata(pem);}catch{return res.status(400).json({success:false,message:"Certificate PEM is invalid"});}
@@ -151,7 +159,7 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
     res.status(201).json({success:true,data:{...r.rows[0],subject:meta.subject,issuer:meta.issuer,serialNumber:meta.serialNumber}});
   });
 
-  router.delete("/security/governance/certificates/:id",...manage,async(req,res)=>{
+  router.delete("/security/governance/certificates/:id",...manage,requireGovernanceAssurance,async(req,res)=>{
     const r=await db("UPDATE security_certificates SET active=FALSE,updated_by=$3,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",[req.params.id,req.user.companyId,req.user.id]);
     if(!r.rows.length)return res.status(404).json({success:false,message:"Certificate not found"});
     await audit(req,"security.certificate_disabled","security_certificate",req.params.id,{});
@@ -162,7 +170,7 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
     res.json({success:true,data:await buildSecurityHealth(db,{companyId:req.user.companyId})});
   });
 
-  router.post("/security/governance/health/:findingKey/waive",...manage,async(req,res)=>{
+  router.post("/security/governance/health/:findingKey/waive",...manage,requireGovernanceAssurance,async(req,res)=>{
     const reason=String(req.body?.reason||"").trim();
     if(!reason)return res.status(400).json({success:false,message:"Waiver reason is required"});
     const r=await db(`INSERT INTO security_health_waivers(company_id,finding_key,reason,expires_at,created_by)
@@ -172,7 +180,7 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
     res.json({success:true,data:r.rows[0]});
   });
 
-  router.delete("/security/governance/health/:findingKey/waive",...manage,async(req,res)=>{
+  router.delete("/security/governance/health/:findingKey/waive",...manage,requireGovernanceAssurance,async(req,res)=>{
     await db("DELETE FROM security_health_waivers WHERE company_id=$1 AND finding_key=$2",[req.user.companyId,String(req.params.findingKey)]);
     await audit(req,"security.health_waiver_removed","security_health_waiver",String(req.params.findingKey),{});
     res.json({success:true});
