@@ -1184,7 +1184,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     try {
       const report=await reportById(req,req.params.id);
       if(!report)return res.status(404).json({success:false,message:"Custom report not found"});
-      const definition=req.body&&Object.keys(req.body).length?{...report.definition,...req.body}:report.definition;
+      const definition=report.definition||{};
       const data=await executeCustomDefinition(req,definition);
       await recordReportView(req,req.params.id);
       const normalized=validateCustomReportDefinition(definition);
