@@ -213,6 +213,7 @@ export default function ObjectFieldRenderer({
           disabled={disabled}
           placeholder={placeholder}
           rows={6}
+          maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || undefined}
           onChange={(event) => handleChange(event.target.value)}
         />
       );
@@ -264,6 +265,7 @@ export default function ObjectFieldRenderer({
           disabled={disabled}
           placeholder={placeholder}
           rows={4}
+          maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || undefined}
           onChange={(event) =>
             handleChange(
               event.target.value
@@ -503,9 +505,9 @@ export default function ObjectFieldRenderer({
 
       {control}
 
-      {field?.description ? (
+      {(field?.config?.helpText || field?.config?.help_text) ? (
         <div className="platform-field-help">
-          {field.description}
+          {field?.config?.helpText || field?.config?.help_text}
         </div>
       ) : null}
 
