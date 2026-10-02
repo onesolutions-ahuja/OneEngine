@@ -145,6 +145,12 @@ export const platformSchema = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (object_id, api_name)
   );
+  CREATE TABLE IF NOT EXISTS platform_auto_number_counters (
+    field_id UUID PRIMARY KEY REFERENCES platform_fields(id) ON DELETE CASCADE,
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    next_value BIGINT NOT NULL DEFAULT 1,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
   CREATE TABLE IF NOT EXISTS platform_matching_rules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
