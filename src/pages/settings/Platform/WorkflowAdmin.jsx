@@ -2577,6 +2577,71 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 11px !important;
   }
 
+  /* Requested Salesforce-style inspector behaviour: fixed column, white
+     surface, sticky tabs and its own scrollbar independent of the canvas. */
+  .workflow-visual-shell {
+    min-height: 0;
+    height: calc(100dvh - 176px);
+    align-items: stretch;
+  }
+  .workflow-node-palette,
+  .workflow-properties-panel {
+    min-height: 0;
+    height: 100%;
+  }
+  .workflow-properties-panel {
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    background: #fff !important;
+  }
+  .workflow-properties-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    margin: 0 -10px 10px !important;
+    background: #fff !important;
+  }
+  .workflow-properties-panel input,
+  .workflow-properties-panel select,
+  .workflow-properties-panel textarea,
+  .workflow-properties-panel button {
+    pointer-events: auto;
+  }
+  .workflow-properties-panel select {
+    cursor: pointer;
+  }
+  .workflow-properties-panel input:focus,
+  .workflow-properties-panel select:focus,
+  .workflow-properties-panel textarea:focus {
+    border-color: var(--sfdc-blue) !important;
+    box-shadow: 0 0 0 1px var(--sfdc-blue) !important;
+    outline: 0 !important;
+  }
+  .workflow-properties-panel .bg-slate-50 {
+    background: #fff !important;
+  }
+  .workflow-properties-panel .border-slate-200 {
+    border-color: #dddbda !important;
+  }
+  .workflow-node-palette {
+    overflow: hidden !important;
+    background: #fff !important;
+  }
+  .workflow-palette-scroll {
+    max-height: none !important;
+    height: calc(100% - 104px);
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  @media (max-width: 1050px) {
+    .workflow-visual-shell { height: auto; min-height: 0; }
+    .workflow-properties-panel { max-height: min(440px, 48dvh) !important; }
+  }
+
   .workflow-record-picker { position: relative; min-width: 0; }
   .workflow-record-picker-input {
     min-height: 32px;
