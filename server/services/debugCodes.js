@@ -355,8 +355,8 @@ export async function writeDebugEvent(db, {
   try {
     await db(
       `INSERT INTO oneengine_debug_events
-        (reference,code,company_id,user_id,endpoint,http_method,http_status,technical_code,technical_message,stack_trace,environment,created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())`,
+        (reference,code,company_id,user_id,endpoint,http_method,http_status,technical_code,technical_message,stack_trace,environment,root_cause_key,diagnostic_details,created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,NOW())`,
       [
         reference,
         definition.code,
@@ -369,6 +369,16 @@ export async function writeDebugEvent(db, {
         String(error?.message || error || "").slice(0,2000),
         error?.stack ? String(error.stack).slice(0,12000) : null,
         environment,
+        String(error?.rootCauseKey || error?.code || definition.code || "").slice(0,120) || null,
+        JSON.stringify({
+          oeCode: definition.code,
+          category: definition.category,
+          title: definition.title,
+          endpoint: req?.originalUrl || req?.path || null,
+          method: req?.method || null,
+          httpStatus: status || null,
+          technicalCode: error?.code ? String(error.code).slice(0,160) : null,
+        }),
       ]
     );
   } catch (writeError) {
