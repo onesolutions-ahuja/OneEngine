@@ -32,7 +32,11 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const selectedStore = stores.find((store) => store.id === storeId);
   const tills = Array.isArray(selectedStore?.tills) ? selectedStore.tills : [];
   const companyScoped = selectedApp?.manifest?.connectorApp?.scope === "company";
-  const SettingsTemplate = selectedApp?.manifest?.connectorApp?.settingsUiVariant === "split" ? ConnectorSettingsSplit : ConnectorSettingsCompact;
+  const SettingsTemplate = settingsMode
+    ? ConnectorSettingsCompact
+    : selectedApp?.manifest?.connectorApp?.settingsUiVariant === "split"
+      ? ConnectorSettingsSplit
+      : ConnectorSettingsCompact;
   const visibleSchema = schema.filter((field) => !["action","readonly","store lookup","till lookup"].includes(field.type));
   const credentialFirstSchema = [...visibleSchema].sort((a, b) => {
     const credential = (field) => field.type === "secret" || /api|token|secret|password|credential|key/i.test(String(field.key || "") + " " + String(field.label || ""));
@@ -339,13 +343,17 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                 );
                 const missingRequired = (action.fields || []).some((field) => field.required && !String(values[field.key] ?? "").trim());
                 return (
-                  <div key={action.key} className="connector-sms-test-card w-full rounded-lg border border-slate-200 bg-white p-4">
-                    <h3 className="text-sm font-semibold text-slate-900">{action.label || "Test action"}</h3>
-                    <p className="text-xs text-slate-500">{action.description || "Run an end-to-end connector test."}</p>
-                    <div className="grid grid-cols-1 gap-3 mt-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div key={action.key} className="connector-sms-test-card connector-settings-test-card">
+                    <div className="connector-settings-test-card-head">
+                      <div>
+                        <h3>{action.label || "Test action"}</h3>
+                        <p>{action.description || "Run an end-to-end connector test."}</p>
+                      </div>
+                    </div>
+                    <div className="connector-settings-test-grid">
                       {(action.fields || []).map((field) => (
-                        <label key={field.key} className="text-xs font-medium text-slate-600">
-                          {field.label || field.key}
+                        <label key={field.key} className="connector-settings-test-field">
+                          <span>{field.label || field.key}</span>
                           <input
                             type={field.type === "tel" ? "tel" : field.type === "email" ? "email" : "text"}
                             maxLength={field.maxLength}
@@ -355,18 +363,19 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                               ...current,
                               [action.key]: { ...values, [field.key]: event.target.value },
                             }))}
-                            className={`${inputClass} mt-1`}
                           />
                         </label>
                       ))}
-                      <button type="button" onClick={() => runPackageTestAction(existingInstance, action)} disabled={runningTestAction === action.key || missingRequired} className="h-9 px-4 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50 md:col-span-2 xl:col-span-3 xl:justify-self-end xl:min-w-40">
-                        {runningTestAction === action.key ? "Running…" : action.label || "Run test"}
-                      </button>
+                    </div>
+                    <div className="connector-settings-test-actions">
                       {testActionResults[action.key] ? (
-                        <p role={testActionResults[action.key].success ? "status" : "alert"} className={`text-sm md:col-span-2 xl:col-span-3 ${testActionResults[action.key].success ? "text-emerald-700" : "text-red-700"}`}>
+                        <p role={testActionResults[action.key].success ? "status" : "alert"} className={testActionResults[action.key].success ? "is-success" : "is-error"}>
                           {testActionResults[action.key].success ? "✓ " : "✕ "}{testActionResults[action.key].message}
                         </p>
-                      ) : null}
+                      ) : <span />}
+                      <button type="button" onClick={() => runPackageTestAction(existingInstance, action)} disabled={runningTestAction === action.key || missingRequired}>
+                        {runningTestAction === action.key ? "Running…" : action.label || "Run test"}
+                      </button>
                     </div>
                   </div>
                 );
