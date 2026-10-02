@@ -154,14 +154,14 @@ export default function DebugCodesAdmin({ onError = () => {} }) {
             {filteredCodes.map((item) => (
               <button key={item.code} type="button" className={item.code === selectedCode ? 'is-active' : ''} onClick={() => choose(item)}>
                 <span className="oe-debug-code">{item.code}</span>
-                <span className="oe-debug-list-copy"><strong>{item.title}</strong><small>{item.category} · {item.severity}{item.active ? '' : ' · Inactive'}</small></span>
+                <span className="oe-debug-list-copy"><strong>{item.title}</strong><small>{item.category}{item.subsystemKey && item.causeKey ? ` · ${item.subsystemKey}/${item.causeKey}` : ''} · {item.severity}{item.active ? '' : ' · Inactive'}</small></span>
               </button>
             ))}
           </div>
 
           <div className="oe-debug-editor">
             <div className="oe-debug-editor-head">
-              <div><h3>{selectedCode || 'New debug code'}</h3><p>{selectedCode ? 'Edit the global definition and matching diagnostics.' : 'Add a new compact global OE code.'}</p></div>
+              <div><h3>{selectedCode || 'New debug code'}</h3><p>{selectedCode ? `${draft.category || 'Platform'} · subsystem ${draft.subsystemKey || draft.code?.[2] || '—'} · cause ${draft.causeKey || draft.code?.[3] || '—'}${draft.legacyCode ? ` · legacy ${draft.legacyCode}` : ''}` : 'Add a new compact global OE code.'}</p></div>
               {selectedCode ? <button type="button" className="oe-debug-copy" onClick={() => copy(selectedCode)}><Clipboard size={14}/> Copy</button> : null}
             </div>
 
