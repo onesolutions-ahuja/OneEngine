@@ -43,6 +43,7 @@ VALUES
 ('OEIP01','Integration','Provider rejected request','The connected service rejected the request.','External provider returned a non-success API response.','ERROR',FALSE,TRUE,TRUE,'provider.*40[0134]|provider rejected|remote.*rejected',261,'I','P'),
 ('OEIM01','Integration','Integration mapping invalid','The connected-service mapping is incomplete or invalid.','Field/data mapping validation failed.','ERROR',FALSE,TRUE,TRUE,'mapping.*invalid|required mapping|field mapping',262,'I','M'),
 ('OEIX01','Integration','Integration sync conflict','The connected-service data could not be reconciled.','Remote/local sync or reconciliation conflict.','ERROR',FALSE,TRUE,TRUE,'sync conflict|reconciliation conflict|record mismatch',263,'I','X'),
+('OEIC02','Integration','Integration provider timeout','The connected service did not respond in time.','External integration/provider request timed out before the OneEngine client timeout.','ERROR',TRUE,TRUE,TRUE,'PROVIDER_TIMEOUT|provider request timed out',264,'I','C'),
 
 ('OEMD01','Payment','Payment declined','The payment was declined.','Payment provider/terminal explicitly declined the payment.','INFO',FALSE,TRUE,TRUE,'payment.*declined|DECLINED',270,'M','D'),
 ('OEMT01','Payment','Payment timeout','The payment terminal did not respond in time.','Payment provider or terminal request timed out.','ERROR',TRUE,TRUE,TRUE,'payment.*timeout|terminal.*timeout',271,'M','T'),
