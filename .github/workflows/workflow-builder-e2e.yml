@@ -99,7 +99,7 @@ jobs:
           echo "OneEngine did not become authentication-ready in time" >&2
           exit 1
       - name: Run Workflow Builder regression
-        run: npx playwright test "tests/e2e/workflow-builder-regression.spec.mjs" --project="desktop-chromium"
+        run: npx playwright test tests/e2e/workflow-builder-regression.spec.mjs --project=desktop-chromium
       - name: Upload Playwright report and traces
         if: always()
         uses: actions/upload-artifact@v4
