@@ -3424,6 +3424,118 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "WAIT_FOR_CONDITIONS",
+    displayName: "Wait for Conditions",
+    description: "Pause a workflow until record conditions are met.",
+    schema: {
+      type: "object",
+      properties: {
+        waitCondition: { type: "object" },
+        pollSeconds: { type: "number" },
+        maxWaitUntil: { type: "string" },
+      },
+      required: ["waitCondition"],
+    },
+    validation: (action) => {
+      if (!action?.waitCondition) throw new Error("Wait for Conditions requires conditions");
+      const pollSeconds = Number(action.pollSeconds || 60);
+      if (!Number.isFinite(pollSeconds) || pollSeconds < 30) throw new Error("Wait for Conditions poll interval must be at least 30 seconds");
+      if (action.maxWaitUntil && Number.isNaN(new Date(action.maxWaitUntil).getTime())) throw new Error("Wait for Conditions stop-waiting time is invalid");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, fields = [], object = null, workflowVariables = {} }) => {
+      const tenantId = companyId || req?.user?.companyId;
+      const condition = resolveWorkflowConditionConfig(action.waitCondition, { record, previousRecord, req, object, workflowVariables });
+      if (evaluateCondition(condition, fields || [], record || {}, previousRecord || null)) {
+        return { status: "completed", conditionMet: true };
+      }
+      if (!runId) throw new Error("Wait for Conditions requires a persisted workflow run");
+      const pollSeconds = Math.max(30, Number(action.pollSeconds || 60));
+      const runAt = new Date(Date.now() + pollSeconds * 1000);
+      const maxWaitUntil = action.maxWaitUntil ? new Date(action.maxWaitUntil) : null;
+      if (maxWaitUntil && !Number.isNaN(maxWaitUntil.getTime()) && runAt > maxWaitUntil) runAt.setTime(maxWaitUntil.getTime());
+      const job = await enqueuePlatformJob({
+        db,
+        companyId: tenantId,
+        kind: "WAIT",
+        payload: {
+          runId,
+          stepRunId,
+          waitCondition: condition,
+          pollSeconds,
+          maxWaitUntil: maxWaitUntil && !Number.isNaN(maxWaitUntil.getTime()) ? maxWaitUntil.toISOString() : null,
+        },
+        runAt,
+        idempotencyKey: `${tenantId || "workflow"}:wait-condition:${runId}:${stepRunId || action.id || "step"}`,
+      });
+      if (job?.id && stepRunId) {
+        await db("UPDATE platform_workflow_step_runs SET durable_job_id=$1,updated_at=NOW() WHERE id=$2", [job.id, stepRunId]);
+      }
+      if (job?.id && runId && tenantId) {
+        await db("UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [runId, tenantId]);
+      }
+      return { status: job ? "waiting" : "skipped", jobId: job?.id || null, conditionMet: false, nextCheckAt: runAt.toISOString(), maxWaitUntil: maxWaitUntil?.toISOString?.() || null };
+    },
+  },
+  {
+    key: "WAIT_UNTIL_DATE",
+    displayName: "Wait Until Date",
+    description: "Pause a workflow until a specific Date/Time Resource.",
+    schema: {
+      type: "object",
+      properties: { resumeAt: {} },
+      required: ["resumeAt"],
+    },
+    validation: (action) => {
+      if (!action?.resumeAt) throw new Error("Wait Until Date requires a date/time Resource");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, object = null, workflowVariables = {} }) => {
+      const tenantId = companyId || req?.user?.companyId;
+      const resolvedResumeAt = resolveConfiguredResource(action.resumeAt, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+      const runAt = new Date(resolvedResumeAt);
+      if (Number.isNaN(runAt.getTime())) throw new Error("Wait Until Date value is invalid");
+      const job = await enqueuePlatformJob({
+        db,
+        companyId: tenantId,
+        kind: "WAIT",
+        payload: { resumeAt: runAt.toISOString(), runId, stepRunId },
+        runAt,
+        idempotencyKey: `${tenantId || "workflow"}:wait-until:${runId || "no-run"}:${stepRunId || action.id || runAt.toISOString()}`,
+      });
+      if (job?.id && stepRunId) await db("UPDATE platform_workflow_step_runs SET durable_job_id=$1,updated_at=NOW() WHERE id=$2", [job.id, stepRunId]);
+      if (job?.id && runId && tenantId) await db("UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [runId, tenantId]);
+      return { status: job ? "waiting" : "skipped", jobId: job?.id || null, resumeAt: runAt.toISOString() };
+    },
+  },
+  {
+    key: "CUSTOM_ERROR",
+    displayName: "Custom Error",
+    description: "Stop the flow with a targeted validation error.",
+    schema: {
+      type: "object",
+      properties: {
+        errorMessage: { type: "string" },
+        errorField: { type: "string" },
+      },
+      required: ["errorMessage"],
+    },
+    validation: (action) => {
+      if (!String(action?.errorMessage || "").trim()) throw new Error("Custom Error requires an error message");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action }) => {
+      const error = new Error(String(action.errorMessage).trim());
+      error.code = "CUSTOM_FLOW_ERROR";
+      error.field = action.errorField || null;
+      error.retryable = false;
+      throw error;
+    },
+  },
+  {
     key: "WAIT",
     displayName: "Wait",
     description: "Pause a workflow without blocking an HTTP request.",
@@ -4411,7 +4523,7 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "CONSTANT","FORMULA","TEXT_TEMPLATE","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","CONDITION","LOOP","GET_RECORDS",
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
-  "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","WAIT","STOP",
+  "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
 ]);
 
 export function friendlyWorkflowError(error, actionType = "") {
@@ -4478,7 +4590,7 @@ export async function executeWorkflowAction(context) {
       message: "Simulated in Debug mode so no external action or irreversible operation was performed.",
     };
   }
-  if (context?.debugMode === true && actionType === "WAIT") {
+  if (context?.debugMode === true && ["WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE"].includes(actionType)) {
     return {
       status: "completed",
       simulated: true,
