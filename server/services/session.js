@@ -27,6 +27,7 @@ export function createSessionToken(user, userStores = []) {
       mustChangePassword: false,
       username: user.username,
       assignedStoreIds: userStores.map(us => us.store_id),
+      sid: user.session_id || user.sid || null,
     },
     requireJwtSecret(),
     { expiresIn: SESSION_TTL }
