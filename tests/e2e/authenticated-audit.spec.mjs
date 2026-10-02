@@ -14,6 +14,7 @@ const routes = [
   "settings/security-identity",
   "settings/mfa-administration",
   "settings/identity-verification-history",
+  "settings/security-governance",
   "developer/objects",
   "developer/workflow-builder",
   "developer/approval-builder",
@@ -203,3 +204,20 @@ test("phase-two identity assurance controls are available", async ({ page }) => 
   await expect(page.getByText("JWKS URI",{exact:true})).toBeVisible();
   expect(failures,failures.join("\n")).toEqual([]);
 });
+
+
+test("phase-three security governance controls are available", async ({ page }) => {
+  const failures = watchRuntimeFailures(page)
+  await page.goto("settings/security-governance")
+  await expect(page.getByRole("button",{name:"Security Health"})).toBeVisible({timeout:30_000})
+  await expect(page.getByRole("button",{name:"API & OAuth"})).toBeVisible()
+  await expect(page.getByRole("button",{name:"Connected Apps"})).toBeVisible()
+  await expect(page.getByRole("button",{name:"Trusted Origins"})).toBeVisible()
+  await expect(page.getByRole("button",{name:"Credential Vault"})).toBeVisible()
+  await expect(page.getByRole("button",{name:"Certificates & Keys"})).toBeVisible()
+  await page.getByRole("button",{name:"API & OAuth"}).click()
+  await expect(page.getByText("Connected-app enforcement",{exact:true})).toBeVisible()
+  await page.getByRole("button",{name:"Connected Apps"}).click()
+  await expect(page.getByText("Connected Apps",{exact:true})).toBeVisible()
+  expect(failures,failures.join("\n")).toEqual([])
+})
