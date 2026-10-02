@@ -14,6 +14,7 @@ export const DEVELOPER_SETTINGS_KEYS = new Set([
   'deployments',
   'notifications',
   'value-sets',
+  'debug',
 ])
 
 const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
