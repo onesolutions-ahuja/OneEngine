@@ -1048,12 +1048,15 @@ const actionOptions = [
   { value: "WEBHOOK", label: "Webhook" },
   { value: "CONDITION", label: "Decision" },
   { value: "WAIT", label: "Wait for Amount of Time" },
+  { value: "WAIT_FOR_CONDITIONS", label: "Wait for Conditions" },
+  { value: "WAIT_UNTIL_DATE", label: "Wait Until Date" },
+  { value: "CUSTOM_ERROR", label: "Custom Error" },
   { value: "STOP", label: "End" },
 ];
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
   "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
-  "CONDITION","WAIT","RUN_SUBFLOW",
+  "CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","RUN_SUBFLOW",
 ]);
 
 const FLOW_ELEMENT_VISUALS = {
@@ -1064,6 +1067,9 @@ const FLOW_ELEMENT_VISUALS = {
   LOOP: { icon: "↻", color: "#fe9339", family: "Logic" },
   CONDITION: { icon: "◇", color: "#fe9339", family: "Logic" },
   WAIT: { icon: "◷", color: "#fe9339", family: "Logic" },
+  WAIT_FOR_CONDITIONS: { icon: "◌", color: "#fe9339", family: "Logic" },
+  WAIT_UNTIL_DATE: { icon: "◴", color: "#fe9339", family: "Logic" },
+  CUSTOM_ERROR: { icon: "!", color: "#c23934", family: "Logic" },
   STOP: { icon: "■", color: "#706e6b", family: "Logic" },
   GET_RECORDS: { icon: "⌕", color: "#e83e8c", family: "Data" },
   CREATE_RECORD: { icon: "+", color: "#e83e8c", family: "Data" },
@@ -1079,7 +1085,7 @@ function flowElementVisual(type = "") {
 }
 
 function flowElementSupportsFaultPath(type = "") {
-  return !["CONDITION","LOOP","WAIT","ASSIGNMENT","STOP","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
+  return !["CONDITION","LOOP","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","ASSIGNMENT","STOP","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
 }
 
 function flowApiName(label = "") {
@@ -1154,6 +1160,12 @@ function makeStep(type = "CREATE_RECORD") {
       faultMode: "FAIL",
       retryCount: 1,
       durationSeconds: 60,
+      resumeAt: "",
+      waitCondition: { type: "all", rules: [blankCondition()] },
+      pollSeconds: 60,
+      maxWaitUntil: "",
+      errorMessage: "",
+      errorField: "",
       reason: "",
       url: "",
       method: "POST",
@@ -1171,7 +1183,7 @@ function getActionLabel(type) {
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(key)) return "Resources";
-  if (["CONDITION","WAIT","STOP","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
+  if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (key === "RUN_SUBFLOW") return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
@@ -1257,7 +1269,20 @@ function workflowActionIssue(step, definition = null) {
     if (!config.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.itemVariable))) return "The Loop Current Item resource could not be generated.";
     if (!Array.isArray(config.bodyBranch) || !config.bodyBranch.length) return "Add at least one element to the For Each Item path.";
   }
-  if (step.type === "BULK_UPDATE_RECORDS") {
+  if (step.type === "WAIT") {
+    if (!Number(step.config?.durationSeconds || 0) && !step.config?.resumeAt) return "Enter a duration for Wait for Amount of Time.";
+  }
+  if (step.type === "WAIT_UNTIL_DATE") {
+    if (!step.config?.resumeAt) return "Choose the date/time Resource to resume at.";
+  }
+  if (step.type === "WAIT_FOR_CONDITIONS") {
+    if (!conditionIsValid(step.config?.waitCondition)) return "Complete the Wait for Conditions criteria.";
+    if (!Number.isFinite(Number(step.config?.pollSeconds)) || Number(step.config?.pollSeconds) < 30) return "Condition checks must run every 30 seconds or longer.";
+  }
+  if (step.type === "CUSTOM_ERROR") {
+    if (!String(step.config?.errorMessage || "").trim()) return "Enter the custom error message.";
+  }
+    if (step.type === "BULK_UPDATE_RECORDS") {
     if (!config.object) return "Choose the target object.";
     if (!config.recordIds) return "Choose the record collection.";
     if (!config.fieldMappings || !Object.keys(config.fieldMappings).length) return "Map at least one field to update.";
@@ -2471,14 +2496,44 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
       case "WAIT":
         return (
           <div className="space-y-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Duration (seconds)</label>
-              <input className={inputClass} type="number" min="0" value={step.config?.durationSeconds || 0} onChange={(event) => updateConfig({ durationSeconds: Number(event.target.value || 0) })} />
+            <label className="block text-xs font-medium text-slate-600">Amount of time (seconds)
+              <input className={inputClass} type="number" min="1" value={Number(step.config?.durationSeconds || 60)} onChange={(event) => updateConfig({ durationSeconds: Math.max(1, Number(event.target.value || 1)), resumeAt: "" })} />
+            </label>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">The flow interview pauses durably and resumes after this amount of time.</div>
+          </div>
+        );
+      case "WAIT_UNTIL_DATE":
+        return (
+          <div className="space-y-3">
+            <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Date/Time Resource" value={step.config?.resumeAt || ""} onChange={(resumeAt) => updateConfig({ resumeAt })} />
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">The flow resumes at the Date/Time value selected above.</div>
+          </div>
+        );
+      case "WAIT_FOR_CONDITIONS":
+        return (
+          <div className="space-y-3">
+            <StepConditionEditor objectKey={rootObjectKey} extraResources={extraResources} value={step.config?.waitCondition || { type: "all", rules: [blankCondition()] }} onChange={(waitCondition) => updateConfig({ waitCondition })} />
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-600">Check every (seconds)
+                <input className={inputClass} type="number" min="30" value={Number(step.config?.pollSeconds || 60)} onChange={(event) => updateConfig({ pollSeconds: Math.max(30, Number(event.target.value || 60)) })} />
+              </label>
+              <label className="block text-xs font-medium text-slate-600">Stop waiting after (optional)
+                <input className={inputClass} type="datetime-local" value={step.config?.maxWaitUntil || ""} onChange={(event) => updateConfig({ maxWaitUntil: event.target.value })} />
+              </label>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Resume at</label>
-              <input className={inputClass} type="datetime-local" value={step.config?.resumeAt || ""} onChange={(event) => updateConfig({ resumeAt: event.target.value })} />
-            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">If the conditions are false, OneEngine re-checks them with durable jobs until they become true or the optional stop-waiting time is reached.</div>
+          </div>
+        );
+      case "CUSTOM_ERROR":
+        return (
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-slate-600">Error Message
+              <textarea className={inputClass} rows={4} value={step.config?.errorMessage || ""} onChange={(event) => updateConfig({ errorMessage: event.target.value })} placeholder="Tell the user what must be corrected." />
+            </label>
+            <label className="block text-xs font-medium text-slate-600">Field API Name (optional)
+              <input className={inputClass} value={step.config?.errorField || ""} onChange={(event) => updateConfig({ errorField: event.target.value })} placeholder="e.g. email" />
+            </label>
+            <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-xs text-red-800">Stops the flow with a targeted validation error. For record-triggered transactions, the triggering change remains uncommitted when the surrounding transaction supports rollback.</div>
           </div>
         );
       case "STOP":
