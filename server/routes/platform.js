@@ -6752,7 +6752,11 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       }
       const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "read", paramsOffset: params.length });
       if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
-      if (listView?.filters) {
+      /* When the runtime sends viewFilters it is the complete editable
+         filter state for the selected view, so it replaces (rather than stacks
+         on top of) the saved filters. This lets users change a saved view and
+         preview the result before saving it again. */
+      if (req.query.viewFilters === undefined && listView?.filters) {
         appendPlatformRecordFilters({
           filters: normalizeListViewFilters(listView.filters, fieldByApiName.keys()),
           fieldByApiName,
