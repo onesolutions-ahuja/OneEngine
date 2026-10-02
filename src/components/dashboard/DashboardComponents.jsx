@@ -362,11 +362,11 @@ export function renderDashboardComponent(component, result, state) {
   const formatter = (value, format) => formatValue(value, format, config.currency);
   const body = {
     kpi: <MetricTile points={points} config={config} />,
-    pie: <PieChart points={points} config={config} onPointClick={drill} />
-    donut: <PieChart points={points} config={config} donut onPointClick={drill} />
+    pie: <PieChart points={points} config={config} onPointClick={drill} />,
+    donut: <PieChart points={points} config={config} donut onPointClick={drill} />,
     bar: config.seriesField
       ? <MultiSeriesBarChart series={multi.series} categories={multi.categories} config={config} formatValue={formatter} onPointClick={drill} />
-      : <BarChart points={points} config={config} onPointClick={drill} />
+      : <BarChart points={points} config={config} onPointClick={drill} />,
     line: <LineChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
     gauge: <GaugeChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
     funnel: <FunnelChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
