@@ -24,11 +24,16 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
     }
   });
   if (homeCompanyId) {
-    const homeClient = page.getByRole("button").filter({ hasText: homeCompanyId.slice(0, 8) }).first();
-    if (await homeClient.isVisible().catch(() => false)) {
-      await homeClient.click();
-      await expect.poll(() => page.evaluate(() => sessionStorage.getItem("onepos_developer_target_company_id") || "")).toBe(homeCompanyId);
-    }
+    // Developer metadata requests carry X-Acting-Company-Id. A previously
+    // selected client can persist across the shared E2E session, so force the
+    // Builder back to the authenticated user's own tenant before exercising
+    // executable workflow tests. This changes only the normal OneDeveloper
+    // target-company context; RBAC is still enforced by the server.
+    await page.evaluate((companyId) => {
+      sessionStorage.setItem("onepos_developer_target_company_id", companyId);
+    }, homeCompanyId);
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("onepos_developer_target_company_id") || "")).toBe(homeCompanyId);
   }
 
   const newWorkflow = page.getByRole("button", { name: /new workflow/i });
