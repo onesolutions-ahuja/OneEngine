@@ -26,6 +26,7 @@ const TABS = [
   ['relationships', 'Relationships'],
   ['record-types', 'Record Types'],
   ['layouts', 'Forms / Layouts'],
+  ['compact-layouts', 'Compact Layouts'],
   ['list-views', 'List Views'],
   ['validation', 'Validation Rules'],
   ['duplicates', 'Duplicate Management'],
@@ -198,6 +199,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
     const wantsConfiguration = activeTab === 'details' || [
       'record-types',
       'layouts',
+      'compact-layouts',
       'list-views',
       'actions',
       'approvals',
@@ -795,12 +797,22 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                 ) : null}
 
                 {activeTab === 'layouts' ? (
-                  <ObjectDataList title="Forms / Layouts" rows={objectData.layouts}
+                  <ObjectDataList title="Forms / Layouts" rows={objectData.layouts.filter((row) => row.page_type !== 'compact')}
                     primary={(row) => row.name || row.label || row.layout_key || 'Layout'}
                     secondary={(row) => row.layout_key || row.page_type || ''}
                     meta={(row) => row.page_type || 'layout'}
                     actionLabel="Layout"
                     onAdd={() => setEditor({ kind: 'layout', item: null, pageType: 'detail' })}
+                    onRowClick={(row) => setEditor({ kind: 'layout', item: row })} />
+                ) : null}
+
+                {activeTab === 'compact-layouts' ? (
+                  <ObjectDataList title="Compact Layouts" rows={objectData.layouts.filter((row) => row.page_type === 'compact')}
+                    primary={(row) => row.name || row.label || row.layout_key || 'Compact Layout'}
+                    secondary={(row) => row.layout_key || ''}
+                    meta={(row) => row.is_default ? 'Primary' : (row.active === false ? 'Inactive' : 'Active')}
+                    actionLabel="Compact Layout"
+                    onAdd={() => setEditor({ kind: 'layout', item: null, pageType: 'compact' })}
                     onRowClick={(row) => setEditor({ kind: 'layout', item: row })} />
                 ) : null}
 
