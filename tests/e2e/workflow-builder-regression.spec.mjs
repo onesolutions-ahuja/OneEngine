@@ -51,9 +51,11 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(page.getByRole("button", { name: "Save as New Version", exact: true })).toBeEnabled();
 
   await page.getByRole("button", { name: "Versions", exact: true }).click();
-  await expect(page.getByText("Version History", { exact: true })).toBeVisible();
+  const versionHistory = page.getByText("Version History", { exact: true });
+  await expect(versionHistory).toBeVisible();
   await expect(page.getByText(/^Version \d+$/).first()).toBeVisible();
-  await page.getByRole("button", { name: "Close", exact: true }).first().click();
+  const versionPanel = versionHistory.locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
+  await versionPanel.getByRole("button", { name: "Close", exact: true }).click();
 
   await page.getByRole("button", { name: "Tests", exact: true }).click();
   await expect(page.getByText("Saved Tests", { exact: true })).toBeVisible();

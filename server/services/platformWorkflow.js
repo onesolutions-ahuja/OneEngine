@@ -3889,11 +3889,11 @@ export function validateWorkflowAction(action) {
 }
 
 export function getRegisteredFunction(functionKey) {
-  return REGISTERED_FUNCTIONS_MAP.get(String(functionKey || "")) || null;
+  return PLATFORM_FUNCTION_MAP.get(String(functionKey || "")) || null;
 }
 
 export function getRegisteredFunctionsRegistry() {
-  return REGISTERED_FUNCTIONS.slice();
+  return PLATFORM_FUNCTIONS.slice();
 }
 
 async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId }) {
