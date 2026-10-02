@@ -4229,7 +4229,35 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   });
 
-  router.post("/platform/flow-sessions/:sessionId/submit", ...manage, async (req, res) => {
+  router.post("/platform/flow-sessions/:sessionId/resume", ...manage, async (req, res) => {
+    try {
+      const result = await db(
+        "SELECT * FROM platform_workflow_screen_sessions WHERE id=$1 AND company_id=$2 LIMIT 1",
+        [req.params.sessionId, req.user.companyId]
+      );
+      const session = result.rows[0] || null;
+      if (!session) return res.status(404).json({ success: false, message: "Screen session not found" });
+      if (session.status !== "PAUSED") return res.status(409).json({ success: false, message: "Screen session is not paused" });
+      if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
+        await db("UPDATE platform_workflow_screen_sessions SET status='EXPIRED',updated_at=NOW() WHERE id=$1", [session.id]);
+        return res.status(410).json({ success: false, message: "Screen session has expired" });
+      }
+      await db(
+        "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',updated_at=NOW() WHERE id=$1 AND company_id=$2",
+        [session.id, req.user.companyId]
+      );
+      await db(
+        "UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+        [session.run_id, req.user.companyId]
+      );
+      return res.json({ success: true, data: { id: session.id, status: "ACTIVE", screen: session.screen || {}, values: session.values || {} } });
+    } catch (error) {
+      console.error("Screen Flow resume error:", error);
+      return res.status(500).json({ success: false, message: "Unable to resume Screen Flow" });
+    }
+  });
+
+    router.post("/platform/flow-sessions/:sessionId/submit", ...manage, async (req, res) => {
     try {
       const sessionResult = await db(
         "SELECT * FROM platform_workflow_screen_sessions WHERE id=$1 AND company_id=$2 LIMIT 1",
@@ -4244,7 +4272,21 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
 
       const navigation = String(req.body?.navigation || "NEXT").toUpperCase();
-      if (!["NEXT","FINISH","BACK"].includes(navigation)) return res.status(400).json({ success: false, message: "Invalid Screen Flow navigation action" });
+      if (!["NEXT","FINISH","BACK","PAUSE"].includes(navigation)) return res.status(400).json({ success: false, message: "Invalid Screen Flow navigation action" });
+
+      if (navigation === "PAUSE") {
+        if (session.screen?.allowPause !== true) return res.status(409).json({ success: false, message: "Pause is not available for this screen" });
+        const values = req.body?.values && typeof req.body.values === "object" && !Array.isArray(req.body.values) ? req.body.values : {};
+        await db(
+          "UPDATE platform_workflow_screen_sessions SET status='PAUSED',values=$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
+          [JSON.stringify(values), session.id, req.user.companyId]
+        );
+        await db(
+          "UPDATE platform_workflow_runs SET status='PAUSED',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+          [session.run_id, req.user.companyId]
+        );
+        return res.json({ success: true, data: { status: "PAUSED", runId: session.run_id, screenSessionId: session.id, screen: session.screen, values, navigation: "PAUSE" } });
+      }
 
       if (navigation === "BACK") {
         if (session.screen?.allowBack === false) return res.status(409).json({ success: false, message: "Back navigation is not available" });
