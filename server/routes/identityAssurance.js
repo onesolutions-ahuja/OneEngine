@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import {
   activeTemporaryVerificationCode, assuranceSatisfies, consumeChallenge, consumeRecoveryCode, createPendingChallenge,
   effectiveStepUpPolicy, findTrustedDevice, generateTemporaryVerificationCode, getPendingChallenge, listMfaMethods,
-  loadEffectiveAssurance, mfaMethodAllowed, newDeviceToken, replaceRecoveryCodes, startTotpEnrollment,
+  loadEffectiveAssurance, mfaMethodAllowed, newDeviceToken, replaceRecoveryCodes, sortMfaMethods, startTotpEnrollment,
   stepUpRequired, trustDevice, verifyTemporaryVerificationCode, verifyTotpMethod,
 } from "../services/identityAssurance.js";
 import { clientIp, createTrackedSession, writeLoginHistory } from "../services/identitySecurity.js";
@@ -78,9 +78,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(policy.action==="BLOCK")return res.status(403).json({success:false,code:"RESOURCE_BLOCKED",message:"This operation is blocked by security policy"});
     if(!stepUpRequired({session:req.authSession,policy,defaultMinutes:15}))return res.json({success:true,required:false,assuranceLevel:req.authSession?.assurance_level||"HIGH"});
     const assurance=await loadEffectiveAssurance(db,{companyId:req.user.companyId,userId:req.user.id,roleId:req.user.roleId});
-    const methods=(await listMfaMethods(db,{companyId:req.user.companyId,userId:req.user.id}))
+    const methods=sortMfaMethods((await listMfaMethods(db,{companyId:req.user.companyId,userId:req.user.id}))
       .filter((method)=>mfaMethodAllowed(method,assurance.effective))
-      .filter((method)=>assuranceSatisfies(methodAssurance(method,assurance.effective),policy.required_assurance||"HIGH"));
+      .filter((method)=>assuranceSatisfies(methodAssurance(method,assurance.effective),policy.required_assurance||"HIGH")));
     const challenge=await createPendingChallenge(db,{companyId:req.user.companyId,userId:req.user.id,type:"STEP_UP",
       context:{sessionId:req.user.sid,resourceKey},minutes:10});
     res.status(202).json({success:true,required:true,challengeId:challenge.id,availableMethods:methods.map(publicMethod),
@@ -149,9 +149,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const requiredAssurance=challenge.challenge_type==="STEP_UP"
       ? ((await effectiveStepUpPolicy(db,{companyId:user.company_id,resourceKey:String(challenge.context?.resourceKey||"").toUpperCase()}))?.required_assurance||"HIGH")
       : policy.effective.requiredLoginAssurance;
-    const usable=methods.filter((method)=>mfaMethodAllowed(method,policy.effective))
+    const usable=sortMfaMethods(methods.filter((method)=>mfaMethodAllowed(method,policy.effective))
       .filter((method)=>!policy.effective.phishingResistantRequired||method.phishing_resistant===true)
-      .filter((method)=>assuranceSatisfies(methodAssurance(method,policy.effective),requiredAssurance));
+      .filter((method)=>assuranceSatisfies(methodAssurance(method,policy.effective),requiredAssurance)));
     const temporaryCode=challenge.challenge_type==="LOGIN"&&!challenge.context?.deviceActivationPending&&!policy.effective.phishingResistantRequired
       &&assuranceSatisfies("STANDARD",requiredAssurance)
       ? await activeTemporaryVerificationCode(db,{companyId:user.company_id,userId:user.id}) : null;
@@ -271,13 +271,14 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const {generateRegistrationOptions}=await import("@simplewebauthn/server");
     const existing=(await listMfaMethods(db,{companyId:user.company_id,userId:user.id,includeUnverified:true})).filter(x=>x.method_type==="PASSKEY"&&x.credential_id);
     const rpID=String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0].split(",")[0].trim();
+    const userVerificationRequired=policy.effective.phishingResistantRequired===true || policy.effective.passkeyAssurance==="HIGH";
     const options=await generateRegistrationOptions({
       rpName:"OneEngine",rpID,userName:user.email||user.username,userDisplayName:user.full_name||user.username,
       userID:new TextEncoder().encode(user.id),
-      attestationType:"none",authenticatorSelection:{authenticatorAttachment:kind==="PLATFORM"?"platform":"cross-platform",residentKey:"preferred",userVerification:"preferred"},
+      attestationType:"none",authenticatorSelection:{authenticatorAttachment:kind==="PLATFORM"?"platform":"cross-platform",residentKey:"preferred",userVerification:userVerificationRequired?"required":"preferred"},
       excludeCredentials:existing.map(x=>({id:x.credential_id,transports:Array.isArray(x.transports)?x.transports:[]})),
     });
-    await db("UPDATE identity_mfa_challenges SET challenge=$2,context=context||$3::jsonb WHERE id=$1",[challenge.id,options.challenge,JSON.stringify({rpID,authenticatorKind:kind})]);
+    await db("UPDATE identity_mfa_challenges SET challenge=$2,context=context||$3::jsonb WHERE id=$1",[challenge.id,options.challenge,JSON.stringify({rpID,authenticatorKind:kind,userVerificationRequired})]);
     res.json({success:true,data:options});
   });
 
@@ -288,7 +289,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const rpID=challenge.context?.rpID||String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0];
     const origin=String(req.headers?.origin||`https://${rpID}`);
     let verification;
-    try{verification=await verifyRegistrationResponse({response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:false});}
+    try{verification=await verifyRegistrationResponse({response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:challenge.context?.userVerificationRequired===true});}
     catch(error){return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});}
     if(!verification.verified||!verification.registrationInfo)return res.status(401).json({success:false,message:"Passkey could not be verified"});
     const effectivePolicy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
@@ -343,8 +344,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(!methods.length)return res.status(409).json({success:false,message:"No passkey is enrolled"});
     const {generateAuthenticationOptions}=await import("@simplewebauthn/server");
     const rpID=String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0].split(",")[0].trim();
-    const options=await generateAuthenticationOptions({rpID,userVerification:"preferred",allowCredentials:methods.map(x=>({id:x.credential_id,transports:Array.isArray(x.transports)?x.transports:[]}))});
-    await db("UPDATE identity_mfa_challenges SET challenge=$2,context=context||$3::jsonb WHERE id=$1",[challenge.id,options.challenge,JSON.stringify({rpID})]);
+    const userVerificationRequired=policy.effective.phishingResistantRequired===true || policy.effective.passkeyAssurance==="HIGH";
+    const options=await generateAuthenticationOptions({rpID,userVerification:userVerificationRequired?"required":"preferred",allowCredentials:methods.map(x=>({id:x.credential_id,transports:Array.isArray(x.transports)?x.transports:[]}))});
+    await db("UPDATE identity_mfa_challenges SET challenge=$2,context=context||$3::jsonb WHERE id=$1",[challenge.id,options.challenge,JSON.stringify({rpID,userVerificationRequired})]);
     res.json({success:true,data:options});
   });
 
@@ -373,7 +375,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const origin=String(req.headers?.origin||`https://${rpID}`);
     let verification;
     try{verification=await verifyAuthenticationResponse({
-      response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:false,
+      response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:challenge.context?.userVerificationRequired===true,
       credential:{id:method.credential_id,publicKey:base64urlBuffer(method.public_key),counter:Number(method.sign_count||0),transports:Array.isArray(method.transports)?method.transports:[]},
     });}catch(error){return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});}
     if(!verification.verified)return res.status(401).json({success:false,message:"Passkey verification failed"});
