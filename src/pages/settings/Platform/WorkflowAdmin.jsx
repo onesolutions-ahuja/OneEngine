@@ -2288,6 +2288,23 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                       {component.type === "DISPLAY_TEXT" ? (
                         <label className="block text-xs font-medium text-slate-600">Content<textarea className={inputClass} rows={4} value={component.text || ""} onChange={(event) => updateComponent(componentIndex, { text: event.target.value })} /></label>
                       ) : null}
+                      {component.type === "RECORD_PICKER" ? (
+                        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={component.objectKey || ""} onObjectChange={(objectKey) => updateComponent(componentIndex, { objectKey })} />
+                          <p className="text-[11px] text-slate-500">Search results respect the signed-in user’s object permissions and company/store scope.</p>
+                        </div>
+                      ) : null}
+                      {component.type === "DATA_TABLE" ? (
+                        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "collection" || String(resource.value || "").endsWith(".records") || String(resource.value || "").endsWith(".collection"))} label="Row Collection" value={component.dataResource || ""} onChange={(dataResource) => updateComponent(componentIndex, { dataResource })} />
+                          <label className="block text-xs font-medium text-slate-600">Columns (comma-separated field paths)
+                            <input className={inputClass} value={(component.columns || []).join(", ")} onChange={(event) => updateComponent(componentIndex, { columns: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="name, status, total" />
+                          </label>
+                          <label className="block text-xs font-medium text-slate-600">Selection Mode
+                            <select className={inputClass} value={component.selectionMode || "multiple"} onChange={(event) => updateComponent(componentIndex, { selectionMode: event.target.value })}><option value="none">None</option><option value="single">Single</option><option value="multiple">Multiple</option></select>
+                          </label>
+                        </div>
+                      ) : null}
                       {component.type === "CUSTOM_COMPONENT" ? (
                         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                           <label className="block text-xs font-medium text-slate-600">Registered Component
