@@ -1630,6 +1630,101 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     res.json({ success: true, data: await resolveEffectiveFieldSecurity(db, result.rows[0], req) });
   });
 
+  router.get("/platform/objects/:objectId/access-summary", ...manage, async (req, res) => {
+    const object = await getObject(req.params.objectId, req, { includeInactive: true });
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    const [roles, permissions] = await Promise.all([
+      db("SELECT id,name,description,is_system FROM roles WHERE company_id=$1 ORDER BY name", [req.user.companyId]),
+      db(
+        "SELECT role_id,can_view,can_create,can_edit,can_delete,can_import,can_export FROM platform_object_permissions WHERE object_id=$1 AND company_id=$2",
+        [object.id, req.user.companyId]
+      ),
+    ]);
+    const byRole = new Map(permissions.rows.map((row) => [String(row.role_id), row]));
+    res.json({
+      success: true,
+      data: roles.rows.map((role) => ({
+        roleId: role.id,
+        roleName: role.name,
+        description: role.description || "",
+        systemRole: role.is_system === true,
+        ...(byRole.get(String(role.id)) || {
+          can_view: false,
+          can_create: false,
+          can_edit: false,
+          can_delete: false,
+          can_import: false,
+          can_export: false,
+        }),
+      })),
+    });
+  });
+
+  router.put("/platform/objects/:objectId/permissions/:roleId", ...manage, async (req, res) => {
+    const object = await getObject(req.params.objectId, req, { includeInactive: true });
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    const role = await db("SELECT id FROM roles WHERE id=$1 AND company_id=$2", [req.params.roleId, req.user.companyId]);
+    if (!role.rows.length) return res.status(404).json({ success: false, message: "Role not found" });
+    const values = {
+      canView: req.body?.canView === true,
+      canCreate: req.body?.canCreate === true,
+      canEdit: req.body?.canEdit === true,
+      canDelete: req.body?.canDelete === true,
+      canImport: req.body?.canImport === true,
+      canExport: req.body?.canExport === true,
+    };
+    if (!values.canView && (values.canCreate || values.canEdit || values.canDelete || values.canImport || values.canExport)) {
+      return res.status(400).json({ success: false, message: "Read access is required before Create, Edit, Delete, Import, or Export can be granted" });
+    }
+    const result = await db(
+      `INSERT INTO platform_object_permissions
+        (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete,can_import,can_export)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (object_id,role_id,company_id)
+       DO UPDATE SET can_view=EXCLUDED.can_view,can_create=EXCLUDED.can_create,can_edit=EXCLUDED.can_edit,
+                     can_delete=EXCLUDED.can_delete,can_import=EXCLUDED.can_import,can_export=EXCLUDED.can_export
+       RETURNING *`,
+      [object.id, req.params.roleId, req.user.companyId, values.canView, values.canCreate, values.canEdit,
+        values.canDelete, values.canImport, values.canExport]
+    );
+    res.json({ success: true, data: result.rows[0] });
+  });
+
+  router.get("/platform/objects/:objectId/field-access-summary", ...manage, async (req, res) => {
+    const object = await getObject(req.params.objectId, req, { includeInactive: true });
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    const [roles, fields, security] = await Promise.all([
+      db("SELECT id,name FROM roles WHERE company_id=$1 ORDER BY name", [req.user.companyId]),
+      db("SELECT id,api_name,label,readable,writable,active FROM platform_fields WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) ORDER BY active DESC,display_order,label", [object.id, req.user.companyId]),
+      db(
+        `SELECT s.field_id,s.role_id,s.readable,s.writable
+           FROM platform_field_security s
+           JOIN platform_fields f ON f.id=s.field_id
+          WHERE f.object_id=$1 AND s.company_id=$2`,
+        [object.id, req.user.companyId]
+      ),
+    ]);
+    const overrides = new Map(security.rows.map((row) => [`${row.field_id}:${row.role_id}`, row]));
+    res.json({
+      success: true,
+      data: {
+        fields: fields.rows,
+        roles: roles.rows,
+        access: fields.rows.map((field) => ({
+          fieldId: field.id,
+          byRole: Object.fromEntries(roles.rows.map((role) => {
+            const override = overrides.get(`${field.id}:${role.id}`);
+            return [role.id, {
+              readable: override ? override.readable !== false : field.readable !== false,
+              writable: override ? override.writable === true : field.writable === true,
+              inherited: !override,
+            }];
+          })),
+        })),
+      },
+    });
+  });
+
   router.get("/platform/objects/:objectId/effective-permissions", authenticate, async (req, res) => {
     const object = await getObject(req.params.objectId, req);
     if (!object) return res.status(404).json({ success: false, message: "Object not found" });
