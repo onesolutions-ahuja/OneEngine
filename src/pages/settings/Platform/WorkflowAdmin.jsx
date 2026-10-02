@@ -2305,6 +2305,18 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                           </label>
                         </div>
                       ) : null}
+                      {component.type === "FILE_UPLOAD" ? (
+                        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={component.fileObjectKey || rootObjectKey || ""} onObjectChange={(fileObjectKey) => updateComponent(componentIndex, { fileObjectKey })} />
+                          <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Target Record Resource (optional)" value={component.fileRecordResource || ""} onChange={(fileRecordResource) => updateComponent(componentIndex, { fileRecordResource })} />
+                          <div className="grid gap-2 md:grid-cols-2">
+                            <label className="block text-xs font-medium text-slate-600">Accepted file types<input className={inputClass} value={(component.acceptedTypes || []).join(", ")} onChange={(event) => updateComponent(componentIndex, { acceptedTypes: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="image/*, application/pdf" /></label>
+                            <label className="block text-xs font-medium text-slate-600">Maximum files<input className={inputClass} type="number" min="1" max="10" value={Number(component.maxFiles || 1)} onChange={(event) => updateComponent(componentIndex, { maxFiles: Math.max(1, Math.min(10, Number(event.target.value || 1))) })} /></label>
+                          </div>
+                          <label className="block text-xs font-medium text-slate-600">File Category<input className={inputClass} value={component.fileCategory || ""} onChange={(event) => updateComponent(componentIndex, { fileCategory: event.target.value })} /></label>
+                          <p className="text-[11px] text-slate-500">If Target Record is blank, files attach to the record that started the flow.</p>
+                        </div>
+                      ) : null}
                       {component.type === "CUSTOM_COMPONENT" ? (
                         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                           <label className="block text-xs font-medium text-slate-600">Registered Component
