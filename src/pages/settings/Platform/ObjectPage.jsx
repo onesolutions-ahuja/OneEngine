@@ -231,6 +231,8 @@ export default function ObjectPage({
   const [pageSize, setPageSize] = useState(50);
   const [recordTotal, setRecordTotal] = useState(0);
   const [selectedRowIds, setSelectedRowIds] = useState([]);
+  const [runtimeSort, setRuntimeSort] = useState({ key: "", direction: "asc" });
+  const [runtimeFilters, setRuntimeFilters] = useState({});
   const [displayMode, setDisplayMode] = useState("split");
   const activeFields = useMemo(
     () => fields.filter((field) => field?.active !== false && !isTechnicalRecordField(field)),
@@ -289,7 +291,7 @@ export default function ObjectPage({
       loadRecords({ pageOverride: 1, searchOverride: search });
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [search, runtimeSort, runtimeFilters]);
 
   useEffect(() => {
     const key = getObjectKey(objectMetadata);
@@ -603,6 +605,13 @@ export default function ObjectPage({
     try {
       const query = new URLSearchParams();
       if (activeListViewId) query.set("listViewId", activeListViewId);
+      if (runtimeSort?.key) {
+        query.set("sortField", runtimeSort.key);
+        query.set("sortDirection", runtimeSort.direction || "asc");
+      }
+      if (runtimeFilters && Object.keys(runtimeFilters).length) {
+        query.set("filterModel", JSON.stringify(runtimeFilters));
+      }
       const requestedPage = pageOverride || page || 1;
       query.set("page", String(requestedPage));
       if (!activeListViewId) query.set("pageSize", String(pageSize || 50));
@@ -792,7 +801,12 @@ export default function ObjectPage({
                 <select
                   className="platform-list-view-select"
                   value={activeListViewId}
-                  onChange={(event) => { setActiveListViewId(event.target.value); setPage(1); }}
+                  onChange={(event) => {
+                    setActiveListViewId(event.target.value);
+                    setRuntimeSort({ key: "", direction: "asc" });
+                    setRuntimeFilters({});
+                    setPage(1);
+                  }}
                   aria-label="Saved list view"
                 >
                   {listViews.map((view) => <option key={view.id} value={view.id}>{view.label}{view.is_default ? " · Default" : ""}</option>)}
@@ -892,6 +906,11 @@ export default function ObjectPage({
                         pageSize={pageSize}
                         total={recordTotal}
                         onPageChange={(nextPage) => setPage(nextPage)}
+                        remoteMode
+                        sortValue={runtimeSort}
+                        onSortChange={(nextSort) => { setRuntimeSort(nextSort); setPage(1); }}
+                        filterValue={runtimeFilters}
+                        onFiltersChange={(nextFilters) => { setRuntimeFilters(nextFilters); setPage(1); }}
                       />
             
           )}
