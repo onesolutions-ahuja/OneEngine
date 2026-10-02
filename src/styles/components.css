@@ -1330,6 +1330,25 @@
 .workspace-page.workspace-mode-kanban {
   grid-template-columns: 220px minmax(0,1fr);
 }
+.record-column-picker-wrap { position:relative; }
+.record-column-picker {
+  position:absolute;
+  z-index:30;
+  right:0;
+  top:calc(100% + 5px);
+  width:230px;
+  max-height:330px;
+  overflow:auto;
+  border:1px solid rgba(0,0,0,.1);
+  border-radius:9px;
+  background:white;
+  padding:8px;
+  box-shadow:0 12px 28px rgba(0,0,0,.14);
+}
+.record-column-picker > strong { display:block; margin-bottom:6px; font-size:10px; }
+.record-column-picker > div { display:grid; gap:3px; }
+.record-column-picker label { display:flex; align-items:center; gap:6px; min-height:24px; font-size:9.5px; }
+.record-column-picker > button { margin-top:7px; min-height:26px; border:1px solid rgba(0,0,0,.08); border-radius:6px; background:white; padding:0 8px; font-size:9.5px; }
 .record-list-view-picker select {
   min-height: 30px;
   max-width: 190px;
