@@ -184,7 +184,7 @@ export async function updateUser(userId, input) {
 }
 
 export async function loadPlatformObjects() {
-  const payload = await apiRequest('/api/platform/metadata')
-  const rows = payload?.data?.objects || []
+  const payload = await apiRequest('/api/platform/objects')
+  const rows = payload?.data?.objects || payload?.data || []
   return Array.isArray(rows) ? rows : []
 }
