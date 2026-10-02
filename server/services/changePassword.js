@@ -1,3 +1,4 @@
+import { assertPasswordAllowed, recordPasswordChange } from "./identitySecurity.js";
 export function createChangePasswordHandler({ db, bcrypt }) {
   return async (req, res) => {
   try {
@@ -7,13 +8,6 @@ export function createChangePasswordHandler({ db, bcrypt }) {
       return res.status(400).json({
         success: false,
         message: "Current password and new password are required",
-      });
-    }
-
-    if (newPassword.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: "New password must be at least 8 characters",
       });
     }
 
@@ -36,6 +30,16 @@ export function createChangePasswordHandler({ db, bcrypt }) {
     }
 
     const user = result.rows[0];
+    const passwordCheck = await assertPasswordAllowed(db, {
+      companyId: req.user.companyId,
+      userId: user.id,
+      password: newPassword,
+      bcrypt,
+      enforceMinimumLifetime: true,
+    });
+    if (!passwordCheck.ok) {
+      return res.status(400).json({ success: false, code: "PASSWORD_POLICY", message: passwordCheck.message });
+    }
 
     const validCurrent = await bcrypt.compare(
       currentPassword,
@@ -61,6 +65,14 @@ export function createChangePasswordHandler({ db, bcrypt }) {
       `,
       [newPasswordHash, user.id]
     );
+    await recordPasswordChange(db, {
+      companyId: req.user.companyId,
+      userId: user.id,
+      previousHash: user.password_hash,
+      settings: passwordCheck.settings,
+      revokeSessions: false,
+      keepSessionId: req.user.sid || null,
+    });
 
     res.json({
       success: true,
