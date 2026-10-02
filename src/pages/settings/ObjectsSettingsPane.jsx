@@ -123,6 +123,9 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
     description: '',
     sourceTable: '',
     active: true,
+    allowReports: true,
+    allowSearch: true,
+    trackHistory: true,
   })
 
   useEffect(() => {
@@ -430,6 +433,9 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
       description: '',
       sourceTable: '',
       active: true,
+      allowReports: true,
+      allowSearch: true,
+      trackHistory: true,
     })
   }
 
@@ -444,6 +450,9 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
       description: selected.description || '',
       sourceTable: selected.source_table || '',
       active: selected.active !== false,
+      allowReports: selected.config?.allowReports !== false,
+      allowSearch: selected.config?.allowSearch !== false,
+      trackHistory: selected.config?.trackHistory !== false,
     })
   }
 
@@ -465,6 +474,9 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
             description: objectForm.description || undefined,
             sourceTable: objectForm.sourceTable || null,
             active: objectForm.active,
+            allowReports: objectForm.allowReports,
+            allowSearch: objectForm.allowSearch,
+            trackHistory: objectForm.trackHistory,
           }),
         },
       )
@@ -1039,6 +1051,11 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
               <label>Source Table<input value={objectForm.sourceTable} onChange={(event) => setObjectForm((current) => ({ ...current, sourceTable: event.target.value }))} placeholder="Optional" /></label>
               <label>Description<textarea rows={3} value={objectForm.description} onChange={(event) => setObjectForm((current) => ({ ...current, description: event.target.value }))} /></label>
               <label className="record-dialog-checkbox"><input type="checkbox" checked={objectForm.active} onChange={(event) => setObjectForm((current) => ({ ...current, active: event.target.checked }))}/> Active</label>
+              <div className="record-dialog-feature-grid">
+                <label className="record-dialog-checkbox"><input type="checkbox" checked={objectForm.allowReports} onChange={(event) => setObjectForm((current) => ({ ...current, allowReports: event.target.checked }))}/><span><strong>Available for reports</strong><small>Expose this object to OneEngine report definitions.</small></span></label>
+                <label className="record-dialog-checkbox"><input type="checkbox" checked={objectForm.allowSearch} onChange={(event) => setObjectForm((current) => ({ ...current, allowSearch: event.target.checked }))}/><span><strong>Allow global search</strong><small>Include records from this object in Platform search.</small></span></label>
+                <label className="record-dialog-checkbox"><input type="checkbox" checked={objectForm.trackHistory} onChange={(event) => setObjectForm((current) => ({ ...current, trackHistory: event.target.checked }))}/><span><strong>Enable field history</strong><small>Field-level Track History selections only write history while this is enabled.</small></span></label>
+              </div>
             </div>
             <div className="record-dialog-footer">
               <button type="button" className="record-dialog-secondary" onClick={() => setObjectModal(null)}>Cancel</button>
