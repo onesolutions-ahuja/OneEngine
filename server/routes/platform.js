@@ -3,7 +3,7 @@ import express from "express";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
 import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
-import { compileFormulas, FormulaError, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS } from "../services/platformFormula.js";
+import { compileFormulas, evaluateWorkflowFormula, FormulaError, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
 import { executePlatformAutomations } from "../services/platformAutomation.js";
 import { hasConfiguredCommunicationProvider } from "../services/platformWorkflow.js";
@@ -4178,6 +4178,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         try {
           if (!(new RegExp(component.pattern)).test(String(value))) errors[name] = component.validationMessage || "The value is not valid";
         } catch {}
+      }
+      if (!errors[name] && String(component?.validationFormula || "").trim()) {
+        try {
+          const formulaInputs = {};
+          for (const [inputName, inputValue] of Object.entries(values || {})) {
+            if (/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(inputName))) formulaInputs[inputName] = inputValue;
+          }
+          const valid = evaluateWorkflowFormula(String(component.validationFormula), formulaInputs);
+          if (valid !== true) errors[name] = component.validationMessage || `${component.label || name} is not valid`;
+        } catch {
+          errors[name] = component.validationMessage || "The validation formula could not be evaluated";
+        }
       }
     }
     return errors;
