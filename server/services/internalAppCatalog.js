@@ -663,7 +663,7 @@ const CATALOG = [
     installable: true,
     visibility: "PUBLIC",
     entitlementKey: "communications.email",
-    dependencies: ["connector_core", "communication_core", "email_connector"],
+    dependencies: ["connector_core", "communication_core"],
     capabilities: ["email_outbound", "provider_status"],
     iconAssetKey: "email",
     providerConnector: {
@@ -709,7 +709,7 @@ const CATALOG = [
     installable: true,
     visibility: "PUBLIC",
     entitlementKey: "communications.email",
-    dependencies: ["connector_core", "communication_core", "email_connector"],
+    dependencies: ["connector_core", "communication_core"],
     capabilities: ["email_outbound", "provider_status"],
     iconAssetKey: "email",
     providerConnector: {
