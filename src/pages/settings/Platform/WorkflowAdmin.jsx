@@ -1543,7 +1543,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
   const isVariableResource = step.type === "ASSIGNMENT" && step.config?.resourceOnly === true;
   const isResource = ["CONSTANT","FORMULA"].includes(step.type) || isVariableResource;
   const [actionSearch, setActionSearch] = useState("");
-  const actionPickerOptions = registryOptions.filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","SCHEDULE_PATH","WHEN"].includes(option.value));
+  const actionPickerOptions = registryOptions.filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","SCHEDULE_PATH","WHEN","STOP"].includes(option.value));
   const visibleActionPickerOptions = actionPickerOptions.filter((option) => !actionSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || workflowActionCategory(option.value)}`.toLowerCase().includes(actionSearch.trim().toLowerCase()));
   const actionPickerGroups = visibleActionPickerOptions.reduce((groups, option) => {
     const category = option.category || workflowActionCategory(option.value) || "Actions";
@@ -2007,11 +2007,11 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 const selected = availableWorkflows.find((item) => String(item.id) === String(event.target.value));
                 updateConfig({ workflowId: event.target.value, workflowInputs: {}, declaredOutputs: selected?.outputContract || [] });
               }}>
-                <option value="">Select a saved workflow</option>
+                <option value="">Select a saved flow</option>
                 {step.config?.workflowId && !availableWorkflows.some((item) => String(item.id) === String(step.config.workflowId)) ? <option value={step.config.workflowId} disabled>{step.config.workflowId} (unavailable)</option> : null}
                 {availableWorkflows.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
-              {!availableWorkflows.length ? <p className="text-xs text-slate-500">Save another active workflow before selecting a subflow.</p> : null}
+              {!availableWorkflows.length ? <p className="text-xs text-slate-500">Save another active flow before selecting a subflow.</p> : null}
             </div>
             {inputContract.length ? (
               <div className="space-y-2">
@@ -2033,7 +2033,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Input mapping</label>
                 <MappingEditor value={step.config?.workflowInputs || {}} onChange={(workflowInputs) => updateConfig({ workflowInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Subflow input" valueLabel="Map from resource" />
-                <p className="mt-1 text-[11px] text-slate-500">This workflow has no formal input contract yet, so legacy free-form mapping remains available.</p>
+                <p className="mt-1 text-[11px] text-slate-500">This flow has no formal input contract yet, so legacy free-form mapping remains available.</p>
               </div>
             )}
             {outputContract.length ? (
@@ -2284,9 +2284,9 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 <label className="block space-y-1 text-xs text-slate-600">
                   <span>When this step fails</span>
                   <select className={inputClass} value={step.config?.faultMode || "FAIL"} onChange={(event) => updateConfig({ faultMode: event.target.value })}>
-                    <option value="FAIL">Fail the workflow</option>
+                    <option value="FAIL">Fail the flow</option>
                     <option value="CONTINUE">Continue to the next step</option>
-                    <option value="STOP">Stop the workflow without running later steps</option>
+                    <option value="STOP">Stop the flow without running later elements</option>
                     <option value="ROUTE">Run an error path</option>
                     <option value="RETRY">Retry, then use the error path or fail</option>
                   </select>
@@ -2339,6 +2339,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [clipboard, setClipboard] = useState(null);
   const [collapsedBranches, setCollapsedBranches] = useState({});
   const [managerDetailId, setManagerDetailId] = useState(null);
+  const [startSnapshot, setStartSnapshot] = useState(null);
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -2378,8 +2379,16 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     });
   };
 
+  const inspectStart = () => {
+    setStartSnapshot(JSON.parse(JSON.stringify(workflow)));
+    setInspectorSnapshot(null);
+    setInspectorNewId(null);
+    setSelectedId("__start__");
+    setPropertiesOpen(true);
+  };
   const inspectStep = (stepId) => {
     const current = workflow.steps.find((step) => step.id === stepId);
+    setStartSnapshot(null);
     setInspectorSnapshot(current ? JSON.parse(JSON.stringify(current)) : null);
     setInspectorNewId(null);
     setSelectedId(stepId);
@@ -2416,18 +2425,22 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setInspectorNewId(null);
   };
   const finishInspector = () => {
+    setStartSnapshot(null);
     setInspectorSnapshot(null);
     setInspectorNewId(null);
     setPropertiesOpen(false);
   };
   const cancelInspector = () => {
-    if (inspectorNewId && selectedId === inspectorNewId) {
+    if (selectedId === "__start__" && startSnapshot) {
+      setWorkflow(JSON.parse(JSON.stringify(startSnapshot)));
+    } else if (inspectorNewId && selectedId === inspectorNewId) {
       removeStepById(inspectorNewId);
       setSelectedId("__start__");
     } else if (inspectorSnapshot) {
       const snapshot = JSON.parse(JSON.stringify(inspectorSnapshot));
       setWorkflow((current) => ({ ...current, steps: current.steps.map((step) => step.id === snapshot.id ? snapshot : step) }));
     }
+    setStartSnapshot(null);
     setInspectorSnapshot(null);
     setInspectorNewId(null);
     setPropertiesOpen(false);
@@ -2549,7 +2562,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     });
   };
   const registeredActionOptions = registryOptions
-    .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","SCHEDULE_PATH"].includes(option.value));
+    .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","SCHEDULE_PATH","STOP"].includes(option.value));
   const palette = [
     ...registryOptions
       .filter((option) => SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(option.value))
@@ -2764,8 +2777,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.7, Number((value - .1).toFixed(1))))}>−</button>
           <button type="button" aria-label="Reset zoom" title="Reset zoom" onClick={() => setCanvasZoom(1)}>{Math.round(canvasZoom * 100)}%</button>
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))))}>+</button>
-          <button type="button" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide elements" : "Show elements"}</button>
-          <button type="button" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide properties" : "Show properties"}</button>
+          <button type="button" title="Toggle Toolbox" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide Toolbox" : "Show Toolbox"}</button>
+          <button type="button" title="Toggle Properties" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide Properties" : "Show Properties"}</button>
         </div>
         {(insertAt != null || branchTarget) ? (
           <div className="workflow-add-element-popover" role="dialog" aria-label="Add Element">
@@ -2810,7 +2823,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </div>
         ) : null}
         <div className="workflow-canvas-lane" style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top center" }}>
-          <button type="button" className="workflow-start-node" onClick={() => setSelectedId("__start__")} title="Configure when this workflow starts">
+          <button type="button" className="workflow-start-node" onClick={inspectStart} title="Configure when this flow starts">
             <span className="workflow-start-icon">▶</span>
             <span className="workflow-start-title">Start</span>
             <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}{workflow.conditions?.length ? ` · ${workflow.conditions.length} condition${workflow.conditions.length === 1 ? "" : "s"}` : ""}{scheduledPathSteps.length ? ` · ${scheduledPathSteps.length} scheduled path${scheduledPathSteps.length === 1 ? "" : "s"}` : ""}</span>
@@ -2925,8 +2938,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
-                  <div className="text-xs font-semibold text-slate-700">Scheduled paths</div>
-                  <p className="mt-1 text-[11px] text-slate-500">Run selected steps later without using a Wait element in the immediate path.</p>
+                  <div className="text-xs font-semibold text-slate-700">Scheduled Paths</div>
+                  <p className="mt-1 text-[11px] text-slate-500">Configure paths that run later from this Start element.</p>
                 </div>
                 <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-blue-700" onClick={addScheduledPath}>+ Add path</button>
               </div>
@@ -2993,6 +3006,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   <p className="mt-2 text-[11px] text-slate-500">Use Changed / Changed to for a specific field transition. Use the option above when the full entry criteria should transition from false to true.</p>
                 </div>
               ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+              <button type="button" className="workflow-cancel-button" onClick={cancelInspector}>Cancel</button>
+              <button type="button" className="workflow-save-button" onClick={finishInspector}>Done</button>
             </div>
           </div>
         ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
@@ -3490,7 +3507,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     : resourceConflict
       ? resourceConflict
       : !actionSteps.length
-        ? "Add at least one action."
+        ? "Add at least one element."
         : actionIssues[0] || "";
   const contractEntries = [...(workflow.inputContract || []), ...(workflow.outputContract || [])];
   const invalidContractName = contractEntries.find((item) => !item?.name || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(item.name)));
@@ -3989,7 +4006,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       <style>{WORKFLOW_VISUAL_CSS}</style>
       {builderLoadIssues.length ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <strong>Some workflow resources could not be loaded.</strong>
+          <strong>Some flow resources could not be loaded.</strong>
           <div className="mt-1 text-xs">{builderLoadIssues.join(" · ")}</div>
           <div className="mt-1 text-xs">Do not assume an empty dropdown means there are no records. Refresh after the connection/API issue is resolved.</div>
         </div>
@@ -4024,7 +4041,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">Saved Tests</div>
-              <p className="mt-1 text-xs text-slate-500">Reusable rollback-safe tests. Assertions make regressions visible after future workflow edits.</p>
+              <p className="mt-1 text-xs text-slate-500">Reusable rollback-safe tests. Assertions make regressions visible after future flow edits.</p>
             </div>
             <button type="button" className="workflow-cancel-button" onClick={() => setTestsOpen(false)}>Close</button>
           </div>
@@ -4191,7 +4208,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <div className="text-base font-semibold text-slate-800">Debug / Test workflow</div>
+                <div className="text-base font-semibold text-slate-800">Debug / Test Flow</div>
                 <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
                   <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${debugMode === "debug" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setDebugMode("debug")}>Debug</button>
                   <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${debugMode === "test" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setDebugMode("test")}>Test</button>
@@ -4213,7 +4230,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             </div>
           ) : (
             <div className="mt-4 flex items-center justify-between gap-3">
-              <div className="text-xs text-slate-600">This workflow has no trigger object, so Debug will run with user/company/store context only.</div>
+              <div className="text-xs text-slate-600">This flow has no trigger object, so Debug will run with user/company/store context only.</div>
               <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue)} onClick={runDebug}>{debugRunning ? "Running…" : debugMode === "test" ? "Run Test" : "Run Debug"}</button>
             </div>
           )}
@@ -4250,7 +4267,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 </div>
               ) : debugResult.status === "NOT_STARTED" ? (
                 <div className="mt-2 text-sm text-amber-800">
-                  <div>{debugResult.friendlyError?.whatHappened || "The selected record did not meet the workflow Start conditions."}</div>
+                  <div>{debugResult.friendlyError?.whatHappened || "The selected record did not meet the flow Start conditions."}</div>
                   <div className="mt-2 rounded-lg bg-white/70 p-3 text-xs"><strong>What to do:</strong> {debugResult.friendlyError?.howToFix || "Choose another record or review the Start conditions."}</div>
                 </div>
               ) : debugMode === "test" && debugResult.testPassed === false ? (
@@ -4263,7 +4280,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-emerald-800">{debugMode === "test" ? "The workflow passed this test record. Green steps ran successfully; dashed green steps were safely simulated." : "Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action."}</p>
+                <p className="mt-2 text-sm text-emerald-800">{debugMode === "test" ? "The flow passed this test record. Green steps ran successfully; dashed green steps were safely simulated." : "Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action."}</p>
               )}
             </div>
           ) : null}
