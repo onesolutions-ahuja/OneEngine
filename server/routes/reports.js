@@ -809,7 +809,9 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
          AND ($4 OR cr.created_by=$3 OR EXISTS (SELECT 1 FROM custom_report_users cru WHERE cru.report_id=cr.id AND cru.user_id=$3))`,
       [id, req.user.companyId, req.user.id, admin]
     );
-    return result.rows[0] || null;
+    const report = result.rows[0] || null;
+    if (!report || !report.folder_id || admin) return report;
+    return (await visibleFolder(req, report.folder_id, "VIEW")) ? report : null;
   };
   const accessibleStores = async (req, storeIds) => {
     const admin = await isCompanyAdmin(req.user);
