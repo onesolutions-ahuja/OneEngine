@@ -1126,11 +1126,12 @@ function WorkspaceLookupField({ field, value, onChange }) {
       return
     }
     let live = true
-    apiRequest(`/api/platform/objects/${encodeURIComponent(targetKey)}/records/${encodeURIComponent(value)}`)
+    apiRequest(`/api/platform/runtime/record-page?objectKey=${encodeURIComponent(targetKey)}&recordId=${encodeURIComponent(value)}`)
       .then((response) => {
         if (!live) return
-        const record = response?.data?.record || response?.data || response?.record || null
-        if (record && typeof record === 'object') setText(recordTitle(record, []))
+        const record = response?.data?.record || null
+        const recordFields = Array.isArray(response?.data?.fields) ? response.data.fields : []
+        if (record && typeof record === 'object') setText(recordTitle(record, recordFields))
         else setText(String(value))
       })
       .catch(() => live && setText(String(value)))
