@@ -53,6 +53,12 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     }});
   }
 
+  async function ensureRecoveryCodes(companyId,userId){
+    const existing=await db(`SELECT 1 FROM identity_mfa_methods
+      WHERE company_id=$1 AND user_id=$2 AND method_type='RECOVERY_CODES' AND active=TRUE AND verified=TRUE LIMIT 1`,[companyId,userId]);
+    return existing.rows.length?[]:replaceRecoveryCodes(db,{companyId,userId});
+  }
+
   async function pendingUser(challengeId,types=["LOGIN","STEP_UP","PASSKEY_REGISTRATION","PASSKEY_AUTHENTICATION"]){
     const challenge=await getPendingChallenge(db,challengeId,{types});
     if(!challenge)return {challenge:null,user:null};
@@ -176,7 +182,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
     const ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code,markVerified:true});
     if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
-    const recoveryCodes=await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
+    const recoveryCodes=await ensureRecoveryCodes(user.company_id,user.id);
     const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.totpAssurance;
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"TOTP",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
   });
@@ -249,7 +255,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
        sign_count=EXCLUDED.sign_count,transports=EXCLUDED.transports,aaguid=EXCLUDED.aaguid,discoverable=EXCLUDED.discoverable,
        authenticator_kind=EXCLUDED.authenticator_kind,verified=TRUE,active=TRUE`,
       [user.company_id,user.id,String(req.body?.label||(challenge.context?.authenticatorKind==="SECURITY_KEY"?"Security Key":"Built-in Passkey")),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice",challenge.context?.authenticatorKind||"PLATFORM"]);
-    const recoveryCodes=await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
+    const recoveryCodes=await ensureRecoveryCodes(user.company_id,user.id);
     const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.passkeyAssurance;
     if(challenge.challenge_type==="STEP_UP"){
       const sid=challenge.context?.sessionId;
