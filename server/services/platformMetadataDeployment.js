@@ -417,9 +417,20 @@ export async function deployMetadata(db, { companyId, manifest, packageKey = "me
     for (const view of plan.manifest.listViews) {
       const objectId = await resolveObject(objectKey(view));
       const key = view.viewKey || view.view_key;
-      const existing = await db("SELECT * FROM platform_list_views WHERE object_id=$1 AND company_id=$2 AND view_key=$3", [objectId, companyId, key]);
+      const existing = await db("SELECT * FROM platform_list_views WHERE object_id=$1 AND company_id=$2 AND view_key=$3 AND owner_user_id IS NULL", [objectId, companyId, key]);
       before.push({ type: "listView", key: `${objectKey(view)}:${key}`, state: existing.rows?.[0] || null });
-      await db("INSERT INTO platform_list_views (object_id,company_id,view_key,label,description,columns,filters,sort,page_size,is_default,active) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,true) ON CONFLICT (object_id,company_id,view_key) DO UPDATE SET label=EXCLUDED.label,description=EXCLUDED.description,columns=EXCLUDED.columns,filters=EXCLUDED.filters,sort=EXCLUDED.sort,page_size=EXCLUDED.page_size,is_default=EXCLUDED.is_default,active=true,updated_at=NOW()", [objectId, companyId, key, view.label, view.description || null, JSON.stringify(view.columns || []), JSON.stringify(view.filters || {}), JSON.stringify(view.sort || { field: null, direction: "asc" }), Number(view.pageSize || view.page_size || 50), view.isDefault === true || view.is_default === true]);
+      const values = [objectId, companyId, key, view.label, view.description || null, JSON.stringify(view.columns || []), JSON.stringify(view.filters || {}), JSON.stringify(view.sort || { field: null, direction: "asc" }), Number(view.pageSize || view.page_size || 50), view.isDefault === true || view.is_default === true];
+      if (existing.rows?.[0]?.id) {
+        await db(
+          "UPDATE platform_list_views SET label=$4,description=$5,columns=$6::jsonb,filters=$7::jsonb,sort=$8::jsonb,page_size=$9,is_default=$10,active=true,updated_at=NOW() WHERE id=$11 AND owner_user_id IS NULL",
+          [...values, existing.rows[0].id]
+        );
+      } else {
+        await db(
+          "INSERT INTO platform_list_views (object_id,company_id,owner_user_id,view_key,label,description,columns,filters,sort,page_size,is_default,active) VALUES ($1,$2,NULL,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,true)",
+          values
+        );
+      }
     }
     for (const type of plan.manifest.recordTypes) {
       const objectId = await resolveObject(objectKey(type));
