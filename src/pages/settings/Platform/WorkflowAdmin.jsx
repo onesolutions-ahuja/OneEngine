@@ -1237,7 +1237,7 @@ function makeStep(type = "CREATE_RECORD") {
       html: "",
       providerStatus: "not-configured",
       functionKey: "",
-      inputs: { value: "hello" },
+      inputs: {},
       workflowId: "",
       workflowInputs: {},
       condition: { type: "all", rules: [blankCondition()] },
@@ -5033,7 +5033,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               />
             </div> : null}
             {flowType === "SCHEDULE_TRIGGERED" ? (() => {
-              const schedule = workflow.actionMetadata?.schedule || { scheduleType: "DAILY", timezone: "Europe/London", definition: { time: "09:00" } };
+              const schedule = workflow.actionMetadata?.schedule || { scheduleType: "DAILY", timezone: "", definition: { time: "" } };
               const definition = schedule.definition || {};
               const updateSchedule = (patch) => setWorkflow((current) => ({
                 ...current,
@@ -5049,15 +5049,15 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     </select>
                   </label>
                   <label className="block text-xs font-medium text-slate-600">Timezone
-                    <input className={inputClass} value={schedule.timezone || "Europe/London"} onChange={(event) => updateSchedule({ timezone: event.target.value })} placeholder="Europe/London" />
+                    <input className={inputClass} value={schedule.timezone || ""} onChange={(event) => updateSchedule({ timezone: event.target.value })} placeholder="Europe/London" />
                   </label>
                 </div>
                 {schedule.scheduleType === "ONCE" ? <div className="grid gap-2 md:grid-cols-2">
                   <label className="block text-xs font-medium text-slate-600">Date<input type="date" className={inputClass} value={definition.date || ""} onChange={(event) => updateDefinition({ date: event.target.value })} /></label>
-                  <label className="block text-xs font-medium text-slate-600">Time<input type="time" className={inputClass} value={definition.time || "09:00"} onChange={(event) => updateDefinition({ time: event.target.value })} /></label>
+                  <label className="block text-xs font-medium text-slate-600">Time<input type="time" className={inputClass} value={definition.time || ""} onChange={(event) => updateDefinition({ time: event.target.value })} /></label>
                 </div> : null}
                 {schedule.scheduleType === "HOURLY" ? <label className="block text-xs font-medium text-slate-600">Minute past the hour<input type="number" min="0" max="59" className={inputClass} value={Number(definition.minute || 0)} onChange={(event) => updateDefinition({ minute: Math.max(0, Math.min(59, Number(event.target.value || 0))) })} /></label> : null}
-                {["DAILY","WEEKLY","MONTHLY"].includes(schedule.scheduleType) ? <label className="block text-xs font-medium text-slate-600">Time<input type="time" className={inputClass} value={definition.time || "09:00"} onChange={(event) => updateDefinition({ time: event.target.value })} /></label> : null}
+                {["DAILY","WEEKLY","MONTHLY"].includes(schedule.scheduleType) ? <label className="block text-xs font-medium text-slate-600">Time<input type="time" className={inputClass} value={definition.time || ""} onChange={(event) => updateDefinition({ time: event.target.value })} /></label> : null}
                 {schedule.scheduleType === "WEEKLY" ? <label className="block text-xs font-medium text-slate-600">Day
                   <select className={inputClass} value={Number((definition.daysOfWeek || [1])[0])} onChange={(event) => updateDefinition({ daysOfWeek: [Number(event.target.value)] })}>
                     <option value={0}>Sunday</option><option value={1}>Monday</option><option value={2}>Tuesday</option><option value={3}>Wednesday</option><option value={4}>Thursday</option><option value={5}>Friday</option><option value={6}>Saturday</option>
@@ -5206,12 +5206,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         apiName: scopeKey === "whatsapp_assistant" ? "WhatsApp_Assistant_Flow" : "",
         description: "",
         flowType: null,
-        schedule: { scheduleType: "DAILY", timezone: "Europe/London", definition: { time: "09:00" } },
+        schedule: { scheduleType: "DAILY", timezone: "", definition: { time: "" } },
       },
       steps: scopeKey === "whatsapp_assistant"
         ? [
             { ...makeStep("WHEN"), type: "CONDITION", label: "Decision" },
-            { ...makeStep("SEND_WHATSAPP"), config: { ...makeStep("SEND_WHATSAPP").config, template: "", recipient: "customer.phone" } },
+            { ...makeStep("SEND_WHATSAPP"), config: { ...makeStep("SEND_WHATSAPP").config, template: "", recipient: "" } },
           ]
         : [],
     };
@@ -5220,7 +5220,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [guideStep, setGuideStep] = useState("trigger");
   const [showBuilder, setShowBuilder] = useState(embedded);
   const [savedWorkflows, setSavedWorkflows] = useState(() => embedded && normalizedInitialWorkflow ? [normalizedInitialWorkflow] : []);
-  const [providerAvailable, setProviderAvailable] = useState({ EMAIL: false, SMS: false, WHATSAPP: false });
+  const [providerAvailable, setProviderAvailable] = useState({ EMAIL: false, BREVO: false, MAILJET: false, SMS: false, WHATSAPP: false });
   const [registryOptions, setRegistryOptions] = useState(scopeKey ? [] : actionOptions);
   const [functionRegistry, setFunctionRegistry] = useState([]);
   const [messageTemplates, setMessageTemplates] = useState([]);
@@ -5798,8 +5798,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           const schedulePayload = {
             workflowId: nextId,
             scheduleType: schedule.scheduleType || "DAILY",
-            definition: schedule.definition || { time: "09:00" },
-            timezone: schedule.timezone || "Europe/London",
+            definition: schedule.definition || { time: "" },
+            timezone: schedule.timezone || "",
             active: nextLifecycle === "ACTIVE",
           };
           if (existingSchedule) await apiRequest(`/api/platform/schedules/${existingSchedule.id}`, { method: "PUT", body: JSON.stringify(schedulePayload) });
