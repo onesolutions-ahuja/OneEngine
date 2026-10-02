@@ -293,6 +293,22 @@ const primaryDatabaseUrl = process.env.DATABASE_URL
   ? normalizePrimaryDatabaseUrl(process.env.DATABASE_URL)
   : "";
 
+function describeDatabaseTarget(connectionString) {
+  try {
+    const parsed = new URL(connectionString);
+    return {
+      host: parsed.hostname || "unknown",
+      port: parsed.port || "5432",
+      database: String(parsed.pathname || "").replace(/^\//, "") || "unknown",
+      sslmode: parsed.searchParams.get("sslmode") || "default",
+    };
+  } catch {
+    return { host: "unparseable", port: "", database: "", sslmode: "" };
+  }
+}
+
+const primaryDatabaseTarget = primaryDatabaseUrl ? describeDatabaseTarget(primaryDatabaseUrl) : null;
+
 const pool = primaryDatabaseUrl
   ? new Pool({
       connectionString: primaryDatabaseUrl,
@@ -2130,7 +2146,7 @@ async function startServer() {
     const trustedPackages = validateTrustedPackageCatalogue();
     console.log(`OneEngine Trusted Runtime ${trustedRuntime.version.slice(0, 12)} (${trustedRuntime.count} capabilities; packages ${trustedPackages.digest.slice(0, 12)}/${trustedPackages.count})`);
     if (!pool) throw new Error("DATABASE_URL is not configured");
-    console.log("onePOS: checking database connection...");
+    console.log("onePOS: checking database connection...", primaryDatabaseTarget || { host: "not configured" });
     await db("SELECT NOW()");
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
