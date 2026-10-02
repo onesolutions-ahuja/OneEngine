@@ -477,9 +477,9 @@ function sensitiveResourceKey(req) {
   if (/\/api\/security\/users\/[^/]+\/unlock(?:\/|$)/.test(path)
       || /\/api\/auth\/password-reset/.test(path)) return "UNLOCK_RESET_PASSWORDS";
   if (/\/api\/security\/mfa(?:\/|$)|\/api\/security\/trusted-devices(?:\/|$)/.test(path) && method !== "GET") return "MANAGE_MFA_UI";
-  if (/\/api\/(platform\/permission|platform\/permission-sets|platform\/permission-set-groups)(?:\/|$)/.test(path)) return "MANAGE_PERMISSION_SETS_PROFILES";
+  if (/\/api\/platform\/permission(?:-sets|-set-groups)?(?:\/|$)/.test(path)) return "MANAGE_PERMISSION_SETS_PROFILES";
   if (/\/api\/(settings\/roles|roles)(?:\/|$)/.test(path) && method !== "GET") return "MANAGE_ROLES";
-  if (/\/api\/platform\/security\/(sharing|groups|defaults|hierarchy)(?:\/|$)/.test(path)) return "MANAGE_SHARING";
+  if (/\/api\/platform\/security\/(?:objects\/[^/]+\/sharing|sharing-rules|public-groups|queues)(?:\/|$)/.test(path)) return "MANAGE_SHARING";
   if (/\/api\/(admin\/users|settings\/users|platform\/objects\/employee)(?:\/|$)/.test(path)) return "MANAGE_USERS";
   if (/\/api\/(reports|custom-reports|dashboard|dashboard-builder)(?:\/|$)/.test(path)) return "REPORTS_DASHBOARDS";
   if (/\/api\/.*(?:export|data-export)(?:\/|$)/.test(path)) return "MANAGE_DATA_EXPORT";
