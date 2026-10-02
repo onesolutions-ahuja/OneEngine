@@ -1070,7 +1070,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           );
           CREATE INDEX IF NOT EXISTS idx_custom_report_types_company_active
             ON custom_report_types(company_id, active, lower(label));
-          DO $ BEGIN
+          DO $$ BEGIN
             IF NOT EXISTS (
               SELECT 1 FROM pg_constraint
               WHERE conrelid='custom_report_types'::regclass
@@ -1080,7 +1080,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
                 ADD CONSTRAINT custom_report_types_primary_object_fk
                 FOREIGN KEY (primary_object_id) REFERENCES platform_objects(id) ON DELETE RESTRICT;
             END IF;
-          END $;
+          END $$;
 
           ALTER TABLE custom_reports
             ADD COLUMN IF NOT EXISTS report_type_id UUID REFERENCES custom_report_types(id) ON DELETE SET NULL;
