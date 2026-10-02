@@ -66,7 +66,9 @@ export default function ObjectButtonEditor({ object, button = null, onSaved, onC
 
   const targets = useMemo(() => form.targetType === "workflow"
     ? workflows.map((rule) => ({ key: String(rule.id || rule.name), label: rule.name || rule.rule_key || rule.id }))
-    : registry.map((item) => ({ key: item.key, label: item.displayName || item.label || item.key })),
+    : form.targetType === "action"
+      ? registry.map((item) => ({ key: item.key, label: item.displayName || item.label || item.key }))
+      : [],
   [form.targetType, registry, workflows]);
 
   async function save() {
@@ -148,11 +150,16 @@ export default function ObjectButtonEditor({ object, button = null, onSaved, onC
         <label>Target type<select value={form.targetType} onChange={(event) => setForm({ ...form, targetType: event.target.value, targetKey: "" })}>
           <option value="action">Registered action</option>
           <option value="workflow">Workflow</option>
+          <option value="url">URL / link</option>
         </select></label>
-        <label>Runs<select value={form.targetKey} onChange={(event) => setForm({ ...form, targetKey: event.target.value })}>
-          <option value="">Select target</option>
-          {targets.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
-        </select></label>
+        {form.targetType === "url" ? (
+          <label>URL / path<input value={form.targetKey} onChange={(event) => setForm({ ...form, targetKey: event.target.value })} placeholder="https://example.com/customer/{id} or /workspace/customer/{id}"/><small>HTTPS or app-relative paths only. Use field placeholders such as {id} or {customer_id}.</small></label>
+        ) : (
+          <label>Runs<select value={form.targetKey} onChange={(event) => setForm({ ...form, targetKey: event.target.value })}>
+            <option value="">Select target</option>
+            {targets.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select></label>
+        )}
         <label>Icon key<input value={form.icon} onChange={(event) => setForm({ ...form, icon: event.target.value })} placeholder="Optional"/></label>
         <label>Required permission<input value={form.requiredPermission} onChange={(event) => setForm({ ...form, requiredPermission: event.target.value })} placeholder="Optional permission key"/></label>
       </div>
