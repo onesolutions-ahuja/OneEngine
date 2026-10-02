@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { apiRequest } from "../../services/api.js";
 
 const FIELD = "onepos-input";
 const CARD = "rounded-xl border p-3 space-y-3";
@@ -67,10 +68,46 @@ export function DrillActionEditor({ action,onChange,reports=[],fields=[] }) {
   </div>{value.type!=="none"?<><div className="text-xs font-medium">Filter mappings</div>{(value.mappings||[]).map((mapping,index)=><div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]"><select className={FIELD} value={mapping.source||""} onChange={(e)=>onChange({...value,mappings:value.mappings.map((m,i)=>i===index?{...m,source:e.target.value}:m)})}><option value="">Source field</option>{fields.map((field)=><option key={field.key} value={field.key}>{field.label}</option>)}</select><input className={FIELD} value={mapping.target||""} placeholder="Target filter field" onChange={(e)=>onChange({...value,mappings:value.mappings.map((m,i)=>i===index?{...m,target:e.target.value}:m)})}/><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>onChange({...value,mappings:value.mappings.filter((_,i)=>i!==index)})}>Remove</button></div>)}<button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>onChange({...value,mappings:[...(value.mappings||[]),{source:fields[0]?.key||"",target:""}]})}>Add mapping</button></>:null}</fieldset>;
 }
 
+function JoinedBlockFieldSelector({ block, onChange }) {
+  const [fields,setFields]=useState([]);
+  const [loading,setLoading]=useState(false);
+  useEffect(()=>{
+    let live=true;
+    if(block.dataSource!=="platform_object"||!block.objectId){setFields([]);return()=>{live=false;};}
+    setLoading(true);
+    apiRequest(`/api/reports/custom/platform-objects/${encodeURIComponent(block.objectId)}/metadata`)
+      .then((response)=>{if(live)setFields(response?.success?response.data?.fields||[]:[]);})
+      .catch(()=>{if(live)setFields([]);})
+      .finally(()=>{if(live)setLoading(false);});
+    return()=>{live=false;};
+  },[block.dataSource,block.objectId]);
+
+  if(block.dataSource!=="platform_object") {
+    return <div className="grid gap-2 md:grid-cols-2">
+      <label className="onepos-label">Fields<input className={`${FIELD} mt-1 font-mono`} value={(block.fields||[]).join(", ")} onChange={(e)=>onChange({...block,fields:e.target.value.split(",").map((v)=>v.trim()).filter(Boolean)})}/></label>
+      <label className="onepos-label">Row groups<input className={`${FIELD} mt-1 font-mono`} value={(block.rowGroups||[]).join(", ")} onChange={(e)=>onChange({...block,rowGroups:e.target.value.split(",").map((v)=>v.trim()).filter(Boolean)})}/></label>
+    </div>;
+  }
+  if(loading)return <div className="text-xs" style={{color:"var(--onepos-text-muted)"}}>Loading fields…</div>;
+  return <div className="space-y-3">
+    <div><div className="text-xs font-medium mb-1">Fields</div><div className="grid gap-2 md:grid-cols-3">{fields.map((field)=><label key={field.key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={(block.fields||[]).includes(field.key)} onChange={()=>onChange({...block,fields:(block.fields||[]).includes(field.key)?block.fields.filter((key)=>key!==field.key):[...(block.fields||[]),field.key]})}/>{field.label}</label>)}</div></div>
+    <label className="onepos-label">Row groups<select multiple className={`${FIELD} mt-1 min-h-24`} value={block.rowGroups||[]} onChange={(e)=>onChange({...block,rowGroups:[...e.target.selectedOptions].map((o)=>o.value)})}>{(block.fields||[]).map((key)=><option key={key} value={key}>{fields.find((field)=>field.key===key)?.label||key}</option>)}</select></label>
+    <div className="space-y-2"><div className="flex items-center justify-between"><span className="text-xs font-medium">Summaries</span><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>onChange({...block,summaries:[...(block.summaries||[]),{aggregate:"COUNT",field:block.fields?.[0]||"",alias:`summary_${(block.summaries||[]).length+1}`}]})}>Add summary</button></div>
+      {(block.summaries||[]).map((summary,index)=><div key={index} className="grid gap-2 md:grid-cols-[150px_1fr_1fr_auto]"><select className={FIELD} value={summary.aggregate||"COUNT"} onChange={(e)=>onChange({...block,summaries:block.summaries.map((item,i)=>i===index?{...item,aggregate:e.target.value}:item)})}>{["COUNT","COUNT_DISTINCT","SUM","AVG","MIN","MAX"].map((agg)=><option key={agg}>{agg}</option>)}</select><select className={FIELD} value={summary.field||""} onChange={(e)=>onChange({...block,summaries:block.summaries.map((item,i)=>i===index?{...item,field:e.target.value}:item)})}><option value="">Field</option>{(block.fields||[]).map((key)=><option key={key} value={key}>{fields.find((field)=>field.key===key)?.label||key}</option>)}</select><input className={FIELD} value={summary.alias||""} placeholder="Alias" onChange={(e)=>onChange({...block,summaries:block.summaries.map((item,i)=>i===index?{...item,alias:e.target.value}:item)})}/><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>onChange({...block,summaries:block.summaries.filter((_,i)=>i!==index)})}>Remove</button></div>)}
+    </div>
+  </div>;
+}
+
 export function JoinedBlocksEditor({ blocks=[],onChange,sources=[],objects=[] }) {
   const [expanded,setExpanded]=useState(0);
   const add=()=>onChange([...blocks,{key:`block_${blocks.length+1}`,label:`Block ${blocks.length+1}`,dataSource:"platform_object",objectId:objects[0]?.id||"",fields:[],filters:[],filterLogic:"all",rowGroups:[],summaries:[],sort:[]}]);
+  const updateBlock=(index,next)=>onChange(blocks.map((block,i)=>i===index?next:block));
   return <fieldset className={CARD} style={border}><div className="flex items-center justify-between"><legend className="font-medium text-sm">Joined report blocks</legend><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" disabled={blocks.length>=5} onClick={add}>Add block</button></div><div className="flex flex-wrap gap-2">{blocks.map((block,index)=><button type="button" key={block.key||index} className={`onepos-btn onepos-btn-sm ${expanded===index?"onepos-btn-primary":"onepos-btn-secondary"}`} onClick={()=>setExpanded(index)}>{block.label||`Block ${index+1}`}</button>)}</div>
-    {blocks[expanded]?<div className="rounded-lg border p-3 space-y-3" style={border}><div className="grid gap-2 md:grid-cols-3"><label className="onepos-label">Block label<input className={`${FIELD} mt-1`} value={blocks[expanded].label||""} onChange={(e)=>onChange(blocks.map((b,i)=>i===expanded?{...b,label:e.target.value}:b))}/></label><label className="onepos-label">Data source<select className={`${FIELD} mt-1`} value={blocks[expanded].dataSource||"platform_object"} onChange={(e)=>onChange(blocks.map((b,i)=>i===expanded?{...b,dataSource:e.target.value}:b))}><option value="sales">Sales</option><option value="platform_object">Platform Object</option>{sources.filter((s)=>!["sales","platform_object"].includes(s.key)).map((s)=><option key={s.key} value={s.key}>{s.label}</option>)}</select></label>{blocks[expanded].dataSource==="platform_object"?<label className="onepos-label">Object<select className={`${FIELD} mt-1`} value={blocks[expanded].objectId||""} onChange={(e)=>onChange(blocks.map((b,i)=>i===expanded?{...b,objectId:e.target.value,fields:[],rowGroups:[],summaries:[]}:b))}><option value="">Select object</option>{objects.map((object)=><option key={object.id} value={object.id}>{object.label||object.object_key}</option>)}</select></label>:null}</div><label className="onepos-label">Fields (comma-separated API names)<input className={`${FIELD} mt-1 font-mono`} value={(blocks[expanded].fields||[]).join(", ")} onChange={(e)=>onChange(blocks.map((b,i)=>i===expanded?{...b,fields:e.target.value.split(",").map((v)=>v.trim()).filter(Boolean)}:b))}/></label><label className="onepos-label">Row groups (comma-separated)<input className={`${FIELD} mt-1 font-mono`} value={(blocks[expanded].rowGroups||[]).join(", ")} onChange={(e)=>onChange(blocks.map((b,i)=>i===expanded?{...b,rowGroups:e.target.value.split(",").map((v)=>v.trim()).filter(Boolean)}:b))}/></label><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>onChange(blocks.filter((_,i)=>i!==expanded))}>Remove block</button></div>:null}
+    {blocks[expanded]?<div className="rounded-lg border p-3 space-y-3" style={border}>
+      <div className="grid gap-2 md:grid-cols-3"><label className="onepos-label">Block label<input className={`${FIELD} mt-1`} value={blocks[expanded].label||""} onChange={(e)=>updateBlock(expanded,{...blocks[expanded],label:e.target.value})}/></label><label className="onepos-label">Data source<select className={`${FIELD} mt-1`} value={blocks[expanded].dataSource||"platform_object"} onChange={(e)=>updateBlock(expanded,{...blocks[expanded],dataSource:e.target.value,objectId:e.target.value==="platform_object"?(objects[0]?.id||""):"",fields:[],rowGroups:[],summaries:[]})}><option value="sales">Sales</option><option value="platform_object">Platform Object</option>{sources.filter((s)=>!["sales","platform_object"].includes(s.key)).map((s)=><option key={s.key} value={s.key}>{s.label}</option>)}</select></label>{blocks[expanded].dataSource==="platform_object"?<label className="onepos-label">Object<select className={`${FIELD} mt-1`} value={blocks[expanded].objectId||""} onChange={(e)=>updateBlock(expanded,{...blocks[expanded],objectId:e.target.value,fields:[],rowGroups:[],summaries:[]})}><option value="">Select object</option>{objects.map((object)=><option key={object.id} value={object.id}>{object.label||object.object_key}</option>)}</select></label>:null}</div>
+      <JoinedBlockFieldSelector block={blocks[expanded]} onChange={(next)=>updateBlock(expanded,next)} />
+      <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>{onChange(blocks.filter((_,i)=>i!==expanded));setExpanded(Math.max(0,expanded-1));}}>Remove block</button>
+    </div>:null}
   </fieldset>;
 }
+
