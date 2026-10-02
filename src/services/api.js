@@ -329,7 +329,9 @@ export async function login(username, password) {
         method: 'POST',
         body: JSON.stringify({
           username,
-          password,        }),
+          password,
+          deviceToken: localStorage.getItem('onepos_trusted_device_token') || null,
+        }),
         signal: controller.signal,
       })
     } finally {
