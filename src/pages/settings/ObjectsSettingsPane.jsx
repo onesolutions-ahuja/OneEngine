@@ -11,6 +11,7 @@ import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 import ActionsAdmin from './Platform/ActionsAdmin.jsx'
 import ObjectActionEditor from './Platform/ObjectActionEditor.jsx'
 import ObjectButtonEditor from './Platform/ObjectButtonEditor.jsx'
+import ListViewEditor from './Platform/ListViewEditor.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import ObjectReportsAdmin from './Platform/ObjectReportsAdmin.jsx'
 import PermissionSetsAdmin from './Platform/PermissionSetsAdmin.jsx'
@@ -698,6 +699,15 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     onCancel={closeEditor}
                     onSaved={async () => { await refreshConfiguration(); closeEditor() }}
                   />
+                ) : editor?.kind === 'list-view' ? (
+                  <ListViewEditor
+                    object={{ ...selected, id: selectedId }}
+                    fields={fields}
+                    view={editor.item || null}
+                    onError={(value) => setError(value || '')}
+                    onCancel={closeEditor}
+                    onSaved={async () => { await refreshConfiguration(); closeEditor() }}
+                  />
                 ) : activeTab === 'details' ? (
                   <div className="objects-overview-grid">
                     <section className="objects-overview-card">
@@ -886,7 +896,10 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                   <ObjectDataList title="List Views" rows={objectData.listViews}
                     primary={(row) => row.label || row.name || row.view_key || 'List View'}
                     secondary={(row) => row.view_key || row.description || ''}
-                    meta={(row) => row.is_default ? 'Default' : (row.active === false ? 'Inactive' : 'Active')} />
+                    meta={(row) => `${row.is_default ? 'Default · ' : ''}${row.visibility_scope || 'company'}`}
+                    actionLabel="List View"
+                    onAdd={() => setEditor({ kind: 'list-view', item: null })}
+                    onRowClick={(row) => setEditor({ kind: 'list-view', item: row })} />
                 ) : null}
 
                 {activeTab === 'approvals' ? (
