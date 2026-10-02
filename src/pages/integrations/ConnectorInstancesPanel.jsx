@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, PlugZap, RefreshCw } from "lucide-react";
-import { ConnectorFieldHelp, ConnectorSettingsCompact, ConnectorSettingsFooter, ConnectorSettingsModeActions } from "./ConnectorSettingsTemplates.jsx";
+import { ConnectorFieldHelp, ConnectorSettingsCompact, ConnectorSettingsFooter, ConnectorSettingsModeActions, ConnectorSettingsSplit } from "./ConnectorSettingsTemplates.jsx";
 import { apiRequest } from "../../services/api.js";
 
 const inputClass = "h-9 w-full border border-slate-300 rounded px-2 text-sm";
@@ -31,6 +31,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const selectedStore = stores.find((store) => store.id === storeId);
   const tills = Array.isArray(selectedStore?.tills) ? selectedStore.tills : [];
   const companyScoped = selectedApp?.manifest?.connectorApp?.scope === "company";
+  const SettingsTemplate = selectedApp?.manifest?.connectorApp?.settingsUiVariant === "split" ? ConnectorSettingsSplit : ConnectorSettingsCompact;
   const visibleSchema = schema.filter((field) => !["action","readonly","store lookup","till lookup"].includes(field.type));
   const credentialFirstSchema = [...visibleSchema].sort((a, b) => {
     const credential = (field) => field.type === "secret" || /api|token|secret|password|credential|key/i.test(String(field.key || "") + " " + String(field.label || ""));
@@ -203,7 +204,10 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
 
   const renderSettingsField = (field, disabled) => {
     const value = configuration[field.key] ?? field.default ?? "";
-    const help = <ConnectorFieldHelp description={field.description} helpUrl={field.helpUrl} helpLabel={field.helpLabel} />;
+    const defaultHelp = field.type === "secret"
+      ? `Enter the secure ${String(field.label || field.key).toLowerCase()} supplied by the provider.`
+      : `Enter the ${String(field.label || field.key).toLowerCase()} used by this connector.`;
+    const help = <ConnectorFieldHelp description={field.description || defaultHelp} helpUrl={field.helpUrl} helpLabel={field.helpLabel} />;
     return (
       <label key={field.key} className="connector-settings-field">
         <span className="connector-settings-field-label">{field.label || field.key}{field.required ? " *" : ""}</span>
@@ -254,7 +258,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
       <div className="connector-settings-standard-wrap">
         {error ? <p role="alert" className="connector-settings-feedback is-error">{error}</p> : null}
         {message ? <p role="status" className="connector-settings-feedback is-success">{message}</p> : null}
-        <ConnectorSettingsCompact
+        <SettingsTemplate
           title={`${dedicatedName} Settings`}
           description="Configure credentials, assignment and connection behaviour."
           status={{ label: statusLabel, tone: statusTone }}
@@ -314,7 +318,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
               submitLabel={existingInstance ? "Save changes" : companyScoped ? "Add connection" : "Assign connector"}
             />
           </form>
-        </ConnectorSettingsCompact>
+        </SettingsTemplate>
 
         {existingInstance && testActions.length ? (
           <div className="connector-settings-test-area">
