@@ -766,6 +766,8 @@ export const platformSchema = `
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     version INTEGER NOT NULL,
     definition JSONB NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    assignments JSONB NOT NULL DEFAULT '[]'::jsonb,
     lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT'
       CHECK (lifecycle_status IN ('DRAFT','ACTIVE','INACTIVE')),
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -846,6 +848,8 @@ export const platformSchema = `
   ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS active_version INTEGER;
   ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS draft_version INTEGER;
   ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS draft_definition JSONB;
+  ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS draft_metadata JSONB;
+  ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS draft_assignments JSONB;
   UPDATE platform_layouts
      SET lifecycle_status=CASE WHEN active=true THEN 'ACTIVE' ELSE 'INACTIVE' END
    WHERE lifecycle_status IS NULL OR lifecycle_status NOT IN ('DRAFT','ACTIVE','INACTIVE');
@@ -871,6 +875,8 @@ export const platformSchema = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(layout_id,version)
   );
+  ALTER TABLE platform_layout_versions ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+  ALTER TABLE platform_layout_versions ADD COLUMN IF NOT EXISTS assignments JSONB NOT NULL DEFAULT '[]'::jsonb;
   CREATE INDEX IF NOT EXISTS idx_platform_layout_versions_layout ON platform_layout_versions(layout_id,version DESC);
   DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='platform_layouts'::regclass AND conname='platform_layouts_page_type_check') THEN
