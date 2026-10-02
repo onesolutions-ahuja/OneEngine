@@ -50,6 +50,7 @@ export async function loadPlatformReportContext(db, req, objectId) {
   const objectResult = await db("SELECT * FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [objectId, req.user.companyId]);
   const object = objectResult.rows[0];
   if (!object) return { object: null, fields: [], relationships: [], visibilitySql: null, visibilityParams: [] };
+  if (object.config?.allowReports === false) return { object: null, fields: [], relationships: [], visibilitySql: null, visibilityParams: [] };
   if (systemObject(object)) object.company_scoped = true;
   const fieldResult = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label", [object.id, req.user.companyId]);
   const safeFields = safeSystemFields(object, fieldResult.rows);
