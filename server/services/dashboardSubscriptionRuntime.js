@@ -1,6 +1,6 @@
 import { normalizeDashboardSubscription } from "./analyticsManagement.js";
 import { createDashboardExecution } from "./dashboardExecution.js";
-import { executeRegisteredAction } from "./platformActions.js";
+import { executeMediatedRegisteredAction } from "./platformWorkflow.js";
 import { resolveReportSubscriptionRecipients } from "./reportSubscriptionDelivery.js";
 import { dashboardAccessAtLeast, loadDashboardPrincipalContext, resolveDashboardAccess } from "./dashboardSecurity.js";
 import { validateDashboardDefinition } from "./dashboardBuilder.js";
@@ -136,7 +136,7 @@ export async function processDashboardSubscriptionDeliveryJob({
     if(!ledger||ledger.status==="DELIVERED")continue;
     await db("UPDATE dashboard_subscription_deliveries SET status='RUNNING',last_error=NULL,updated_at=NOW() WHERE id=$1",[ledger.id]);
     try{
-      const outcome=await executeRegisteredAction({
+      const outcome=await executeMediatedRegisteredAction({
         db,companyId:row.company_id,userId:executionUser.id,
         req:{user:{id:executionUser.id,companyId:row.company_id}},
         action:{type:"SEND_EMAIL",recipient:recipient.email,subject:`Scheduled dashboard: ${dashboard.name}`,body},
