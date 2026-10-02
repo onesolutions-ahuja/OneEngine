@@ -68,6 +68,8 @@ function resolveContextPathValue(path, { record, previousRecord, user, rootObjec
   const raw = String(path || "").trim();
   if (!raw) return undefined;
   if (raw === "$now") return now instanceof Date ? now.toISOString() : now;
+  if (["$flow.currentStage","$Flow.CurrentStage"].includes(raw)) return variables?.variables?.__flowCurrentStage || null;
+  if (["$flow.activeStages","$Flow.ActiveStages"].includes(raw)) return (variables?.variables?.__flowStages || []).filter((stage) => stage?.active !== false);
   if (raw === "$record") return record || null;
   if (raw.startsWith("$record.")) return resolveRecordPathValue(record, raw.slice("$record.".length), null);
   if (raw === "$previous") return previousRecord || null;
