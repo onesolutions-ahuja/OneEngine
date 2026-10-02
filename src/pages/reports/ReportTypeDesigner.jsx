@@ -70,6 +70,29 @@ export function ReportTypeDesigner({ initialValue = null, onSaved, onCancel }) {
     ...fields.map((field)=>({...field,fieldKey:field.api_name,displayPath:objectById.get(String(value.primaryObjectId))?.label||"Primary object"})),
     ...relatedFields,
   ],[fields,relatedFields,objectById,value.primaryObjectId]);
+  const orderedDesignerFields=useMemo(()=>{
+    const layout=value.experience?.fieldLayout||[];
+    const orderByKey=new Map(layout.map((entry,index)=>[String(entry.fieldKey),Number.isFinite(Number(entry.order))?Number(entry.order):index]));
+    return designerFields.map((field,index)=>({field,index,key:String(field.fieldKey||field.api_name||"")})).sort((a,b)=>{
+      const left=orderByKey.has(a.key)?orderByKey.get(a.key):100000+a.index;
+      const right=orderByKey.has(b.key)?orderByKey.get(b.key):100000+b.index;
+      return left-right;
+    }).map((entry)=>entry.field);
+  },[designerFields,value.experience?.fieldLayout]);
+  const moveDesignerField=(fieldKey,direction)=>{
+    const experience=value.experience||{};
+    const layout=experience.fieldLayout||[];
+    const normalized=orderedDesignerFields.map((field,index)=>{
+      const key=String(field.fieldKey||field.api_name||"");
+      const existing=layout.find((entry)=>String(entry.fieldKey)===key);
+      return existing?{...existing,order:index}:{fieldKey:key,displayLabel:field.label||field.api_name||key,sectionKey:"fields",visible:true,defaultSelected:false,lookupPath:field.relationshipAlias?[field.relationshipAlias]:[],order:index};
+    });
+    const position=normalized.findIndex((entry)=>String(entry.fieldKey)===String(fieldKey));
+    const target=position+direction;
+    if(position<0||target<0||target>=normalized.length)return;
+    [normalized[position],normalized[target]]=[normalized[target],normalized[position]];
+    update({experience:{...experience,fieldLayout:normalized.map((entry,index)=>({...entry,order:index}))}});
+  };
   const relationshipCandidates=useMemo(()=>{
     if(selectedRelationships.length>=3)return[];
     const rows=[];
@@ -177,14 +200,14 @@ export function ReportTypeDesigner({ initialValue = null, onSaved, onCancel }) {
 
     <section className="onepos-card onepos-card-body space-y-3">
       <div><h3 className="font-semibold">Field exposure</h3><p className="text-xs" style={{color:"var(--onepos-text-muted)"}}>Configure primary and related-object fields from the same report-type layout.</p></div>
-      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">{designerFields.map((field)=>{
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">{orderedDesignerFields.map((field,fieldIndex)=>{
         const fieldKey=field.fieldKey||field.api_name;
         const current=(value.fieldVisibility||[]).find((item)=>item.fieldKey===fieldKey)||{fieldKey,visible:true,defaultSelected:false,category:"Fields"};
         const commit=(patch)=>{const existing=value.fieldVisibility||[];update({fieldVisibility:existing.some((item)=>item.fieldKey===fieldKey)?existing.map((item)=>item.fieldKey===fieldKey?{...item,...patch}:item):[...existing,{...current,...patch}]});};
         const experience=value.experience||{}, layout=experience.fieldLayout||[];
         const item=layout.find((x)=>x.fieldKey===fieldKey)||{fieldKey,displayLabel:field.label||field.api_name||fieldKey,sectionKey:"fields",visible:true,defaultSelected:false,lookupPath:field.relationshipAlias?[field.relationshipAlias]:[],order:layout.length};
         const commitLayout=(patch)=>update({experience:{...experience,fieldLayout:layout.some((x)=>x.fieldKey===fieldKey)?layout.map((x)=>x.fieldKey===fieldKey?{...x,...patch}:x):[...layout,{...item,...patch}]}});
-        return <div key={fieldKey} className="rounded-lg border p-2 space-y-2" style={{borderColor:"var(--onepos-border)"}}><div className="text-sm font-medium">{field.label||field.api_name||fieldKey}</div><div className="text-[11px]" style={{color:"var(--onepos-text-muted)"}}>{field.displayPath||"Primary object"} · <span className="font-mono">{fieldKey}</span></div><label className="flex gap-2 text-xs"><input type="checkbox" checked={current.visible!==false} onChange={(e)=>commit({visible:e.target.checked})}/>Visible</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={current.defaultSelected===true} onChange={(e)=>{commit({defaultSelected:e.target.checked});commitLayout({defaultSelected:e.target.checked});}}/>Selected by default</label><input className="onepos-input text-xs" value={item.displayLabel||""} onChange={(e)=>commitLayout({displayLabel:e.target.value})} placeholder="Display label"/><select className="onepos-input text-xs" value={item.sectionKey||"fields"} onChange={(e)=>commitLayout({sectionKey:e.target.value})}>{(experience.sections||[{key:"fields",label:"Fields"}]).filter((s)=>s.visible!==false).map((s)=><option key={s.key} value={s.key}>{s.label}</option>)}</select></div>;
+        return <div key={fieldKey} className="rounded-lg border p-2 space-y-2" style={{borderColor:"var(--onepos-border)"}}><div className="flex items-center gap-1"><div className="text-sm font-medium flex-1">{field.label||field.api_name||fieldKey}</div><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" disabled={fieldIndex===0} onClick={()=>moveDesignerField(fieldKey,-1)} aria-label="Move field up">↑</button><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" disabled={fieldIndex===orderedDesignerFields.length-1} onClick={()=>moveDesignerField(fieldKey,1)} aria-label="Move field down">↓</button></div><div className="text-[11px]" style={{color:"var(--onepos-text-muted)"}}>{field.displayPath||"Primary object"} · <span className="font-mono">{fieldKey}</span></div><label className="flex gap-2 text-xs"><input type="checkbox" checked={current.visible!==false} onChange={(e)=>commit({visible:e.target.checked})}/>Visible</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={current.defaultSelected===true} onChange={(e)=>{commit({defaultSelected:e.target.checked});commitLayout({defaultSelected:e.target.checked});}}/>Selected by default</label><input className="onepos-input text-xs" value={item.displayLabel||""} onChange={(e)=>commitLayout({displayLabel:e.target.value})} placeholder="Display label"/><select className="onepos-input text-xs" value={item.sectionKey||"fields"} onChange={(e)=>commitLayout({sectionKey:e.target.value})}>{(experience.sections||[{key:"fields",label:"Fields"}]).filter((s)=>s.visible!==false).map((s)=><option key={s.key} value={s.key}>{s.label}</option>)}</select></div>;
       })}</div>
     </section>
     <div className="flex justify-end gap-2"><button type="button" className="onepos-btn onepos-btn-secondary" onClick={onCancel}>Cancel</button><button type="button" className="onepos-btn onepos-btn-primary" disabled={saving} onClick={save}>{saving?"Saving…":"Save report type"}</button></div>
