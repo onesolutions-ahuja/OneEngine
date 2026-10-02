@@ -213,6 +213,8 @@ export default function ObjectPage({
   const [relatedLists, setRelatedLists] = useState({});
   const [executingAction, setExecutingAction] = useState("");
   const [recordButtons, setRecordButtons] = useState([]);
+  const [listButtons, setListButtons] = useState([]);
+  const [bulkEditFieldKey, setBulkEditFieldKey] = useState("");
   const [approvalState,setApprovalState]=useState(null);
   const [approvalComment,setApprovalComment]=useState("");
 
@@ -249,6 +251,10 @@ export default function ObjectPage({
     const keys = visibleColumnKeys.length ? visibleColumnKeys : activeFields.map(getFieldKey);
     return keys.map((key) => byKey.get(key)).filter(Boolean);
   }, [activeFields, visibleColumnKeys]);
+  const bulkEditableFields = useMemo(
+    () => activeFields.filter((field) => field?.writable !== false && !["formula", "rollup"].includes(field?.field_type)),
+    [activeFields]
+  );
   /* Every Platform Object uses the same metadata record command surface.
      A pre-supplied fields list marks the self-service READ-ONLY profile view:
      the shell opened one specific record (the signed-in user's own), so the
@@ -536,14 +542,16 @@ export default function ObjectPage({
 
   async function loadRecordButtons() {
     if (selfServiceView) return;
-    const objectId = objectMetadata?.id || objectMetadata?.object_id;
-    if (!objectId) return;
+    const key = getObjectKey(objectMetadata);
+    if (!key) return;
     try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectId)}/buttons`);
+      const response = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(key)}/buttons`);
       const buttons = Array.isArray(response?.data) ? response.data : [];
       setRecordButtons(buttons.filter((button) => button.active !== false && (!button.placement || ["record", "detail", "view"].includes(button.placement))));
+      setListButtons(buttons.filter((button) => button.active !== false && ["list", "bulk", "mass"].includes(button.placement)));
     } catch {
       setRecordButtons([]);
+      setListButtons([]);
     }
   }
 
@@ -794,6 +802,49 @@ export default function ObjectPage({
   }
 
 
+  async function bulkEditSelectedRecords(values) {
+    if (!bulkEditFieldKey || !selectedRowIds.length) return;
+    const value = values?.[bulkEditFieldKey];
+    setRecordsLoading(true);
+    try {
+      for (const id of selectedRowIds) {
+        await apiRequest(`/api/platform/objects/${encodeURIComponent(resolvedObjectKey)}/records/${encodeURIComponent(id)}`, {
+          method: "PUT",
+          body: JSON.stringify({ data: { [bulkEditFieldKey]: value } }),
+        });
+      }
+      setBulkEditFieldKey("");
+      setSelectedRowIds([]);
+      await loadRecords();
+      setError("");
+    } catch (err) {
+      setError(err?.message || "Unable to edit selected records.");
+    } finally {
+      setRecordsLoading(false);
+    }
+  }
+
+  async function executeBulkMetadataButton(button, ids) {
+    if (!button?.button_key || !ids?.length) return;
+    setExecutingAction(`bulk:${button.button_key}`);
+    try {
+      for (const id of ids) {
+        await apiRequest(
+          `/api/platform/objects/${encodeURIComponent(resolvedObjectKey)}/records/${encodeURIComponent(id)}/buttons/${encodeURIComponent(button.button_key)}/execute`,
+          { method: "POST", body: JSON.stringify({}) }
+        );
+      }
+      setSelectedRowIds([]);
+      await loadRecords();
+      setError("");
+    } catch (err) {
+      setError(err?.message || `Unable to run ${button.label || "bulk action"}.`);
+    } finally {
+      setExecutingAction("");
+    }
+  }
+
+
   function handleRecordSelect(record) {
     setSelectedRecord(record);
 
@@ -1033,6 +1084,33 @@ export default function ObjectPage({
               </form>
             </RecordModal>
           ) : null}
+          {bulkEditFieldKey ? (
+            <RecordModal
+              open
+              mode="edit"
+              title={`Edit ${selectedRowIds.length} selected record${selectedRowIds.length === 1 ? "" : "s"}`}
+              subtitle="Choose one field and value. Every selected record is validated and permission-checked separately."
+              size="md"
+              onClose={() => setBulkEditFieldKey("")}
+            >
+              <div className="platform-bulk-edit">
+                <label>
+                  <span>Field</span>
+                  <select value={bulkEditFieldKey} onChange={(event) => setBulkEditFieldKey(event.target.value)}>
+                    {bulkEditableFields.map((field) => <option key={getFieldKey(field)} value={getFieldKey(field)}>{getFieldLabel(field)}</option>)}
+                  </select>
+                </label>
+                {bulkEditableFields.find((field) => getFieldKey(field) === bulkEditFieldKey) ? (
+                  <FormRenderer
+                    fields={[bulkEditableFields.find((field) => getFieldKey(field) === bulkEditFieldKey)]}
+                    initialValues={{ [bulkEditFieldKey]: "" }}
+                    mode="edit"
+                    onSubmit={bulkEditSelectedRecords}
+                  />
+                ) : null}
+              </div>
+            </RecordModal>
+          ) : null}
           {recordModal?.type === "create" ? (
             <RecordModal open mode="create" title="Create record" size="lg" className={layoutPresentationClass(createLayout || detailLayout)} onClose={() => setRecordModal(null)} formId="platform-create-record-form">
             <div className="platform-create-record">
@@ -1107,7 +1185,20 @@ export default function ObjectPage({
                         selectable={canWriteRecords}
                         selectedRowIds={selectedRowIds}
                         onSelectionChange={setSelectedRowIds}
-                        bulkActions={canWriteRecords ? [{ key: "delete", label: "Delete", onClick: deleteSelectedRecords }] : []}
+                        bulkActions={canWriteRecords ? [
+                          ...(bulkEditableFields.length ? [{
+                            key: "edit",
+                            label: "Edit selected",
+                            onClick: () => setBulkEditFieldKey(getFieldKey(bulkEditableFields[0])),
+                          }] : []),
+                          ...listButtons.map((button) => ({
+                            key: `button:${button.button_key}`,
+                            label: button.label,
+                            disabled: executingAction !== "",
+                            onClick: (ids) => executeBulkMetadataButton(button, ids),
+                          })),
+                          { key: "delete", label: "Delete", onClick: deleteSelectedRecords },
+                        ] : []}
                         page={page}
                         pageSize={pageSize}
                         total={recordTotal}
@@ -1541,6 +1632,28 @@ export default function ObjectPage({
           justify-content: flex-end;
           gap: 8px;
           padding-top: 4px;
+        }
+
+        .platform-bulk-edit {
+          display: grid;
+          gap: 14px;
+        }
+
+        .platform-bulk-edit > label {
+          display: grid;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .platform-bulk-edit > label select {
+          width: 100%;
+          border: 1px solid var(--border-color, #d1d5db);
+          border-radius: 8px;
+          background: var(--card-background, #fff);
+          color: var(--text-primary, #1f2937);
+          padding: 9px 10px;
+          font: inherit;
         }
 
         .platform-list-mode {
