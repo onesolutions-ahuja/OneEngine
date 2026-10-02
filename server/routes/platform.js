@@ -2945,6 +2945,105 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({ success: true, data: layout });
   });
 
+  router.get("/platform/layouts/:layoutId/assignments", ...manage, async (req, res) => {
+    const layoutResult = await db(
+      "SELECT * FROM platform_layouts WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+      [req.params.layoutId, req.user.companyId]
+    );
+    const layout = layoutResult.rows[0];
+    if (!layout) return res.status(404).json({ success: false, message: "Layout not found" });
+    const result = await db(
+      `SELECT a.*, app.app_key, app.label AS app_label, rt.record_type_key, rt.label AS record_type_label,
+              r.name AS role_name
+         FROM platform_layout_assignments a
+         LEFT JOIN platform_apps app ON app.id=a.app_id
+         LEFT JOIN platform_record_types rt ON rt.id=a.record_type_id
+         LEFT JOIN roles r ON r.id=a.role_id
+        WHERE a.layout_id=$1 AND (a.company_id IS NULL OR a.company_id=$2) AND a.active=true
+        ORDER BY a.priority DESC,a.created_at,a.id`,
+      [layout.id, req.user.companyId]
+    );
+    res.json({ success: true, data: result.rows });
+  });
+
+  router.put("/platform/layouts/:layoutId/assignments", ...manage, async (req, res) => {
+    const layoutResult = await db(
+      "SELECT * FROM platform_layouts WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+      [req.params.layoutId, req.user.companyId]
+    );
+    const layout = layoutResult.rows[0];
+    if (!layout) return res.status(404).json({ success: false, message: "Layout not found" });
+    const rows = Array.isArray(req.body?.assignments) ? req.body.assignments : null;
+    if (!rows) return res.status(400).json({ success: false, message: "assignments must be an array" });
+    if (rows.length > 100) return res.status(400).json({ success: false, message: "A layout supports up to 100 assignments" });
+
+    const normalized = [];
+    const seen = new Set();
+    for (const row of rows) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) {
+        return res.status(400).json({ success: false, message: "Each assignment must be an object" });
+      }
+      const appId = row.appId || row.app_id || null;
+      const recordTypeId = row.recordTypeId || row.record_type_id || null;
+      const roleId = row.roleId || row.role_id || null;
+      const deviceProfile = String(row.deviceProfile || row.device_profile || "any").toLowerCase();
+      const priority = Number.isFinite(Number(row.priority)) ? Math.max(-1000, Math.min(1000, Number(row.priority))) : 0;
+      const requiredPermissions = Array.isArray(row.requiredPermissions || row.required_permissions)
+        ? [...new Set((row.requiredPermissions || row.required_permissions).map((value) => String(value).trim()).filter(Boolean))]
+        : [];
+      if (!["any","desktop","tablet","mobile"].includes(deviceProfile)) {
+        return res.status(400).json({ success: false, message: "Device must be Any, Desktop, Tablet or Mobile" });
+      }
+      if (requiredPermissions.some((permission) => !/^[A-Za-z0-9_.:-]{1,120}$/.test(permission))) {
+        return res.status(400).json({ success: false, message: "Required permission contains an invalid permission key" });
+      }
+      if (appId) {
+        const app = await db("SELECT id FROM platform_apps WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [appId, req.user.companyId]);
+        if (!app.rows.length) return res.status(400).json({ success: false, message: "Assigned app is not available" });
+      }
+      if (recordTypeId) {
+        const recordType = await db("SELECT id FROM platform_record_types WHERE id=$1 AND object_id=$2 AND active=true AND (company_id IS NULL OR company_id=$3)", [recordTypeId, layout.object_id, req.user.companyId]);
+        if (!recordType.rows.length) return res.status(400).json({ success: false, message: "Assigned record type is not available for this object" });
+      }
+      if (roleId) {
+        const role = await db("SELECT id FROM roles WHERE id=$1 AND (company_id IS NULL OR company_id=$2)", [roleId, req.user.companyId]);
+        if (!role.rows.length) return res.status(400).json({ success: false, message: "Assigned role is not available" });
+      }
+      const signature = JSON.stringify([appId || "", recordTypeId || "", roleId || "", deviceProfile, [...requiredPermissions].sort()]);
+      if (seen.has(signature)) return res.status(400).json({ success: false, message: "Duplicate layout assignment" });
+      seen.add(signature);
+      normalized.push({ appId, recordTypeId, roleId, deviceProfile, requiredPermissions, priority });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "DELETE FROM platform_layout_assignments WHERE layout_id=$1 AND company_id=$2",
+        [layout.id, req.user.companyId]
+      );
+      const saved = [];
+      for (const row of normalized) {
+        const result = await client.query(
+          `INSERT INTO platform_layout_assignments
+            (layout_id,company_id,app_id,record_type_id,role_id,device_profile,required_permissions,priority,active)
+           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,true)
+           RETURNING *`,
+          [layout.id, req.user.companyId, row.appId, row.recordTypeId, row.roleId, row.deviceProfile, JSON.stringify(row.requiredPermissions), row.priority]
+        );
+        saved.push(result.rows[0]);
+      }
+      await client.query("COMMIT");
+      res.json({ success: true, data: saved });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error("Platform layout assignment save error:", error);
+      res.status(500).json({ success: false, message: "Unable to save layout assignments" });
+    } finally {
+      client.release();
+    }
+  });
+
   router.post("/platform/layouts/:layoutId/clone", ...manage, async (req, res) => {
     const existing = await db("SELECT * FROM platform_layouts WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [req.params.layoutId, req.user.companyId]);
     if (!existing.rows.length) return res.status(404).json({ success: false, message: "Layout not found" });
