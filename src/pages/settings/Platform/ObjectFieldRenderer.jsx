@@ -251,13 +251,14 @@ export default function ObjectFieldRenderer({
       break;
 
     case "time":
-      control = <input type="time" value={value ?? ""} disabled={disabled} onChange={(event) => handleChange(event.target.value)} />;
+      control = <input type="time" step="0.001" value={value ?? ""} disabled={disabled} onChange={(event) => handleChange(event.target.value)} />;
       break;
 
     case "json":
       control = <textarea value={typeof value === "string" ? value : JSON.stringify(value ?? {}, null, 2)} disabled={disabled} rows={6} onChange={(event) => { try { handleChange(JSON.parse(event.target.value)); } catch {} }} />;
       break;
 
+    case "text_area":
     case "long_text":
       control = (
         <textarea
