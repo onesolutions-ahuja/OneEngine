@@ -3069,11 +3069,14 @@ button.git-control-tile { cursor: pointer; }
 
 .onebuilder-workflow-window .workflow-canvas-surface {
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
 }
 
 .onebuilder-workflow-window .workflow-canvas-lane {
-  min-height: calc(100% - 84px);
-  margin-top: 54px;
+  min-height: calc(100% - 48px);
+  margin-top: 8px;
+  padding-bottom: 28px;
 }
 
 @media (max-width: 760px) {
