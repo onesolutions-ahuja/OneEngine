@@ -568,7 +568,7 @@ export default function createAdminRouter({
         [roleId || null, storeId || null, req.user.companyId]
       );
       if (!assignment.rows[0].valid_role || !assignment.rows[0].valid_store) return res.status(400).json({ success: false, message: "Role or store does not belong to this company" });
-      const hash = await bcrypt.hash(password, 12);
+      const hash = await bcrypt.hash(password, 10);
       const result = await withDomainSave({ pool, db, savePlatformRecord, key: "employee", req, write: (db) => db("INSERT INTO users (company_id,store_id,role_id,username,password_hash,full_name,email) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,username,full_name,email,active,store_id,role_id", [req.user.companyId, storeId || null, roleId || null, String(username).trim().toLowerCase(), hash, String(fullName).trim(), email || null]) });
       res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) { if (error.code === "PLATFORM_RECORD_INVALID") return res.status(error.status).json({ success: false, code: error.code, message: error.message }); res.status(error.code === "23505" ? 409 : 500).json({ success: false, code: error.code === "23505" ? "EMAIL_ALREADY_REGISTERED" : undefined, message: error.code === "23505" ? DUPLICATE_EMAIL_MESSAGE : "Unable to create user" }); }
@@ -596,7 +596,7 @@ export default function createAdminRouter({
       if (!assignment.rows[0].valid_role || !assignment.rows[0].valid_store) return res.status(400).json({ success: false, message: "Role or store does not belong to this company" });
       const passwordClause = req.body.password ? ", password_hash = $8" : "";
       const params = [req.body.fullName, normalizeEmail(req.body.email), req.body.roleId || null, req.body.storeId || null, req.body.active !== false, req.params.id, req.user.companyId];
-      if (req.body.password) params.push(await bcrypt.hash(req.body.password, 12));
+      if (req.body.password) params.push(await bcrypt.hash(req.body.password, 10));
       const result = await withDomainSave({ pool, db, savePlatformRecord, key: "employee", req, id: req.params.id, write: (db) => db(`UPDATE users SET full_name=$1,email=$2,role_id=$3,store_id=$4,active=$5,updated_at=NOW()${passwordClause} WHERE id=$6 AND company_id=$7 RETURNING id,username,full_name,email,active,store_id,role_id`, params) });
       if (!result.rows.length) return res.status(404).json({ success: false, message: "User not found" });
       res.json({ success: true, data: result.rows[0] });
@@ -609,7 +609,7 @@ export default function createAdminRouter({
    * POST /api/admin/users/:id/reset-password
    * Admin reset of ANOTHER user's password. No current-password check (the
    * admin does not know it); requires user.manage permission + company scope.
-   * Body: { newPassword, confirmPassword }. Keeps bcrypt hashing (cost 12).
+   * Body: { newPassword, confirmPassword }. Keeps bcrypt hashing (cost 10).
    */
   router.post("/admin/users/:id/reset-password", authenticate, authorize("user.manage"), async (req, res) => {
     try {
@@ -620,7 +620,7 @@ export default function createAdminRouter({
       if (newPassword !== confirmPassword) return res.status(400).json({ success: false, message: "New password and confirmation do not match" });
       if (String(newPassword).length < 8) return res.status(400).json({ success: false, message: "New password must be at least 8 characters" });
       if (String(req.params.id) === String(req.user.id)) return res.status(400).json({ success: false, message: "Use change-password for your own account" });
-      const hash = await bcrypt.hash(String(newPassword), 12);
+      const hash = await bcrypt.hash(String(newPassword), 10);
       const result = await db("UPDATE users SET password_hash=$1, must_change_password=FALSE, updated_at=NOW() WHERE id=$2 AND company_id=$3 RETURNING id, username", [hash, req.params.id, req.user.companyId]);
       if (!result.rows.length) return res.status(404).json({ success: false, message: "User not found" });
       res.json({ success: true, message: "Password reset successfully", data: result.rows[0] });
