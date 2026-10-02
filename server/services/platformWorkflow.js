@@ -1,4 +1,5 @@
 import { evaluateCondition } from "./platformConditions.js";
+import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
 import { executeRegisteredAction } from "./platformActions.js";
@@ -79,10 +80,12 @@ function redact(value, depth = 0) {
 }
 
 function errorDetails(error) {
+  const status = error?.status || error?.statusCode || 500;
   return redact({
     message: String(error?.message || error || "Workflow execution failed").slice(0, 2000),
     code: error?.code || null,
-    status: error?.status || error?.statusCode || null,
+    oeCode: classifyDebugCode(error, Number(status || 500)),
+    status,
     retryable: error?.retryable ?? null,
   });
 }
@@ -993,6 +996,7 @@ export async function updateWorkflowStepRunStatus({ db, stepRunId, status, error
         SET status=$1::varchar,
             completed_at=CASE WHEN UPPER($1::varchar) IN ('PENDING','RUNNING','WAITING') THEN NULL ELSE COALESCE(completed_at, NOW()) END,
             error_text=$2,
+            error_code=COALESCE(($3::jsonb->'error'->>'oeCode'), error_code),
             metadata=COALESCE(metadata,'{}'::jsonb) || $3::jsonb,
             updated_at=NOW()
       WHERE id=$4 RETURNING *`,
@@ -5274,9 +5278,9 @@ async function recordCompensationFailure({ db, runId, stepRunId, action, error, 
   if (!db || !runId) return details;
   await db(
     `INSERT INTO platform_workflow_compensation_runs
-       (run_id, step_run_id, company_id, action_type, status, error_text, metadata)
-     VALUES ($1,$2,$3,$4,'FAILED',$5,$6::jsonb)`,
-    [runId, stepRunId || null, context.companyId || context.req?.user?.companyId || null, resolveWorkflowActionType(action), details.message, JSON.stringify({ error: details })]
+       (run_id, step_run_id, company_id, action_type, status, error_text, error_code, metadata)
+     VALUES ($1,$2,$3,$4,'FAILED',$5,$6,$7::jsonb)`,
+    [runId, stepRunId || null, context.companyId || context.req?.user?.companyId || null, resolveWorkflowActionType(action), details.message, details.oeCode || "OEWX01", JSON.stringify({ error: details })]
   );
   return details;
 }
@@ -5770,8 +5774,8 @@ export async function executeWorkflowActions({ actions, ...context }) {
       const compensationFailures = await compensateCompletedSteps(completed, context, error);
       if (context.runId && context.db) {
         await context.db(
-          "UPDATE platform_workflow_runs SET status='FAILED', completed_at=NOW(), error_text=$1, metadata=COALESCE(metadata,'{}'::jsonb) || $2::jsonb, updated_at=NOW() WHERE id=$3 AND company_id=$4",
-          [details.message, JSON.stringify({ rootError: details, compensationFailures }), context.runId, context.companyId || context.req?.user?.companyId]
+          "UPDATE platform_workflow_runs SET status='FAILED', completed_at=NOW(), error_text=$1, error_code=$2, metadata=COALESCE(metadata,'{}'::jsonb) || $3::jsonb, updated_at=NOW() WHERE id=$4 AND company_id=$5",
+          [details.message, details.oeCode || "OEWE01", JSON.stringify({ rootError: details, compensationFailures }), context.runId, context.companyId || context.req?.user?.companyId]
         );
       }
       throw new WorkflowExecutionError(details, compensationFailures);
