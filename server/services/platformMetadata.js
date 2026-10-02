@@ -655,6 +655,33 @@ export const platformSchema = `
   ALTER TABLE platform_apps ADD COLUMN IF NOT EXISTS managed BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE platform_apps ADD COLUMN IF NOT EXISTS package_required BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE platform_apps ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE;
+  CREATE TABLE IF NOT EXISTS platform_layout_assignments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    layout_id UUID NOT NULL REFERENCES platform_layouts(id) ON DELETE CASCADE,
+    company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+    app_id UUID REFERENCES platform_apps(id) ON DELETE CASCADE,
+    record_type_id UUID REFERENCES platform_record_types(id) ON DELETE CASCADE,
+    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    device_profile VARCHAR(20) NOT NULL DEFAULT 'any',
+    required_permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
+    priority INTEGER NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  DO $ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname='platform_layout_assignments_device_check'
+    ) THEN
+      ALTER TABLE platform_layout_assignments
+        ADD CONSTRAINT platform_layout_assignments_device_check
+        CHECK (device_profile IN ('any','desktop','tablet','mobile'));
+    END IF;
+  END $;
+  CREATE INDEX IF NOT EXISTS idx_platform_layout_assignments_layout
+    ON platform_layout_assignments(layout_id, active);
+  CREATE INDEX IF NOT EXISTS idx_platform_layout_assignments_scope
+    ON platform_layout_assignments(company_id, app_id, record_type_id, role_id, device_profile, active);
   CREATE TABLE IF NOT EXISTS platform_pages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     app_id UUID NOT NULL REFERENCES platform_apps(id) ON DELETE CASCADE,
