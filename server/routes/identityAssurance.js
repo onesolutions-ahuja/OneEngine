@@ -4,7 +4,7 @@ import {
   activeTemporaryVerificationCode, assuranceSatisfies, consumeChallenge, consumeRecoveryCode, createPendingChallenge,
   effectiveStepUpPolicy, findTrustedDevice, generateTemporaryVerificationCode, getPendingChallenge, listMfaMethods,
   loadEffectiveAssurance, mfaMethodAllowed, newDeviceToken, replaceRecoveryCodes, sortMfaMethods, startTotpEnrollment,
-  stepUpRequired, trustDevice, verifyTemporaryVerificationCode, verifyTotpMethod,
+  stepUpRequired, trustDevice, verifyTemporaryVerificationCode, verifyTotpMethod, writeVerificationHistory,
 } from "../services/identityAssurance.js";
 import { clientIp, createTrackedSession, writeLoginHistory } from "../services/identitySecurity.js";
 
@@ -29,6 +29,8 @@ function methodAssurance(method,effective){
 export default function createIdentityAssuranceRouter({authenticate,authorize,db,createToken,encryptCredentials,decryptCredentials,writeAudit}) {
   const router=express.Router();
   const manage=[authenticate,authorize("settings.manage")];
+  const mfaManage=[authenticate,authorize("settings.manage","security.mfa.manage")];
+  const verificationView=[authenticate,authorize("settings.manage","security.mfa.manage","security.identity_verification_history.view")];
 
   async function finishChallenge(req,res,{challenge,user,assuranceLevel="HIGH",mfaMethod="MFA",trust=false,deviceName=null,extra={}}){
     const consumed=await consumeChallenge(db,challenge.id);
@@ -47,6 +49,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     user.session_id=sessionId;
     const token=createToken(user);
     await writeLoginHistory(db,{user,identifier:user.email||user.username,status:"SUCCESS",reason:"MFA_VERIFIED",ip:clientIp(req),userAgent:req.get("user-agent")||null,authMethod:challenge.context?.authMethod||"PASSWORD",sessionId,req});
+    await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:challenge.context?.deviceActivationPending?"DEVICE_ACTIVATION":"MFA_VERIFICATION",
+      method:mfaMethod,status:"SUCCESS",challengeType:challenge.challenge_type,assuranceLevel,ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId,
+      details:{trustedDevice:Boolean(device),authMethod:challenge.context?.authMethod||"PASSWORD"}});
     res.json({success:true,token,deviceToken,...extra,user:{
       id:user.id,username:user.username,name:user.full_name,role:user.role_name,defaultLandingPage:user.default_landing_page||"dashboard",
       companyId:user.company_id,storeId:user.store_id,mustChangePassword:user.must_change_password===true,
@@ -245,6 +250,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       }
       await consumeChallenge(db,challenge.id);
       await db("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW(),mfa_method=$3 WHERE id=$1 AND user_id=$4",[sid,assurance,methodType,user.id]);
+      await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"STEP_UP",method:methodType,status:"SUCCESS",
+        challengeType:challenge.challenge_type,assuranceLevel:assurance,ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId:sid,
+        details:{resourceKey}});
       return res.json({success:true,assuranceLevel:assurance});
     }
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:methodType,trust:methodType==="TEMPORARY_CODE"?false:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
@@ -383,12 +391,15 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(challenge.challenge_type==="STEP_UP"){
       await consumeChallenge(db,challenge.id);
       await db("UPDATE identity_sessions SET assurance_level=$3,assurance_verified_at=NOW(),mfa_method='PASSKEY' WHERE id=$1 AND user_id=$2",[challenge.context?.sessionId,user.id,methodLevel]);
+      await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"STEP_UP",method:method.authenticator_kind||"PASSKEY",status:"SUCCESS",
+        challengeType:challenge.challenge_type,assuranceLevel:methodLevel,ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId:challenge.context?.sessionId||null,
+        details:{resourceKey:String(challenge.context?.resourceKey||"").toUpperCase()}});
       return res.json({success:true,assuranceLevel:methodLevel});
     }
     return finishChallenge(req,res,{challenge,user,assuranceLevel:methodLevel,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
   });
 
-  router.get("/security/mfa/users",...manage,async(req,res)=>{
+  router.get("/security/mfa/users",...mfaManage,async(req,res)=>{
     const r=await db(`SELECT u.id,u.username,u.full_name,u.email,
       COUNT(m.id) FILTER (WHERE m.active=TRUE AND m.verified=TRUE)::int AS method_count,
       COALESCE(jsonb_agg(DISTINCT m.method_type) FILTER (WHERE m.active=TRUE AND m.verified=TRUE),'[]'::jsonb) AS method_types
@@ -397,7 +408,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.json({success:true,data:r.rows});
   });
 
-  router.get("/security/mfa/users/:userId/methods",...manage,async(req,res)=>{
+  router.get("/security/mfa/users/:userId/methods",...mfaManage,async(req,res)=>{
     const [r,temp]=await Promise.all([
       db(`SELECT id,method_type,label,authenticator_kind,phishing_resistant,verified,active,created_at,last_used_at
         FROM identity_mfa_methods WHERE company_id=$1 AND user_id=$2 ORDER BY created_at`,[req.user.companyId,req.params.userId]),
@@ -408,7 +419,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.json({success:true,data:rows});
   });
 
-  router.post("/security/mfa/users/:userId/temporary-code",...manage,async(req,res)=>{
+  router.post("/security/mfa/users/:userId/temporary-code",...mfaManage,async(req,res)=>{
     if(!req.authSession||!assuranceSatisfies(req.authSession.assurance_level,"HIGH")){
       return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"TEMPORARY_MFA_CODE",message:"High-Assurance verification is required to generate a temporary MFA code"});
     }
@@ -426,7 +437,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     }
   });
 
-  router.post("/security/mfa/users/:userId/temporary-code/expire",...manage,async(req,res)=>{
+  router.post("/security/mfa/users/:userId/temporary-code/expire",...mfaManage,async(req,res)=>{
     if(!req.authSession||!assuranceSatisfies(req.authSession.assurance_level,"HIGH")){
       return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"TEMPORARY_MFA_CODE",message:"High-Assurance verification is required to expire a temporary MFA code"});
     }
@@ -435,7 +446,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.json({success:true});
   });
 
-  router.post("/security/mfa/users/:userId/methods/:methodId/disconnect",...manage,async(req,res)=>{
+  router.post("/security/mfa/users/:userId/methods/:methodId/disconnect",...mfaManage,async(req,res)=>{
     const r=await db(`UPDATE identity_mfa_methods SET active=FALSE
       WHERE id=$1 AND user_id=$2 AND company_id=$3 RETURNING id`,[req.params.methodId,req.params.userId,req.user.companyId]);
     if(!r.rows.length)return res.status(404).json({success:false,message:"MFA method not found"});
@@ -443,7 +454,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.json({success:true});
   });
 
-  router.get("/security/trusted-devices/all",...manage,async(req,res)=>{
+  router.get("/security/trusted-devices/all",...mfaManage,async(req,res)=>{
     const r=await db(`SELECT d.id,d.user_id,u.username,u.full_name,d.device_name,d.platform,d.browser,d.first_ip::text,d.last_ip::text,
       d.trusted_until,d.created_at,d.last_seen_at,d.revoked_at
       FROM identity_trusted_devices d JOIN users u ON u.id=d.user_id
@@ -451,10 +462,20 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.json({success:true,data:r.rows});
   });
 
-  router.post("/security/trusted-devices/:id/admin-revoke",...manage,async(req,res)=>{
+  router.post("/security/trusted-devices/:id/admin-revoke",...mfaManage,async(req,res)=>{
     const r=await db("UPDATE identity_trusted_devices SET revoked_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",[req.params.id,req.user.companyId]);
     if(!r.rows.length)return res.status(404).json({success:false,message:"Trusted device not found"});
     await writeAudit?.(req.user.companyId,req.user.id,"security.trusted_device_revoked","identity_trusted_device",req.params.id,{});
+    res.json({success:true});
+  });
+
+  router.post("/security/mfa/methods/:methodId/disconnect",authenticate,async(req,res)=>{
+    const r=await db(`UPDATE identity_mfa_methods SET active=FALSE
+      WHERE id=$1 AND company_id=$2 AND user_id=$3 AND active=TRUE RETURNING id,method_type,authenticator_kind`,
+      [req.params.methodId,req.user.companyId,req.user.id]);
+    if(!r.rows.length)return res.status(404).json({success:false,message:"MFA method not found"});
+    await writeVerificationHistory(db,{companyId:req.user.companyId,userId:req.user.id,eventType:"METHOD_DISCONNECTED",
+      method:r.rows[0].authenticator_kind||r.rows[0].method_type,status:"SUCCESS",ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId:req.user.sid||null});
     res.json({success:true});
   });
 
@@ -478,6 +499,38 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
         reverify_after_minutes=EXCLUDED.reverify_after_minutes,active=TRUE,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING *`,
       [req.user.companyId,req.params.resourceKey,action,required,minutes,req.user.id]);
     res.json({success:true,data:r.rows[0]});
+  });
+
+  router.get("/security/identity-verification-history",...verificationView,async(req,res)=>{
+    const limit=Math.min(1000,Math.max(1,Number(req.query.limit)||200));
+    const userId=String(req.query.userId||"").trim()||null;
+    const method=String(req.query.method||"").trim().toUpperCase();
+    const status=String(req.query.status||"").trim().toUpperCase();
+    const from=String(req.query.from||"").trim()||null;
+    const to=String(req.query.to||"").trim()||null;
+    const r=await db(`SELECT h.id,h.occurred_at,h.event_type,h.method,h.status,h.challenge_type,h.assurance_level,
+      h.ip_address::text,h.user_agent,h.session_id,h.details,u.username,u.full_name
+      FROM identity_verification_history h LEFT JOIN users u ON u.id=h.user_id
+      WHERE h.company_id=$1
+        AND ($2::uuid IS NULL OR h.user_id=$2)
+        AND ($3='' OR UPPER(COALESCE(h.method,''))=$3)
+        AND ($4='' OR h.status=$4)
+        AND ($5::timestamptz IS NULL OR h.occurred_at >= $5::timestamptz)
+        AND ($6::timestamptz IS NULL OR h.occurred_at <= $6::timestamptz)
+      ORDER BY h.occurred_at DESC LIMIT $7`,[req.user.companyId,userId,method,status,from,to,limit]);
+    res.json({success:true,data:r.rows});
+  });
+
+  router.get("/security/identity-verification-history/export.csv",...verificationView,async(req,res)=>{
+    const r=await db(`SELECT h.occurred_at,u.username,u.full_name,h.event_type,h.method,h.status,h.challenge_type,
+      h.assurance_level,h.ip_address::text,h.user_agent
+      FROM identity_verification_history h LEFT JOIN users u ON u.id=h.user_id
+      WHERE h.company_id=$1 ORDER BY h.occurred_at DESC LIMIT 20000`,[req.user.companyId]);
+    const columns=["occurred_at","username","full_name","event_type","method","status","challenge_type","assurance_level","ip_address","user_agent"];
+    const csv=[columns.join(","),...r.rows.map(row=>columns.map(key=>`"${String(row[key]??"").replace(/"/g,'""')}"`).join(","))].join("\n");
+    res.setHeader("Content-Type","text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition",'attachment; filename="oneengine-identity-verification-history.csv"');
+    res.send(csv);
   });
 
   router.get("/security/auth-providers",...manage,async(req,res)=>{
