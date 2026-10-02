@@ -35,6 +35,18 @@ function componentVisible(component, values) {
   return !(actual == null || actual === '' || actual === false || (Array.isArray(actual) && actual.length === 0))
 }
 
+function componentOptions(component, values) {
+  const options = Array.isArray(component?.options) ? component.options : []
+  if (!component?.controllingComponent) return options
+  const controller = values?.[component.controllingComponent]
+  const selected = Array.isArray(controller) ? controller.map(String) : [String(controller ?? '')]
+  return options.filter((option) => {
+    const allowed = Array.isArray(option?.controllingValues) ? option.controllingValues.map(String) : []
+    if (!allowed.length) return true
+    return selected.some((value) => allowed.includes(value))
+  })
+}
+
 export default function ScreenFlowRuntimePage({ sessionId }) {
   const [session, setSession] = useState(null)
   const [values, setValues] = useState({})
@@ -117,18 +129,18 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       return <label className="flex items-center gap-2"><input {...common} type="checkbox" checked={Boolean(value)} onChange={(event) => setValue(component.name, event.target.checked)} /><span>{component.toggleLabel || component.helpText || component.label}</span></label>
     }
     if (component.type === 'RADIO') {
-      return <div className="space-y-2">{(component.options || []).map((option) => <label key={option.value} className="flex items-center gap-2"><input {...common} type="radio" value={option.value} checked={String(value ?? '') === String(option.value)} onChange={() => setValue(component.name, option.value)} /><span>{option.label}</span></label>)}</div>
+      return <div className="space-y-2">{componentOptions(component, values).map((option) => <label key={option.value} className="flex items-center gap-2"><input {...common} type="radio" value={option.value} checked={String(value ?? '') === String(option.value)} onChange={() => setValue(component.name, option.value)} /><span>{option.label}</span></label>)}</div>
     }
     if (component.type === 'CHECKBOX_GROUP') {
       const selected = Array.isArray(value) ? value : []
-      return <div className="space-y-2">{(component.options || []).map((option) => <label key={option.value} className="flex items-center gap-2"><input {...common} type="checkbox" checked={selected.includes(option.value)} onChange={(event) => setValue(component.name, event.target.checked ? [...selected, option.value] : selected.filter((item) => item !== option.value))} /><span>{option.label}</span></label>)}</div>
+      return <div className="space-y-2">{componentOptions(component, values).map((option) => <label key={option.value} className="flex items-center gap-2"><input {...common} type="checkbox" checked={selected.includes(option.value)} onChange={(event) => setValue(component.name, event.target.checked ? [...selected, option.value] : selected.filter((item) => item !== option.value))} /><span>{option.label}</span></label>)}</div>
     }
     if (component.type === 'SELECT') {
-      return <select {...common} className="w-full rounded-lg border border-slate-300 px-3 py-2" value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)}><option value="">{component.placeholder || 'Select…'}</option>{(component.options || []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+      return <select {...common} className="w-full rounded-lg border border-slate-300 px-3 py-2" value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)}><option value="">{component.placeholder || 'Select…'}</option>{componentOptions(component, values).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
     }
     if (component.type === 'MULTI_SELECT') {
       const selected = Array.isArray(value) ? value : []
-      return <select {...common} multiple className="w-full rounded-lg border border-slate-300 px-3 py-2" value={selected} onChange={(event) => setValue(component.name, Array.from(event.target.selectedOptions).map((option) => option.value))}>{(component.options || []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+      return <select {...common} multiple className="w-full rounded-lg border border-slate-300 px-3 py-2" value={selected} onChange={(event) => setValue(component.name, Array.from(event.target.selectedOptions).map((option) => option.value))}>{componentOptions(component, values).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
     }
     if (component.type === 'SLIDER') {
       return <div><input {...common} className="w-full" type="range" min={component.min ?? 0} max={component.max ?? 100} step={component.step ?? 1} value={value ?? component.min ?? 0} onChange={(event) => setValue(component.name, Number(event.target.value))} /><div className="text-right text-xs text-slate-500">{value ?? component.min ?? 0}</div></div>
