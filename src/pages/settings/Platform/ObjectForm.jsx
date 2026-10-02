@@ -839,7 +839,7 @@ export default function ObjectForm({
                 ? (Number.isFinite(Number(field?.config?.scale)) ? String(1 / (10 ** Number(field.config.scale))) : "any")
                 : undefined
             }
-            maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || undefined}
+            maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || ({ text:255, email:80, phone:40, url:255 }[type]) || undefined}
             placeholder={
               field?.placeholder || ""
             }
