@@ -26,7 +26,8 @@ function localResourceValue(path, values) {
 function componentVisible(component, values) {
   if (component?.visible === false) return false
   if (!component?.visibilityResource) return true
-  const actual = localResourceValue(component.visibilityResource, values)
+  const localValue = localResourceValue(component.visibilityResource, values)
+  const actual = localValue === undefined ? component.visibilityInitialValue : localValue
   const operator = component.visibilityOperator || 'truthy'
   if (operator === 'falsy') return actual == null || actual === '' || actual === false || (Array.isArray(actual) && actual.length === 0)
   if (operator === 'equals') return String(actual ?? '') === String(component.visibilityValue ?? '')
