@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS security_api_policies (
   company_id UUID PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
   enforce_connected_app_policy BOOLEAN NOT NULL DEFAULT FALSE,
   require_pkce BOOLEAN NOT NULL DEFAULT TRUE,
-  require_high_assurance_for_app_admin BOOLEAN NOT NULL DEFAULT TRUE,
+  require_high_assurance_for_app_admin BOOLEAN NOT NULL DEFAULT FALSE,
   default_refresh_token_days INTEGER NOT NULL DEFAULT 30 CHECK (default_refresh_token_days BETWEEN 1 AND 3650),
   max_refresh_token_days INTEGER NOT NULL DEFAULT 180 CHECK (max_refresh_token_days BETWEEN 1 AND 3650),
   allowed_grant_types JSONB NOT NULL DEFAULT '["authorization_code","refresh_token"]'::jsonb,
