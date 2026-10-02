@@ -79,6 +79,9 @@ function makeColumns(fields, listView = null) {
   return safe.map((field) => ({
     key: field.api_name,
     label: field.label || field.api_name,
+    fieldType: field.field_type || 'text',
+    options: Array.isArray(field.options) ? field.options : [],
+    editable: field.writable !== false && !['formula','rollup','lookup','multiselect','json'].includes(String(field.field_type || '').toLowerCase()),
     render: (row) => readableValue(row?.[field.api_name]),
   }))
 }
@@ -155,6 +158,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [error, setError] = useState('')
   const [editor, setEditor] = useState(null)
+  const [bulkEditor, setBulkEditor] = useState(null)
   const [detailTab, setDetailTab] = useState('details')
   const [relatedState, setRelatedState] = useState({ key: '', loading: false, rows: [], error: '' })
   const [historyState, setHistoryState] = useState({ loading: false, rows: [], error: '' })
@@ -516,6 +520,69 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     }
   }
 
+  const inlineEditRecord = async (row, column, value) => {
+    if (!selectedObject || !row?.id || !column?.key || !canEdit) return
+    const type = String(column.fieldType || '').toLowerCase()
+    let nextValue = value
+    if (['number','decimal','currency'].includes(type)) nextValue = value === '' ? null : Number(value)
+    if (value === '') nextValue = null
+    try {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(row.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ data: { [column.key]: nextValue }, recordTypeId: row.recordTypeId || row.record_type_id || null }),
+      })
+      if (response?.success === false) throw new Error(response.message || 'Unable to update record')
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
+      if (String(selectedId) === String(row.id)) {
+        const detailResponse = await apiRequest(`/api/platform/runtime/record-page?objectKey=${encodeURIComponent(objectKey(selectedObject))}&recordId=${encodeURIComponent(row.id)}`)
+        setDetail(detailResponse?.data || null)
+      }
+    } catch (err) {
+      setError(err?.message || 'Unable to update record')
+    }
+  }
+
+  const openBulkEdit = (ids) => {
+    const writable = fields.filter((field) => field.active !== false && field.writable !== false && !['formula','rollup','json'].includes(String(field.field_type || '').toLowerCase()))
+    setBulkEditor({ ids, fieldKey: writable[0]?.api_name || '', value: '', error: '' })
+  }
+
+  const saveBulkEdit = async (event) => {
+    event.preventDefault()
+    if (!selectedObject || !bulkEditor?.ids?.length || !bulkEditor.fieldKey) return
+    const field = fields.find((item) => item.api_name === bulkEditor.fieldKey)
+    if (!field) return
+    let value = bulkEditor.value
+    const type = String(field.field_type || '').toLowerCase()
+    if (['number','decimal','currency'].includes(type)) value = value === '' ? null : Number(value)
+    if (value === '') value = null
+    try {
+      for (const id of bulkEditor.ids) {
+        const row = rows.find((item) => String(item.id) === String(id))
+        await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ data: { [bulkEditor.fieldKey]: value }, recordTypeId: row?.recordTypeId || row?.record_type_id || null }),
+        })
+      }
+      setBulkEditor(null)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
+    } catch (err) {
+      setBulkEditor((current) => ({ ...current, error: err?.message || 'Unable to update selected records' }))
+    }
+  }
+
+  const bulkDeleteRecords = async (ids) => {
+    if (!selectedObject || !ids?.length || !canDelete || !window.confirm(`Delete ${ids.length} selected record${ids.length === 1 ? '' : 's'}?`)) return
+    try {
+      for (const id of ids) {
+        await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      }
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
+    } catch (err) {
+      setError(err?.message || 'Unable to delete selected records')
+    }
+  }
+
   const deleteRecord = async () => {
     if (!selectedObject || !selectedId || !canDelete || !window.confirm('Delete this record?')) return
     try {
@@ -683,6 +750,9 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             onFiltersChange={handleListFiltersChange}
             pageInfo={pageInfo}
             onPageChange={handlePageChange}
+            onInlineEdit={canEdit ? inlineEditRecord : null}
+            onBulkEdit={canEdit ? openBulkEdit : null}
+            onBulkDelete={canDelete ? bulkDeleteRecords : null}
           />
         ) : <div className="workspace-state">Select an object.</div>}
       </main>
@@ -800,6 +870,36 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
           </form>
         </div>
       ) : null}
+
+      {bulkEditor ? (
+        <div className="workspace-editor-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setBulkEditor(null)}>
+          <form className="workspace-editor" onSubmit={saveBulkEdit}>
+            <header>
+              <div><strong>Edit {bulkEditor.ids.length} selected record{bulkEditor.ids.length === 1 ? '' : 's'}</strong></div>
+              <button type="button" onClick={() => setBulkEditor(null)}><X size={15}/></button>
+            </header>
+            <div className="workspace-editor-body">
+              {bulkEditor.error ? <div className="workspace-editor-error">{bulkEditor.error}</div> : null}
+              <label>
+                <span>Field</span>
+                <select value={bulkEditor.fieldKey} onChange={(event) => setBulkEditor((current) => ({ ...current, fieldKey: event.target.value, value: '' }))}>
+                  {fields.filter((field) => field.active !== false && field.writable !== false && !['formula','rollup','json'].includes(String(field.field_type || '').toLowerCase())).map((field) => (
+                    <option key={field.id || field.api_name} value={field.api_name}>{field.label || field.api_name}</option>
+                  ))}
+                </select>
+              </label>
+              {(() => {
+                const field = fields.find((item) => item.api_name === bulkEditor.fieldKey)
+                return field ? <WorkspaceField field={field} value={bulkEditor.value} onChange={(value) => setBulkEditor((current) => ({ ...current, value }))} /> : null
+              })()}
+            </div>
+            <footer>
+              <button type="button" onClick={() => setBulkEditor(null)}>Cancel</button>
+              <button type="submit" className="workspace-save"><Save size={13}/> Apply to selected</button>
+            </footer>
+          </form>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -813,6 +913,93 @@ function WorkspaceField({ field, value, onChange }) {
     const options = Array.isArray(field.options) ? field.options : []
     return <label><span>{field.label || field.api_name}</span><select value={value ?? ''} onChange={(e) => onChange(e.target.value)}><option value="">Select…</option>{options.filter((o) => o.active !== false).map((o) => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o.value ?? o}</option>)}</select></label>
   }
+  if (type === 'lookup') {
+    return <WorkspaceLookupField field={field} value={value} onChange={onChange} />
+  }
   const htmlType = ['number','decimal','currency'].includes(type) ? 'number' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : type === 'email' ? 'email' : type === 'phone' ? 'tel' : 'text'
   return <label><span>{field.label || field.api_name}</span><input type={htmlType} value={value ?? ''} required={field.required === true} onChange={(e) => onChange(e.target.value)} /></label>
+}
+
+function WorkspaceLookupField({ field, value, onChange }) {
+  const targetKey = field?.config?.relatedObjectKey || field?.config?.related_object_key || ''
+  const [text, setText] = useState('')
+  const [options, setOptions] = useState([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const lookupTimerRef = useRef(null)
+
+  useEffect(() => {
+    if (!value || !targetKey) {
+      setText(value ? String(value) : '')
+      return
+    }
+    let live = true
+    apiRequest(`/api/platform/objects/${encodeURIComponent(targetKey)}/records/${encodeURIComponent(value)}`)
+      .then((response) => {
+        if (!live) return
+        const record = response?.data?.record || response?.data || response?.record || null
+        if (record && typeof record === 'object') setText(recordTitle(record, []))
+        else setText(String(value))
+      })
+      .catch(() => live && setText(String(value)))
+    return () => { live = false }
+  }, [value, targetKey])
+
+  useEffect(() => () => {
+    if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current)
+  }, [])
+
+  const search = (next) => {
+    setText(next)
+    setOpen(true)
+    if (!targetKey) return
+    if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current)
+    lookupTimerRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const params = new URLSearchParams({ page: '1', pageSize: '20' })
+        if (next.trim()) params.set('search', next.trim())
+        const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(targetKey)}/records?${params.toString()}`)
+        setOptions(Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [])
+      } catch {
+        setOptions([])
+      } finally {
+        setLoading(false)
+      }
+    }, 200)
+  }
+
+  const choose = (record) => {
+    onChange(record.id)
+    setText(recordTitle(record, []))
+    setOpen(false)
+  }
+
+  return (
+    <label className="workspace-lookup-field">
+      <span>{field.label || field.api_name}</span>
+      <div className="workspace-lookup-input">
+        <input
+          type="search"
+          value={text}
+          required={field.required === true}
+          placeholder={targetKey ? `Search ${targetKey}…` : 'Search records…'}
+          onFocus={() => { setOpen(true); if (!options.length) search('') }}
+          onChange={(event) => { onChange(''); search(event.target.value) }}
+          onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false) }}
+        />
+        {value ? <button type="button" onClick={() => { onChange(''); setText(''); setOptions([]) }}>Clear</button> : null}
+        {open ? (
+          <div className="workspace-lookup-results">
+            {loading ? <div>Searching…</div> : options.length ? options.map((record) => (
+              <button key={record.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => choose(record)}>
+                <strong>{recordTitle(record, [])}</strong>
+                <small>{record.id}</small>
+              </button>
+            )) : <div>No matching records.</div>}
+          </div>
+        ) : null}
+      </div>
+    </label>
+  )
 }
