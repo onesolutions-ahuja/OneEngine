@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Search, Settings2, ShieldCheck } from 'lucide-react'
-import { apiRequest, getStoredUser, setDeviceServerAddress } from '../../services/api'
+import { apiRequest, getDeviceKey, getStoredUser, setDeviceServerAddress } from '../../services/api'
 
 const SETTINGS_CATALOG_CACHE_KEY = 'onepos.settings.catalog.v1'
 
@@ -41,19 +41,7 @@ function fieldValue(record, field) {
   return record?.[field.api_name] ?? ''
 }
 
-function currentDeviceKey() {
-  const storageKey = 'onepos_device_key'
-  try {
-    let value = localStorage.getItem(storageKey)
-    if (!value) {
-      value = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `device-${Date.now()}`
-      localStorage.setItem(storageKey, value)
-    }
-    return value
-  } catch {
-    return 'device-local'
-  }
-}
+function currentDeviceKey() { return getDeviceKey() }
 
 function currentDeviceName() {
   try {

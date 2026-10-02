@@ -1027,6 +1027,26 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           CREATE INDEX IF NOT EXISTS idx_kiosk_devices_store ON kiosk_devices(company_id,store_id,active);
         `);
       },
+    },
+    {
+      key: "0037_workstation_hardware_assignments",
+      version: "37",
+      name: "Scope configured hardware and payment terminals to a workstation device key",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE hardware_configurations
+            ADD COLUMN IF NOT EXISTS device_key VARCHAR(120) NOT NULL DEFAULT 'legacy-unassigned';
+          ALTER TABLE payment_terminals
+            ADD COLUMN IF NOT EXISTS device_key VARCHAR(120) NOT NULL DEFAULT 'legacy-unassigned';
+          ALTER TABLE hardware_configurations
+            DROP CONSTRAINT IF EXISTS hardware_configurations_company_id_store_id_device_type_key;
+          DROP INDEX IF EXISTS hardware_configurations_company_id_store_id_device_type_key;
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_hardware_configurations_device
+            ON hardware_configurations(company_id, store_id, device_key, device_type);
+          CREATE INDEX IF NOT EXISTS idx_payment_terminals_device
+            ON payment_terminals(company_id, store_id, device_key, active);
+        `);
+      },
     }
   ]);
 

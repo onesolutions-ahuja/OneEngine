@@ -32,6 +32,22 @@ export default function createSettingsRouter({
 }) {
   const router = express.Router();
 
+  const deviceKeyFor = (req) => {
+    const raw = String(req.get('X-One-Device-Key') || '').trim()
+    return /^[A-Za-z0-9._:-]{1,120}$/.test(raw) ? raw : 'device-local'
+  };
+
+  const claimLegacyHardware = async (req) => {
+    const deviceKey = deviceKeyFor(req)
+    await db(
+      `UPDATE hardware_configurations
+          SET device_key=$1,updated_at=NOW()
+        WHERE company_id=$2 AND store_id=$3 AND device_key='legacy-unassigned'`,
+      [deviceKey, req.user.companyId, req.user.storeId]
+    );
+    return deviceKey
+  };
+
   router.get("/settings/payment-methods", authenticate, async (req, res) => {
     try {
       await ensureDefaultPaymentMethods(db, req.user.companyId);
@@ -903,111 +919,172 @@ export default function createSettingsRouter({
 
   router.get("/payment-terminals", authenticate, async (req, res) => {
     try {
+      const deviceKey = deviceKeyFor(req);
       const result = await db(
-        `
-        SELECT id, store_id, provider, name, terminal_identifier, connection_url,
-          active, (api_credentials IS NOT NULL AND api_credentials <> '') AS has_credentials,
-          last_test_result, last_tested_at, created_at, updated_at
-        FROM payment_terminals
-        WHERE company_id = $1
-        ORDER BY name
-        `,
-        [req.user.companyId]
+        `SELECT id,store_id,provider,name,terminal_identifier,connection_url,
+                active,(api_credentials IS NOT NULL AND api_credentials <> '') AS has_credentials,
+                last_test_result,last_tested_at,created_at,updated_at,
+                (device_key=$3) AS linked_to_this_device,
+                (device_key='legacy-unassigned') AS unassigned
+           FROM payment_terminals
+          WHERE company_id=$1 AND store_id=$2
+          ORDER BY linked_to_this_device DESC,active DESC,name`,
+        [req.user.companyId, req.user.storeId, deviceKey]
       );
-      res.json({ success: true, data: result.rows });
-    } catch (error) {
-      console.error("Load payment terminals error:", error);
-      res.status(500).json({ success: false, message: "Unable to load payment terminals" });
+      res.json({success:true,data:result.rows});
+    } catch(error) {
+      console.error("Load payment terminals error:",error);
+      res.status(500).json({success:false,message:"Unable to load payment terminals"});
     }
   });
 
-  router.post("/payment-terminals", authenticate, authorize("settings.manage"), async (req, res) => {
-    const { provider, name, terminalIdentifier = null, connectionUrl = null, apiCredentials = null, storeId = null } = req.body;
-    if (!provider || !name) return res.status(400).json({ success: false, message: "Provider and terminal name are required" });
+  router.post("/payment-terminals", authenticate, authorize("settings.manage"), async (req,res) => {
+    const {provider,name,terminalIdentifier=null,connectionUrl=null,apiCredentials=null,storeId=null}=req.body;
+    if(!provider||!name) return res.status(400).json({success:false,message:"Provider and terminal name are required"});
     try {
-      const result = await db(
-        `INSERT INTO payment_terminals (company_id, store_id, provider, name, terminal_identifier, connection_url, api_credentials) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, store_id, provider, name, terminal_identifier, connection_url, active`,
-        [req.user.companyId, storeId || req.user.storeId, String(provider).trim(), String(name).trim(), terminalIdentifier || null, connectionUrl || null, apiCredentials || null]
+      const targetStoreId=storeId||req.user.storeId;
+      if(!targetStoreId) return res.status(400).json({success:false,message:"Select a store before configuring a payment terminal"});
+      const deviceKey=deviceKeyFor(req);
+      const result=await db(
+        `INSERT INTO payment_terminals (company_id,store_id,provider,name,terminal_identifier,connection_url,api_credentials,device_key)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         RETURNING id,store_id,provider,name,terminal_identifier,connection_url,active,TRUE AS linked_to_this_device`,
+        [req.user.companyId,targetStoreId,String(provider).trim(),String(name).trim(),terminalIdentifier||null,connectionUrl||null,apiCredentials||null,deviceKey]
       );
-      await writeAudit(req.user.companyId, req.user.id, "payment_terminal.created", "payment_terminal", result.rows[0].id, { provider, name });
-      res.status(201).json({ success: true, message: "Payment terminal created", data: result.rows[0] });
-    } catch (error) {
-      console.error("Create payment terminal error:", error);
-      res.status(500).json({ success: false, message: "Unable to create payment terminal" });
+      await writeAudit(req.user.companyId,req.user.id,"payment_terminal.created","payment_terminal",result.rows[0].id,{provider,name,deviceLinked:true});
+      res.status(201).json({success:true,message:"Payment terminal created and linked to this device",data:result.rows[0]});
+    } catch(error) {
+      console.error("Create payment terminal error:",error);
+      res.status(500).json({success:false,message:"Unable to create payment terminal"});
     }
   });
 
-  router.put("/payment-terminals/:id", authenticate, authorize("settings.manage"), async (req, res) => {
-    const { provider, name, terminalIdentifier = null, connectionUrl = null, apiCredentials, active = true } = req.body;
+  router.put("/payment-terminals/:id", authenticate, authorize("settings.manage"), async (req,res) => {
+    const {provider,name,terminalIdentifier=null,connectionUrl=null,apiCredentials,active=true,linkToThisDevice=false}=req.body;
     try {
-      const existing = await db("SELECT api_credentials FROM payment_terminals WHERE id = $1 AND company_id = $2", [req.params.id, req.user.companyId]);
-      if (!existing.rows.length) return res.status(404).json({ success: false, message: "Payment terminal not found" });
-      const credentials = apiCredentials ? apiCredentials : existing.rows[0].api_credentials;
-      const result = await db(
-        `UPDATE payment_terminals SET provider=$1, name=$2, terminal_identifier=$3, connection_url=$4, api_credentials=$5, active=$6, updated_at=NOW() WHERE id=$7 AND company_id=$8 RETURNING id, store_id, provider, name, terminal_identifier, connection_url, active, (api_credentials IS NOT NULL AND api_credentials <> '') AS has_credentials`,
-        [provider, name, terminalIdentifier || null, connectionUrl || null, credentials, active !== false, req.params.id, req.user.companyId]
+      const existing=await db("SELECT api_credentials,device_key,store_id FROM payment_terminals WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId]);
+      if(!existing.rows.length) return res.status(404).json({success:false,message:"Payment terminal not found"});
+      if(String(existing.rows[0].store_id)!==String(req.user.storeId||'')) return res.status(403).json({success:false,message:"This terminal belongs to another store"});
+      const credentials=apiCredentials?apiCredentials:existing.rows[0].api_credentials;
+      const deviceKey=linkToThisDevice?deviceKeyFor(req):existing.rows[0].device_key;
+      const result=await db(
+        `UPDATE payment_terminals
+            SET provider=$1,name=$2,terminal_identifier=$3,connection_url=$4,api_credentials=$5,active=$6,device_key=$7,updated_at=NOW()
+          WHERE id=$8 AND company_id=$9
+          RETURNING id,store_id,provider,name,terminal_identifier,connection_url,active,
+                    (api_credentials IS NOT NULL AND api_credentials <> '') AS has_credentials,
+                    (device_key=$7) AS linked_to_this_device`,
+        [provider,name,terminalIdentifier||null,connectionUrl||null,credentials,active!==false,deviceKey,req.params.id,req.user.companyId]
       );
-      await writeAudit(req.user.companyId, req.user.id, "payment_terminal.updated", "payment_terminal", req.params.id, { provider, name, active: active !== false });
-      res.json({ success: true, message: "Payment terminal updated", data: result.rows[0] });
-    } catch (error) {
-      console.error("Update payment terminal error:", error);
-      res.status(500).json({ success: false, message: "Unable to update payment terminal" });
+      await writeAudit(req.user.companyId,req.user.id,"payment_terminal.updated","payment_terminal",req.params.id,{provider,name,active:active!==false,deviceLinked:linkToThisDevice||undefined});
+      res.json({success:true,message:linkToThisDevice?"Payment terminal linked to this device":"Payment terminal updated",data:result.rows[0]});
+    } catch(error) {
+      console.error("Update payment terminal error:",error);
+      res.status(500).json({success:false,message:"Unable to update payment terminal"});
     }
   });
 
-  router.post("/payment-terminals/:id/test", authenticate, authorize("settings.manage"), async (req, res) => {
+  router.post("/payment-terminals/:id/test", authenticate, authorize("settings.manage"), async (req,res) => {
     try {
-      const result = await db("SELECT * FROM payment_terminals WHERE id = $1 AND company_id = $2", [req.params.id, req.user.companyId]);
-      if (!result.rows.length) return res.status(404).json({ success: false, message: "Payment terminal not found" });
-      const test = await testPaymentTerminal(result.rows[0]);
-      await db("UPDATE payment_terminals SET last_test_result=$1, last_tested_at=NOW() WHERE id=$2 AND company_id=$3", [test.message, req.params.id, req.user.companyId]);
-      res.json({ success: true, data: test });
-    } catch (error) {
-      console.error("Test payment terminal error:", error);
-      res.status(500).json({ success: false, message: "Unable to test payment terminal" });
+      const deviceKey=deviceKeyFor(req);
+      const result=await db("SELECT * FROM payment_terminals WHERE id=$1 AND company_id=$2 AND store_id=$3 AND device_key=$4",[req.params.id,req.user.companyId,req.user.storeId,deviceKey]);
+      if(!result.rows.length) return res.status(404).json({success:false,message:"Payment terminal is not linked to this device"});
+      const test=await testPaymentTerminal(result.rows[0]);
+      await db("UPDATE payment_terminals SET last_test_result=$1,last_tested_at=NOW() WHERE id=$2 AND company_id=$3",[test.message,req.params.id,req.user.companyId]);
+      res.json({success:true,data:test});
+    } catch(error) {
+      console.error("Test payment terminal error:",error);
+      res.status(500).json({success:false,message:"Unable to test payment terminal"});
     }
   });
 
-  router.get("/hardware", authenticate, async (req, res) => {
+  router.get("/hardware", authenticate, async (req,res) => {
     try {
-      const result = await db(
-        `SELECT id, store_id, device_type, device_name, connection_type, connection_address, paper_width, is_default, active, last_test_result, last_tested_at FROM hardware_configurations WHERE company_id=$1 AND store_id=$2 ORDER BY device_type`,
-        [req.user.companyId, req.user.storeId]
+      const deviceKey=await claimLegacyHardware(req);
+      const result=await db(
+        `SELECT id,store_id,device_type,device_name,connection_type,connection_address,paper_width,is_default,active,last_test_result,last_tested_at
+           FROM hardware_configurations
+          WHERE company_id=$1 AND store_id=$2 AND device_key=$3
+          ORDER BY device_type`,
+        [req.user.companyId,req.user.storeId,deviceKey]
       );
-      res.json({ success: true, data: result.rows });
-    } catch (error) {
-      console.error("Load hardware error:", error);
-      res.status(500).json({ success: false, message: "Unable to load hardware configuration" });
+      res.json({success:true,data:result.rows});
+    } catch(error) {
+      console.error("Load hardware error:",error);
+      res.status(500).json({success:false,message:"Unable to load hardware configuration"});
     }
   });
 
-  router.put("/hardware", authenticate, authorize("settings.manage"), async (req, res) => {
-    const { deviceType, deviceName = null, connectionType = null, connectionAddress = null, paperWidth = null, isDefault = false, active = false } = req.body;
-    if (!["BARCODE_SCANNER", "CASH_DRAWER", "RECEIPT_PRINTER"].includes(deviceType)) return res.status(400).json({ success: false, message: "Invalid hardware type" });
+  router.put("/hardware", authenticate, authorize("settings.manage"), async (req,res) => {
+    const {deviceType,deviceName=null,connectionType=null,connectionAddress=null,paperWidth=null,isDefault=false,active=false}=req.body;
+    if(!["BARCODE_SCANNER","CASH_DRAWER","RECEIPT_PRINTER"].includes(deviceType)) return res.status(400).json({success:false,message:"Invalid hardware type"});
     try {
-      const result = await db(
-        `INSERT INTO hardware_configurations (company_id, store_id, device_type, device_name, connection_type, connection_address, paper_width, is_default, active) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (company_id, store_id, device_type) DO UPDATE SET device_name=$4, connection_type=$5, connection_address=$6, paper_width=$7, is_default=$8, active=$9, updated_at=NOW() RETURNING id, store_id, device_type, device_name, connection_type, connection_address, paper_width, is_default, active, last_test_result, last_tested_at`,
-        [req.user.companyId, req.user.storeId, deviceType, deviceName, connectionType, connectionAddress, paperWidth, isDefault, active]
+      const deviceKey=await claimLegacyHardware(req);
+      const result=await db(
+        `INSERT INTO hardware_configurations (company_id,store_id,device_key,device_type,device_name,connection_type,connection_address,paper_width,is_default,active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         ON CONFLICT (company_id,store_id,device_key,device_type)
+         DO UPDATE SET device_name=$5,connection_type=$6,connection_address=$7,paper_width=$8,is_default=$9,active=$10,updated_at=NOW()
+         RETURNING id,store_id,device_type,device_name,connection_type,connection_address,paper_width,is_default,active,last_test_result,last_tested_at`,
+        [req.user.companyId,req.user.storeId,deviceKey,deviceType,deviceName,connectionType,connectionAddress,paperWidth,isDefault,active]
       );
-      await writeAudit(req.user.companyId, req.user.id, "hardware.updated", "hardware", result.rows[0].id, { deviceType, connectionType, active });
-      res.json({ success: true, message: "Hardware configuration updated", data: result.rows[0] });
-    } catch (error) {
-      console.error("Update hardware error:", error);
-      res.status(500).json({ success: false, message: "Unable to update hardware configuration" });
+      await writeAudit(req.user.companyId,req.user.id,"hardware.updated","hardware",result.rows[0].id,{deviceType,connectionType,active,deviceLinked:true});
+      res.json({success:true,message:"Hardware configuration updated for this device",data:result.rows[0]});
+    } catch(error) {
+      console.error("Update hardware error:",error);
+      res.status(500).json({success:false,message:"Unable to update hardware configuration"});
     }
   });
 
-  router.post("/hardware/:type/test", authenticate, authorize("settings.manage"), async (req, res) => {
-    const allowed = ["BARCODE_SCANNER", "CASH_DRAWER", "RECEIPT_PRINTER"];
-    if (!allowed.includes(req.params.type)) return res.status(400).json({ success: false, message: "Invalid hardware type" });
-    const message = "Hardware integration not configured";
+  router.post("/hardware/:type/test", authenticate, authorize("settings.manage"), async (req,res) => {
+    const allowed=["BARCODE_SCANNER","CASH_DRAWER","RECEIPT_PRINTER"];
+    if(!allowed.includes(req.params.type)) return res.status(400).json({success:false,message:"Invalid hardware type"});
+    const message="Live hardware probe is unavailable for this connection type";
     try {
-      const result = await db("SELECT id FROM hardware_configurations WHERE company_id=$1 AND store_id=$2 AND device_type=$3", [req.user.companyId, req.user.storeId, req.params.type]);
-      if (result.rows.length) await db("UPDATE hardware_configurations SET last_test_result=$1, last_tested_at=NOW() WHERE id=$2 AND company_id=$3 AND store_id=$4", [message, result.rows[0].id, req.user.companyId, req.user.storeId]);
-      res.json({ success: true, data: { status: "NOT_CONFIGURED", message } });
-    } catch (error) {
-      console.error("Test hardware error:", error);
-      res.status(500).json({ success: false, message: "Unable to test hardware" });
+      const deviceKey=await claimLegacyHardware(req);
+      const result=await db("SELECT id FROM hardware_configurations WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND device_type=$4",[req.user.companyId,req.user.storeId,deviceKey,req.params.type]);
+      if(result.rows.length) await db("UPDATE hardware_configurations SET last_test_result=$1,last_tested_at=NOW() WHERE id=$2",[message,result.rows[0].id]);
+      res.json({success:true,data:{status:"CONFIGURED",live:false,message}});
+    } catch(error) {
+      console.error("Test hardware error:",error);
+      res.status(500).json({success:false,message:"Unable to test hardware"});
+    }
+  });
+
+  router.get("/health/devices", authenticate, async (req,res) => {
+    try {
+      const deviceKey=await claimLegacyHardware(req);
+      const [hardwareResult,terminalResult]=await Promise.all([
+        db(`SELECT id,device_type,device_name,connection_type,last_test_result,last_tested_at
+              FROM hardware_configurations
+             WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND active=true
+             ORDER BY device_type`,[req.user.companyId,req.user.storeId,deviceKey]),
+        db(`SELECT * FROM payment_terminals
+             WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND active=true
+             ORDER BY name`,[req.user.companyId,req.user.storeId,deviceKey]),
+      ]);
+      const hardware=hardwareResult.rows.map(row=>({
+        id:`hardware:${row.id}`,kind:"hardware",deviceType:row.device_type,
+        name:row.device_name||String(row.device_type||"Device").replaceAll("_"," "),
+        status:"CONFIGURED",live:false,
+        message:row.last_test_result||"Configured for this device; live probing is not supported by this connection.",
+        checkedAt:row.last_tested_at||null,
+      }));
+      const terminals=await Promise.all(terminalResult.rows.map(async row=>{
+        try {
+          const probe=await testPaymentTerminal(row);
+          const status=String(probe?.status||"UNKNOWN").toUpperCase();
+          const connected=["CONNECTED","READY","ONLINE","OK","SUCCESS"].includes(status);
+          await db("UPDATE payment_terminals SET last_test_result=$1,last_tested_at=NOW() WHERE id=$2 AND company_id=$3",[probe?.message||status,row.id,req.user.companyId]);
+          return {id:`terminal:${row.id}`,kind:"payment_terminal",deviceType:"PAYMENT_TERMINAL",name:row.name||row.provider||"Card terminal",status:connected?"CONNECTED":status,live:true,message:probe?.message||status,checkedAt:new Date().toISOString()};
+        } catch(error) {
+          return {id:`terminal:${row.id}`,kind:"payment_terminal",deviceType:"PAYMENT_TERMINAL",name:row.name||row.provider||"Card terminal",status:"OFFLINE",live:true,message:error?.message||"Connection check failed",checkedAt:new Date().toISOString()};
+        }
+      }));
+      res.json({success:true,data:[...hardware,...terminals]});
+    } catch(error) {
+      console.error("Device health error:",error);
+      res.status(500).json({success:false,message:"Unable to load device health"});
     }
   });
 

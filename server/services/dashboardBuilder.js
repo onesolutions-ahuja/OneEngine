@@ -286,7 +286,14 @@ export function mergeDashboardFilters(reportDefinition, dashboardFilters = []) {
   const filters = Array.isArray(reportDefinition?.filters) ? [...reportDefinition.filters] : [];
   for (const filter of dashboardFilters) {
     if (filter.field === "date") filters.push({ field: "date", operator: filter.operator || filter.value || "this_week" });
-    if (filter.field === "store" && filter.value) filters.push({ field: "store", operator: "equals", value: filter.value });
+    if (filter.field === "store" && filter.value) {
+      const values = Array.isArray(filter.value) ? filter.value.filter(Boolean) : [filter.value].filter(Boolean);
+      if (values.length) filters.push({
+        field: "store",
+        operator: values.length > 1 || filter.operator === "in" ? "in" : "equals",
+        value: values.length > 1 || filter.operator === "in" ? values : values[0],
+      });
+    }
   }
   return { ...reportDefinition, filters };
 }

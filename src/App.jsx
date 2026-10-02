@@ -1749,55 +1749,42 @@ function DevicesMenu({ onOpenSettings }) {
 
   useEffect(() => {
     let live = true
-    const storeId = getActiveStoreId()
-    Promise.all([
-      apiRequest('/api/hardware').catch(() => ({ data: [] })),
-      apiRequest('/api/payment-terminals').catch(() => ({ data: [] })),
-    ]).then(([hardwareResponse, terminalResponse]) => {
-      if (!live) return
-      const hardware = (Array.isArray(hardwareResponse?.data) ? hardwareResponse.data : [])
-        .filter((device) => device?.active === true)
-        .map((device) => ({
-          id: `hardware:${device.id || device.device_type}`,
-          name: device.device_name || String(device.device_type || 'Device').replaceAll('_', ' '),
-          type: String(device.device_type || 'Device').replaceAll('_', ' '),
-          status: device.last_test_result || 'Configured and active',
-          icon: device.device_type === 'RECEIPT_PRINTER' ? Printer : MonitorSmartphone,
-        }))
-      const terminals = (Array.isArray(terminalResponse?.data) ? terminalResponse.data : [])
-        .filter((terminal) => terminal?.active === true && (!storeId || String(terminal.store_id || '') === String(storeId)))
-        .map((terminal) => ({
-          id: `terminal:${terminal.id}`,
-          name: terminal.name || terminal.provider || 'Card terminal',
-          type: 'Card machine',
-          status: terminal.last_test_result || 'Configured and active',
-          icon: CreditCard,
-        }))
-      setDevices([...hardware, ...terminals])
-    }).finally(() => { if (live) setLoadingDevices(false) })
+    apiRequest('/api/health/devices', { timeoutMs: 15000, retryGet: false })
+      .then((response) => {
+        if (!live) return
+        setDevices(Array.isArray(response?.data) ? response.data : [])
+      })
+      .catch(() => { if (live) setDevices([]) })
+      .finally(() => { if (live) setLoadingDevices(false) })
     return () => { live = false }
   }, [])
+
+  const iconFor = (device) => device.deviceType === 'RECEIPT_PRINTER'
+    ? Printer
+    : device.deviceType === 'PAYMENT_TERMINAL' ? CreditCard : MonitorSmartphone
+  const isOnline = (status) => ['CONNECTED','READY','ONLINE','VERIFIED','OK','SUCCESS'].includes(String(status || '').toUpperCase())
 
   return (
     <motion.div className="mac-popover devices-menu git-macos-panel" initial={{ opacity: 0, y: -10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', mass: 0.1, stiffness: 150, damping: 12 }}>
       <div className="git-macos-card">
         <div className="git-macos-row git-macos-row--top">
           <span className="git-macos-icon git-macos-icon--blue"><MonitorSmartphone size={16} /></span>
-          <div className="git-macos-copy"><strong>Connected Devices</strong><small>Configured and active hardware for this store/device.</small></div>
+          <div className="git-macos-copy"><strong>Connected Devices</strong><small>Only active hardware linked to this workstation.</small></div>
         </div>
       </div>
-      <div className="git-macos-section-title">Active devices</div>
+      <div className="git-macos-section-title">This workstation</div>
       <div className="git-macos-card device-status-list">
-        {loadingDevices ? <div className="git-macos-card--center">Loading configured devices…</div> : devices.length ? devices.map((device) => {
-          const Icon = device.icon
+        {loadingDevices ? <div className="git-macos-card--center">Checking device health…</div> : devices.length ? devices.map((device) => {
+          const Icon = iconFor(device)
+          const online = isOnline(device.status)
           return (
             <div className="git-macos-row device-status-row" key={device.id}>
               <span className="git-macos-icon git-macos-icon--gray"><Icon size={15} /></span>
-              <div className="git-macos-copy"><strong>{device.name}</strong><small>{device.type} · {device.status}</small></div>
-              <span className="git-macos-status-dot is-online" aria-label="Active" />
+              <div className="git-macos-copy"><strong>{device.name}</strong><small>{String(device.deviceType || 'Device').replaceAll('_',' ')} · {device.message || device.status}{device.live === false ? ' · live probe unavailable' : ''}</small></div>
+              <span className={`git-macos-status-dot ${online ? 'is-online' : ''}`} aria-label={online ? 'Connected' : device.status || 'Configured'} />
             </div>
           )
-        }) : <div className="git-macos-card--center">No active devices are linked to this store/device.</div>}
+        }) : <div className="git-macos-card--center">No active devices are linked to this workstation.</div>}
       </div>
       <button type="button" className="git-macos-footer-button" onClick={onOpenSettings}>Open Hardware Settings</button>
     </motion.div>

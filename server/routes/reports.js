@@ -42,7 +42,7 @@ function validateUuidList(values, label) {
 }
 
 function customDateRange(filters = []) {
-  const dateFilter = filters.find((filter) => filter && (filter.field === "date" || filter.operator));
+  const dateFilter = filters.find((filter) => filter && filter.field === "date");
   const operator = dateFilter?.operator || "this_week";
   const now = new Date();
   const iso = (date) => date.toISOString().slice(0, 10);
@@ -111,6 +111,7 @@ export function buildCustomSalesQuery(definition, dateRange, storeIds, userIds) 
   }
   if (filterClauses.length) where.push(`(${filterClauses.join(definition.filterLogic === "any" ? " OR " : " AND ")})`);
   const fields = definition.fields.map((key) => CUSTOM_FIELD_MAP.get(key));
+  const needsPayments = definition.fields.includes("method") || definition.fields.includes("total");
   const select = fields.map((field) => `${field.sql} AS "${field.key}"`);
   const explicitGroups = definition.groupBy.map((key) => CUSTOM_FIELD_MAP.get(key).sql);
   const groupByExprs = new Set(explicitGroups);
@@ -127,7 +128,7 @@ export function buildCustomSalesQuery(definition, dateRange, storeIds, userIds) 
     INNER JOIN sale_items si ON si.sale_id=s.id
     INNER JOIN products p ON p.id=si.product_id
     LEFT JOIN categories pc ON pc.id=p.category_id
-    LEFT JOIN payments pay ON pay.sale_id=s.id AND pay.status='completed'
+    ${needsPayments ? "LEFT JOIN payments pay ON pay.sale_id=s.id AND pay.status='completed'" : ""}
     LEFT JOIN users u ON u.id=s.user_id
     INNER JOIN stores st ON st.id=s.store_id
     WHERE ${where.join(" AND ")}

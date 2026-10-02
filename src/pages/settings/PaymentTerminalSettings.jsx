@@ -45,6 +45,8 @@ export default function PaymentTerminalSettings() {
     connectionUrl: terminal.connection_url || '',
     apiCredentials: '',
     hasCredentials: terminal.has_credentials === true,
+    linkedToThisDevice: terminal.linked_to_this_device === true,
+    unassigned: terminal.unassigned === true,
     active: terminal.active !== false,
   })
 
@@ -67,6 +69,7 @@ export default function PaymentTerminalSettings() {
           connectionUrl: form.connectionUrl.trim() || null,
           apiCredentials: form.apiCredentials || undefined,
           active: form.active !== false,
+          linkToThisDevice: form.id ? form.linkedToThisDevice === true : true,
         }),
       })
       setMessage('Payment terminal saved.')
@@ -113,6 +116,7 @@ export default function PaymentTerminalSettings() {
             <p>{terminal.provider}{terminal.terminal_identifier ? ` · ${terminal.terminal_identifier}` : ''}{terminal.has_credentials ? ' · credentials configured' : ''}</p>
           </div>
           <div className="settings-inline-actions">
+            <span className="settings-value">{terminal.linked_to_this_device ? 'Linked to this device' : terminal.unassigned ? 'Not linked yet' : 'Linked elsewhere'}</span>
             <span className="settings-value">{terminal.active !== false ? 'Active' : 'Inactive'}</span>
             <button type="button" className="settings-secondary-button" onClick={() => beginEdit(terminal)}>Edit</button>
             <button type="button" className="settings-secondary-button" disabled={testing === terminal.id} onClick={() => test(terminal)}>
@@ -149,6 +153,12 @@ export default function PaymentTerminalSettings() {
           <div><strong>API credentials</strong><p>{form.hasCredentials ? 'Leave blank to keep existing credentials.' : 'Enter provider credentials if required.'}</p></div>
           <input type="password" value={form.apiCredentials} onChange={(event) => setForm((current) => ({ ...current, apiCredentials: event.target.value }))} />
         </div>
+        {form.id ? (
+          <div className="settings-row">
+            <div><strong>Workstation assignment</strong><p>{form.linkedToThisDevice ? 'This terminal is linked to this workstation.' : 'Linking prevents this terminal appearing on other workstations.'}</p></div>
+            <button type="button" className="settings-secondary-button" disabled={form.linkedToThisDevice} onClick={() => setForm((current) => ({ ...current, linkedToThisDevice: true }))}>{form.linkedToThisDevice ? 'Linked' : 'Link to this device'}</button>
+          </div>
+        ) : null}
         <div className="settings-row">
           <strong>Active</strong>
           <button type="button" className={`mac-switch ${form.active ? 'is-on' : ''}`} onClick={() => setForm((current) => ({ ...current, active: !current.active }))}><span /></button>

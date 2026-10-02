@@ -11,6 +11,20 @@ export const ACTIVE_STORE_STORAGE_KEY = 'onepos_active_store_id'
 export const AVAILABLE_STORES_STORAGE_KEY = 'onepos_available_stores'
 export const KIOSK_TOKEN_STORAGE_KEY = 'onepos_kiosk_token'
 export const KIOSK_DISPLAY_TOKEN_STORAGE_KEY = 'onepos_kiosk_display_token'
+export const DEVICE_KEY_STORAGE_KEY = 'onepos_device_key'
+
+export function getDeviceKey() {
+  try {
+    let value = localStorage.getItem(DEVICE_KEY_STORAGE_KEY) || ''
+    if (!value) {
+      value = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `device-${Date.now()}-${Math.random().toString(36).slice(2,10)}`
+      localStorage.setItem(DEVICE_KEY_STORAGE_KEY, value)
+    }
+    return value
+  } catch {
+    return 'device-local'
+  }
+}
 
 export function getActingCompanyId() {
   try { return sessionStorage.getItem(ACTING_COMPANY_STORAGE_KEY) || '' } catch { return '' }
@@ -154,6 +168,9 @@ function contextHeaders(path, supplied = {}) {
   const headers = new Headers(supplied)
   headers.delete('X-Acting-Company-Id')
   headers.delete('X-Store-Id')
+  headers.delete('X-One-Device-Key')
+  const deviceKey = getDeviceKey()
+  if (deviceKey) headers.set('X-One-Device-Key', deviceKey)
   const storeId = getActiveStoreId()
   if (storeId) headers.set('X-Store-Id', storeId)
   const metadataHeaders = developerMetadataHeaders(path)
