@@ -8,8 +8,9 @@ export function developerMetadataHeaders(path) {
   try { permissions = JSON.parse(sessionStorage.getItem('onepos_session_permissions') || '{}') } catch { return {} }
   if (!Array.isArray(permissions.permissions) || !permissions.permissions.includes('oneengine.manage')) return {}
   const pathname = new URL(path, window.location.origin).pathname
+  const savedWorkflowTestRun = /^\/api\/platform\/rules\/[^/]+\/tests\/[^/]+\/run\/?$/.test(pathname)
   const metadata = /^\/api\/platform\/(metadata|objects|relationships|rules|approval-processes|approval-roles|apps|pages|layouts|reports|value-sets|value-set-values|deployments|notification-subscriptions)(\/|$)/.test(pathname)
-    && !/\/(records|execute|run)(\/|$)/.test(pathname)
+    && (!/\/(records|execute|run)(\/|$)/.test(pathname) || savedWorkflowTestRun)
   const dashboardBuilder = readRoute().section === 'dashboard-builder' && /^\/api\/dashboards(\/|$)/.test(pathname)
   const reportBuilder = readRoute().section === 'report-builder' && /^\/api\/reports\/custom(\/|$)/.test(pathname)
   const target = sessionStorage.getItem('onepos_developer_target_company_id') || ''
