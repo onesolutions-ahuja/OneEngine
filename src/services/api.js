@@ -190,6 +190,59 @@ export async function apiFetch(path, options = {}) {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 12000
 const SAFE_GET_RETRY_STATUSES = new Set([429, 502, 503, 504])
+const OE_CODE_RE = /^OE[A-Z][0-9]{2,3}$/
+
+function clientDebugCode(error, status = 0, payload = null) {
+  const explicit = String(payload?.oeCode || payload?.code || error?.oeCode || '').toUpperCase()
+  if (OE_CODE_RE.test(explicit)) return explicit
+  if (error?.code === 'API_TIMEOUT' || error?.name === 'TimeoutError') return 'OEN02'
+  if (error?.name === 'TypeError' || error?.name === 'NetworkError' || /failed to fetch|networkerror|network request failed/i.test(String(error?.message || ''))) return 'OEN01'
+  if (status === 401) return 'OEU01'
+  if (status === 403) return 'OER01'
+  if (status === 404) return 'OEA04'
+  if (status === 429) return 'OEA03'
+  if ([502, 503, 504].includes(status)) return 'OEA01'
+  return status >= 500 ? 'OEA02' : ''
+}
+
+function defaultDebugMessage(code) {
+  const messages = {
+    OEN01: 'OneEngine could not be reached. Check your connection and try again.',
+    OEN02: 'The request took too long. Please try again.',
+    OEA01: 'The requested OneEngine service is unavailable.',
+    OEA02: 'OneEngine could not complete this request.',
+    OEA03: 'Too many requests. Please try again shortly.',
+    OEA04: 'The requested service could not be found.',
+    OER01: 'You do not have permission to perform this action.',
+    OEU01: 'Please sign in again to continue.',
+    OEF01: 'This screen could not be displayed.',
+    OEF02: 'This page could not be loaded.',
+  }
+  return messages[code] || 'OneEngine could not complete this request.'
+}
+
+export function oneEngineErrorText(error) {
+  if (!error) return 'OneEngine could not complete this request. Error OEA02'
+  const code = clientDebugCode(error, error?.status || 0, error?.payload)
+  const raw = String(error?.userMessage || error?.payload?.message || error?.message || '').trim()
+  const message = raw && !/failed to fetch|networkerror|network request failed|server is starting/i.test(raw)
+    ? raw.replace(/\s*\(?Error\s+OE[A-Z][0-9]{2,3}\)?\s*$/i, '').trim()
+    : defaultDebugMessage(code || 'OEA02')
+  return code ? `${message} Error ${code}${error?.reference ? ` · Ref ${error.reference}` : ''}` : message
+}
+
+function normalizeOneEngineError(error, { status = 0, payload = null } = {}) {
+  const oeCode = clientDebugCode(error, status, payload)
+  if (!oeCode) return error
+  const normalized = error instanceof Error ? error : new Error(String(error || 'Request failed'))
+  normalized.status = status || normalized.status
+  normalized.payload = payload ?? normalized.payload
+  normalized.oeCode = oeCode
+  normalized.reference = payload?.reference || normalized.reference || ''
+  normalized.userMessage = payload?.message || defaultDebugMessage(oeCode)
+  normalized.message = oneEngineErrorText(normalized)
+  return normalized
+}
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -273,22 +326,28 @@ export async function apiRequest(path, options = {}) {
 
       if (!response.ok) {
         const message = typeof body === 'object' && body?.message ? body.message : `Request failed (${response.status})`
-        throw Object.assign(new Error(message), {
+        const error = Object.assign(new Error(message), {
           status: response.status,
           code: typeof body === 'object' ? body?.code : undefined,
           payload: body,
+          reference: typeof body === 'object' ? body?.reference : undefined,
         })
+        throw normalizeOneEngineError(error, { status: response.status, payload: body })
       }
 
       return body
     } catch (error) {
-      lastError = error
+      const normalizedError = normalizeOneEngineError(error, {
+        status: error?.status || 0,
+        payload: error?.payload || null,
+      })
+      lastError = normalizedError
       const externalAbort = fetchOptions.signal?.aborted === true
       const retryableNetworkFailure =
         !externalAbort &&
-        (error?.code === 'API_TIMEOUT' || error?.name === 'TypeError' || error?.name === 'NetworkError')
+        (normalizedError?.code === 'API_TIMEOUT' || normalizedError?.oeCode === 'OEN01' || normalizedError?.oeCode === 'OEN02' || normalizedError?.name === 'TypeError' || normalizedError?.name === 'NetworkError')
 
-      if (attempt + 1 >= maxAttempts || !retryableNetworkFailure) throw error
+      if (attempt + 1 >= maxAttempts || !retryableNetworkFailure) throw normalizedError
       await delay(700)
     }
   }
@@ -340,9 +399,9 @@ export async function login(username, password) {
       data = await attemptLogin()
     } catch (retryError) {
       if (retryError?.name === 'AbortError' || retryError?.code === 'API_TIMEOUT') {
-        throw new Error('Server is starting. Please try again in a few seconds.')
+        throw normalizeOneEngineError(retryError, { status: 0 })
       }
-      throw retryError
+      throw normalizeOneEngineError(retryError, { status: retryError?.status || 0, payload: retryError?.payload || null })
     }
   }
 
