@@ -29,6 +29,7 @@ export const CUSTOM_REPORT_FIELDS = [
 ];
 const CUSTOM_FIELD_MAP = new Map(CUSTOM_REPORT_FIELDS.map((field) => [field.key, field]));
 const CUSTOM_DATE_FILTERS = [
+  { key: "all_time", label: "All time" },
   { key: "today", label: "Today" }, { key: "yesterday", label: "Yesterday" },
   { key: "this_week", label: "This week" }, { key: "last_7_days", label: "Last 7 days" },
   { key: "this_month", label: "This month" }, { key: "this_quarter", label: "This quarter" },
@@ -55,6 +56,7 @@ function customDateRange(filters = []) {
   const now = new Date();
   const iso = (date) => date.toISOString().slice(0, 10);
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  if (operator === "all_time") return { from: null, to: null };
   if (operator === "custom") return { from: dateFilter.from || dateFilter.dateFrom || null, to: dateFilter.to || dateFilter.dateTo || null };
   if (operator === "today") return { from: iso(start), to: iso(start) };
   if (operator === "yesterday") { start.setUTCDate(start.getUTCDate() - 1); return { from: iso(start), to: iso(start) }; }
