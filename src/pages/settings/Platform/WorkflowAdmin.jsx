@@ -1229,7 +1229,12 @@ function makeStep(type = "CREATE_RECORD") {
       fieldMappings: {},
       template: "",
       templateId: "",
-      recipient: "customer.email",
+      recipient: "",
+      contentMode: "TEMPLATE",
+      subject: "",
+      body: "",
+      text: "",
+      html: "",
       providerStatus: "not-configured",
       functionKey: "",
       inputs: { value: "hello" },
@@ -1271,7 +1276,7 @@ function workflowActionCategory(type = "") {
   if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","LIMIT_REPETITIONS","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (["RUN_SUBFLOW","SCREEN","RUN_AGENT"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
-  if (["EMAIL_ALERT","SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
+  if (["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
   return "Actions";
 }
 
@@ -1498,9 +1503,18 @@ function workflowActionIssue(step, definition = null) {
     return conditionIsValid(config.condition) ? "" : "Complete the condition field/operator/value.";
   }
   if ((RECORD_ACTION_TYPES.has(step.type) || step.type === "GET_RECORDS") && !config.object) return "Choose the target object.";
-  if (["EMAIL_ALERT","SEND_EMAIL","SEND_SMS","SEND_WHATSAPP"].includes(step.type)) {
-    if (!config.templateId && !config.template) return "Choose a message template.";
+  if (["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET","SEND_SMS","SEND_WHATSAPP"].includes(step.type)) {
     if (!config.recipient) return "Choose a recipient.";
+    const emailAction = ["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET"].includes(step.type);
+    if (emailAction) {
+      const templateMode = step.type === "EMAIL_ALERT" || (config.contentMode || "TEMPLATE") === "TEMPLATE";
+      if (templateMode && !config.templateId && !config.template) return "Choose a message template.";
+      if (!templateMode && (!String(config.subject || "").trim() || !String(config.body || config.text || config.message || "").trim())) {
+        return "Add an email subject and message body.";
+      }
+    } else if (!config.templateId && !config.template) {
+      return "Choose a message template.";
+    }
   }
   if (step.type === "IN_APP_NOTIFICATION" && (!config.title || !config.message || !config.recipient)) {
     return "Add title, message and recipient.";
@@ -2930,29 +2944,77 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
       }
       case "EMAIL_ALERT":
       case "SEND_EMAIL":
+      case "SEND_EMAIL_BREVO":
+      case "SEND_EMAIL_MAILJET":
       case "SEND_SMS":
       case "SEND_WHATSAPP": {
-        const available = providerAvailable[["EMAIL_ALERT","SEND_EMAIL"].includes(step.type) ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP"];
+        const isEmail = ["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET"].includes(step.type);
+        const providerKey = step.type === "SEND_EMAIL_BREVO" ? "BREVO" : step.type === "SEND_EMAIL_MAILJET" ? "MAILJET" : isEmail ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP";
+        const providerLabel = step.type === "SEND_EMAIL_BREVO" ? "Brevo" : step.type === "SEND_EMAIL_MAILJET" ? "Mailjet" : isEmail ? "Configured email provider" : step.type === "SEND_SMS" ? "Configured SMS provider" : "Configured WhatsApp provider";
+        const available = providerAvailable[providerKey];
+        const templateOnly = step.type === "EMAIL_ALERT" || !isEmail;
+        const contentMode = templateOnly ? "TEMPLATE" : (step.config?.contentMode || "TEMPLATE");
         return (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <span className="text-sm font-medium text-slate-700">{step.type}</span>
+              <div>
+                <span className="text-sm font-medium text-slate-700">{providerLabel}</span>
+                <p className="mt-1 text-[11px] text-slate-500">Provider credentials and sender identity come from connector metadata, never from this Flow.</p>
+              </div>
               <ProviderStatusPill available={available} />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Template</label>
-              <select className={inputClass} value={step.config?.templateId || step.config?.template || ""} onChange={(event) => updateConfig({ templateId: event.target.value, template: "" })}>
-                <option value="">Select message template</option>
-                {messageTemplates
-                  .filter((template) => String(template.channel || "").toUpperCase() === (["EMAIL_ALERT","SEND_EMAIL"].includes(step.type) ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP"))
-                  .map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Recipient mapping</label>
-              <input className={inputClass} value={step.config?.recipient || ""} onChange={(event) => updateConfig({ recipient: event.target.value })} placeholder="customer.email / order.contact / team" />
-              <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value="" label="Insert recipient field" onInsert={(token) => updateConfig({ recipient: token })} />
-            </div>
+
+            <ResourceOrLiteralInput
+              label={isEmail ? "Recipient email" : step.type === "SEND_SMS" ? "Recipient phone" : "Recipient"}
+              value={step.config?.recipient || ""}
+              onChange={(recipient) => updateConfig({ recipient })}
+              rootObjectKey={rootObjectKey}
+              extraResources={extraResources}
+              required
+            />
+
+            {!templateOnly ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Content source</label>
+                <select className={inputClass} value={contentMode} onChange={(event) => updateConfig({ contentMode: event.target.value })}>
+                  <option value="TEMPLATE">Message template</option>
+                  <option value="CUSTOM">Custom subject and body</option>
+                </select>
+              </div>
+            ) : null}
+
+            {contentMode === "TEMPLATE" ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Template</label>
+                <select className={inputClass} value={step.config?.templateId || step.config?.template || ""} onChange={(event) => updateConfig({ templateId: event.target.value, template: "" })}>
+                  <option value="">Select message template</option>
+                  {messageTemplates
+                    .filter((template) => String(template.channel || "").toUpperCase() === (isEmail ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP"))
+                    .map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">Template merge values are resolved from the current record and Flow resources at runtime.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <ResourceOrLiteralInput
+                  label="Subject"
+                  value={step.config?.subject || ""}
+                  onChange={(subject) => updateConfig({ subject })}
+                  rootObjectKey={rootObjectKey}
+                  extraResources={extraResources}
+                  required
+                />
+                <ResourceOrLiteralInput
+                  label="Message body"
+                  value={step.config?.body || step.config?.text || ""}
+                  onChange={(body) => updateConfig({ body, text: body })}
+                  rootObjectKey={rootObjectKey}
+                  extraResources={extraResources}
+                  required
+                />
+                <p className="text-[11px] text-slate-500">For a composed message with several record fields, create a Text Template Resource and select it as the body. No code or JSON is required.</p>
+              </div>
+            )}
           </div>
         );
       }
@@ -5415,20 +5477,32 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   }, [workflow.steps]);
 
   useEffect(() => {
-    apiRequest("/api/integrations")
-      .then((response) => {
-        const integrations = Array.isArray(response?.data) ? response.data : [];
-        const nextState = { EMAIL: false, SMS: false, WHATSAPP: false };
+    Promise.all([
+      apiRequest("/api/integrations").catch(() => ({ data: [] })),
+      apiRequest("/api/connector-instances").catch(() => ({ data: [] })),
+    ])
+      .then(([integrationResponse, connectorResponse]) => {
+        const integrations = Array.isArray(integrationResponse?.data) ? integrationResponse.data : [];
+        const connectors = Array.isArray(connectorResponse?.data) ? connectorResponse.data : [];
+        const nextState = { EMAIL: false, BREVO: false, MAILJET: false, SMS: false, WHATSAPP: false };
         for (const item of integrations) {
           const provider = String(item.provider || "").toUpperCase();
           if (provider === "EMAIL" || provider === "SMS" || provider === "WHATSAPP") {
             nextState[provider] = Boolean(item.active !== false && item.configuration && Object.keys(item.configuration || {}).length > 0);
           }
         }
+        for (const item of connectors) {
+          const packageKey = String(item.packageKey || item.connector_package_key || "");
+          const ready = item.enabled === true
+            && String(item.status || item.connectionStatus || "").toUpperCase() === "CONNECTED"
+            && (item.testPassed === true || item.health?.success === true);
+          if (packageKey === "brevo_connector") nextState.BREVO = ready;
+          if (packageKey === "mailjet_connector") nextState.MAILJET = ready;
+        }
         setProviderAvailable(nextState);
       })
       .catch(() => {
-        setProviderAvailable({ EMAIL: false, SMS: false, WHATSAPP: false });
+        setProviderAvailable({ EMAIL: false, BREVO: false, MAILJET: false, SMS: false, WHATSAPP: false });
       });
   }, []);
 
