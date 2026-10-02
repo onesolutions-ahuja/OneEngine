@@ -341,12 +341,15 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const cfg=provider.configuration||{};
     try{
       if(["OIDC","APPLE","GOOGLE"].includes(provider.provider_type)){
-        const urls=[cfg.authorizationEndpoint,cfg.tokenEndpoint,cfg.userInfoEndpoint].filter(Boolean);
-        if(urls.length<3)return res.status(400).json({success:false,message:"Authorization, token and user-info endpoints are required"});
+        const isApple=provider.provider_type==="APPLE";
+        const authorizationEndpoint=cfg.authorizationEndpoint||(isApple?"https://appleid.apple.com/auth/authorize":null);
+        const tokenEndpoint=cfg.tokenEndpoint||(isApple?"https://appleid.apple.com/auth/token":null);
+        const urls=[authorizationEndpoint,tokenEndpoint,...(isApple?[]:[cfg.userInfoEndpoint])].filter(Boolean);
+        if(urls.length<(isApple?2:3))return res.status(400).json({success:false,message:isApple?"Apple authorization and token endpoints are required":"Authorization, token and user-info endpoints are required"});
         for(const value of urls){const url=new URL(String(value));if(url.protocol!=="https:")throw new Error("Provider endpoints must use HTTPS");}
         const discovery=cfg.discoveryUrl?await fetch(String(cfg.discoveryUrl),{headers:{Accept:"application/json"}}):null;
         if(discovery&&!discovery.ok)throw new Error(`Discovery endpoint returned HTTP ${discovery.status}`);
-        return res.json({success:true,data:{ok:true,message:"OIDC provider configuration is valid.",discovery:discovery?await discovery.json():null}});
+        return res.json({success:true,data:{ok:true,message:isApple?"Apple Sign in configuration is valid.":"OIDC provider configuration is valid.",discovery:discovery?await discovery.json():null}});
       }
       if(provider.provider_type==="SAML"){
         if(!cfg.entryPoint||!cfg.issuer||!cfg.idpCert)throw new Error("SAML entry point, issuer/entity ID, and IdP certificate are required");
