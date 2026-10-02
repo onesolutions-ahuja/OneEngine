@@ -2013,6 +2013,42 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "TEXT_TEMPLATE",
+    displayName: "Text Template",
+    description: "Build reusable text with Flow merge resources.",
+    schema: {
+      type: "object",
+      properties: {
+        resourceName: { type: "string" },
+        templateText: { type: "string" },
+      },
+      required: ["resourceName","templateText"],
+    },
+    validation: (action) => {
+      if (!action?.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.resourceName))) {
+        throw new Error("Text Template requires a valid resource name");
+      }
+      if (!String(action.templateText || "").trim()) throw new Error("Text Template requires body text");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const value = String(action.templateText || "").replace(/\{!([^}]+)\}/g, (match, rawPath) => {
+        const path = String(rawPath || "").trim()
+          .replace(/^\$Record__Prior(?=\.|$)/, "$previous")
+          .replace(/^\$Record(?=\.|$)/, "$record")
+          .replace(/^\$User(?=\.|$)/, "$user")
+          .replace(/^\$Flow\.CurrentDateTime$/, "$now");
+        const resolved = resolveConfiguredResource(path, context, { preserveMissing: false });
+        return resolved == null ? "" : String(resolved);
+      });
+      workflowVariables.variables[String(action.resourceName)] = value;
+      return { status: "completed", resourceName: String(action.resourceName), resourceType: "text", value };
+    },
+  },
+  {
     key: "ASSIGNMENT",
     displayName: "Assignment",
     description: "Set one or more existing flow variables without writing to the database.",
@@ -4226,7 +4262,7 @@ async function assertWorkflowObjectPermission(context, actionType) {
 }
 
 const DEBUG_EXECUTABLE_ACTIONS = new Set([
-  "CONSTANT","FORMULA","ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
+  "CONSTANT","FORMULA","TEXT_TEMPLATE","ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
   "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","WAIT","STOP",
