@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiRequest } from '../../services/api'
+import { apiFetch, apiRequest } from '../../services/api'
 
 const TABS=[['export','Data Export'],['retention','Data Retention'],['email','Email Security'],['delegated','Delegated Administration']]
 
@@ -30,6 +30,20 @@ export default function DataProtectionSettings(){
   }
   useEffect(()=>{void load().catch(e=>setError(e.message||'Unable to load data protection settings'))},[])
 
+  const downloadExport=async(id)=>{
+    try{
+      const response=await apiFetch('/api/security/data/exports/'+encodeURIComponent(id)+'/download')
+      if(!response.ok)throw new Error('Unable to download export')
+      const blob=await response.blob()
+      const url=URL.createObjectURL(blob)
+      const a=document.createElement('a')
+      a.href=url
+      a.download='oneengine-export-'+id+'.json.gz'
+      document.body.appendChild(a);a.click();a.remove()
+      setTimeout(()=>URL.revokeObjectURL(url),1000)
+    }catch(e){setError(e.message||'Unable to download export')}
+  }
+
   const saveExport=async()=>{
     try{
       await apiRequest('/api/security/data/export-settings',{method:'PUT',body:JSON.stringify({
@@ -56,7 +70,7 @@ export default function DataProtectionSettings(){
         <div className="settings-row"><strong>Include audit logs</strong><input type="checkbox" checked={exportSettings.include_audit_logs!==false} onChange={e=>setExportSettings(s=>({...s,include_audit_logs:e.target.checked}))}/></div>
         <div className="metadata-settings-form-actions"><button type="button" onClick={saveExport}>Save</button><button type="button" className="is-primary" onClick={async()=>{try{await apiRequest('/api/security/data/exports',{method:'POST',body:'{}'});setNotice('Data export generated.');await load()}catch(e){setError(e.message)}}}>Generate export now</button></div>
       </section>
-      <section className="settings-card"><h3 className="font-semibold">Export History</h3>{exports.map(x=><div className="settings-row" key={x.id}><div><strong>{new Date(x.created_at).toLocaleString()}</strong><p>{x.row_count} rows · expires {new Date(x.expires_at).toLocaleString()}</p></div><a href={'/api/security/data/exports/'+x.id+'/download'} target="_blank" rel="noreferrer">Download</a></div>)}</section>
+      <section className="settings-card"><h3 className="font-semibold">Export History</h3>{exports.map(x=><div className="settings-row" key={x.id}><div><strong>{new Date(x.created_at).toLocaleString()}</strong><p>{x.row_count} rows · expires {new Date(x.expires_at).toLocaleString()}</p></div><button type="button" onClick={()=>void downloadExport(x.id)}>Download</button></div>)}</section>
     </div>:null}
 
     {tab==='retention'?<div className="space-y-4">
