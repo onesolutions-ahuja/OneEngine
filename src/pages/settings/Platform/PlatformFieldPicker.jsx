@@ -29,6 +29,7 @@ export default function PlatformFieldPicker({
   const [objects, setObjects] = useState([]);
   const [fields, setFields] = useState([]);
   const [search, setSearch] = useState("");
+  const [objectSearch, setObjectSearch] = useState("");
   const [objectsLoading, setObjectsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -103,6 +104,16 @@ export default function PlatformFieldPicker({
     return () => { active = false; };
   }, [availableFields, objects, selectedObjectKey]);
 
+  const filteredObjects = useMemo(() => {
+    const query = objectSearch.trim().toLowerCase();
+    if (!query) return objects;
+    return objects.filter((object) => {
+      const key = objectKey(object);
+      const label = object?.label || object?.name || key;
+      return `${label} ${key}`.toLowerCase().includes(query);
+    });
+  }, [objects, objectSearch]);
+
   const filteredFields = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return fields;
@@ -124,11 +135,14 @@ export default function PlatformFieldPicker({
   return (
     <div className={`space-y-2 ${className}`}>
       {includeObjectSelector ? (
-        <select className="w-full rounded border px-2 py-2 text-sm" value={selectedObjectKey || ""} onChange={(event) => selectObject(event.target.value)} disabled={objectsLoading}>
-          <option value="">{objectsLoading ? "Loading objects..." : "Select object"}</option>
-          {selectedObjectKey && !objects.some((item) => objectKey(item) === String(selectedObjectKey)) ? <option value={selectedObjectKey}>Unknown object: {selectedObjectKey}</option> : null}
-          {objects.map((object) => <option key={object.id || objectKey(object)} value={objectKey(object)}>{object.label || objectKey(object)}</option>)}
-        </select>
+        <div className="space-y-2">
+          <input className="w-full rounded border px-2 py-2 text-sm" value={objectSearch} onChange={(event) => setObjectSearch(event.target.value)} placeholder="Search objects..." aria-label="Search objects" disabled={objectsLoading}/>
+          <select className="w-full rounded border px-2 py-2 text-sm" value={selectedObjectKey || ""} onChange={(event) => selectObject(event.target.value)} disabled={objectsLoading}>
+            <option value="">{objectsLoading ? "Loading objects..." : "Select object"}</option>
+            {selectedObjectKey && !objects.some((item) => objectKey(item) === String(selectedObjectKey)) ? <option value={selectedObjectKey}>Unknown object: {selectedObjectKey}</option> : null}
+            {filteredObjects.map((object) => <option key={object.id || objectKey(object)} value={objectKey(object)}>{object.label || objectKey(object)}</option>)}
+          </select>
+        </div>
       ) : null}
       {objectOnly ? null : (
       <div className="flex gap-2">

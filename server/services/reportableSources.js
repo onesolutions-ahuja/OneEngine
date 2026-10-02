@@ -100,7 +100,14 @@ export function validatePlatformReportDefinition(definition, object, fields, rel
   normalized.crossFilters = normalizeCrossFilters(definition.crossFilters || []);
   for (const filter of normalized.filters) {
     if (!fieldMap.has(String(filter?.field)) || !OPERATORS.has(String(filter?.operator))) throw new Error("Invalid report filter");
-    if (filter.compareField && !fieldMap.has(String(filter.compareField))) throw new Error("Invalid comparison field");
+    if (filter.compareField) {
+      if (!fieldMap.has(String(filter.compareField))) throw new Error("Invalid comparison field");
+      if (String(filter.field) === String(filter.compareField)) throw new Error("Field-to-field filters must compare two different fields");
+      const leftType = String(fieldMap.get(String(filter.field))?.field_type || fieldMap.get(String(filter.field))?.type || "").toLowerCase();
+      const rightType = String(fieldMap.get(String(filter.compareField))?.field_type || fieldMap.get(String(filter.compareField))?.type || "").toLowerCase();
+      const comparisonKind = (type) => ["number","decimal","currency","percent","rollup"].includes(type) ? "numeric" : type === "date" ? "date" : type === "datetime" ? "datetime" : null;
+      if (!comparisonKind(leftType) || comparisonKind(leftType) !== comparisonKind(rightType)) throw new Error("Field-to-field filters require two different numeric fields or two fields of the same date/time type");
+    }
   }
   for (const item of normalized.sort) {
     if (!fieldMap.has(String(item?.field)) || !["asc", "desc"].includes(String(item?.direction).toLowerCase())) throw new Error("Invalid sort field");
@@ -142,9 +149,12 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
     const joinKeyword = String(relationship.reportJoinType || relationship.joinType || "").toUpperCase() === "WITH"
       ? "INNER JOIN"
       : "LEFT JOIN";
+    const sourceRelationshipKey = relationship.source_relationship_key || relationship.sourceRelationshipKey || null;
+    const sourceAlias = sourceRelationshipKey ? relationshipAliases[sourceRelationshipKey] : "r";
+    if (!sourceAlias || !isSafeIdentifier(sourceAlias)) throw new Error("Report relationship path is invalid");
     joins.push(localColumn && isSafeIdentifier(localColumn) && targetColumn && isSafeIdentifier(targetColumn)
-      ? `${joinKeyword} "${targetTable}" ${alias} ON ${alias}."${targetColumn}" = r."${localColumn}"`
-      : `${joinKeyword} "${targetTable}" ${alias} ON ${alias}."${childColumn}" = r."id"`);
+      ? `${joinKeyword} "${targetTable}" ${alias} ON ${alias}."${targetColumn}" = ${sourceAlias}."${localColumn}"`
+      : `${joinKeyword} "${targetTable}" ${alias} ON ${alias}."${childColumn}" = ${sourceAlias}."id"`);
   }
   let next = params.length + 1;
   if (object.store_scoped === true) {
@@ -263,7 +273,10 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
       next += 1;
     }
     const companyClause = relationship.target_company_scoped === true ? ` AND ${alias}.company_id = $1` : "";
-    const exists = `EXISTS (SELECT 1 FROM "${targetTable}" ${alias} WHERE ${alias}."${targetColumn}" = r."${localColumn}"${companyClause}${subfilters.length ? ` AND ${subfilters.join(" AND ")}` : ""})`;
+    const sourceRelationshipKey = relationship.source_relationship_key || relationship.sourceRelationshipKey || null;
+    const sourceAlias = sourceRelationshipKey ? relationshipAliases[sourceRelationshipKey] : "r";
+    if (!sourceAlias || !isSafeIdentifier(sourceAlias)) throw new Error("Cross-filter relationship path is invalid");
+    const exists = `EXISTS (SELECT 1 FROM "${targetTable}" ${alias} WHERE ${alias}."${targetColumn}" = ${sourceAlias}."${localColumn}"${companyClause}${subfilters.length ? ` AND ${subfilters.join(" AND ")}` : ""})`;
     where.push(crossFilter.type === "WITHOUT" ? `NOT ${exists}` : exists);
   }
   const selected = normalized.fields.map((key) => `${fieldExpression(fieldMap.get(key), "r", relationshipAliases)} AS "${key}"`);

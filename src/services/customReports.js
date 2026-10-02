@@ -4,8 +4,9 @@ export function getCustomReportMetadata() {
   return apiRequest("/api/reports/custom/metadata");
 }
 
-export function getPlatformReportFields(objectId) {
-  return apiRequest(`/api/reports/custom/platform-objects/${encodeURIComponent(objectId)}/metadata`);
+export function getPlatformReportFields(objectId, reportTypeId = null) {
+  const query = reportTypeId ? `?reportTypeId=${encodeURIComponent(reportTypeId)}` : "";
+  return apiRequest(`/api/reports/custom/platform-objects/${encodeURIComponent(objectId)}/metadata${query}`);
 }
 
 export function getCustomReports() {

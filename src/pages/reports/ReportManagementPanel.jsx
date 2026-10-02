@@ -10,6 +10,7 @@ import {
   getReportSubscriptions,
   moveReportToFolder,
   setReportFavourite,
+  updateReportFolder,
 } from "../../services/customReports.js";
 
 const muted = { color: "var(--onepos-text-muted)" };
@@ -18,6 +19,10 @@ export default function ReportManagementPanel({
   reports = [],
   currentReportId = null,
   canManage = false,
+  users = [],
+  roles = [],
+  publicGroups = [],
+  currentDefinition = null,
   onOpenReport,
   onRunReport,
   onDuplicateReport,
@@ -32,6 +37,9 @@ export default function ReportManagementPanel({
   const [folderFilter, setFolderFilter] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderShared, setNewFolderShared] = useState(false);
+  const [folderEditorId, setFolderEditorId] = useState("");
+  const [folderAccess, setFolderAccess] = useState([]);
+  const [subscriptionDraft, setSubscriptionDraft] = useState({ cadence:"DAILY",hour:8,minute:0,weekday:1,monthday:1,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC",delivery:["IN_APP"],recipients:[],condition:{type:"ALWAYS",field:null,value:null} });
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
@@ -65,6 +73,7 @@ export default function ReportManagementPanel({
     return () => { live = false; };
   }, [currentReportId]);
 
+  const subscriptionUnsupported = currentDefinition?.format === "joined" || currentDefinition?.historicalTrend?.enabled === true;
   const favouriteIds = useMemo(() => new Set((navigation.favourites || []).map((item) => String(item.id))), [navigation.favourites]);
   const filteredReports = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -127,23 +136,43 @@ export default function ReportManagementPanel({
     if (!currentReportId) return;
     try {
       setBusy("subscribe");
-      await createReportSubscription(currentReportId, {
-        active: true,
-        cadence: "DAILY",
-        hour: 8,
-        minute: 0,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London",
-        delivery: ["IN_APP"],
-        recipients: [],
-        condition: { type: "ALWAYS" },
-      });
-      const response = await getReportSubscriptions(currentReportId);
-      setSubscriptions(response?.success ? response.data || [] : []);
+      const response = await createReportSubscription(currentReportId, { active:true, ...subscriptionDraft });
+      if (!response?.success) throw new Error(response?.message || "Unable to create subscription");
+      const list = await getReportSubscriptions(currentReportId);
+      setSubscriptions(list?.success ? list.data || [] : []);
     } catch (err) {
       setError(err?.message || "Unable to create subscription");
     } finally {
       setBusy("");
     }
+  };
+
+  const principalOptions = [
+    ...users.map((item)=>({type:"USER",id:String(item.id),label:item.full_name||item.username||"User"})),
+    ...roles.map((item)=>({type:"ROLE",id:String(item.id),label:item.name||"Role"})),
+    ...publicGroups.map((item)=>({type:"PUBLIC_GROUP",id:String(item.id),label:item.name||"Public Group"})),
+  ];
+  const selectedFolder = folders.find((folder)=>String(folder.id)===String(folderEditorId)) || null;
+  const openFolderEditor = (folderId) => {
+    const folder = folders.find((item)=>String(item.id)===String(folderId));
+    setFolderEditorId(folderId||"");
+    setFolderAccess(Array.isArray(folder?.access)?folder.access:[]);
+  };
+  const saveFolderAccess = async () => {
+    if (!selectedFolder) return;
+    try {
+      setBusy("folder-sharing");
+      const response = await updateReportFolder(selectedFolder.id,{
+        name:selectedFolder.name,
+        description:selectedFolder.description||"",
+        visibility:folderAccess.length?"SHARED":"PRIVATE",
+        access:folderAccess,
+      });
+      if(!response?.success) throw new Error(response?.message||"Unable to update folder sharing");
+      await loadManagement();
+      openFolderEditor(selectedFolder.id);
+    } catch(err){setError(err?.message||"Unable to update folder sharing");}
+    finally{setBusy("");}
   };
 
   const removeSubscription = async (subscriptionId) => {
@@ -185,6 +214,22 @@ export default function ReportManagementPanel({
         </div> : null}
       </div>
 
+      {canManage&&folders.length?<div className="rounded-xl border p-3 space-y-3" style={{borderColor:"var(--onepos-border)"}}>
+        <div className="grid gap-3 md:grid-cols-[220px_1fr_auto] items-end">
+          <label className="onepos-label">Folder sharing<select className="onepos-input mt-1" value={folderEditorId} onChange={(e)=>openFolderEditor(e.target.value)}><option value="">Select folder</option>{folders.map((folder)=><option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
+          {selectedFolder?<div className="text-xs" style={muted}>Assign users, roles or public groups. VIEW can run reports, EDIT can move/edit content, MANAGE can change folder access.</div>:<div/>}
+          {selectedFolder?<button type="button" className="onepos-btn onepos-btn-secondary" disabled={busy==="folder-sharing"} onClick={saveFolderAccess}>Save sharing</button>:null}
+        </div>
+        {selectedFolder?<div className="space-y-2">
+          {folderAccess.map((entry,index)=>{const key=`${entry.principalType}:${entry.principalId}`;return <div key={key||index} className="grid gap-2 md:grid-cols-[1fr_150px_auto]">
+            <select className="onepos-input" value={key} onChange={(e)=>{const [principalType,principalId]=e.target.value.split(":");setFolderAccess((current)=>current.map((item,i)=>i===index?{...item,principalType,principalId}:item));}}><option value="">Select principal</option>{principalOptions.map((option)=><option key={`${option.type}:${option.id}`} value={`${option.type}:${option.id}`}>{option.type.replace("_"," ")} · {option.label}</option>)}</select>
+            <select className="onepos-input" value={entry.accessLevel||"VIEW"} onChange={(e)=>setFolderAccess((current)=>current.map((item,i)=>i===index?{...item,accessLevel:e.target.value}:item))}><option value="VIEW">View</option><option value="EDIT">Edit</option><option value="MANAGE">Manage</option></select>
+            <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>setFolderAccess((current)=>current.filter((_,i)=>i!==index))}>Remove</button>
+          </div>})}
+          <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" disabled={!principalOptions.length} onClick={()=>{const first=principalOptions[0];if(first)setFolderAccess((current)=>[...current,{principalType:first.type,principalId:first.id,accessLevel:"VIEW"}]);}}>Add access</button>
+        </div>:null}
+      </div>:null}
+
       {(navigation.favourites || []).length || (navigation.recent || []).length ? <div className="grid gap-3 lg:grid-cols-2">
         <div>
           <div className="text-xs font-semibold uppercase mb-2" style={muted}>Favourites</div>
@@ -223,7 +268,24 @@ export default function ReportManagementPanel({
     {currentReportId ? <section className="onepos-card onepos-card-body space-y-4">
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="space-y-2">
-          <div className="flex items-center justify-between"><h3 className="font-semibold">Subscriptions</h3><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" disabled={busy === "subscribe"} onClick={subscribe}>Subscribe daily</button></div>
+          <div className="flex items-center justify-between"><h3 className="font-semibold">Subscriptions</h3><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" disabled={busy === "subscribe" || subscriptionUnsupported} onClick={subscribe}>Add subscription</button></div>{subscriptionUnsupported?<div className="text-xs" style={muted}>{currentDefinition?.format==="joined"?"Subscriptions are unavailable for joined reports.":"Subscriptions are unavailable while historical trending is enabled."}</div>:null}
+          <div className="rounded-lg border p-3 space-y-2" style={{borderColor:"var(--onepos-border)"}}>
+            <div className="grid gap-2 md:grid-cols-3">
+              <label className="onepos-label">Cadence<select className="onepos-input mt-1" value={subscriptionDraft.cadence} onChange={(e)=>setSubscriptionDraft((d)=>({...d,cadence:e.target.value}))}><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option></select></label>
+              <label className="onepos-label">Hour<input className="onepos-input mt-1" type="number" min="0" max="23" value={subscriptionDraft.hour} onChange={(e)=>setSubscriptionDraft((d)=>({...d,hour:Number(e.target.value)}))}/></label>
+              <label className="onepos-label">Minute<input className="onepos-input mt-1" type="number" min="0" max="59" value={subscriptionDraft.minute} onChange={(e)=>setSubscriptionDraft((d)=>({...d,minute:Number(e.target.value)}))}/></label>
+              {subscriptionDraft.cadence==="WEEKLY"?<label className="onepos-label">Weekday<select className="onepos-input mt-1" value={subscriptionDraft.weekday} onChange={(e)=>setSubscriptionDraft((d)=>({...d,weekday:Number(e.target.value)}))}>{["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map((label,index)=><option key={label} value={index}>{label}</option>)}</select></label>:null}
+              {subscriptionDraft.cadence==="MONTHLY"?<label className="onepos-label">Day of month<input className="onepos-input mt-1" type="number" min="1" max="28" value={subscriptionDraft.monthday} onChange={(e)=>setSubscriptionDraft((d)=>({...d,monthday:Number(e.target.value)}))}/></label>:null}
+              <label className="onepos-label">Timezone<input className="onepos-input mt-1" value={subscriptionDraft.timezone} onChange={(e)=>setSubscriptionDraft((d)=>({...d,timezone:e.target.value}))}/></label>
+            </div>
+            <div className="flex flex-wrap gap-4 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={subscriptionDraft.delivery.includes("IN_APP")} onChange={(e)=>setSubscriptionDraft((d)=>({...d,delivery:e.target.checked?[...new Set([...d.delivery,"IN_APP"])]:d.delivery.filter((x)=>x!=="IN_APP")}))}/>In-app</label><label className="flex items-center gap-2"><input type="checkbox" checked={subscriptionDraft.delivery.includes("EMAIL")} onChange={(e)=>setSubscriptionDraft((d)=>({...d,delivery:e.target.checked?[...new Set([...d.delivery,"EMAIL"])]:d.delivery.filter((x)=>x!=="EMAIL")}))}/>Email</label></div>
+            {subscriptionDraft.delivery.includes("EMAIL")?<label className="onepos-label">Email recipients<input className="onepos-input mt-1" value={(subscriptionDraft.recipients||[]).join(", ")} onChange={(e)=>setSubscriptionDraft((d)=>({...d,recipients:e.target.value.split(",").map((v)=>v.trim()).filter(Boolean)}))} placeholder="name@example.com, team@example.com"/></label>:null}
+            <div className="grid gap-2 md:grid-cols-3">
+              <label className="onepos-label">Run condition<select className="onepos-input mt-1" value={subscriptionDraft.condition?.type||"ALWAYS"} onChange={(e)=>setSubscriptionDraft((d)=>({...d,condition:{...(d.condition||{}),type:e.target.value}}))}><option value="ALWAYS">Always</option><option value="ROW_COUNT_GT">Row count greater than</option><option value="ROW_COUNT_EQ">Row count equals</option><option value="VALUE_GT">Value greater than</option><option value="VALUE_GTE">Value greater/equal</option><option value="VALUE_LT">Value less than</option><option value="VALUE_LTE">Value less/equal</option></select></label>
+              {(subscriptionDraft.condition?.type||"ALWAYS").startsWith("VALUE_")?<label className="onepos-label">Field<select className="onepos-input mt-1" value={subscriptionDraft.condition?.field||""} onChange={(e)=>setSubscriptionDraft((d)=>({...d,condition:{...(d.condition||{}),field:e.target.value}}))}><option value="">Select field</option>{(currentDefinition?.fields||[]).map((field)=><option key={field} value={field}>{field}</option>)}</select></label>:null}
+              {subscriptionDraft.condition?.type!=="ALWAYS"?<label className="onepos-label">Threshold<input className="onepos-input mt-1" type="number" value={subscriptionDraft.condition?.value??0} onChange={(e)=>setSubscriptionDraft((d)=>({...d,condition:{...(d.condition||{}),value:Number(e.target.value)}}))}/></label>:null}
+            </div>
+          </div>
           {subscriptions.length ? subscriptions.map((item) => <div key={item.id} className="rounded-lg border p-2 flex items-center gap-2" style={{borderColor:"var(--onepos-border)"}}>
             <div className="flex-1 text-sm"><strong>{item.definition?.cadence || "DAILY"}</strong><span className="block text-xs" style={muted}>{item.definition?.timezone || ""} · {item.last_status || "Not run yet"}</span></div>
             <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" disabled={busy === `subscription:${item.id}`} onClick={() => removeSubscription(item.id)}>Remove</button>

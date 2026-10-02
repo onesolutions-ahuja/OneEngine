@@ -8,7 +8,7 @@
 
 const REPORT_FORMATS = new Set(["tabular", "summary", "matrix", "joined"]);
 const PRESENTATIONS = new Set([
-  "table", "summary", "bar", "line", "pie", "donut", "gauge", "funnel", "scatter",
+  "table", "summary", "bar", "line", "pie", "donut", "gauge", "funnel", "scatter", "combo",
 ]);
 const AGGREGATES = new Set(["COUNT", "COUNT_DISTINCT", "SUM", "AVG", "MIN", "MAX"]);
 const FORMULA_SCOPES = new Set(["row", "summary", "cross_block"]);
@@ -112,38 +112,79 @@ function normalizeDrillAction(action) {
 }
 
 function normalizeBlock(block, index) {
-  return { key: String(block?.key || `block_${index + 1}`), label: String(block?.label || `Block ${index + 1}`).slice(0, 120), dataSource: String(block?.dataSource || "platform_object"),
-    objectId: block?.objectId ? String(block.objectId) : null, fields: uniqueStrings(block?.fields, 100), filters: asArray(block?.filters, 50),
-    filterLogic: normalizeFilterLogic(block?.filterLogic, asArray(block?.filters, 50).length), rowGroups: uniqueStrings(block?.rowGroups || block?.groupBy, 10),
-    columnGroups: uniqueStrings(block?.columnGroups, 10), summaries: asArray(block?.summaries, 30), sort: asArray(block?.sort, 20) };
+  const rawFilters = Array.isArray(block?.filters) ? block.filters : [];
+  if (rawFilters.length > 20) throw new Error(`Joined block ${index + 1} can contain up to 20 filters`);
+  if (rawFilters.filter((filter) => String(filter?.operator || "").endsWith("_field")).length > 4) throw new Error(`Joined block ${index + 1} can contain up to 4 field-to-field filters`);
+  const filters = asArray(rawFilters, 20);
+  const summaryFormulas = asArray(block?.summaryFormulas, 10).map((formula, formulaIndex) => normalizeFormula(formula, formulaIndex, "summary"));
+  return {
+    key: String(block?.key || `block_${index + 1}`),
+    label: String(block?.label || `Block ${index + 1}`).slice(0, 120),
+    dataSource: String(block?.dataSource || "platform_object"),
+    objectId: block?.objectId ? String(block.objectId) : null,
+    reportTypeId: block?.reportTypeId ? String(block.reportTypeId) : null,
+    fields: uniqueStrings(block?.fields, 100),
+    filters,
+    filterLogic: normalizeFilterLogic(block?.filterLogic, filters.length),
+    rowGroups: uniqueStrings(block?.rowGroups || block?.groupBy, 10),
+    columnGroups: uniqueStrings(block?.columnGroups, 10),
+    summaries: asArray(block?.summaries, 30),
+    summaryFormulas,
+    sort: asArray(block?.sort, 20).map((item) => ({ field: String(item?.field || ""), direction: String(item?.direction || "asc").toLowerCase() === "desc" ? "desc" : "asc", nulls: String(item?.nulls || "last").toLowerCase() === "first" ? "first" : "last" })),
+  };
 }
 
 export function normalizeAdvancedReportDefinition(definition = {}) {
-  const filters = asArray(definition.filters, 50);
+  const rawFilters = Array.isArray(definition.filters) ? definition.filters : [];
+  if (rawFilters.length > 20) throw new Error("A report can contain up to 20 field filters");
+  const filters = asArray(rawFilters, 20);
+  if (filters.filter((filter) => String(filter?.operator || "").endsWith("_field")).length > 4) throw new Error("A report can contain up to 4 field-to-field filters");
   const format = REPORT_FORMATS.has(String(definition.format)) ? String(definition.format) : "tabular";
   const rowGroups = uniqueStrings(definition.rowGroups || definition.groupBy, 10);
   const columnGroups = uniqueStrings(definition.columnGroups, 10);
   const normalized = { ...definition, schemaVersion: 2, format, fields: uniqueStrings(definition.fields, 100), filters,
     filterLogic: normalizeFilterLogic(definition.filterLogic, filters.length), rowGroups, columnGroups, groupBy: rowGroups,
     summaries: asArray(definition.summaries, 30).map((summary) => ({ aggregate: String(summary?.aggregate || "COUNT").toUpperCase(), field: String(summary?.field || ""), alias: summary?.alias ? String(summary.alias) : null, showGrandTotal: summary?.showGrandTotal !== false, showSubtotals: summary?.showSubtotals !== false })),
-    buckets: asArray(definition.buckets, 20).map(normalizeBucket), rowFormulas: asArray(definition.rowFormulas, 20).map((formula, index) => normalizeFormula(formula, index, "row")),
+    buckets: format === "joined" ? [] : asArray(definition.buckets, 20).map(normalizeBucket),
+    rowFormulas: format === "joined" ? [] : asArray(definition.rowFormulas, 2).map((formula, index) => normalizeFormula(formula, index, "row")),
     summaryFormulas: asArray(definition.summaryFormulas, 20).map((formula, index) => normalizeFormula(formula, index, "summary")),
-    crossBlockFormulas: format === "joined" ? asArray(definition.crossBlockFormulas, 20).map((formula, index) => normalizeFormula(formula, index, "cross_block")) : [],
+    crossBlockFormulas: format === "joined" ? asArray(definition.crossBlockFormulas, 10).map((formula, index) => normalizeFormula(formula, index, "cross_block")) : [],
     sort: asArray(definition.sort, 20).map((item) => ({ field: String(item?.field || ""), direction: String(item?.direction || "asc").toLowerCase() === "desc" ? "desc" : "asc", nulls: String(item?.nulls || "last").toLowerCase() === "first" ? "first" : "last" })),
     rowLimit: Math.min(Math.max(Number(definition.rowLimit || 1000), 1), 1000), showDetails: definition.showDetails !== false, showSubtotals: definition.showSubtotals !== false, showGrandTotal: definition.showGrandTotal !== false,
-    presentation: { type: PRESENTATIONS.has(String(definition.presentation?.type)) ? String(definition.presentation.type) : "table", xField: definition.presentation?.xField ? String(definition.presentation.xField) : null, yField: definition.presentation?.yField ? String(definition.presentation.yField) : null, seriesField: definition.presentation?.seriesField ? String(definition.presentation.seriesField) : null, stacked: definition.presentation?.stacked === true, orientation: definition.presentation?.orientation === "horizontal" ? "horizontal" : "vertical", showLegend: definition.presentation?.showLegend !== false, showValues: definition.presentation?.showValues === true },
-    conditionalFormatting: asArray(definition.conditionalFormatting, 30).map(normalizeConditionalRule), drillAction: normalizeDrillAction(definition.drillAction),
+    presentation: {
+      type: PRESENTATIONS.has(String(definition.presentation?.type)) ? String(definition.presentation.type) : "table",
+      xField: definition.presentation?.xField ? String(definition.presentation.xField) : null,
+      yField: definition.presentation?.yField ? String(definition.presentation.yField) : null,
+      yFields: uniqueStrings(definition.presentation?.yFields || (definition.presentation?.yField ? [definition.presentation.yField] : []), 10),
+      seriesField: definition.presentation?.seriesField ? String(definition.presentation.seriesField) : null,
+      secondaryAxisFields: uniqueStrings(definition.presentation?.secondaryAxisFields, 10),
+      stacked: definition.presentation?.stacked === true,
+      normalizeToPercent: definition.presentation?.normalizeToPercent === true,
+      orientation: definition.presentation?.orientation === "horizontal" ? "horizontal" : "vertical",
+      showLegend: definition.presentation?.showLegend !== false,
+      showValues: definition.presentation?.showValues === true,
+      showGrid: definition.presentation?.showGrid !== false,
+      sortBy: definition.presentation?.sortBy ? String(definition.presentation.sortBy) : null,
+      sortDirection: String(definition.presentation?.sortDirection || "asc").toLowerCase() === "desc" ? "desc" : "asc",
+      maxCategories: Math.min(Math.max(Number(definition.presentation?.maxCategories || 20), 2), 100),
+      referenceLines: asArray(definition.presentation?.referenceLines, 10).map((line) => ({ label: String(line?.label || "").slice(0, 100), value: Number(line?.value || 0), axis: line?.axis === "secondary" ? "secondary" : "primary" })),
+    },
+    conditionalFormatting: format === "joined" ? [] : asArray(definition.conditionalFormatting, 30).map(normalizeConditionalRule), drillAction: normalizeDrillAction(definition.drillAction),
     blocks: format === "joined" ? asArray(definition.blocks, 5).map(normalizeBlock) : [], commonGroups: format === "joined" ? uniqueStrings(definition.commonGroups, 10) : [] };
   validateFilterLogic(normalized.filterLogic, normalized.filters.length);
   if (format === "matrix" && (!rowGroups.length || !columnGroups.length)) throw new Error("Matrix reports require at least one row group and one column group");
   if (format === "matrix" && !normalized.summaries.length) throw new Error("Matrix reports require at least one summary value");
   if (format === "joined" && normalized.blocks.length < 2) throw new Error("Joined reports require at least two report blocks");
+  if (format === "joined" && normalized.blocks.reduce((count, block) => count + (block.summaryFormulas || []).length, 0) > 50) throw new Error("Joined reports can contain up to 50 block summary formulas");
+  if (format === "joined" && Array.isArray(definition.crossFilters) && definition.crossFilters.length) throw new Error("Joined reports do not support cross filters");
+  if (format === "joined" && definition.historicalTrend?.enabled === true) throw new Error("Joined reports do not support historical trending");
+  if (Array.isArray(definition.rowFormulas) && definition.rowFormulas.length > 2) throw new Error("A report can contain up to 2 row-level formulas");
   for (const summary of normalized.summaries) if (!AGGREGATES.has(summary.aggregate)) throw new Error(`Invalid aggregate ${summary.aggregate}`);
   return normalized;
 }
 
 export function reportCapabilities() {
-  return { schemaVersion: 2, formats: [...REPORT_FORMATS], aggregates: [...AGGREGATES], presentations: [...PRESENTATIONS], maxJoinedBlocks: 5, maxFilters: 50,
-    maxRowGroups: 10, maxColumnGroups: 10, maxBuckets: 20, maxFormulas: 20, maxSorts: 20, filterLogic: "custom",
+  return { schemaVersion: 2, formats: [...REPORT_FORMATS], aggregates: [...AGGREGATES], presentations: [...PRESENTATIONS], maxJoinedBlocks: 5, maxFilters: 20, maxFieldComparisons: 4,
+    maxRowGroups: 10, maxColumnGroups: 10, maxBuckets: 20, maxRowFormulas: 2, maxSummaryFormulas: 20, maxCrossBlockFormulas: 10, maxSorts: 20, filterLogic: "custom",
     supports: { tabular: true, summary: true, matrix: true, joined: true, buckets: true, rowFormulas: true, summaryFormulas: true, crossBlockFormulas: true, conditionalFormatting: true, drillActions: true, multipleSorts: true, detailToggle: true, subtotals: true, grandTotals: true } };
 }

@@ -3446,6 +3446,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [paletteSearch, setPaletteSearch] = useState("");
+  const [startTriggerSearch, setStartTriggerSearch] = useState("");
   const [paletteTab, setPaletteTab] = useState("elements");
   const [insertAt, setInsertAt] = useState(null);
   const [branchTarget, setBranchTarget] = useState(null);
@@ -3488,6 +3489,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       : flowType === "SCHEDULE_TRIGGERED"
         ? [{ key: "scheduled", label: "On schedule", kind: "schedule" }]
         : [{ key: "manual", label: "Manual trigger", kind: "manual" }];
+  const filteredStartTriggerOptions = startTriggerOptions.filter((option) => {
+    const query = startTriggerSearch.trim().toLowerCase();
+    return !query || `${option.label || ""} ${option.key || ""}`.toLowerCase().includes(query);
+  });
+  useEffect(() => { setStartTriggerSearch(""); }, [flowType]);
   const freeformPositions = workflow.actionMetadata?.builderLayout?.positions || {};
   const setLayoutMode = (mode) => setWorkflow((current) => ({
     ...current,
@@ -5017,9 +5023,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Trigger</label>
-              <select aria-label="Flow trigger" className={inputClass} value={workflow.trigger || "manual"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
+              {startTriggerOptions.length > 8 ? <input className={inputClass} value={startTriggerSearch} onChange={(event) => setStartTriggerSearch(event.target.value)} placeholder="Search triggers or events..." aria-label="Search flow triggers"/> : null}
+              <select aria-label="Flow trigger" className={inputClass} value={workflow.trigger || "manual"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value, entryTransition: "EVERY_TIME" }))}>
                 {!startTriggerOptions.some((option) => option.key === workflow.trigger) && workflow.trigger ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
-                {startTriggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+                {workflow.trigger && startTriggerOptions.some((option) => option.key === workflow.trigger) && !filteredStartTriggerOptions.some((option) => option.key === workflow.trigger) ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
+                {filteredStartTriggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
               </select>
             </div>
             {["RECORD_TRIGGERED","SCHEDULE_TRIGGERED"].includes(flowType) ? <div>
@@ -5029,7 +5037,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 includeObjectSelector
                 objectOnly
                 selectedObjectKey={workflow.object || ""}
-                onObjectChange={(object) => setWorkflow((current) => ({ ...current, object }))}
+                onObjectChange={(object) => setWorkflow((current) => ({ ...current, object, conditions: [], match: "all", entryTransition: "EVERY_TIME" }))}
               />
             </div> : null}
             {flowType === "SCHEDULE_TRIGGERED" ? (() => {

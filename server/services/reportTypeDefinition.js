@@ -20,12 +20,53 @@ export function normalizeReportType(input = {}) {
   if (!primaryObjectId) throw new Error("Primary object is required");
   return { id: input.id || null, label: label.slice(0, 150), key, description: String(input.description || "").slice(0, 500), primaryObjectId, active: input.active !== false,
     experience: input.experience && typeof input.experience === "object" ? input.experience : {},
-    relationships: arr(input.relationships, 10).map((item, index) => { const relationshipId = String(item?.relationshipId || "").trim(); const joinType = String(item?.joinType || "WITH_OR_WITHOUT").toUpperCase(); if (!relationshipId) throw new Error(`Relationship ${index + 1} is required`); if (!JOIN_TYPES.has(joinType)) throw new Error(`Relationship ${index + 1} join type is invalid`); return { relationshipId, joinType, alias: String(item?.alias || "").trim() || null }; }),
+    relationships: arr(input.relationships, 3).map((item, index) => {
+      const relationshipId = String(item?.relationshipId || "").trim();
+      const joinType = String(item?.joinType || "WITH_OR_WITHOUT").toUpperCase();
+      const sourceRelationshipId = item?.sourceRelationshipId ? String(item.sourceRelationshipId).trim() : null;
+      const previous = arr(input.relationships, 3).slice(0, index);
+      if (!relationshipId) throw new Error(`Relationship ${index + 1} is required`);
+      if (!JOIN_TYPES.has(joinType)) throw new Error(`Relationship ${index + 1} join type is invalid`);
+      if (sourceRelationshipId && !previous.some((candidate) => String(candidate?.relationshipId || "") === sourceRelationshipId)) throw new Error(`Relationship ${index + 1} has an invalid parent path`);
+      let ancestorId = sourceRelationshipId;
+      while (ancestorId) {
+        const ancestor = previous.find((candidate) => String(candidate?.relationshipId || "") === String(ancestorId));
+        if (!ancestor) break;
+        if (String(ancestor.joinType || "WITH_OR_WITHOUT").toUpperCase() === "WITH_OR_WITHOUT" && joinType === "WITH") {
+          throw new Error(`Relationship ${index + 1} must remain optional because an earlier relationship in its path is optional`);
+        }
+        ancestorId = ancestor.sourceRelationshipId ? String(ancestor.sourceRelationshipId) : null;
+      }
+      return { relationshipId, sourceRelationshipId, joinType, alias: String(item?.alias || "").trim() || null };
+    }),
     fieldVisibility: arr(input.fieldVisibility, 500).map((item) => ({ fieldKey: String(item?.fieldKey || ""), visible: item?.visible !== false, defaultSelected: item?.defaultSelected === true, category: String(item?.category || "Fields").slice(0, 100) })).filter((item) => item.fieldKey) };
 }
 
 export function normalizeCrossFilters(input = []) {
-  return arr(input, 5).map((item, index) => { const type = String(item?.type || "WITH").toUpperCase(); const relationshipKey = String(item?.relationshipKey || "").trim(); if (!CROSS_TYPES.has(type)) throw new Error(`Cross filter ${index + 1} has an invalid type`); if (!relationshipKey) throw new Error(`Cross filter ${index + 1} needs a relationship`); return { type, relationshipKey, subfilters: arr(item?.subfilters, 10).map((subfilter) => ({ field: String(subfilter?.field || ""), operator: String(subfilter?.operator || "equals"), value: subfilter?.value ?? null, compareField: subfilter?.compareField ? String(subfilter.compareField) : null })) }; });
+  return arr(input, 3).map((item, index) => {
+    const type = String(item?.type || "WITH").toUpperCase();
+    const relationshipKey = String(item?.relationshipKey || "").trim();
+    if (!CROSS_TYPES.has(type)) throw new Error(`Cross filter ${index + 1} has an invalid type`);
+    if (!relationshipKey) throw new Error(`Cross filter ${index + 1} needs a relationship`);
+    return {
+      type,
+      relationshipKey,
+      subfilters: arr(item?.subfilters, 5).map((subfilter, subIndex) => {
+        const field = String(subfilter?.field || "").trim();
+        const operator = String(subfilter?.operator || "equals");
+        const compareField = subfilter?.compareField ? String(subfilter.compareField).trim() : null;
+        if (!field) throw new Error(`Cross filter ${index + 1} condition ${subIndex + 1} needs a field`);
+        if (FIELD_OPERATORS.has(operator) && !compareField) throw new Error(`Cross filter ${index + 1} condition ${subIndex + 1} requires a comparison field`);
+        return {
+          field,
+          operator,
+          value: subfilter?.value ?? null,
+          compareField,
+          relativeDate: subfilter?.relativeDate ? normalizeRelativeDate(subfilter.relativeDate) : null,
+        };
+      }),
+    };
+  });
 }
 
 export function normalizeAdvancedFieldFilter(filter = {}) {

@@ -166,8 +166,8 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     return [req.user.companyId, req.user.storeId, req.query.dateFrom || null, req.query.dateTo || null];
   }
 
-  async function platformReportContext(req, objectId) {
-    return loadPlatformReportContext(db, req, objectId);
+  async function platformReportContext(req, objectId, relationshipPlan = null) {
+    return loadPlatformReportContext(db, req, objectId, relationshipPlan);
   }
 
   router.get("/reports/summary", authenticate, authorize("reports.summary.view"), async (req, res) => {
@@ -861,7 +861,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     if (!row) throw new Error("Custom report type is unavailable");
     const definition = normalizeReportType({ ...(row.definition || {}), id: row.id });
     if (!(await reportTypeIsVisible(req, row))) throw new Error("Custom report type is not deployed");
-    const context = await platformReportContext(req, definition.primaryObjectId);
+    const context = await platformReportContext(req, definition.primaryObjectId, definition.relationships);
     const relationshipConfig = new Map((definition.relationships || []).map((entry) => [String(entry.relationshipId), entry]));
     const relationships = (context.relationships || [])
       .filter((relationship) => relationshipConfig.has(String(relationship.id)))
@@ -878,7 +878,20 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const layout = layoutMap.get(String(field.api_name));
       return layout?.displayLabel ? { ...field, label: layout.displayLabel } : field;
     });
-    return { row, definition, context: { ...context, fields, relationships } };
+    const visibleRelationships = relationships.map((relationship) => ({
+      ...relationship,
+      fields: (relationship.fields || []).filter((field) => {
+        const key = `${relationship.relationship_key}.${field.api_name}`;
+        const layout = layoutMap.get(key);
+        const visibility = visibilityMap.get(key);
+        return layout?.visible !== false && visibility?.visible !== false;
+      }).map((field) => {
+        const key = `${relationship.relationship_key}.${field.api_name}`;
+        const layout = layoutMap.get(key);
+        return layout?.displayLabel ? { ...field, label: layout.displayLabel } : field;
+      }),
+    }));
+    return { row, definition, context: { ...context, fields, relationships: visibleRelationships } };
   }
 
   async function visibleFolder(req, folderId, minimum = "VIEW") {
@@ -915,7 +928,14 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         }, context.relationships);
         const result = await db(built.sql, built.params);
         return {
-          columns: validated.fields.map((key) => ({ key, label: context.fields.find((field) => field.api_name === key)?.label || key })),
+          columns: validated.fields.map((key) => {
+            const direct = context.fields.find((field) => field.api_name === key);
+            if (direct) return { key, label: direct.label || key };
+            const [relationshipKey, ...fieldParts] = String(key).split(".");
+            const related = context.relationships.find((relationship) => String(relationship.relationship_key) === relationshipKey);
+            const relatedField = related?.fields?.find((field) => String(field.api_name) === fieldParts.join("."));
+            return { key, label: relatedField ? `${related.label || related.target_object_key || relationshipKey} · ${relatedField.label || relatedField.api_name}` : key };
+          }),
           rows: result.rows,
         };
       }
@@ -950,9 +970,10 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
 
   router.get("/reports/custom/report-types", authenticate, authorize("reports.custom.view"), async (req, res) => {
     try {
-      const result = await db("SELECT * FROM custom_report_types WHERE company_id=$1 AND active=TRUE ORDER BY lower(label)", [req.user.companyId]);
+      const manage = await canManageReportTypes(req);
+      const result = await db(`SELECT * FROM custom_report_types WHERE company_id=$1 ${manage ? "" : "AND active=TRUE"} ORDER BY active DESC,lower(label)`, [req.user.companyId]);
       const visible = [];
-      for (const row of result.rows || []) if (await reportTypeIsVisible(req, row)) visible.push(row);
+      for (const row of result.rows || []) if (manage || (row.active === true && await reportTypeIsVisible(req, row))) visible.push(row);
       res.json({ success: true, data: visible });
     } catch (error) { res.status(500).json({ success: false, message: "Unable to load report types" }); }
   });
@@ -982,6 +1003,21 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       if (!result.rows[0]) return res.status(404).json({ success: false, message: "Report type not found" });
       res.json({ success: true, data: result.rows[0] });
     } catch (error) { res.status(400).json({ success: false, message: error.message || "Unable to update report type" }); }
+  });
+
+  router.delete("/reports/custom/report-types/:id", authenticate, authorize("reports.custom.manage"), async (req, res) => {
+    try {
+      const existing = await db("SELECT id,label FROM custom_report_types WHERE id=$1 AND company_id=$2", [req.params.id, req.user.companyId]);
+      if (!existing.rows[0]) return res.status(404).json({ success: false, message: "Report type not found" });
+      const usage = await db("SELECT COUNT(*)::int AS count FROM custom_reports WHERE company_id=$1 AND report_type_id=$2 AND archived_at IS NULL", [req.user.companyId, req.params.id]);
+      if (Number(usage.rows[0]?.count || 0) > 0) {
+        return res.status(409).json({ success: false, code: "REPORT_TYPE_IN_USE", message: "This report type is used by one or more saved reports. Reassign or archive those reports before deleting it." });
+      }
+      await db("DELETE FROM custom_report_types WHERE id=$1 AND company_id=$2", [req.params.id, req.user.companyId]);
+      res.json({ success: true, data: { id: req.params.id } });
+    } catch (error) {
+      res.status(400).json({ success: false, message: error.message || "Unable to delete report type" });
+    }
   });
 
   router.get("/reports/custom/folders", authenticate, authorize("reports.custom.view"), async (req, res) => {
@@ -1037,9 +1073,11 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
   router.get("/reports/custom/metadata", authenticate, authorize("reports.custom.view"), async (req, res) => {
     try {
       const manage = await canManageReports(req);
-      const [stores, users, reports, reportTypes, platformObjects] = await Promise.all([
+      const [stores, users, roles, publicGroups, reports, reportTypes, platformObjects] = await Promise.all([
         db("SELECT id,name FROM stores WHERE company_id=$1 AND active=true ORDER BY name", [req.user.companyId]),
         db("SELECT id,username,full_name FROM users WHERE company_id=$1 AND active=true ORDER BY full_name,username", [req.user.companyId]),
+        db("SELECT id,name FROM roles WHERE company_id=$1 ORDER BY name", [req.user.companyId]),
+        db("SELECT id,name FROM platform_public_groups WHERE company_id=$1 ORDER BY name", [req.user.companyId]),
         db(`SELECT cr.id,cr.name,cr.description,cr.definition,cr.created_by,cr.folder_id,cr.report_type_id,
               COALESCE(array_agg(cru.user_id) FILTER (WHERE cru.user_id IS NOT NULL),'{}') AS user_ids,u.full_name AS created_by_name
             FROM custom_reports cr LEFT JOIN users u ON u.id=cr.created_by LEFT JOIN custom_report_users cru ON cru.report_id=cr.id
@@ -1053,6 +1091,8 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         filters: CUSTOM_DATE_FILTERS,
         stores: stores.rows,
         users: users.rows,
+        roles: manage ? roles.rows : [],
+        publicGroups: manage ? publicGroups.rows : [],
         reports: await filterReportsByFolderAccess(req, reports.rows || []),
         reportTypes: await (async () => {
           const visible = [];
@@ -1069,7 +1109,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
 
   router.get("/reports/custom", authenticate, authorize("reports.custom.view"), async (req, res) => {
     try {
-      const manage = canManageReports(req.user);
+      const manage = await canManageReports(req);
       const result = await db(
         `SELECT cr.id,cr.name,cr.description,cr.definition,cr.created_by,cr.updated_at,cr.folder_id,cr.report_type_id,
           COALESCE(array_agg(cru.user_id) FILTER (WHERE cru.user_id IS NOT NULL),'{}') AS user_ids,u.full_name AS created_by_name
@@ -1084,11 +1124,12 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
 
   router.get("/reports/custom/platform-objects/:objectId/metadata", authenticate, authorize("reports.custom.view"), async (req, res) => {
     try {
-      const context=await platformReportContext(req,req.params.objectId);
+      const reportType = req.query.reportTypeId ? await resolveCustomReportType(req, req.query.reportTypeId) : null;
+      const context = reportType?.context || await platformReportContext(req,req.params.objectId);
       if(!context.object||!context.object.source_table)return res.status(404).json({success:false,message:"Report object not found"});
       const fields=context.fields.map((field)=>({...field,key:field.api_name,type:field.field_type}));
-      res.json({success:true,data:{object:context.object,fields,relationships:context.relationships.map(({fields:relatedFields,...relationship})=>({...relationship,fields:relatedFields.map((field)=>({...field,key:field.api_name,type:field.field_type}))}))}});
-    } catch (error) { res.status(500).json({success:false,message:"Unable to load report object metadata"}); }
+      res.json({success:true,data:{object:context.object,fields,relationships:context.relationships.map(({fields:relatedFields,...relationship})=>({...relationship,fields:relatedFields.map((field)=>({...field,key:`${relationship.relationship_key}.${field.api_name}`,type:field.field_type}))}))}});
+    } catch (error) { res.status(400).json({success:false,message:error.message||"Unable to load report object metadata"}); }
   });
 
   router.post("/reports/custom/preview", authenticate, authorize("reports.custom.view"), async (req, res) => {
@@ -1190,6 +1231,9 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     try {
       const report=await reportById(req,req.params.id);
       if(!report)return res.status(404).json({success:false,message:"Custom report not found"});
+      const reportDefinition=validateCustomReportDefinition(report.definition||{});
+      if(reportDefinition.format==="joined")return res.status(400).json({success:false,message:"Joined reports do not support subscriptions"});
+      if(reportDefinition.historicalTrend?.enabled===true)return res.status(400).json({success:false,message:"Historical trend reports do not support subscriptions"});
       const definition=normalizeSubscription(req.body);
       const result=await db("INSERT INTO report_subscriptions(company_id,report_id,user_id,definition,active) VALUES($1,$2,$3,$4::jsonb,$5) RETURNING *",[req.user.companyId,req.params.id,req.user.id,JSON.stringify(definition),definition.active]);
       res.status(201).json({success:true,data:result.rows[0]});
