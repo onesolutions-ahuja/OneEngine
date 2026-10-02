@@ -144,15 +144,20 @@ export default function createProviderOAuthRouter({ authenticate, authorize, db,
         : String(process.env.SHOPIFY_OAUTH_SCOPES || "read_products,write_products,read_inventory,write_inventory,read_orders,read_customers,write_fulfillments,read_locations,write_webhooks")
           .split(",").map((scope) => scope.trim()).filter(Boolean);
       const governance=await connectedAppDecision(db,{
-        companyId:connection.company_id,appKey:provider,connectionId:connection.id,requestedScopes,
+        companyId:connection.company_id,appKey:provider,connectionId:connection.id,userId:req.user.id,requestedScopes,grantType:"authorization_code",
       });
       if(!governance.allowed){
         await writeAudit?.(connection.company_id,req.user.id,"security.connected_app_blocked","integration_connection",connection.id,{
           provider,reason:governance.reason,missingScopes:governance.missingScopes||[],
         });
-        return res.status(403).json({success:false,code:governance.reason,message:governance.reason==="OAUTH_SCOPE_NOT_APPROVED"
+        const message=governance.reason==="OAUTH_SCOPE_NOT_APPROVED"
           ?"Requested OAuth scopes are not approved by Security Governance"
-          :"This connected app is not approved by Security Governance"});
+          :governance.reason==="CONNECTED_APP_USER_NOT_APPROVED"
+            ?"Your user is not approved for this connected app"
+            :governance.reason==="OAUTH_GRANT_NOT_APPROVED"
+              ?"The OAuth authorization-code grant is not approved by Security Governance"
+              :"This connected app is not approved by Security Governance";
+        return res.status(403).json({success:false,code:governance.reason,message});
       }
 
       let authorizationUrl;
