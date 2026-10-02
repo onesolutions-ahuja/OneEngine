@@ -29,6 +29,7 @@ function activeOptions(field) {
 export default function RecordTypeEditor({ object, fields = [] }) {
   const [types, setTypes] = useState([]);
   const [editing, setEditing] = useState(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [cloneSourceId, setCloneSourceId] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
   const [picklistRestrictions, setPicklistRestrictions] = useState({});
@@ -47,6 +48,7 @@ export default function RecordTypeEditor({ object, fields = [] }) {
 
   useEffect(() => {
     setEditing(null);
+    setEditorOpen(false);
     setCloneSourceId("");
     setForm(EMPTY_FORM);
     setPicklistRestrictions({});
@@ -63,6 +65,7 @@ export default function RecordTypeEditor({ object, fields = [] }) {
 
   function openEdit(type) {
     setEditing(type);
+    setEditorOpen(true);
     setCloneSourceId("");
     setForm({
       label: type.label || "",
@@ -79,6 +82,7 @@ export default function RecordTypeEditor({ object, fields = [] }) {
   function cloneFrom(type) {
     if (!type) return resetEditor();
     setEditing(null);
+    setEditorOpen(true);
     setCloneSourceId(type.id);
     setForm({
       label: `${type.label || "Record Type"} Copy`,
@@ -157,7 +161,7 @@ export default function RecordTypeEditor({ object, fields = [] }) {
     }
   }
 
-  const showEditor = Boolean(editing || cloneSourceId || form.label || !types.length);
+  const showEditor = editorOpen || !types.length;
 
   return (
     <section className="platform-editor-card platform-record-types">
@@ -166,7 +170,7 @@ export default function RecordTypeEditor({ object, fields = [] }) {
           <h2>Record Types</h2>
           <p>Control record categories, defaults, picklist availability, and the record-type context used by page-layout assignments.</p>
         </div>
-        <button type="button" className="platform-primary-button" onClick={() => { resetEditor(); setForm({ ...EMPTY_FORM }); }}>
+        <button type="button" className="platform-primary-button" onClick={() => { resetEditor(); setEditorOpen(true); setForm({ ...EMPTY_FORM }); }}>
           <Plus size={13}/> New Record Type
         </button>
       </div>
