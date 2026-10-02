@@ -70,7 +70,8 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
   router.get("/security/governance/connected-apps",...manage,async(req,res)=>{
     const r=await db(`SELECT COALESCE(p.id,c.id) AS id,LOWER(COALESCE(p.app_key,c.provider_name)) AS app_key,
       COALESCE(p.display_name,c.name,c.provider_name) AS display_name,c.id AS integration_connection_id,c.provider_name,c.connection_status,c.enabled AS connection_enabled,
-      p.active,p.permitted_user_mode,p.allowed_scopes,p.refresh_token_days,p.ip_policy,p.require_high_assurance,p.revoke_on_policy_change,p.updated_at
+      p.active,p.permitted_user_mode,p.allowed_scopes,p.refresh_token_days,p.ip_policy,p.require_high_assurance,p.revoke_on_policy_change,p.updated_at,
+      (SELECT COUNT(*)::int FROM security_connected_app_user_assignments a WHERE a.connected_app_policy_id=p.id AND a.active=TRUE) AS approved_user_count
       FROM integration_connections c
       FULL OUTER JOIN security_connected_app_policies p ON p.company_id=c.company_id AND (p.integration_connection_id=c.id OR (p.integration_connection_id IS NULL AND LOWER(p.app_key)=LOWER(c.provider_name)))
       WHERE COALESCE(p.company_id,c.company_id)=$1 ORDER BY display_name`,[req.user.companyId]);
@@ -104,6 +105,38 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
       ]);
     await audit(req,"security.connected_app_policy_saved","security_connected_app_policy",r.rows[0].id,{appKey});
     res.json({success:true,data:r.rows[0]});
+  });
+
+  router.get("/security/governance/connected-apps/:appKey/users",...manage,async(req,res)=>{
+    const policy=(await db("SELECT id FROM security_connected_app_policies WHERE company_id=$1 AND app_key=$2 LIMIT 1",[req.user.companyId,String(req.params.appKey||"").toLowerCase()])).rows[0];
+    if(!policy)return res.status(404).json({success:false,message:"Connected-app policy not found"});
+    const r=await db(`SELECT u.id,u.username,u.full_name,u.email,
+      EXISTS(SELECT 1 FROM security_connected_app_user_assignments a
+        WHERE a.company_id=u.company_id AND a.connected_app_policy_id=$2 AND a.user_id=u.id AND a.active=TRUE) AS approved
+      FROM users u WHERE u.company_id=$1 AND u.active=TRUE ORDER BY u.full_name,u.username`,[req.user.companyId,policy.id]);
+    res.json({success:true,data:r.rows});
+  });
+
+  router.post("/security/governance/connected-apps/:appKey/users/:userId",...manage,requireGovernanceAssurance,async(req,res)=>{
+    const policy=(await db("SELECT id FROM security_connected_app_policies WHERE company_id=$1 AND app_key=$2 LIMIT 1",[req.user.companyId,String(req.params.appKey||"").toLowerCase()])).rows[0];
+    if(!policy)return res.status(404).json({success:false,message:"Connected-app policy not found"});
+    const user=(await db("SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE",[req.params.userId,req.user.companyId])).rows[0];
+    if(!user)return res.status(404).json({success:false,message:"Active company user not found"});
+    const r=await db(`INSERT INTO security_connected_app_user_assignments(company_id,connected_app_policy_id,user_id,assigned_by)
+      VALUES($1,$2,$3,$4)
+      ON CONFLICT(company_id,connected_app_policy_id,user_id) DO UPDATE SET active=TRUE,assigned_by=EXCLUDED.assigned_by,updated_at=NOW()
+      RETURNING *`,[req.user.companyId,policy.id,user.id,req.user.id]);
+    await audit(req,"security.connected_app_user_approved","security_connected_app_policy",policy.id,{userId:user.id});
+    res.status(201).json({success:true,data:r.rows[0]});
+  });
+
+  router.delete("/security/governance/connected-apps/:appKey/users/:userId",...manage,requireGovernanceAssurance,async(req,res)=>{
+    const policy=(await db("SELECT id FROM security_connected_app_policies WHERE company_id=$1 AND app_key=$2 LIMIT 1",[req.user.companyId,String(req.params.appKey||"").toLowerCase()])).rows[0];
+    if(!policy)return res.status(404).json({success:false,message:"Connected-app policy not found"});
+    await db(`UPDATE security_connected_app_user_assignments SET active=FALSE,updated_at=NOW()
+      WHERE company_id=$1 AND connected_app_policy_id=$2 AND user_id=$3`,[req.user.companyId,policy.id,req.params.userId]);
+    await audit(req,"security.connected_app_user_revoked","security_connected_app_policy",policy.id,{userId:req.params.userId});
+    res.json({success:true});
   });
 
   router.get("/security/governance/vault",...vaultManage,async(req,res)=>{
