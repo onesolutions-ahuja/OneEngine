@@ -1,14 +1,15 @@
 import express from "express";
 import crypto from "node:crypto";
 import {
-  assuranceSatisfies, consumeChallenge, consumeRecoveryCode, createPendingChallenge,
-  effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, newDeviceToken,
-  replaceRecoveryCodes, startTotpEnrollment, stepUpRequired, trustDevice, verifyTotpMethod,
+  activeTemporaryVerificationCode, assuranceSatisfies, consumeChallenge, consumeRecoveryCode, createPendingChallenge,
+  effectiveStepUpPolicy, findTrustedDevice, generateTemporaryVerificationCode, getPendingChallenge, listMfaMethods,
+  loadEffectiveAssurance, mfaMethodAllowed, newDeviceToken, replaceRecoveryCodes, startTotpEnrollment,
+  stepUpRequired, trustDevice, verifyTemporaryVerificationCode, verifyTotpMethod,
 } from "../services/identityAssurance.js";
 import { clientIp, createTrackedSession, writeLoginHistory } from "../services/identitySecurity.js";
 
 function publicMethod(row){
-  return {id:row.id,type:row.method_type,label:row.label||row.method_type,phishingResistant:row.phishing_resistant===true,lastUsedAt:row.last_used_at||null};
+  return {id:row.id,type:row.method_type,label:row.label||row.method_type,authenticatorKind:row.authenticator_kind||null,phishingResistant:row.phishing_resistant===true,lastUsedAt:row.last_used_at||null};
 }
 function safeProvider(row){
   const cfg=row?.configuration&&typeof row.configuration==="object"?row.configuration:{};
@@ -48,7 +49,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   }
 
   async function pendingUser(challengeId,types=["LOGIN","STEP_UP","PASSKEY_REGISTRATION","PASSKEY_AUTHENTICATION"]){
-    const challenge=await import("../services/identityAssurance.js").then(m=>m.getPendingChallenge(db,challengeId,{types}));
+    const challenge=await getPendingChallenge(db,challengeId,{types});
     if(!challenge)return {challenge:null,user:null};
     const r=await db(`SELECT u.*,r.name role_name,COALESCE(r.default_landing_page,'dashboard') default_landing_page
       FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.id=$1 AND u.company_id=$2 AND u.active=TRUE LIMIT 1`,[challenge.user_id,challenge.company_id]);
@@ -95,14 +96,20 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       totpAssurance:level("totpAssurance","totp_assurance"),
       passkeyAssurance:level("passkeyAssurance","passkey_assurance"),
       ssoAssurance:level("ssoAssurance","sso_assurance"),
+      allowTotp:b.allowTotp===undefined?current.allow_totp:b.allowTotp!==false,
+      allowPlatformPasskeys:b.allowPlatformPasskeys===undefined?current.allow_platform_passkeys:b.allowPlatformPasskeys!==false,
+      allowSecurityKeys:b.allowSecurityKeys===undefined?current.allow_security_keys:b.allowSecurityKeys!==false,
+      allowRecoveryCodes:b.allowRecoveryCodes===undefined?current.allow_recovery_codes:b.allowRecoveryCodes!==false,
     };
     if(values.phishingResistant && values.passkeyAssurance!=="HIGH")return res.status(400).json({success:false,message:"Passkey authentication must be High Assurance when phishing-resistant MFA is required."});
     const r=await db(`UPDATE identity_security_settings SET mfa_required=$1,phishing_resistant_mfa_required=$2,trust_sso_mfa=$3,
       trusted_device_days=$4,device_activation_required=$5,skip_device_activation_on_trusted_network=$6,
       step_up_period_minutes=$7,required_login_assurance=$8,password_assurance=$9,totp_assurance=$10,
-      passkey_assurance=$11,sso_assurance=$12,updated_by=$13,updated_at=NOW() WHERE company_id=$14 RETURNING *`,
+      passkey_assurance=$11,sso_assurance=$12,allow_totp=$13,allow_platform_passkeys=$14,allow_security_keys=$15,allow_recovery_codes=$16,
+      updated_by=$17,updated_at=NOW() WHERE company_id=$18 RETURNING *`,
       [values.mfaRequired,values.phishingResistant,values.trustSsoMfa,values.trustedDeviceDays,values.deviceActivationRequired,values.skipDeviceActivationOnTrustedNetwork,
-       values.stepUpPeriodMinutes,values.requiredLoginAssurance,values.passwordAssurance,values.totpAssurance,values.passkeyAssurance,values.ssoAssurance,req.user.id,req.user.companyId]);
+       values.stepUpPeriodMinutes,values.requiredLoginAssurance,values.passwordAssurance,values.totpAssurance,values.passkeyAssurance,values.ssoAssurance,
+       values.allowTotp,values.allowPlatformPasskeys,values.allowSecurityKeys,values.allowRecoveryCodes,req.user.id,req.user.companyId]);
     await writeAudit?.(req.user.companyId,req.user.id,"security.assurance_updated","identity_security_settings",req.user.companyId,values);
     res.json({success:true,data:r.rows[0]});
   });
@@ -116,13 +123,20 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(!challenge||!user)return res.status(404).json({success:false,message:"Verification challenge is invalid or expired"});
     const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
     const methods=await listMfaMethods(db,{companyId:user.company_id,userId:user.id});
-    const usable=methods.filter((method)=>!policy.effective.phishingResistantRequired||method.phishing_resistant===true);
+    const usable=methods.filter((method)=>mfaMethodAllowed(method,policy.effective))
+      .filter((method)=>!policy.effective.phishingResistantRequired||method.phishing_resistant===true);
+    const temporaryCode=!challenge.context?.activationOnly&&!policy.effective.phishingResistantRequired
+      ? await activeTemporaryVerificationCode(db,{companyId:user.company_id,userId:user.id}) : null;
+    const availableMethods=[
+      ...usable.map(publicMethod),
+      ...(temporaryCode?[{id:temporaryCode.id,type:"TEMPORARY_CODE",label:"Temporary Verification Code",phishingResistant:false,expiresAt:temporaryCode.expires_at}]:[]),
+    ];
     res.json({success:true,data:{
       challengeId:challenge.id,
       challengeType:challenge.challenge_type,
-      enrollmentRequired:usable.length===0,
+      enrollmentRequired:usable.length===0 && !temporaryCode,
       phishingResistantRequired:policy.effective.phishingResistantRequired===true,
-      availableMethods:usable.map(publicMethod),
+      availableMethods,
       user:{id:user.id,name:user.full_name,username:user.username},
     }});
   });
@@ -130,8 +144,10 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   router.post("/auth/mfa/totp/start",async(req,res)=>{
     const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
+    const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    if(!policy.effective.allowTotp)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Authenticator apps are disabled by security policy"});
     const enrolled=await listMfaMethods(db,{companyId:user.company_id,userId:user.id});
-    if(enrolled.length)return res.status(409).json({success:false,message:"An MFA method is already enrolled. Verify an existing method."});
+    if(enrolled.some((method)=>method.method_type==="TOTP"))return res.status(409).json({success:false,message:"An authenticator app is already enrolled."});
     const method=await startTotpEnrollment(db,{companyId:user.company_id,userId:user.id,email:user.email||user.username,label:req.body?.label||"Authenticator"});
     res.json({success:true,data:method});
   });
@@ -155,8 +171,13 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code});
       assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.totpAssurance;
     }else if(methodType==="RECOVERY_CODE"){
-      ok=await consumeRecoveryCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
-      assurance="HIGH";
+      const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+      if(policy.effective.allowRecoveryCodes)ok=await consumeRecoveryCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
+      assurance="STANDARD";
+    }else if(methodType==="TEMPORARY_CODE"){
+      if(challenge.context?.activationOnly)return res.status(403).json({success:false,code:"TEMP_CODE_NOT_VALID_FOR_DEVICE_ACTIVATION",message:"Temporary verification codes can satisfy MFA but cannot activate a new device"});
+      ok=await verifyTemporaryVerificationCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
+      assurance="STANDARD";
     }
     if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
     if(challenge.challenge_type==="STEP_UP"){
@@ -172,16 +193,20 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   router.post("/auth/mfa/passkey/registration-options",async(req,res)=>{
     const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
+    const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    const kind=String(req.body?.authenticatorKind||"PLATFORM").toUpperCase()==="SECURITY_KEY"?"SECURITY_KEY":"PLATFORM";
+    if(kind==="PLATFORM"&&!policy.effective.allowPlatformPasskeys)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Built-in passkeys are disabled by security policy"});
+    if(kind==="SECURITY_KEY"&&!policy.effective.allowSecurityKeys)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Physical security keys are disabled by security policy"});
     const {generateRegistrationOptions}=await import("@simplewebauthn/server");
     const existing=(await listMfaMethods(db,{companyId:user.company_id,userId:user.id,includeUnverified:true})).filter(x=>x.method_type==="PASSKEY"&&x.credential_id);
     const rpID=String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0].split(",")[0].trim();
     const options=await generateRegistrationOptions({
       rpName:"OneEngine",rpID,userName:user.email||user.username,userDisplayName:user.full_name||user.username,
       userID:new TextEncoder().encode(user.id),
-      attestationType:"none",authenticatorSelection:{residentKey:"preferred",userVerification:"preferred"},
+      attestationType:"none",authenticatorSelection:{authenticatorAttachment:kind==="PLATFORM"?"platform":"cross-platform",residentKey:"preferred",userVerification:"preferred"},
       excludeCredentials:existing.map(x=>({id:x.credential_id,transports:Array.isArray(x.transports)?x.transports:[]})),
     });
-    await db("UPDATE identity_mfa_challenges SET challenge=$2,context=context||$3::jsonb WHERE id=$1",[challenge.id,options.challenge,JSON.stringify({rpID})]);
+    await db("UPDATE identity_mfa_challenges SET challenge=$2,context=context||$3::jsonb WHERE id=$1",[challenge.id,options.challenge,JSON.stringify({rpID,authenticatorKind:kind})]);
     res.json({success:true,data:options});
   });
 
@@ -199,11 +224,12 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const cred=info.credential;
     const id=cred?.id||req.body?.credential?.id;
     const publicKey=Buffer.from(cred.publicKey).toString("base64url");
-    await db(`INSERT INTO identity_mfa_methods(company_id,user_id,method_type,label,credential_id,public_key,sign_count,transports,aaguid,discoverable,phishing_resistant,verified)
-      VALUES($1,$2,'PASSKEY',$3,$4,$5,$6,$7::jsonb,$8,$9,TRUE,TRUE)
+    await db(`INSERT INTO identity_mfa_methods(company_id,user_id,method_type,label,credential_id,public_key,sign_count,transports,aaguid,discoverable,authenticator_kind,phishing_resistant,verified)
+      VALUES($1,$2,'PASSKEY',$3,$4,$5,$6,$7::jsonb,$8,$9,$10,TRUE,TRUE)
       ON CONFLICT(user_id,method_type,label) DO UPDATE SET credential_id=EXCLUDED.credential_id,public_key=EXCLUDED.public_key,
-       sign_count=EXCLUDED.sign_count,transports=EXCLUDED.transports,aaguid=EXCLUDED.aaguid,discoverable=EXCLUDED.discoverable,verified=TRUE,active=TRUE`,
-      [user.company_id,user.id,String(req.body?.label||"Passkey"),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice"]);
+       sign_count=EXCLUDED.sign_count,transports=EXCLUDED.transports,aaguid=EXCLUDED.aaguid,discoverable=EXCLUDED.discoverable,
+       authenticator_kind=EXCLUDED.authenticator_kind,verified=TRUE,active=TRUE`,
+      [user.company_id,user.id,String(req.body?.label||(challenge.context?.authenticatorKind==="SECURITY_KEY"?"Security Key":"Built-in Passkey")),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice",challenge.context?.authenticatorKind||"PLATFORM"]);
     const recoveryCodes=await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
     const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.passkeyAssurance;
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
@@ -212,7 +238,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   router.post("/auth/mfa/passkey/options",async(req,res)=>{
     const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
-    const methods=(await listMfaMethods(db,{companyId:user.company_id,userId:user.id})).filter(x=>x.method_type==="PASSKEY");
+    const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    const methods=(await listMfaMethods(db,{companyId:user.company_id,userId:user.id}))
+      .filter(x=>x.method_type==="PASSKEY"&&mfaMethodAllowed(x,policy.effective));
     if(!methods.length)return res.status(409).json({success:false,message:"No passkey is enrolled"});
     const {generateAuthenticationOptions}=await import("@simplewebauthn/server");
     const rpID=String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0].split(",")[0].trim();
