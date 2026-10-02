@@ -117,6 +117,19 @@ function normalizeInitialValue(value, field) {
     return value;
   }
 
+  if (type === "multiselect") {
+    if (Array.isArray(value)) return value.map(String);
+    if (typeof value === "string" && value.trim()) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed.map(String);
+      } catch {
+        return value.split(/[;,]/).map((item) => item.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  }
+
   return value;
 }
 
@@ -757,6 +770,25 @@ export default function ObjectForm({
           </select>
         );
 
+        break;
+      }
+
+      case "multiselect": {
+        const options = getAvailableFieldOptions(field, values);
+        const selectedValues = Array.isArray(value) ? value.map(String) : [];
+        control = (
+          <select
+            {...commonProps}
+            multiple
+            size={Math.min(8, Math.max(3, options.length || 3))}
+            value={selectedValues}
+            onChange={(event) => updateValue(field, Array.from(event.target.selectedOptions).map((option) => option.value))}
+          >
+            {options.map((option) => (
+              <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
+            ))}
+          </select>
+        );
         break;
       }
 
