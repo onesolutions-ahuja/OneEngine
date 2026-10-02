@@ -1969,10 +1969,10 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     try {
       const result = await db(
         `INSERT INTO platform_list_views
-          (object_id,company_id,owner_user_id,visibility_scope,shared_role_ids,view_key,label,description,columns,filters,sort,page_size,is_default)
-         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13)
+          (object_id,company_id,owner_user_id,visibility_scope,shared_role_ids,view_key,label,description,columns,filters,filter_model,sort,page_size,is_default)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14)
          RETURNING *`,
-        [object.id, req.user.companyId, req.user.id, visibilityScope, JSON.stringify(sharedRoleIds), viewKey, req.body.label.trim(), req.body.description || null, JSON.stringify(columns), JSON.stringify(req.body.filters || {}), JSON.stringify(normalizeListViewSort(req.body.sort)), Number(req.body.pageSize || 50), req.body.isDefault === true]
+        [object.id, req.user.companyId, req.user.id, visibilityScope, JSON.stringify(sharedRoleIds), viewKey, req.body.label.trim(), req.body.description || null, JSON.stringify(columns), JSON.stringify(req.body.filters || {}), JSON.stringify(req.body.filterModel || {}), JSON.stringify(normalizeListViewSort(req.body.sort)), Number(req.body.pageSize || 50), req.body.isDefault === true]
       );
       if (req.body.pin === true) {
         await db(
@@ -2021,14 +2021,15 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
                 active=COALESCE($3,active),
                 columns=COALESCE($4::jsonb,columns),
                 filters=COALESCE($5::jsonb,filters),
-                sort=COALESCE($6::jsonb,sort),
-                page_size=COALESCE($7,page_size),
-                is_default=COALESCE($8,is_default),
-                visibility_scope=$9,
-                shared_role_ids=$10::jsonb,
+                filter_model=COALESCE($6::jsonb,filter_model),
+                sort=COALESCE($7::jsonb,sort),
+                page_size=COALESCE($8,page_size),
+                is_default=COALESCE($9,is_default),
+                visibility_scope=$10,
+                shared_role_ids=$11::jsonb,
                 user_modified=true,updated_at=NOW()
-          WHERE id=$11 RETURNING *`,
-        [req.body.label, req.body.description, req.body.active, req.body.columns === undefined ? null : JSON.stringify(columns), req.body.filters === undefined ? null : JSON.stringify(req.body.filters || {}), req.body.sort === undefined ? null : JSON.stringify(normalizeListViewSort(req.body.sort)), req.body.pageSize === undefined ? null : Number(req.body.pageSize), req.body.isDefault, visibilityScope, JSON.stringify(visibilityScope === "roles" ? sharedRoleIds : []), view.id]
+          WHERE id=$12 RETURNING *`,
+        [req.body.label, req.body.description, req.body.active, req.body.columns === undefined ? null : JSON.stringify(columns), req.body.filters === undefined ? null : JSON.stringify(req.body.filters || {}), req.body.filterModel === undefined ? null : JSON.stringify(req.body.filterModel || {}), req.body.sort === undefined ? null : JSON.stringify(normalizeListViewSort(req.body.sort)), req.body.pageSize === undefined ? null : Number(req.body.pageSize), req.body.isDefault, visibilityScope, JSON.stringify(visibilityScope === "roles" ? sharedRoleIds : []), view.id]
       );
       res.json({ success: true, data: { ...result.rows[0], can_edit: true, can_share: canManage } });
     } catch (error) {
@@ -6702,8 +6703,12 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const fieldByApiName = new Map(readableFields.map((field) => [field.api_name, field]));
       const filters = parseRecordFilters(req.query);
       if (!filters) return res.status(400).json({ success: false, message: "filter must be a JSON object" });
-      const filterModel = parseRecordFilterModel(req.query);
-      if (!filterModel) return res.status(400).json({ success: false, message: "filterModel must be a JSON object" });
+      const requestedFilterModel = parseRecordFilterModel(req.query);
+      if (!requestedFilterModel) return res.status(400).json({ success: false, message: "filterModel must be a JSON object" });
+      const filterModel = {
+        ...((listView?.filter_model && typeof listView.filter_model === "object" && !Array.isArray(listView.filter_model)) ? listView.filter_model : {}),
+        ...requestedFilterModel,
+      };
       const clauses = [];
       const params = [];
       if (object.company_scoped) {
