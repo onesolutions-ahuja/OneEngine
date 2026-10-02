@@ -739,6 +739,40 @@ export const platformSchema = `
   ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS managed BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS package_required BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE;
+  ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';
+  ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS active_version INTEGER;
+  ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS draft_version INTEGER;
+  ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS draft_definition JSONB;
+  ALTER TABLE platform_pages DROP CONSTRAINT IF EXISTS platform_pages_page_type_check;
+  ALTER TABLE platform_pages ADD CONSTRAINT platform_pages_page_type_check
+    CHECK (page_type IN ('page','dashboard','modal','object','list_view','report'));
+  UPDATE platform_pages
+     SET lifecycle_status=CASE WHEN active=true THEN 'ACTIVE' ELSE 'INACTIVE' END
+   WHERE lifecycle_status IS NULL OR lifecycle_status NOT IN ('DRAFT','ACTIVE','INACTIVE');
+  UPDATE platform_pages SET active_version=version WHERE active=true AND active_version IS NULL;
+  DO $ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname='platform_pages_lifecycle_status_check'
+    ) THEN
+      ALTER TABLE platform_pages
+        ADD CONSTRAINT platform_pages_lifecycle_status_check
+        CHECK (lifecycle_status IN ('DRAFT','ACTIVE','INACTIVE'));
+    END IF;
+  END $;
+  CREATE TABLE IF NOT EXISTS platform_page_versions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    page_id UUID NOT NULL REFERENCES platform_pages(id) ON DELETE CASCADE,
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    definition JSONB NOT NULL,
+    lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT'
+      CHECK (lifecycle_status IN ('DRAFT','ACTIVE','INACTIVE')),
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(page_id,version)
+  );
+  CREATE INDEX IF NOT EXISTS idx_platform_page_versions_page ON platform_page_versions(page_id,version DESC);
   CREATE TABLE IF NOT EXISTS platform_rules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     object_id UUID REFERENCES platform_objects(id) ON DELETE CASCADE,
