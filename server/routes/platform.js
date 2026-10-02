@@ -1908,62 +1908,173 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     if (!(await hasPlatformObjectPermission(db, req, object.id, "view"))) {
       return res.status(403).json({ success: false, message: "You do not have permission to view list views for this object" });
     }
+    const roleId = req.user.roleId ? String(req.user.roleId) : "";
     const result = await db(
-      "SELECT * FROM platform_list_views WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY is_default DESC,label",
-      [object.id, req.user.companyId]
+      `SELECT v.*,
+              CASE WHEN pref.list_view_id=v.id THEN true ELSE false END AS is_pinned
+         FROM platform_list_views v
+         LEFT JOIN platform_list_view_preferences pref
+           ON pref.company_id=$2 AND pref.user_id=$3 AND pref.object_id=v.object_id
+        WHERE v.object_id=$1
+          AND (v.company_id IS NULL OR v.company_id=$2)
+          AND v.active=true
+          AND (
+            v.visibility_scope='company'
+            OR v.owner_user_id=$3
+            OR (v.visibility_scope='roles' AND v.shared_role_ids ? $4)
+          )
+        ORDER BY CASE WHEN pref.list_view_id=v.id THEN 0 ELSE 1 END,
+                 CASE WHEN v.owner_user_id=$3 THEN 0 ELSE 1 END,
+                 v.is_default DESC,v.label`,
+      [object.id, req.user.companyId, req.user.id, roleId]
     );
-    res.json({ success: true, data: result.rows });
+    const canManage = await canManageGlobal(db, req);
+    res.json({
+      success: true,
+      data: result.rows.map((view) => ({
+        ...view,
+        can_edit: String(view.owner_user_id || "") === String(req.user.id) || canManage,
+        can_share: canManage,
+      })),
+    });
   });
 
-  router.post("/platform/objects/:objectId/list-views", ...manage, async (req, res) => {
-    const object = await getObject(req.params.objectId, req, { forMutation: true });
-    if (!object) return res.status(404).json({ success: false, message: "Object not found or not editable" });
+  router.post("/platform/objects/:objectId/list-views", authenticate, async (req, res) => {
+    const object = await getObject(req.params.objectId, req);
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    if (!(await hasPlatformObjectPermission(db, req, object.id, "view"))) {
+      return res.status(403).json({ success: false, message: "You do not have permission to create a list view for this object" });
+    }
     const fields = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order", [object.id, req.user.companyId]);
     const validFields = new Set(fields.rows.map((field) => field.api_name));
     const columns = Array.isArray(req.body?.columns) ? req.body.columns.filter((column) => typeof column === "string" && validFields.has(column)) : [];
     if (!req.body || typeof req.body.label !== "string" || !req.body.label.trim() || !columns.length) {
       return res.status(400).json({ success: false, message: "A label and at least one valid column are required" });
     }
-    const viewKey = req.body.viewKey || toSafeApiName(req.body.label, "list_view");
+    const canManage = await canManageGlobal(db, req);
+    const requestedScope = ["private","company","roles"].includes(req.body.visibilityScope) ? req.body.visibilityScope : "private";
+    const visibilityScope = canManage ? requestedScope : "private";
+    let sharedRoleIds = [];
+    if (visibilityScope === "roles") {
+      const requestedRoles = Array.isArray(req.body.sharedRoleIds) ? [...new Set(req.body.sharedRoleIds.map(String))].slice(0, 100) : [];
+      if (!requestedRoles.length) return res.status(400).json({ success: false, message: "Select at least one role for a role-shared list view" });
+      const validRoles = await db("SELECT id::text AS id FROM roles WHERE company_id=$1 AND id::text = ANY($2::text[])", [req.user.companyId, requestedRoles]);
+      sharedRoleIds = validRoles.rows.map((row) => row.id);
+      if (sharedRoleIds.length !== requestedRoles.length) return res.status(400).json({ success: false, message: "One or more shared roles are not available" });
+    }
+    const baseKey = req.body.viewKey || toSafeApiName(req.body.label, "list_view");
+    const userSuffix = String(req.user.id || "").replace(/-/g, "").slice(0, 10);
+    const viewKey = visibilityScope === "private" ? `${baseKey}_${userSuffix}` : baseKey;
+    if (!isSafeIdentifier(viewKey)) return res.status(400).json({ success: false, message: "List view key is invalid" });
     try {
       const result = await db(
-        "INSERT INTO platform_list_views (object_id,company_id,view_key,label,description,columns,filters,sort,page_size,is_default) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10) RETURNING *",
-        [object.id, req.user.companyId, viewKey, req.body.label.trim(), req.body.description || null, JSON.stringify(columns), JSON.stringify(req.body.filters || {}), JSON.stringify(normalizeListViewSort(req.body.sort)), Number(req.body.pageSize || 50), req.body.isDefault === true]
+        `INSERT INTO platform_list_views
+          (object_id,company_id,owner_user_id,visibility_scope,shared_role_ids,view_key,label,description,columns,filters,sort,page_size,is_default)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13)
+         RETURNING *`,
+        [object.id, req.user.companyId, req.user.id, visibilityScope, JSON.stringify(sharedRoleIds), viewKey, req.body.label.trim(), req.body.description || null, JSON.stringify(columns), JSON.stringify(req.body.filters || {}), JSON.stringify(normalizeListViewSort(req.body.sort)), Number(req.body.pageSize || 50), req.body.isDefault === true]
       );
-      res.status(201).json({ success: true, data: result.rows[0] });
+      if (req.body.pin === true) {
+        await db(
+          `INSERT INTO platform_list_view_preferences (company_id,user_id,object_id,list_view_id,updated_at)
+           VALUES ($1,$2,$3,$4,NOW())
+           ON CONFLICT (company_id,user_id,object_id)
+           DO UPDATE SET list_view_id=EXCLUDED.list_view_id,updated_at=NOW()`,
+          [req.user.companyId, req.user.id, object.id, result.rows[0].id]
+        );
+      }
+      res.status(201).json({ success: true, data: { ...result.rows[0], can_edit: true, can_share: canManage, is_pinned: req.body.pin === true } });
     } catch (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, message: "A list view with this key already exists" });
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "A list view with this name/key already exists" });
       console.error("Platform list view create error:", error);
       res.status(500).json({ success: false, message: "Unable to create list view" });
     }
   });
 
-  router.put("/platform/list-views/:listViewId", ...manage, async (req, res) => {
+  router.put("/platform/list-views/:listViewId", authenticate, async (req, res) => {
     const existing = await db("SELECT * FROM platform_list_views WHERE id=$1 AND company_id=$2", [req.params.listViewId, req.user.companyId]);
     const view = existing.rows[0];
-    if (!view) return res.status(404).json({ success: false, message: "List view not found or not editable" });
+    if (!view) return res.status(404).json({ success: false, message: "List view not found" });
+    const canManage = await canManageGlobal(db, req);
+    const isOwner = String(view.owner_user_id || "") === String(req.user.id);
+    if (!isOwner && !canManage) return res.status(403).json({ success: false, message: "You cannot edit this list view" });
     const fields = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order", [view.object_id, req.user.companyId]);
     const validFields = new Set(fields.rows.map((field) => field.api_name));
     const columns = req.body.columns === undefined ? view.columns : (Array.isArray(req.body.columns) ? req.body.columns.filter((column) => typeof column === "string" && validFields.has(column)) : []);
     if (req.body.columns !== undefined && !columns.length) return res.status(400).json({ success: false, message: "List view columns must include at least one valid field" });
-    if (req.body.viewKey !== undefined && !isSafeIdentifier(req.body.viewKey)) return res.status(400).json({ success: false, message: "viewKey must be a safe identifier" });
+    const requestedScope = ["private","company","roles"].includes(req.body.visibilityScope) ? req.body.visibilityScope : view.visibility_scope;
+    const visibilityScope = canManage ? requestedScope : "private";
+    let sharedRoleIds = Array.isArray(view.shared_role_ids) ? view.shared_role_ids : [];
+    if (visibilityScope === "roles" && req.body.sharedRoleIds !== undefined) {
+      const requestedRoles = Array.isArray(req.body.sharedRoleIds) ? [...new Set(req.body.sharedRoleIds.map(String))].slice(0, 100) : [];
+      const validRoles = requestedRoles.length
+        ? await db("SELECT id::text AS id FROM roles WHERE company_id=$1 AND id::text = ANY($2::text[])", [req.user.companyId, requestedRoles])
+        : { rows: [] };
+      sharedRoleIds = validRoles.rows.map((row) => row.id);
+      if (!sharedRoleIds.length) return res.status(400).json({ success: false, message: "Select at least one valid role" });
+    }
     try {
       const result = await db(
-        "UPDATE platform_list_views SET view_key=COALESCE($1,view_key), label=COALESCE($2,label), description=COALESCE($3,description), active=COALESCE($4,active), columns=COALESCE($5::jsonb,columns), filters=COALESCE($6::jsonb,filters), sort=COALESCE($7::jsonb,sort), page_size=COALESCE($8,page_size), is_default=COALESCE($9,is_default), user_modified=true,updated_at=NOW() WHERE id=$10 RETURNING *",
-        [req.body.viewKey, req.body.label, req.body.description, req.body.active, req.body.columns === undefined ? null : JSON.stringify(columns), req.body.filters === undefined ? null : JSON.stringify(req.body.filters || {}), req.body.sort === undefined ? null : JSON.stringify(normalizeListViewSort(req.body.sort)), req.body.pageSize === undefined ? null : Number(req.body.pageSize), req.body.isDefault, view.id]
+        `UPDATE platform_list_views
+            SET label=COALESCE($1,label),
+                description=COALESCE($2,description),
+                active=COALESCE($3,active),
+                columns=COALESCE($4::jsonb,columns),
+                filters=COALESCE($5::jsonb,filters),
+                sort=COALESCE($6::jsonb,sort),
+                page_size=COALESCE($7,page_size),
+                is_default=COALESCE($8,is_default),
+                visibility_scope=$9,
+                shared_role_ids=$10::jsonb,
+                user_modified=true,updated_at=NOW()
+          WHERE id=$11 RETURNING *`,
+        [req.body.label, req.body.description, req.body.active, req.body.columns === undefined ? null : JSON.stringify(columns), req.body.filters === undefined ? null : JSON.stringify(req.body.filters || {}), req.body.sort === undefined ? null : JSON.stringify(normalizeListViewSort(req.body.sort)), req.body.pageSize === undefined ? null : Number(req.body.pageSize), req.body.isDefault, visibilityScope, JSON.stringify(visibilityScope === "roles" ? sharedRoleIds : []), view.id]
       );
-      res.json({ success: true, data: result.rows[0] });
+      res.json({ success: true, data: { ...result.rows[0], can_edit: true, can_share: canManage } });
     } catch (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, message: "A list view with this key already exists" });
       console.error("Platform list view update error:", error);
       res.status(500).json({ success: false, message: "Unable to update list view" });
     }
   });
 
-  router.delete("/platform/list-views/:listViewId", ...manage, async (req, res) => {
-    const result = await db("UPDATE platform_list_views SET active=false,user_modified=true WHERE id=$1 AND company_id=$2 RETURNING *", [req.params.listViewId, req.user.companyId]);
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "List view not found or not editable" });
+  router.delete("/platform/list-views/:listViewId", authenticate, async (req, res) => {
+    const existing = await db("SELECT * FROM platform_list_views WHERE id=$1 AND company_id=$2", [req.params.listViewId, req.user.companyId]);
+    const view = existing.rows[0];
+    if (!view) return res.status(404).json({ success: false, message: "List view not found" });
+    const canManage = await canManageGlobal(db, req);
+    const isOwner = String(view.owner_user_id || "") === String(req.user.id);
+    if (!isOwner && !canManage) return res.status(403).json({ success: false, message: "You cannot delete this list view" });
+    const result = await db("UPDATE platform_list_views SET active=false,user_modified=true WHERE id=$1 RETURNING *", [view.id]);
+    await db("UPDATE platform_list_view_preferences SET list_view_id=NULL,updated_at=NOW() WHERE list_view_id=$1", [view.id]);
     res.json({ success: true, data: result.rows[0] });
+  });
+
+  router.put("/platform/objects/:objectId/list-view-preference", authenticate, async (req, res) => {
+    const object = await getObject(req.params.objectId, req);
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    if (!(await hasPlatformObjectPermission(db, req, object.id, "view"))) {
+      return res.status(403).json({ success: false, message: "You do not have permission to view records for this object" });
+    }
+    const listViewId = req.body?.listViewId || null;
+    if (listViewId) {
+      const roleId = req.user.roleId ? String(req.user.roleId) : "";
+      const visible = await db(
+        `SELECT id FROM platform_list_views
+          WHERE id=$1 AND object_id=$2 AND active=true
+            AND (company_id IS NULL OR company_id=$3)
+            AND (visibility_scope='company' OR owner_user_id=$4 OR (visibility_scope='roles' AND shared_role_ids ? $5))`,
+        [listViewId, object.id, req.user.companyId, req.user.id, roleId]
+      );
+      if (!visible.rows.length) return res.status(404).json({ success: false, message: "List view is not available" });
+    }
+    await db(
+      `INSERT INTO platform_list_view_preferences (company_id,user_id,object_id,list_view_id,updated_at)
+       VALUES ($1,$2,$3,$4,NOW())
+       ON CONFLICT (company_id,user_id,object_id)
+       DO UPDATE SET list_view_id=EXCLUDED.list_view_id,updated_at=NOW()`,
+      [req.user.companyId, req.user.id, object.id, listViewId]
+    );
+    res.json({ success: true, data: { objectId: object.id, listViewId } });
   });
 
   router.get("/platform/objects/:objectKey/reports", authenticate, async (req, res) => {
@@ -6574,7 +6685,13 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const fields = await applyFieldSecurity(db, safeFields, req);
       const calculate = compileFormulas(safeFields);
       const readableFields = fields.filter((field) => field.readable !== false && field.field_type !== "formula" && field.field_type !== "rollup" && isSafeIdentifier(field.api_name) && Boolean(platformFieldSql(field, object)));
-      const listView = req.query.listViewId ? (await db("SELECT * FROM platform_list_views WHERE id=$1 AND object_id=$2 AND company_id=$3 AND active=true", [req.query.listViewId, object.id, req.user.companyId])).rows[0] || null : null;
+      const listView = req.query.listViewId ? (await db(
+        `SELECT * FROM platform_list_views
+          WHERE id=$1 AND object_id=$2 AND active=true
+            AND (company_id IS NULL OR company_id=$3)
+            AND (visibility_scope='company' OR owner_user_id=$4 OR (visibility_scope='roles' AND shared_role_ids ? $5))`,
+        [req.query.listViewId, object.id, req.user.companyId, req.user.id, req.user.roleId ? String(req.user.roleId) : ""]
+      )).rows[0] || null : null;
       const configuredColumns = listView && Array.isArray(listView.columns) ? listView.columns : null;
       // A List View controls presentation, filtering, sorting and page size.
       // It must not truncate the record payload: selecting a row still needs
