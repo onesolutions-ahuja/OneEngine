@@ -233,11 +233,22 @@ export default function ObjectPage({
   const [selectedRowIds, setSelectedRowIds] = useState([]);
   const [runtimeSort, setRuntimeSort] = useState({ key: "", direction: "asc" });
   const [runtimeFilters, setRuntimeFilters] = useState({});
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState([]);
+  const [listViewDialog, setListViewDialog] = useState(null);
   const [displayMode, setDisplayMode] = useState("split");
   const activeFields = useMemo(
     () => fields.filter((field) => field?.active !== false && !isTechnicalRecordField(field)),
     [fields]
   );
+  const activeListView = useMemo(
+    () => listViews.find((view) => String(view.id) === String(activeListViewId)) || null,
+    [listViews, activeListViewId]
+  );
+  const displayedListFields = useMemo(() => {
+    const byKey = new Map(activeFields.map((field) => [getFieldKey(field), field]));
+    const keys = visibleColumnKeys.length ? visibleColumnKeys : activeFields.map(getFieldKey);
+    return keys.map((key) => byKey.get(key)).filter(Boolean);
+  }, [activeFields, visibleColumnKeys]);
   /* Every Platform Object uses the same metadata record command surface.
      A pre-supplied fields list marks the self-service READ-ONLY profile view:
      the shell opened one specific record (the signed-in user's own), so the
@@ -257,6 +268,27 @@ export default function ObjectPage({
       loadObject();
     }
   }, [resolvedObjectKey, suppliedObject]);
+
+  useEffect(() => {
+    if (!activeFields.length) {
+      setVisibleColumnKeys([]);
+      return;
+    }
+    const valid = new Set(activeFields.map(getFieldKey));
+    const configured = Array.isArray(activeListView?.columns)
+      ? activeListView.columns.filter((key) => valid.has(key))
+      : [];
+    setVisibleColumnKeys(configured.length ? configured : activeFields.map(getFieldKey));
+    setRuntimeSort({
+      key: activeListView?.sort?.field || "",
+      direction: activeListView?.sort?.direction === "desc" ? "desc" : "asc",
+    });
+    setRuntimeFilters(
+      activeListView?.filter_model && typeof activeListView.filter_model === "object"
+        ? activeListView.filter_model
+        : {}
+    );
+  }, [activeListViewId, listViews, activeFields]);
 
   useEffect(() => {
     if (objectMetadata) {
@@ -422,9 +454,83 @@ export default function ObjectPage({
       const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectId)}/list-views`);
       const views = Array.isArray(response?.data) ? response.data : [];
       setListViews(views);
-      setActiveListViewId((current) => current || views.find((view) => view.is_default)?.id || views[0]?.id || "");
+      setActiveListViewId((current) => current || views.find((view) => view.is_pinned)?.id || views.find((view) => view.is_default)?.id || views[0]?.id || "");
     } catch {
       setListViews([]);
+    }
+  }
+
+  async function persistListView(mode = "create", draft = null) {
+    const objectId = objectMetadata?.id || objectMetadata?.object_id;
+    if (!objectId) return;
+    const editing = mode === "edit" ? activeListView : null;
+    if (mode === "edit" && (!editing || editing.can_edit !== true)) {
+      setError("This list view is read-only.");
+      return;
+    }
+    const label = (draft?.label || editing?.label || "").trim();
+    if (!label) {
+      setError("Enter a list view name.");
+      return;
+    }
+    const columns = visibleColumnKeys.length ? visibleColumnKeys : activeFields.map(getFieldKey);
+    if (!columns.length) {
+      setError("Choose at least one column.");
+      return;
+    }
+    try {
+      const payload = {
+        label,
+        description: draft?.description ?? editing?.description ?? "",
+        columns,
+        filters: {},
+        filterModel: runtimeFilters || {},
+        sort: { field: runtimeSort?.key || null, direction: runtimeSort?.direction || "asc" },
+        pageSize,
+        ...(mode === "create" ? { visibilityScope: "private", pin: draft?.pin === true } : {}),
+      };
+      const response = await apiRequest(
+        mode === "edit"
+          ? `/api/platform/list-views/${encodeURIComponent(editing.id)}`
+          : `/api/platform/objects/${encodeURIComponent(objectId)}/list-views`,
+        { method: mode === "edit" ? "PUT" : "POST", body: JSON.stringify(payload) }
+      );
+      const saved = response?.data;
+      setListViewDialog(null);
+      await loadListViews();
+      if (saved?.id) setActiveListViewId(saved.id);
+      setError("");
+    } catch (err) {
+      setError(err?.message || "Unable to save list view.");
+    }
+  }
+
+  async function pinActiveListView() {
+    const objectId = objectMetadata?.id || objectMetadata?.object_id;
+    if (!objectId || !activeListView) return;
+    const unpin = activeListView.is_pinned === true;
+    try {
+      await apiRequest(`/api/platform/objects/${encodeURIComponent(objectId)}/list-view-preference`, {
+        method: "PUT",
+        body: JSON.stringify({ listViewId: unpin ? null : activeListView.id }),
+      });
+      await loadListViews();
+      setError("");
+    } catch (err) {
+      setError(err?.message || "Unable to update pinned list view.");
+    }
+  }
+
+  async function deleteActiveListView() {
+    if (!activeListView?.id || activeListView.can_edit !== true) return;
+    if (!window.confirm(`Delete list view "${activeListView.label}"?`)) return;
+    try {
+      await apiRequest(`/api/platform/list-views/${encodeURIComponent(activeListView.id)}`, { method: "DELETE" });
+      setActiveListViewId("");
+      await loadListViews();
+      setError("");
+    } catch (err) {
+      setError(err?.message || "Unable to delete list view.");
     }
   }
 
@@ -609,9 +715,7 @@ export default function ObjectPage({
         query.set("sortField", runtimeSort.key);
         query.set("sortDirection", runtimeSort.direction || "asc");
       }
-      if (runtimeFilters && Object.keys(runtimeFilters).length) {
-        query.set("filterModel", JSON.stringify(runtimeFilters));
-      }
+      query.set("filterModel", JSON.stringify(runtimeFilters || {}));
       const requestedPage = pageOverride || page || 1;
       query.set("page", String(requestedPage));
       if (!activeListViewId) query.set("pageSize", String(pageSize || 50));
@@ -802,9 +906,12 @@ export default function ObjectPage({
                   className="platform-list-view-select"
                   value={activeListViewId}
                   onChange={(event) => {
-                    setActiveListViewId(event.target.value);
-                    setRuntimeSort({ key: "", direction: "asc" });
-                    setRuntimeFilters({});
+                    const nextId = event.target.value;
+                    const nextView = listViews.find((view) => String(view.id) === String(nextId));
+                    setActiveListViewId(nextId);
+                    setRuntimeSort({ key: nextView?.sort?.field || "", direction: nextView?.sort?.direction === "desc" ? "desc" : "asc" });
+                    setRuntimeFilters(nextView?.filter_model && typeof nextView.filter_model === "object" ? nextView.filter_model : {});
+                    setVisibleColumnKeys(Array.isArray(nextView?.columns) && nextView.columns.length ? nextView.columns : activeFields.map(getFieldKey));
                     setPage(1);
                   }}
                   aria-label="Saved list view"
@@ -863,12 +970,7 @@ export default function ObjectPage({
                         title={objectLabel}
                         subtitle={() => activeListViewId ? (listViews.find((view) => String(view.id) === String(activeListViewId))?.description || "Saved list view") : "All records"}
                         rows={records}
-                        columns={(activeListViewId && listViews.find((view) => String(view.id) === String(activeListViewId))?.columns?.length
-                          ? listViews.find((view) => String(view.id) === String(activeListViewId)).columns
-                              .map((key) => activeFields.find((field) => getFieldKey(field) === key))
-                              .filter(Boolean)
-                          : activeFields
-                        ).map((field) => ({
+                        columns={displayedListFields.map((field) => ({
                           key: getFieldKey(field),
                           label: getFieldLabel(field),
                           render: (row) => formatRecordDisplayValue(getFieldValue(row, field), field),
@@ -911,6 +1013,8 @@ export default function ObjectPage({
                         onSortChange={(nextSort) => { setRuntimeSort(nextSort); setPage(1); }}
                         filterValue={runtimeFilters}
                         onFiltersChange={(nextFilters) => { setRuntimeFilters(nextFilters); setPage(1); }}
+                        columnOrderValue={visibleColumnKeys}
+                        onColumnOrderChange={setVisibleColumnKeys}
                       />
             
           )}
