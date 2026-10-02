@@ -3838,6 +3838,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         if (component?.visibilityResource) {
           next.visibilityInitialValue = resolveScreenResource(component.visibilityResource);
         }
+        if (component?.type === "DATA_TABLE" && component?.dataResource) {
+          const rows = resolveScreenResource(component.dataResource);
+          next.rows = Array.isArray(rows) ? rows : [];
+        }
         return next;
       });
       const stages = (Array.isArray(workflowVariables.variables?.__flowStages)
