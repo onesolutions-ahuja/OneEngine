@@ -3592,8 +3592,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, workflowVariables = {} }) => {
       if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
-      const stage = { label: String(action.stageLabel), value: action.stageValue ?? action.resourceName, order: Math.max(1, Number(action.stageOrder || 1)) };
+      const stage = { label: String(action.stageLabel), value: action.stageValue ?? action.resourceName, order: Math.max(1, Number(action.stageOrder || 1)), active: action.stageActive !== false };
       workflowVariables.variables[String(action.resourceName)] = stage;
+      const stages = Array.isArray(workflowVariables.variables.__flowStages) ? workflowVariables.variables.__flowStages : [];
+      workflowVariables.variables.__flowStages = [...stages.filter((item) => String(item?.value) !== String(stage.value)), stage].sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+      if (stage.active && !workflowVariables.variables.__flowCurrentStage) workflowVariables.variables.__flowCurrentStage = stage;
       return { status: "completed", resourceName: String(action.resourceName), resourceType: "stage", value: stage };
     },
   },
@@ -3837,12 +3840,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         return next;
       });
-      const stages = Object.values(workflowVariables.variables || {})
-        .filter((value) => value && typeof value === "object" && !Array.isArray(value) && Number.isFinite(Number(value.order)) && value.label)
+      const stages = (Array.isArray(workflowVariables.variables?.__flowStages)
+        ? workflowVariables.variables.__flowStages
+        : Object.values(workflowVariables.variables || {}).filter((value) => value && typeof value === "object" && !Array.isArray(value) && Number.isFinite(Number(value.order)) && value.label))
+        .filter((stage) => stage?.active !== false)
         .sort((a, b) => Number(a.order) - Number(b.order));
       const currentStage = rawScreen.currentStageResource
         ? resolveScreenResource(rawScreen.currentStageResource)
-        : null;
+        : workflowVariables.variables?.__flowCurrentStage || null;
+      if (currentStage) workflowVariables.variables.__flowCurrentStage = currentStage;
       const screen = {
         ...rawScreen,
         components,
