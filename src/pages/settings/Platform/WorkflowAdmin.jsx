@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
 import PlatformFieldPicker from "./PlatformFieldPicker.jsx";
-import MetadataResourcePicker from "./MetadataResourcePicker.jsx";
+import MetadataResourcePicker from "./MetadataResourcePicker.jsx";\nimport WorkflowReactFlowCanvas from "./WorkflowReactFlowCanvas.jsx";
 
 const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 shadow-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100";
 
@@ -7135,138 +7135,29 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             })}
           </div>
         ) : (
-        <div ref={laneRef} className="workflow-canvas-lane" style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top center" }}>
-          <button type="button" className="workflow-start-node" onClick={inspectStart} title="Configure when this flow starts">
-            <span className="workflow-start-icon">▶</span>
-            <span className="workflow-start-title">Start</span>
-            <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}{workflow.conditions?.length ? ` · ${workflow.conditions.length} condition${workflow.conditions.length === 1 ? "" : "s"}` : ""}{scheduledPathSteps.length ? ` · ${scheduledPathSteps.length} scheduled path${scheduledPathSteps.length === 1 ? "" : "s"}` : ""}</span>
-          </button>
-          {scheduledPathSteps.length ? (
-            <div className="workflow-branch-map workflow-start-paths" aria-label="Scheduled Paths">
-              {scheduledPathSteps.map(({ step: scheduledPath }) => renderOwnedPath({
-                ownerId: scheduledPath.id,
-                kind: "scheduled",
-                ids: scheduledPath.config?.branch || [],
-                label: scheduledPath.config?.pathLabel || "Scheduled Path",
-              }))}
-            </div>
-          ) : null}
-          <div className="workflow-node-connector">
-            {scheduledPathSteps.length ? <span className="workflow-connector-label">Run Immediately</span> : null}
-            <button type="button" className="workflow-insert-button" aria-label="Add element after Start" onClick={() => { setGroupTargetId(null); setBranchTarget(null); setInsertAt(0); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
-          </div>
-          {visibleCanvasSteps.map(({ step, index }) => {
-            const group = groupForStep(step.id);
-            const anchoredEmptyGroup = anchoredGroupBeforeStep(step.id);
-            const firstGroupStepId = group ? firstStepIdForGroup(group) : null;
-            const isGroupFirst = group && String(firstGroupStepId) === String(step.id);
-            if (group && collapsedGroups[group.id] === true && !isGroupFirst) return null;
-            const visual = flowElementVisual(step.type);
-            const elementKind = SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action";
-            const builderError = builderErrorByStepId.get(String(step.id)) || "";
-            const collapsed = collapsedBranches[step.id] === true;
-            const canCollapse = ["CONDITION","LOOP"].includes(step.type);
-            const outcomes = step.type === "CONDITION"
-              ? (Array.isArray(step.config?.outcomes) && step.config.outcomes.length
-                  ? step.config.outcomes
-                  : [{ id: "outcome-1", label: "Outcome 1", branch: step.config?.ifBranch || [] }])
-              : [];
-            const decisionPaths = step.type === "CONDITION"
-              ? [
-                  ...outcomes.map((outcome, i) => ({ id: outcome.id || `outcome-${i + 1}`, label: outcome.label || `Outcome ${i + 1}`, ids: outcome.branch || [] })),
-                  { id: "__default__", label: step.config?.defaultLabel || "Default Outcome", ids: step.config?.defaultBranch || step.config?.elseBranch || [] },
-                ]
-              : [];
-            return (
-              <div key={step.id} className={`workflow-node-wrap workflow-stage ${canCollapse ? "has-branching" : ""}`}>
-                {anchoredEmptyGroup ? <div className="workflow-group-card">
-                  <div className="workflow-group-head">
-                    <div><strong>{anchoredEmptyGroup.label}</strong>{anchoredEmptyGroup.description ? <small>{anchoredEmptyGroup.description}</small> : <small>Empty group</small>}</div>
-                    <div className="workflow-group-actions">
-                      <button type="button" onClick={() => addElementInsideGroup(anchoredEmptyGroup.id, index)}>+ Add Element</button>
-                      <button type="button" onClick={() => deleteGroup(anchoredEmptyGroup.id)}>Delete Group</button>
-                    </div>
-                  </div>
-                </div> : null}
-                {isGroupFirst ? <div className="workflow-group-card">
-                  <div className="workflow-group-head">
-                    <div><strong>{group.label}</strong>{group.description ? <small>{group.description}</small> : <small>{group.stepIds.length} elements</small>}</div>
-                    <div className="workflow-group-actions">
-                      <button type="button" onClick={() => toggleGroupCollapse(group.id, collapsedGroups[group.id] !== true)}>{collapsedGroups[group.id] === true ? "Expand" : "Collapse"}</button>
-                      <button type="button" onClick={() => addElementInsideGroup(group.id, index + 1)}>+ Add Element</button>
-                      <button type="button" onClick={() => deleteGroup(group.id)}>Ungroup</button>
-                    </div>
-                  </div>
-                </div> : null}
-                {group && collapsedGroups[group.id] === true ? null : <>
-                <div className="workflow-node-row">
-                  <button type="button" onClick={() => { if (selectionMode) { toggleElementSelection(step.id); return; } inspectStep(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id || selectedElementIds.includes(String(step.id)) ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${builderError ? "has-builder-error" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`} title={builderError || undefined}>
-                    <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
-                    <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : elementKind}</span>
-                    <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
-                    {step.config?.description ? <span className="workflow-node-description" title={step.config.description}>ⓘ</span> : null}
-                    {step.type === "CONDITION" && decisionConditionSummary(step, workflow.object || workflow.objectKey) ? <span className="workflow-node-note">{decisionConditionSummary(step, workflow.object || workflow.objectKey)}</span> : null}
-                    {step.type === "LOOP" ? <span className="workflow-node-note">For Each Item · After Last</span> : null}
-                    {step.config?.faultMode && step.config.faultMode !== "FAIL" ? <span className="workflow-fault-badge">Fault path</span> : null}
-                    {builderError ? <span className="workflow-node-error-badge">! Fix configuration</span> : null}
-                  </button>
-                  {canCollapse ? <button type="button" className="workflow-decision-toggle" title={collapsed ? "Expand paths" : "Collapse paths"} aria-label={collapsed ? "Expand paths" : "Collapse paths"} onClick={() => toggleBranchCollapse(step.id, !collapsed)}>{collapsed ? "▸" : "▾"}</button> : null}
-                  <details className="workflow-node-menu">
-                    <summary aria-label={`Open actions for ${step.label || getActionLabel(step.type)}`} title="Element actions">⋮</summary>
-                    <div className="workflow-node-menu-popover">
-                      <button type="button" onClick={() => inspectStep(step.id)}>Edit Element</button>
-                      <button type="button" onClick={() => copyStep(step)}>Copy Element</button>
-                      <button type="button" onClick={() => requestCutStep(step)}>Cut Element</button>
-                      {flowElementSupportsFaultPath(step.type) ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
-                      <button type="button" className="is-danger" onClick={() => requestDeleteStep(step)}>Delete Element</button>
-                    </div>
-                  </details>
-                </div>
-
-                {step.type === "CONDITION" ? (
-                  <div className="workflow-decision-stage" aria-label="Decision paths">
-                    {renderDecisionConnectorSvg(decisionPaths.length)}
-                    <span className="workflow-decision-stem workflow-decision-stem--in" aria-hidden="true" />
-                    <span className="workflow-decision-rail workflow-decision-rail--top" aria-hidden="true" />
-                    <div className="workflow-branch-map workflow-decision-map" style={{ "--workflow-branch-edge": `${50 / Math.max(1, decisionPaths.length)}%` }}>
-                      {decisionPaths.map((p) => renderOwnedPath({ ownerId: step.id, kind: "decision", outcomeId: p.id, ids: p.ids, label: p.label, ancestry: [String(step.id)] }))}
-                    </div>
-                    <span className="workflow-decision-rail workflow-decision-rail--bottom" aria-hidden="true" />
-                    <span className="workflow-decision-stem workflow-decision-stem--out" aria-hidden="true" />
-                  </div>
-                ) : null}
-                {step.type === "LOOP" && !collapsed ? (
-                  <div className="workflow-branch-map workflow-branch-map-single" aria-label="For Each Item path">
-                    {renderOwnedPath({ ownerId: step.id, kind: "loop", ids: step.config?.bodyBranch || [], label: "For Each Item", ancestry: [String(step.id)] })}
-                  </div>
-                ) : null}
-                {["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? (
-                  <div className="workflow-branch-map workflow-branch-map-single workflow-fault-map" aria-label="Fault path">
-                    {renderOwnedPath({ ownerId: step.id, kind: "fault", ids: step.config?.faultBranch || [], label: "Fault", tone: "fault", ancestry: [String(step.id)] })}
-                  </div>
-                ) : null}
-
-                <div className="workflow-node-connector">
-                  {step.type === "LOOP" ? <span className="workflow-connector-label">After Last</span> : null}
-                  {step.config?.nextStepId ? <span className="workflow-connector-label">Go To → {workflow.steps.find((item) => String(item.id) === String(step.config.nextStepId))?.label || "Element"}</span> : null}
-                  <button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setAutoConnectSourceId(null); setGroupTargetId(null); setBranchTarget(null); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
-                </div>
-                </>}
-              </div>
-            );
-          })}
-          {!visibleCanvasSteps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => { setInsertAt(0); setBranchTarget(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+ Add Element</button> : null}
-          {endAnchoredGroups.map((group) => <div key={group.id} className="workflow-group-card">
-            <div className="workflow-group-head">
-              <div><strong>{group.label}</strong>{group.description ? <small>{group.description}</small> : <small>Empty group</small>}</div>
-              <div className="workflow-group-actions">
-                <button type="button" onClick={() => addElementInsideGroup(group.id, workflow.steps.length)}>+ Add Element</button>
-                <button type="button" onClick={() => deleteGroup(group.id)}>Delete Group</button>
-              </div>
-            </div>
-          </div>)}
-          <div className="workflow-end-node"><span>■</span><strong>End</strong></div>
-        </div>
+          <WorkflowReactFlowCanvas
+            workflow={workflow}
+            mainEntries={visibleCanvasSteps}
+            flowElementVisual={flowElementVisual}
+            getActionLabel={getActionLabel}
+            getTriggerLabel={getTriggerLabel}
+            onInspect={(id) => {
+              if (String(id) === "__start__") inspectStart();
+              else inspectStep(id);
+            }}
+            onInsertMain={(index) => {
+              setAutoConnectSourceId(null);
+              setGroupTargetId(null);
+              setBranchTarget(null);
+              setInsertAt(index);
+              setPaletteTab("elements");
+              setPaletteOpen(true);
+            }}
+            onInsertBranch={({ ownerId, kind, outcomeId, index }) => {
+              openPath(pathTarget(kind, ownerId, outcomeId, index));
+            }}
+            onDelete={requestDeleteStep}
+          />
         )}
       </main>
       {propertiesOpen ? <aside ref={propertiesRef} tabIndex={-1} className="workflow-properties-panel">
