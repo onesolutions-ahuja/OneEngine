@@ -31,6 +31,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0038_passkey_passwordless_login",
   "0039_diagnostic_code_v2",
   "0040_diagnostic_catalogue_expansion",
+  "0041_diagnostic_runtime_columns",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -193,6 +194,20 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     up: client => client.query(
       readFileSync(new URL("./migrations/0040_diagnostic_catalogue_expansion.sql", import.meta.url), "utf8")
     ),
+  },
+  {
+    key: "0041_diagnostic_runtime_columns",
+    version: "41",
+    name: "Persist OE diagnostic codes in workflow and job traces",
+    up: client => client.query(`
+      ALTER TABLE platform_action_jobs ADD COLUMN IF NOT EXISTS last_error_code VARCHAR(6);
+      ALTER TABLE platform_workflow_runs ADD COLUMN IF NOT EXISTS error_code VARCHAR(6);
+      ALTER TABLE platform_workflow_step_runs ADD COLUMN IF NOT EXISTS error_code VARCHAR(6);
+      ALTER TABLE platform_workflow_compensation_runs ADD COLUMN IF NOT EXISTS error_code VARCHAR(6);
+      CREATE INDEX IF NOT EXISTS idx_platform_action_jobs_error_code ON platform_action_jobs(last_error_code);
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_runs_error_code ON platform_workflow_runs(error_code);
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_step_runs_error_code ON platform_workflow_step_runs(error_code);
+    `),
   },
 ]);
 
