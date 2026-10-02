@@ -1,6 +1,4 @@
-import { defineConfig } from "cypress";
-
-export default defineConfig({
+export default {
   projectId: "9qotdd",
   video: true,
   screenshotOnRunFailure: true,
@@ -24,4 +22,4 @@ export default defineConfig({
       password: process.env.ONEPOS_E2E_PASSWORD || "",
     },
   },
-});
+};
