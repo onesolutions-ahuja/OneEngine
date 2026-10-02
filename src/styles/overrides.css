@@ -3250,3 +3250,187 @@
   line-height: 1.35;
   color: rgba(255,255,255,.68);
 }
+
+
+/* 2026-10-02 dock capacity/alignment correction.
+   Desktop reserves ten 40px app slots at 1.6x the former 12px gap (19.2px),
+   then a frozen divider/Jarvis zone. Mobile keeps Jarvis fixed and scrolls apps. */
+@media (min-width: 901px) {
+  .dock {
+    --dock-icon-size: 40px;
+    --dock-icon-gap: 19.2px;
+    width: 730px;
+    max-width: calc(100vw - 24px);
+    height: 82px;
+    min-height: 82px;
+    padding: 18px 18px 10px;
+    box-sizing: border-box;
+    align-items: flex-end;
+    gap: 0;
+  }
+
+  .dock-desktop-items {
+    width: 592px; /* 10 * 40px icons + 10 * 19.2px spacing */
+    flex: 0 0 592px;
+    min-width: 0;
+    display: flex;
+    align-items: flex-end;
+    gap: var(--dock-icon-gap);
+    padding-left: 8px;
+    padding-right: 8px;
+    box-sizing: border-box;
+    overflow: visible;
+  }
+
+  .dock-desktop-items .dock-item {
+    width: var(--dock-icon-size) !important;
+    min-width: var(--dock-icon-size);
+    max-width: var(--dock-icon-size);
+    flex: 0 0 var(--dock-icon-size);
+    transform-origin: bottom center;
+    z-index: 1;
+  }
+
+  .dock-desktop-items .dock-item:hover,
+  .dock-desktop-items .dock-item:focus-visible {
+    z-index: 4;
+  }
+
+  .dock-fixed-zone {
+    width: 102px;
+    min-width: 102px;
+    flex: 0 0 102px;
+    height: 54px;
+    margin-left: 18px;
+    display: grid;
+    grid-template-columns: 1px 82px;
+    column-gap: 19px;
+    align-items: end;
+    justify-content: end;
+    position: relative;
+    z-index: 20;
+    pointer-events: auto;
+  }
+
+  .dock-fixed-zone .dock-separator {
+    width: 1px;
+    height: 42px;
+    margin: 0;
+    align-self: end;
+  }
+
+  .dock-fixed-zone .dock-jarves-slot {
+    width: 82px;
+    flex: 0 0 82px;
+    height: 52px;
+  }
+}
+
+/* Tablet/mobile dock: viewport-width shell, horizontally scrollable app strip,
+   fixed non-overlapping Jarvis reservation on the right. */
+@media (max-width: 900px) {
+  .dock-zone {
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
+
+  .dock {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    height: 74px;
+    min-height: 74px;
+    margin: 0;
+    padding: 12px 86px 10px 12px;
+    box-sizing: border-box;
+    display: block;
+    position: relative;
+  }
+
+  .dock-desktop-items {
+    display: none;
+  }
+
+  .dock-mobile-items {
+    width: 100%;
+    height: 52px;
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 0 10px 0 4px;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dock-mobile-items::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dock-mobile-item {
+    flex: 0 0 46px;
+    width: 46px;
+    min-width: 46px;
+    height: 48px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    scroll-snap-align: start;
+  }
+
+  .dock-mobile-item .dock-icon-wrap {
+    width: 42px;
+    height: 42px;
+  }
+
+  .dock-fixed-zone {
+    position: absolute;
+    right: 4px;
+    bottom: 9px;
+    width: 78px;
+    height: 54px;
+    display: grid;
+    grid-template-columns: 1px 64px;
+    column-gap: 10px;
+    align-items: end;
+    justify-content: end;
+    z-index: 8;
+    pointer-events: auto;
+  }
+
+  .dock-fixed-zone .dock-separator {
+    display: block;
+    width: 1px;
+    height: 38px;
+    margin: 0;
+  }
+
+  .dock-fixed-zone .dock-jarves-slot {
+    width: 64px;
+    height: 50px;
+    flex: 0 0 64px;
+  }
+}
+
+@media (max-width: 420px) {
+  .dock-zone {
+    left: 6px;
+    right: 6px;
+  }
+
+  .dock {
+    padding-left: 14px;
+    padding-right: 82px;
+  }
+
+  .dock-mobile-items {
+    gap: 10px;
+    padding-left: 4px;
+  }
+}
