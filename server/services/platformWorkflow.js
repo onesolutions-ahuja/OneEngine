@@ -3630,6 +3630,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         currentStage,
         allowBack: action.allowBack !== false,
         allowFinish: action.allowFinish !== false,
+        allowPause: action.allowPause === true,
         showFooter: action.showFooter !== false,
       };
       const existing = await db(
