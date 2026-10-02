@@ -48,10 +48,12 @@ export default function FormRenderer({
           config: {
             ...(field.config || {}),
             ...(component.visibilityCondition ? { visibilityCondition: component.visibilityCondition } : {}),
+            ...(component.help_text !== undefined ? { helpText: component.help_text } : {}),
+            ...(component.default_value !== undefined ? { defaultValue: component.default_value } : {}),
           },
           label: component.label || field.label,
           help_text: component.help_text ?? field.help_text,
-          description: component.help_text ?? field.description ?? field.help_text,
+          description: field.description,
           placeholder: component.placeholder ?? field.placeholder,
           required: component.required === true || field.required === true,
           readOnly: component.readOnly === true,
