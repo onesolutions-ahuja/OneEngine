@@ -3204,7 +3204,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   router.get("/platform/apps/:appId/pages", ...manage, async (req, res) => {
     const app = await db("SELECT * FROM platform_apps WHERE id=$1 AND company_id=$2 AND active=true", [req.params.appId, req.user.companyId]);
     if (!app.rows.length) return res.status(404).json({ success: false, message: "App not found" });
-    const result = await db("SELECT * FROM platform_pages WHERE app_id=$1 AND company_id=$2 AND active=true ORDER BY label", [app.rows[0].id, req.user.companyId]);
+    const result = await db("SELECT * FROM platform_pages WHERE app_id=$1 AND company_id=$2 ORDER BY active DESC,label", [app.rows[0].id, req.user.companyId]);
     res.json({ success: true, data: result.rows });
   });
 
@@ -3219,11 +3219,30 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     const pageType = ["object", "list_view", "report"].includes(req.body.pageType) ? req.body.pageType : "object";
     const definition = normalizePageDefinition(req.body.definition);
     try {
-      const result = await db(
-        "INSERT INTO platform_pages (app_id,company_id,page_key,label,route_path,page_type,definition) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING *",
-        [app.rows[0].id, req.user.companyId, pageKey, req.body.label.trim(), req.body.routePath || "/", pageType, JSON.stringify(definition)]
-      );
-      res.status(201).json({ success: true, data: result.rows[0] });
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(
+          `INSERT INTO platform_pages
+            (app_id,company_id,page_key,label,route_path,page_type,definition,draft_definition,active,lifecycle_status,version,draft_version)
+           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$7::jsonb,false,'DRAFT',1,1)
+           RETURNING *`,
+          [app.rows[0].id, req.user.companyId, pageKey, req.body.label.trim(), req.body.routePath || "/", pageType, JSON.stringify(definition)]
+        );
+        await client.query(
+          `INSERT INTO platform_page_versions
+            (page_id,company_id,version,definition,lifecycle_status,created_by)
+           VALUES ($1,$2,1,$3::jsonb,'DRAFT',$4)`,
+          [result.rows[0].id, req.user.companyId, JSON.stringify(definition), req.user.id || null]
+        );
+        await client.query("COMMIT");
+        res.status(201).json({ success: true, data: result.rows[0] });
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
     } catch (error) {
       if (error.code === "23505") return res.status(409).json({ success: false, message: "A page with this key already exists" });
       console.error("Platform page create error:", error);
@@ -3232,14 +3251,164 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   });
 
   router.put("/platform/pages/:pageId", ...manage, async (req, res) => {
-    const page = await db("SELECT * FROM platform_pages WHERE id=$1 AND company_id=$2", [req.params.pageId, req.user.companyId]);
-    if (!page.rows.length) return res.status(404).json({ success: false, message: "Page not found or not editable" });
-    const definition = req.body?.definition === undefined ? page.rows[0].definition : normalizePageDefinition(req.body.definition);
+    const pageResult = await db("SELECT * FROM platform_pages WHERE id=$1 AND company_id=$2", [req.params.pageId, req.user.companyId]);
+    if (!pageResult.rows.length) return res.status(404).json({ success: false, message: "Page not found or not editable" });
+    const page = pageResult.rows[0];
     const result = await db(
-      "UPDATE platform_pages SET page_key=COALESCE($1,page_key), label=COALESCE($2,label), route_path=COALESCE($3,route_path), page_type=COALESCE($4,page_type), definition=COALESCE($5::jsonb,definition), active=COALESCE($6,active), updated_at=NOW() WHERE id=$7 RETURNING *",
-      [req.body?.pageKey, req.body?.label, req.body?.routePath, req.body?.pageType, JSON.stringify(definition), req.body?.active, page.rows[0].id]
+      `UPDATE platform_pages
+          SET page_key=COALESCE($1,page_key),
+              label=COALESCE($2,label),
+              route_path=COALESCE($3,route_path),
+              page_type=COALESCE($4,page_type),
+              updated_at=NOW(),
+              user_modified=true
+        WHERE id=$5 RETURNING *`,
+      [req.body?.pageKey, req.body?.label, req.body?.routePath, req.body?.pageType, page.id]
+    );
+    if (req.body?.definition !== undefined) {
+      const definition = normalizePageDefinition(req.body.definition);
+      const maxResult = await db(
+        "SELECT COALESCE(MAX(version),0)::int AS version FROM platform_page_versions WHERE page_id=$1 AND company_id=$2",
+        [page.id, req.user.companyId]
+      );
+      const nextVersion = Number(maxResult.rows[0]?.version || 0) + 1;
+      await db(
+        `UPDATE platform_pages
+            SET draft_definition=$1::jsonb,draft_version=$2,version=GREATEST(version,$2),
+                lifecycle_status=CASE WHEN active=true THEN lifecycle_status ELSE 'DRAFT' END,
+                updated_at=NOW(),user_modified=true
+          WHERE id=$3`,
+        [JSON.stringify(definition), nextVersion, page.id]
+      );
+      await db(
+        `INSERT INTO platform_page_versions
+          (page_id,company_id,version,definition,lifecycle_status,created_by)
+         VALUES ($1,$2,$3,$4::jsonb,'DRAFT',$5)`,
+        [page.id, req.user.companyId, nextVersion, JSON.stringify(definition), req.user.id || null]
+      );
+    }
+    const refreshed = await db("SELECT * FROM platform_pages WHERE id=$1", [page.id]);
+    res.json({ success: true, data: refreshed.rows[0] || result.rows[0] });
+  });
+
+  router.get("/platform/pages/:pageId/versions", ...manage, async (req, res) => {
+    const page = await db("SELECT id FROM platform_pages WHERE id=$1 AND company_id=$2", [req.params.pageId, req.user.companyId]);
+    if (!page.rows.length) return res.status(404).json({ success: false, message: "Page not found" });
+    const versions = await db(
+      `SELECT id,page_id,version,lifecycle_status,created_by,created_at
+         FROM platform_page_versions
+        WHERE page_id=$1 AND company_id=$2
+        ORDER BY version DESC`,
+      [req.params.pageId, req.user.companyId]
+    );
+    res.json({ success: true, data: versions.rows });
+  });
+
+  router.get("/platform/pages/:pageId/versions/:version", ...manage, async (req, res) => {
+    const result = await db(
+      `SELECT * FROM platform_page_versions
+        WHERE page_id=$1 AND company_id=$2 AND version=$3`,
+      [req.params.pageId, req.user.companyId, Number(req.params.version)]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: "Page version not found" });
+    res.json({ success: true, data: result.rows[0] });
+  });
+
+  router.post("/platform/pages/:pageId/activate", ...manage, async (req, res) => {
+    const pageResult = await db("SELECT * FROM platform_pages WHERE id=$1 AND company_id=$2", [req.params.pageId, req.user.companyId]);
+    const page = pageResult.rows[0];
+    if (!page) return res.status(404).json({ success: false, message: "Page not found" });
+    const version = Number(page.draft_version || page.active_version || page.version || 1);
+    const definition = page.draft_definition || page.definition;
+    if (!definition) return res.status(409).json({ success: false, message: "Page has no draft to activate" });
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "UPDATE platform_page_versions SET lifecycle_status='INACTIVE' WHERE page_id=$1 AND company_id=$2 AND lifecycle_status='ACTIVE'",
+        [page.id, req.user.companyId]
+      );
+      const existingVersion = await client.query(
+        "SELECT id FROM platform_page_versions WHERE page_id=$1 AND company_id=$2 AND version=$3",
+        [page.id, req.user.companyId, version]
+      );
+      if (existingVersion.rows.length) {
+        await client.query(
+          "UPDATE platform_page_versions SET lifecycle_status='ACTIVE' WHERE id=$1",
+          [existingVersion.rows[0].id]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO platform_page_versions
+            (page_id,company_id,version,definition,lifecycle_status,created_by)
+           VALUES ($1,$2,$3,$4::jsonb,'ACTIVE',$5)`,
+          [page.id, req.user.companyId, version, JSON.stringify(definition), req.user.id || null]
+        );
+      }
+      const updated = await client.query(
+        `UPDATE platform_pages
+            SET definition=$1::jsonb,active=true,lifecycle_status='ACTIVE',
+                active_version=$2,version=GREATEST(version,$2),
+                draft_definition=NULL,draft_version=NULL,updated_at=NOW(),user_modified=true
+          WHERE id=$3 RETURNING *`,
+        [JSON.stringify(definition), version, page.id]
+      );
+      await client.query("COMMIT");
+      res.json({ success: true, data: updated.rows[0] });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+  router.post("/platform/pages/:pageId/deactivate", ...manage, async (req, res) => {
+    const result = await db(
+      `UPDATE platform_pages
+          SET active=false,lifecycle_status='INACTIVE',updated_at=NOW(),user_modified=true
+        WHERE id=$1 AND company_id=$2 RETURNING *`,
+      [req.params.pageId, req.user.companyId]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: "Page not found" });
+    await db(
+      "UPDATE platform_page_versions SET lifecycle_status='INACTIVE' WHERE page_id=$1 AND company_id=$2 AND lifecycle_status='ACTIVE'",
+      [req.params.pageId, req.user.companyId]
     );
     res.json({ success: true, data: result.rows[0] });
+  });
+
+  router.post("/platform/pages/:pageId/versions/:version/restore", ...manage, async (req, res) => {
+    const [pageResult, versionResult] = await Promise.all([
+      db("SELECT * FROM platform_pages WHERE id=$1 AND company_id=$2", [req.params.pageId, req.user.companyId]),
+      db(
+        "SELECT * FROM platform_page_versions WHERE page_id=$1 AND company_id=$2 AND version=$3",
+        [req.params.pageId, req.user.companyId, Number(req.params.version)]
+      ),
+    ]);
+    const page = pageResult.rows[0];
+    const source = versionResult.rows[0];
+    if (!page || !source) return res.status(404).json({ success: false, message: "Page or version not found" });
+    const maxResult = await db(
+      "SELECT COALESCE(MAX(version),0)::int AS version FROM platform_page_versions WHERE page_id=$1 AND company_id=$2",
+      [page.id, req.user.companyId]
+    );
+    const nextVersion = Number(maxResult.rows[0]?.version || 0) + 1;
+    await db(
+      `INSERT INTO platform_page_versions
+        (page_id,company_id,version,definition,lifecycle_status,created_by)
+       VALUES ($1,$2,$3,$4::jsonb,'DRAFT',$5)`,
+      [page.id, req.user.companyId, nextVersion, JSON.stringify(source.definition), req.user.id || null]
+    );
+    const updated = await db(
+      `UPDATE platform_pages
+          SET draft_definition=$1::jsonb,draft_version=$2,version=GREATEST(version,$2),
+              lifecycle_status=CASE WHEN active=true THEN lifecycle_status ELSE 'DRAFT' END,
+              updated_at=NOW(),user_modified=true
+        WHERE id=$3 RETURNING *`,
+      [JSON.stringify(source.definition), nextVersion, page.id]
+    );
+    res.json({ success: true, data: updated.rows[0] });
   });
 
   router.delete("/platform/pages/:pageId", ...manage, async (req, res) => {
