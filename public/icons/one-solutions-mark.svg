@@ -1,22 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-18 -18 196 226" fill="none" role="img" aria-label="One Solutions">
-  <defs>
-    <linearGradient id="outer" x1="20" y1="10" x2="142" y2="172" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#12d8d0"/>
-      <stop offset=".34" stop-color="#0aa6ec"/>
-      <stop offset=".7" stop-color="#0a58be"/>
-      <stop offset="1" stop-color="#072c73"/>
-    </linearGradient>
-    <linearGradient id="fold" x1="28" y1="60" x2="118" y2="128" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0a62b9"/>
-      <stop offset="1" stop-color="#052a63"/>
-    </linearGradient>
-    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
-      <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#072b5d" flood-opacity=".28"/>
-    </filter>
-  </defs>
-  <g filter="url(#shadow)">
-    <path d="M38 8c-10 0-18 8-18 18v48l22-15 73 43-73 42-22-15v36c0 10 8 18 18 18 4 0 8-1 11-3l88-51c13-8 13-27 0-35L49 11c-3-2-7-3-11-3Z" fill="url(#outer)"/>
-    <path d="M20 74 43 59l63 37c10 6 10 20 0 26l-63 37-23-15 72-42-72-28Z" fill="url(#fold)"/>
-    <path d="M44 63 64 50v79H44V88L24 101V80l20-17Z" fill="white"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="39 146 155 216" role="img" aria-label="One Solutions">
+  <image href="one-solutions-logo.webp" x="0" y="0" width="500" height="500" preserveAspectRatio="none"/>
 </svg>
