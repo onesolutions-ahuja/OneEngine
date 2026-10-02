@@ -1857,17 +1857,26 @@ export default function LayoutEditor({
           <select className="onepos-input" value={targetType} onChange={(event) => updateComponentPatch(index, { target_type: event.target.value, target_key: "" })}>
             <option value="action">Registered Action</option>
             <option value="workflow">Workflow</option>
+            <option value="url">URL / Link</option>
           </select>
         </label>
-        <label className="pfb-field">
-          <span className="pfb-field-label">{targetType === "workflow" ? "Workflow" : "Action"}</span>
-          <select className="onepos-input" value={component.target_key || ""} onChange={(event) => updateComponent(index, "target_key", event.target.value)}>
-            <option value="">Select {targetType}</option>
-            {targetType === "workflow"
-              ? workflows.map((rule) => <option key={rule.id} value={rule.id}>{rule.name}</option>)
-              : registeredActions.map((action) => <option key={action.key} value={action.key}>{action.displayName || action.label || action.key}</option>)}
-          </select>
-        </label>
+        {targetType === "url" ? (
+          <label className="pfb-field">
+            <span className="pfb-field-label">URL / Path</span>
+            <input type="text" className="onepos-input" value={component.target_key || ""} placeholder="https://example.com/{id} or /workspace/object/{id}" onChange={(event) => updateComponent(index, "target_key", event.target.value)} />
+            <small>HTTPS or app-relative only. Record field placeholders such as {id} are supported.</small>
+          </label>
+        ) : (
+          <label className="pfb-field">
+            <span className="pfb-field-label">{targetType === "workflow" ? "Workflow" : "Action"}</span>
+            <select className="onepos-input" value={component.target_key || ""} onChange={(event) => updateComponent(index, "target_key", event.target.value)}>
+              <option value="">Select {targetType}</option>
+              {targetType === "workflow"
+                ? workflows.map((rule) => <option key={rule.id} value={rule.id}>{rule.name}</option>)
+                : registeredActions.map((action) => <option key={action.key} value={action.key}>{action.displayName || action.label || action.key}</option>)}
+            </select>
+          </label>
+        )}
         <label className="pfb-field">
           <span className="pfb-field-label">Required permission</span>
           <input type="text" className="onepos-input" value={component.required_permission || ""} placeholder="Optional permission key" onChange={(event) => updateComponent(index, "required_permission", event.target.value)} />
