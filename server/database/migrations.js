@@ -41,6 +41,9 @@ export async function runMigrations(database, migrations) {
       )
     `);
 
+    if (!Array.isArray(migrations) || migrations.some(migration => !migration || !migration.key || typeof migration.up !== "function")) {
+      throw new Error("Invalid database migration registry: every migration must define key and up");
+    }
     const requestedKeys = new Set(migrations.map(migration => migration.key));
     const migrationPlan = [
       ...migrations,
