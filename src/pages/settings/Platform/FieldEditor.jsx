@@ -6,7 +6,8 @@ import WhereUsedPanel from "./WhereUsedPanel.jsx";
 
 const FIELD_TYPES = [
   { value: "text", label: "Text" },
-  { value: "long_text", label: "Long Text" },
+  { value: "text_area", label: "Text Area" },
+  { value: "long_text", label: "Long Text Area" },
   { value: "rich_text", label: "Rich Text" },
   { value: "url", label: "URL" },
   { value: "time", label: "Time" },
@@ -100,7 +101,7 @@ export default function FieldEditor({
     unique: field?.config?.unique === true,
     externalId: field?.config?.externalId === true || field?.config?.external_id === true,
     uniqueCaseSensitive: field?.config?.uniqueCaseSensitive === true || field?.config?.unique_case_sensitive === true,
-    trackHistory: field?.config?.trackHistory !== undefined ? field.config.trackHistory === true : !isNew,
+    trackHistory: field?.config?.trackHistory === true || field?.config?.track_history === true,
     lookupFilter: {
       active: field?.config?.lookupFilter?.active === true || field?.config?.lookup_filter?.active === true,
       required: (field?.config?.lookupFilter?.required ?? field?.config?.lookup_filter?.required) !== false,
@@ -983,12 +984,12 @@ export default function FieldEditor({
               ) : form.defaultMode !== "formula" && !["lookup","address","location","json","multiselect"].includes(form.field_type) ? (
                 <label><span>Default value</span><input type={["number","decimal","currency","percent"].includes(form.field_type) ? "number" : form.field_type === "date" ? "date" : form.field_type === "datetime" ? "datetime-local" : form.field_type === "time" ? "time" : "text"} value={form.defaultValue ?? ""} onChange={(event) => update("defaultValue", event.target.value)} /></label>
               ) : null}
-              {["text","long_text","rich_text","url","email","phone"].includes(form.field_type) ? (
+              {["text","text_area","long_text","rich_text","url","email","phone"].includes(form.field_type) ? (
                 <label><span>Maximum length</span><input type="number" min={["long_text","rich_text"].includes(form.field_type) ? 256 : 1} max={["long_text","rich_text"].includes(form.field_type) ? 131072 : 255} value={form.maxLength ?? ""} onChange={(event) => update("maxLength", event.target.value)} placeholder={["long_text","rich_text"].includes(form.field_type) ? "256–131072" : "1–255"} /></label>
               ) : null}
               {["number","decimal","currency","percent"].includes(form.field_type) ? (
                 <>
-                  <label><span>Precision</span><input type="number" min="1" max="38" value={form.precision ?? ""} onChange={(event) => update("precision", event.target.value)} placeholder="Digits" /></label>
+                  <label><span>Precision (total digits)</span><input type="number" min="1" max="18" value={form.precision ?? ""} onChange={(event) => update("precision", event.target.value)} placeholder="Digits" /></label>
                   <label><span>Decimal places</span><input type="number" min="0" max="18" value={form.scale ?? ""} onChange={(event) => update("scale", event.target.value)} placeholder="Scale" /></label>
                 </>
               ) : null}
