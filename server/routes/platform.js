@@ -684,13 +684,13 @@ function validateGeneralFieldConfig(field) {
       throw new ConditionError("Precision must be between 1 and 18 for numeric fields");
     }
     const scale = config.scale === undefined || config.scale === null ? 0 : Number(config.scale);
-    if (!Number.isInteger(scale) || scale < 0 || scale > 18 || scale > precision) {
-      throw new ConditionError("Decimal places must be between 0 and 18 and cannot exceed precision");
+    if (!Number.isInteger(scale) || scale < 0 || scale > 17 || scale > precision) {
+      throw new ConditionError("Decimal places must be between 0 and 17 and cannot exceed precision");
     }
   }
   if (config.scale !== undefined && config.scale !== null && config.precision === undefined) {
     const scale = Number(config.scale);
-    if (!numericTypes.has(field.field_type) || !Number.isInteger(scale) || scale < 0 || scale > 18) {
+    if (!numericTypes.has(field.field_type) || !Number.isInteger(scale) || scale < 0 || scale > 17) {
       throw new ConditionError("Decimal places are invalid for this field type");
     }
   }
