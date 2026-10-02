@@ -427,7 +427,7 @@ CREATE TABLE IF NOT EXISTS custom_report_types (
     type_key VARCHAR(100) NOT NULL,
     label VARCHAR(150) NOT NULL,
     description VARCHAR(500),
-    primary_object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE RESTRICT,
+    primary_object_id UUID NOT NULL,
     definition JSONB NOT NULL DEFAULT '{}'::jsonb,
     active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

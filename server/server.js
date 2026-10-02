@@ -2192,7 +2192,7 @@ app.use(
   })
 );
 
-app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyCustomers }));
+app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyCustomers, hasPermission }));
 
 /*
 |--------------------------------------------------------------------------

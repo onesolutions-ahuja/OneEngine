@@ -6,7 +6,7 @@ import { compileFilterLogic, normalizeAdvancedReportDefinition, reportCapabiliti
 import { executeAnalyticsDefinition } from "../services/reportExecution.js";
 import { normalizeFolder, normalizeSubscription, subscriptionConditionMatches, subscriptionIsDue } from "../services/analyticsManagement.js";
 import { normalizeReportType } from "../services/reportTypeDefinition.js";
-import { normalizeHistoricalTrend, normalizePreviewPreference, normalizeReportExport, normalizeReportTypeExperience, reportTypeVisibleToUser } from "../services/reportExperience.js";
+import { normalizeHistoricalTrend, normalizePreviewPreference, normalizeReportExport, normalizeReportTypeExperience } from "../services/reportExperience.js";
 import { buildDetailsCsv, buildFormattedXlsx } from "../services/reportExport.js";
 import { resolveAnalyticsPrincipalAccess } from "../services/analyticsSecurity.js";
 import { publishPlatformEvent } from "../services/platformEvents.js";
@@ -159,7 +159,7 @@ function customReportVisibility(user, report) {
 }
 
 export default function createReportsRouter({ authenticate, authorize, db }) {
-  const { canAccessStore, canViewCompanyCustomers } = arguments[0];
+  const { canAccessStore, canViewCompanyCustomers, hasPermission: hasSystemPermission } = arguments[0];
   const router = express.Router();
 
   function scopedReportParams(req) {
@@ -801,7 +801,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     canViewCompanyCustomers ? canViewCompanyCustomers(user) : false
   );
   const reportById = async (req, id) => {
-    const admin = await isCompanyAdmin(req.user);
+    const admin = await canManageReports(req);
     const result = await db(
       `SELECT cr.*, EXISTS (SELECT 1 FROM custom_report_users cru WHERE cru.report_id=cr.id AND cru.user_id=$3) AS mapped
        FROM custom_reports cr
@@ -835,8 +835,22 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     ...((definition.filters || []).flatMap((filter) => filter?.field === "store"
       ? (Array.isArray(filter.value) ? filter.value : [filter.value]) : [])),
   ];
-  const hasPermission = (user, code) => Array.isArray(user?.permissions) && user.permissions.includes(code);
-  const canManageReports = (user) => hasPermission(user, "reports.custom.manage");
+  const canManageReports = async (req) => (
+    hasSystemPermission ? hasSystemPermission(req, "reports.custom.manage") : false
+  );
+  const canManageReportTypes = async (req) => (
+    (await canManageReports(req))
+    || (hasSystemPermission ? await hasSystemPermission(req, "platform.metadata.manage") : false)
+  );
+  const reportTypeIsVisible = async (req, row) => {
+    const status = String(
+      row?.definition?.experience?.status
+      || row?.definition?.status
+      || row?.status
+      || "IN_DEVELOPMENT"
+    ).toUpperCase();
+    return status === "DEPLOYED" || (await canManageReportTypes(req));
+  };
 
   async function resolveCustomReportType(req, reportTypeId) {
     if (!reportTypeId) return null;
@@ -844,7 +858,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     const row = result.rows[0];
     if (!row) throw new Error("Custom report type is unavailable");
     const definition = normalizeReportType({ ...(row.definition || {}), id: row.id });
-    if (!reportTypeVisibleToUser(row, req.user)) throw new Error("Custom report type is not deployed");
+    if (!(await reportTypeIsVisible(req, row))) throw new Error("Custom report type is not deployed");
     const context = await platformReportContext(req, definition.primaryObjectId);
     const relationshipConfig = new Map((definition.relationships || []).map((entry) => [String(entry.relationshipId), entry]));
     const relationships = (context.relationships || [])
@@ -923,7 +937,9 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
   router.get("/reports/custom/report-types", authenticate, authorize("reports.custom.view"), async (req, res) => {
     try {
       const result = await db("SELECT * FROM custom_report_types WHERE company_id=$1 AND active=TRUE ORDER BY lower(label)", [req.user.companyId]);
-      res.json({ success: true, data: (result.rows || []).filter((row) => reportTypeVisibleToUser(row, req.user)) });
+      const visible = [];
+      for (const row of result.rows || []) if (await reportTypeIsVisible(req, row)) visible.push(row);
+      res.json({ success: true, data: visible });
     } catch (error) { res.status(500).json({ success: false, message: "Unable to load report types" }); }
   });
 
@@ -997,7 +1013,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
          WHERE cr.company_id=$1 AND cr.archived_at IS NULL
            AND (cr.created_by=$2 OR EXISTS(SELECT 1 FROM custom_report_users cru WHERE cru.report_id=cr.id AND cru.user_id=$2) OR $3)
          ORDER BY COALESCE(rup.last_viewed_at,cr.updated_at) DESC`,
-        [req.user.companyId, req.user.id, canManageReports(req.user)]
+        [req.user.companyId, req.user.id, await canManageReports(req)]
       );
       res.json({ success: true, data: { favourites: result.rows.filter((row) => row.favourite === true), recent: result.rows.filter((row) => row.last_viewed_at).slice(0,20) } });
     } catch (error) { res.status(500).json({ success: false, message: "Unable to load report navigation" }); }
@@ -1005,7 +1021,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
 
   router.get("/reports/custom/metadata", authenticate, authorize("reports.custom.view"), async (req, res) => {
     try {
-      const manage = canManageReports(req.user);
+      const manage = await canManageReports(req);
       const [stores, users, reports, reportTypes, platformObjects] = await Promise.all([
         db("SELECT id,name FROM stores WHERE company_id=$1 AND active=true ORDER BY name", [req.user.companyId]),
         db("SELECT id,username,full_name FROM users WHERE company_id=$1 AND active=true ORDER BY full_name,username", [req.user.companyId]),
@@ -1023,7 +1039,11 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         stores: stores.rows,
         users: users.rows,
         reports: reports.rows,
-        reportTypes: (reportTypes.rows || []).filter((row) => reportTypeVisibleToUser(row, req.user)),
+        reportTypes: await (async () => {
+          const visible = [];
+          for (const row of reportTypes.rows || []) if (await reportTypeIsVisible(req, row)) visible.push(row);
+          return visible;
+        })(),
         sources: STANDARD_REPORT_SOURCES,
         platformObjects: platformObjects.rows,
         capabilities: reportCapabilities(),
@@ -1172,7 +1192,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     try {
       const report=await reportById(req,req.params.id);
       if(!report)return res.status(404).json({success:false,message:"Custom report not found"});
-      if(String(report.created_by)!==String(req.user.id)&&!canManageReports(req.user))return res.status(403).json({success:false,message:"You cannot move this report"});
+      if(String(report.created_by)!==String(req.user.id)&&!(await canManageReports(req)))return res.status(403).json({success:false,message:"You cannot move this report"});
       const folderId=req.body?.folderId||null;
       if(folderId&&!(await visibleFolder(req,folderId,"EDIT")))return res.status(400).json({success:false,message:"Report folder is not available"});
       await db("UPDATE custom_reports SET folder_id=$3,updated_at=NOW() WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId,folderId]);
@@ -1204,7 +1224,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     try {
       const report=await reportById(req,req.params.id);
       if(!report)return res.status(404).json({success:false,message:"Custom report not found"});
-      if(String(report.created_by)!==String(req.user.id)&&!canManageReports(req.user))return res.status(403).json({success:false,message:"Only the owner or a report manager can edit this report"});
+      if(String(report.created_by)!==String(req.user.id)&&!(await canManageReports(req)))return res.status(403).json({success:false,message:"Only the owner or a report manager can edit this report"});
       const name=String(req.body?.name||report.name).trim();
       const reportType=await resolveCustomReportType(req,req.body?.reportTypeId||req.body?.report_type_id||report.report_type_id||null);
       const sourceInput=reportType?{...req.body,dataSource:"platform_object",objectId:reportType.definition.primaryObjectId,reportTypeId:reportType.row.id}:req.body;
@@ -1218,7 +1238,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
   });
 
   router.delete("/reports/custom/:id", authenticate, authorize("reports.custom.edit"), async (req,res)=>{
-    try{const report=await reportById(req,req.params.id);if(!report)return res.status(404).json({success:false,message:"Custom report not found"});if(String(report.created_by)!==String(req.user.id)&&!canManageReports(req.user))return res.status(403).json({success:false,message:"You cannot archive this report"});await db("UPDATE custom_reports SET archived_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId]);res.json({success:true,data:{id:req.params.id}});}
+    try{const report=await reportById(req,req.params.id);if(!report)return res.status(404).json({success:false,message:"Custom report not found"});if(String(report.created_by)!==String(req.user.id)&&!(await canManageReports(req)))return res.status(403).json({success:false,message:"You cannot archive this report"});await db("UPDATE custom_reports SET archived_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId]);res.json({success:true,data:{id:req.params.id}});}
     catch(error){res.status(500).json({success:false,message:"Unable to archive custom report"});}
   });
 
@@ -1228,7 +1248,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
   });
 
   router.put("/reports/custom/:id/users", authenticate, authorize("reports.custom.share"), async (req,res)=>{
-    try{const report=await reportById(req,req.params.id);if(!report)return res.status(404).json({success:false,message:"Custom report not found"});if(String(report.created_by)!==String(req.user.id)&&!canManageReports(req.user))return res.status(403).json({success:false,message:"You cannot share this report"});const userIds=validateUuidList(req.body?.userIds,"user");const valid=await db("SELECT id FROM users WHERE company_id=$1 AND active=true AND id=ANY($2::uuid[])",[req.user.companyId,userIds]);if(valid.rows.length!==userIds.length)return res.status(400).json({success:false,message:"One or more users were not found"});await db("DELETE FROM custom_report_users WHERE report_id=$1",[req.params.id]);for(const userId of userIds)await db("INSERT INTO custom_report_users(report_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[req.params.id,userId]);res.json({success:true,data:{userIds}});}
+    try{const report=await reportById(req,req.params.id);if(!report)return res.status(404).json({success:false,message:"Custom report not found"});if(String(report.created_by)!==String(req.user.id)&&!(await canManageReports(req)))return res.status(403).json({success:false,message:"You cannot share this report"});const userIds=validateUuidList(req.body?.userIds,"user");const valid=await db("SELECT id FROM users WHERE company_id=$1 AND active=true AND id=ANY($2::uuid[])",[req.user.companyId,userIds]);if(valid.rows.length!==userIds.length)return res.status(400).json({success:false,message:"One or more users were not found"});await db("DELETE FROM custom_report_users WHERE report_id=$1",[req.params.id]);for(const userId of userIds)await db("INSERT INTO custom_report_users(report_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[req.params.id,userId]);res.json({success:true,data:{userIds}});}
     catch(error){res.status(400).json({success:false,message:error.message||"Unable to map report users"});}
   });
 
