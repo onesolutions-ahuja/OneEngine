@@ -45,12 +45,13 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
 
   // Unsaved workflows can be Debugged safely, but persisted-test/version controls
   // correctly remain unavailable until the first save.
-  await expect(page.getByRole("button", { name: "Debug", exact: true })).toBeEnabled();
+  const workflowWorkspace = page.getByLabel("Workflow Builder workspace");
+  await expect(workflowWorkspace.getByRole("button", { name: "Debug", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "View Tests", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Version History", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save As", exact: true })).toBeDisabled();
 
-  await page.getByRole("button", { name: "Debug", exact: true }).click();
+  await workflowWorkspace.getByRole("button", { name: "Debug", exact: true }).click();
   await expect(page.getByText("Debug / Test workflow", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Debug", exact: true }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
@@ -164,10 +165,15 @@ test("email provider actions use metadata resources instead of hardcoded recipie
   await expect(newWorkflow).toBeVisible({ timeout: 15_000 });
   await newWorkflow.click();
 
-  // New workflows must not silently carry an executable sample recipient.
+  // Registered provider actions use the Salesforce-style Action element:
+  // Add Element -> Action -> choose the registered provider action.
   await page.getByRole("button", { name: "Add element after Start", exact: true }).click();
-  const search = page.getByLabel("Search flow elements");
-  await search.fill("Send Email - Brevo");
+  const palette = page.locator(".workflow-node-palette");
+  await palette.getByLabel("Search flow elements").fill("Action");
+  await palette.getByRole("button", { name: "Action", exact: true }).click();
+
+  const actionSearch = page.getByLabel("Search actions");
+  await actionSearch.fill("Send Email - Brevo");
   const brevo = page.getByRole("button", { name: "Send Email - Brevo", exact: true });
   await expect(brevo).toBeEnabled();
   await brevo.click();
@@ -183,10 +189,12 @@ test("email provider actions use metadata resources instead of hardcoded recipie
   await expect(page.getByText("Subject *", { exact: true })).toBeVisible();
   await expect(page.getByText("Message body *", { exact: true })).toBeVisible();
 
-  // Mailjet uses the same no-code contract, rather than a separate raw JSON editor.
+  // Cancel the newly inserted element and repeat the same no-code path for Mailjet.
   await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
   await page.getByRole("button", { name: "Add element after Start", exact: true }).click();
-  await search.fill("Send Email - Mailjet");
+  await palette.getByLabel("Search flow elements").fill("Action");
+  await palette.getByRole("button", { name: "Action", exact: true }).click();
+  await page.getByLabel("Search actions").fill("Send Email - Mailjet");
   const mailjet = page.getByRole("button", { name: "Send Email - Mailjet", exact: true });
   await expect(mailjet).toBeEnabled();
   await mailjet.click();
