@@ -1742,8 +1742,10 @@ function workflowActionIssue(step, definition = null) {
       if (!templateMode && (!String(config.subject || "").trim() || !String(config.body || config.text || config.message || "").trim())) {
         return "Add an email subject and message body.";
       }
-    } else if (!config.templateId && !config.template) {
-      return "Choose a message template.";
+    } else {
+      const templateMode = (config.contentMode || "CUSTOM") === "TEMPLATE";
+      if (templateMode && !config.templateId && !config.template) return "Choose a message template.";
+      if (!templateMode && !String(config.body || config.text || config.message || "").trim()) return "Add a message body.";
     }
   }
   if (step.type === "IN_APP_NOTIFICATION" && (!config.title || !config.message || !config.recipient)) {
@@ -3182,8 +3184,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
         const providerKey = step.type === "SEND_EMAIL_BREVO" ? "BREVO" : step.type === "SEND_EMAIL_MAILJET" ? "MAILJET" : isEmail ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP";
         const providerLabel = step.type === "SEND_EMAIL_BREVO" ? "Brevo" : step.type === "SEND_EMAIL_MAILJET" ? "Mailjet" : isEmail ? "Configured email provider" : step.type === "SEND_SMS" ? "Configured SMS provider" : "Configured WhatsApp provider";
         const available = providerAvailable[providerKey];
-        const templateOnly = step.type === "EMAIL_ALERT" || !isEmail;
-        const contentMode = templateOnly ? "TEMPLATE" : (step.config?.contentMode || "TEMPLATE");
+        const templateOnly = step.type === "EMAIL_ALERT";
+        const contentMode = templateOnly ? "TEMPLATE" : (step.config?.contentMode || (isEmail ? "TEMPLATE" : "CUSTOM"));
         return (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -3226,14 +3228,14 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               </div>
             ) : (
               <div className="space-y-3">
-                <ResourceOrLiteralInput
+                {isEmail ? <ResourceOrLiteralInput
                   label="Subject"
                   value={step.config?.subject || ""}
                   onChange={(subject) => updateConfig({ subject })}
                   rootObjectKey={rootObjectKey}
                   extraResources={extraResources}
                   required
-                />
+                /> : null}
                 <ResourceOrLiteralInput
                   label="Message body"
                   value={step.config?.body || step.config?.text || ""}
