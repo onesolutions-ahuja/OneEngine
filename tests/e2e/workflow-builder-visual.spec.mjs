@@ -39,21 +39,20 @@ test("Welcome Message Customer canvas matches compact split-merge geometry", asy
   await page.goto("developer/workflow-builder");
   await expect(page.getByRole("button", { name: /new workflow/i })).toBeVisible({ timeout: 20_000 });
 
-  let workflowSearch = page.getByPlaceholder("Search workflows...");
+  let workflowSearch = page.getByPlaceholder("Search Workflow");
   if (!(await workflowSearch.isVisible().catch(() => false))) {
     const backToFlows = page.getByRole("button", { name: "Back to Flows", exact: true });
     if (await backToFlows.isVisible().catch(() => false)) {
       await backToFlows.click();
     }
   }
-  workflowSearch = page.getByPlaceholder("Search workflows...");
+  workflowSearch = page.getByPlaceholder("Search Workflow");
   await expect(workflowSearch).toBeVisible({ timeout: 20_000 });
   await workflowSearch.fill("Welcome Message Customer");
 
-  const namedWorkflow = page.getByText("Welcome Message Customer", { exact: true }).first();
-  await expect(namedWorkflow).toBeVisible({ timeout: 20_000 });
-  const workflowRow = namedWorkflow.locator("xpath=ancestor::div[contains(@class,'border-b')][1]");
-  await workflowRow.getByRole("button", { name: "Edit", exact: true }).click();
+  const workflowRow = page.locator(".onebuilder-list-row").filter({ hasText: "Welcome Message Customer" }).first();
+  await expect(workflowRow).toBeVisible({ timeout: 20_000 });
+  await workflowRow.click();
 
   const canvas = page.locator(".workflow-canvas-surface");
   await expect(canvas).toBeVisible();
