@@ -13,11 +13,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Pack repository
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install app dependencies
+        run: |
+          npm ci
+          npm install --prefix server --no-audit --no-fund
+      - name: Pack repository and dependencies
         run: |
           tar --exclude=.git -czf /tmp/oneengine-ux-audit.tar.gz .
+          tar -czf /tmp/oneengine-node-modules.tar.gz node_modules server/node_modules
+      - name: Pack PostgreSQL 16 rootfs
+        run: |
+          docker pull postgres:16
+          cid="$(docker create postgres:16)"
+          docker export "$cid" | gzip -1 > /tmp/postgres16-rootfs.tar.gz
+          docker rm "$cid"
       - uses: actions/upload-artifact@v4
         with:
           name: oneengine-ux-audit-source
           path: /tmp/oneengine-ux-audit.tar.gz
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oneengine-local-runtime
+          path: |
+            /tmp/oneengine-node-modules.tar.gz
+            /tmp/postgres16-rootfs.tar.gz
           retention-days: 1
