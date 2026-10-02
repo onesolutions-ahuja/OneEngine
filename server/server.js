@@ -81,7 +81,7 @@ import createIdentitySecurityRouter from "./routes/identitySecurity.js";
 import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
-import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, stepUpRequired } from "./services/identityAssurance.js";
+import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
 import createOwnDeliveryRouter from "./routes/ownDelivery.js";
@@ -1011,7 +1011,9 @@ app.get("/api/auth/google/callback", async (req, res) => {
       || !googleActivationSatisfied;
     if (googleNeedsOneEngineMfa) {
       const methods = await listMfaMethods(googleDb, { companyId: user.company_id, userId: user.id });
-      const usable = methods.filter((method) => !googleAssurancePolicy.effective.phishingResistantRequired || method.phishing_resistant === true);
+      const usable = sortMfaMethods(methods
+        .filter((method) => mfaMethodAllowed(method, googleAssurancePolicy.effective))
+        .filter((method) => !googleAssurancePolicy.effective.phishingResistantRequired || method.phishing_resistant === true));
       const challenge = await createPendingChallenge(googleDb, {
         companyId: user.company_id,
         userId: user.id,
@@ -1247,7 +1249,9 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       || !activationSatisfied;
     if (requiresSecondFactor) {
       const methods = await listMfaMethods(loginDb, { companyId: user.company_id, userId: user.id });
-      const usable = methods.filter((method) => !effectiveAssurance.phishingResistantRequired || method.phishing_resistant === true);
+      const usable = sortMfaMethods(methods
+        .filter((method) => mfaMethodAllowed(method, effectiveAssurance))
+        .filter((method) => !effectiveAssurance.phishingResistantRequired || method.phishing_resistant === true));
       const challenge = await createPendingChallenge(loginDb, {
         companyId: user.company_id,
         userId: user.id,
