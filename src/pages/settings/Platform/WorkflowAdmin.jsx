@@ -507,6 +507,24 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 8px;
     font-weight: 650;
   }
+  .workflow-branch-map {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    z-index: 2;
+    display: flex;
+    width: min(620px, calc(100vw - 620px));
+    min-width: 360px;
+    transform: translateX(-50%);
+    justify-content: center;
+    gap: 10px;
+    pointer-events: none;
+  }
+  .workflow-branch-path { position: relative; min-width: 78px; padding-top: 19px; text-align: center; pointer-events: auto; }
+  .workflow-branch-line { position: absolute; top: 0; left: 50%; width: 1px; height: 17px; background: #8fa6bf; }
+  .workflow-branch-label { display: block; overflow: hidden; color: #64748b; font-size: 8px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-branch-add { width: 22px; height: 22px; margin-top: 5px; border: 1px solid #8fa6bf; border-radius: 999px; background: #fff; color: #2563eb; font-size: 15px; line-height: 18px; cursor: pointer; }
+  .workflow-node-wrap:has(.workflow-branch-map) { margin-bottom: 72px; }
   .workflow-node-delete {
     position: absolute;
     top: 8px;
@@ -2189,6 +2207,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : getActionLabel(step.type)}</span>
               <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
               {step.type === "CONDITION" ? <div className="workflow-decision-preview">{(Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? step.config.outcomes : [{ label: "Outcome 1" }]).slice(0, 3).map((outcome, outcomeIndex) => <span key={outcome.id || outcomeIndex}>{outcome.label || `Outcome ${outcomeIndex + 1}`}</span>)}<span>Default Outcome</span></div> : null}
+              {step.type === "CONDITION" ? <div className="workflow-branch-map" aria-label="Decision paths">{[...(Array.isArray(step.config?.outcomes) && step.config.outcomes.length ? step.config.outcomes : [{ label: "Outcome 1" }]).slice(0, 3), { id: "__default__", label: "Default Outcome" }].map((outcome, outcomeIndex, all) => <div key={outcome.id || outcomeIndex} className="workflow-branch-path"><span className="workflow-branch-line" /><span className="workflow-branch-label">{outcome.label || `Outcome ${outcomeIndex + 1}`}</span><button type="button" className="workflow-branch-add" aria-label={`Add element to ${outcome.label || `Outcome ${outcomeIndex + 1}`}`} onClick={(event) => { event.stopPropagation(); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button></div>)}</div> : null}
               {step.type === "LOOP" ? <span className="workflow-node-note">Runs selected body steps once per collection item.</span> : null}
               {step.config?.faultMode && step.config.faultMode !== "FAIL" ? (
                 <span className="workflow-fault-badge">↳ On Error · {String(step.config.faultMode).toLowerCase().replace("_"," ")}{Array.isArray(step.config?.faultBranch) && step.config.faultBranch.length ? ` · ${step.config.faultBranch.length} recovery step${step.config.faultBranch.length === 1 ? "" : "s"}` : ""}</span>
