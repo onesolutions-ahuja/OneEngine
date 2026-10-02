@@ -196,7 +196,8 @@ export class WorkflowExecutionError extends Error {
     super(details.message);
     this.name = "WorkflowExecutionError";
     this.code = details.code || "WORKFLOW_EXECUTION_FAILED";
-    this.details = details;
+    this.oeCode = details.oeCode || classifyDebugCode(this, Number(details.status || 500));
+    this.details = { ...details, oeCode: this.oeCode };
     this.compensationFailures = compensationFailures;
   }
 }
