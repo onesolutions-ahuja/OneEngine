@@ -185,6 +185,10 @@ export default function LayoutEditor({
   const [registeredActions, setRegisteredActions] = useState([]);
   const [workflows, setWorkflows] = useState([]);
   const [recordTypes, setRecordTypes] = useState([]);
+  const [availableApps, setAvailableApps] = useState([]);
+  const [permissionCatalog, setPermissionCatalog] = useState([]);
+  const [layoutAssignments, setLayoutAssignments] = useState([]);
+  const [assignmentsTouched, setAssignmentsTouched] = useState(false);
   const [loadingObjects, setLoadingObjects] =
     useState(false);
   const [loadingFields, setLoadingFields] =
@@ -250,7 +254,37 @@ export default function LayoutEditor({
     setPreviewMode("");
     setFieldSearch("");
     setMobilePane("canvas");
+    setLayoutAssignments([]);
+    setAssignmentsTouched(false);
   }, [layoutId, initialObjectId, initialPageType]);
+
+  useEffect(() => {
+    if (!layoutId) {
+      setLayoutAssignments([]);
+      setAssignmentsTouched(false);
+      return;
+    }
+    let cancelled = false;
+    apiRequest(`/api/platform/layouts/${encodeURIComponent(layoutId)}/assignments`)
+      .then((result) => {
+        if (cancelled) return;
+        const rows = Array.isArray(result?.data) ? result.data : [];
+        setLayoutAssignments(rows.map((row) => ({
+          id: row.id,
+          appId: row.app_id || "",
+          recordTypeId: row.record_type_id || "",
+          roleId: row.role_id || "",
+          deviceProfile: row.device_profile || "any",
+          requiredPermissions: Array.isArray(row.required_permissions) ? row.required_permissions : [],
+          priority: Number(row.priority || 0),
+        })));
+        setAssignmentsTouched(false);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err?.message || "Unable to load layout activation assignments.");
+      });
+    return () => { cancelled = true; };
+  }, [layoutId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,6 +296,12 @@ export default function LayoutEditor({
       .catch(() => {});
     apiRequest("/api/platform/rules")
       .then((result) => { if (!cancelled && Array.isArray(result?.data)) setWorkflows(result.data.filter((rule) => rule?.action?.type === "workflow")); })
+      .catch(() => {});
+    apiRequest("/api/platform/apps")
+      .then((result) => { if (!cancelled && Array.isArray(result?.data)) setAvailableApps(result.data); })
+      .catch(() => {});
+    apiRequest("/api/platform/permission-catalog")
+      .then((result) => { if (!cancelled && Array.isArray(result?.data)) setPermissionCatalog(result.data); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -604,6 +644,30 @@ export default function LayoutEditor({
     updateComponent(index, "visibilityCondition", condition?.conditions?.length ? condition : null);
   }
 
+  function addLayoutAssignment() {
+    setLayoutAssignments((current) => [...current, {
+      appId: "",
+      recordTypeId: form.record_type_id || "",
+      roleId: form.role_id || "",
+      deviceProfile: "any",
+      requiredPermissions: [],
+      priority: 0,
+    }]);
+    setAssignmentsTouched(true);
+  }
+
+  function updateLayoutAssignment(index, key, value) {
+    setLayoutAssignments((current) => current.map((row, rowIndex) =>
+      rowIndex === index ? { ...row, [key]: value } : row
+    ));
+    setAssignmentsTouched(true);
+  }
+
+  function removeLayoutAssignment(index) {
+    setLayoutAssignments((current) => current.filter((_, rowIndex) => rowIndex !== index));
+    setAssignmentsTouched(true);
+  }
+
   async function saveLayout(event) {
     event.preventDefault();
 
@@ -650,6 +714,24 @@ export default function LayoutEditor({
 
       const saved =
         data?.data || data;
+
+      const savedLayoutId = saved?.id || saved?.layout_id || layoutId;
+      if (savedLayoutId && (assignmentsTouched || (isNew && layoutAssignments.length > 0))) {
+        await apiRequest(`/api/platform/layouts/${encodeURIComponent(savedLayoutId)}/assignments`, {
+          method: "PUT",
+          body: JSON.stringify({
+            assignments: layoutAssignments.map((assignment) => ({
+              appId: assignment.appId || null,
+              recordTypeId: assignment.recordTypeId || null,
+              roleId: assignment.roleId || null,
+              deviceProfile: assignment.deviceProfile || "any",
+              requiredPermissions: assignment.requiredPermissions || [],
+              priority: Number(assignment.priority || 0),
+            })),
+          }),
+        });
+        setAssignmentsTouched(false);
+      }
 
       if (
         typeof onSave ===
@@ -1101,6 +1183,75 @@ export default function LayoutEditor({
             <option value="inactive">Inactive</option>
           </select>
         </label>
+        <div className="pfb-activation">
+          <div className="pfb-activation-head">
+            <div>
+              <strong>Activation</strong>
+              <span>Choose where this layout is used. The most specific matching assignment wins.</span>
+            </div>
+            <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={addLayoutAssignment}>
+              <Plus size={12} aria-hidden="true" /> Add assignment
+            </button>
+          </div>
+          {layoutAssignments.length ? layoutAssignments.map((assignment, index) => (
+            <div className="pfb-activation-row" key={assignment.id || `assignment-${index}`}>
+              <label className="pfb-field">
+                <span className="pfb-field-label">App</span>
+                <select className="onepos-input" value={assignment.appId || ""} onChange={(event) => updateLayoutAssignment(index, "appId", event.target.value)}>
+                  <option value="">Any app</option>
+                  {availableApps.map((app) => <option key={app.id} value={app.id}>{app.label || app.app_key}</option>)}
+                </select>
+              </label>
+              <label className="pfb-field">
+                <span className="pfb-field-label">Record Type</span>
+                <select className="onepos-input" value={assignment.recordTypeId || ""} onChange={(event) => updateLayoutAssignment(index, "recordTypeId", event.target.value)}>
+                  <option value="">Any record type</option>
+                  {recordTypes.map((recordType) => <option key={recordType.id} value={recordType.id}>{recordType.label}</option>)}
+                </select>
+              </label>
+              <label className="pfb-field">
+                <span className="pfb-field-label">Role</span>
+                <select className="onepos-input" value={assignment.roleId || ""} onChange={(event) => updateLayoutAssignment(index, "roleId", event.target.value)}>
+                  <option value="">Any role</option>
+                  {availableRoles.map((role) => {
+                    const id = getId(role);
+                    return <option key={id} value={id}>{role?.name || role?.label || `Role ${id}`}</option>;
+                  })}
+                </select>
+              </label>
+              <label className="pfb-field">
+                <span className="pfb-field-label">Device</span>
+                <select className="onepos-input" value={assignment.deviceProfile || "any"} onChange={(event) => updateLayoutAssignment(index, "deviceProfile", event.target.value)}>
+                  <option value="any">Any device</option>
+                  <option value="desktop">Desktop</option>
+                  <option value="tablet">Tablet</option>
+                  <option value="mobile">Mobile</option>
+                </select>
+              </label>
+              <label className="pfb-field pfb-activation-permissions">
+                <span className="pfb-field-label">Required permissions</span>
+                <select
+                  className="onepos-input"
+                  multiple
+                  size={Math.min(5, Math.max(3, permissionCatalog.length || 3))}
+                  value={assignment.requiredPermissions || []}
+                  onChange={(event) => updateLayoutAssignment(index, "requiredPermissions", Array.from(event.target.selectedOptions).map((option) => option.value))}
+                >
+                  {permissionCatalog.map((permission) => <option key={permission} value={permission}>{permission}</option>)}
+                </select>
+              </label>
+              <label className="pfb-field">
+                <span className="pfb-field-label">Priority</span>
+                <input className="onepos-input" type="number" min="-1000" max="1000" value={assignment.priority ?? 0} onChange={(event) => updateLayoutAssignment(index, "priority", Number(event.target.value || 0))} />
+              </label>
+              <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary pfb-activation-remove" onClick={() => removeLayoutAssignment(index)}>
+                <Trash2 size={12} aria-hidden="true" /> Remove
+              </button>
+            </div>
+          )) : (
+            <p className="pfb-note">No explicit assignments. The legacy Record Type / Role fields above remain the fallback until you add an assignment.</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -1622,6 +1773,17 @@ export default function LayoutEditor({
       {error ? (
         <div className="onepos-alert onepos-alert-error pfb-alert">{error}</div>
       ) : null}
+      <style>{`
+        .pfb-activation { grid-column: 1 / -1; display:grid; gap:10px; margin-top:8px; padding-top:12px; border-top:1px solid var(--border-color,#e5e7eb); }
+        .pfb-activation-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+        .pfb-activation-head strong { display:block; font-size:12px; }
+        .pfb-activation-head span { display:block; margin-top:3px; color:var(--text-secondary,#64748b); font-size:10px; line-height:1.4; }
+        .pfb-activation-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:10px; border:1px solid var(--border-color,#e5e7eb); border-radius:9px; background:var(--muted-background,#f8fafc); }
+        .pfb-activation-permissions { grid-column:1 / -1; }
+        .pfb-activation-permissions select { min-height:78px; }
+        .pfb-activation-remove { justify-self:end; grid-column:1 / -1; }
+        @media (max-width:760px) { .pfb-activation-row { grid-template-columns:1fr; } .pfb-activation-permissions,.pfb-activation-remove { grid-column:auto; } }
+      `}</style>
       {diagnostics.length ? (
         <div className="onepos-alert onepos-alert-warning pfb-alert" role="status">
           <strong>Configuration diagnostics</strong>
