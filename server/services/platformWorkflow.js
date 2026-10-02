@@ -3124,7 +3124,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             };
           }
         }
-        return { status: "completed", matched: false, outcomeId: null, outcomeLabel: "Default", outcomeIndex: -1 };
+        return { status: "completed", matched: false, outcomeId: null, outcomeLabel: String(action.defaultLabel || "Default Outcome"), outcomeIndex: -1 };
       }
       const result = evaluateCondition(resolveWorkflowConditionConfig(action.condition, conditionContext), fields || [], record || {}, previousRecord || null);
       return { status: result ? "completed" : "skipped", matched: Boolean(result), legacyBinary: true };
@@ -4590,7 +4590,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
             ? null
             : outcomes.find((outcome) => String(outcome?.id) === String(result.outcomeId));
           selectedIds = selectedOutcome ? (selectedOutcome.branch || []) : (item.defaultBranch || []);
-          outcomeName = selectedOutcome?.label || "Default";
+          outcomeName = selectedOutcome?.label || String(item.defaultLabel || "Default Outcome");
         } else {
           selectedIds = result.matched ? (item.ifBranch || []) : (item.elseBranch || []);
           outcomeName = result.matched ? "IF" : "ELSE";
