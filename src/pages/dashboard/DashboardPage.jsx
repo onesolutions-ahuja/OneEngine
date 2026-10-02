@@ -462,7 +462,7 @@ export default function DashboardPage({ onOpenBuilder }) {
         {subscriptions.map((subscription)=><div key={subscription.id} className="flex items-center justify-between gap-3 rounded-lg border p-3" style={{borderColor:'var(--onepos-border)'}}><div><strong className="text-sm">{subscription.definition?.cadence || 'DAILY'} · {String(subscription.definition?.hour ?? 8).padStart(2,'0')}:{String(subscription.definition?.minute ?? 0).padStart(2,'0')}</strong><div className="text-xs opacity-70">{subscription.definition?.timezone || 'UTC'} · {subscription.last_status || 'Not run yet'}</div></div><button type="button" className="onepos-btn onepos-btn-sm" disabled={subscriptionBusy} onClick={()=>removeSubscription(subscription.id)}>Unsubscribe</button></div>)}
         {!subscriptionBusy && !subscriptions.length ? <p className="text-sm opacity-70">No dashboard subscriptions yet.</p> : null}
       </div>
-    </div>
+    </div> : null}
     {(definition?.global_filters || []).length ? <div className="onepos-card onepos-card-body flex flex-wrap items-end gap-3 mb-4">
       {(definition.global_filters || []).map((filter) => <DashboardFilterControl
         key={filter.key}
