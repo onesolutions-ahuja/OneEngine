@@ -927,8 +927,26 @@ app.get("/api/auth/google/callback", async (req, res) => {
       return res.redirect(googleOAuthErrorRedirect(returnTo, "account_disabled"));
     }
 
+    const googleDb = (query, params = []) => pool.query(query, params);
+    const googleIp = clientIp(req);
+    const googleAgent = req.get("user-agent") || null;
+    const googleSettings = await loadSecuritySettings(googleDb, user.company_id);
+    const googleAccess = await accessDecision(googleDb, {
+      companyId: user.company_id,
+      userId: user.id,
+      roleId: user.role_id,
+      ip: googleIp,
+    });
+    if (!googleAccess.allowed) {
+      await writeLoginHistory(googleDb, { user, identifier: email, status: "BLOCKED", reason: googleAccess.code, ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE" });
+      return res.redirect(googleOAuthErrorRedirect(returnTo, String(googleAccess.code || "security_policy_blocked").toLowerCase()));
+    }
+    await clearFailedLogin(googleDb, user);
     await pool.query("UPDATE users SET last_login_at=NOW() WHERE id=$1", [user.id]);
+    const sessionId = await createTrackedSession(googleDb, { user, ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", settings: googleSettings });
+    user.session_id = sessionId;
     const token = createToken(user);
+    await writeLoginHistory(googleDb, { user, identifier: email, status: "SUCCESS", ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", sessionId });
 
     const target = new URL(returnTo);
     target.hash = `google_token=${encodeURIComponent(token)}`;
