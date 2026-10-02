@@ -97,7 +97,8 @@ import createPlatformEventsRouter from "./routes/platformEvents.js";
 import { saveDomainConfiguration } from "./services/platformDomainRecords.js";
 import createAdvancedPlatformRouter from "./routes/advancedPlatform.js";
 import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformMetadata.js";
-import { verifyPublicPackageRegistry } from "./services/packageRegistry.js";
+import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
+import { seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
 import { getCompanyEntitlements } from "./services/licensing.js";
 import { requireEntitlement } from "./services/licensing.js";
 import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime } from "./services/googleConnect.js";
@@ -1959,13 +1960,6 @@ function platformBootstrapFingerprint() {
 
 async function platformBootstrapIsCurrent() {
   const fingerprint = platformBootstrapFingerprint();
-  await db(
-    `CREATE TABLE IF NOT EXISTS onepos_runtime_state (
-       state_key VARCHAR(120) PRIMARY KEY,
-       state_value TEXT NOT NULL,
-       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-     )`
-  );
   const result = await db(
     "SELECT state_value FROM onepos_runtime_state WHERE state_key='platform_bootstrap_fingerprint' LIMIT 1"
   );
@@ -1991,6 +1985,29 @@ async function startServer() {
     await db("SELECT NOW()");
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
+
+    // Catalogue availability is a core startup requirement, not part of the
+    // heavyweight metadata bootstrap. Keep OneStore/package discovery current
+    // before the HTTP listener can be reported live.
+    await db(
+      `CREATE TABLE IF NOT EXISTS onepos_runtime_state (
+         state_key VARCHAR(120) PRIMARY KEY,
+         state_value TEXT NOT NULL,
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+       )`
+    );
+    console.log("onePOS: syncing package catalogue...");
+    await seedInternalAppCatalog(pool);
+    await seedPackageRegistry(pool);
+    const startupRegistryHealth = await verifyPublicPackageRegistry(pool);
+    if (!startupRegistryHealth.healthy) {
+      const details = [
+        startupRegistryHealth.missing.length ? `missing=${startupRegistryHealth.missing.join(",")}` : "",
+        startupRegistryHealth.stale.length ? `stale=${startupRegistryHealth.stale.map((item) => item.packageKey).join(",")}` : "",
+      ].filter(Boolean).join(" ");
+      throw new Error(`Package catalogue startup verification failed${details ? `: ${details}` : ""}`);
+    }
+    console.log(`onePOS: package catalogue ready (${startupRegistryHealth.actualCount}/${startupRegistryHealth.expectedCount} public packages verified)`);
 
     const recoveredCommands = await db(
       `UPDATE platform_workflow_runs
