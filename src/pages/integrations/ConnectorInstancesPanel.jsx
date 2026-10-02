@@ -21,6 +21,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const [message, setMessage] = useState("");
   const [testActionValues, setTestActionValues] = useState({});
   const [runningTestAction, setRunningTestAction] = useState("");
+  const [testActionResults, setTestActionResults] = useState({});
   const [settingsEditMode, setSettingsEditMode] = useState("view");
   const existingInstance = instances.find((instance) => instance.packageKey === packageKey) || null;
 
@@ -155,6 +156,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     );
     const values = { ...defaults, ...(testActionValues[action.key] || {}) };
     setRunningTestAction(action.key);
+    setTestActionResults((current) => ({ ...current, [action.key]: null }));
     setError("");
     setMessage("");
     try {
@@ -164,11 +166,15 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
         body: JSON.stringify(values),
       });
       const providerId = result?.data?.providerMessageId;
-      setMessage(providerId
-        ? `${action.label || "Test"} completed successfully. Provider message ID: ${providerId}`
-        : `${action.label || "Test"} completed successfully.`);
+      const successText = providerId
+        ? `Sent successfully. Provider message ID: ${providerId}`
+        : (result?.data?.message || "Sent successfully.");
+      setTestActionResults((current) => ({ ...current, [action.key]: { success: true, message: successText } }));
+      setMessage(successText);
     } catch (actionError) {
-      setError(actionError.message || `Unable to run ${action.label || "test action"}`);
+      const failureText = actionError.message || `Unable to run ${action.label || "test action"}`;
+      setTestActionResults((current) => ({ ...current, [action.key]: { success: false, message: failureText } }));
+      setError(failureText);
     } finally {
       setRunningTestAction("");
     }
@@ -356,6 +362,11 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                       <button type="button" onClick={() => runPackageTestAction(existingInstance, action)} disabled={runningTestAction === action.key || missingRequired} className="h-9 px-4 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50 md:col-span-2 xl:col-span-3 xl:justify-self-end xl:min-w-40">
                         {runningTestAction === action.key ? "Running…" : action.label || "Run test"}
                       </button>
+                      {testActionResults[action.key] ? (
+                        <p role={testActionResults[action.key].success ? "status" : "alert"} className={`text-sm md:col-span-2 xl:col-span-3 ${testActionResults[action.key].success ? "text-emerald-700" : "text-red-700"}`}>
+                          {testActionResults[action.key].success ? "✓ " : "✕ "}{testActionResults[action.key].message}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 );
