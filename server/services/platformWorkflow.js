@@ -3424,6 +3424,146 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "CHOICE",
+    displayName: "Choice",
+    description: "Create one reusable screen choice.",
+    schema: { type: "object", properties: { resourceName: { type: "string" }, choiceLabel: { type: "string" }, choiceValue: {}, choiceDataType: { type: "string" } }, required: ["resourceName","choiceLabel"] },
+    validation: (action) => {
+      if (!action?.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.resourceName))) throw new Error("Choice requires a valid API Name");
+      if (!String(action.choiceLabel || "").trim()) throw new Error("Choice requires a label");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const value = resolveConfiguredResource(action.choiceValue, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+      const choice = { label: String(action.choiceLabel), value, dataType: action.choiceDataType || "text" };
+      workflowVariables.variables[String(action.resourceName)] = choice;
+      return { status: "completed", resourceName: String(action.resourceName), resourceType: "choice", value: choice };
+    },
+  },
+  {
+    key: "COLLECTION_CHOICE_SET",
+    displayName: "Collection Choice Set",
+    description: "Map a Flow collection into reusable screen choices.",
+    schema: { type: "object", properties: { resourceName: { type: "string" }, collection: { type: "string" }, choiceLabelPath: { type: "string" }, choiceValuePath: { type: "string" } }, required: ["resourceName","collection","choiceLabelPath","choiceValuePath"] },
+    validation: (action) => {
+      if (!action?.resourceName || !action?.collection || !action?.choiceLabelPath || !action?.choiceValuePath) throw new Error("Collection Choice Set is incomplete");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const source = resolveConfiguredResource(action.collection, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+      const getPath = (item, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);
+      const choices = (Array.isArray(source) ? source : []).map((item) => ({
+        label: String(getPath(item, action.choiceLabelPath) ?? ""),
+        value: getPath(item, action.choiceValuePath),
+      })).filter((choice) => choice.label);
+      workflowVariables.variables[String(action.resourceName)] = choices;
+      return { status: "completed", resourceName: String(action.resourceName), resourceType: "choice_collection", value: choices, count: choices.length };
+    },
+  },
+  {
+    key: "PICKLIST_CHOICE_SET",
+    displayName: "Picklist Choice Set",
+    description: "Reuse the configured values of a picklist field as screen choices.",
+    schema: { type: "object", properties: { resourceName: { type: "string" }, object: { type: "string" }, fieldApiName: { type: "string" } }, required: ["resourceName","object","fieldApiName"] },
+    validation: (action) => {
+      if (!action?.resourceName || !action?.object || !action?.fieldApiName) throw new Error("Picklist Choice Set is incomplete");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, db, companyId, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const target = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const fieldResult = await db(
+        `SELECT * FROM platform_fields
+          WHERE object_id=$1 AND api_name=$2 AND active=true AND (company_id IS NULL OR company_id=$3)
+          LIMIT 1`,
+        [target.id, action.fieldApiName, companyId || req?.user?.companyId]
+      );
+      const field = fieldResult.rows?.[0];
+      if (!field) throw new Error("Picklist field is unavailable");
+      const config = field.config && typeof field.config === "object" ? field.config : {};
+      const raw = Array.isArray(config.options) ? config.options : Array.isArray(config.values) ? config.values : Array.isArray(config.choices) ? config.choices : [];
+      const choices = raw.map((item) => typeof item === "object"
+        ? { label: String(item.label ?? item.value ?? ""), value: item.value ?? item.key ?? item.label }
+        : { label: String(item), value: item }).filter((choice) => choice.label);
+      workflowVariables.variables[String(action.resourceName)] = choices;
+      return { status: "completed", resourceName: String(action.resourceName), resourceType: "choice_collection", value: choices, count: choices.length };
+    },
+  },
+  {
+    key: "RECORD_CHOICE_SET",
+    displayName: "Record Choice Set",
+    description: "Build screen choices from tenant-scoped records.",
+    schema: { type: "object", properties: { resourceName: { type: "string" }, object: { type: "string" }, choiceLabelField: { type: "string" }, choiceValueField: { type: "string" }, limit: { type: "number" } }, required: ["resourceName","object","choiceLabelField","choiceValueField"] },
+    validation: (action) => {
+      if (!action?.resourceName || !action?.object || !action?.choiceLabelField || !action?.choiceValueField) throw new Error("Record Choice Set is incomplete");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, db, companyId, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const target = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const tenantId = companyId || req?.user?.companyId;
+      const metadataResult = await db(
+        `SELECT * FROM platform_fields
+          WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)`,
+        [target.id, tenantId]
+      );
+      const fields = metadataResult.rows || [];
+      const labelField = fields.find((field) => String(field.api_name) === String(action.choiceLabelField) || String(field.source_column) === String(action.choiceLabelField));
+      const valueField = String(action.choiceValueField) === "id"
+        ? { api_name: "id", source_column: "id" }
+        : fields.find((field) => String(field.api_name) === String(action.choiceValueField) || String(field.source_column) === String(action.choiceValueField));
+      const labelColumn = labelField?.source_column || labelField?.api_name;
+      const valueColumn = valueField?.source_column || valueField?.api_name;
+      if (!isSafeIdentifier(labelColumn) || !isSafeIdentifier(valueColumn)) throw new Error("Record Choice Set fields are unavailable");
+      const params = [];
+      const clauses = [];
+      if (target.company_scoped !== false) {
+        params.push(tenantId);
+        clauses.push(`company_id=${params.length}`);
+      }
+      if (target.store_scoped) {
+        if (!req?.user?.storeId) throw new Error("Record Choice Set requires an active store");
+        params.push(req.user.storeId);
+        clauses.push(`store_id=${params.length}`);
+      }
+      params.push(Math.max(1, Math.min(200, Number(action.limit || 50))));
+      const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+      const result = await db(
+        `SELECT "${labelColumn}" AS label_value,"${valueColumn}" AS stored_value
+           FROM "${target.source_table}"${where}
+          ORDER BY "${labelColumn}" NULLS LAST
+          LIMIT ${params.length}`,
+        params
+      );
+      const choices = (result.rows || []).map((row) => ({ label: String(row.label_value ?? ""), value: row.stored_value })).filter((choice) => choice.label);
+      workflowVariables.variables[String(action.resourceName)] = choices;
+      return { status: "completed", resourceName: String(action.resourceName), resourceType: "choice_collection", value: choices, count: choices.length };
+    },
+  },
+  {
+    key: "STAGE",
+    displayName: "Stage",
+    description: "Define an ordered Screen Flow progress stage.",
+    schema: { type: "object", properties: { resourceName: { type: "string" }, stageLabel: { type: "string" }, stageValue: {}, stageOrder: { type: "number" } }, required: ["resourceName","stageLabel"] },
+    validation: (action) => {
+      if (!action?.resourceName || !String(action.stageLabel || "").trim()) throw new Error("Stage is incomplete");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const stage = { label: String(action.stageLabel), value: action.stageValue ?? action.resourceName, order: Math.max(1, Number(action.stageOrder || 1)) };
+      workflowVariables.variables[String(action.resourceName)] = stage;
+      return { status: "completed", resourceName: String(action.resourceName), resourceType: "stage", value: stage };
+    },
+  },
+  {
     key: "SCREEN",
     displayName: "Screen",
     description: "Pause a flow and present a metadata-defined interactive screen.",
@@ -3451,8 +3591,21 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, workflowVariables = {} }) => {
       const tenantId = companyId || req?.user?.companyId;
       if (!runId) throw new Error("Screen requires a persisted workflow run");
+      const rawScreen = action.screen || {};
+      const resolveScreenResource = (value) => resolveConfiguredResource(value, { req, workflowVariables }, { preserveMissing: false });
+      const components = (Array.isArray(rawScreen.components) ? rawScreen.components : []).map((component) => {
+        if (!component?.choiceResource) return { ...component };
+        const resolved = resolveScreenResource(component.choiceResource);
+        const choices = Array.isArray(resolved) ? resolved : resolved && typeof resolved === "object" && Object.prototype.hasOwnProperty.call(resolved, "label") ? [resolved] : [];
+        return { ...component, options: choices.map((choice) => ({ label: String(choice?.label ?? choice?.value ?? ""), value: choice?.value ?? choice?.label })).filter((choice) => choice.label) };
+      });
+      const stages = Object.values(workflowVariables.variables || {})
+        .filter((value) => value && typeof value === "object" && !Array.isArray(value) && Number.isFinite(Number(value.order)) && value.label)
+        .sort((a, b) => Number(a.order) - Number(b.order));
       const screen = {
-        ...(action.screen || {}),
+        ...rawScreen,
+        components,
+        stages,
         allowBack: action.allowBack !== false,
         allowFinish: action.allowFinish !== false,
         showFooter: action.showFooter !== false,
