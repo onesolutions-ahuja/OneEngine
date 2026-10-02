@@ -179,6 +179,8 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const [listSearch, setListSearch] = useState('')
   const [listFilters, setListFilters] = useState({})
   const [listSort, setListSort] = useState({ key: '', direction: 'asc' })
+  const [listDisplayMode, setListDisplayMode] = useState('split')
+  const [kanbanField, setKanbanField] = useState('')
   const [pageInfo, setPageInfo] = useState({ page: 1, pageSize: 50, total: 0, pages: 0 })
   const rowRequestRef = useRef(0)
   const searchTimerRef = useRef(null)
@@ -247,6 +249,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     search = listSearch,
     filters = listFilters,
     sort = listSort,
+    pageSizeOverride = null,
   } = {}) => {
     if (!object) return
     const requestId = ++rowRequestRef.current
@@ -256,6 +259,8 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     try {
       const params = new URLSearchParams()
       params.set('page', String(Math.max(1, Number(page) || 1)))
+      if (pageSizeOverride) params.set('pageSize', String(pageSizeOverride))
+      else if (listDisplayMode === 'kanban') params.set('pageSize', '200')
       if (listViewId) params.set('listViewId', listViewId)
       if (search?.trim()) params.set('search', search.trim())
       params.set('viewFilters', JSON.stringify(uiFiltersToMetadata(filters)))
@@ -455,6 +460,63 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     }
   }
 
+  const manageListView = async (action) => {
+    if (!selectedObject || !activeListViewId) return
+    const view = runtimeMeta.listViews.find((item) => String(item.id) === String(activeListViewId))
+    if (!view || !(view.owner_user_id || view.scope === 'PERSONAL')) return
+    try {
+      setError('')
+      if (action === 'rename') {
+        const label = window.prompt('Rename this list view', view.label || '')?.trim()
+        if (!label || label === view.label) return
+        await apiRequest(`/api/platform/list-views/${encodeURIComponent(view.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ label }),
+        })
+        await loadObject(selectedObject, true, view.id)
+        return
+      }
+      if (action === 'default') {
+        await apiRequest(`/api/platform/list-views/${encodeURIComponent(view.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ isDefault: true }),
+        })
+        await loadObject(selectedObject, true, view.id)
+        return
+      }
+      if (action === 'delete') {
+        if (!window.confirm(`Delete list view “${view.label}”?`)) return
+        await apiRequest(`/api/platform/list-views/${encodeURIComponent(view.id)}`, { method: 'DELETE' })
+        await loadObject(selectedObject, true, '')
+      }
+    } catch (err) {
+      setError(err?.message || 'Unable to manage list view')
+    }
+  }
+
+  const handleDisplayModeChange = (mode) => {
+    if (!['table','split','kanban'].includes(mode)) return
+    setListDisplayMode(mode)
+    const nextKanbanField = kanbanField || fields.find((field) => ['picklist','select','boolean'].includes(String(field.field_type || '').toLowerCase()))?.api_name || ''
+    if (mode === 'kanban' && nextKanbanField && nextKanbanField !== kanbanField) setKanbanField(nextKanbanField)
+    void loadRows({
+      object: selectedObject,
+      listViewId: activeListViewId,
+      page: 1,
+      search: listSearch,
+      filters: listFilters,
+      sort: listSort,
+      pageSizeOverride: mode === 'kanban' ? 200 : null,
+    })
+  }
+
+  const handleKanbanMove = async (rowId, fieldKey, value) => {
+    const row = rows.find((item) => String(item.id) === String(rowId))
+    const column = columns.find((item) => item.key === fieldKey)
+    if (!row || !column) return
+    await inlineEditRecord(row, column, value)
+  }
+
   const filteredObjects = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return objects
@@ -466,6 +528,9 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const activeListView = runtimeMeta.listViews.find((item) => String(item.id) === String(activeListViewId)) || runtimeMeta.defaultListView || null
   const columns = useMemo(() => makeColumns(fields, activeListView), [fields, activeListView])
   const searchKeys = useMemo(() => columns.map((column) => column.key), [columns])
+  const kanbanFields = useMemo(() => fields
+    .filter((field) => field.readable !== false && field.writable !== false && ['picklist','select','boolean'].includes(String(field.field_type || '').toLowerCase()))
+    .map((field) => ({ key: field.api_name, label: field.label || field.api_name })), [fields])
   const canCreate = permissions?.can_create === true
   const canEdit = permissions?.can_edit === true
   const canDelete = permissions?.can_delete === true
@@ -801,7 +866,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   }
 
   return (
-    <section className="workspace-page">
+    <section className={`workspace-page workspace-mode-${listDisplayMode}`}>
       <aside className="workspace-object-pane">
         <div className="workspace-pane-title">
           <div><strong>Workspace</strong><span>{objects.length} objects</span></div>
@@ -857,11 +922,18 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             onInlineEdit={canEdit ? inlineEditRecord : null}
             onBulkEdit={canEdit ? openBulkEdit : null}
             onBulkDelete={canDelete ? bulkDeleteRecords : null}
+            onManageListView={manageListView}
+            displayMode={listDisplayMode}
+            onDisplayModeChange={handleDisplayModeChange}
+            kanbanFields={kanbanFields}
+            kanbanField={kanbanField || kanbanFields[0]?.key || ''}
+            onKanbanFieldChange={(fieldKey) => { setKanbanField(fieldKey); void loadRows({ object: selectedObject, listViewId: activeListViewId, page: 1, search: listSearch, filters: listFilters, sort: listSort, pageSizeOverride: 200 }) }}
+            onKanbanMove={canEdit ? handleKanbanMove : null}
           />
         ) : <div className="workspace-state">Select an object.</div>}
       </main>
 
-      <aside className="workspace-detail-pane">
+      {listDisplayMode === 'split' ? <aside className="workspace-detail-pane">
         {!selectedObject ? null : loadingDetail ? (
           <div className="workspace-state">Loading record…</div>
         ) : detailRecord ? (
@@ -965,7 +1037,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         ) : (
           <div className="workspace-state">Select a record to see its details.</div>
         )}
-      </aside>
+      </aside> : null}
 
       {editor ? (
         <div className="workspace-editor-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setEditor(null)}>
