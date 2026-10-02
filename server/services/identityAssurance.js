@@ -19,6 +19,10 @@ export function effectiveAssurance(settings, policy) {
     passkeyAssurance: String(settings?.passkey_assurance || "HIGH").toUpperCase(),
     ssoAssurance: String(settings?.sso_assurance || "STANDARD").toUpperCase(),
     stepUpPeriodMinutes: Math.max(1, Number(settings?.step_up_period_minutes || 15)),
+    allowTotp: settings?.allow_totp !== false,
+    allowPlatformPasskeys: settings?.allow_platform_passkeys !== false,
+    allowSecurityKeys: settings?.allow_security_keys !== false,
+    allowRecoveryCodes: settings?.allow_recovery_codes !== false,
   };
 }
 
@@ -78,7 +82,7 @@ export function totpUri({secret,email,issuer="OneEngine"}){
 }
 
 export async function listMfaMethods(db,{companyId,userId,includeUnverified=false}){
-  const r=await db(`SELECT id,method_type,label,credential_id,sign_count,transports,aaguid,discoverable,phishing_resistant,verified,active,created_at,last_used_at
+  const r=await db(`SELECT id,method_type,label,credential_id,sign_count,transports,aaguid,discoverable,authenticator_kind,phishing_resistant,verified,active,created_at,last_used_at
     FROM identity_mfa_methods WHERE company_id=$1 AND user_id=$2 AND active=TRUE ${includeUnverified?"":"AND verified=TRUE"} ORDER BY created_at`,[companyId,userId]);
   return r.rows;
 }
@@ -180,4 +184,55 @@ export function stepUpRequired({session,policy,defaultMinutes=15}){
   const minutes=Number(policy.reverify_after_minutes||defaultMinutes||15);
   const verified=session?.assurance_verified_at?new Date(session.assurance_verified_at).getTime():0;
   return !verified || Date.now()-verified>minutes*60000;
+}
+
+
+function hashTemporaryCode(code){
+  return crypto.createHash("sha256").update(String(code||"").replace(/\s+/g,"")).digest("hex");
+}
+
+export async function generateTemporaryVerificationCode(db,{companyId,userId,generatedBy,expiresHours=1}){
+  const hours=Math.min(24,Math.max(1,Number(expiresHours)||1));
+  const recent=await db(`SELECT COUNT(*)::int count FROM identity_temporary_verification_codes
+    WHERE user_id=$1 AND generated_at>NOW()-INTERVAL '1 hour'`,[userId]);
+  if(Number(recent.rows[0]?.count||0)>=6){
+    const error=new Error("No more than six temporary verification codes can be generated per user per hour");
+    error.code="TEMP_CODE_RATE_LIMIT"; error.status=429; throw error;
+  }
+  await db("UPDATE identity_temporary_verification_codes SET expired_at=NOW() WHERE user_id=$1 AND expired_at IS NULL",[userId]);
+  const code=String(crypto.randomInt(0,100000000)).padStart(8,"0");
+  const r=await db(`INSERT INTO identity_temporary_verification_codes(company_id,user_id,code_hash,expires_at,generated_by)
+    VALUES($1,$2,$3,NOW()+($4::text||' hours')::interval,$5) RETURNING id,expires_at,generated_at`,
+    [companyId,userId,hashTemporaryCode(code),hours,generatedBy||null]);
+  return {...r.rows[0],code};
+}
+
+export async function verifyTemporaryVerificationCode(db,{companyId,userId,code}){
+  const value=String(code||"").replace(/\s+/g,"");
+  if(!/^\d{8}$/.test(value))return false;
+  const r=await db(`SELECT id,code_hash FROM identity_temporary_verification_codes
+    WHERE company_id=$1 AND user_id=$2 AND expired_at IS NULL AND expires_at>NOW()
+    ORDER BY generated_at DESC LIMIT 1`,[companyId,userId]);
+  const row=r.rows[0];if(!row)return false;
+  const a=Buffer.from(hashTemporaryCode(value)),b=Buffer.from(row.code_hash);
+  return a.length===b.length&&crypto.timingSafeEqual(a,b);
+}
+
+export async function activeTemporaryVerificationCode(db,{companyId,userId}){
+  const r=await db(`SELECT id,expires_at,generated_at FROM identity_temporary_verification_codes
+    WHERE company_id=$1 AND user_id=$2 AND expired_at IS NULL AND expires_at>NOW()
+    ORDER BY generated_at DESC LIMIT 1`,[companyId,userId]);
+  return r.rows[0]||null;
+}
+
+export function mfaMethodAllowed(method,effective){
+  if(!method)return false;
+  if(method.method_type==="TOTP")return effective?.allowTotp!==false;
+  if(method.method_type==="RECOVERY_CODES")return effective?.allowRecoveryCodes!==false;
+  if(method.method_type==="PASSKEY"){
+    if(method.authenticator_kind==="SECURITY_KEY")return effective?.allowSecurityKeys!==false;
+    if(method.authenticator_kind==="PLATFORM")return effective?.allowPlatformPasskeys!==false;
+    return effective?.allowPlatformPasskeys!==false||effective?.allowSecurityKeys!==false;
+  }
+  return false;
 }
