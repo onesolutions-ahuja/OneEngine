@@ -29,14 +29,14 @@ jobs:
       - name: Test backend legacy browser redirect
         run: |
           set -euo pipefail
-          HEADERS="$(curl --retry 6 --retry-all-errors --retry-delay 5 -fsSI "https://onepos.onrender.com/")"
+          HEADERS="$(curl --retry 6 --retry-all-errors --retry-delay 5 -fsSI "https://oneengine.onrender.com/")"
           echo "$HEADERS"
           echo "$HEADERS" | grep -qi '^location: https://onesolutions-ahuja.github.io/OneEngine'
 
       - name: Test backend and database health
         run: |
           set -euo pipefail
-          BODY="$(curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "https://onepos.onrender.com/api/health")"
+          BODY="$(curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "https://oneengine.onrender.com/api/health")"
           echo "$BODY"
           echo "$BODY" | grep -q '"success":true'
           echo "$BODY" | grep -q '"status":"online"'
@@ -47,6 +47,6 @@ jobs:
           set -euo pipefail
           HEADERS="$(curl --retry 6 --retry-all-errors --retry-delay 5 -fsSI \
             -H 'Origin: https://onesolutions-ahuja.github.io' \
-            "https://onepos.onrender.com/api/health")"
+            "https://oneengine.onrender.com/api/health")"
           echo "$HEADERS"
           echo "$HEADERS" | grep -qi 'access-control-allow-origin:'
