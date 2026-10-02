@@ -28,6 +28,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const [submitting, setSubmitting] = useState(false)
   const [mfa, setMfa] = useState(null)
   const [mfaCode, setMfaCode] = useState('')
+  const [alternateCode, setAlternateCode] = useState('')
   const [totpSetup, setTotpSetup] = useState(null)
   const [trustDevice, setTrustDevice] = useState(false)
   const [providers, setProviders] = useState([])
@@ -169,17 +170,26 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const useRecoveryCode = async () => {
     try {
       setSubmitting(true); setError('')
-      const result = await verifyMfa({ challengeId:mfa.challengeId, methodType:'RECOVERY_CODE', code:mfaCode, trustDevice, deviceName:browserDeviceName() })
+      const result = await verifyMfa({ challengeId:mfa.challengeId, methodType:'RECOVERY_CODE', code:alternateCode, trustDevice, deviceName:browserDeviceName() })
       if (result?.token) onUnlock()
     } catch (err) { setError(err?.message || 'Recovery code is invalid') }
     finally { setSubmitting(false) }
   }
 
-  const registerPasskey = async () => {
+  const useTemporaryCode = async () => {
+    try {
+      setSubmitting(true); setError('')
+      const result = await verifyMfa({ challengeId:mfa.challengeId, methodType:'TEMPORARY_CODE', code:alternateCode, trustDevice:false, deviceName:browserDeviceName() })
+      if (result?.token) onUnlock()
+    } catch (err) { setError(err?.message || 'Temporary verification code is invalid') }
+    finally { setSubmitting(false) }
+  }
+
+  const registerPasskey = async (authenticatorKind = 'PLATFORM') => {
     try {
       setSubmitting(true); setError('')
       if (!window.PublicKeyCredential || !navigator.credentials) throw new Error('Passkeys are not supported on this browser/device.')
-      const response = await startPasskeyRegistration(mfa.challengeId)
+      const response = await startPasskeyRegistration(mfa.challengeId, authenticatorKind)
       const credential = await navigator.credentials.create({ publicKey: decodeCreationOptions(response.data) })
       const result = await completePasskeyRegistration({
         challengeId:mfa.challengeId, credential:credentialToJson(credential), label:'Passkey',
@@ -316,14 +326,21 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
 
               {mfa.enrollmentRequired ? (
                 <>
-                  {mfa.phishingResistantRequired ? null : (
+                  {mfa.allowedEnrollmentMethods?.includes('TOTP') ? (
                     <button className="login-submit" type="button" disabled={submitting} onClick={startTotp}>
                       Set up authenticator
                     </button>
-                  )}
-                  <button className="google-signin-button" type="button" disabled={submitting} onClick={registerPasskey}>
-                    Set up passkey
-                  </button>
+                  ) : null}
+                  {mfa.allowedEnrollmentMethods?.includes('PLATFORM_PASSKEY') ? (
+                    <button className="google-signin-button" type="button" disabled={submitting} onClick={()=>registerPasskey('PLATFORM')}>
+                      Set up built-in passkey
+                    </button>
+                  ) : null}
+                  {mfa.allowedEnrollmentMethods?.includes('SECURITY_KEY') ? (
+                    <button className="google-signin-button" type="button" disabled={submitting} onClick={()=>registerPasskey('SECURITY_KEY')}>
+                      Set up physical security key
+                    </button>
+                  ) : null}
                 </>
               ) : (
                 <>
@@ -338,8 +355,17 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
                   {!mfa.phishingResistantRequired && mfa.availableMethods?.some((item)=>item.type==='TOTP') ? (
                     <button className="login-submit" type="button" disabled={submitting || mfaCode.length!==6} onClick={completeTotp}>Verify code</button>
                   ) : null}
-                  {!mfa.phishingResistantRequired ? (
-                    <button className="lock-signout" type="button" disabled={submitting || !mfaCode.trim()} onClick={useRecoveryCode}>Use recovery code</button>
+                  {!mfa.phishingResistantRequired && mfa.availableMethods?.some((item)=>item.type==='RECOVERY_CODES') ? (
+                    <>
+                      <input className="login-field" value={alternateCode} onChange={(e)=>setAlternateCode(e.target.value.toUpperCase())} placeholder="Recovery code" autoComplete="one-time-code" />
+                      <button className="lock-signout" type="button" disabled={submitting || !alternateCode.trim()} onClick={useRecoveryCode}>Use recovery code</button>
+                    </>
+                  ) : null}
+                  {!mfa.phishingResistantRequired && mfa.availableMethods?.some((item)=>item.type==='TEMPORARY_CODE') ? (
+                    <>
+                      <input className="login-field login-pin-field" value={alternateCode} onChange={(e)=>setAlternateCode(e.target.value.replace(/\D/g,'').slice(0,8))} placeholder="8-digit temporary code" inputMode="numeric" autoComplete="one-time-code" />
+                      <button className="lock-signout" type="button" disabled={submitting || alternateCode.length!==8} onClick={useTemporaryCode}>Use temporary verification code</button>
+                    </>
                   ) : null}
                 </>
               )}
@@ -360,7 +386,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
               </label>
 
               {error ? <div className="login-error">{error}</div> : null}
-              <button className="lock-signout" type="button" onClick={()=>{setMfa(null);setTotpSetup(null);setMfaCode('');setError('')}} disabled={submitting}>Back to sign in</button>
+              <button className="lock-signout" type="button" onClick={()=>{setMfa(null);setTotpSetup(null);setMfaCode('');setAlternateCode('');setError('')}} disabled={submitting}>Back to sign in</button>
             </>
           ) : (
             <>
