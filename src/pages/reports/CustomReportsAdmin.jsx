@@ -111,7 +111,8 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     relationshipKey:relationship.relationship_key||relationship.key,
   }))),[platformRelationships]);
   const availableFields=definition.dataSource==="platform_object"?[...platformFields,...relatedPlatformFields]:metadata.fields;
-  const selectedFields=useMemo(()=>definition.fields.map((key)=>availableFields.find((field)=>field.key===key)).filter(Boolean),[definition.fields,availableFields]);\n  const selectedObjectMeta=(metadata.platformObjects||[]).find((object)=>String(object.id)===String(definition.objectId||""));
+  const selectedFields=useMemo(()=>definition.fields.map((key)=>availableFields.find((field)=>field.key===key)).filter(Boolean),[definition.fields,availableFields]);
+  const selectedObjectMeta=(metadata.platformObjects||[]).find((object)=>String(object.id)===String(definition.objectId||""));
   const historicalFieldKeys=selectedObjectMeta?.config?.historicalTrending?.enabled===true&&Array.isArray(selectedObjectMeta.config.historicalTrending.fields)?selectedObjectMeta.config.historicalTrending.fields:[];
   const historicalFields=availableFields.filter((field)=>historicalFieldKeys.includes(field.key));
   const historicalEnabled=definition.historicalTrend?.enabled===true;
