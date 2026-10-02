@@ -542,8 +542,8 @@ export async function verifyMfa({ challengeId, methodId, methodType = 'TOTP', co
   return data
 }
 
-export async function startPasskeyRegistration(challengeId) {
-  return apiRequest('/api/auth/mfa/passkey/registration-options', { method: 'POST', body: JSON.stringify({ challengeId }) })
+export async function startPasskeyRegistration(challengeId, authenticatorKind = 'PLATFORM') {
+  return apiRequest('/api/auth/mfa/passkey/registration-options', { method: 'POST', body: JSON.stringify({ challengeId, authenticatorKind }) })
 }
 
 export async function completePasskeyRegistration({ challengeId, credential, label = 'Passkey', trustDevice = false, deviceName = '' }) {
