@@ -1475,6 +1475,104 @@ export default function createConnectorsRouter({
     }
   });
 
+  router.post("/connector-instances/:id/send-test-email", authenticate, authorize("communications.send"), async (req, res) => {
+    try {
+      const recipient = String(req.body?.recipient || "").trim().toLowerCase();
+      const subject = String(req.body?.subject || "Brevo Test").trim();
+      const message = String(req.body?.message || "It works I love chatGPT").trim();
+
+      if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) || recipient.length > 320) {
+        return res.status(400).json({ success: false, code: "INVALID_RECIPIENT", message: "Enter a valid recipient email address" });
+      }
+      if (!subject || subject.length > 200) {
+        return res.status(400).json({ success: false, code: "INVALID_SUBJECT", message: "Email subject is required and must be 200 characters or fewer" });
+      }
+      if (!message || message.length > 2000) {
+        return res.status(400).json({ success: false, code: "INVALID_MESSAGE", message: "Email message is required and must be 2000 characters or fewer" });
+      }
+
+      const instanceResult = await db(
+        `SELECT c.*,p.manifest
+           FROM integration_connections c
+           JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
+          WHERE c.id=$1 AND c.company_id=$2
+          LIMIT 1`,
+        [req.params.id, req.user.companyId]
+      );
+      const instance = instanceResult.rows[0];
+      if (!instance) return res.status(404).json({ success: false, message: "Connector instance not found" });
+      if (instance.connector_package_key !== "brevo_connector") {
+        return res.status(400).json({ success: false, message: "This test is only available for Brevo" });
+      }
+
+      const lastTest = jsonValue(instance.last_test_result, {});
+      if (lastTest?.success !== true || String(instance.connection_status || "").toUpperCase() !== "CONNECTED") {
+        return res.status(409).json({ success: false, message: "Run a successful Brevo connection test before sending email" });
+      }
+
+      const driver = drivers?.get(instance.connector_package_key);
+      if (!driver || !driver.capabilities?.has?.("email.send")) {
+        return res.status(409).json({ success: false, message: "Brevo email send capability is unavailable" });
+      }
+
+      const configuration = {
+        ...jsonValue(instance.connector_configuration, {}),
+        ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
+      };
+      const service = new ConnectorService({
+        connectorKey: instance.connector_package_key,
+        capabilities: ["email.send"],
+        adapter: driver.createAdapter({
+          instanceId: instance.id,
+          configuration,
+          companyId: instance.company_id,
+          storeId: instance.store_id,
+          tillId: instance.till_id,
+        }),
+      });
+
+      const connection = await service.connect();
+      if (!connection.healthy) {
+        return res.status(409).json({ success: false, message: connection.lastError || "Brevo is not healthy" });
+      }
+
+      const result = await service.execute("email.send", {
+        to: recipient,
+        subject,
+        text: message,
+      });
+
+      await writeAudit?.(
+        req.user.companyId,
+        req.user.id || null,
+        "connector.test_email.sent",
+        "integration_connection",
+        instance.id,
+        {
+          packageKey: instance.connector_package_key,
+          recipientDomain: recipient.split("@")[1] || null,
+          providerMessageId: result?.providerMessageId || null,
+        }
+      );
+
+      return res.json({
+        success: true,
+        data: {
+          status: result?.status || "SENT",
+          providerMessageId: result?.providerMessageId || null,
+          message: "Test email submitted to Brevo",
+        },
+      });
+    } catch (error) {
+      console.error("Send Brevo test email error:", error);
+      return res.status(error?.status || 500).json({
+        success: false,
+        code: error?.code || undefined,
+        message: error?.message || "Unable to send Brevo test email",
+      });
+    }
+  });
+
   router.post("/connector-instances/:id/send-test-sms", authenticate, authorize("communications.send"), async (req, res) => {
     try {
       const recipient = String(req.body?.recipient || "").trim();
