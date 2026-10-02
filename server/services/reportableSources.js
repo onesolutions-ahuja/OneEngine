@@ -301,7 +301,7 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
     if (relationship.target_company_scoped === true) relationScope.push(`${alias}.company_id = $1`);
     if (relationship.target_store_scoped === true) {
       if (!scope.storeId) throw new Error("A store session is required to report on this relationship");
-      relationScope.push(`${alias}.store_id = ${next}`);
+      relationScope.push(`${alias}.store_id = $${next}`);
       params.push(String(scope.storeId));
       next += 1;
     }
