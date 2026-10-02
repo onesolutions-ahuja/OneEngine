@@ -1,4 +1,4 @@
-import { normalizePicklistOptions, localPicklistOptions, fieldValueError, normalizeFieldValue, enrichFields, applyFieldSecurity, resolveEffectiveFieldSecurity, valueSetOptions } from "../services/platformFieldValues.js";
+import { normalizePicklistOptions, localPicklistOptions, fieldValueError, normalizeFieldValue, enrichFields, applyFieldSecurity, resolveEffectiveFieldSecurity, valueSetOptions, formatAutoNumberValue } from "../services/platformFieldValues.js";
 import express from "express";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
 import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
@@ -587,7 +587,7 @@ async function hydrateFormulaRecordPaths(db, object, fields, records, req, depth
     const params = [id];
     if (parent.company_scoped || systemObject(parent)) {
       params.push(req.user.companyId);
-      clauses.push(`company_id=${params.length}`);
+      clauses.push(`company_id=$${params.length}`);
     }
     if (parent.store_scoped) {
       if (!req.user.storeId) {
@@ -595,7 +595,7 @@ async function hydrateFormulaRecordPaths(db, object, fields, records, req, depth
         return null;
       }
       params.push(req.user.storeId);
-      clauses.push(`store_id=${params.length}`);
+      clauses.push(`store_id=$${params.length}`);
     }
     appendSystemReadScope(parent, req, clauses, params);
     const sharing = await buildPlatformSharingScope({ db, object: parent, fields: parentFields, req, access: "read", paramsOffset: params.length });
@@ -5366,11 +5366,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         let where = "id=$1";
         if (object.company_scoped !== false) {
           params.push(req.user.companyId);
-          where += ` AND company_id=${params.length}`;
+          where += ` AND company_id=$${params.length}`;
         }
         if (object.store_scoped && req.user.storeId) {
           params.push(req.user.storeId);
-          where += ` AND store_id=${params.length}`;
+          where += ` AND store_id=$${params.length}`;
         }
         const recordResult = await db(`SELECT * FROM "${object.source_table}" WHERE ${where} LIMIT 1`, params);
         record = recordResult.rows[0] || null;
@@ -7477,10 +7477,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (!filter || !filter.conditions.length || filter.required === false) return true;
     const scope = ["id=$1"];
     const params = [targetRecordId];
-    if (targetObject.company_scoped) { params.push(req.user.companyId); scope.push(`company_id=${params.length}`); }
+    if (targetObject.company_scoped) { params.push(req.user.companyId); scope.push(`company_id=$${params.length}`); }
     if (targetObject.store_scoped) {
       if (!req.user.storeId) return false;
-      params.push(req.user.storeId); scope.push(`store_id=${params.length}`);
+      params.push(req.user.storeId); scope.push(`store_id=$${params.length}`);
     }
     const result = await db(`SELECT * FROM "${targetObject.source_table}" WHERE ${scope.join(" AND ")} LIMIT 1`, params);
     if (!result.rows.length) return false;
@@ -7694,9 +7694,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     for (const field of fields || []) {
       if (field.active !== true || field.field_type !== "auto_number" || !field.source_column) continue;
       const start = Math.max(1, Number.parseInt(field.config?.start ?? field.config?.startNumber ?? 1, 10) || 1);
-      const padding = Math.max(0, Math.min(20, Number.parseInt(field.config?.padding ?? 0, 10) || 0));
-      const prefix = String(field.config?.prefix || "").slice(0, 50);
-      const suffix = String(field.config?.suffix || "").slice(0, 50);
       const counter = await db(
         `INSERT INTO platform_auto_number_counters (field_id,company_id,next_value,updated_at)
          VALUES ($1,$2,$3,NOW())
@@ -7709,7 +7706,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       generated.push({
         field,
         column: metadataColumn(field),
-        value: `${prefix}${String(sequence).padStart(padding, "0")}${suffix}`,
+        value: formatAutoNumberValue(field.config || {}, sequence),
       });
     }
     return generated;
@@ -7724,8 +7721,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (recordId && recordIdIsValid(String(recordId)) && object?.source_table && isSafeIdentifier(object.source_table)) {
       const params = [recordId];
       const scope = ["id=$1"];
-      if (object.company_scoped) { params.push(req.user.companyId); scope.push(`company_id=${params.length}`); }
-      if (object.store_scoped) { params.push(req.user.storeId); scope.push(`store_id=${params.length}`); }
+      if (object.company_scoped) { params.push(req.user.companyId); scope.push(`company_id=$${params.length}`); }
+      if (object.store_scoped) { params.push(req.user.storeId); scope.push(`store_id=$${params.length}`); }
       const current = await db(`SELECT * FROM "${object.source_table}" WHERE ${scope.join(" AND ")} LIMIT 1`, params);
       if (current.rows[0]) {
         for (const candidate of activeFields) {
