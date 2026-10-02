@@ -1185,6 +1185,7 @@ function makeStep(type = "CREATE_RECORD") {
       },
       allowBack: true,
       allowFinish: true,
+      allowPause: false,
       showFooter: true,
       itemVariable: type === "LOOP" ? "currentItem_Loop" : "currentItem",
       bodyBranch: [],
@@ -2115,14 +2116,16 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <label className="block text-xs font-medium text-slate-600">Description
               <textarea className={inputClass} rows={2} value={screen.description || ""} onChange={(event) => updateScreen({ description: event.target.value })} />
             </label>
-            <div className="grid gap-2 md:grid-cols-3">
+            <div className="grid gap-2 md:grid-cols-4">
               <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowBack !== false} onChange={(event) => updateConfig({ allowBack: event.target.checked })} /> Allow Previous</label>
               <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowFinish !== false} onChange={(event) => updateConfig({ allowFinish: event.target.checked })} /> Allow Finish</label>
+              <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.allowPause === true} onChange={(event) => updateConfig({ allowPause: event.target.checked })} /> Allow Pause</label>
               <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.showFooter !== false} onChange={(event) => updateConfig({ showFooter: event.target.checked })} /> Show footer</label>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <label className="block text-xs font-medium text-slate-600">Next Label<input className={inputClass} value={screen.nextLabel || "Next"} onChange={(event) => updateScreen({ nextLabel: event.target.value })} /></label>
               <label className="block text-xs font-medium text-slate-600">Previous Label<input className={inputClass} value={screen.backLabel || "Previous"} onChange={(event) => updateScreen({ backLabel: event.target.value })} /></label>
+              <label className="block text-xs font-medium text-slate-600">Pause Label<input className={inputClass} value={screen.pauseLabel || "Pause"} onChange={(event) => updateScreen({ pauseLabel: event.target.value })} /></label>
               <label className="block text-xs font-medium text-slate-600">Finish Label<input className={inputClass} value={screen.finishLabel || "Finish"} onChange={(event) => updateScreen({ finishLabel: event.target.value })} /></label>
             </div>
             <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "stage")} label="Current Stage Resource (optional)" value={screen.currentStageResource || ""} onChange={(currentStageResource) => updateScreen({ currentStageResource })} />
