@@ -911,8 +911,8 @@ export default function LayoutEditor({
     );
   }
 
-  async function saveLayout(event) {
-    event.preventDefault();
+  async function saveLayout(event, { notify = true } = {}) {
+    event?.preventDefault?.();
 
     setSaving(true);
     setError("");
@@ -967,7 +967,7 @@ export default function LayoutEditor({
       setSavedLayout(saved);
       setAssignmentsTouched(false);
 
-      if (typeof onSave === "function") {
+      if (notify && typeof onSave === "function") {
         onSave(saved);
       }
       return saved;
@@ -1002,7 +1002,7 @@ export default function LayoutEditor({
     setLifecycleBusy(true);
     setError("");
     try {
-      const saved = await saveLayout({ preventDefault() {} });
+      const saved = await saveLayout(null, { notify: false });
       const targetId = saved?.id || saved?.layout_id || layoutId;
       if (!targetId) return;
       const response = await apiRequest(`/api/platform/layouts/${encodeURIComponent(targetId)}/activate`, {
