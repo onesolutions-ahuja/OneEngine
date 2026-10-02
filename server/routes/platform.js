@@ -502,7 +502,8 @@ function metadataRecordValue(record, field) {
   return undefined;
 }
 
-async function hydrateFormulaRecordPaths(db, object, fields, records, req) {
+async function hydrateFormulaRecordPaths(db, object, fields, records, req, depth = 0) {
+  if (depth > 6) return records;
   const formulaPaths = [...new Set(
     (fields || [])
       .filter((field) => field.active !== false && field.field_type === "formula")
@@ -574,7 +575,13 @@ async function hydrateFormulaRecordPaths(db, object, fields, records, req) {
       return null;
     }
     const hydrated = await hydrateExtensions(db, parent, parentFields, result.rows, req);
-    const row = hydrated[0] || null;
+    let row = hydrated[0] || null;
+    if (row && depth < 6) {
+      const formulaRecords = await calculateFormulaRecords(db, parent, parentFields, [row], req, depth + 1);
+      row = formulaRecords[0] || row;
+      const rolled = await populateRollups(db, parent, parentFields, [row], req);
+      row = rolled[0] || row;
+    }
     recordCache.set(cacheKey, row);
     return row;
   };
@@ -602,7 +609,7 @@ async function hydrateFormulaRecordPaths(db, object, fields, records, req) {
 
     const fieldApi = parts[parts.length - 1];
     const targetField = (fieldsByObject.get(String(currentObject.id)) || []).find((field) => field.api_name === fieldApi);
-    if (!targetField || ["formula", "rollup"].includes(targetField.field_type)) return undefined;
+    if (!targetField) return undefined;
     return metadataRecordValue(currentRecord, targetField);
   };
 
@@ -616,8 +623,8 @@ async function hydrateFormulaRecordPaths(db, object, fields, records, req) {
   return output;
 }
 
-async function calculateFormulaRecords(db, object, fields, records, req) {
-  const withPaths = await hydrateFormulaRecordPaths(db, object, fields, records, req);
+async function calculateFormulaRecords(db, object, fields, records, req, depth = 0) {
+  const withPaths = await hydrateFormulaRecordPaths(db, object, fields, records, req, depth);
   const calculate = compileFormulas(fields);
   return withPaths.map((record) => calculate(record));
 }
