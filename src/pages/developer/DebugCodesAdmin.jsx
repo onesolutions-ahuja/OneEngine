@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Bug, Clipboard, Plus, RefreshCw, Save, Search } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import './DebugCodesAdmin.css'
 
 const EMPTY = {
   code: '',
