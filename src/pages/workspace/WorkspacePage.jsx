@@ -507,7 +507,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       if (response?.success === false) throw new Error(response.message || 'Unable to save record')
       const relatedToRefresh = editor.relatedRelationship || null
       setEditor(null)
-      await loadObject(selectedObject, true, saved?.id || activeListViewId)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
       const savedId = response?.data?.id
       if (savedId && key === objectKey(selectedObject)) setSelectedId(savedId)
       if (relatedToRefresh) await loadRelated(relatedToRefresh)
