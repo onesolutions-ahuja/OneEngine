@@ -5764,6 +5764,20 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   };
 
   const saveWorkflow = async (lifecycleOverride = null, { keepOpen = false, silent = false, forceNewVersion = false } = {}) => {
+    if (String(workflow.actionMetadata?.flowType || "").toUpperCase() === "SCHEDULE_TRIGGERED") {
+      const schedule = workflow.actionMetadata?.schedule || {};
+      const definition = schedule.definition || {};
+      if (!String(schedule.timezone || "").trim()) {
+        onError?.("Choose a timezone for this scheduled Flow.");
+        return null;
+      }
+      if (String(schedule.scheduleType || "DAILY").toUpperCase() !== "HOURLY"
+          && !String(definition.time || "").trim()
+          && !(String(schedule.scheduleType || "").toUpperCase() === "ONCE" && (definition.at || definition.runAt))) {
+        onError?.("Choose a time for this scheduled Flow.");
+        return null;
+      }
+    }
     const nextLifecycle = String(lifecycleOverride || workflow.lifecycleStatus || (workflow.active === true ? "ACTIVE" : "DRAFT")).toUpperCase();
     if (nextLifecycle === "ACTIVE" && reviewIssue) {
       onError?.(`Cannot activate flow: ${reviewIssue}`);
