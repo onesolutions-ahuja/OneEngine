@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import { consumeGoogleOAuthCallback, getStoredUser, hasSession, login, startGoogleLogin, verifyPin } from '../../services/api'
+import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeGoogleOAuthCallback, getPasskeyOptions, getStoredUser, hasSession, login, startGoogleLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPin } from '../../services/api'
 import { useClock } from './DesktopDock'
 
 export function CompanyContextLoading() {
@@ -27,6 +27,10 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [mfa, setMfa] = useState(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const [totpSetup, setTotpSetup] = useState(null)
+  const [trustDevice, setTrustDevice] = useState(false)
 
   useEffect(() => {
     const result = consumeGoogleOAuthCallback()
@@ -37,6 +41,10 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
     }
     if (result.token) {
       window.location.reload()
+      return
+    }
+    if (result.mfaRequired && result.challengeId) {
+      void loadMfaChallenge(result.challengeId, result)
     }
   }, [])
 
@@ -60,6 +68,124 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
     [now],
   )
 
+  const loadMfaChallenge = async (challengeId, fallback = {}) => {
+    try {
+      const response = await apiRequest(`/api/auth/mfa/challenge/${encodeURIComponent(challengeId)}`)
+      setMfa({ ...(fallback || {}), ...(response?.data || {}), challengeId })
+    } catch {
+      setMfa({ ...(fallback || {}), challengeId })
+    }
+  }
+
+  const browserDeviceName = () => {
+    try { return navigator.userAgentData?.platform || navigator.platform || 'This device' } catch { return 'This device' }
+  }
+
+  const credentialToJson = (credential) => {
+    if (!credential) return null
+    const toB64 = (value) => value ? btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'') : null
+    const result = {
+      id: credential.id,
+      rawId: toB64(credential.rawId),
+      type: credential.type,
+      authenticatorAttachment: credential.authenticatorAttachment || undefined,
+      clientExtensionResults: credential.getClientExtensionResults?.() || {},
+      response: {},
+    }
+    const response = credential.response
+    for (const key of ['clientDataJSON','attestationObject','authenticatorData','signature','userHandle']) {
+      if (response?.[key]) result.response[key] = toB64(response[key])
+    }
+    if (typeof response?.getTransports === 'function') result.response.transports = response.getTransports()
+    return result
+  }
+
+  const decodeCreationOptions = (options) => {
+    const fromB64 = (value) => {
+      const text = String(value || '').replace(/-/g,'+').replace(/_/g,'/')
+      const padded = text + '='.repeat((4 - text.length % 4) % 4)
+      const bytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0))
+      return bytes.buffer
+    }
+    return {
+      ...options,
+      challenge: fromB64(options.challenge),
+      user: { ...options.user, id: fromB64(options.user.id) },
+      excludeCredentials: (options.excludeCredentials || []).map((item) => ({ ...item, id: fromB64(item.id) })),
+    }
+  }
+
+  const decodeRequestOptions = (options) => {
+    const fromB64 = (value) => {
+      const text = String(value || '').replace(/-/g,'+').replace(/_/g,'/')
+      const padded = text + '='.repeat((4 - text.length % 4) % 4)
+      return Uint8Array.from(atob(padded), c => c.charCodeAt(0)).buffer
+    }
+    return {
+      ...options,
+      challenge: fromB64(options.challenge),
+      allowCredentials: (options.allowCredentials || []).map((item) => ({ ...item, id: fromB64(item.id) })),
+    }
+  }
+
+  const startTotp = async () => {
+    try {
+      setSubmitting(true); setError('')
+      const response = await startTotpEnrollment(mfa.challengeId)
+      setTotpSetup(response?.data || null)
+    } catch (err) { setError(err?.message || 'Unable to start authenticator setup') }
+    finally { setSubmitting(false) }
+  }
+
+  const completeTotp = async () => {
+    try {
+      setSubmitting(true); setError('')
+      const method = totpSetup?.id || mfa?.availableMethods?.find((item) => item.type === 'TOTP')?.id
+      if (!method) throw new Error('Authenticator method is not available.')
+      const result = totpSetup
+        ? await completeTotpEnrollment({ challengeId:mfa.challengeId, methodId:method, code:mfaCode, trustDevice, deviceName:browserDeviceName() })
+        : await verifyMfa({ challengeId:mfa.challengeId, methodId:method, methodType:'TOTP', code:mfaCode, trustDevice, deviceName:browserDeviceName() })
+      if (result?.token) onUnlock()
+    } catch (err) { setError(err?.message || 'Verification failed') }
+    finally { setSubmitting(false) }
+  }
+
+  const useRecoveryCode = async () => {
+    try {
+      setSubmitting(true); setError('')
+      const result = await verifyMfa({ challengeId:mfa.challengeId, methodType:'RECOVERY_CODE', code:mfaCode, trustDevice, deviceName:browserDeviceName() })
+      if (result?.token) onUnlock()
+    } catch (err) { setError(err?.message || 'Recovery code is invalid') }
+    finally { setSubmitting(false) }
+  }
+
+  const registerPasskey = async () => {
+    try {
+      setSubmitting(true); setError('')
+      if (!window.PublicKeyCredential || !navigator.credentials) throw new Error('Passkeys are not supported on this browser/device.')
+      const response = await startPasskeyRegistration(mfa.challengeId)
+      const credential = await navigator.credentials.create({ publicKey: decodeCreationOptions(response.data) })
+      const result = await completePasskeyRegistration({
+        challengeId:mfa.challengeId, credential:credentialToJson(credential), label:'Passkey',
+        trustDevice, deviceName:browserDeviceName(),
+      })
+      if (result?.token) onUnlock()
+    } catch (err) { setError(err?.message || 'Passkey setup failed') }
+    finally { setSubmitting(false) }
+  }
+
+  const authenticatePasskey = async () => {
+    try {
+      setSubmitting(true); setError('')
+      if (!window.PublicKeyCredential || !navigator.credentials) throw new Error('Passkeys are not supported on this browser/device.')
+      const response = await getPasskeyOptions(mfa.challengeId)
+      const credential = await navigator.credentials.get({ publicKey: decodeRequestOptions(response.data) })
+      const result = await verifyPasskey({ challengeId:mfa.challengeId, credential:credentialToJson(credential), trustDevice, deviceName:browserDeviceName() })
+      if (result?.token) onUnlock()
+    } catch (err) { setError(err?.message || 'Passkey verification failed') }
+    finally { setSubmitting(false) }
+  }
+
   const submit = async (event) => {
     event?.preventDefault()
     try {
@@ -75,7 +201,11 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
 
       if (!username.trim()) { setError('Enter your email or username.'); return }
       if (!password) { setError('Enter your password.'); return }
-      await login(username.trim(), password)
+      const result = await login(username.trim(), password)
+      if (result?.mfaRequired && result?.challengeId) {
+        await loadMfaChallenge(result.challengeId, result)
+        return
+      }
       onUnlock()
     } catch (err) {
       setError(err?.message || 'Unable to sign in')
@@ -151,6 +281,59 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
               >
                 Sign Out
               </button>
+            </>
+          ) : mfa?.challengeId ? (
+            <>
+              <div className="login-title">Verify your identity</div>
+              <div className="login-subtitle">{mfa.phishingResistantRequired ? 'A phishing-resistant passkey is required.' : 'Complete multi-factor authentication to continue.'}</div>
+
+              {mfa.enrollmentRequired ? (
+                <>
+                  {mfa.phishingResistantRequired ? null : (
+                    <button className="login-submit" type="button" disabled={submitting} onClick={startTotp}>
+                      Set up authenticator
+                    </button>
+                  )}
+                  <button className="google-signin-button" type="button" disabled={submitting} onClick={registerPasskey}>
+                    Set up passkey
+                  </button>
+                </>
+              ) : (
+                <>
+                  {mfa.availableMethods?.some((item)=>item.type==='PASSKEY') ? (
+                    <button className="login-submit" type="button" disabled={submitting} onClick={authenticatePasskey}>
+                      Use passkey
+                    </button>
+                  ) : null}
+                  {!mfa.phishingResistantRequired && mfa.availableMethods?.some((item)=>item.type==='TOTP') ? (
+                    <input className="login-field login-pin-field" value={mfaCode} onChange={(e)=>setMfaCode(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" />
+                  ) : null}
+                  {!mfa.phishingResistantRequired && mfa.availableMethods?.some((item)=>item.type==='TOTP') ? (
+                    <button className="login-submit" type="button" disabled={submitting || mfaCode.length!==6} onClick={completeTotp}>Verify code</button>
+                  ) : null}
+                  {!mfa.phishingResistantRequired ? (
+                    <button className="lock-signout" type="button" disabled={submitting || !mfaCode.trim()} onClick={useRecoveryCode}>Use recovery code</button>
+                  ) : null}
+                </>
+              )}
+
+              {totpSetup ? (
+                <div className="login-mfa-setup">
+                  <strong>Authenticator key</strong>
+                  <code>{totpSetup.secret}</code>
+                  <small>Add this key to your authenticator app, then enter the 6-digit code.</small>
+                  <input className="login-field login-pin-field" value={mfaCode} onChange={(e)=>setMfaCode(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" />
+                  <button className="login-submit" type="button" disabled={submitting || mfaCode.length!==6} onClick={completeTotp}>Confirm authenticator</button>
+                </div>
+              ) : null}
+
+              <label className="login-trust-device">
+                <input type="checkbox" checked={trustDevice} onChange={(e)=>setTrustDevice(e.target.checked)} />
+                <span>Trust this device</span>
+              </label>
+
+              {error ? <div className="login-error">{error}</div> : null}
+              <button className="lock-signout" type="button" onClick={()=>{setMfa(null);setTotpSetup(null);setMfaCode('');setError('')}} disabled={submitting}>Back to sign in</button>
             </>
           ) : (
             <>
