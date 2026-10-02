@@ -97,6 +97,7 @@ import createPlatformEventsRouter from "./routes/platformEvents.js";
 import { saveDomainConfiguration } from "./services/platformDomainRecords.js";
 import createAdvancedPlatformRouter from "./routes/advancedPlatform.js";
 import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformMetadata.js";
+import { verifyPublicPackageRegistry } from "./services/packageRegistry.js";
 import { getCompanyEntitlements } from "./services/licensing.js";
 import { requireEntitlement } from "./services/licensing.js";
 import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime } from "./services/googleConnect.js";
@@ -644,23 +645,41 @@ async function canAccessStore(user, storeId) {
 
 app.get("/api/health", async (req, res) => {
   let database = "not configured";
+  let bootstrap = { current: false, fingerprint: null };
+  let packageRegistry = { healthy: false, expectedCount: 0, actualCount: 0, missing: [], stale: [] };
+  let healthError = null;
 
   if (pool) {
     try {
       await db("SELECT NOW()");
       database = "connected";
+      bootstrap = await platformBootstrapIsCurrent();
+      packageRegistry = await verifyPublicPackageRegistry(db);
     } catch (error) {
-      console.error("Database health check failed:", error.message);
-      database = "error";
+      console.error("Database/platform health check failed:", error.message);
+      database = database === "connected" ? "connected" : "error";
+      healthError = error.message;
     }
   }
 
-  res.json({
-    success: true,
+  const healthy =
+    database === "connected" &&
+    bootstrap.current === true &&
+    packageRegistry.healthy === true &&
+    !healthError;
+
+  res.status(healthy ? 200 : 503).json({
+    success: healthy,
     app: "onePOS",
-    status: "online",
+    status: healthy ? "online" : "unhealthy",
     version: "0.2.0",
     database,
+    platformBootstrap: {
+      current: bootstrap.current === true,
+      fingerprint: bootstrap.fingerprint || null,
+    },
+    packageRegistry,
+    ...(healthError ? { error: healthError } : {}),
     time: new Date().toISOString(),
   });
 });
@@ -2110,14 +2129,25 @@ async function startServer() {
       // Re-check after acquiring the lock: another instance may have completed
       // the same fingerprint while this one was waiting.
       const bootstrapState = await platformBootstrapIsCurrent();
+      let bootstrapRan = false;
       if (!bootstrapState.current) {
         console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
         await initializePlatformMetadata(pool, { includeOperationalObjects: true });
         await initializeStandardObjectEcosystem(pool);
-        await markPlatformBootstrapCurrent(bootstrapState.fingerprint);
+        bootstrapRan = true;
       } else {
         console.log("onePOS: platform bootstrap metadata unchanged; skipping heavy bootstrap");
       }
+
+      const registryHealth = await verifyPublicPackageRegistry(pool);
+      if (!registryHealth.healthy) {
+        const details = [
+          registryHealth.missing.length ? `missing=${registryHealth.missing.join(",")}` : "",
+          registryHealth.stale.length ? `stale=${registryHealth.stale.map((item) => item.packageKey).join(",")}` : "",
+        ].filter(Boolean).join(" ");
+        throw new Error(`Public package registry is out of sync with source catalogue${details ? `: ${details}` : ""}`);
+      }
+      if (bootstrapRan) await markPlatformBootstrapCurrent(bootstrapState.fingerprint);
     } finally {
       try {
         await bootstrapLockClient.query("SELECT pg_advisory_unlock(hashtext('onepos_platform_bootstrap'))");
