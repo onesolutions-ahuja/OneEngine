@@ -302,9 +302,15 @@ export async function createTrackedSession(db, { user, ip, userAgent, authMethod
 
 export async function enforceTrackedSession(db, req) {
   const user = req.user;
-  if (!user?.id || !user?.companyId) return { allowed: true };
+  if (!user?.id) return { allowed: true };
+  const effectiveCompanyId = user.companyId || null;
+  const authenticatedCompanyId = Object.prototype.hasOwnProperty.call(user, "authenticatedCompanyId")
+    ? (user.authenticatedCompanyId || null)
+    : effectiveCompanyId;
   const ip = clientIp(req);
-  const decision = await accessDecision(db, { companyId: user.companyId, userId: user.id, roleId: user.roleId, ip });
+  const decision = effectiveCompanyId
+    ? await accessDecision(db, { companyId: effectiveCompanyId, userId: user.id, roleId: user.roleId, ip })
+    : { allowed: true, settings: null, policy: null };
   if (!decision.allowed) return decision;
 
   const enforceIp = decision.settings?.enforce_login_ip_every_request === true;
@@ -315,8 +321,8 @@ export async function enforceTrackedSession(db, req) {
 
   if (!user.sid) return { allowed: true, legacySession: true, decision };
   const sessionResult = await db(
-    `SELECT * FROM identity_sessions WHERE id=$1 AND user_id=$2 AND company_id=$3 LIMIT 1`,
-    [user.sid, user.id, user.companyId]
+    `SELECT * FROM identity_sessions WHERE id=$1 AND user_id=$2 AND company_id IS NOT DISTINCT FROM $3 LIMIT 1`,
+    [user.sid, user.id, authenticatedCompanyId]
   );
   const session = sessionResult.rows[0];
   if (!session || session.revoked_at) return { allowed: false, code: "SESSION_REVOKED", reason: "Session has been revoked" };
