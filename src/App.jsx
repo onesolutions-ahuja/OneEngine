@@ -125,6 +125,7 @@ const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage')
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
 const OneKioskDevicesPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDevicesPage'))
 const PublicAppointmentBookingPage = lazyWithRecovery(() => import('./pages/assistant/PublicAppointmentBookingPage'))
+const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
   Bluetooth,
   LockKeyhole,
@@ -2426,6 +2427,9 @@ export default function App() {
   const route = readRoute()
   if (route.app === 'customer-display') {
     return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary>
+  }
+  if (route.app === 'flow-runtime') {
+    return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary>
   }
   if (route.app === 'public-assistant-booking') {
     return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading booking…</div>}><PublicAppointmentBookingPage token={route.token} /></Suspense></LazyLoadBoundary>
