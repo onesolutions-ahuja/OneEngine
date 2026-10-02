@@ -76,14 +76,22 @@ export async function searchPlatformRecords(db, req, query, { maxResults = MAX_R
         [object.id, req.user.companyId]
       );
       const secured = await applyFieldSecurity(db, safeSystemFields(object, fieldResult.rows), req);
-      const readable = secured.filter((field) =>
-        field.readable !== false && SEARCHABLE_TYPES.has(field.field_type) && platformFieldSql(field, object)
-      );
-      if (!readable.length) continue;
-      const labelField = chooseLabel(readable);
-      const secondaryField = readable.find((field) => field !== labelField && ["sku", "code", "barcode", "email", "phone"].includes(field.api_name));
+      const readableFields = secured.filter((field) => field.readable !== false && platformFieldSql(field, object));
+      const searchable = readableFields.filter((field) => SEARCHABLE_TYPES.has(field.field_type));
+      if (!searchable.length) continue;
+      const configuredKeys = Array.isArray(object.config?.searchLayoutFields)
+        ? object.config.searchLayoutFields.map(String).slice(0, 8)
+        : [];
+      const byKey = new Map(readableFields.map((field) => [field.api_name, field]));
+      const configuredDisplay = configuredKeys.map((key) => byKey.get(key)).filter(Boolean);
+      const fallbackPrimary = chooseLabel(searchable);
+      const fallbackSecondary = searchable.find((field) => field !== fallbackPrimary && ["sku", "code", "barcode", "email", "phone"].includes(field.api_name))
+        || searchable.find((field) => field !== fallbackPrimary);
+      const displayFields = (configuredDisplay.length ? configuredDisplay : [fallbackPrimary, fallbackSecondary].filter(Boolean)).slice(0, 8);
+      const labelField = displayFields[0] || fallbackPrimary;
+      const secondaryField = displayFields[1] || fallbackSecondary;
       const params = [normalized];
-      const terms = readable.map((field) => `CAST(${platformFieldSql(field, object)} AS TEXT) ILIKE $1`);
+      const terms = searchable.map((field) => `CAST(${platformFieldSql(field, object)} AS TEXT) ILIKE $1`);
       const clauses = [`(${terms.join(" OR ")})`];
       if (object.company_scoped !== false) {
         params.push(req.user.companyId);
@@ -97,8 +105,7 @@ export async function searchPlatformRecords(db, req, query, { maxResults = MAX_R
         : "id";
       const columns = [
         `"id"`,
-        `${platformFieldSql(labelField, object)} AS "primary_value"`,
-        secondaryField ? `${platformFieldSql(secondaryField, object)} AS "secondary_value"` : "NULL AS secondary_value",
+        ...displayFields.map((field, index) => `${platformFieldSql(field, object)} AS "display_${index}"`),
       ];
       const queryResult = await db(
         `SELECT ${columns.join(", ")} FROM "${object.source_table}"
@@ -113,8 +120,13 @@ export async function searchPlatformRecords(db, req, query, { maxResults = MAX_R
           objectApiName: object.object_key,
           objectLabel: object.label,
           recordId: row.id,
-          primaryLabel: row.primary_value == null ? String(row.id) : String(row.primary_value),
-          secondaryLabel: row.secondary_value == null ? "" : String(row.secondary_value),
+          primaryLabel: row.display_0 == null ? String(row.id) : String(row.display_0),
+          secondaryLabel: row.display_1 == null ? "" : String(row.display_1),
+          displayFields: displayFields.map((field, index) => ({
+            key: field.api_name,
+            label: field.label || field.api_name,
+            value: row[`display_${index}`] == null ? "" : String(row[`display_${index}`]),
+          })),
           destination: destinationFor(object, row.id),
         });
       }
