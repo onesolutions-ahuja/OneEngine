@@ -3569,6 +3569,61 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "RECOMMENDATION_ASSIGNMENT",
+    displayName: "Recommendation Assignment",
+    description: "Create a new recommendation collection from an existing collection and mapped values.",
+    schema: {
+      type: "object",
+      properties: {
+        collection: { type: "string" },
+        recommendationMappings: { type: "object" },
+        apiName: { type: "string" },
+      },
+      required: ["collection","recommendationMappings"],
+    },
+    validation: (action) => {
+      if (!action?.collection) throw new Error("Recommendation Assignment requires a source collection");
+      if (!action.recommendationMappings || typeof action.recommendationMappings !== "object" || !Object.keys(action.recommendationMappings).length) {
+        throw new Error("Recommendation Assignment requires at least one mapping");
+      }
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
+      const mappings = action.recommendationMappings || {};
+      const readItemPath = (item, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);
+      const output = (Array.isArray(source) ? source : []).map((item) => {
+        const recommendation = item && typeof item === "object" && !Array.isArray(item) ? { ...item } : {};
+        for (const [field, configured] of Object.entries(mappings)) {
+          if (configured === undefined || configured === null || configured === "") continue;
+          let value;
+          if (typeof configured === "string" && configured.startsWith("item.")) {
+            value = readItemPath(item, configured.slice(5));
+          } else if (configured === "item") {
+            value = item;
+          } else {
+            value = resolveConfiguredResource(configured, { ...context, record: item }, { preserveMissing: false });
+          }
+          recommendation[field] = value;
+        }
+        return recommendation;
+      });
+      const resourceName = String(action.apiName || action.resourceName || "Recommendations");
+      workflowVariables.variables[resourceName] = output;
+      return {
+        status: "completed",
+        resourceName,
+        resourceType: "collection",
+        value: output,
+        recommendations: output,
+        count: output.length,
+      };
+    },
+  },
+  {
     key: "SCREEN",
     displayName: "Screen",
     description: "Pause a flow and present a metadata-defined interactive screen.",
@@ -4774,7 +4829,7 @@ async function assertWorkflowObjectPermission(context, actionType) {
 }
 
 const DEBUG_EXECUTABLE_ACTIONS = new Set([
-  "CONSTANT","FORMULA","TEXT_TEMPLATE","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","CONDITION","LOOP","GET_RECORDS",
+  "CONSTANT","FORMULA","TEXT_TEMPLATE","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
   "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
