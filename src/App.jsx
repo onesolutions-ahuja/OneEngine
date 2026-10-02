@@ -2112,6 +2112,12 @@ function Desktop({ onLock, onSignOut }) {
       return
     }
 
+    // Any app navigation must dismiss the Launchpad first. Without this,
+    // dock shortcuts can change the route behind the full-screen overlay.
+    setLauncherOpen(false)
+    setAppSearch('')
+    setTopPanel('')
+
     const routeMap = new Set([
       'integrations','google-connect','accounting','online-orders','order-prep','own-delivery',
       'assistant','kiosk','kiosk-display','kiosk-devices','returns','exchange','layaway','supplier-returns','audit-log','licensing',
