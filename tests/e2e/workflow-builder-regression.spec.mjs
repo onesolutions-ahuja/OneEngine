@@ -4,6 +4,13 @@ import { loginIfConfigured, watchRuntimeFailures } from "./helpers.mjs";
 test.beforeEach(async ({ page }) => {
   test.skip(!(process.env.ONEPOS_E2E_USERNAME && process.env.ONEPOS_E2E_PASSWORD), "Set ONEPOS_PLAYWRIGHT_USERNAME and ONEPOS_PLAYWRIGHT_PASSWORD in GitHub Actions repository Variables for authenticated QA.");
   await loginIfConfigured(page);
+  await page.evaluate(() => {
+    try {
+      const user = JSON.parse(sessionStorage.getItem("onepos_user") || "{}");
+      const companyId = String(user.companyId || user.company_id || "");
+      if (companyId) sessionStorage.setItem("onepos_developer_target_company_id", companyId);
+    } catch {}
+  });
 });
 
 test("workflow builder exposes complete no-code authoring and safe test surfaces", async ({ page }) => {
