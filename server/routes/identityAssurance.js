@@ -70,7 +70,10 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   router.post("/auth/step-up/start",authenticate,async(req,res)=>{
     const resourceKey=String(req.body?.resourceKey||"").trim().toUpperCase();
     if(!resourceKey)return res.status(400).json({success:false,message:"resourceKey is required"});
-    const policy=await effectiveStepUpPolicy(db,{companyId:req.user.companyId,resourceKey});
+    const configuredPolicy=await effectiveStepUpPolicy(db,{companyId:req.user.companyId,resourceKey});
+    const policy=configuredPolicy|| (resourceKey==="TEMPORARY_MFA_CODE"
+      ? {action:"RAISE",required_assurance:"HIGH",reverify_after_minutes:15}
+      : null);
     if(!policy||policy.action==="ALLOW")return res.json({success:true,required:false,assuranceLevel:req.authSession?.assurance_level||"STANDARD"});
     if(policy.action==="BLOCK")return res.status(403).json({success:false,code:"RESOURCE_BLOCKED",message:"This operation is blocked by security policy"});
     if(!stepUpRequired({session:req.authSession,policy,defaultMinutes:15}))return res.json({success:true,required:false,assuranceLevel:req.authSession?.assurance_level||"HIGH"});
@@ -144,8 +147,10 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
     const methods=await listMfaMethods(db,{companyId:user.company_id,userId:user.id});
     const usable=methods.filter((method)=>mfaMethodAllowed(method,policy.effective))
-      .filter((method)=>!policy.effective.phishingResistantRequired||method.phishing_resistant===true);
+      .filter((method)=>!policy.effective.phishingResistantRequired||method.phishing_resistant===true)
+      .filter((method)=>assuranceSatisfies(methodAssurance(method,policy.effective),policy.effective.requiredLoginAssurance));
     const temporaryCode=!challenge.context?.activationOnly&&!policy.effective.phishingResistantRequired
+      && assuranceSatisfies("STANDARD",policy.effective.requiredLoginAssurance)
       ? await activeTemporaryVerificationCode(db,{companyId:user.company_id,userId:user.id}) : null;
     const availableMethods=[
       ...usable.map(publicMethod),
@@ -182,6 +187,12 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
     const ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code,markVerified:true});
     if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
+    if(assurancePolicy.effective.phishingResistantRequired && methodType!=="PASSKEY"){
+      return res.status(403).json({success:false,code:"PHISHING_RESISTANT_MFA_REQUIRED",message:"A phishing-resistant passkey or security key is required"});
+    }
+    if(challenge.challenge_type==="LOGIN"&&!assuranceSatisfies(assurance,assurancePolicy.effective.requiredLoginAssurance)){
+      return res.status(403).json({success:false,code:"MFA_ASSURANCE_INSUFFICIENT",message:"This verification method does not meet the required login assurance level"});
+    }
     const recoveryCodes=await ensureRecoveryCodes(user.company_id,user.id);
     const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.totpAssurance;
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"TOTP",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
@@ -191,10 +202,12 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
     const methodType=String(req.body?.methodType||"TOTP").toUpperCase();
+    const assurancePolicy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
     let ok=false,assurance="HIGH";
     if(methodType==="TOTP"){
+      if(!assurancePolicy.effective.allowTotp)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Authenticator apps are disabled by security policy"});
       ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code});
-      assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.totpAssurance;
+      assurance=assurancePolicy.effective.totpAssurance;
     }else if(methodType==="RECOVERY_CODE"){
       const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
       if(policy.effective.allowRecoveryCodes)ok=await consumeRecoveryCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
@@ -327,7 +340,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
 
   router.post("/security/mfa/users/:userId/temporary-code",...manage,async(req,res)=>{
     if(!req.authSession||!assuranceSatisfies(req.authSession.assurance_level,"HIGH")){
-      return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"USER_ADMIN",message:"High-Assurance verification is required to generate a temporary MFA code"});
+      return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"TEMPORARY_MFA_CODE",message:"High-Assurance verification is required to generate a temporary MFA code"});
     }
     const user=(await db("SELECT id,role_id,active FROM users WHERE id=$1 AND company_id=$2",[req.params.userId,req.user.companyId])).rows[0];
     if(!user?.active)return res.status(404).json({success:false,message:"Active user not found"});
@@ -345,7 +358,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
 
   router.post("/security/mfa/users/:userId/temporary-code/expire",...manage,async(req,res)=>{
     if(!req.authSession||!assuranceSatisfies(req.authSession.assurance_level,"HIGH")){
-      return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"USER_ADMIN",message:"High-Assurance verification is required to expire a temporary MFA code"});
+      return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"TEMPORARY_MFA_CODE",message:"High-Assurance verification is required to expire a temporary MFA code"});
     }
     await db("UPDATE identity_temporary_verification_codes SET expired_at=NOW() WHERE company_id=$1 AND user_id=$2 AND expired_at IS NULL",[req.user.companyId,req.params.userId]);
     await writeAudit?.(req.user.companyId,req.user.id,"security.temp_mfa_code_expired","user",req.params.userId,{});
