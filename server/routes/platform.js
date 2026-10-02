@@ -3735,9 +3735,228 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   });
 
   router.get("/platform/layouts/:layoutId", ...manage, async (req, res) => {
-    const result = await db("SELECT * FROM platform_layouts WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [req.params.layoutId, req.user.companyId]);
+    const result = await db("SELECT * FROM platform_layouts WHERE id=$1 AND (company_id IS NULL OR company_id=$2)", [req.params.layoutId, req.user.companyId]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Layout not found" });
     res.json({ success: true, data: result.rows[0] });
+  });
+
+  router.post("/platform/layouts/draft", ...manage, async (req, res) => {
+    if (!validLayoutInput(req.body)) return res.status(400).json({ success: false, message: "A valid layout definition is required" });
+    const object = await getObject(req.body.objectId, req);
+    if (!object) return res.status(400).json({ success: false, message: "Object not found" });
+    const definitionError = await validateLayoutDefinition(db, req.body.definition, object, req);
+    if (definitionError) return res.status(400).json({ success: false, message: definitionError });
+    const companyId = req.body.companyId || req.user.companyId;
+    if (companyId !== req.user.companyId && !await canManageGlobal(db, req)) return res.status(403).json({ success: false, message: "Cannot manage another company's layout" });
+    if (!(await validateLayoutRole(db, req.body.roleId, req))) return res.status(400).json({ success: false, message: "Role does not belong to this company" });
+    const recordTypeId = req.body.recordTypeId || null;
+    if (recordTypeId && !(await resolveRecordType(object, recordTypeId, req))) return res.status(400).json({ success: false, message: "Record type does not belong to this object and company" });
+    const assignments = await normalizeLayoutAssignmentDraft(req.body.assignments || [], object.id, req);
+    const pageType = req.body.pageType ?? req.body.page_type;
+    const layoutKey = toSafeApiName(req.body.layoutKey || req.body.name, "layout");
+    const metadata = {
+      name: req.body.name.trim(),
+      pageType,
+      roleId: req.body.roleId || null,
+      recordTypeId,
+      isDefault: req.body.isDefault === true,
+    };
+    try {
+      const result = await db(
+        `INSERT INTO platform_layouts
+          (object_id,page_type,role_id,company_id,record_type_id,name,layout_key,definition,active,is_default,
+           lifecycle_status,version,draft_version,draft_definition,draft_metadata,draft_assignments)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,false,false,'DRAFT',1,1,$8::jsonb,$9::jsonb,$10::jsonb)
+         RETURNING *`,
+        [object.id, pageType, req.body.roleId || null, companyId, recordTypeId, req.body.name.trim(), layoutKey,
+          JSON.stringify(req.body.definition), JSON.stringify(metadata), JSON.stringify(assignments)]
+      );
+      await db(
+        `INSERT INTO platform_layout_versions
+          (layout_id,company_id,version,definition,metadata,assignments,lifecycle_status,created_by)
+         VALUES ($1,$2,1,$3::jsonb,$4::jsonb,$5::jsonb,'DRAFT',$6)`,
+        [result.rows[0].id, companyId, JSON.stringify(req.body.definition), JSON.stringify(metadata), JSON.stringify(assignments), req.user.id || null]
+      );
+      res.status(201).json({ success: true, data: result.rows[0] });
+    } catch (error) {
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "A layout with this API key or scope already exists" });
+      throw error;
+    }
+  });
+
+  router.put("/platform/layouts/:layoutId/draft", ...manage, async (req, res) => {
+    const existingResult = await db("SELECT * FROM platform_layouts WHERE id=$1 AND (company_id IS NULL OR company_id=$2)", [req.params.layoutId, req.user.companyId]);
+    const existing = existingResult.rows[0];
+    if (!existing || (existing.company_id === null && !await canManageGlobal(db, req))) return res.status(404).json({ success: false, message: "Layout not found or not editable" });
+    const object = await getObject(existing.object_id, req);
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    const definition = req.body?.definition;
+    if (!definition || !Array.isArray(definition.components)) return res.status(400).json({ success: false, message: "A valid layout definition is required" });
+    const definitionError = await validateLayoutDefinition(db, definition, object, req);
+    if (definitionError) return res.status(400).json({ success: false, message: definitionError });
+    const pageType = req.body.pageType ?? req.body.page_type ?? existing.page_type;
+    if (!PAGE_TYPES.has(pageType)) return res.status(400).json({ success: false, message: "Invalid page type" });
+    const roleId = req.body.roleId === undefined ? existing.role_id || null : req.body.roleId || null;
+    if (!(await validateLayoutRole(db, roleId, req))) return res.status(400).json({ success: false, message: "Role does not belong to this company" });
+    const recordTypeId = req.body.recordTypeId === undefined ? existing.record_type_id || null : req.body.recordTypeId || null;
+    if (recordTypeId && !(await resolveRecordType(object, recordTypeId, req))) return res.status(400).json({ success: false, message: "Record type does not belong to this object and company" });
+    const assignments = await normalizeLayoutAssignmentDraft(req.body.assignments ?? existing.draft_assignments ?? [], object.id, req);
+    const metadata = {
+      name: String(req.body.name || existing.draft_metadata?.name || existing.name).trim(),
+      pageType,
+      roleId,
+      recordTypeId,
+      isDefault: req.body.isDefault === undefined ? Boolean(existing.draft_metadata?.isDefault ?? existing.is_default) : req.body.isDefault === true,
+    };
+    const maxResult = await db(
+      "SELECT COALESCE(MAX(version),0)::int AS version FROM platform_layout_versions WHERE layout_id=$1 AND company_id=$2",
+      [existing.id, req.user.companyId]
+    );
+    const nextVersion = Number(maxResult.rows[0]?.version || existing.version || 0) + 1;
+    await db(
+      `INSERT INTO platform_layout_versions
+        (layout_id,company_id,version,definition,metadata,assignments,lifecycle_status,created_by)
+       VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,'DRAFT',$7)`,
+      [existing.id, req.user.companyId, nextVersion, JSON.stringify(definition), JSON.stringify(metadata), JSON.stringify(assignments), req.user.id || null]
+    );
+    const updated = await db(
+      `UPDATE platform_layouts
+          SET draft_definition=$1::jsonb,draft_metadata=$2::jsonb,draft_assignments=$3::jsonb,
+              draft_version=$4,version=GREATEST(version,$4),
+              lifecycle_status=CASE WHEN active=true THEN lifecycle_status ELSE 'DRAFT' END,
+              updated_at=NOW(),user_modified=true
+        WHERE id=$5 RETURNING *`,
+      [JSON.stringify(definition), JSON.stringify(metadata), JSON.stringify(assignments), nextVersion, existing.id]
+    );
+    res.json({ success: true, data: updated.rows[0] });
+  });
+
+  router.get("/platform/layouts/:layoutId/versions", ...manage, async (req, res) => {
+    const existing = await db("SELECT id FROM platform_layouts WHERE id=$1 AND (company_id IS NULL OR company_id=$2)", [req.params.layoutId, req.user.companyId]);
+    if (!existing.rows.length) return res.status(404).json({ success: false, message: "Layout not found" });
+    const versions = await db(
+      `SELECT id,layout_id,version,lifecycle_status,created_by,created_at
+         FROM platform_layout_versions
+        WHERE layout_id=$1 AND company_id=$2 ORDER BY version DESC`,
+      [req.params.layoutId, req.user.companyId]
+    );
+    res.json({ success: true, data: versions.rows });
+  });
+
+  router.post("/platform/layouts/:layoutId/activate", ...manage, async (req, res) => {
+    const existingResult = await db("SELECT * FROM platform_layouts WHERE id=$1 AND (company_id IS NULL OR company_id=$2)", [req.params.layoutId, req.user.companyId]);
+    const layout = existingResult.rows[0];
+    if (!layout || (layout.company_id === null && !await canManageGlobal(db, req))) return res.status(404).json({ success: false, message: "Layout not found or not editable" });
+    const version = Number(layout.draft_version || layout.active_version || layout.version || 1);
+    const definition = layout.draft_definition || layout.definition;
+    const metadata = layout.draft_metadata || {
+      name: layout.name, pageType: layout.page_type, roleId: layout.role_id || null,
+      recordTypeId: layout.record_type_id || null, isDefault: layout.is_default === true,
+    };
+    const assignments = await normalizeLayoutAssignmentDraft(layout.draft_assignments || [], layout.object_id, req);
+
+    for (const row of assignments) {
+      const conflict = await db(
+        `SELECT l.name
+           FROM platform_layout_assignments a
+           JOIN platform_layouts l ON l.id=a.layout_id
+          WHERE l.object_id=$1 AND l.page_type=$2 AND l.id<>$3 AND l.active=true
+            AND a.active=true AND a.company_id=$4
+            AND a.app_id IS NOT DISTINCT FROM $5::uuid
+            AND a.record_type_id IS NOT DISTINCT FROM $6::uuid
+            AND a.role_id IS NOT DISTINCT FROM $7::uuid
+            AND a.device_profile=$8 AND a.priority=$9 AND a.required_permissions=$10::jsonb
+          LIMIT 1`,
+        [layout.object_id, metadata.pageType, layout.id, req.user.companyId, row.appId, row.recordTypeId, row.roleId,
+          row.deviceProfile, row.priority, JSON.stringify([...row.requiredPermissions].sort())]
+      );
+      if (conflict.rows.length) return res.status(409).json({ success: false, code: "LAYOUT_ASSIGNMENT_CONFLICT", message: `This activation scope is already assigned to "${conflict.rows[0].name}".` });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "UPDATE platform_layout_versions SET lifecycle_status='INACTIVE' WHERE layout_id=$1 AND company_id=$2 AND lifecycle_status='ACTIVE'",
+        [layout.id, req.user.companyId]
+      );
+      await client.query(
+        "UPDATE platform_layout_versions SET lifecycle_status='ACTIVE' WHERE layout_id=$1 AND company_id=$2 AND version=$3",
+        [layout.id, req.user.companyId, version]
+      );
+      await client.query("DELETE FROM platform_layout_assignments WHERE layout_id=$1 AND company_id=$2", [layout.id, req.user.companyId]);
+      for (const row of assignments) {
+        await client.query(
+          `INSERT INTO platform_layout_assignments
+            (layout_id,company_id,app_id,record_type_id,role_id,device_profile,required_permissions,priority,active)
+           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,true)`,
+          [layout.id, req.user.companyId, row.appId, row.recordTypeId, row.roleId, row.deviceProfile, JSON.stringify(row.requiredPermissions), row.priority]
+        );
+      }
+      if (metadata.isDefault === true) {
+        await client.query(
+          "UPDATE platform_layouts SET is_default=false WHERE object_id=$1 AND page_type=$2 AND id<>$3 AND (company_id IS NULL OR company_id=$4)",
+          [layout.object_id, metadata.pageType, layout.id, req.user.companyId]
+        );
+      }
+      const updated = await client.query(
+        `UPDATE platform_layouts
+            SET page_type=$1,role_id=$2,record_type_id=$3,name=$4,definition=$5::jsonb,
+                active=true,is_default=$6,lifecycle_status='ACTIVE',active_version=$7,
+                version=GREATEST(version,$7),draft_version=NULL,draft_definition=NULL,
+                draft_metadata=NULL,draft_assignments=NULL,updated_at=NOW(),user_modified=true
+          WHERE id=$8 RETURNING *`,
+        [metadata.pageType, metadata.roleId || null, metadata.recordTypeId || null, metadata.name,
+          JSON.stringify(definition), metadata.isDefault === true, version, layout.id]
+      );
+      await client.query("COMMIT");
+      await syncLayoutButtons(db, req, updated.rows[0]);
+      res.json({ success: true, data: updated.rows[0] });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+  router.post("/platform/layouts/:layoutId/deactivate", ...manage, async (req, res) => {
+    const result = await db(
+      `UPDATE platform_layouts SET active=false,is_default=false,lifecycle_status='INACTIVE',updated_at=NOW(),user_modified=true
+        WHERE id=$1 AND (company_id=$2 OR (company_id IS NULL AND $3=true)) RETURNING *`,
+      [req.params.layoutId, req.user.companyId, await canManageGlobal(db, req)]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: "Layout not found" });
+    await db("UPDATE platform_layout_versions SET lifecycle_status='INACTIVE' WHERE layout_id=$1 AND company_id=$2 AND lifecycle_status='ACTIVE'", [req.params.layoutId, req.user.companyId]);
+    res.json({ success: true, data: result.rows[0] });
+  });
+
+  router.post("/platform/layouts/:layoutId/versions/:version/restore", ...manage, async (req, res) => {
+    const [layoutResult, versionResult] = await Promise.all([
+      db("SELECT * FROM platform_layouts WHERE id=$1 AND (company_id IS NULL OR company_id=$2)", [req.params.layoutId, req.user.companyId]),
+      db("SELECT * FROM platform_layout_versions WHERE layout_id=$1 AND company_id=$2 AND version=$3", [req.params.layoutId, req.user.companyId, Number(req.params.version)]),
+    ]);
+    const layout = layoutResult.rows[0];
+    const source = versionResult.rows[0];
+    if (!layout || !source) return res.status(404).json({ success: false, message: "Layout or version not found" });
+    const maxResult = await db("SELECT COALESCE(MAX(version),0)::int AS version FROM platform_layout_versions WHERE layout_id=$1 AND company_id=$2", [layout.id, req.user.companyId]);
+    const nextVersion = Number(maxResult.rows[0]?.version || 0) + 1;
+    await db(
+      `INSERT INTO platform_layout_versions
+        (layout_id,company_id,version,definition,metadata,assignments,lifecycle_status,created_by)
+       VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,'DRAFT',$7)`,
+      [layout.id, req.user.companyId, nextVersion, JSON.stringify(source.definition), JSON.stringify(source.metadata || {}), JSON.stringify(source.assignments || []), req.user.id || null]
+    );
+    const updated = await db(
+      `UPDATE platform_layouts
+          SET draft_definition=$1::jsonb,draft_metadata=$2::jsonb,draft_assignments=$3::jsonb,
+              draft_version=$4,version=GREATEST(version,$4),
+              lifecycle_status=CASE WHEN active=true THEN lifecycle_status ELSE 'DRAFT' END,
+              updated_at=NOW(),user_modified=true
+        WHERE id=$5 RETURNING *`,
+      [JSON.stringify(source.definition), JSON.stringify(source.metadata || {}), JSON.stringify(source.assignments || []), nextVersion, layout.id]
+    );
+    res.json({ success: true, data: updated.rows[0] });
   });
 
   router.post("/platform/layouts", ...manage, async (req, res) => {
