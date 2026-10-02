@@ -1,7 +1,7 @@
 import express from "express";
 import crypto from "node:crypto";
 import { accessDecision, clientIp, createTrackedSession, loadSecuritySettings, writeLoginHistory } from "../services/identitySecurity.js";
-import { assuranceSatisfies, createPendingChallenge, listMfaMethods, loadEffectiveAssurance } from "../services/identityAssurance.js";
+import { assuranceSatisfies, createPendingChallenge, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods } from "../services/identityAssurance.js";
 
 function hash(value){return crypto.createHash("sha256").update(String(value||"")).digest("hex");}
 function b64url(buffer){return Buffer.from(buffer).toString("base64url");}
@@ -77,7 +77,9 @@ export default function createIdentityProviderLoginRouter({db,createToken,decryp
       || !activationSatisfied;
     if(needsMfa){
       const methods=await listMfaMethods(db,{companyId:user.company_id,userId:user.id});
-      const usable=methods.filter(m=>!assurance.effective.phishingResistantRequired||m.phishing_resistant===true);
+      const usable=sortMfaMethods(methods
+        .filter((method)=>mfaMethodAllowed(method,assurance.effective))
+        .filter((method)=>!assurance.effective.phishingResistantRequired||method.phishing_resistant===true));
       const challenge=await createPendingChallenge(db,{
         companyId:user.company_id,userId:user.id,type:"LOGIN",
         context:{authMethod,providerId:provider.id,phishingResistantRequired:assurance.effective.phishingResistantRequired===true,activationOnly:!activationSatisfied&&!assurance.effective.mfaRequired,deviceActivationPending:!activationSatisfied},
