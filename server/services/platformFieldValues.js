@@ -26,10 +26,23 @@ export function fieldValueError(field, value) {
   const type = field.field_type;
   const empty = value === null || value === undefined || value === "";
   if (empty) return field.required ? `${field.label} is required` : null;
-  if (["text", "email", "phone", "multiselect"].includes(type) && typeof value !== "string" && !Array.isArray(value)) return `${field.label} must be text`;
-  if (["number", "decimal", "currency"].includes(type) && (!((typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isFinite(Number(value))))) return `${field.label} must be a valid number`;
+  if (["text", "long_text", "rich_text", "email", "phone", "url", "time", "auto_number", "multiselect"].includes(type) && typeof value !== "string" && !Array.isArray(value)) return `${field.label} must be text`;
+  if (["number", "decimal", "currency", "percent"].includes(type) && (!((typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isFinite(Number(value))))) return `${field.label} must be a valid number`;
   if (type === "boolean" && ![true, false, 0, 1, "true", "false", "0", "1"].includes(value)) return `${field.label} must be boolean`;
   if (["date", "datetime"].includes(type) && Number.isNaN(new Date(value).getTime())) return `${field.label} must be a valid ${type}`;
+  if (type === "time" && !/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(String(value))) return `${field.label} must be a valid time`;
+  if (type === "url") {
+    try { new URL(String(value)); } catch { return `${field.label} must be a valid URL`; }
+  }
+  if (type === "percent" && (Number(value) < -1000000 || Number(value) > 1000000)) return `${field.label} must be a valid percentage`;
+  if (["address", "location", "json"].includes(type) && (typeof value !== "object" || Array.isArray(value))) return `${field.label} must be structured data`;
+  if (type === "location") {
+    const latitude = Number(value?.latitude ?? value?.lat);
+    const longitude = Number(value?.longitude ?? value?.lng ?? value?.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return `${field.label} must contain valid latitude and longitude`;
+    }
+  }
   if (type === "select" || type === "picklist") {
     const options = localPicklistOptions(field);
     const allowed = options.filter((option) => option.active !== false).map((option) => option.value);
@@ -42,7 +55,7 @@ export function fieldValueError(field, value) {
 export function normalizeFieldValue(field, value) {
   if (value === null || value === undefined || value === "") return null;
   if (field.field_type === "boolean") return value === true || value === 1 || value === "1" || value === "true";
-  if (["number", "decimal", "currency"].includes(field.field_type)) return Number(value);
+  if (["number", "decimal", "currency", "percent"].includes(field.field_type)) return Number(value);
   if (field.field_type === "multiselect" && Array.isArray(value)) return JSON.stringify(value);
   return value;
 }
