@@ -324,7 +324,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
         </SettingsTemplate>
 
         {existingInstance && testActions.length ? (
-          <div className="connector-settings-test-area">
+          <div className="connector-settings-test-area w-full">
             {testActions
               .filter((action) => !action.requiresEnabled || existingInstance.enabled)
               .map((action) => {
@@ -333,10 +333,10 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                 );
                 const missingRequired = (action.fields || []).some((field) => field.required && !String(values[field.key] ?? "").trim());
                 return (
-                  <div key={action.key} className="connector-sms-test-card rounded-lg border border-slate-200 bg-white p-4">
+                  <div key={action.key} className="connector-sms-test-card w-full rounded-lg border border-slate-200 bg-white p-4">
                     <h3 className="text-sm font-semibold text-slate-900">{action.label || "Test action"}</h3>
                     <p className="text-xs text-slate-500">{action.description || "Run an end-to-end connector test."}</p>
-                    <div className="grid grid-cols-1 gap-3 mt-3">
+                    <div className="grid grid-cols-1 gap-3 mt-3 md:grid-cols-2 xl:grid-cols-3">
                       {(action.fields || []).map((field) => (
                         <label key={field.key} className="text-xs font-medium text-slate-600">
                           {field.label || field.key}
@@ -353,7 +353,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                           />
                         </label>
                       ))}
-                      <button type="button" onClick={() => runPackageTestAction(existingInstance, action)} disabled={runningTestAction === action.key || missingRequired} className="h-9 px-4 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50">
+                      <button type="button" onClick={() => runPackageTestAction(existingInstance, action)} disabled={runningTestAction === action.key || missingRequired} className="h-9 px-4 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50 md:col-span-2 xl:col-span-3 xl:justify-self-end xl:min-w-40">
                         {runningTestAction === action.key ? "Running…" : action.label || "Run test"}
                       </button>
                     </div>
