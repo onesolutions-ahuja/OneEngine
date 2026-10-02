@@ -5155,6 +5155,20 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
         const contentMode = templateOnly ? "TEMPLATE" : (step.config?.contentMode || (isEmail ? "TEMPLATE" : "CUSTOM"));
         return (
           <div className="space-y-3">
+            {isEmail && step.type !== "EMAIL_ALERT" ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Email provider</label>
+                <select
+                  className={inputClass}
+                  value={step.type}
+                  onChange={(event) => updateStep(index, { type: event.target.value, config: { ...(step.config || {}) } })}
+                >
+                  <option value="SEND_EMAIL">Configured default email provider</option>
+                  {(providerAvailable.BREVO || step.type === "SEND_EMAIL_BREVO") ? <option value="SEND_EMAIL_BREVO">Brevo</option> : null}
+                  {(providerAvailable.MAILJET || step.type === "SEND_EMAIL_MAILJET") ? <option value="SEND_EMAIL_MAILJET">Mailjet</option> : null}
+                </select>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div>
                 <span className="text-sm font-medium text-slate-700">{providerLabel}</span>
@@ -8072,12 +8086,19 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           }
         }
         for (const item of connectors) {
-          const packageKey = String(item.packageKey || item.connector_package_key || "");
+          const packageKey = String(item.packageKey || item.connector_package_key || "").toLowerCase();
+          const capabilities = (Array.isArray(item.capabilities) ? item.capabilities : [])
+            .map((capability) => String(typeof capability === "string" ? capability : capability?.key || "").toLowerCase())
+            .filter(Boolean);
           const ready = item.enabled === true
             && String(item.status || item.connectionStatus || "").toUpperCase() === "CONNECTED"
             && (item.testPassed === true || item.health?.success === true);
-          if (packageKey === "brevo_connector") nextState.BREVO = ready;
-          if (packageKey === "mailjet_connector") nextState.MAILJET = ready;
+          if (!ready) continue;
+          if (packageKey === "brevo_connector") nextState.BREVO = true;
+          if (packageKey === "mailjet_connector") nextState.MAILJET = true;
+          if (packageKey.includes("email") || packageKey.includes("brevo") || packageKey.includes("mailjet") || capabilities.some((key) => key.startsWith("email."))) nextState.EMAIL = true;
+          if (packageKey.includes("sms") || capabilities.some((key) => key.startsWith("sms.") || key.includes("message.sms"))) nextState.SMS = true;
+          if (packageKey.includes("whatsapp") || capabilities.some((key) => key.startsWith("whatsapp.") || key.includes("message.whatsapp"))) nextState.WHATSAPP = true;
         }
         setProviderAvailable(nextState);
       })
