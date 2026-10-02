@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '../../services/api'
+import IdentityAssuranceSettings from './IdentityAssuranceSettings'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
 const title = (value) => value.charAt(0).toUpperCase() + value.slice(1)
@@ -7,6 +8,7 @@ const title = (value) => value.charAt(0).toUpperCase() + value.slice(1)
 const emptyPolicy = () => ({
   name: 'New Access Policy', description: '', scopeType: 'ROLE', scopeId: '', priority: 100,
   timezone: 'Europe/London', enforceLoginIp: false, active: true, loginHours: {},
+  mfaRequired:null, phishingResistantMfaRequired:null, requiredLoginAssurance:null, trustedDeviceDays:null, trustSsoMfa:null,
 })
 
 function Toggle({ checked, onChange, disabled=false, label }) {
@@ -123,7 +125,7 @@ export default function SecurityIdentitySettings() {
 
   if(loading&&!data)return <div className="settings-card settings-state-card">Loading Security & Identity…</div>
 
-  const tabs=[['password','Password Policies'],['session','Session Settings'],['access','Login Access Policies'],['network','Network Access'],['history','Login History'],['sessions','Active Sessions']]
+  const tabs=[['password','Password Policies'],['session','Session Settings'],['mfa','MFA & Assurance'],['providers','Authentication Providers'],['access','Login Access Policies'],['network','Network Access'],['history','Login History'],['sessions','Active Sessions']]
 
   return <div className="space-y-4 min-w-0">
     {error?<div className="settings-error">{error}</div>:null}
@@ -156,6 +158,10 @@ export default function SecurityIdentitySettings() {
       <div className="metadata-settings-form-actions"><button className="is-primary" disabled={saving} onClick={saveSettings}>{saving?'Saving…':'Save session settings'}</button></div>
     </div>:null}
 
+    {tab==='mfa'?<IdentityAssuranceSettings mode="assurance"/>:null}
+
+    {tab==='providers'?<IdentityAssuranceSettings mode="providers"/>:null}
+
     {tab==='access'?<div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
       <section className="settings-card">
         <div className="flex items-center gap-2"><strong>Access Policies</strong><button type="button" className="ml-auto" onClick={()=>{setPolicyId('');setPolicyDraft(emptyPolicy());setPolicyRanges([])}}>New</button></div>
@@ -169,6 +175,11 @@ export default function SecurityIdentitySettings() {
           {policyDraft.scopeType!=='COMPANY'?<div className="settings-row"><strong>{policyDraft.scopeType==='ROLE'?'Role':'User'}</strong><select value={policyDraft.scopeId||''} onChange={e=>setPolicyDraft(d=>({...d,scopeId:e.target.value}))}><option value="">Select…</option>{(policyDraft.scopeType==='ROLE'?principals.roles:principals.users).map(x=><option key={x.id} value={x.id}>{x.name||x.full_name||x.username}</option>)}</select></div>:null}</>:null}
           <div className="settings-row"><div><strong>Policy timezone</strong><p>Login hours stay anchored to this timezone even if company timezone later changes.</p></div><input value={policyDraft.timezone||''} onChange={e=>setPolicyDraft(d=>({...d,timezone:e.target.value}))}/></div>
           <div className="settings-row"><div><strong>Restrict login IP addresses</strong><p>When enabled, login is denied unless the source IP is inside an allowed range below.</p></div><Toggle label="Restrict login IP" checked={policyDraft.enforceLoginIp===true} onChange={v=>setPolicyDraft(d=>({...d,enforceLoginIp:v}))}/></div>
+          <div className="settings-row"><div><strong>MFA requirement</strong><p>Inherit tenant default or override it for this company/role/user policy.</p></div><select value={policyDraft.mfaRequired===null?'INHERIT':policyDraft.mfaRequired?'REQUIRE':'NOT_REQUIRED'} onChange={e=>setPolicyDraft(d=>({...d,mfaRequired:e.target.value==='INHERIT'?null:e.target.value==='REQUIRE'}))}><option value="INHERIT">Inherit</option><option value="REQUIRE">Require MFA</option><option value="NOT_REQUIRED">Do not require MFA</option></select></div>
+          <div className="settings-row"><div><strong>Phishing-resistant MFA</strong><p>Require passkey/WebAuthn for this scope, or inherit.</p></div><select value={policyDraft.phishingResistantMfaRequired===null?'INHERIT':policyDraft.phishingResistantMfaRequired?'REQUIRE':'NOT_REQUIRED'} onChange={e=>setPolicyDraft(d=>({...d,phishingResistantMfaRequired:e.target.value==='INHERIT'?null:e.target.value==='REQUIRE'}))}><option value="INHERIT">Inherit</option><option value="REQUIRE">Require phishing-resistant MFA</option><option value="NOT_REQUIRED">Do not require</option></select></div>
+          <div className="settings-row"><div><strong>Login assurance level</strong><p>Override the minimum session level required at login.</p></div><select value={policyDraft.requiredLoginAssurance??'INHERIT'} onChange={e=>setPolicyDraft(d=>({...d,requiredLoginAssurance:e.target.value==='INHERIT'?null:e.target.value}))}><option value="INHERIT">Inherit</option><option value="STANDARD">Standard</option><option value="HIGH">High Assurance</option></select></div>
+          <div className="settings-row"><div><strong>Trusted device lifetime</strong><p>Blank means inherit the tenant default.</p></div><input type="number" min="0" max="3650" value={policyDraft.trustedDeviceDays??''} placeholder="Inherit" onChange={e=>setPolicyDraft(d=>({...d,trustedDeviceDays:e.target.value===''?null:Number(e.target.value)}))}/></div>
+          <div className="settings-row"><div><strong>Trust SSO provider MFA</strong><p>Choose whether high-assurance SSO can satisfy MFA for this scope.</p></div><select value={policyDraft.trustSsoMfa===null?'INHERIT':policyDraft.trustSsoMfa?'YES':'NO'} onChange={e=>setPolicyDraft(d=>({...d,trustSsoMfa:e.target.value==='INHERIT'?null:e.target.value==='YES'}))}><option value="INHERIT">Inherit</option><option value="YES">Trust SSO MFA</option><option value="NO">Require OneEngine MFA</option></select></div>
           <div className="settings-row"><strong>Active</strong><Toggle label="Policy active" checked={policyDraft.active!==false} onChange={v=>setPolicyDraft(d=>({...d,active:v}))}/></div>
           <div className="metadata-settings-form-actions"><button className="is-primary" disabled={saving} onClick={savePolicy}>{policyId?'Save policy':'Create policy'}</button></div>
         </section>
@@ -200,6 +211,8 @@ function fromPolicy(p){
     name:p.name||'',description:p.description||'',scopeType:p.scope_type||'COMPANY',scopeId:p.scope_id||'',
     priority:p.priority??100,timezone:p.timezone||'Europe/London',enforceLoginIp:p.enforce_login_ip===true,
     active:p.active!==false,loginHours:p.login_hours||{},
+    mfaRequired:p.mfa_required??null,phishingResistantMfaRequired:p.phishing_resistant_mfa_required??null,
+    requiredLoginAssurance:p.required_login_assurance??null,trustedDeviceDays:p.trusted_device_days??null,trustSsoMfa:p.trust_sso_mfa??null,
   }
 }
 
