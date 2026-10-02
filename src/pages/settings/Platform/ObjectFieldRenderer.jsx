@@ -38,6 +38,31 @@ function formatValue(value, field) {
   return formatRecordDisplayValue(value, field);
 }
 
+function richTextNodes(value) {
+  const text = String(value ?? "");
+  const parts = text.split(/(\*\*[^*]+\*\*|_[^_]+_|\[[^\]]+\]\(https?:\/\/[^)]+\))/g);
+  return parts.map((part, index) => {
+    if (/^\*\*[^*]+\*\*$/.test(part)) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (/^_[^_]+_$/.test(part)) return <em key={index}>{part.slice(1, -1)}</em>;
+    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
+    if (link) return <a key={index} href={link[2]} target="_blank" rel="noreferrer">{link[1]}</a>;
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
+}
+
+function structuredDisplay(value, type) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "—";
+  if (type === "location") {
+    const lat = value.latitude ?? value.lat;
+    const lng = value.longitude ?? value.lng ?? value.lon;
+    return lat === undefined || lng === undefined ? "—" : `${lat}, ${lng}`;
+  }
+  if (type === "address") {
+    return [value.line1, value.line2, value.city, value.region, value.postcode, value.country].filter(Boolean).join(", ") || "—";
+  }
+  return JSON.stringify(value);
+}
+
 export default function ObjectFieldRenderer({
   field,
   value,
@@ -77,6 +102,30 @@ export default function ObjectFieldRenderer({
   if (mode === "display" || (field?.fieldType || field?.field_type) === "formula") {
     /* Boolean display uses THE global read-only toggle (same design language
        as the editable control); everything else formats to text. */
+    if (fieldType === "rich_text") {
+      return (
+        <div className={`platform-field-renderer platform-field-display ${className}`}>
+          <div className="platform-field-display-label">{label}</div>
+          <div className="platform-field-display-value platform-rich-display">{richTextNodes(value)}</div>
+        </div>
+      );
+    }
+    if (["address", "location", "json"].includes(fieldType)) {
+      return (
+        <div className={`platform-field-renderer platform-field-display ${className}`}>
+          <div className="platform-field-display-label">{label}</div>
+          <div className="platform-field-display-value">{structuredDisplay(value, fieldType)}</div>
+        </div>
+      );
+    }
+    if (fieldType === "url" && value) {
+      return (
+        <div className={`platform-field-renderer platform-field-display ${className}`}>
+          <div className="platform-field-display-label">{label}</div>
+          <div className="platform-field-display-value"><a href={String(value)} target="_blank" rel="noreferrer">{String(value)}</a></div>
+        </div>
+      );
+    }
     if (fieldType === "boolean" && (field?.fieldType || field?.field_type) !== "formula") {
       return (
         <div className={`platform-field-renderer platform-field-display ${className}`}>
@@ -157,6 +206,57 @@ export default function ObjectFieldRenderer({
 
       break;
 
+    case "rich_text":
+      control = (
+        <textarea
+          value={value ?? ""}
+          disabled={disabled}
+          placeholder={placeholder}
+          rows={6}
+          onChange={(event) => handleChange(event.target.value)}
+        />
+      );
+      break;
+
+    case "address": {
+      const address = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+      const patch = (key, next) => handleChange({ ...address, [key]: next });
+      control = (
+        <div className="platform-structured-grid">
+          <input value={address.line1 || ""} disabled={disabled} placeholder="Address line 1" onChange={(event) => patch("line1", event.target.value)} />
+          <input value={address.line2 || ""} disabled={disabled} placeholder="Address line 2" onChange={(event) => patch("line2", event.target.value)} />
+          <input value={address.city || ""} disabled={disabled} placeholder="City" onChange={(event) => patch("city", event.target.value)} />
+          <input value={address.region || ""} disabled={disabled} placeholder="County / Region" onChange={(event) => patch("region", event.target.value)} />
+          <input value={address.postcode || ""} disabled={disabled} placeholder="Postcode" onChange={(event) => patch("postcode", event.target.value)} />
+          <input value={address.country || ""} disabled={disabled} placeholder="Country" onChange={(event) => patch("country", event.target.value)} />
+        </div>
+      );
+      break;
+    }
+
+    case "location": {
+      const location = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+      control = (
+        <div className="platform-structured-grid platform-location-grid">
+          <input type="number" step="any" min="-90" max="90" value={location.latitude ?? location.lat ?? ""} disabled={disabled} placeholder="Latitude" onChange={(event) => handleChange({ ...location, latitude: event.target.value === "" ? "" : Number(event.target.value) })} />
+          <input type="number" step="any" min="-180" max="180" value={location.longitude ?? location.lng ?? location.lon ?? ""} disabled={disabled} placeholder="Longitude" onChange={(event) => handleChange({ ...location, longitude: event.target.value === "" ? "" : Number(event.target.value) })} />
+        </div>
+      );
+      break;
+    }
+
+    case "auto_number":
+      control = <output>{value || "Generated on save"}</output>;
+      break;
+
+    case "time":
+      control = <input type="time" value={value ?? ""} disabled={disabled} onChange={(event) => handleChange(event.target.value)} />;
+      break;
+
+    case "json":
+      control = <textarea value={typeof value === "string" ? value : JSON.stringify(value ?? {}, null, 2)} disabled={disabled} rows={6} onChange={(event) => { try { handleChange(JSON.parse(event.target.value)); } catch {} }} />;
+      break;
+
     case "long_text":
       control = (
         <textarea
@@ -177,6 +277,7 @@ export default function ObjectFieldRenderer({
     case "number":
     case "decimal":
     case "currency":
+    case "percent":
       control = (
         <input
           type="number"
@@ -184,7 +285,7 @@ export default function ObjectFieldRenderer({
           disabled={disabled}
           placeholder={placeholder}
           step={
-            fieldType === "decimal"
+            ["decimal", "percent"].includes(fieldType)
               ? "any"
               : "1"
           }
@@ -488,6 +589,17 @@ export default function ObjectFieldRenderer({
           cursor: not-allowed;
           opacity: 0.65;
         }
+
+        .platform-structured-grid {
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:6px;
+        }
+        .platform-structured-grid > :first-child,
+        .platform-structured-grid > :nth-child(2) { grid-column:1 / -1; }
+        .platform-location-grid > * { grid-column:auto !important; }
+        .platform-rich-display { white-space:pre-wrap; }
+        @media(max-width:640px){ .platform-structured-grid { grid-template-columns:1fr; } .platform-structured-grid > * { grid-column:auto !important; } }
 
         .platform-field-checkbox {
           display: flex !important;
