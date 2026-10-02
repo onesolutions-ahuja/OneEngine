@@ -5,6 +5,7 @@ import { fieldValueError, formatAutoNumberValue, normalizeFieldValue } from "../
 
 test("field constraints enforce max length, precision and scale", () => {
   assert.equal(fieldValueError({ label:"Code", field_type:"text", required:false, config:{ maxLength:5 } }, "ABCDEF"), "Code must be 5 characters or fewer");
+  assert.equal(fieldValueError({ label:"Notes", field_type:"text_area", required:false, config:{ maxLength:255 } }, "x".repeat(256)), "Notes must be 255 characters or fewer");
   assert.equal(fieldValueError({ label:"Amount", field_type:"decimal", required:false, config:{ precision:5, scale:2 } }, "123.456"), "Amount supports at most 2 decimal places");
   assert.equal(fieldValueError({ label:"Amount", field_type:"decimal", required:false, config:{ precision:5, scale:2 } }, "1234.56"), "Amount supports at most 5 digits");
   assert.equal(fieldValueError({ label:"Amount", field_type:"decimal", required:false, config:{ precision:5, scale:2 } }, "123.45"), null);
@@ -19,6 +20,12 @@ test("multi-select validates every selected metadata value", () => {
   assert.equal(fieldValueError(field, ["a","b"]), null);
   assert.match(fieldValueError(field, ["a","old"]), /unavailable option/i);
   assert.equal(normalizeFieldValue(field, ["a","b"]), '["a","b"]');
+});
+
+test("email and millisecond time validation match field semantics", () => {
+  assert.equal(fieldValueError({ label:"Email", field_type:"email", required:false, config:{} }, "person@example.com"), null);
+  assert.match(fieldValueError({ label:"Email", field_type:"email", required:false, config:{} }, "not-an-email"), /valid email address/i);
+  assert.equal(fieldValueError({ label:"Time", field_type:"time", required:false, config:{} }, "14:30:15.125"), null);
 });
 
 test("auto-number formatter supports padding and UTC date tokens", () => {
