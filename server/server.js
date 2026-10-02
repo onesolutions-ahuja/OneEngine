@@ -104,7 +104,7 @@ import createPlatformEventsRouter from "./routes/platformEvents.js";
 import { saveDomainConfiguration } from "./services/platformDomainRecords.js";
 import createAdvancedPlatformRouter from "./routes/advancedPlatform.js";
 import createDebugCodesRouter from "./routes/debugCodes.js";
-import { buildDebugPayload, classifyDebugCode, builtinDebugCode } from "./services/debugCodes.js";
+import { buildDebugPayload, classifyDebugCode, builtinDebugCode, createDebugReference, normalizeDebugCode, writeDebugEvent } from "./services/debugCodes.js";
 import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformMetadata.js";
 import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
 import { seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
@@ -439,6 +439,49 @@ async function db(query, params = [], reqOverride = null) {
 
   return chosenPool.query(query, params);
 }
+
+
+// Every handled API failure also receives a OneEngine diagnostic code.
+// This covers route handlers that deliberately return {success:false} and
+// therefore never reach the final exception boundary.
+app.use("/api", (req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    try {
+      if (body && typeof body === "object" && body.success === false) {
+        const existing = normalizeDebugCode(body.oeCode || "");
+        const status = Number(res.statusCode || 500);
+        const diagnosticError = Object.assign(
+          new Error(String(body.message || body.error || body.code || "OneEngine request failed")),
+          { code: body.code && !String(body.code).startsWith("OE") ? body.code : undefined }
+        );
+        const derived = builtinDebugCode(existing)
+          ? existing
+          : classifyDebugCode(diagnosticError, status);
+        const definition = builtinDebugCode(derived) || builtinDebugCode("OEXU01");
+        const reference = String(body.reference || body.debugReference || createDebugReference()).toUpperCase();
+
+        body = {
+          ...body,
+          oeCode: definition.code,
+          reference,
+        };
+
+        void writeDebugEvent(db, {
+          reference,
+          definition,
+          error: diagnosticError,
+          status,
+          req,
+        });
+      }
+    } catch (debugError) {
+      console.error("OneEngine response diagnostic decoration failed:", debugError?.message || debugError);
+    }
+    return originalJson(body);
+  };
+  next();
+});
 
 const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
