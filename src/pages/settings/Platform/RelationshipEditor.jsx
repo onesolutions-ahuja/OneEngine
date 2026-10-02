@@ -239,24 +239,17 @@ export default function RelationshipEditor({
           "Select the child object."
         );
       }
-
-      if (
-        String(form.parent_object_id) ===
-        String(form.child_object_id)
-      ) {
-        throw new Error(
-          "Parent and child objects cannot be the same."
-        );
-      }
-
       const payload = {
         relationshipKey: form.relationship_key,
+        label: form.name?.trim() || form.relationship_key,
+        description: form.description?.trim() || null,
         relationshipType: form.relationship_type,
         parentObjectId: form.parent_object_id,
         childObjectId: form.child_object_id,
         childFieldId: form.child_field_id || null,
         onDelete: form.on_delete || "restrict",
         onUpdate: form.on_update || "restrict",
+        active: form.active !== false,
       };
 
       const url = isNew
@@ -353,6 +346,7 @@ export default function RelationshipEditor({
                 value={
                   form.relationship_key || ""
                 }
+                readOnly={!isNew}
                 onChange={(event) =>
                   update(
                     "relationship_key",
@@ -425,6 +419,7 @@ export default function RelationshipEditor({
                   Inactive
                 </option>
               </select>
+              <small>For lookup/one-to-many relationships, this is the child field that stores or represents the relationship.</small>
             </label>
           </div>
         </section>
@@ -530,7 +525,7 @@ export default function RelationshipEditor({
             </label>
 
             <label>
-              <span>Parent Field</span>
+              <span>Parent Reference Field</span>
 
               <select
                 value={
@@ -569,10 +564,11 @@ export default function RelationshipEditor({
                   }
                 )}
               </select>
+              <small>Optional metadata hint for the parent-side display/reference field.</small>
             </label>
 
             <label>
-              <span>Child Field</span>
+              <span>Child Relationship Field</span>
 
               <select
                 value={
