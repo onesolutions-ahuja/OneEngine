@@ -85,6 +85,11 @@ export default function RecordListView({
   pageSize = 50,
   total = null,
   onPageChange,
+  remoteMode = false,
+  sortValue = null,
+  onSortChange,
+  filterValue = null,
+  onFiltersChange,
 }) {
   const [query, setQuery] = useState('')
   const resolvedQuery = onSearchChange ? (searchValue ?? '') : query
@@ -94,6 +99,8 @@ export default function RecordListView({
   const [savingCell, setSavingCell] = useState(false)
   const [sort, setSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
   const [filters, setFilters] = useState({})
+  const resolvedSort = sortValue || sort
+  const resolvedFilters = filterValue || filters
   const [filterOpen, setFilterOpen] = useState(null)
   const [draggingKey, setDraggingKey] = useState(null)
   const [dataLoaderMode, setDataLoaderMode] = useState(null)
@@ -161,9 +168,11 @@ export default function RecordListView({
           searchKeys.some((key) => String(row?.[key] ?? '').toLowerCase().includes(q)),
         )
 
+    if (remoteMode) return result
+
     result = result.filter((row) =>
       columns.every((column) => {
-        const config = filters[column.key]
+        const config = resolvedFilters[column.key]
         if (!config) return true
 
         const selected = config.values || []
@@ -177,11 +186,11 @@ export default function RecordListView({
       }),
     )
 
-    if (!sort.key) return result
-    const column = columns.find((item) => item.key === sort.key)
+    if (!resolvedSort.key) return result
+    const column = columns.find((item) => item.key === resolvedSort.key)
     const read = column?.sortValue
       ? (row) => column.sortValue(row)
-      : (row) => row?.[sort.key]
+      : (row) => row?.[resolvedSort.key]
 
     return [...result].sort((a, b) => {
       const av = read(a)
@@ -199,27 +208,31 @@ export default function RecordListView({
         comparison = String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true })
       }
 
-      return sort.direction === 'asc' ? comparison : -comparison
+      return resolvedSort.direction === 'asc' ? comparison : -comparison
     })
-  }, [rows, resolvedQuery, searchKeys, columns, sort, filters, onSearchChange])
+  }, [rows, resolvedQuery, searchKeys, columns, resolvedSort, resolvedFilters, onSearchChange, remoteMode])
 
   const toggleSort = (column) => {
     if (column.sortable === false) return
-    setSort((current) => ({
+    const next = {
       key: column.key,
-      direction: current.key === column.key && current.direction === 'asc' ? 'desc' : 'asc',
-    }))
+      direction: resolvedSort.key === column.key && resolvedSort.direction === 'asc' ? 'desc' : 'asc',
+    }
+    if (onSortChange) onSortChange(next)
+    else setSort(next)
   }
 
   const patchFilter = (columnKey, patch) => {
-    setFilters((current) => ({
-      ...current,
-      [columnKey]: { values: [], operator: '', value: '', ...(current[columnKey] || {}), ...patch },
-    }))
+    const next = {
+      ...resolvedFilters,
+      [columnKey]: { values: [], operator: '', value: '', ...(resolvedFilters[columnKey] || {}), ...patch },
+    }
+    if (onFiltersChange) onFiltersChange(next)
+    else setFilters(next)
   }
 
   const toggleFilterValue = (columnKey, optionId) => {
-    const current = filters[columnKey] || { values: [], operator: '', value: '' }
+    const current = resolvedFilters[columnKey] || { values: [], operator: '', value: '' }
     const selected = current.values || []
     patchFilter(columnKey, {
       values: selected.includes(optionId)
@@ -229,11 +242,10 @@ export default function RecordListView({
   }
 
   const clearColumnFilter = (columnKey) => {
-    setFilters((current) => {
-      const next = { ...current }
-      delete next[columnKey]
-      return next
-    })
+    const next = { ...resolvedFilters }
+    delete next[columnKey]
+    if (onFiltersChange) onFiltersChange(next)
+    else setFilters(next)
   }
 
   const moveColumn = (fromKey, toKey) => {
@@ -389,9 +401,9 @@ export default function RecordListView({
                 ) : null}
                 {canEdit ? <th className="record-list-edit-head"></th> : null}
                 {orderedColumns.map((column) => {
-                  const activeSort = sort.key === column.key
-                  const SortIcon = activeSort && sort.direction === 'desc' ? ArrowDown : ArrowUp
-                  const filter = filters[column.key] || {}
+                  const activeSort = resolvedSort.key === column.key
+                  const SortIcon = activeSort && resolvedSort.direction === 'desc' ? ArrowDown : ArrowUp
+                  const filter = resolvedFilters[column.key] || {}
                   const activeFilter = Boolean((filter.values || []).length || filter.operator)
                   const options = filterOptions[column.key] || []
                   return (
@@ -431,7 +443,7 @@ export default function RecordListView({
                           className={`record-sort-button ${activeSort ? 'is-active' : ''}`}
                           onClick={() => toggleSort(column)}
                           disabled={column.sortable === false}
-                          title={activeSort && sort.direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
+                          title={activeSort && resolvedSort.direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
                         >
                           <span>{column.label}</span>
                           {column.sortable === false ? null : <SortIcon size={12} />}
