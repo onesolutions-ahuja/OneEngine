@@ -1000,7 +1000,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
         companyId: user.company_id,
         userId: user.id,
         type: "LOGIN",
-        context: { authMethod: "GOOGLE", phishingResistantRequired: googleAssurancePolicy.effective.phishingResistantRequired === true, activationOnly: !googleActivationSatisfied && !googleAssurancePolicy.effective.mfaRequired },
+        context: { authMethod: "GOOGLE", phishingResistantRequired: googleAssurancePolicy.effective.phishingResistantRequired === true, activationOnly: !googleActivationSatisfied && !googleAssurancePolicy.effective.mfaRequired, deviceActivationPending: !googleActivationSatisfied },
         minutes: 10,
       });
       const target = new URL(returnTo);
@@ -1236,7 +1236,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         companyId: user.company_id,
         userId: user.id,
         type: "LOGIN",
-        context: { authMethod: "PASSWORD", phishingResistantRequired: effectiveAssurance.phishingResistantRequired === true, activationOnly: !activationSatisfied && !effectiveAssurance.mfaRequired },
+        context: { authMethod: "PASSWORD", phishingResistantRequired: effectiveAssurance.phishingResistantRequired === true, activationOnly: !activationSatisfied && !effectiveAssurance.mfaRequired, deviceActivationPending: !activationSatisfied },
         minutes: 10,
       });
       return res.status(202).json({
