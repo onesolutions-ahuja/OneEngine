@@ -169,7 +169,7 @@ const PORT = process.env.PORT || 10000;
 let httpServer = null;
 let runtimeReadiness = {
   state: "starting",
-  oeCode: "OES01",
+  oeCode: "OESB01",
   message: "OneEngine is starting. Please try again shortly.",
   technicalMessage: null,
   updatedAt: new Date().toISOString(),
@@ -260,7 +260,7 @@ function createFixedWindowRateLimiter({ windowMs, max, keyPrefix }) {
     res.setHeader("RateLimit-Reset", String(Math.ceil(entry.resetAt / 1000)));
     if (entry.count > max) {
       res.setHeader("Retry-After", String(Math.ceil((entry.resetAt - now) / 1000)));
-      return res.status(429).json({ success: false, code: "OEA03", oeCode: "OEA03", message: "Too many requests. Please try again shortly." });
+      return res.status(429).json({ success: false, code: "OEAR01", oeCode: "OEAR01", message: "Too many requests. Please try again shortly." });
     }
     next();
   };
@@ -298,12 +298,12 @@ app.use(createTrustedRuntimeGate());
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 // Keep the process reachable while core dependencies initialise. This lets the
-// browser receive an exact OneEngine code (for example OED02 for a database
+// browser receive an exact OneEngine code (for example OEDQ01 for a database
 // resource limit) instead of incorrectly assuming that Render is merely starting.
 app.use("/api", (req, res, next) => {
   if (req.path === "/health" || req.path === "/") return next();
   if (runtimeReadiness.state === "ready") return next();
-  const definition = builtinDebugCode(runtimeReadiness.oeCode) || builtinDebugCode("OES01");
+  const definition = builtinDebugCode(runtimeReadiness.oeCode) || builtinDebugCode("OESB01");
   return res.status(503).json({
     success: false,
     code: definition.code,
@@ -798,12 +798,12 @@ app.get("/api/health", async (req, res) => {
     : null;
   const oeCode = healthy
     ? null
-    : classifiedHealthCode && classifiedHealthCode !== "OEA01" && classifiedHealthCode !== "OEA02"
+    : classifiedHealthCode && classifiedHealthCode !== "OEAA01" && classifiedHealthCode !== "OEAE01"
       ? classifiedHealthCode
-      : runtimeReadiness.oeCode && runtimeReadiness.oeCode !== "OEA01" && runtimeReadiness.oeCode !== "OEA02"
+      : runtimeReadiness.oeCode && runtimeReadiness.oeCode !== "OEAA01" && runtimeReadiness.oeCode !== "OEAE01"
         ? runtimeReadiness.oeCode
-        : "OEN01";
-  const definition = oeCode ? (builtinDebugCode(oeCode) || builtinDebugCode("OEA01")) : null;
+        : "OENH01";
+  const definition = oeCode ? (builtinDebugCode(oeCode) || builtinDebugCode("OEAA01")) : null;
 
   res.status(healthy ? 200 : 503).json({
     success: healthy,
@@ -2299,7 +2299,7 @@ app.use(async (error, req, res, next) => {
   } catch (debugError) {
     console.error("OneEngine Debug boundary failed:", debugError);
     const code = classifyDebugCode(error, status);
-    const definition = builtinDebugCode(code) || builtinDebugCode("OEA02");
+    const definition = builtinDebugCode(code) || builtinDebugCode("OEAE01");
     return res.status(status).json({
       success: false,
       code: definition.code,
@@ -2328,7 +2328,7 @@ app.get(["/", "/login", "/app", "/app/*", "/customer-display"], (req, res) => {
 /* Unknown API routes remain JSON; unknown browser routes go to the active frontend. */
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
-    return res.status(404).json({ success: false, code: "OEA04", oeCode: "OEA04", message: "The requested service could not be found." });
+    return res.status(404).json({ success: false, code: "OEAF01", oeCode: "OEAF01", message: "The requested service could not be found." });
   }
   return res.redirect(302, SMART_THEME_URL);
 });
@@ -3460,7 +3460,7 @@ async function startServer() {
   } catch (error) {
     console.error("onePOS startup failed:", error);
     const oeCode = classifyDebugCode(error, 503);
-    const definition = builtinDebugCode(oeCode) || builtinDebugCode("OES02");
+    const definition = builtinDebugCode(oeCode) || builtinDebugCode("OESS01");
     runtimeReadiness = {
       state: "degraded",
       oeCode: definition.code,
