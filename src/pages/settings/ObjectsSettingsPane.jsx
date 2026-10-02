@@ -17,6 +17,7 @@ import AccessControlAdmin from './Platform/AccessControlAdmin.jsx'
 import AssignmentRuleEditor from './Platform/AssignmentRuleEditor.jsx'
 import SharingRuleEditor from './Platform/SharingRuleEditor.jsx'
 import DuplicateRulesAdmin from './Platform/DuplicateRulesAdmin.jsx'
+import WhereUsedPanel from './Platform/WhereUsedPanel.jsx'
 
 const TABS = [
   ['details', 'Details'],
@@ -37,6 +38,7 @@ const TABS = [
   ['sharing', 'Sharing'],
   ['automation-logs', 'Automation Logs'],
   ['permissions', 'Permissions'],
+  ['where-used', 'Where Used'],
 ]
 
 function objectName(object) {
@@ -596,6 +598,11 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     fields={fields}
                     onSave={saveField}
                     onCancel={closeEditor}
+                    onNavigateDependency={(tab) => {
+                      closeEditor()
+                      setActiveTab(tab)
+                      setMobileStage('detail')
+                    }}
                   />
                 ) : editor?.kind === 'relationship' ? (
                   <RelationshipEditor
@@ -920,7 +927,18 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                   </div>
                 ) : null}
 
-                {activeTab === 'permissions' ? (
+                {activeTab === 'where-used' ? (
+          <WhereUsedPanel
+            objectId={selectedId}
+            title="Where Used"
+            onNavigate={(tab) => {
+              setActiveTab(tab)
+              setMobileStage('detail')
+            }}
+          />
+        ) : null}
+
+        {activeTab === 'permissions' ? (
                   <div className="objects-permissions-card">
                     <div className="objects-permission-tabs">
                       <button type="button" className={permissionView === 'effective' ? 'is-active' : ''} onClick={() => setPermissionView('effective')}>Effective Access</button>
