@@ -91,6 +91,9 @@ export default function FieldEditor({
     defaultMode: field?.config?.defaultFormula || field?.config?.default_formula ? "formula" : "static",
     defaultValue: field?.config?.defaultValue ?? field?.config?.default_value ?? "",
     defaultFormula: field?.config?.defaultFormula || field?.config?.default_formula || "",
+    restrictedPicklist: field?.config?.restricted !== false,
+    sortAlphabetically: field?.config?.sortAlphabetically === true || field?.config?.sort_alphabetically === true,
+    multiSelectVisibleLines: Number(field?.config?.visibleLines ?? field?.config?.visible_lines ?? 6),
     maxLength: field?.config?.maxLength ?? field?.config?.max_length ?? "",
     precision: field?.config?.precision ?? "",
     scale: field?.config?.scale ?? field?.config?.decimalPlaces ?? field?.config?.decimal_places ?? "",
@@ -285,6 +288,16 @@ export default function FieldEditor({
     setForm((current) => ({ ...current, options: current.options.filter((_, optionIndex) => optionIndex !== index) }));
   }
 
+  function moveOption(index, direction) {
+    setForm((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.options.length) return current;
+      const options = [...current.options];
+      [options[index], options[target]] = [options[target], options[index]];
+      return { ...current, options };
+    });
+  }
+
   function picklistOptions(candidate) {
     const options = Array.isArray(candidate?.options)
       ? candidate.options
@@ -471,7 +484,10 @@ export default function FieldEditor({
           ...(form.requiredCondition ? { requiredCondition: form.requiredCondition } : {}),
           ...(["picklist", "select", "multiselect"].includes(form.field_type)
             ? {
-                ...(form.valueSource === "reusable" ? { valueSetId: form.valueSetId } : {}),
+                ...(form.valueSource === "reusable" ? { valueSetId: form.valueSetId } : { valueSetId: null }),
+                restricted: form.restrictedPicklist !== false,
+                sortAlphabetically: form.sortAlphabetically === true,
+                visibleLines: form.field_type === "multiselect" ? Math.max(3, Math.min(50, Number(form.multiSelectVisibleLines || 6))) : null,
                 ...(form.dependentPicklist?.controllingField ? {
                   dependentPicklist: {
                     controllingField: form.dependentPicklist.controllingField,
@@ -684,12 +700,16 @@ export default function FieldEditor({
                       <input value={option.label || ""} placeholder="In Progress" onChange={(event) => updateOption(index, "label", event.target.value)} />
                       <input value={option.value || ""} readOnly placeholder="in_progress" />
                       <label><input type="checkbox" checked={option.active !== false} onChange={(event) => updateOption(index, "active", event.target.checked)} /> Active</label>
+                      {!form.sortAlphabetically ? <><button type="button" disabled={index === 0} onClick={() => moveOption(index, -1)} aria-label="Move value up">↑</button><button type="button" disabled={index === form.options.length - 1} onClick={() => moveOption(index, 1)} aria-label="Move value down">↓</button></> : null}
                       <button type="button" onClick={() => removeOption(index)}>Remove</button>
                     </div>
                   ))}
                   <button type="button" onClick={addOption}>Add value</button>
                 </>
               )}
+              <label className="platform-checkbox"><input type="checkbox" checked={form.sortAlphabetically === true} onChange={(event) => update("sortAlphabetically", event.target.checked)} /><span><strong>Sort values alphabetically</strong><small>Otherwise users see the manual order above.</small></span></label>
+              <label className="platform-checkbox"><input type="checkbox" checked={form.restrictedPicklist !== false} onChange={(event) => update("restrictedPicklist", event.target.checked)} /><span><strong>Restricted values</strong><small>When off, API/import/automation may save values not defined here; record forms still show the configured choices.</small></span></label>
+              {form.field_type === "multiselect" ? <label><span>Visible lines</span><input type="number" min="3" max="50" value={form.multiSelectVisibleLines || 6} onChange={(event) => update("multiSelectVisibleLines", Number(event.target.value || 6))} /></label> : null}
               <div className="platform-dependent-picklist">
                 <label>
                   <span>Controlling field</span>
