@@ -61,7 +61,11 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   // Persist a harmless manual workflow so the regression exercises the real
   // version/test APIs rather than only checking their disabled pre-save state.
   const qaWorkflowName = `Workflow Builder E2E ${Date.now()}`;
-  await page.getByPlaceholder("Flow label").fill(qaWorkflowName);
+  await workflowWorkspace.getByRole("button", { name: "View Properties", exact: true }).click();
+  const flowProperties = page.getByRole("dialog", { name: "Flow Properties" });
+  await expect(flowProperties).toBeVisible();
+  await flowProperties.getByPlaceholder("Flow Label").fill(qaWorkflowName);
+  await flowProperties.getByRole("button", { name: "Done", exact: true }).click();
   const initialTriggerSelect = page.getByLabel("Flow trigger");
   await initialTriggerSelect.selectOption("manual");
   await page.getByRole("button", { name: "Stop", exact: true }).first().click();
@@ -93,7 +97,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(savedTest).toBeVisible();
   await expect(savedTest.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
   await savedTest.getByRole("button", { name: "Run", exact: true }).click();
-  const debugPanel = page.locator("div").filter({ hasText: "Debug / Test workflow" }).filter({ hasText: "No database changes were kept" }).last();
+  const debugPanel = page.locator("div").filter({ hasText: "Debug / Test Flow" }).filter({ hasText: "No database changes were kept" }).last();
   await expect(debugPanel.getByText("Test passed", { exact: true })).toBeVisible();
   await expect(debugPanel.getByText(/No database changes were kept/i)).toBeVisible();
   await debugPanel.getByRole("button", { name: "Close", exact: true }).click();
