@@ -1,4 +1,5 @@
 import { evaluateCondition } from "./platformConditions.js";
+import { renderMessageTemplate } from "./messageTemplates.js";
 import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
@@ -43,7 +44,7 @@ import {
 } from "./oneAssistant.js";
 
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
 
@@ -1230,6 +1231,79 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
   return { status: "PENDING", duplicate: false, request };
 }
 
+async function resolveEmailWorkflowAction({
+  db,
+  companyId,
+  action,
+  record,
+  previousRecord,
+  object,
+  workflowVariables,
+  req,
+}) {
+  const context = { record, previousRecord, req, object, workflowVariables };
+  const resolved = resolveCommunicationWorkflowAction(
+    action,
+    record,
+    object,
+    workflowVariables,
+    req,
+    previousRecord
+  );
+  const resolveValue = (value) => {
+    if (value === undefined || value === null || value === "") return value;
+    const candidate = resolveConfiguredResource(value, context, { preserveMissing: true });
+    return candidate === undefined ? value : candidate;
+  };
+
+  resolved.subject = resolveValue(action?.subject);
+  const configuredBody = action?.body ?? action?.text ?? action?.message;
+  if (configuredBody !== undefined) {
+    const body = resolveValue(configuredBody);
+    resolved.body = body;
+    resolved.text = body;
+    resolved.message = body;
+  }
+  if (action?.html !== undefined) resolved.html = resolveValue(action.html);
+
+  const templateRef = action?.templateId || action?.template || null;
+  const contentMode = String(action?.contentMode || (templateRef ? "TEMPLATE" : "CUSTOM")).toUpperCase();
+  if (contentMode === "TEMPLATE" && templateRef) {
+    const templateResult = await db(
+      `SELECT id,api_key,subject,body
+         FROM platform_message_templates
+        WHERE active=TRUE
+          AND channel='EMAIL'
+          AND (company_id=$1 OR company_id IS NULL)
+          AND (id::text=$2 OR api_key=$2)
+        ORDER BY CASE WHEN company_id=$1 THEN 0 ELSE 1 END
+        LIMIT 1`,
+      [companyId, String(templateRef)]
+    );
+    const template = templateResult.rows[0];
+    if (!template) {
+      throw Object.assign(new Error("Selected email template is unavailable"), { code: "TEMPLATE_NOT_FOUND", retryable: false });
+    }
+    const templateContext = resolved.templateContext && typeof resolved.templateContext === "object"
+      ? resolved.templateContext
+      : (record || {});
+    resolved.subject = renderMessageTemplate(template.subject || "", templateContext);
+    resolved.text = renderMessageTemplate(template.body || "", templateContext);
+    resolved.body = resolved.text;
+    resolved.message = resolved.text;
+    resolved.templateId = template.id;
+    resolved.template = template.api_key || resolved.template;
+  }
+
+  if (!String(resolved.subject || "").trim()) {
+    throw Object.assign(new Error("Email subject is required"), { code: "INVALID_SUBJECT", retryable: false });
+  }
+  if (!String(resolved.text || resolved.body || resolved.message || resolved.html || "").trim()) {
+    throw Object.assign(new Error("Email message body is required"), { code: "INVALID_MESSAGE", retryable: false });
+  }
+  return resolved;
+}
+
 async function executeProviderSpecificEmail({
   packageKey,
   actionKey,
@@ -1270,14 +1344,16 @@ async function executeProviderSpecificEmail({
       error: `${packageKey === "brevo_connector" ? "Brevo" : "Mailjet"} connector is not configured, tested and enabled`,
     };
   }
-  const resolvedAction = resolveCommunicationWorkflowAction(
+  const resolvedAction = await resolveEmailWorkflowAction({
+    db,
+    companyId: company,
     action,
     record,
+    previousRecord,
     object,
     workflowVariables,
     req,
-    previousRecord
-  );
+  });
   const execution = await executeConnectorWorkflowAction({
     action: {
       ...resolvedAction,
@@ -3025,7 +3101,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (!provider.configured) {
         return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
+      const resolvedAction = await resolveEmailWorkflowAction({ db, companyId: company, action, record, previousRecord, object, workflowVariables, req });
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
@@ -3034,6 +3110,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     key: "SEND_EMAIL_BREVO",
     displayName: "Send Email - Brevo",
     description: "Send an email through the tenant's installed Brevo connector.",
+    schema: {
+      type: "object",
+      properties: {
+        recipient: { type: "string", title: "Recipient email" },
+        contentMode: { type: "string", enum: ["TEMPLATE","CUSTOM"], title: "Content source" },
+        templateId: { type: "string", title: "Message template" },
+        subject: { type: "string", title: "Subject" },
+        body: { type: "string", title: "Message body" },
+      },
+      required: ["recipient"],
+    },
     validation: (action) => {
       if (!action?.recipient && !action?.to) throw new Error("Send Email - Brevo requires a recipient");
     },
@@ -3049,6 +3136,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     key: "SEND_EMAIL_MAILJET",
     displayName: "Send Email - Mailjet",
     description: "Send an email through the tenant's installed Mailjet connector.",
+    schema: {
+      type: "object",
+      properties: {
+        recipient: { type: "string", title: "Recipient email" },
+        contentMode: { type: "string", enum: ["TEMPLATE","CUSTOM"], title: "Content source" },
+        templateId: { type: "string", title: "Message template" },
+        subject: { type: "string", title: "Subject" },
+        body: { type: "string", title: "Message body" },
+      },
+      required: ["recipient"],
+    },
     validation: (action) => {
       if (!action?.recipient && !action?.to) throw new Error("Send Email - Mailjet requires a recipient");
     },
@@ -3077,7 +3175,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (!provider.configured) {
         return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
       }
-      const resolvedAction = resolveCommunicationWorkflowAction({ ...action, type: "SEND_EMAIL" }, record, object, workflowVariables, req, previousRecord);
+      const resolvedAction = await resolveEmailWorkflowAction({ db, companyId: company, action: { ...action, type: "SEND_EMAIL", contentMode: "TEMPLATE" }, record, previousRecord, object, workflowVariables, req });
       const job = await enqueuePlatformJob({
         db,
         companyId: company,
