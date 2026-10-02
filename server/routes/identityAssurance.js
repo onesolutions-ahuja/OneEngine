@@ -257,6 +257,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const kind=String(req.body?.authenticatorKind||"PLATFORM").toUpperCase()==="SECURITY_KEY"?"SECURITY_KEY":"PLATFORM";
     if(kind==="PLATFORM"&&!policy.effective.allowPlatformPasskeys)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Built-in passkeys are disabled by security policy"});
     if(kind==="SECURITY_KEY"&&!policy.effective.allowSecurityKeys)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Physical security keys are disabled by security policy"});
+    if(challenge.challenge_type==="LOGIN"&&!assuranceSatisfies(policy.effective.passkeyAssurance,policy.effective.requiredLoginAssurance)){
+      return res.status(403).json({success:false,code:"PASSKEY_ASSURANCE_INSUFFICIENT",message:"Passkeys do not meet the required login assurance level"});
+    }
     if(challenge.challenge_type==="STEP_UP"){
       const resourceKey=String(challenge.context?.resourceKey||"").toUpperCase();
       const configured=resourceKey?await effectiveStepUpPolicy(db,{companyId:user.company_id,resourceKey}):null;
@@ -288,6 +291,21 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     try{verification=await verifyRegistrationResponse({response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:false});}
     catch(error){return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});}
     if(!verification.verified||!verification.registrationInfo)return res.status(401).json({success:false,message:"Passkey could not be verified"});
+    const effectivePolicy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    const registeredKind=challenge.context?.authenticatorKind||"PLATFORM";
+    if(registeredKind==="PLATFORM"&&!effectivePolicy.effective.allowPlatformPasskeys)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Built-in passkeys are disabled by security policy"});
+    if(registeredKind==="SECURITY_KEY"&&!effectivePolicy.effective.allowSecurityKeys)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Physical security keys are disabled by security policy"});
+    if(challenge.challenge_type==="LOGIN"&&!assuranceSatisfies(effectivePolicy.effective.passkeyAssurance,effectivePolicy.effective.requiredLoginAssurance)){
+      return res.status(403).json({success:false,code:"PASSKEY_ASSURANCE_INSUFFICIENT",message:"Passkeys do not meet the required login assurance level"});
+    }
+    if(challenge.challenge_type==="STEP_UP"){
+      const resourceKey=String(challenge.context?.resourceKey||"").toUpperCase();
+      const configured=resourceKey?await effectiveStepUpPolicy(db,{companyId:user.company_id,resourceKey}):null;
+      const stepPolicy=configured||(resourceKey==="TEMPORARY_MFA_CODE"?{required_assurance:"HIGH"}:null);
+      if(stepPolicy&&!assuranceSatisfies(effectivePolicy.effective.passkeyAssurance,stepPolicy.required_assurance||"HIGH")){
+        return res.status(403).json({success:false,code:"PASSKEY_ASSURANCE_INSUFFICIENT",message:"Passkeys do not meet the required step-up assurance level"});
+      }
+    }
     const info=verification.registrationInfo;
     const cred=info.credential;
     const id=cred?.id||req.body?.credential?.id;
@@ -298,8 +316,8 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
        sign_count=EXCLUDED.sign_count,transports=EXCLUDED.transports,aaguid=EXCLUDED.aaguid,discoverable=EXCLUDED.discoverable,
        authenticator_kind=EXCLUDED.authenticator_kind,verified=TRUE,active=TRUE`,
       [user.company_id,user.id,String(req.body?.label||(challenge.context?.authenticatorKind==="SECURITY_KEY"?"Security Key":"Built-in Passkey")),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice",challenge.context?.authenticatorKind||"PLATFORM"]);
-    const recoveryCodes=challenge.challenge_type==="LOGIN" ? await ensureRecoveryCodes(user.company_id,user.id) : [];
-    const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.passkeyAssurance;
+    const recoveryCodes=challenge.challenge_type==="LOGIN"&&effectivePolicy.effective.allowRecoveryCodes ? await ensureRecoveryCodes(user.company_id,user.id) : [];
+    const assurance=effectivePolicy.effective.passkeyAssurance;
     if(challenge.challenge_type==="STEP_UP"){
       const sid=challenge.context?.sessionId;
       if(!sid)return res.status(400).json({success:false,message:"Step-up session is missing"});
@@ -314,6 +332,15 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
     const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    let requiredAssurance=policy.effective.requiredLoginAssurance;
+    if(challenge.challenge_type==="STEP_UP"){
+      const resourceKey=String(challenge.context?.resourceKey||"").toUpperCase();
+      const configured=resourceKey?await effectiveStepUpPolicy(db,{companyId:user.company_id,resourceKey}):null;
+      requiredAssurance=(configured||(resourceKey==="TEMPORARY_MFA_CODE"?{required_assurance:"HIGH"}:null))?.required_assurance||"HIGH";
+    }
+    if(!assuranceSatisfies(policy.effective.passkeyAssurance,requiredAssurance)){
+      return res.status(403).json({success:false,code:"PASSKEY_ASSURANCE_INSUFFICIENT",message:"Passkeys do not meet the required assurance level"});
+    }
     const methods=(await listMfaMethods(db,{companyId:user.company_id,userId:user.id}))
       .filter(x=>x.method_type==="PASSKEY"&&mfaMethodAllowed(x,policy.effective));
     if(!methods.length)return res.status(409).json({success:false,message:"No passkey is enrolled"});
