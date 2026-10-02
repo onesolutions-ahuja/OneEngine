@@ -79,9 +79,19 @@ function visitAuthenticated(path) {
   assertNoFatalPageText();
 }
 
+function createFlowOfType(typeLabel) {
+  cy.get('button[aria-label="New Flow"]', { timeout: 30000 }).click();
+  cy.get('[role="dialog"][aria-label="New Flow"]').should("be.visible");
+  cy.contains("button", "Next").click();
+  cy.contains("button", typeLabel).click();
+  cy.contains("button", "Create").click();
+  cy.get(".workflow-builder-header", { timeout: 30000 }).should("be.visible");
+}
+
 describe("OneEngine deep deployed E2E", () => {
   beforeEach(() => {
     cy.on("uncaught:exception", (error) => {
+      if (/ResizeObserver loop (limit exceeded|completed with undelivered notifications)/i.test(String(error?.message || error))) return false;
       throw error;
     });
   });
@@ -149,8 +159,7 @@ describe("OneEngine deep deployed E2E", () => {
   it("Workflow Builder surrounding chrome follows Salesforce-style panes and controls", () => {
     visitAuthenticated("developer/workflow-builder");
 
-    cy.get('button[aria-label="New Workflow"]').click();
-    cy.contains("button", "Record-Triggered Flow").click();
+    createFlowOfType("Record-Triggered Flow");
 
     cy.get(".workflow-node-palette", { timeout: 30000 }).should("be.visible").then(($pane) => {
       const style = getComputedStyle($pane[0]);
@@ -187,9 +196,7 @@ describe("OneEngine deep deployed E2E", () => {
   it("Workflow Builder parity gate: flow type is chosen before Builder and is not editable in Flow Properties", () => {
     visitAuthenticated("developer/workflow-builder");
 
-    cy.get('button[aria-label="New Workflow"]').click();
-    cy.get('[role="dialog"][aria-label="New Flow"]').should("be.visible");
-    cy.contains("button", "Record-Triggered Flow").click();
+    createFlowOfType("Record-Triggered Flow");
 
     cy.get(".workflow-properties-panel", { timeout: 30000 }).should("contain.text", "Configure Start");
     cy.get(".workflow-properties-panel").should("contain.text", "Select Object");
@@ -203,8 +210,7 @@ describe("OneEngine deep deployed E2E", () => {
   it("Workflow Builder parity gate: button bar and Toolbox follow the Salesforce interaction model", () => {
     visitAuthenticated("developer/workflow-builder");
 
-    cy.get('button[aria-label="New Workflow"]').click();
-    cy.contains("button", "Record-Triggered Flow").click();
+    createFlowOfType("Record-Triggered Flow");
 
     cy.get(".workflow-node-palette", { timeout: 30000 }).should("contain.text", "Toolbox");
     cy.get(".workflow-node-palette").should("contain.text", "Elements").and("contain.text", "Manager");
@@ -221,8 +227,18 @@ describe("OneEngine deep deployed E2E", () => {
   it("Workflow Builder parity gate: record-triggered Debug uses Setup/Details and preserves triggering-record setup in-session", () => {
     visitAuthenticated("developer/workflow-builder");
 
-    cy.get('button[aria-label="New Workflow"]').click();
-    cy.contains("button", "Record-Triggered Flow").click();
+    createFlowOfType("Record-Triggered Flow");
+
+    cy.get('.workflow-properties-panel input[aria-label="Search objects"]', { timeout: 30000 })
+      .parent()
+      .find("select")
+      .should(($select) => {
+        expect($select.find("option").length).to.be.greaterThan(1);
+      })
+      .then(($select) => {
+        const value = $select.find("option").eq(1).val();
+        cy.wrap($select).select(String(value));
+      });
 
     cy.get(".workflow-builder-header").contains("button", "Debug").click();
     cy.get(".workflow-debug-drawer", { timeout: 30000 }).should("be.visible");
@@ -242,8 +258,7 @@ describe("OneEngine deep deployed E2E", () => {
   it("Workflow Builder left search and Add Element search use independent state", () => {
     visitAuthenticated("developer/workflow-builder");
 
-    cy.get('button[aria-label="New Workflow"]').click();
-    cy.contains("button", "Autolaunched Flow (No Trigger)").click();
+    createFlowOfType("Autolaunched Flow (No Trigger)");
 
     cy.get(".workflow-node-palette", { timeout: 30000 }).should("be.visible");
     cy.get('.workflow-node-palette input[aria-label="Search flow elements"]').clear().type("Assignment");

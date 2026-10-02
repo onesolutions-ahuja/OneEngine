@@ -1,6 +1,18 @@
 import { test, expect } from "@playwright/test";
 import { loginIfConfigured, watchRuntimeFailures } from "./helpers.mjs";
 
+async function createFlowOfType(page, typeLabel) {
+  const newFlow = page.getByRole("button", { name: /new flow/i }).first();
+  await expect(newFlow).toBeVisible({ timeout: 15_000 });
+  await newFlow.click();
+  const dialog = page.getByRole("dialog", { name: "New Flow" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Next", exact: true }).click();
+  await dialog.getByRole("button", { name: new RegExp(`^${typeLabel}`) }).click();
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByLabel("Workflow Builder workspace")).toBeVisible({ timeout: 15_000 });
+}
+
 test.beforeEach(async ({ page }) => {
   test.skip(!(process.env.ONEPOS_E2E_USERNAME && process.env.ONEPOS_E2E_PASSWORD), "Set ONEPOS_PLAYWRIGHT_USERNAME and ONEPOS_PLAYWRIGHT_PASSWORD in GitHub Actions repository Variables for authenticated QA.");
   await loginIfConfigured(page);
@@ -43,11 +55,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem("onepos_developer_target_company_id") || "")).toBe(homeCompanyId);
   }
 
-  const newWorkflow = page.getByRole("button", { name: /new workflow/i });
-  await expect(newWorkflow).toBeVisible({ timeout: 15_000 });
-  await newWorkflow.click();
-  await expect(page.getByRole("dialog", { name: "New Flow" })).toBeVisible();
-  await page.getByRole("button", { name: "Autolaunched Flow (No Trigger)", exact: true }).click();
+  await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
 
   await expect(page.getByText("Elements", { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Manager", { exact: true })).toBeVisible();
@@ -61,11 +69,11 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(page.getByRole("button", { name: "Save As", exact: true })).toBeDisabled();
 
   await workflowWorkspace.getByRole("button", { name: "Debug", exact: true }).click();
-  await expect(page.getByText("Debug / Test Flow", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Debug", exact: true }).last()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
-  await expect(page.getByText(/database changes are rolled back/i)).toBeVisible();
-  await page.getByRole("button", { name: "Close", exact: true }).first().click();
+  const initialDebugPanel = page.locator(".workflow-debug-drawer");
+  await expect(initialDebugPanel).toBeVisible();
+  await expect(initialDebugPanel.getByRole("button", { name: "Setup", exact: true })).toBeVisible();
+  await expect(initialDebugPanel.getByRole("button", { name: "Details", exact: true })).toBeDisabled();
+  await initialDebugPanel.getByRole("button", { name: "Close", exact: true }).click();
 
   // Persist a harmless manual workflow so the regression exercises the real
   // version/test APIs rather than only checking their disabled pre-save state.
@@ -111,21 +119,17 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(savedTest).toBeVisible();
   await expect(savedTest.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
   await savedTest.getByRole("button", { name: "Run", exact: true }).click();
-  const debugPanel = page.locator("div").filter({ hasText: "Debug / Test Flow" }).filter({ hasText: "No database changes were kept" }).last();
+  const debugPanel = page.locator(".workflow-debug-drawer").filter({ hasText: "No database changes were kept" }).last();
   await expect(debugPanel.getByText("Test passed", { exact: true })).toBeVisible();
   await expect(debugPanel.getByText(/No database changes were kept/i)).toBeVisible();
   await debugPanel.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "View Tests", exact: true }).click();
 
-  // Record-triggered Start configuration exposes Salesforce-style transition
-  // semantics without requiring Changed operators on every individual field.
-  await workflowWorkspace.getByRole("button", { name: "View Properties", exact: true }).click();
-  const recordFlowProperties = page.getByRole("dialog", { name: "Flow Properties" });
-  await expect(recordFlowProperties).toBeVisible();
-  await recordFlowProperties.getByLabel("Flow Type").selectOption("RECORD_TRIGGERED");
-  await recordFlowProperties.getByRole("button", { name: "Done", exact: true }).click();
+  // Record-triggered flow type is selected before Builder entry and remains fixed.
+  await page.getByRole("button", { name: "Back to Flows", exact: true }).click();
+  await createFlowOfType(page, "Record-Triggered Flow");
   const triggerSelect = page.getByLabel("Flow trigger");
-  await triggerSelect.selectOption("after_update");
+  await triggerSelect.selectOption("updated");
   await page.locator(".workflow-start-node").click();
   await expect(page.getByText("When conditions become true", { exact: true })).toBeVisible();
   await expect(page.getByRole("option", { name: "Every time the record meets the conditions" })).toHaveCount(1);
@@ -185,9 +189,7 @@ test("email provider actions use metadata resources instead of hardcoded recipie
   const failures = watchRuntimeFailures(page);
   await page.goto("developer/workflow-builder");
 
-  const newWorkflow = page.getByRole("button", { name: /new workflow/i });
-  await expect(newWorkflow).toBeVisible({ timeout: 15_000 });
-  await newWorkflow.click();
+  await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
 
   // Registered provider actions use the Salesforce-style Action element:
   // Add Element -> Action -> choose the registered provider action.

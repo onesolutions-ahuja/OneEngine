@@ -3506,6 +3506,139 @@ const WORKFLOW_VISUAL_CSS = `
     padding-right: 0 !important;
   }
 
+
+  /* Salesforce-style Flow Builder interaction chrome. Canvas node/edge presentation stays OneEngine. */
+  .workflow-toolbox-title {
+    flex: 0 0 auto;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid #e5e5e5;
+    background: #fff;
+    color: #181818;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .workflow-layout-toggle--header {
+    height: 32px !important;
+    border: 1px solid var(--sfdc-border) !important;
+    border-radius: 4px !important;
+    background: #fff !important;
+  }
+  .workflow-layout-toggle--header button {
+    height: 30px !important;
+    min-height: 30px !important;
+    border: 0 !important;
+    border-radius: 3px !important;
+    padding: 0 10px !important;
+    background: #fff !important;
+    color: var(--sfdc-blue) !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+  }
+  .workflow-layout-toggle--header button.is-active {
+    background: #eef4ff !important;
+    color: #032d60 !important;
+  }
+  .workflow-debug-tabs {
+    display: flex;
+    gap: 18px;
+    border-bottom: 1px solid #dddbda;
+  }
+  .workflow-debug-tabs button {
+    position: relative;
+    min-height: 34px;
+    border: 0;
+    background: transparent;
+    color: #444;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .workflow-debug-tabs button.is-active {
+    color: #0176d3;
+  }
+  .workflow-debug-tabs button.is-active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 3px;
+    background: #0176d3;
+  }
+
+
+  .workflow-new-flow-dialog {
+    border-radius: 4px !important;
+    overflow: hidden;
+  }
+  .workflow-new-flow-source {
+    width: min(520px, 100%);
+    min-height: 110px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: 2px solid #0176d3;
+    border-radius: 4px;
+    background: #eef4ff;
+    padding: 18px;
+    text-align: left;
+  }
+  .workflow-new-flow-source-icon,
+  .workflow-new-flow-type-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 4px;
+    background: #0176d3;
+    color: #fff;
+    font-size: 19px;
+    font-weight: 700;
+  }
+  .workflow-new-flow-source strong,
+  .workflow-new-flow-type strong {
+    display: block;
+    color: #181818;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .workflow-new-flow-source small,
+  .workflow-new-flow-type small {
+    display: block;
+    margin-top: 5px;
+    color: #706e6b;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .workflow-new-flow-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .workflow-new-flow-type {
+    min-height: 96px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border: 1px solid #c9c7c5 !important;
+    border-radius: 4px !important;
+    background: #fff !important;
+    padding: 13px !important;
+    text-align: left;
+  }
+  .workflow-new-flow-type:hover {
+    border-color: #1b96ff !important;
+    background: #f3f9ff !important;
+  }
+  .workflow-new-flow-type.is-selected {
+    border: 2px solid #0176d3 !important;
+    background: #eef4ff !important;
+    padding: 12px !important;
+  }
+
 `;
 
 function WorkflowRecordPicker({ objectKey, value, onChange, ariaLabel = "Search records" }) {
@@ -7903,6 +8036,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   return (
     <div className={`workflow-visual-shell ${!paletteOpen ? "palette-collapsed" : ""} ${!propertiesOpen ? "properties-collapsed" : ""}`}>
       {paletteOpen ? <aside ref={paletteRef} tabIndex={-1} className="workflow-node-palette">
+        <div className="workflow-toolbox-title">Toolbox</div>
         <div className="workflow-palette-head">
           <div className="workflow-palette-tabs inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
             <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${paletteTab === "elements" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setPaletteTab("elements")}>Elements</button>
@@ -8062,10 +8196,6 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         onDrop={(event) => { if (layoutMode === "FREEFORM") onFreeformDrop(event); }}
       >
         <div className="workflow-canvas-toolbar">
-          <span className="workflow-layout-toggle" aria-label="Canvas layout">
-            <button type="button" className={layoutMode === "AUTO" ? "is-active" : ""} onClick={() => setLayoutMode("AUTO")}>Auto-Layout</button>
-            <button type="button" className={layoutMode === "FREEFORM" ? "is-active" : ""} onClick={() => { setLayoutMode("FREEFORM"); setPaletteOpen(true); setPaletteTab("elements"); }}>Free-Form</button>
-          </span>
           <div className="workflow-canvas-toolbar-right">
             <button type="button" className="workflow-canvas-checks" title={totalBuilderErrors ? "Show Errors" : "Show Warnings"} onClick={() => setIssuesOpen(true)}>
               {totalBuilderErrors ? `Errors ${totalBuilderErrors}` : builderWarnings.length ? `Warnings ${builderWarnings.length}` : "Checks ✓"}
@@ -8401,6 +8531,17 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <span className="font-semibold text-slate-800">{FLOW_TYPE_OPTIONS.find((item) => item.key === flowType)?.label || flowType}</span>
               <span className="ml-2">Flow type is selected when the flow is created. Use Properties to change advanced version settings.</span>
             </div>
+            {["RECORD_TRIGGERED","SCHEDULE_TRIGGERED"].includes(flowType) ? <div>
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Select Object</div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Object {flowType === "SCHEDULE_TRIGGERED" ? "(optional batch source)" : ""}</label>
+              <PlatformFieldPicker
+                scopeKey={scopeKey}
+                includeObjectSelector
+                objectOnly
+                objectKey={workflow.object || ""}
+                onObjectChange={(object) => setWorkflow((current) => ({ ...current, object, conditions: [], match: "all", entryTransition: "EVERY_TIME" }))}
+              />
+            </div> : null}
             {flowType === "RECORD_TRIGGERED" ? (
               <div>
                 <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Configure Trigger</div>
@@ -8416,7 +8557,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   {RECORD_TRIGGER_WHEN_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
                 </select>
               </div>
-            ) : (
+            ) : flowType === "SCHEDULE_TRIGGERED" ? null : (
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">{flowType === "PLATFORM_EVENT_TRIGGERED" ? "Event" : "Trigger"}</label>
                 {startTriggerOptions.length > 8 ? <input className={inputClass} value={startTriggerSearch} onChange={(event) => setStartTriggerSearch(event.target.value)} placeholder="Search triggers or events..." aria-label="Search flow triggers"/> : null}
@@ -8427,17 +8568,6 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 </select>
               </div>
             )}
-            {["RECORD_TRIGGERED","SCHEDULE_TRIGGERED"].includes(flowType) ? <div>
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Select Object</div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Object {flowType === "SCHEDULE_TRIGGERED" ? "(optional batch source)" : ""}</label>
-              <PlatformFieldPicker
-                scopeKey={scopeKey}
-                includeObjectSelector
-                objectOnly
-                objectKey={workflow.object || ""}
-                onObjectChange={(object) => setWorkflow((current) => ({ ...current, object, conditions: [], match: "all", entryTransition: "EVERY_TIME" }))}
-              />
-            </div> : null}
             {flowType === "SCHEDULE_TRIGGERED" ? (() => {
               const schedule = workflow.actionMetadata?.schedule || { scheduleType: "DAILY", timezone: "", definition: { time: "" } };
               const definition = schedule.definition || {};
@@ -8655,6 +8785,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [debugRunning, setDebugRunning] = useState(false);
   const [debugRecordMode, setDebugRecordMode] = useState("latest");
   const [debugRecordId, setDebugRecordId] = useState("");
+  const [debugPanelTab, setDebugPanelTab] = useState("setup");
   const [debugPathId, setDebugPathId] = useState("immediate");
   const [debugSkipStartConditions, setDebugSkipStartConditions] = useState(false);
   const [debugRollbackMode, setDebugRollbackMode] = useState(true);
@@ -8681,6 +8812,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [pendingRestoreVersion, setPendingRestoreVersion] = useState(null);
   const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
   const [newFlowChooserOpen, setNewFlowChooserOpen] = useState(false);
+  const [newFlowChooserStep, setNewFlowChooserStep] = useState("source");
+  const [newFlowTypeDraft, setNewFlowTypeDraft] = useState("");
 
   const currentDefinitionSignature = persistedWorkflowSignature(workflow);
   const hasUnsavedChanges = currentDefinitionSignature !== savedDefinitionSignature;
@@ -9748,6 +9881,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         }),
       });
       setDebugResult(response?.data || null);
+      setDebugPanelTab("details");
     } catch (error) {
       onError?.(error.message || "Unable to run Debug.");
     } finally {
@@ -9771,33 +9905,63 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       <div className="space-y-4">
         {newFlowChooserOpen ? (
           <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label="New Flow">
-            <div className="w-full max-w-5xl rounded-lg border border-slate-300 bg-white shadow-2xl">
+            <div className="workflow-new-flow-dialog w-full max-w-5xl border border-slate-300 bg-white shadow-2xl">
               <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">New Flow</h3>
-                  <p className="mt-1 text-sm text-slate-500">Start from scratch, then choose the type of flow you want to build.</p>
+                  <p className="mt-1 text-sm text-slate-500">{newFlowChooserStep === "source" ? "Choose how you want to start." : "Choose the type of flow you want to build."}</p>
                 </div>
                 <button type="button" className="workflow-cancel-button" onClick={() => setNewFlowChooserOpen(false)} aria-label="Close New Flow">×</button>
               </div>
-              <div className="px-6 py-5">
-                <div className="mb-4 text-sm font-semibold text-slate-800">Start From Scratch</div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {FLOW_TYPE_OPTIONS.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      className="group min-h-[150px] rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-blue-500 hover:bg-blue-50 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      onClick={() => startNewFlow(option.key)}
-                    >
-                      <span className="mb-3 grid h-9 w-9 place-items-center rounded bg-blue-600 text-lg font-semibold text-white">{option.icon}</span>
-                      <strong className="block text-sm text-slate-900">{option.label}</strong>
-                      <span className="mt-2 block text-xs leading-5 text-slate-500">{option.description}</span>
-                    </button>
-                  ))}
+              {newFlowChooserStep === "source" ? (
+                <div className="px-6 py-6">
+                  <div className="mb-4 text-sm font-semibold text-slate-800">How do you want to start?</div>
+                  <button
+                    type="button"
+                    className="workflow-new-flow-source is-selected"
+                    aria-pressed="true"
+                    onClick={() => {}}
+                  >
+                    <span className="workflow-new-flow-source-icon">＋</span>
+                    <span>
+                      <strong>Start From Scratch</strong>
+                      <small>Choose a flow type and configure the automation yourself.</small>
+                    </span>
+                  </button>
                 </div>
-              </div>
-              <div className="flex justify-end border-t border-slate-200 px-6 py-3">
-                <button type="button" className="workflow-cancel-button" onClick={() => setNewFlowChooserOpen(false)}>Cancel</button>
+              ) : (
+                <div className="px-6 py-5">
+                  <div className="mb-4 text-sm font-semibold text-slate-800">Select a Flow Type</div>
+                  <div className="workflow-new-flow-grid">
+                    {FLOW_TYPE_OPTIONS.map((option) => {
+                      const selected = newFlowTypeDraft === option.key;
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          aria-pressed={selected}
+                          className={`workflow-new-flow-type ${selected ? "is-selected" : ""}`}
+                          onClick={() => setNewFlowTypeDraft(option.key)}
+                        >
+                          <span className="workflow-new-flow-type-icon">{option.icon}</span>
+                          <span>
+                            <strong>{option.label}</strong>
+                            <small>{option.description}</small>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3">
+                <div>{newFlowChooserStep === "type" ? <button type="button" className="workflow-cancel-button" onClick={() => setNewFlowChooserStep("source")}>Back</button> : null}</div>
+                <div className="flex gap-2">
+                  <button type="button" className="workflow-cancel-button" onClick={() => setNewFlowChooserOpen(false)}>Cancel</button>
+                  {newFlowChooserStep === "source"
+                    ? <button type="button" className="workflow-save-button" onClick={() => setNewFlowChooserStep("type")}>Next</button>
+                    : <button type="button" className="workflow-save-button" disabled={!newFlowTypeDraft} onClick={() => startNewFlow(newFlowTypeDraft)}>Create</button>}
+                </div>
               </div>
             </div>
           </div>
@@ -9807,7 +9971,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             <h2 className="text-xl font-semibold">{title}</h2>
             <p className="text-sm text-slate-500">{description}</p>
           </div>
-          <button type="button" className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => setNewFlowChooserOpen(true)}>+ New Flow</button>
+          <button type="button" aria-label="New Flow" className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => { setNewFlowChooserStep("source"); setNewFlowTypeDraft(""); setNewFlowChooserOpen(true); }}>+ New Flow</button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -9931,10 +10095,15 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.past.length} onClick={undoFlowChange} title="Undo" aria-label="Undo">↶</button>
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.future.length} onClick={redoFlowChange} title="Redo" aria-label="Redo">↷</button>
           <span className="workflow-header-separator" aria-hidden="true" />
+          <button type="button" className="workflow-cancel-button" onClick={requestSelectionMode}>Select Elements</button>
+          <span className="workflow-layout-toggle workflow-layout-toggle--header" aria-label="Canvas layout">
+            <button type="button" className={layoutMode === "AUTO" ? "is-active" : ""} onClick={() => setLayoutMode("AUTO")}>Auto-Layout</button>
+            <button type="button" className={layoutMode === "FREEFORM" ? "is-active" : ""} onClick={() => { setLayoutMode("FREEFORM"); setPaletteOpen(true); setPaletteTab("elements"); }}>Free-Form</button>
+          </span>
           <button type="button" className="workflow-cancel-button" aria-label="View Properties" onClick={openFlowProperties}>Properties</button>
           {reviewIssue ? <button type="button" className="workflow-cancel-button workflow-icon-button" title={reviewIssue} aria-label="Show Errors" onClick={() => document.getElementById("workflow-review-section")?.scrollIntoView({ behavior: "smooth", block: "center" })}>!</button> : null}
           <button type="button" className="workflow-cancel-button" aria-label="View Tests" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
-          <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
+          <button type="button" className="workflow-cancel-button" onClick={() => { setDebugPanelTab("setup"); setDebugOpen(true); }}>Debug</button>
           <button type="button" className="workflow-cancel-button" disabled={!workflowId || saveBusy} title={workflowId ? "Create a new immutable version from the current Builder state" : "Save this flow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>{saveBusy ? "Saving…" : "Save As"}</button>
           <button type="button" className="workflow-cancel-button" disabled={saveBusy || (Boolean(workflowId) && !hasUnsavedChanges)} title={!hasUnsavedChanges && workflowId ? "No unsaved changes" : "Save draft"} onClick={() => saveWorkflow("DRAFT")}>{saveBusy ? "Saving…" : "Save"}</button>
           {workflow.runtimeActive ? <button type="button" className="workflow-cancel-button" disabled={saveBusy} title="Stop new runs from the currently live version" onClick={() => setDeactivateConfirmOpen(true)}>Deactivate</button> : null}
@@ -9976,41 +10145,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             <label>Description
               <textarea className={inputClass} rows={4} value={workflow.actionMetadata?.description || ""} onChange={(event) => setWorkflow((current) => ({ ...current, actionMetadata: { ...(current.actionMetadata || {}), description: event.target.value } }))} placeholder="Describe what this flow does." />
             </label>
-            <label>Flow Type
-              <select className={inputClass} value={String(workflow.actionMetadata?.flowType || "AUTOLAUNCHED").toUpperCase()} onChange={(event) => {
-                const flowType = event.target.value;
-                setWorkflow((current) => {
-                  const nextTrigger = flowType === "SCREEN_FLOW" || flowType === "AUTOLAUNCHED" || flowType === "RECOMMENDATION_STRATEGY" || flowType === "INSTRUCTION_FLOW"
-                    ? "manual"
-                    : flowType === "SCHEDULE_TRIGGERED"
-                      ? "scheduled"
-                      : flowType === "RECORD_TRIGGERED"
-                        ? (["before_create","after_create","before_update","after_update","before_save","after_save","field_changed","before_delete","after_delete"].includes(current.trigger) ? current.trigger : "after_save")
-                        : flowType === "PLATFORM_EVENT_TRIGGERED"
-                          ? (triggerOptions.find((option) => option.kind === "event")?.key || current.trigger)
-                          : current.trigger;
-                  return {
-                    ...current,
-                    trigger: nextTrigger,
-                    actionMetadata: {
-                      ...(current.actionMetadata || {}),
-                      flowType,
-                      optimizeFor: current.actionMetadata?.optimizeFor || "ACTIONS_AND_RELATED_RECORDS",
-                      ...(flowType !== "RECORD_TRIGGERED" ? { includeAsyncPath: false } : {}),
-                    },
-                  };
-                });
-              }}>
-                <option value="AUTOLAUNCHED">Autolaunched Flow</option>
-                <option value="RECORD_TRIGGERED">Record-Triggered Flow</option>
-                <option value="SCHEDULE_TRIGGERED">Schedule-Triggered Flow</option>
-                <option value="PLATFORM_EVENT_TRIGGERED">Event-Triggered Flow</option>
-                <option value="SCREEN_FLOW">Screen Flow</option>
-                <option value="RECOMMENDATION_STRATEGY">Recommendation Strategy Flow</option>
-                <option value="INSTRUCTION_FLOW">Instruction Flow</option>
-                <option value="KIOSK_EXPERIENCE">Kiosk Experience</option>
-              </select>
-            </label>
+
             <div className="workflow-path-action-buttons">
               <button type="button" className="workflow-cancel-button" onClick={cancelFlowProperties}>Cancel</button>
               <button type="button" className="workflow-save-button" onClick={finishFlowProperties}>Done</button>
@@ -10196,14 +10331,14 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <div className="text-base font-semibold text-slate-800">Debug / Test Flow</div>
-                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-                  <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${debugMode === "debug" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => { setDebugMode("debug"); setDebugResult(null); setActiveSavedTest(null); }}>Debug</button>
-                  <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${debugMode === "test" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => { setDebugMode("test"); setDebugResult(null); setActiveSavedTest(null); }}>Test</button>
-                </div>
+                <div className="text-base font-semibold text-slate-800">Debug</div>
               </div>
-              <p className="mt-1 text-xs text-slate-500">{debugMode === "debug" ? "Debug shows the path taken and highlights failed steps." : "Test gives a simple pass/fail result using the same safe execution trace."} Database changes are rolled back and external actions such as messages, payments, webhooks and printing are simulated.</p>
-              {flowType === "RECORD_TRIGGERED" ? <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="workflow-debug-tabs mt-3">
+                <button type="button" className={debugPanelTab === "setup" ? "is-active" : ""} onClick={() => setDebugPanelTab("setup")}>Setup</button>
+                <button type="button" className={debugPanelTab === "details" ? "is-active" : ""} disabled={!debugResult} onClick={() => setDebugPanelTab("details")}>Details</button>
+              </div>
+              {debugPanelTab === "setup" ? <p className="mt-1 text-xs text-slate-500">Configure the triggering context for this debug interview. Your selections are kept while this Builder session remains open.</p> : <p className="mt-1 text-xs text-slate-500">Review the executed path, resources, outcomes, and any errors from the latest debug interview.</p>}
+              {debugPanelTab === "setup" && flowType === "RECORD_TRIGGERED" ? <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <div className="text-xs font-semibold text-slate-700">Debug Options</div>
                 <div className="grid gap-2 md:grid-cols-2">
                   <label className="text-[11px] font-medium text-slate-600">Path for Debug Run
@@ -10223,6 +10358,10 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   </label>
                 </div>
                 <label className="flex items-start gap-2 text-[11px] text-slate-700">
+                  <input type="checkbox" className="mt-0.5" checked={debugRecordMode === "specific"} onChange={(event) => { setDebugRecordMode(event.target.checked ? "specific" : "latest"); setDebugResult(null); }} />
+                  <span><strong className="block">Use a specific triggering record</strong><span className="text-slate-500">Search for the record whose field values should be used for this debug interview.</span></span>
+                </label>
+                <label className="flex items-start gap-2 text-[11px] text-slate-700">
                   <input type="checkbox" className="mt-0.5" checked={debugSkipStartConditions} onChange={(event) => setDebugSkipStartConditions(event.target.checked)} />
                   <span><strong className="block">Skip start condition requirements</strong><span className="text-slate-500">Run the selected path even if the triggering record does not meet Start entry criteria.</span></span>
                 </label>
@@ -10235,7 +10374,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             </div>
             <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(false)}>Close</button>
           </div>
-          {(workflow.inputContract || []).length ? (
+          {debugPanelTab === "setup" && (workflow.inputContract || []).length ? (
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="text-xs font-semibold text-slate-700">Debug inputs</div>
               <p className="mt-1 text-[11px] text-slate-500">These values are available to the flow as declared input resources for this run only.</p>
@@ -10261,16 +10400,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               </div>
             </div>
           ) : null}
-          {workflow.object ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-[180px_1fr_auto]">
-              <select className={inputClass} value={debugRecordMode} onChange={(event) => { setDebugRecordMode(event.target.value); setDebugResult(null); }}>
-                <option value="latest">Use latest record</option>
-                <option value="specific">Use specific record</option>
-              </select>
-              {debugRecordMode === "specific" ? <WorkflowRecordPicker objectKey={workflow.object} value={debugRecordId} onChange={setDebugRecordId} ariaLabel="Search debug record" /> : <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">The most recent record in the current company/store will be used.</div>}
-              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue) || Boolean(debugMissingInput) || (workflow.object && debugRecordMode === "specific" && !debugRecordId.trim())} onClick={runDebug}>{debugRunning ? "Running…" : debugMode === "test" ? "Run Test" : "Run Debug"}</button>
+          {debugPanelTab === "setup" && workflow.object ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+              {debugRecordMode === "specific" ? <WorkflowRecordPicker objectKey={workflow.object} value={debugRecordId} onChange={setDebugRecordId} ariaLabel="Search debug record" /> : <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">The most recent accessible record will be used unless you choose a specific triggering record above.</div>}
+              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue) || Boolean(debugMissingInput) || (workflow.object && debugRecordMode === "specific" && !debugRecordId.trim())} onClick={runDebug}>{debugRunning ? "Running…" : "Run"}</button>
             </div>
-          ) : (
+          ) : debugPanelTab === "setup" ? (
             <div className="mt-4 flex items-center justify-between gap-3">
               <div className="text-xs text-slate-600">This flow has no trigger object, so Debug will run with user/company/store context only.</div>
               <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue) || Boolean(debugMissingInput) || (workflow.object && debugRecordMode === "specific" && !debugRecordId.trim())} onClick={runDebug}>{debugRunning ? "Running…" : debugMode === "test" ? "Run Test" : "Run Debug"}</button>
@@ -10281,7 +10416,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               Enter the required Debug input <strong>{debugMissingInput.label || debugMissingInput.name}</strong> before running this flow.
             </div>
           ) : null}
-          {debugResult ? (
+          {debugPanelTab === "details" && debugResult ? (
             <div className={`mt-4 rounded-xl border p-4 ${debugMode === "test" ? (debugResult.testPassed === true ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50") : debugResult.status === "FAILED" ? "border-red-200 bg-red-50" : debugResult.status === "NOT_STARTED" || debugResult.completedWithHandledError ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
               <div className="flex items-center justify-between gap-3">
                 <strong className={debugMode === "test" ? (debugResult.testPassed === true ? "text-emerald-800" : "text-red-800") : debugResult.status === "FAILED" ? "text-red-800" : debugResult.status === "NOT_STARTED" || debugResult.completedWithHandledError ? "text-amber-800" : "text-emerald-800"}>{debugMode === "test" ? (debugResult.testPassed === true ? "Test passed" : "Test failed") : (debugResult.status === "FAILED" ? "Debug found a problem" : debugResult.status === "NOT_STARTED" ? "Debug did not enter the workflow" : debugResult.completedWithHandledError ? "Debug completed with handled error" : "Debug completed successfully")}</strong>
