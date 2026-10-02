@@ -4,7 +4,7 @@ import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js
 import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
 import { compileFormulas, evaluateWorkflowFormula, FormulaError, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS } from "../services/platformFormula.js";
-import { ConditionError, evaluateCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
+import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
 import { executePlatformAutomations } from "../services/platformAutomation.js";
 import { hasConfiguredCommunicationProvider } from "../services/platformWorkflow.js";
 import {
@@ -5580,6 +5580,47 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       loadEffectivePermissionSets(db, req.user, req),
     ]);
     return result.rows.length > 0 || permissionSetAllowsSystemPermission(permissionSets, permission);
+  }
+
+  async function buildUiConditionContext(req, { record = null, object = null, recordTypeId = null } = {}) {
+    const [rolePermissionsResult, permissionSets, entitlementMap] = await Promise.all([
+      req.user.roleId
+        ? db(
+            `SELECT p.code
+               FROM role_permissions rp
+               JOIN permissions p ON p.id=rp.permission_id
+              WHERE rp.role_id=$1`,
+            [req.user.roleId]
+          )
+        : Promise.resolve({ rows: [] }),
+      loadEffectivePermissionSets(db, req.user, req),
+      getCompanyEntitlements(db, req.user.companyId),
+    ]);
+    const permissions = [...new Set([
+      ...rolePermissionsResult.rows.map((row) => row.code),
+      ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+    ])];
+    const entitlements = Object.entries(entitlementMap || {})
+      .filter(([, enabled]) => enabled === true)
+      .map(([key]) => key);
+    return {
+      user: {
+        id: req.user.id || null,
+        roleId: req.user.roleId || null,
+        companyId: req.user.companyId || null,
+      },
+      permissions,
+      roles: [req.user.roleId].filter(Boolean),
+      device: layoutFormFactor(req),
+      formFactor: layoutFormFactor(req),
+      entitlements,
+      packages: entitlements,
+      recordTypeId: recordTypeId || record?.recordTypeId || record?.record_type_id || null,
+      record: record || {},
+      object: object || {},
+      objectState: object || {},
+      companyId: req.user.companyId || null,
+    };
   }
 
   function layoutFormFactor(req) {
