@@ -32,6 +32,9 @@ jobs:
         working-directory: server
 
   playwright-smoke:
+    concurrency:
+      group: oneengine-authenticated-e2e
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     needs: build-and-audit
     steps:
