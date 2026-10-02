@@ -37,16 +37,19 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
       onPackagesChange?.(nextPackages)
       return nextPackages
     }catch(err){
-      const cached=readMarketplaceCache()
+      const cached=refreshCatalogue?[]:readMarketplaceCache()
       if(cached.length){
         setPackages(cached)
         onPackagesChange?.(cached)
+      }else{
+        setPackages([])
+        onPackagesChange?.([])
       }
-      setError(err?.message||'Unable to load oneStore')
+      setError(err?.message||'Unable to load the live oneStore catalogue')
       return cached
     }finally{setLoading(false)}
   }
-  useEffect(()=>{void load()},[])
+  useEffect(()=>{void load({refreshCatalogue:true})},[])
   useEffect(()=>{if(Array.isArray(initialPackages)&&initialPackages.length){setPackages(initialPackages);writeMarketplaceCache(initialPackages)}},[initialPackages])
   useEffect(()=>{setSelectedKey(String(initialSelectedPackageKey||''))},[initialSelectedPackageKey])
   const hasPending=packages.some(item=>['QUEUED','UPDATING'].includes(String(item.company_installation?.update_status||'').toUpperCase()))
