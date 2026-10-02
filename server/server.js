@@ -499,6 +499,11 @@ function sensitiveResourceKey(req) {
   // Salesforce-style high-assurance controls are intentionally granular.
   // Reads are included where the protected resource itself can expose sensitive
   // information (for example reports, auth providers and health/security views).
+  if (/\/api\/security\/governance\/health(?:\/|$)/.test(path)) return "VIEW_HEALTH_CHECK";
+  if (/\/api\/security\/governance\/certificates(?:\/|$)/.test(path)) return "MANAGE_CERTIFICATES";
+  if (/\/api\/security\/governance\/vault(?:\/|$)/.test(path)) return "MANAGE_ENCRYPTION_KEYS";
+  if (/\/api\/security\/governance\/(connected-apps|api-policy)(?:\/|$)/.test(path)) return "MANAGE_CONNECTED_APPS";
+  if (/\/api\/security\/governance\/trusted-origins(?:\/|$)/.test(path)) return "MANAGE_CONNECTED_APPS";
   if (/\/api\/security\/auth-providers(?:\/|$)/.test(path)) return "MANAGE_AUTH_PROVIDERS";
   if (/\/api\/security\/policies(?:\/|$)/.test(path) && !/\/ip-ranges(?:\/|$)/.test(path)) return "MANAGE_LOGIN_ACCESS_POLICIES";
   if (/\/api\/security\/settings(?:\/|$)/.test(path) && method !== "GET") {
