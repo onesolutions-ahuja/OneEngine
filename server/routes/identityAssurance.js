@@ -500,6 +500,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   });
 
   router.post("/security/mfa/methods/:methodId/disconnect",authenticate,async(req,res)=>{
+    if(!req.authSession||!assuranceSatisfies(req.authSession.assurance_level,"HIGH")){
+      return res.status(428).json({success:false,code:"STEP_UP_REQUIRED",resourceKey:"MFA_SELF_SERVICE",message:"High-Assurance verification is required to disconnect an MFA method"});
+    }
     const r=await db(`UPDATE identity_mfa_methods SET active=FALSE
       WHERE id=$1 AND company_id=$2 AND user_id=$3 AND active=TRUE RETURNING id,method_type,authenticator_kind`,
       [req.params.methodId,req.user.companyId,req.user.id]);
