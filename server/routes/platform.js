@@ -686,7 +686,16 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   async function authorizePlatformManage(req, res, next) {
     return authorize("oneengine.manage")(req, res, next);
   }
+  async function authorizeWorkflowExecute(req, res, next) {
+    try {
+      if (await hasExecutionPermission(req, "workflow.execute")) return next();
+      return res.status(403).json({ success: false, message: "You do not have permission to execute workflows" });
+    } catch (error) {
+      return next(error);
+    }
+  }
   const manage = [authenticate, resolveActingCompany, authorizePlatformManage];
+  const workflowExecute = [authenticate, authorizeWorkflowExecute];
   // Record CRUD is governed by Object permissions/RBAC, not by identity,
   // role names, or the Settings administration permission.
   const recordAccess = [authenticate, resolveActingCompany];
@@ -4538,14 +4547,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   });
 
-  router.get("/platform/flow-sessions/:sessionId", ...manage, async (req, res) => {
+  router.get("/platform/flow-sessions/:sessionId", ...workflowExecute, async (req, res) => {
     try {
       const result = await db(
         `SELECT id,workflow_id,run_id,step_run_id,step_identifier,status,screen,values,history,expires_at,submitted_at,created_at,updated_at
            FROM platform_workflow_screen_sessions
-          WHERE id=$1 AND company_id=$2
+          WHERE id=$1 AND company_id=$2 AND (actor_user_id IS NULL OR actor_user_id=$3)
           LIMIT 1`,
-        [req.params.sessionId, req.user.companyId]
+        [req.params.sessionId, req.user.companyId, req.user.id || null]
       );
       const session = result.rows[0] || null;
       if (!session) return res.status(404).json({ success: false, message: "Screen session not found" });
@@ -4572,11 +4581,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   });
 
-  router.post("/platform/flow-sessions/:sessionId/resume", ...manage, async (req, res) => {
+  router.post("/platform/flow-sessions/:sessionId/resume", ...workflowExecute, async (req, res) => {
     try {
       const result = await db(
-        "SELECT * FROM platform_workflow_screen_sessions WHERE id=$1 AND company_id=$2 LIMIT 1",
-        [req.params.sessionId, req.user.companyId]
+        "SELECT * FROM platform_workflow_screen_sessions WHERE id=$1 AND company_id=$2 AND (actor_user_id IS NULL OR actor_user_id=$3) LIMIT 1",
+        [req.params.sessionId, req.user.companyId, req.user.id || null]
       );
       const session = result.rows[0] || null;
       if (!session) return res.status(404).json({ success: false, message: "Screen session not found" });
@@ -4600,11 +4609,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   });
 
-    router.post("/platform/flow-sessions/:sessionId/submit", ...manage, async (req, res) => {
+    router.post("/platform/flow-sessions/:sessionId/submit", ...workflowExecute, async (req, res) => {
     try {
       const sessionResult = await db(
-        "SELECT * FROM platform_workflow_screen_sessions WHERE id=$1 AND company_id=$2 LIMIT 1",
-        [req.params.sessionId, req.user.companyId]
+        "SELECT * FROM platform_workflow_screen_sessions WHERE id=$1 AND company_id=$2 AND (actor_user_id IS NULL OR actor_user_id=$3) LIMIT 1",
+        [req.params.sessionId, req.user.companyId, req.user.id || null]
       );
       const session = sessionResult.rows[0] || null;
       if (!session) return res.status(404).json({ success: false, message: "Screen session not found" });
@@ -4616,6 +4625,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       const navigation = String(req.body?.navigation || "NEXT").toUpperCase();
       if (!["NEXT","FINISH","BACK","PAUSE"].includes(navigation)) return res.status(400).json({ success: false, message: "Invalid Screen Flow navigation action" });
+      if (navigation === "FINISH" && session.screen?.allowFinish === false) return res.status(409).json({ success: false, message: "Finish is not available for this screen" });
 
       if (navigation === "PAUSE") {
         if (session.screen?.allowPause !== true) return res.status(409).json({ success: false, message: "Pause is not available for this screen" });
@@ -4642,9 +4652,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const previous = previousResult.rows?.[0] || null;
         if (!previous) return res.status(409).json({ success: false, message: "Back navigation is not available" });
 
+        const backValues = req.body?.values && typeof req.body.values === "object" && !Array.isArray(req.body.values) ? req.body.values : {};
         await db(
-          "UPDATE platform_workflow_screen_sessions SET status='CANCELLED_BACK',updated_at=NOW() WHERE id=$1 AND company_id=$2",
-          [session.id, req.user.companyId]
+          "UPDATE platform_workflow_screen_sessions SET status='CANCELLED_BACK',values=$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
+          [JSON.stringify(backValues), session.id, req.user.companyId]
         );
         if (session.step_run_id) {
           await db(
