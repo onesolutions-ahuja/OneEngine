@@ -189,6 +189,7 @@ export default function ObjectPage({
   onBack,
   onSelectRecord,
   renderRecordActions,
+  appKey = "",
 }) {
   const [objectMetadata, setObjectMetadata] =
     useState(suppliedObject || null);
@@ -239,6 +240,12 @@ export default function ObjectPage({
   const [visibleColumnKeys, setVisibleColumnKeys] = useState([]);
   const [listViewDialog, setListViewDialog] = useState(null);
   const [displayMode, setDisplayMode] = useState("split");
+  const [formFactor, setFormFactor] = useState(() => {
+    if (typeof window === "undefined") return "desktop";
+    if (window.innerWidth <= 650) return "mobile";
+    if (window.innerWidth <= 1024) return "tablet";
+    return "desktop";
+  });
   const activeFields = useMemo(
     () => fields.filter((field) => field?.active !== false && !isTechnicalRecordField(field)),
     [fields]
@@ -301,12 +308,36 @@ export default function ObjectPage({
     if (objectMetadata) {
       loadFields();
       if (!selfServiceView) {
-        loadDetailLayout();
         loadRecordButtons();
         loadListViews();
       }
     }
   }, [objectMetadata]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const updateFormFactor = () => {
+      const next = window.innerWidth <= 650 ? "mobile" : window.innerWidth <= 1024 ? "tablet" : "desktop";
+      setFormFactor((current) => current === next ? current : next);
+    };
+    window.addEventListener("resize", updateFormFactor);
+    updateFormFactor();
+    return () => window.removeEventListener("resize", updateFormFactor);
+  }, []);
+
+  useEffect(() => {
+    if (!objectMetadata || selfServiceView) return;
+    loadDetailLayout();
+  }, [
+    objectMetadata,
+    selectedRecord?.recordTypeId,
+    selectedRecord?.record_type_id,
+    selectedRecordTypeId,
+    formFactor,
+    appKey,
+    selfServiceView,
+  ]);
+
 
   useEffect(() => {
     if (
@@ -556,22 +587,38 @@ export default function ObjectPage({
     }
   }
 
+  function effectiveLayoutUrl(pageType, recordTypeId = "") {
+    const objectId = objectMetadata?.id;
+    const query = new URLSearchParams({
+      objectId: String(objectId || ""),
+      pageType,
+      formFactor,
+    });
+    if (recordTypeId) query.set("recordTypeId", recordTypeId);
+    if (appKey) query.set("appKey", appKey);
+    return `/api/platform/layouts/effective?${query.toString()}`;
+  }
+
   async function loadDetailLayout() {
     const objectId = objectMetadata?.id;
     if (!objectId) return;
+    const recordTypeId = selectedRecord?.recordTypeId || selectedRecord?.record_type_id || "";
     try {
-      const response = await apiRequest(`/api/platform/layouts/effective?objectId=${encodeURIComponent(objectId)}&pageType=detail`);
-      setDetailLayout(response?.data || null);
-      const [createResponse, editResponse, quickResponse] = await Promise.all([
-        apiRequest(`/api/platform/layouts/effective?objectId=${encodeURIComponent(objectId)}&pageType=create`),
-        apiRequest(`/api/platform/layouts/effective?objectId=${encodeURIComponent(objectId)}&pageType=edit`),
-        apiRequest(`/api/platform/layouts/effective?objectId=${encodeURIComponent(objectId)}&pageType=quick_create`),
+      const [detailResponse, createResponse, editResponse, quickResponse] = await Promise.all([
+        apiRequest(effectiveLayoutUrl("detail", recordTypeId)),
+        apiRequest(effectiveLayoutUrl("create", selectedRecordTypeId || "")),
+        apiRequest(effectiveLayoutUrl("edit", recordTypeId)),
+        apiRequest(effectiveLayoutUrl("quick_create", selectedRecordTypeId || "")),
       ]);
+      setDetailLayout(detailResponse?.data || null);
       setCreateLayout(createResponse?.data || null);
       setEditLayout(editResponse?.data || null);
       setQuickCreateLayout(quickResponse?.data || null);
     } catch {
       setDetailLayout(null);
+      setCreateLayout(null);
+      setEditLayout(null);
+      setQuickCreateLayout(null);
     }
   }
 
