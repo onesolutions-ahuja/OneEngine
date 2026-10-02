@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { getStoredUser } from "../../services/api.js";
 import {
   createReportFolder,
   createReportSubscription,
@@ -30,6 +31,7 @@ export default function ReportManagementPanel({
   const [query, setQuery] = useState("");
   const [folderFilter, setFolderFilter] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderShared, setNewFolderShared] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
@@ -103,8 +105,16 @@ export default function ReportManagementPanel({
     if (!name) return;
     try {
       setBusy("new-folder");
-      await createReportFolder({ name, visibility: "PRIVATE", access: [] });
+      const sessionUser = getStoredUser();
+      const companyId = sessionUser?.companyId || sessionUser?.company_id || "";
+      if (newFolderShared && !companyId) throw new Error("Company context is unavailable");
+      await createReportFolder({
+        name,
+        visibility: newFolderShared ? "SHARED" : "PRIVATE",
+        access: newFolderShared ? [{ principalType: "COMPANY", principalId: String(companyId), accessLevel: "VIEW" }] : [],
+      });
       setNewFolderName("");
+      setNewFolderShared(false);
       await loadManagement();
     } catch (err) {
       setError(err?.message || "Unable to create folder");
@@ -165,9 +175,12 @@ export default function ReportManagementPanel({
           </select>
         </label>
         {canManage ? <div className="flex gap-2 items-end">
-          <label className="onepos-label">New folder
-            <input className="onepos-input mt-1" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Folder name" />
-          </label>
+          <div>
+            <label className="onepos-label">New folder
+              <input className="onepos-input mt-1" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Folder name" />
+            </label>
+            <label className="mt-1 flex items-center gap-2 text-xs"><input type="checkbox" checked={newFolderShared} onChange={(e) => setNewFolderShared(e.target.checked)} />Share with company (view)</label>
+          </div>
           <button type="button" className="onepos-btn onepos-btn-secondary" disabled={busy === "new-folder"} onClick={createFolder}>Create</button>
         </div> : null}
       </div>
