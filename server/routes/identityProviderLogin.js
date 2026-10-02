@@ -57,7 +57,8 @@ async function verifyOidcIdToken(idToken,{clientId,nonce,issuer,jwksUri}){
   if(!jwk)throw new Error("OIDC signing key is unavailable");
   const key=crypto.createPublicKey({key:jwk,format:"jwk"});
   const algorithms={RS256:"RSA-SHA256",RS384:"RSA-SHA384",RS512:"RSA-SHA512",ES256:"SHA256",ES384:"SHA384"};
-  const valid=crypto.verify(algorithms[header.alg],Buffer.from(`${parts[0]}.${parts[1]}`),key,Buffer.from(parts[2],"base64url"));
+  const verifierKey=String(header.alg).startsWith("ES")?{key,dsaEncoding:"ieee-p1363"}:key;
+  const valid=crypto.verify(algorithms[header.alg],Buffer.from(`${parts[0]}.${parts[1]}`),verifierKey,Buffer.from(parts[2],"base64url"));
   if(!valid)throw new Error("OIDC ID token signature is invalid");
   const now=Math.floor(Date.now()/1000);
   if(issuer&&String(claims.iss)!==String(issuer))throw new Error("OIDC issuer is invalid");
