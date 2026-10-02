@@ -41,7 +41,7 @@ export default function RecordTypeEditor({ object, fields = [] }) {
   );
 
   async function load() {
-    const response = await apiRequest(`/api/platform/objects/${object.id}/record-types`);
+    const response = await apiRequest(`/api/platform/objects/${object.id}/record-types?includeInactive=1`);
     setTypes(Array.isArray(response?.data) ? response.data : []);
   }
 
