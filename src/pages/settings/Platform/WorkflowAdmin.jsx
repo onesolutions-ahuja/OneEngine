@@ -6465,6 +6465,22 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               ) : (
                 <p className="mt-2 text-sm text-emerald-800">{debugMode === "test" ? "The flow passed this test record. Green steps ran successfully; dashed green steps were safely simulated." : "Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action."}</p>
               )}
+              {Array.isArray(debugResult.resourceHistory) && debugResult.resourceHistory.length ? (
+                <details className="mt-3 rounded-lg border border-slate-200 bg-white/80 p-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-700">Resource history · {debugResult.resourceHistory.length} step{debugResult.resourceHistory.length === 1 ? "" : "s"}</summary>
+                  <div className="mt-3 space-y-2">
+                    {debugResult.resourceHistory.map((entry, index) => (
+                      <details key={`${entry.stepId || index}-${index}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                        <summary className="cursor-pointer text-xs text-slate-700">
+                          <strong>{workflow.steps.find((step) => String(step.id) === String(entry.stepId))?.label || entry.actionType || entry.stepId || `Step ${index + 1}`}</strong>
+                          <span className="ml-2 text-slate-400">{entry.status || ""}</span>
+                        </summary>
+                        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-2 text-[10px] text-slate-600">{JSON.stringify(entry.snapshot?.variables || {}, null, 2)}</pre>
+                      </details>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </div>
           ) : null}
         </div>
