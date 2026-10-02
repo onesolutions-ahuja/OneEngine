@@ -107,6 +107,11 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
 
   // Record-triggered Start configuration exposes Salesforce-style transition
   // semantics without requiring Changed operators on every individual field.
+  await workflowWorkspace.getByRole("button", { name: "View Properties", exact: true }).click();
+  const recordFlowProperties = page.getByRole("dialog", { name: "Flow Properties" });
+  await expect(recordFlowProperties).toBeVisible();
+  await recordFlowProperties.getByLabel("Flow Type").selectOption("RECORD_TRIGGERED");
+  await recordFlowProperties.getByRole("button", { name: "Done", exact: true }).click();
   const triggerSelect = page.getByLabel("Flow trigger");
   await triggerSelect.selectOption("after_update");
   await page.locator(".workflow-start-node").click();
@@ -116,24 +121,25 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
 
   // Start configuration owns scheduled paths; adding one must expose the
   // no-code timing controls without adding a normal canvas node.
-  await expect(page.getByText("Scheduled paths", { exact: true })).toBeVisible();
+  await expect(page.getByText("Scheduled Paths", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "+ Add path", exact: true }).click();
   await expect(page.getByPlaceholder("Path name")).toHaveValue("Scheduled Path");
   await expect(page.getByRole("option", { name: "Run after a delay" })).toHaveCount(1);
-  await expect(page.getByText("Steps on this scheduled path", { exact: true })).toBeVisible();
+  await expect(page.getByText("Add elements to this path from the Scheduled Path branch on the canvas.", { exact: true })).toBeVisible();
 
   // Decision authoring must support ordered named outcomes + Default.
   await page.getByRole("button", { name: "Decision", exact: true }).first().click();
   const decisionCard = page.locator(".workflow-node-card").filter({ hasText: "Decision" }).last();
   await decisionCard.click();
-  await expect(page.getByRole("button", { name: "+ Add outcome", exact: true })).toBeVisible();
-  await expect(page.getByText("Default · No outcome matched", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "+ New Outcome", exact: true })).toBeVisible();
+  await expect(page.getByText("Default Outcome Label", { exact: true })).toBeVisible();
+  await expect(page.getByText(/This path runs only when no configured outcome matches/i)).toBeVisible();
 
   // Every executable element exposes friendly fault handling instead of raw
   // exception configuration.
   const onError = page.getByText("On Error", { exact: true }).last();
   await onError.click();
-  await expect(page.getByRole("option", { name: "Fail the workflow" })).toHaveCount(1);
+  await expect(page.getByRole("option", { name: "Fail the flow" })).toHaveCount(1);
   await expect(page.getByRole("option", { name: "Run an error path" })).toHaveCount(1);
   await expect(page.getByText(/Fault resources such as Error message and How to fix/i)).toBeVisible();
 
@@ -155,7 +161,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(page.locator("style").filter({ hasText: "is-debug-completed" })).toHaveCount(1);
 
   // Resource Manager remains separate from canvas elements.
-  await page.getByRole("button", { name: "Resources", exact: true }).click();
+  await page.getByRole("button", { name: "Manager", exact: true }).click();
   await expect(page.getByRole("button", { name: "+ Constant", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "+ Formula", exact: true })).toBeVisible();
 
