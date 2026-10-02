@@ -71,6 +71,29 @@ function getFieldOptions(field) {
   });
 }
 
+function dependentPicklistConfig(field) {
+  const config = field?.config?.dependentPicklist || field?.config?.dependent_picklist;
+  if (!config || typeof config !== "object" || Array.isArray(config)) return null;
+  const controllingField = config.controllingField || config.controlling_field || "";
+  const mappings = config.mappings && typeof config.mappings === "object" && !Array.isArray(config.mappings)
+    ? config.mappings
+    : {};
+  return controllingField ? { controllingField, mappings } : null;
+}
+
+function getAvailableFieldOptions(field, values) {
+  const options = getFieldOptions(field);
+  const dependent = dependentPicklistConfig(field);
+  if (!dependent) return options;
+  const controllingValue = values?.[dependent.controllingField];
+  if (controllingValue === null || controllingValue === undefined || controllingValue === "") return [];
+  const normalizedController = String(controllingValue);
+  return options.filter((option) => {
+    const allowed = dependent.mappings?.[String(option.value)];
+    return Array.isArray(allowed) && allowed.map(String).includes(normalizedController);
+  });
+}
+
 function normalizeInitialValue(value, field) {
   if (
     value === null ||
@@ -350,6 +373,16 @@ export default function ObjectForm({
       [key]: value,
     };
 
+    for (const candidate of activeFields) {
+      const dependent = dependentPicklistConfig(candidate);
+      if (!dependent || dependent.controllingField !== key) continue;
+      const dependentKey = getFieldKey(candidate);
+      const currentDependentValue = nextValues[dependentKey];
+      if (currentDependentValue === null || currentDependentValue === undefined || currentDependentValue === "") continue;
+      const allowed = getAvailableFieldOptions(candidate, nextValues).some((option) => String(option.value) === String(currentDependentValue));
+      if (!allowed) nextValues[dependentKey] = "";
+    }
+
     setValues(nextValues);
 
     setValidationErrors((current) => {
@@ -513,7 +546,7 @@ export default function ObjectForm({
       case "select":
       case "picklist": {
         const options =
-          getFieldOptions(field);
+          getAvailableFieldOptions(field, values);
 
         control = (
           <select
