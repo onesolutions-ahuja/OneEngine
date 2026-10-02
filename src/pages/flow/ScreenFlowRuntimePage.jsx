@@ -96,6 +96,9 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
           const base = import.meta.env.BASE_URL.replace(/\/$/, '')
           window.history.replaceState(null, '', `${base}/flow/${encodeURIComponent(data.screenSessionId)}`)
         }
+      } else if (data.status === 'PAUSED') {
+        setSession({ id: data.screenSessionId || session.id, status: 'PAUSED', screen: data.screen || screen, values: data.values || values })
+        setMessage('Flow paused.')
       } else {
         setSession({ status: data.status || 'COMPLETED', screen: null })
         setMessage(data.status === 'COMPLETED' ? 'Flow completed.' : 'Flow is waiting.')
@@ -169,6 +172,7 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
   }
 
   if (!session) return <div className="min-h-screen bg-slate-50 p-8 text-sm text-slate-600">{message || 'Loading flow…'}</div>
+  if (session.status === 'PAUSED') return <div className="min-h-screen bg-slate-50 p-8"><div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h1 className="text-xl font-semibold text-slate-900">Flow paused</h1><p className="mt-3 text-sm text-slate-600">{message || 'Resume when you are ready to continue.'}</p><button type="button" className="mt-5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onClick={async () => { try { const response = await apiRequest(`/api/platform/flow-sessions/${encodeURIComponent(session.id)}/resume`, { method: 'POST' }); hydrate(response?.data); setMessage(''); } catch (error) { setMessage(error.message || 'Unable to resume this flow.') } }}>Resume</button></div></div>
   if (session.status !== 'ACTIVE' || !screen) return <div className="min-h-screen bg-slate-50 p-8"><div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h1 className="text-xl font-semibold text-slate-900">Flow</h1><p className="mt-3 text-sm text-slate-600">{message || `This flow session is ${String(session.status || 'closed').toLowerCase()}.`}</p></div></div>
 
   return <div className="min-h-screen bg-slate-50 px-4 py-8">
@@ -211,6 +215,7 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       {screen.showFooter !== false ? <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
         <div>{screen.allowBack ? <button type="button" disabled={busy} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50" onClick={() => submit('BACK')}>{screen.backLabel || 'Previous'}</button> : null}</div>
         <div className="flex gap-2">
+          {screen.allowPause ? <button type="button" disabled={busy} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50" onClick={() => submit('PAUSE')}>{screen.pauseLabel || 'Pause'}</button> : null}
           {screen.allowFinish ? <button type="button" disabled={busy} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50" onClick={() => submit('FINISH')}>{screen.finishLabel || 'Finish'}</button> : null}
           <button type="button" disabled={busy} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={() => submit('NEXT')}>{busy ? 'Working…' : (screen.nextLabel || 'Next')}</button>
         </div>
