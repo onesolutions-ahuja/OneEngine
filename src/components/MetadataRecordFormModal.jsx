@@ -20,8 +20,9 @@ function isAuditField(field){
     || ['created_at','updated_at','createdat','updatedat','created','updated'].includes(source)
 }
 function isFieldDisabled(field){
+  const type=String(field?.field_type||'').toLowerCase()
   return field?.writable===false
-    || String(field?.field_type||'').toLowerCase()==='formula'
+    || ['formula','rollup','auto_number'].includes(type)
     || isAuditField(field)
 }
 function configOf(field){
@@ -80,9 +81,14 @@ function MetadataField({field,value,onChange}){
     control=<select multiple value={selected} disabled={disabled} required={field?.required===true} onChange={e=>onChange(Array.from(e.target.selectedOptions,o=>o.value))}>{optionsOf(field).map(o=><option key={String(optionValue(o))} value={String(optionValue(o))}>{String(optionLabel(o))}</option>)}</select>
   }else if(type==='lookup'&&lookups.length){
     control=<select value={typeof value==='object'?(value?.id||''):(value??'')} disabled={disabled} required={field?.required===true} onChange={e=>onChange(e.target.value)}><option value="">Select {label}</option>{lookups.map(row=>{const id=row?.id??row?.record_id;const text=row?.label??row?.name??row?.full_name??row?.username??row?.display_name??row?.title??id;return <option key={String(id)} value={String(id)}>{String(text)}</option>})}</select>
+  }else if(type==='auto_number'){
+    control=<output>{value||'Generated on save'}</output>
   }else{
-    const htmlType=['email','date','datetime-local','url','tel'].includes(type)?type:type==='datetime'?'datetime-local':type==='phone'?'tel':['number','decimal','currency'].includes(type)?'number':'text'
-    control=<input type={htmlType} step={['decimal','currency'].includes(type)?'any':undefined} value={typeof value==='object'?'':(value??'')} disabled={disabled} required={field?.required===true} onChange={e=>onChange(['number','decimal','currency'].includes(type)&&e.target.value!==''?Number(e.target.value):e.target.value)}/>
+    const numeric=['number','decimal','currency','percent'].includes(type)
+    const htmlType=type==='time'?'time':['email','date','url'].includes(type)?type:type==='datetime'?'datetime-local':type==='phone'?'tel':numeric?'number':'text'
+    const maxLength=Number(config.maxLength??config.max_length)||({text:255,email:80,phone:40,url:255}[type])||undefined
+    const step=type==='time'?'0.001':numeric?(Number.isFinite(Number(config.scale))?String(1/(10**Number(config.scale))):'any'):undefined
+    control=<input type={htmlType} step={step} maxLength={maxLength} value={typeof value==='object'?'':(value??'')} disabled={disabled} required={field?.required===true&&!['auto_number','formula','rollup'].includes(type)} onChange={e=>onChange(numeric&&e.target.value!==''?Number(e.target.value):e.target.value)}/>
   }
 
   return <label className={`metadata-form-field ${type==='boolean'?'is-toggle':''}`}>
