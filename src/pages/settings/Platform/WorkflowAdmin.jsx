@@ -2245,7 +2245,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                               updateComponent(componentIndex, { registryKey, registryConfig: {}, label: definition?.label || component.label });
                             }}>
                               <option value="">Select component</option>
-                              {platformComponents.filter((item) => !item.reserved && item.key !== "jarves").map((item) => <option key={item.key} value={item.key}>{item.label} · {item.category || item.kind || "component"}</option>)}
+                              {platformComponents.filter((item) => item.flowScreenSupported === true && !item.reserved).map((item) => <option key={item.key} value={item.key}>{item.label} · {item.category || item.kind || "component"}</option>)}
                             </select>
                           </label>
                           {component.registryKey ? <label className="block text-xs font-medium text-slate-600">Component Configuration (JSON)
