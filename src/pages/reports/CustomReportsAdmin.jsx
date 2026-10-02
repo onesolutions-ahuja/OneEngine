@@ -67,8 +67,24 @@ const fresh = () => ({
 
 const errorMessage = (error) => error?.message || "Unable to complete this report action";
 const fieldLabel = (fields, key) => fields.find((field) => field.key === key)?.label || key;
+const runtimeFilterDefinition = (definition, runtimeFilters = []) => {
+  const extra = (Array.isArray(runtimeFilters) ? runtimeFilters : []).filter((filter) => filter && filter.field && filter.operator);
+  if (!extra.length) return definition;
+  const existing = Array.isArray(definition.filters) ? definition.filters : [];
+  const existingLogic = String(definition.filterLogic || "all").trim();
+  const existingExpression = existing.length <= 1
+    ? (existing.length ? "1" : "")
+    : existingLogic.toLowerCase() === "all"
+      ? existing.map((_, index) => String(index + 1)).join(" AND ")
+      : existingLogic.toLowerCase() === "any"
+        ? existing.map((_, index) => String(index + 1)).join(" OR ")
+        : existingLogic;
+  const runtimeExpression = extra.map((_, index) => String(existing.length + index + 1)).join(" AND ");
+  const filterLogic = existingExpression ? "(" + existingExpression + ") AND " + runtimeExpression : runtimeExpression;
+  return { ...definition, filters: [...existing, ...extra], filterLogic };
+};
 
-export default function CustomReportsAdmin({ embedded = false, initialReport = null, onClose, onSaved } = {}) {
+export default function CustomReportsAdmin({ embedded = false, initialReport = null, initialRuntimeFilters = [], onClose, onSaved } = {}) {
   const [reports,setReports]=useState([]);
   const [reportCurrency,setReportCurrency]=useState("GBP");
   const [metadata,setMetadata]=useState({ fields:[],filters:[],stores:[],users:[],roles:[],publicGroups:[],platformObjects:[],reportTypes:[],sources:[],relationships:[],canManage:false });
@@ -83,6 +99,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [showExport,setShowExport]=useState(false);
+  const [runtimeFilters,setRuntimeFilters]=useState(()=>Array.isArray(initialRuntimeFilters)?initialRuntimeFilters:[]);
 
   const load=async()=>{
     try{
@@ -100,6 +117,16 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
   };
   useEffect(()=>{void load();},[]);
   useEffect(()=>{let live=true;apiRequest("/api/settings").then((response)=>{if(live&&response?.success)setReportCurrency(response.data?.company?.currency||"GBP");}).catch(()=>{});return()=>{live=false;};},[]);
+  useEffect(()=>{
+    let live=true;
+    if(!initialReport?.id||!runtimeFilters.length)return()=>{live=false;};
+    if(String(definition.format||"").toLowerCase()==="joined"){setNotice("Drill filters are not applied to Joined Reports.");return()=>{live=false;};}
+    setNotice("Drill filters applied for this view only.");
+    previewCustomReport(runtimeFilterDefinition(definition,runtimeFilters))
+      .then((response)=>{if(!live)return;if(!response?.success)throw new Error(response?.message||"Unable to apply drill filters");setResults(response.data);})
+      .catch((error)=>{if(live)setError(errorMessage(error));});
+    return()=>{live=false;};
+  },[]);
 
   useEffect(()=>{
     const objectId=definition.objectId;
@@ -123,11 +150,11 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
   const historicalEnabled=definition.historicalTrend?.enabled===true;
   const update=(patch)=>setDefinition((current)=>({...current,...patch}));
 
-  const reset=()=>{setEditingId(null);setDefinition(fresh());setResults(null);setNotice("");setError("");};
+  const reset=()=>{setEditingId(null);setDefinition(fresh());setResults(null);setRuntimeFilters([]);setNotice("");setError("");};
   const open=async(report)=>{
     try{
       setError("");const response=await getCustomReport(report.id);if(!response?.success)throw new Error(response?.message);
-      const data=response.data;setEditingId(data.id);setDefinition({...fresh(),...(data.definition||{}),name:data.name||"",description:data.description||"",userIds:data.user_ids||data.userIds||[]});setResults(null);
+      const data=response.data;setEditingId(data.id);setDefinition({...fresh(),...(data.definition||{}),name:data.name||"",description:data.description||"",userIds:data.user_ids||data.userIds||[]});setRuntimeFilters([]);setResults(null);
     }catch(e){setError(errorMessage(e));}
   };
   const changeSource=(dataSource)=>{
@@ -167,7 +194,15 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     }catch(e){setError(errorMessage(e));}finally{setSaving(false);}
   };
   const run=async(id)=>{
-    try{setRunning(id);setError("");const response=await runCustomReport(id);if(!response?.success)throw new Error(response?.message);setResults(response.data);const report=reports.find((item)=>item.id===id);if(report&&!editingId)await open(report);}catch(e){setError(errorMessage(e));}finally{setRunning("");}
+    try{
+      setRunning(id);setError("");
+      const useRuntime=String(id)===String(editingId||initialReport?.id||"")&&runtimeFilters.length>0;
+      const response=useRuntime?await previewCustomReport(runtimeFilterDefinition(definition,runtimeFilters)):await runCustomReport(id);
+      if(!response?.success)throw new Error(response?.message);
+      setResults(response.data);
+      const report=reports.find((item)=>item.id===id);
+      if(report&&!editingId)await open(report);
+    }catch(e){setError(errorMessage(e));}finally{setRunning("");}
   };
   const duplicate=async(report)=>{try{const response=await duplicateCustomReport(report.id);if(!response?.success)throw new Error(response?.message);setNotice("Report duplicated.");await load();}catch(e){setError(errorMessage(e));}};
   const archive=async(report)=>{if(!window.confirm(`Archive "${report.name}"?`))return;try{const response=await archiveCustomReport(report.id);if(!response?.success)throw new Error(response?.message);if(editingId===report.id)reset();await load();}catch(e){setError(errorMessage(e));}};
