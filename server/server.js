@@ -81,6 +81,7 @@ import createIdentitySecurityRouter from "./routes/identitySecurity.js";
 import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
 import createSecurityGovernanceRouter from "./routes/securityGovernance.js";
+import createDataProtectionRouter from "./routes/dataProtection.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
@@ -501,6 +502,10 @@ function sensitiveResourceKey(req) {
   // Salesforce-style high-assurance controls are intentionally granular.
   // Reads are included where the protected resource itself can expose sensitive
   // information (for example reports, auth providers and health/security views).
+  if (/\/api\/security\/data\/exports?(?:\/|$)/.test(path)) return "MANAGE_DATA_EXPORT";
+  if (/\/api\/security\/data\/retention(?:\/|$)/.test(path)) return "MANAGE_DATA_EXPORT";
+  if (/\/api\/security\/email(?:\/|$)/.test(path)) return "SECURITY_CONFIGURATION";
+  if (/\/api\/security\/delegated-admin(?:\/|$)/.test(path)) return "MANAGE_USERS";
   if (/\/api\/security\/governance\/health(?:\/|$)/.test(path)) return "VIEW_HEALTH_CHECK";
   if (/\/api\/security\/governance\/certificates(?:\/|$)/.test(path)) return "MANAGE_CERTIFICATES";
   if (/\/api\/security\/governance\/vault(?:\/|$)/.test(path)) return "MANAGE_ENCRYPTION_KEYS";
@@ -1849,6 +1854,7 @@ app.use("/api", createIdentitySecurityRouter({ authenticate, authorize, db, writ
 app.use("/api", createIdentityAssuranceRouter({ authenticate, authorize, db, createToken, encryptCredentials, decryptCredentials, writeAudit }));
 app.use("/api", createIdentityProviderLoginRouter({ db, createToken, decryptCredentials, encryptCredentials }));
 app.use("/api", createSecurityGovernanceRouter({ authenticate, authorize, db, writeAudit }));
+app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createHospitalityRouter({ authenticate, authorize, db, pool, canAccessStore }));
 app.use("/api", createClientWebShopRouter({
   authenticate,
