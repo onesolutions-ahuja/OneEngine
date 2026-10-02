@@ -191,7 +191,8 @@ const SETTINGS_VISUALS = {
   users: { icon: Users, tone: 'blue', searchTerms: ['user', 'username', 'email', 'role', 'store', 'active', 'inactive'] },
   'roles-permissions': { icon: ShieldCheck, tone: 'blue', searchTerms: ['role', 'permission', 'permissions', 'parent role', 'system role', 'custom role'] },
   'security-identity': { icon: Shield, tone: 'blue', searchTerms: ['security', 'identity', 'ip range', 'trusted network', 'login hours', 'password policy', 'session', 'login history'] },
-  'mfa-administration': { icon: ShieldCheck, tone: 'blue', searchTerms: ['mfa', 'verification', 'temporary code', 'trusted device', 'identity verification history'] },
+  'mfa-administration': { icon: ShieldCheck, tone: 'blue', searchTerms: ['mfa', 'verification', 'temporary code', 'trusted device'] },
+  'identity-verification-history': { icon: ShieldCheck, tone: 'blue', searchTerms: ['identity verification history', 'mfa audit', 'verification events', 'step up'] },
   'ai-assistant': { icon: Sparkles, tone: 'purple' },
   connections: { icon: Cable, tone: 'purple' },
   'uber-eats': { icon: Cable, tone: 'purple' },
@@ -1335,6 +1336,8 @@ function SettingsPage({ onOpenProfile }) {
                 <SecurityIdentitySettings />
               ) : current?.key === 'mfa-administration' ? (
                 <MfaAdministrationSettings />
+              ) : current?.key === 'identity-verification-history' ? (
+                <IdentityAssuranceSettings mode="history" />
               ) : current?.key === 'users' ? (
                 <RecordListView
                   title="Users"
