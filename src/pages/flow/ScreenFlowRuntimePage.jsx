@@ -53,6 +53,7 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [recordSearch, setRecordSearch] = useState({})
 
   const screen = session?.screen || {}
   const components = useMemo(() => Array.isArray(screen.components) ? screen.components : [], [screen.components])
@@ -78,6 +79,22 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
   }, [sessionId])
 
   const setValue = (name, value) => setValues((current) => ({ ...current, [name]: value }))
+
+  const searchRecords = async (component, query) => {
+    const name = component?.name
+    if (!name) return
+    const q = String(query || '').trim()
+    setRecordSearch((current) => ({ ...current, [name]: { query: q, loading: q.length >= 2, results: [] } }))
+    if (q.length < 2) return
+    try {
+      const response = await apiRequest(`/api/platform/search?q=${encodeURIComponent(q)}`)
+      const results = Array.isArray(response?.data?.results) ? response.data.results : []
+      const filtered = component.objectKey ? results.filter((item) => String(item.objectApiName) === String(component.objectKey)) : results
+      setRecordSearch((current) => ({ ...current, [name]: { query: q, loading: false, results: filtered } }))
+    } catch {
+      setRecordSearch((current) => ({ ...current, [name]: { query: q, loading: false, results: [] } }))
+    }
+  }
 
   const renderRegisteredComponent = (component) => {
     const key = String(component.registryKey || '')
@@ -193,12 +210,42 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       return <input {...common} type="file" multiple={component.multiple !== false} onChange={(event) => setValue(component.name, Array.from(event.target.files || []).map((file) => ({ name: file.name, size: file.size, type: file.type })))} />
     }
     if (component.type === 'RECORD_PICKER') {
-      return <input {...common} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || 'Record ID or search value'} value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)} />
+      const state = recordSearch[component.name] || { query: '', loading: false, results: [] }
+      return <div className="relative">
+        <input {...common} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || 'Search records…'} value={state.query} onChange={(event) => searchRecords(component, event.target.value)} />
+        {state.loading ? <div className="mt-1 text-xs text-slate-500">Searching…</div> : null}
+        {state.results.length ? <div className="mt-1 max-h-48 overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          {state.results.map((item) => <button key={`${item.objectApiName}:${item.recordId}`} type="button" className="block w-full border-b border-slate-100 px-3 py-2 text-left hover:bg-slate-50" onClick={() => {
+            setValue(component.name, item.recordId)
+            setRecordSearch((current) => ({ ...current, [component.name]: { query: item.primaryLabel || String(item.recordId), loading: false, results: [] } }))
+          }}>
+            <div className="text-sm font-medium text-slate-800">{item.primaryLabel || item.recordId}</div>
+            <div className="text-xs text-slate-500">{item.objectLabel}{item.secondaryLabel ? ` · ${item.secondaryLabel}` : ''}</div>
+          </button>)}
+        </div> : null}
+        {value ? <div className="mt-1 text-[11px] text-slate-500">Selected record: {String(value)}</div> : null}
+      </div>
     }
     if (component.type === 'DATA_TABLE') {
       const rows = Array.isArray(component.rows) ? component.rows : []
       const selected = Array.isArray(value) ? value : []
-      return <div className="overflow-auto rounded-lg border border-slate-200"><table className="min-w-full text-sm"><tbody>{rows.map((row, index) => <tr key={row.id || index} className="border-b border-slate-100"><td className="p-2"><input type="checkbox" checked={selected.includes(row.id || index)} onChange={(event) => setValue(component.name, event.target.checked ? [...selected, row.id || index] : selected.filter((item) => item !== (row.id || index)))} /></td>{Object.entries(row).filter(([key]) => key !== 'id').map(([key, cell]) => <td key={key} className="p-2">{String(cell ?? '')}</td>)}</tr>)}</tbody></table></div>
+      const columns = Array.isArray(component.columns) && component.columns.length
+        ? component.columns
+        : [...new Set(rows.flatMap((row) => Object.keys(row || {})).filter((key) => key !== 'id'))].slice(0, 8)
+      const cell = (row, path) => String(path || '').split('.').filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], row)
+      const rowKey = (row, index) => row?.id ?? index
+      const toggle = (key) => {
+        if (component.selectionMode === 'none') return
+        if (component.selectionMode === 'single') return setValue(component.name, selected.includes(key) ? [] : [key])
+        setValue(component.name, selected.includes(key) ? selected.filter((item) => item !== key) : [...selected, key])
+      }
+      return <div className="overflow-auto rounded-lg border border-slate-200"><table className="min-w-full text-sm">
+        <thead className="bg-slate-50"><tr>{component.selectionMode !== 'none' ? <th className="p-2 text-left" /> : null}{columns.map((column) => <th key={column} className="p-2 text-left text-xs font-semibold text-slate-600">{column}</th>)}</tr></thead>
+        <tbody>{rows.map((row, index) => {
+          const key = rowKey(row, index)
+          return <tr key={key} className="border-t border-slate-100">{component.selectionMode !== 'none' ? <td className="p-2"><input type={component.selectionMode === 'single' ? 'radio' : 'checkbox'} checked={selected.includes(key)} onChange={() => toggle(key)} /></td> : null}{columns.map((column) => <td key={column} className="p-2">{String(cell(row, column) ?? '')}</td>)}</tr>
+        })}</tbody>
+      </table></div>
     }
     return <input {...common} className="w-full rounded-lg border border-slate-300 px-3 py-2" value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)} />
   }
