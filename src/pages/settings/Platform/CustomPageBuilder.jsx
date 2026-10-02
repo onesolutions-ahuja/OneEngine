@@ -116,6 +116,9 @@ export default function CustomPageBuilder({ onMessage, onError }) {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [versions, setVersions] = useState([]);
+  const [showVersions, setShowVersions] = useState(false);
   const [dirty, setDirty] = useState(false);
   /* Undo/redo: bounded snapshot stack of draft trees. Every mutation pushes. */
   const [undoStack, setUndoStack] = useState([]);
@@ -164,19 +167,33 @@ export default function CustomPageBuilder({ onMessage, onError }) {
     });
   }, []);
 
+  const loadVersions = async (id) => {
+    if (!id) { setVersions([]); return []; }
+    try {
+      const response = await apiRequest(`/api/platform/pages/${encodeURIComponent(id)}/versions`);
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      setVersions(rows);
+      return rows;
+    } catch {
+      setVersions([]);
+      return [];
+    }
+  };
+
   const loadPage = (row) => {
     setPageId(row?.id || "");
     setPage(row || null);
-    const tree = normalizeCustomPageTree(row?.definition || {});
+    const tree = normalizeCustomPageTree(row?.draft_definition || row?.definition || {});
     setDraft({ pageKey: row?.page_key || "", label: row?.label || "Custom Page", presentation_mode: tree.presentation_mode, device: tree.device, sections: tree.sections });
-    setUndoStack([]); setRedoStack([]); setSelectedNodeId(null); setSelectedSectionId(null); setDirty(false); setPreview(false);
+    setUndoStack([]); setRedoStack([]); setSelectedNodeId(null); setSelectedSectionId(null); setDirty(false); setPreview(false); setShowVersions(false);
+    if (row?.id) void loadVersions(row.id); else setVersions([]);
   };
 
   const openNewPage = () => {
     setPage(null); setPageId("");
     const fresh = newPageDraft();
     setDraft(fresh);
-    setUndoStack([]); setRedoStack([]); setSelectedNodeId(null); setSelectedSectionId(null); setDirty(false); setPreview(false);
+    setUndoStack([]); setRedoStack([]); setSelectedNodeId(null); setSelectedSectionId(null); setDirty(false); setPreview(false); setVersions([]); setShowVersions(false);
   };
 
   /* ------------------------------ mutations ------------------------------ */
@@ -374,12 +391,16 @@ const updateNode = (nodeId, changes) => {
     setSaving(true);
     try {
       const definition = definitionForSave();
+      let saved = null;
       if (pageId) {
-        const response = await apiRequest(`/api/platform/pages/${pageId}`, { method: "PUT", body: JSON.stringify({ definition, label: draft.label }) });
-        setPage(response.data);
-        const tree = normalizeCustomPageTree(response.data?.definition || {});
-        setDraft({ ...draft, label: response.data?.label || draft.label, presentation_mode: tree.presentation_mode, device: tree.device, sections: tree.sections });
-        onMessage?.("Custom page saved.");
+        const response = await apiRequest(`/api/platform/pages/${encodeURIComponent(pageId)}`, { method: "PUT", body: JSON.stringify({ definition, label: draft.label }) });
+        saved = response.data;
+        setPage(saved);
+        const tree = normalizeCustomPageTree(saved?.draft_definition || definition);
+        setDraft({ ...draft, label: saved?.label || draft.label, presentation_mode: tree.presentation_mode, device: tree.device, sections: tree.sections });
+        setPages((current) => current.map((row) => row.id === saved?.id ? saved : row));
+        if (saved?.id) await loadVersions(saved.id);
+        onMessage?.("Draft saved.");
       } else {
         let targetApp = appId || apps[0]?.id;
         if (!targetApp) {
@@ -392,15 +413,74 @@ const updateNode = (nodeId, changes) => {
           method: "POST",
           body: JSON.stringify({ label: draft.label, pageKey, pageType: "object", definition }),
         });
-        setPage(response.data); setPageId(response.data.id); setAppId(targetApp);
-        setPages((current) => [...current, response.data]);
-        onMessage?.("Custom page created and saved.");
+        saved = response.data;
+        setPage(saved); setPageId(saved.id); setAppId(targetApp);
+        setPages((current) => [...current, saved]);
+        await loadVersions(saved.id);
+        onMessage?.("Draft created.");
       }
       setUndoStack([]); setRedoStack([]); setDirty(false);
+      return saved;
     } catch (error) {
-      onError?.(error.message || "Unable to save the page.");
+      onError?.(error.message || "Unable to save the draft.");
+      return null;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const activatePage = async () => {
+    setLifecycleBusy(true);
+    try {
+      const saved = dirty || !pageId ? await save() : page;
+      const id = saved?.id || pageId;
+      if (!id) return;
+      const response = await apiRequest(`/api/platform/pages/${encodeURIComponent(id)}/activate`, { method: "POST", body: JSON.stringify({}) });
+      const activated = response?.data;
+      setPage(activated);
+      setPages((current) => current.map((row) => row.id === activated?.id ? activated : row));
+      await loadVersions(id);
+      onMessage?.("Page activated.");
+    } catch (error) {
+      onError?.(error.message || "Unable to activate the page.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+
+  const deactivatePage = async () => {
+    if (!pageId) return;
+    setLifecycleBusy(true);
+    try {
+      const response = await apiRequest(`/api/platform/pages/${encodeURIComponent(pageId)}/deactivate`, { method: "POST", body: JSON.stringify({}) });
+      const inactive = response?.data;
+      setPage(inactive);
+      setPages((current) => current.map((row) => row.id === inactive?.id ? inactive : row));
+      await loadVersions(pageId);
+      onMessage?.("Page deactivated.");
+    } catch (error) {
+      onError?.(error.message || "Unable to deactivate the page.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+
+  const restoreVersion = async (version) => {
+    if (!pageId) return;
+    setLifecycleBusy(true);
+    try {
+      const response = await apiRequest(`/api/platform/pages/${encodeURIComponent(pageId)}/versions/${encodeURIComponent(version)}/restore`, { method: "POST", body: JSON.stringify({}) });
+      const restored = response?.data;
+      setPage(restored);
+      const tree = normalizeCustomPageTree(restored?.draft_definition || restored?.definition || {});
+      setDraft({ pageKey: restored?.page_key || draft.pageKey, label: restored?.label || draft.label, presentation_mode: tree.presentation_mode, device: tree.device, sections: tree.sections });
+      setDirty(false);
+      await loadVersions(pageId);
+      onMessage?.(`Version ${version} restored as a new draft.`);
+    } catch (error) {
+      onError?.(error.message || "Unable to restore the page version.");
+    } finally {
+      setLifecycleBusy(false);
     }
   };
 
@@ -684,10 +764,27 @@ const updateNode = (nodeId, changes) => {
           <button type="button" className={`cpb-device-btn ${preview ? "active" : ""}`} onClick={() => setPreview((value) => !value)} aria-pressed={preview}>
             <Eye size={13} /> {preview ? "Exit Preview" : "Preview"}
           </button>
-          <button type="button" className="onepos-btn onepos-btn-primary onepos-btn-sm" onClick={save} disabled={saving}>{saving ? "Saving…" : dirty || !pageId ? "Save" : "Saved"}</button>
+          <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setShowVersions((value) => !value)} disabled={!pageId || lifecycleBusy}>Versions</button>
+          {page?.active ? (
+            <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={deactivatePage} disabled={lifecycleBusy}>Deactivate</button>
+          ) : null}
+          <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={save} disabled={saving || lifecycleBusy}>{saving ? "Saving…" : dirty || !pageId || page?.draft_version ? "Save Draft" : "Draft Saved"}</button>
+          <button type="button" className="onepos-btn onepos-btn-primary onepos-btn-sm" onClick={activatePage} disabled={saving || lifecycleBusy || (!dirty && !page?.draft_version && page?.active)}>{lifecycleBusy ? "Working…" : "Activate"}</button>
         </span>
       </div>
-      {dirty ? <p className="text-[11px] text-amber-600">Unsaved changes — drag, configure and preview freely; Save publishes.</p> : null}
+      {dirty ? <p className="text-[11px] text-amber-600">Unsaved changes — Save Draft does not change the active runtime page.</p> : page?.draft_version ? <p className="text-[11px] text-amber-600">Draft v{page.draft_version} is not active yet.</p> : page?.active ? <p className="text-[11px] text-emerald-700">Active version v{page.active_version || page.version || 1}.</p> : null}
+      {showVersions && pageId ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-2 text-xs">
+          {versions.length ? versions.map((version) => (
+            <div key={version.id || version.version} className="flex items-center gap-2 border-b border-slate-100 py-1.5 last:border-0">
+              <strong>v{version.version}</strong>
+              <span className="text-slate-500">{version.lifecycle_status}</span>
+              <span className="text-slate-400">{version.created_at ? new Date(version.created_at).toLocaleString() : ""}</span>
+              <button type="button" className="ml-auto onepos-btn onepos-btn-secondary onepos-btn-sm" disabled={lifecycleBusy} onClick={() => restoreVersion(version.version)}>Restore as Draft</button>
+            </div>
+          )) : <span className="text-slate-500">No versions yet.</span>}
+        </div>
+      ) : null}
 
       {preview ? (
         /* PREVIEW MODE — the unsaved tree rendered exactly like runtime. */
