@@ -58,6 +58,7 @@ export default function FieldEditor({
     ...(field || {}),
     apiName: field?.apiName || field?.api_name || "",
     sourceColumn: field?.sourceColumn || field?.source_column || "",
+    description: field?.description || field?.config?.description || "",
     expression: field?.config?.expression || "",
     resultType: field?.config?.resultType || "decimal",
     visibilityCondition: field?.config?.visibilityCondition || null,
@@ -422,6 +423,7 @@ export default function FieldEditor({
         description: form.description || "",
         config: {
           ...(field?.config || {}),
+          description: String(form.description || "").trim(),
           ...(form.field_type === "formula" ? { expression: form.expression, resultType: form.resultType } : {}),
           ...(form.field_type === "rollup" ? {
             operation: form.rollupOperation,
