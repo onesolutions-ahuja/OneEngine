@@ -160,7 +160,19 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const [editor, setEditor] = useState(null)
   const [bulkEditor, setBulkEditor] = useState(null)
   const [detailTab, setDetailTab] = useState('details')
-  const [relatedState, setRelatedState] = useState({ key: '', loading: false, rows: [], error: '' })
+  const [relatedState, setRelatedState] = useState({
+    key: '',
+    relationship: null,
+    loading: false,
+    rows: [],
+    fields: [],
+    permissions: null,
+    error: '',
+    search: '',
+    filters: {},
+    sort: { key: '', direction: 'asc' },
+    pageInfo: { page: 1, pageSize: 25, total: 0, pages: 0 },
+  })
   const [historyState, setHistoryState] = useState({ loading: false, rows: [], error: '' })
   const [actionBusy, setActionBusy] = useState('')
   const [activeListViewId, setActiveListViewId] = useState('')
@@ -170,6 +182,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const [pageInfo, setPageInfo] = useState({ page: 1, pageSize: 50, total: 0, pages: 0 })
   const rowRequestRef = useRef(0)
   const searchTimerRef = useRef(null)
+  const relatedSearchTimerRef = useRef(null)
 
   useEffect(() => {
     let live = true
@@ -224,6 +237,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
   useEffect(() => () => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (relatedSearchTimerRef.current) clearTimeout(relatedSearchTimerRef.current)
   }, [])
 
   const loadRows = async ({
@@ -684,15 +698,105 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     }
   }
 
-  const loadRelated = async (relationship) => {
+  const loadRelated = async (relationship, overrides = {}) => {
     if (!selectedObject || !selectedId || !relationship?.relationship_key) return
     setDetailTab('related')
-    setRelatedState({ key: relationship.relationship_key, loading: true, rows: [], error: '' })
+    const changingRelationship = relatedState.key !== relationship.relationship_key
+    const search = overrides.search !== undefined ? overrides.search : (changingRelationship ? '' : relatedState.search)
+    const filters = overrides.filters !== undefined ? overrides.filters : (changingRelationship ? {} : relatedState.filters)
+    const sort = overrides.sort !== undefined ? overrides.sort : (changingRelationship ? { key: '', direction: 'asc' } : relatedState.sort)
+    const page = overrides.page !== undefined ? overrides.page : (changingRelationship ? 1 : relatedState.pageInfo.page || 1)
+
+    setRelatedState((current) => ({
+      ...current,
+      key: relationship.relationship_key,
+      relationship,
+      loading: true,
+      error: '',
+      ...(changingRelationship ? {
+        rows: [],
+        fields: [],
+        permissions: null,
+        search,
+        filters,
+        sort,
+        pageInfo: { page: 1, pageSize: 25, total: 0, pages: 0 },
+      } : { search, filters, sort }),
+    }))
+
     try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/related/${encodeURIComponent(relationship.relationship_key)}?pageSize=100`)
-      setRelatedState({ key: relationship.relationship_key, loading: false, rows: response?.records || response?.data || [], error: '' })
+      const params = new URLSearchParams({ page: String(Math.max(1, Number(page) || 1)), pageSize: '25' })
+      if (search?.trim()) params.set('search', search.trim())
+      params.set('viewFilters', JSON.stringify(uiFiltersToMetadata(filters)))
+      if (sort?.key) {
+        params.set('sortField', sort.key)
+        params.set('sortDirection', sort.direction === 'desc' ? 'desc' : 'asc')
+      }
+      const response = await apiRequest(
+        `/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/related/${encodeURIComponent(relationship.relationship_key)}?${params.toString()}`,
+      )
+      setRelatedState((current) => ({
+        ...current,
+        key: relationship.relationship_key,
+        relationship,
+        loading: false,
+        rows: Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [],
+        fields: Array.isArray(response?.fields) ? response.fields : current.fields,
+        permissions: response?.permissions || current.permissions,
+        error: '',
+        search,
+        filters,
+        sort,
+        pageInfo: {
+          page: Number(response?.page || page || 1),
+          pageSize: Number(response?.pageSize || 25),
+          total: Number(response?.total || 0),
+          pages: Number(response?.pages || 0),
+        },
+      }))
     } catch (err) {
-      setRelatedState({ key: relationship.relationship_key, loading: false, rows: [], error: err?.message || 'Unable to load related records' })
+      setRelatedState((current) => ({
+        ...current,
+        key: relationship.relationship_key,
+        relationship,
+        loading: false,
+        rows: [],
+        error: err?.message || 'Unable to load related records',
+      }))
+    }
+  }
+
+  const handleRelatedSearchChange = (value) => {
+    const relationship = relatedState.relationship
+    if (!relationship) return
+    setRelatedState((current) => ({ ...current, search: value }))
+    if (relatedSearchTimerRef.current) clearTimeout(relatedSearchTimerRef.current)
+    relatedSearchTimerRef.current = setTimeout(() => {
+      void loadRelated(relationship, { page: 1, search: value })
+    }, 250)
+  }
+
+  const handleRelatedFiltersChange = (filters) => {
+    if (!relatedState.relationship) return
+    setRelatedState((current) => ({ ...current, filters }))
+    void loadRelated(relatedState.relationship, { page: 1, filters })
+  }
+
+  const handleRelatedSortChange = (sort) => {
+    if (!relatedState.relationship) return
+    setRelatedState((current) => ({ ...current, sort }))
+    void loadRelated(relatedState.relationship, { page: 1, sort })
+  }
+
+  const openRelatedRecord = (row) => {
+    const childKey = relatedState.relationship?.child_object_key
+    if (!childKey || !row?.id) return
+    if (objects.some((item) => objectKey(item) === childKey)) {
+      setSelectedKey(childKey)
+      setSelectedId(row.id)
+      setDetailTab('details')
+    } else {
+      onRouteChange?.(childKey, row.id)
     }
   }
 
@@ -796,19 +900,35 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
                 ))}
               </div>
               {detailTab === 'related' ? (
-                <section className="workspace-detail-card">
-                  <div className="workspace-related-heading">
-                    <h3>Related Records</h3>
-                    {(() => {
-                      const relationship = outboundRelationships.find((item) => item.relationship_key === relatedState.key)
-                      return relationship && canCreate ? <button type="button" disabled={Boolean(actionBusy)} onClick={() => createRelatedRecord(relationship)}><Plus size={12}/> New</button> : null
-                    })()}
-                  </div>
-                  {relatedState.loading ? <div className="workspace-state">Loading related records…</div> : relatedState.error ? <div className="workspace-state">{relatedState.error}</div> : relatedState.rows.length ? relatedState.rows.map((row) => (
-                    <button className="workspace-related-row" type="button" key={row.id}>
-                      <strong>{recordTitle(row, fields)}</strong><span>{row.id}</span>
-                    </button>
-                  )) : <div className="workspace-state">No related records.</div>}
+                <section className="workspace-detail-card workspace-related-list-card">
+                  {relatedState.relationship ? (
+                    <RecordListView
+                      title={relatedState.relationship.child_object_label || relatedState.relationship.relationship_key || 'Related Records'}
+                      subtitle={`${relatedState.pageInfo.total || 0} related records`}
+                      rows={relatedState.rows}
+                      columns={makeColumns(relatedState.fields)}
+                      searchKeys={relatedState.fields.filter((field) => field.readable !== false).map((field) => field.api_name)}
+                      createLabel="New"
+                      canCreate={relatedState.permissions?.can_create === true}
+                      canEdit={false}
+                      onCreate={() => createRelatedRecord(relatedState.relationship)}
+                      loading={relatedState.loading}
+                      error={relatedState.error}
+                      emptyText="No related records."
+                      serverMode
+                      searchValue={relatedState.search}
+                      onSearchChange={handleRelatedSearchChange}
+                      sortValue={relatedState.sort}
+                      onSortChange={handleRelatedSortChange}
+                      filtersValue={relatedState.filters}
+                      onFiltersChange={handleRelatedFiltersChange}
+                      pageInfo={relatedState.pageInfo}
+                      onPageChange={(page) => loadRelated(relatedState.relationship, { page })}
+                      onDataChanged={() => loadRelated(relatedState.relationship, { page: relatedState.pageInfo.page })}
+                      selectedRowId={null}
+                      onRowSelect={openRelatedRecord}
+                    />
+                  ) : <div className="workspace-state">Choose a related list.</div>}
                 </section>
               ) : detailTab === 'history' ? (
                 <section className="workspace-detail-card">
