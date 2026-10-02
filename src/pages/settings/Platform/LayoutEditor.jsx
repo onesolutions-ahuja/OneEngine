@@ -190,6 +190,10 @@ export default function LayoutEditor({
   const [layoutAssignments, setLayoutAssignments] = useState([]);
   const [assignmentsTouched, setAssignmentsTouched] = useState(false);
   const [assignmentPreview, setAssignmentPreview] = useState(null);
+  const [savedLayout, setSavedLayout] = useState(layout || null);
+  const [versions, setVersions] = useState([]);
+  const [showVersions, setShowVersions] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [loadingObjects, setLoadingObjects] =
     useState(false);
   const [loadingFields, setLoadingFields] =
@@ -212,6 +216,8 @@ export default function LayoutEditor({
   const [securityFor, setSecurityFor] = useState("");
 
   const layoutId =
+    savedLayout?.id ||
+    savedLayout?.layout_id ||
     layout?.id ||
     layout?.layout_id;
   const diagnostics = diagnoseFormDefinition({
@@ -240,6 +246,8 @@ export default function LayoutEditor({
   const objectLabel = getObjectName(availableObjects.find((object) => String(getId(object)) === String(form.object_id)));
 
   useEffect(() => {
+    setSavedLayout(layout || null);
+    setShowVersions(false);
     const nextIsNew = !layout?.id && !layout?.layout_id;
     const nextForm = {
       ...EMPTY_LAYOUT,
@@ -286,6 +294,22 @@ export default function LayoutEditor({
       });
     return () => { cancelled = true; };
   }, [layoutId]);
+
+  useEffect(() => {
+    if (!layoutId) {
+      setVersions([]);
+      return;
+    }
+    let cancelled = false;
+    apiRequest(`/api/platform/layouts/${encodeURIComponent(layoutId)}/versions`)
+      .then((response) => {
+        if (!cancelled) setVersions(Array.isArray(response?.data) ? response.data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setVersions([]);
+      });
+    return () => { cancelled = true; };
+  }, [layoutId, savedLayout?.draft_version, savedLayout?.active_version]);
 
   useEffect(() => {
     let cancelled = false;
