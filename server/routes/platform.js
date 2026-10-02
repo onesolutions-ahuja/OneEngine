@@ -2131,7 +2131,10 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       "SELECT f.id,o.company_id FROM platform_fields f JOIN platform_objects o ON o.id=f.object_id WHERE f.id=$1 AND (f.company_id IS NULL OR f.company_id=$2) AND (o.company_id IS NULL OR o.company_id=$2)",
       [req.params.fieldId, req.user.companyId]
     );
-    if (!field.rows.length || (field.rows[0].company_id === null && !await canManageGlobal(db, req))) return res.status(404).json({ success: false, message: "Field not found or not editable" });
+    if (!field.rows.length) return res.status(404).json({ success: false, message: "Field not found" });
+    // Field security is tenant-scoped access metadata. A tenant admin may
+    // restrict a global/package field for one of their roles without mutating
+    // the global field definition itself.
     const role = await db("SELECT id FROM roles WHERE id=$1 AND company_id=$2", [req.params.roleId, req.user.companyId]);
     if (!role.rows.length) return res.status(404).json({ success: false, message: "Role not found" });
     const result = await db(
