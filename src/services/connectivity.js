@@ -10,6 +10,7 @@ const state = {
   database: DB_STATES.UNKNOWN,
   checking: false,
   lastError: null,
+  oeCode: null,
   lastServerOkAt: null,
 }
 const listeners = new Set()
@@ -35,23 +36,22 @@ export async function checkConnectivity() {
   inFlight = (async () => {
     try {
       const response = await fetch(apiUrl('/api/health'), { cache: 'no-store', signal: AbortSignal.timeout(8000) })
-      if (!response.ok) throw Object.assign(new Error(`Server responded HTTP ${response.status}`), { serverReached: true })
+      let body = null
+      try { body = await response.json() } catch {}
       state.internet = INTERNET_STATES.CONNECTED
       state.server = SERVER_STATES.CONNECTED
       state.lastServerOkAt = new Date().toISOString()
-      state.lastError = null
-      try {
-        const body = await response.json()
-        state.database = body?.database === 'connected' ? DB_STATES.CONNECTED
-          : ['error','not configured'].includes(body?.database) ? DB_STATES.UNAVAILABLE : DB_STATES.UNKNOWN
-      } catch {
-        state.database = DB_STATES.UNKNOWN
-      }
+      state.database = body?.database === 'connected' ? DB_STATES.CONNECTED
+        : ['error','not configured'].includes(body?.database) ? DB_STATES.UNAVAILABLE : DB_STATES.UNKNOWN
+      state.oeCode = body?.oeCode || body?.code || null
+      state.lastError = response.ok ? null : (body?.message || `Server responded HTTP ${response.status}`)
+      if (!response.ok) return
     } catch (error) {
-      if (error?.serverReached) {
-        state.internet = INTERNET_STATES.CONNECTED
-      } else if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         state.internet = INTERNET_STATES.DISCONNECTED
+        state.oeCode = 'OEND01'
+      } else {
+        state.oeCode = error?.name === 'TimeoutError' ? 'OENT01' : 'OENR01'
       }
       state.server = SERVER_STATES.UNREACHABLE
       state.database = DB_STATES.UNKNOWN
@@ -76,6 +76,7 @@ function onOffline() {
   state.server = SERVER_STATES.UNREACHABLE
   state.database = DB_STATES.UNKNOWN
   state.lastError = 'Internet unavailable'
+  state.oeCode = 'OEND01'
   notify()
 }
 
