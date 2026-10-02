@@ -3953,6 +3953,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           const rows = resolveScreenResource(component.dataResource);
           next.rows = Array.isArray(rows) ? rows : [];
         }
+        if (component?.type === "IMAGE" && component?.source) {
+          next.resolvedSource = /^(?:\$|steps\.|variables\.)/.test(String(component.source))
+            ? resolveScreenResource(component.source)
+            : component.source;
+        }
+        if (component?.type === "LINK" && component?.href) {
+          next.resolvedHref = /^(?:\$|steps\.|variables\.)/.test(String(component.href))
+            ? resolveScreenResource(component.href)
+            : component.href;
+        }
+        if (component?.type === "PROGRESS" && component?.stageResource) {
+          next.resolvedStage = resolveScreenResource(component.stageResource);
+        }
         if (component?.type === "FILE_UPLOAD") {
           const targetRecord = component.fileRecordResource
             ? resolveScreenResource(component.fileRecordResource)
