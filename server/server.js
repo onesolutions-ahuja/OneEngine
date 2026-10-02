@@ -2241,7 +2241,7 @@ async function startServer() {
     const trustedPackages = validateTrustedPackageCatalogue();
     console.log(`OneEngine Trusted Runtime ${trustedRuntime.version.slice(0, 12)} (${trustedRuntime.count} capabilities; packages ${trustedPackages.digest.slice(0, 12)}/${trustedPackages.count})`);
     if (!pool) throw new Error("DATABASE_URL is not configured");
-    console.log("onePOS: checking database connection...", primaryDatabaseTarget || { host: "not configured" });
+    console.log(`onePOS: checking database connection host=${primaryDatabaseTarget?.host || "not-configured"} database=${primaryDatabaseTarget?.database || "not-configured"} sslmode=${primaryDatabaseTarget?.sslmode || "not-configured"}`);
     await db("SELECT NOW()");
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
