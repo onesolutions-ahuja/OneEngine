@@ -2170,14 +2170,22 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                       {["RADIO","CHECKBOX_GROUP","SELECT","MULTI_SELECT"].includes(component.type) ? (
                         <div className="space-y-2">
                           <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => ["choice","choice_collection"].includes(resource.type))} label="Choice Resource (optional)" value={component.choiceResource || ""} onChange={(choiceResource) => updateComponent(componentIndex, { choiceResource })} />
+                          <label className="block text-xs font-medium text-slate-600">Controlling Component API Name (optional)
+                            <input className={inputClass} value={component.controllingComponent || ""} onChange={(event) => updateComponent(componentIndex, { controllingComponent: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="country" />
+                          </label>
                           <div className="text-[11px] font-semibold text-slate-600">Choices</div>
-                          {(component.options || []).map((option, optionIndex) => <div key={optionIndex} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                          {(component.options || []).map((option, optionIndex) => <div key={optionIndex} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
                             <input className={inputClass} value={option.label || ""} onChange={(event) => {
                               const options = [...(component.options || [])]; options[optionIndex] = { ...option, label: event.target.value }; updateComponent(componentIndex, { options });
                             }} placeholder="Label" />
                             <input className={inputClass} value={option.value || ""} onChange={(event) => {
                               const options = [...(component.options || [])]; options[optionIndex] = { ...option, value: event.target.value }; updateComponent(componentIndex, { options });
                             }} placeholder="Value" />
+                            <input className={inputClass} value={(option.controllingValues || []).join(", ")} onChange={(event) => {
+                              const options = [...(component.options || [])];
+                              options[optionIndex] = { ...option, controllingValues: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) };
+                              updateComponent(componentIndex, { options });
+                            }} placeholder="Show when controller = …" />
                             <button type="button" className="text-xs text-red-600" onClick={() => updateComponent(componentIndex, { options: (component.options || []).filter((_, i) => i !== optionIndex) })}>Remove</button>
                           </div>)}
                           <button type="button" className="text-xs text-blue-700" onClick={() => updateComponent(componentIndex, { options: [...(component.options || []), { label: `Option ${(component.options || []).length + 1}`, value: `option_${(component.options || []).length + 1}` }] })}>+ Choice</button>
