@@ -12,6 +12,7 @@ import { componentIcon, componentKeyForFieldType, paletteComponents, useComponen
 const PAGE_TYPES = [
   { value: "list", label: "List" },
   { value: "detail", label: "View Details" },
+  { value: "compact", label: "Compact Highlights" },
   { value: "create", label: "Create" },
   { value: "edit", label: "Edit" },
   { value: "quick_create", label: "Quick Create" },
