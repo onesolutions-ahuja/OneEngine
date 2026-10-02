@@ -736,6 +736,49 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-node-menu.branch-menu > summary { width: 22px; height: 22px; font-size: 15px; }
   .workflow-branch-add { width: 24px; height: 24px; border: 1px solid #8fa6bf; border-radius: 999px; background: #fff; color: #0176d3; font-size: 16px; line-height: 20px; cursor: pointer; }
   .workflow-branch-add:hover { border-color: #0176d3; background: #f3f9ff; }
+  .workflow-owned-step { display: flex; width: 100%; flex-direction: column; align-items: center; gap: 7px; }
+  .workflow-branch-map-single { justify-content: center; overflow: visible; }
+  .workflow-branch-map-single > .workflow-branch-path { max-width: 210px; flex-grow: 0; }
+  .workflow-branch-path.is-fault .workflow-branch-label { color: #ba0517; }
+  .workflow-branch-path.is-fault .workflow-branch-line { background: #ea001e; }
+  .workflow-fault-map { margin-top: 4px; }
+  .workflow-start-paths { margin-top: 8px; }
+  .workflow-nested-paths { width: 100%; }
+  .workflow-nested-map {
+    width: 100%;
+    max-width: 100%;
+    margin: 5px 0 0;
+    transform: none;
+    overflow-x: auto;
+    padding: 16px 2px 2px;
+    gap: 6px;
+  }
+  .workflow-nested-map .workflow-branch-path { min-width: 118px; flex-basis: 118px; }
+  .workflow-branch-collapse {
+    position: absolute;
+    left: -24px;
+    top: 7px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border: 1px solid #c9c7c5;
+    border-radius: 999px;
+    background: #fff;
+    color: #444;
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .workflow-connector-label {
+    position: absolute;
+    left: calc(50% + 18px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: max-content;
+    color: #706e6b;
+    font-size: 8px;
+    font-weight: 700;
+  }
   .workflow-end-node {
     display: inline-flex;
     align-items: center;
