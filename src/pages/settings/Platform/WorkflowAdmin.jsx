@@ -1019,31 +1019,34 @@ const WORKFLOW_VISUAL_CSS = `
 `;
 
 const SCREEN_COMPONENT_TYPES = [
-  { value: "DISPLAY_TEXT", label: "Display Text", input: false },
-  { value: "TEXT", label: "Text" },
-  { value: "TEXT_AREA", label: "Text Area" },
-  { value: "EMAIL", label: "Email" },
-  { value: "PASSWORD", label: "Password" },
-  { value: "NUMBER", label: "Number" },
-  { value: "DATE", label: "Date" },
-  { value: "DATETIME", label: "Date/Time" },
-  { value: "CHECKBOX", label: "Checkbox" },
-  { value: "TOGGLE", label: "Toggle" },
-  { value: "RADIO", label: "Radio Buttons" },
-  { value: "CHECKBOX_GROUP", label: "Checkbox Group" },
-  { value: "SELECT", label: "Picklist" },
-  { value: "MULTI_SELECT", label: "Multi-Select Picklist" },
-  { value: "SLIDER", label: "Slider" },
-  { value: "ADDRESS", label: "Address" },
-  { value: "RECORD_PICKER", label: "Record Picker" },
-  { value: "DATA_TABLE", label: "Data Table" },
-  { value: "FILE_UPLOAD", label: "File Upload" },
-  { value: "IMAGE", label: "Image", input: false },
-  { value: "LINK", label: "Link", input: false },
-  { value: "SECTION", label: "Section", input: false },
-  { value: "COLUMNS", label: "Columns", input: false },
-  { value: "CUSTOM_COMPONENT", label: "Registered Component" },
+  { value: "DISPLAY_TEXT", label: "Display Text", input: false, group: "Display", description: "Rich instructional or informational text." },
+  { value: "IMAGE", label: "Image", input: false, group: "Display", description: "Display an image from a URL or resource." },
+  { value: "LINK", label: "Link", input: false, group: "Display", description: "Display a clickable link." },
+  { value: "PROGRESS", label: "Progress Indicator", input: false, group: "Display", description: "Show stage/progress from Stage resources." },
+  { value: "SECTION", label: "Section", input: false, group: "Layout", description: "Group related screen content." },
+  { value: "COLUMNS", label: "Columns", input: false, group: "Layout", description: "Arrange components into columns." },
+  { value: "TEXT", label: "Text", group: "Input", description: "Single-line text input." },
+  { value: "TEXT_AREA", label: "Text Area", group: "Input", description: "Multi-line text input." },
+  { value: "EMAIL", label: "Email", group: "Input", description: "Email address input." },
+  { value: "PASSWORD", label: "Password", group: "Input", description: "Masked text input." },
+  { value: "NUMBER", label: "Number", group: "Input", description: "Numeric input." },
+  { value: "DATE", label: "Date", group: "Input", description: "Date input." },
+  { value: "DATETIME", label: "Date/Time", group: "Input", description: "Date and time input." },
+  { value: "CHECKBOX", label: "Checkbox", group: "Input", description: "Single boolean choice." },
+  { value: "TOGGLE", label: "Toggle", group: "Input", description: "Boolean toggle control." },
+  { value: "SLIDER", label: "Slider", group: "Input", description: "Numeric slider input." },
+  { value: "ADDRESS", label: "Address", group: "Input", description: "Structured address input." },
+  { value: "RADIO", label: "Radio Buttons", group: "Choice", description: "Select one choice." },
+  { value: "CHECKBOX_GROUP", label: "Checkbox Group", group: "Choice", description: "Select multiple choices." },
+  { value: "SELECT", label: "Picklist", group: "Choice", description: "Select one choice from a list." },
+  { value: "MULTI_SELECT", label: "Multi-Select Picklist", group: "Choice", description: "Select multiple choices from a list." },
+  { value: "RECORD_PICKER", label: "Record Picker", group: "Data", description: "Search and select an accessible record." },
+  { value: "DATA_TABLE", label: "Data Table", group: "Data", description: "Display and optionally select records." },
+  { value: "FILE_UPLOAD", label: "File Upload", group: "Data", description: "Collect one or more files." },
+  { value: "CUSTOM_COMPONENT", label: "Registered Component", group: "Custom", description: "Use a registered OneEngine screen component." },
 ];
+
+const SCREEN_COMPONENT_GROUPS = ["Input", "Choice", "Data", "Display", "Layout", "Custom"];
 
 const actionOptions = [
   { value: "CONSTANT", label: "Constant" },
@@ -1359,9 +1362,32 @@ function workflowActionIssue(step, definition = null) {
     if (!String(screen.label || "").trim()) return "Enter a Screen label.";
     if (!String(screen.apiName || "").trim() || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(String(screen.apiName))) return "Enter a valid Screen API Name.";
     if (!Array.isArray(screen.components)) return "Screen components are invalid.";
-    const names = screen.components.map((component) => String(component?.name || "").trim()).filter(Boolean);
-    if (new Set(names).size !== names.length) return "Screen component API Names must be unique.";
-    if (screen.components.some((component) => component?.input !== false && !String(component?.name || "").trim())) return "Every input component needs an API Name.";
+    const inputComponents = screen.components.filter((component) => component?.input !== false);
+    const names = inputComponents.map((component) => String(component?.name || "").trim()).filter(Boolean);
+    const normalizedNames = names.map((name) => name.toLowerCase());
+    if (new Set(normalizedNames).size !== normalizedNames.length) return "Screen component API Names must be unique.";
+    if (inputComponents.some((component) => !String(component?.name || "").trim() || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(String(component.name)))) return "Every input component needs a valid API Name.";
+    if (inputComponents.some((component) => String(component.validationFormula || "").trim() && !String(component.validationMessage || "").trim())) return "Add an error message for every component validation formula.";
+    const choiceComponents = screen.components.filter((component) => ["RADIO","CHECKBOX_GROUP","SELECT","MULTI_SELECT"].includes(component?.type));
+    for (const component of choiceComponents) {
+      const options = Array.isArray(component.options) ? component.options : [];
+      if (!component.choiceResource && !options.length) return `Add choices or choose a Choice Resource for ${component.label || component.name || "the choice component"}.`;
+      if (options.some((option) => !String(option?.label || "").trim() || String(option?.value ?? "").trim() === "")) return `Complete every choice label and value for ${component.label || component.name || "the choice component"}.`;
+      const values = options.map((option) => String(option.value));
+      if (new Set(values).size !== values.length) return `Choice values must be unique for ${component.label || component.name || "the choice component"}.`;
+      if (component.controllingComponent && !inputComponents.some((candidate) => candidate.name === component.controllingComponent)) return `Choose a valid controlling component for ${component.label || component.name || "the choice component"}.`;
+    }
+    if (screen.components.some((component) => component.visibilityResource && ["equals","not_equals"].includes(component.visibilityOperator) && String(component.visibilityValue ?? "").trim() === "")) return "Conditional visibility comparisons need a compare value.";
+    if (screen.components.some((component) => component.type === "RECORD_PICKER" && !component.objectKey)) return "Choose an object for every Record Picker.";
+    if (screen.components.some((component) => component.type === "DATA_TABLE" && !component.dataResource)) return "Choose a row collection for every Data Table.";
+    if (screen.components.some((component) => component.type === "CUSTOM_COMPONENT" && (!component.registryKey || component.registryConfigError))) return "Complete every registered screen component configuration.";
+    if (screen.components.some((component) => component.type === "PROGRESS" && !component.stageResource && !screen.currentStageResource)) return "Choose a Stage Resource for every Progress Indicator.";
+    if (config.showFooter !== false) {
+      if (!String(screen.nextLabel || "Next").trim()) return "Enter a Next button label.";
+      if (config.allowBack !== false && !String(screen.backLabel || "Previous").trim()) return "Enter a Previous button label.";
+      if (config.allowPause === true && !String(screen.pauseLabel || "Pause").trim()) return "Enter a Pause button label.";
+      if (config.allowFinish !== false && !String(screen.finishLabel || "Finish").trim()) return "Enter a Finish button label.";
+    }
   }
     if (step.type === "COLLECTION_FILTER") {
     if (!config.collection) return "Choose the collection to filter.";
@@ -2271,12 +2297,29 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <strong className="text-xs text-slate-700">Screen Components</strong>
-                <select className={inputClass} defaultValue="" onChange={(event) => { if (event.target.value) addComponent(event.target.value); event.target.value = ""; }}>
-                  <option value="">+ Add Component</option>
-                  {SCREEN_COMPONENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                </select>
+                <div>
+                  <strong className="text-xs text-slate-700">Screen Components</strong>
+                  <div className="text-[11px] text-slate-500">Choose a component from the palette, then configure it below.</div>
+                </div>
               </div>
+              <details className="mb-3 rounded-lg border border-slate-200 bg-white p-2">
+                <summary className="cursor-pointer text-xs font-semibold text-blue-700">+ Add Component</summary>
+                <div className="mt-2 space-y-3">
+                  {SCREEN_COMPONENT_GROUPS.map((group) => (
+                    <div key={group}>
+                      <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">{group}</div>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {SCREEN_COMPONENT_TYPES.filter((item) => (item.group || "Input") === group).map((item) => (
+                          <button key={item.value} type="button" className="rounded-lg border border-slate-200 bg-white p-2 text-left hover:border-blue-300 hover:bg-blue-50" onClick={() => addComponent(item.value)}>
+                            <strong className="block text-xs text-slate-700">{item.label}</strong>
+                            <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">{item.description}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
               <div className="space-y-2">
                 {components.map((component, componentIndex) => (
                   <details key={component.id || componentIndex} className="rounded-lg border border-slate-200 bg-white p-3" open={componentIndex === 0}>
@@ -2316,6 +2359,19 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                           </div>
                           <label className="block text-xs font-medium text-slate-600">File Category<input className={inputClass} value={component.fileCategory || ""} onChange={(event) => updateComponent(componentIndex, { fileCategory: event.target.value })} /></label>
                           <p className="text-[11px] text-slate-500">If Target Record is blank, files attach to the record that started the flow.</p>
+                        </div>
+                      ) : null}
+                      {component.type === "PROGRESS" ? (
+                        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "stage")} label="Stage Resource" value={component.stageResource || screen.currentStageResource || ""} onChange={(stageResource) => updateComponent(componentIndex, { stageResource })} />
+                          <label className="block text-xs font-medium text-slate-600">Display Style
+                            <select className={inputClass} value={component.progressStyle || "path"} onChange={(event) => updateComponent(componentIndex, { progressStyle: event.target.value })}>
+                              <option value="path">Stage path</option>
+                              <option value="bar">Progress bar</option>
+                              <option value="compact">Compact status</option>
+                            </select>
+                          </label>
+                          <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={component.showStageLabels !== false} onChange={(event) => updateComponent(componentIndex, { showStageLabels: event.target.checked })} /> Show stage labels</label>
                         </div>
                       ) : null}
                       {component.type === "CUSTOM_COMPONENT" ? (
@@ -4360,6 +4416,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                       <div><span>API Name</span><strong>{step.config?.apiName || flowApiName(step.label || getActionLabel(step.type))}</strong></div>
                       <div><span>Outputs</span><strong>{stepOutputCount(step.id)}</strong></div>
                       <div><span>Incoming paths</span><strong>{incomingPathCount(step.id)}</strong></div>
+                      {step.type === "SCREEN" ? <div><span>Components</span><strong>{step.config?.screen?.components?.length || 0}</strong></div> : null}
+                      {step.type === "SCREEN" ? <div><span>Navigation</span><strong>{step.config?.showFooter === false ? "Footer hidden" : [step.config?.allowBack !== false ? "Previous" : null, "Next", step.config?.allowPause === true ? "Pause" : null, step.config?.allowFinish !== false ? "Finish" : null].filter(Boolean).join(" · ")}</strong></div> : null}
                       {step.config?.description ? <p>{step.config.description}</p> : null}
                     </div>
                   ) : null}
