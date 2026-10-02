@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { assuranceSatisfies, effectiveAssurance, mfaMethodAllowed } from '../server/services/identityAssurance.js'
+import { assuranceSatisfies, effectiveAssurance, mfaMethodAllowed, sortMfaMethods } from '../server/services/identityAssurance.js'
 
 test('assurance hierarchy inherits tenant defaults when policy overrides are null',()=>{
   const settings={
@@ -60,4 +60,15 @@ test('verification-method policy distinguishes TOTP built-in passkeys and securi
   assert.equal(mfaMethodAllowed({method_type:'PASSKEY',authenticator_kind:'PLATFORM'},effective),true)
   assert.equal(mfaMethodAllowed({method_type:'PASSKEY',authenticator_kind:'SECURITY_KEY'},effective),false)
   assert.equal(mfaMethodAllowed({method_type:'RECOVERY_CODES'},effective),true)
+})
+
+
+test('MFA methods are offered strongest-first like Salesforce verifier priority',()=>{
+  const sorted=sortMfaMethods([
+    {id:'t',method_type:'TOTP',created_at:'2026-01-01'},
+    {id:'k',method_type:'PASSKEY',authenticator_kind:'SECURITY_KEY',created_at:'2026-01-01'},
+    {id:'p',method_type:'PASSKEY',authenticator_kind:'PLATFORM',created_at:'2026-01-01'},
+    {id:'r',method_type:'RECOVERY_CODES',created_at:'2026-01-01'},
+  ])
+  assert.deepEqual(sorted.map(x=>x.id),['p','k','t','r'])
 })
