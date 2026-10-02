@@ -685,6 +685,21 @@ const CATALOG = [
         { key: "email.send", requiredPermissions: ["communications.send"] },
         { key: "connector.test", requiredPermissions: ["integration.manage"] }
       ],
+      testActions: [
+        {
+          key: "email.send",
+          label: "Send test email",
+          description: "Verify the full OneEngine to Brevo email delivery path.",
+          endpoint: "/api/connector-instances/{instanceId}/send-test-email",
+          permission: "communications.send",
+          requiresEnabled: false,
+          fields: [
+            { key: "recipient", type: "email", required: true, maxLength: 320, label: "To email", placeholder: "name@example.com" },
+            { key: "subject", type: "string", required: true, maxLength: 200, default: "Brevo Test", label: "Subject" },
+            { key: "message", type: "string", required: true, maxLength: 2000, default: "It works I love chatGPT", label: "Message" }
+          ]
+        }
+      ],
       configurationSchema: [
         { key: "fromEmail", type: "string", required: true, label: "Verified sender email", description: "Use a sender address already verified in Brevo.", helpUrl: "https://app.brevo.com/senders/list", helpLabel: "Open Brevo sender settings" },
         { key: "fromName", type: "string", label: "Sender name" },
