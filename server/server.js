@@ -1166,6 +1166,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         success: false,
+        code: "LOGIN_INPUT_REQUIRED",
         message: "Email and password are required",
       });
     }
@@ -1173,6 +1174,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     if (!pool) {
       return res.status(503).json({
         success: false,
+        code: "IDENTITY_DATABASE_UNAVAILABLE",
         message: "Identity database is not configured",
       });
     }
@@ -1221,6 +1223,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     if (!result.rows.length) {
       return res.status(401).json({
         success: false,
+        code: "USER_NOT_FOUND",
         message: "Invalid username or password",
       });
     }
@@ -1244,6 +1247,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     if (!user.active) {
       return res.status(403).json({
         success: false,
+        code: "USER_DISABLED",
         message: "User account is disabled",
       });
     }
@@ -1517,7 +1521,7 @@ app.post("/api/auth/unlock-pin", authenticate, async (req, res) => {
         : { rows: [] };
       if (platformAccess.rows.length) {
         if (pin !== String(process.env.SUPERADMIN_BOOTSTRAP_PIN)) {
-          return res.status(401).json({ success: false, message: "Incorrect PIN" });
+          return res.status(401).json({ success: false, code: "INVALID_PIN", message: "Incorrect PIN" });
         }
         const pinHash = await bcrypt.hash(pin, PASSWORD_BCRYPT_ROUNDS);
         await db(
