@@ -6,6 +6,7 @@ import {
 } from "../services/integrationCredentials.js";
 import { createQuickBooksAdapter } from "../services/quickbooksAdapter.js";
 import { createShopifyAdapter } from "../services/shopifyAdapter.js";
+import { connectedAppDecision } from "../services/securityGovernance.js";
 
 const STATE_TTL_SECONDS = 600;
 const SHOP_DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.myshopify\.com$/i;
@@ -138,6 +139,22 @@ export default function createProviderOAuthRouter({ authenticate, authorize, db,
       );
       if (!stored.rows?.length) return res.status(404).json({ success: false, message: "Integration not found" });
 
+      const requestedScopes = provider === "quickbooks"
+        ? ["com.intuit.quickbooks.accounting"]
+        : String(process.env.SHOPIFY_OAUTH_SCOPES || "read_products,write_products,read_inventory,write_inventory,read_orders,read_customers,write_fulfillments,read_locations,write_webhooks")
+          .split(",").map((scope) => scope.trim()).filter(Boolean);
+      const governance=await connectedAppDecision(db,{
+        companyId:connection.company_id,appKey:provider,connectionId:connection.id,requestedScopes,
+      });
+      if(!governance.allowed){
+        await writeAudit?.(connection.company_id,req.user.id,"security.connected_app_blocked","integration_connection",connection.id,{
+          provider,reason:governance.reason,missingScopes:governance.missingScopes||[],
+        });
+        return res.status(403).json({success:false,code:governance.reason,message:governance.reason==="OAUTH_SCOPE_NOT_APPROVED"
+          ?"Requested OAuth scopes are not approved by Security Governance"
+          :"This connected app is not approved by Security Governance"});
+      }
+
       let authorizationUrl;
       if (provider === "quickbooks") {
         const url = new URL("https://appcenter.intuit.com/connect/oauth2");
@@ -152,7 +169,7 @@ export default function createProviderOAuthRouter({ authenticate, authorize, db,
         if (!shop) return res.status(400).json({ success: false, message: "A valid Shopify myshopify.com domain is required" });
         const url = new URL(`https://${shop}/admin/oauth/authorize`);
         url.searchParams.set("client_id", clientId);
-        url.searchParams.set("scope", process.env.SHOPIFY_OAUTH_SCOPES || "read_products,write_products,read_inventory,write_inventory,read_orders,read_customers,write_fulfillments,read_locations,write_webhooks");
+        url.searchParams.set("scope", requestedScopes.join(","));
         url.searchParams.set("redirect_uri", callbackUrl);
         url.searchParams.set("state", state);
         authorizationUrl = url.toString();
