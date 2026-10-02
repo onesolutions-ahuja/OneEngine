@@ -67,7 +67,7 @@ export function fieldValueError(field, value) {
       if (digits > precision) return `${field.label} supports at most ${precision} digits`;
     }
   }
-  if (["text", "long_text", "rich_text", "email", "phone", "url", "time", "auto_number", "multiselect"].includes(type) && typeof value !== "string" && !Array.isArray(value)) return `${field.label} must be text`;
+  if (["text", "text_area", "long_text", "rich_text", "email", "phone", "url", "time", "auto_number", "multiselect"].includes(type) && typeof value !== "string" && !Array.isArray(value)) return `${field.label} must be text`;
   if (["number", "decimal", "currency", "percent"].includes(type) && (!((typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isFinite(Number(value))))) return `${field.label} must be a valid number`;
   if (type === "boolean" && ![true, false, 0, 1, "true", "false", "0", "1"].includes(value)) return `${field.label} must be boolean`;
   if (["date", "datetime"].includes(type) && Number.isNaN(new Date(value).getTime())) return `${field.label} must be a valid ${type}`;
