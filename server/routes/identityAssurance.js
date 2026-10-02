@@ -209,7 +209,11 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       return res.status(403).json({success:false,code:"MFA_ASSURANCE_INSUFFICIENT",message:"Authenticator apps do not meet the required login assurance level"});
     }
     const ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code,markVerified:true});
-    if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
+    if(!ok){
+      await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"MFA_VERIFICATION",method:methodType,status:"FAILURE",
+        challengeType:challenge.challenge_type,ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId:challenge.context?.sessionId||null});
+      return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
+    }
     const recoveryCodes=policy.effective.allowRecoveryCodes ? await ensureRecoveryCodes(user.company_id,user.id) : [];
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"TOTP",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
   });
@@ -298,7 +302,11 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const origin=String(req.headers?.origin||`https://${rpID}`);
     let verification;
     try{verification=await verifyRegistrationResponse({response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:challenge.context?.userVerificationRequired===true});}
-    catch(error){return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});}
+    catch(error){
+      await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"MFA_ENROLLMENT",method:challenge.context?.authenticatorKind||"PASSKEY",status:"FAILURE",
+        challengeType:challenge.challenge_type,ip:clientIp(req),userAgent:req.get("user-agent")||null});
+      return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});
+    }
     if(!verification.verified||!verification.registrationInfo)return res.status(401).json({success:false,message:"Passkey could not be verified"});
     const effectivePolicy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
     const registeredKind=challenge.context?.authenticatorKind||"PLATFORM";
@@ -385,8 +393,16 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     try{verification=await verifyAuthenticationResponse({
       response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:challenge.context?.userVerificationRequired===true,
       credential:{id:method.credential_id,publicKey:base64urlBuffer(method.public_key),counter:Number(method.sign_count||0),transports:Array.isArray(method.transports)?method.transports:[]},
-    });}catch(error){return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});}
-    if(!verification.verified)return res.status(401).json({success:false,message:"Passkey verification failed"});
+    });}catch(error){
+      await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"MFA_VERIFICATION",method:method.authenticator_kind||"PASSKEY",status:"FAILURE",
+        challengeType:challenge.challenge_type,ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId:challenge.context?.sessionId||null});
+      return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});
+    }
+    if(!verification.verified){
+      await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"MFA_VERIFICATION",method:method.authenticator_kind||"PASSKEY",status:"FAILURE",
+        challengeType:challenge.challenge_type,ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId:challenge.context?.sessionId||null});
+      return res.status(401).json({success:false,message:"Passkey verification failed"});
+    }
     await db("UPDATE identity_mfa_methods SET sign_count=$2,last_used_at=NOW() WHERE id=$1",[method.id,verification.authenticationInfo?.newCounter||method.sign_count]);
     if(challenge.challenge_type==="STEP_UP"){
       await consumeChallenge(db,challenge.id);
