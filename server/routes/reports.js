@@ -657,9 +657,6 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     } catch (error) { console.error("VAT report error:", error); res.status(500).json({ success: false, message: "Unable to load VAT report" }); }
   });
 
-  const isCompanyAdmin = async (user) => (
-    canViewCompanyCustomers ? canViewCompanyCustomers(user) : false
-  );
   const reportById = async (req, id) => {
     const admin = await canManageReports(req);
     const result = await db(
@@ -674,23 +671,24 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     return (await visibleFolder(req, report.folder_id, "VIEW")) ? report : null;
   };
   const accessibleStores = async (req, storeIds) => {
-    const admin = await isCompanyAdmin(req.user);
-    const ids = [...new Set((storeIds || []).filter(Boolean).map(String))];
-    if (!ids.length && !admin) {
-      if (!req.user.storeId || (canAccessStore && !(await canAccessStore(req.user, String(req.user.storeId))))) {
-        throw new Error("A store assignment is required to run a custom report");
-      }
-      return [String(req.user.storeId)];
-    }
-    if (!ids.length) return [];
-    if (!admin) {
-      for (const id of ids) {
-        if (!canAccessStore || !(await canAccessStore(req.user, id))) throw new Error("You do not have access to one or more stores");
-      }
-    }
-    const result = await db("SELECT id FROM stores WHERE company_id=$1 AND id = ANY($2::uuid[])", [req.user.companyId, ids]);
-    if (result.rows.length !== ids.length) throw new Error("One or more stores were not found");
-    return ids;
+    const requested = [...new Set((storeIds || []).filter(Boolean).map(String))];
+    const assigned = await db(
+      `SELECT s.id
+         FROM user_stores us
+         JOIN stores s ON s.id=us.store_id
+        WHERE us.user_id=$1
+          AND us.active=TRUE
+          AND s.company_id=$2
+          AND s.active=TRUE
+        ORDER BY s.name,s.id`,
+      [req.user.id, req.user.companyId]
+    );
+    const assignedIds = (assigned.rows || []).map((row) => String(row.id));
+    if (!assignedIds.length) throw new Error("A store assignment is required to run a custom report");
+    if (!requested.length) return assignedIds;
+    const allowed = new Set(assignedIds);
+    if (requested.some((id) => !allowed.has(id))) throw new Error("You do not have access to one or more stores");
+    return requested;
   };
   const requestedStoreIds = (definition) => [
     ...(definition.storeIds || []),
