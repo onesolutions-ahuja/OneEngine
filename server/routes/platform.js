@@ -7663,10 +7663,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   }
 
   async function writeRecordHistory(object, recordId, fields, oldRecord, newRecord, action, req) {
-    const changes = fields.filter((field) => field.api_name && (
-      action !== "update" ||
-      JSON.stringify(oldRecord?.[field.api_name] ?? null) !== JSON.stringify(newRecord?.[field.api_name] ?? null)
-    ));
+    const changes = fields.filter((field) => {
+      const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+      if (!field.api_name || config.trackHistory === false || config.track_history === false) return false;
+      return action !== "update" ||
+        JSON.stringify(oldRecord?.[field.api_name] ?? null) !== JSON.stringify(newRecord?.[field.api_name] ?? null);
+    });
     try {
       for (const field of changes) {
         await db(
