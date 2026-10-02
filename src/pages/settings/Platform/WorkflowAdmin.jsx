@@ -2728,6 +2728,84 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const resourceQuery = paletteSearch.trim().toLowerCase();
   const visibleGlobalResources = globalResources.filter((item) => !resourceQuery || `${item.label} ${item.detail} ${item.type}`.toLowerCase().includes(resourceQuery));
   const visibleStepResources = stepResources.filter((item) => !resourceQuery || `${item.label} ${item.type}`.toLowerCase().includes(resourceQuery));
+
+  function openPath(target) {
+    setBranchTarget(target);
+    setInsertAt(null);
+    setPaletteTab("elements");
+    setPaletteOpen(true);
+  }
+
+  function pathTarget(kind, ownerId, outcomeId, position) {
+    return kind === "decision"
+      ? { decisionId: ownerId, outcomeId, position }
+      : { kind, ownerId, position };
+  }
+
+  function renderOwnedPath({ ownerId, kind, ids = [], label, outcomeId = null, tone = "", depth = 0, ancestry = [] }) {
+    const children = ids.map((id) => branchStepById.get(String(id))).filter(Boolean);
+    return (
+      <div key={`${ownerId}-${kind}-${outcomeId || label}`} className={`workflow-branch-path ${tone ? `is-${tone}` : ""}`}>
+        <span className="workflow-branch-line" />
+        <span className="workflow-branch-label">{label}</span>
+        <div className="workflow-branch-stack">
+          <button type="button" className="workflow-branch-add" aria-label={`Add first element to ${label}`} onClick={() => openPath(pathTarget(kind, ownerId, outcomeId, 0))}>+</button>
+          {children.map((child, childIndex) => {
+            const childVisual = flowElementVisual(child.type);
+            const childIndexInFlow = workflow.steps.findIndex((item) => item.id === child.id);
+            const childCanCollapse = ["CONDITION","LOOP"].includes(child.type);
+            const childCollapsed = collapsedBranches[child.id] === true;
+            return (
+              <div key={child.id} className="workflow-owned-step">
+                <div className="workflow-branch-node-row">
+                  <button type="button" className={`workflow-branch-node-card ${selectedId === child.id ? "is-selected" : ""}`} onClick={() => inspectStep(child.id)}>
+                    <span className="workflow-branch-node-icon" style={{ background: childVisual.color }}>{childVisual.icon}</span>
+                    <span><small>{SALESFORCE_CORE_ELEMENT_TYPES.has(child.type) ? getActionLabel(child.type) : "Action"}</small><strong>{child.label || getActionLabel(child.type)}</strong></span>
+                  </button>
+                  {childCanCollapse ? <button type="button" className="workflow-branch-collapse" aria-label={childCollapsed ? "Expand paths" : "Collapse paths"} onClick={() => toggleBranchCollapse(child.id, !childCollapsed)}>{childCollapsed ? "▸" : "▾"}</button> : null}
+                  <details className="workflow-node-menu branch-menu">
+                    <summary aria-label={`Open actions for ${child.label || getActionLabel(child.type)}`}>⋮</summary>
+                    <div className="workflow-node-menu-popover">
+                      <button type="button" onClick={() => inspectStep(child.id)}>Edit Element</button>
+                      <button type="button" onClick={() => copyStep(child)}>Copy Element</button>
+                      <button type="button" onClick={() => cutStep(child)}>Cut Element</button>
+                      {flowElementSupportsFaultPath(child.type) ? <button type="button" onClick={() => addFaultPath(child)}>Add Fault Path</button> : null}
+                      <button type="button" className="is-danger" onClick={() => removeStep(childIndexInFlow)}>Delete Element</button>
+                    </div>
+                  </details>
+                </div>
+                {renderNestedPaths(child, depth + 1, ancestry)}
+                <button type="button" className="workflow-branch-add" aria-label={`Add element after ${child.label || getActionLabel(child.type)}`} onClick={() => openPath(pathTarget(kind, ownerId, outcomeId, childIndex + 1))}>+</button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function renderNestedPaths(owner, depth = 0, ancestry = []) {
+    if (!owner?.id || depth > 5 || ancestry.includes(String(owner.id))) return null;
+    const next = [...ancestry, String(owner.id)];
+    const collapsed = collapsedBranches[owner.id] === true;
+    const blocks = [];
+    if (owner.type === "CONDITION" && !collapsed) {
+      const outcomes = Array.isArray(owner.config?.outcomes) && owner.config.outcomes.length
+        ? owner.config.outcomes
+        : [{ id: "outcome-1", label: "Outcome 1", branch: owner.config?.ifBranch || [] }];
+      const paths = outcomes.map((outcome, i) => ({ id: outcome.id || `outcome-${i + 1}`, label: outcome.label || `Outcome ${i + 1}`, ids: outcome.branch || [] }));
+      paths.push({ id: "__default__", label: owner.config?.defaultLabel || "Default Outcome", ids: owner.config?.defaultBranch || owner.config?.elseBranch || [] });
+      blocks.push(<div key="decision" className="workflow-branch-map workflow-nested-map">{paths.map((p) => renderOwnedPath({ ownerId: owner.id, kind: "decision", outcomeId: p.id, ids: p.ids, label: p.label, depth, ancestry: next }))}</div>);
+    }
+    if (owner.type === "LOOP" && !collapsed) {
+      blocks.push(<div key="loop" className="workflow-branch-map workflow-branch-map-single workflow-nested-map">{renderOwnedPath({ ownerId: owner.id, kind: "loop", ids: owner.config?.bodyBranch || [], label: "For Each Item", depth, ancestry: next })}</div>);
+    }
+    if (["ROUTE","RETRY"].includes(String(owner.config?.faultMode || "FAIL").toUpperCase())) {
+      blocks.push(<div key="fault" className="workflow-branch-map workflow-branch-map-single workflow-nested-map">{renderOwnedPath({ ownerId: owner.id, kind: "fault", ids: owner.config?.faultBranch || [], label: "Fault", tone: "fault", depth, ancestry: next })}</div>);
+    }
+    return blocks.length ? <div className="workflow-nested-paths">{blocks}</div> : null;
+  }
+
   return (
     <div className={`workflow-visual-shell ${!paletteOpen ? "palette-collapsed" : ""} ${!propertiesOpen ? "properties-collapsed" : ""}`}>
       {paletteOpen ? <aside className="workflow-node-palette">
