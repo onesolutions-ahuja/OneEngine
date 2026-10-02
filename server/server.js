@@ -474,6 +474,9 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
 */
 const jarvis = createJarvis({ tools: createJarvisTools({ db, canViewCompanyCustomers }) });
 const jarvesAccess = createJarvesAccessChecker({ db });
+// Shared, server-only AI service for authenticated Flow actions. No provider
+// credentials are exposed through app.locals; callers only receive ask().
+app.locals.oneEngineAgent = jarvis;
 
 /*
 |--------------------------------------------------------------------------
