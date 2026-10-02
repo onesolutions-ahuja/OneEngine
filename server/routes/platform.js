@@ -3350,7 +3350,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       companyId
         ? db("SELECT * FROM platform_assignment_rules WHERE object_id=$1 AND company_id=$2 ORDER BY priority DESC,name", [object.id, companyId])
         : { rows: [] },
-      db("SELECT * FROM platform_list_views WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY is_default DESC,label", [object.id, companyId]),
+      db("SELECT * FROM platform_list_views WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true AND owner_user_id IS NULL ORDER BY is_default DESC,label", [object.id, companyId]),
       db("SELECT * FROM platform_reports WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY label", [object.id, companyId]),
       db("SELECT * FROM platform_layouts WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY page_type,name", [object.id, companyId]),
       db("SELECT * FROM platform_record_types WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY is_default DESC,label", [object.id, companyId]),
