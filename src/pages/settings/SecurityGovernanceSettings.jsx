@@ -18,6 +18,7 @@ export default function SecurityGovernanceSettings(){
   const [vaultDraft,setVaultDraft]=useState({name:'',purpose:'',secret:'',secretKind:'GENERIC',expiresAt:''})
   const [cert,setCert]=useState({name:'',purpose:'',certificatePem:'',privateKeyPem:''})
   const [app,setApp]=useState(null)
+  const [appUsers,setAppUsers]=useState([])
   const [stepUp,setStepUp]=useState(null)
   const [stepCode,setStepCode]=useState('')
   const [pendingMutation,setPendingMutation]=useState(null)
@@ -79,6 +80,22 @@ export default function SecurityGovernanceSettings(){
     }catch(e){setError(e.message||'Additional verification failed')}
   }
 
+  const loadAppUsers=async(appKey)=>{
+    try{
+      const response=await apiRequest('/api/security/governance/connected-apps/'+encodeURIComponent(appKey)+'/users')
+      setAppUsers(response.data||[])
+    }catch(e){
+      if(e?.status===404)setAppUsers([])
+      else throw e
+    }
+  }
+
+  const openApp=async(a)=>{
+    const draft={appKey:a.app_key,displayName:a.display_name||a.app_key,integrationConnectionId:a.integration_connection_id||'',active:a.active!==false,permittedUserMode:a.permitted_user_mode||'ALL_AUTHORISED',allowedScopes:Array.isArray(a.allowed_scopes)?a.allowed_scopes.join(' '):'',refreshTokenDays:a.refresh_token_days||'',ipPolicy:a.ip_policy||'ENFORCE',requireHighAssurance:a.require_high_assurance===true,revokeOnPolicyChange:a.revoke_on_policy_change!==false}
+    setApp(draft);setAppUsers([])
+    if(a.active===true)await loadAppUsers(a.app_key).catch(e=>setError(e.message))
+  }
+
   const savePolicy=async()=>{
     try{
       const result=await mutate('/api/security/governance/api-policy',{method:'PUT',body:JSON.stringify({
@@ -125,7 +142,7 @@ export default function SecurityGovernanceSettings(){
 
     {tab==='apps'?<div className="space-y-4">
       <section className="settings-card"><h3 className="font-semibold">Connected Apps</h3><p>Inventory integrations and approve their OAuth/API access before enabling enforcement.</p>
-        {apps.map(a=><div className="settings-row" key={a.id||a.app_key}><div><strong>{a.display_name||a.app_key}</strong><p>{(a.provider_name||a.app_key)+' · '+(a.connection_status||'Policy only')+' · '+(a.active===true?'Governed':'Not governed')}</p></div><button type="button" onClick={()=>setApp({appKey:a.app_key,displayName:a.display_name||a.app_key,integrationConnectionId:a.integration_connection_id||'',active:a.active!==false,permittedUserMode:a.permitted_user_mode||'ALL_AUTHORISED',allowedScopes:Array.isArray(a.allowed_scopes)?a.allowed_scopes.join(' '):'',refreshTokenDays:a.refresh_token_days||'',ipPolicy:a.ip_policy||'ENFORCE',requireHighAssurance:a.require_high_assurance===true,revokeOnPolicyChange:a.revoke_on_policy_change!==false})}>Edit policy</button></div>)}
+        {apps.map(a=><div className="settings-row" key={a.id||a.app_key}><div><strong>{a.display_name||a.app_key}</strong><p>{(a.provider_name||a.app_key)+' · '+(a.connection_status||'Policy only')+' · '+(a.active===true?'Governed':'Not governed')}</p></div><button type="button" onClick={()=>void openApp(a)}>Edit policy</button></div>)}
       </section>
       {app?<section className="settings-card">
         <div className="settings-row"><strong>Name</strong><input value={app.displayName} onChange={e=>setApp(d=>({...d,displayName:e.target.value}))}/></div>
@@ -134,7 +151,13 @@ export default function SecurityGovernanceSettings(){
         <div className="settings-row"><strong>Refresh-token days</strong><input type="number" value={app.refreshTokenDays} onChange={e=>setApp(d=>({...d,refreshTokenDays:e.target.value}))}/></div>
         <div className="settings-row"><strong>IP policy</strong><select value={app.ipPolicy} onChange={e=>setApp(d=>({...d,ipPolicy:e.target.value}))}><option value="ENFORCE">Enforce</option><option value="RELAX">Relax</option></select></div>
         <div className="settings-row"><strong>Require High Assurance</strong><input type="checkbox" checked={app.requireHighAssurance} onChange={e=>setApp(d=>({...d,requireHighAssurance:e.target.checked}))}/></div>
-        <div className="metadata-settings-form-actions"><button type="button" className="is-primary" onClick={async()=>{try{const result=await mutate('/api/security/governance/connected-apps/'+encodeURIComponent(app.appKey),{method:'PUT',body:JSON.stringify({...app,allowedScopes:app.allowedScopes.split(/[\s,]+/).filter(Boolean),refreshTokenDays:app.refreshTokenDays?Number(app.refreshTokenDays):null})});if(!result)return;setApp(null);await load()}catch(e){setError(e.message)}}}>Save connected-app policy</button></div>
+        <div className="metadata-settings-form-actions"><button type="button" className="is-primary" onClick={async()=>{try{const result=await mutate('/api/security/governance/connected-apps/'+encodeURIComponent(app.appKey),{method:'PUT',body:JSON.stringify({...app,allowedScopes:app.allowedScopes.split(/[\s,]+/).filter(Boolean),refreshTokenDays:app.refreshTokenDays?Number(app.refreshTokenDays):null})});if(!result)return;setNotice('Connected-app policy saved.');await load();await loadAppUsers(app.appKey)}catch(e){setError(e.message)}}}>Save connected-app policy</button></div>
+        {app.permittedUserMode==='ADMIN_APPROVED'?<div>
+          <h4 className="font-semibold">Approved Users</h4>
+          <p>Only approved users can start OAuth for this connected app.</p>
+          {appUsers.map(user=><div className="settings-row" key={user.id}><div><strong>{user.full_name||user.username}</strong><p>{user.email||user.username}</p></div><input type="checkbox" checked={user.approved===true} onChange={async e=>{try{const path='/api/security/governance/connected-apps/'+encodeURIComponent(app.appKey)+'/users/'+encodeURIComponent(user.id);const result=await mutate(path,{method:e.target.checked?'POST':'DELETE',body:e.target.checked?'{}':undefined});if(result)await loadAppUsers(app.appKey)}catch(err){setError(err.message)}}}/></div>)}
+          {!appUsers.length?<p>Save this policy first, then approve users here.</p>:null}
+        </div>:null}
       </section>:null}
     </div>:null}
 
