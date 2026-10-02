@@ -46,7 +46,7 @@ function getFieldOptions(field) {
     return [];
   }
 
-  return options.map((option) => {
+  const normalized = options.map((option) => {
     if (
       typeof option === "string" ||
       typeof option === "number"
@@ -70,6 +70,9 @@ function getFieldOptions(field) {
         "",
     };
   });
+  return field?.config?.sortAlphabetically === true || field?.config?.sort_alphabetically === true
+    ? normalized.sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" }))
+    : normalized;
 }
 
 function dependentPicklistConfig(field) {
@@ -526,9 +529,13 @@ export default function ObjectForm({
       if (!dependent || dependent.controllingField !== key) continue;
       const dependentKey = getFieldKey(candidate);
       const currentDependentValue = nextValues[dependentKey];
-      if (currentDependentValue === null || currentDependentValue === undefined || currentDependentValue === "") continue;
-      const allowed = getAvailableFieldOptions(candidate, nextValues).some((option) => String(option.value) === String(currentDependentValue));
-      if (!allowed) nextValues[dependentKey] = "";
+      if (currentDependentValue === null || currentDependentValue === undefined || currentDependentValue === "" || (Array.isArray(currentDependentValue) && !currentDependentValue.length)) continue;
+      const allowedValues = new Set(getAvailableFieldOptions(candidate, nextValues).map((option) => String(option.value)));
+      if (Array.isArray(currentDependentValue)) {
+        nextValues[dependentKey] = currentDependentValue.filter((selected) => allowedValues.has(String(selected)));
+      } else if (!allowedValues.has(String(currentDependentValue))) {
+        nextValues[dependentKey] = "";
+      }
     }
 
     setValues(nextValues);
@@ -792,7 +799,7 @@ export default function ObjectForm({
           <select
             {...commonProps}
             multiple
-            size={Math.min(8, Math.max(3, options.length || 3))}
+            size={Math.max(3, Math.min(50, Number(field?.config?.visibleLines ?? field?.config?.visible_lines ?? Math.min(8, Math.max(3, options.length || 3)))))}
             value={selectedValues}
             onChange={(event) => updateValue(field, Array.from(event.target.selectedOptions).map((option) => option.value))}
           >
