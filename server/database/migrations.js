@@ -22,6 +22,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0029_identity_device_activation",
   "0030_identity_verification_methods",
   "0031_identity_passkey_kinds",
+  "0032_identity_multiple_passkeys",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -111,6 +112,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Distinguish built-in passkeys and security keys",
     up: client => client.query(
       readFileSync(new URL("./migrations/0031_identity_passkey_kinds.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0032_identity_multiple_passkeys",
+    version: "32",
+    name: "Support multiple passkeys per user",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0032_identity_multiple_passkeys.sql", import.meta.url), "utf8")
     ),
   },
 ]);
