@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppWindow, BarChart3, CheckCircle2, CircleDot, Filter, Gauge, GripVertical, LayoutDashboard,
   Pencil, Plus, RefreshCw, Search, Table2, TextCursorInput, UserCheck, Workflow,
@@ -117,7 +117,7 @@ function GenericProperties({ item, fields = [], actionRegistry = [], roles = [],
   return <div className="onebuilder-properties-form"><label>Title<input value={item.label || ''} onChange={(e) => onChange({ ...item, label: e.target.value })}/></label><label>Configuration<textarea rows="10" value={JSON.stringify(item.config || {}, null, 2)} onChange={(e) => { try { onChange({ ...item, config: JSON.parse(e.target.value) }) } catch {} }}/></label></div>
 }
 
-export default function OneBuilder({ initialTab = 'workflow', singleBuilder = false }) {
+export default function OneBuilder({ initialTab = 'workflow', singleBuilder = false, initialWorkflowId = '', onWorkflowOpen, onWorkflowClose }) {
   const [tab, setTab] = useState(initialTab)
   const [listQuery, setListQuery] = useState('')
   const [componentRegistry, setComponentRegistry] = useState([])
@@ -144,6 +144,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const [listLoading, setListLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const openedRouteWorkflowRef = useRef('')
 
   const loadBase = async () => {
     setLoading(true)
@@ -297,6 +298,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   }
 
   const newDefinition = () => {
+    if (tab === 'workflow') onWorkflowClose?.()
     setMode('builder')
     setSideTab('components')
     setSelectedSavedId('')
@@ -343,10 +345,20 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
       }
       setSelectedSavedId(id)
       setSelectedNodeId('')
+      if (tab === 'workflow') onWorkflowOpen?.(id)
     } catch (err) {
       setError(err?.message || 'Unable to open definition')
     }
   }
+
+  useEffect(() => {
+    if (tab !== 'workflow' || !initialWorkflowId || loading || listLoading) return
+    if (openedRouteWorkflowRef.current === String(initialWorkflowId)) return
+    const exists = saved.workflow.some((item) => String(item.id) === String(initialWorkflowId))
+    if (!exists) return
+    openedRouteWorkflowRef.current = String(initialWorkflowId)
+    void openSaved(initialWorkflowId)
+  }, [tab, initialWorkflowId, loading, listLoading, saved.workflow])
 
   const saveDefinition = async () => {
     setError('')
@@ -448,6 +460,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
               setSelectedNodeId('')
               setSideTab('components')
               setError('')
+              onWorkflowClose?.()
               void loadSavedDefinitions('workflow')
             }}
             onSaved={() => {
@@ -456,6 +469,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
               setSelectedSavedId('')
               setSelectedNodeId('')
               setSideTab('components')
+              onWorkflowClose?.()
               void loadSavedDefinitions('workflow')
             }}
           />
