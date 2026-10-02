@@ -89,13 +89,17 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
     })
   },[selectedProvider?.id])
 
-  const guarded=async(action)=>{
+  const guarded=async(action,onRetryResult=null)=>{
     try{return await action()}
     catch(e){
       if(e?.status===428&&e?.payload?.resourceKey){
         const start=await apiRequest('/api/auth/step-up/start',{method:'POST',body:JSON.stringify({resourceKey:e.payload.resourceKey})})
         if(start?.required){
-          setPendingAction(()=>action)
+          setPendingAction(()=>async()=>{
+            const result=await action()
+            if(onRetryResult)await onRetryResult(result)
+            return result
+          })
           setStepUp({resourceKey:e.payload.resourceKey,...start})
           return null
         }
@@ -222,12 +226,18 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
   const generateTempCode=async()=>{
     if(!userId)return
     setGeneratedTempCode(null);setError('')
-    try{
-      const response=await guarded(()=>apiRequest(`/api/security/mfa/users/${userId}/temporary-code`,{method:'POST',body:JSON.stringify({expiresHours:tempCodeHours})}))
+    const applyResult=async(response)=>{
       if(response?.data){
         setGeneratedTempCode(response.data)
         await loadMethods(userId)
       }
+    }
+    try{
+      const response=await guarded(
+        ()=>apiRequest(`/api/security/mfa/users/${userId}/temporary-code`,{method:'POST',body:JSON.stringify({expiresHours:tempCodeHours})}),
+        applyResult,
+      )
+      if(response)await applyResult(response)
     }catch(e){setError(e.message||'Unable to generate temporary verification code')}
   }
 
