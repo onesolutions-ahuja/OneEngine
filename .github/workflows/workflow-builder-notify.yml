@@ -1,0 +1,86 @@
+name: Workflow Builder E2E Notifications
+
+on:
+  workflow_run:
+    workflows: ["Workflow Builder E2E Gate"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  notify:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify repository owner
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const conclusion = String(run.conclusion || '').toLowerCase();
+            const icon = conclusion === 'success' ? '✅' : '❌';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const label = 'workflow-builder-watch';
+            const title = 'Workflow Builder E2E notifications';
+
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: label });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: label,
+                color: '1f6feb',
+                description: 'Mobile notifications for Workflow Builder E2E results',
+              });
+            }
+
+            const existing = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            });
+            let issue = existing.data.find((item) => item.title === title && !item.pull_request);
+
+            if (!issue) {
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                labels: [label],
+                body: [
+                  `@${owner} this is the notification thread for **Workflow Builder E2E Gate**.`,
+                  '',
+                  'Every completed run adds one comment here for **pass** or **fail**.',
+                  'Keep notifications enabled for this issue in the GitHub mobile app.',
+                ].join('\n'),
+              });
+              issue = created.data;
+            }
+
+            const sha = String(run.head_sha || '').slice(0, 8);
+            const branch = run.head_branch || 'unknown';
+            const message = [
+              `@${owner} ${icon} **Workflow Builder E2E ${conclusion.toUpperCase()}**`,
+              '',
+              `- Commit: \`${sha}\``,
+              `- Branch: \`${branch}\``,
+              `- Run: [#${run.run_number}](${run.html_url})`,
+              '',
+              conclusion === 'failure'
+                ? 'Open ChatGPT and say **check** — the failed run is ready to inspect.'
+                : 'Open ChatGPT and say **check** — the run passed.',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: message,
+            });
