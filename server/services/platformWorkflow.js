@@ -2130,6 +2130,51 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "INSTRUCTION_TEMPLATE",
+    displayName: "Instruction Template",
+    description: "Build reusable provider-neutral AI or automation instructions from named Flow inputs.",
+    schema: {
+      type: "object",
+      properties: {
+        resourceName: { type: "string" },
+        instructionText: { type: "string" },
+        instructionInputs: { type: "object" },
+      },
+      required: ["resourceName","instructionText"],
+    },
+    validation: (action) => {
+      if (!action?.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.resourceName))) {
+        throw new Error("Instruction Template requires a valid resource name");
+      }
+      if (!String(action.instructionText || "").trim()) throw new Error("Instruction Template requires instructions");
+      if (action.instructionInputs && (typeof action.instructionInputs !== "object" || Array.isArray(action.instructionInputs))) {
+        throw new Error("Instruction Template inputs must be a named mapping");
+      }
+      for (const name of Object.keys(action.instructionInputs || {})) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(name)) throw new Error(`Instruction input "${name}" is invalid`);
+      }
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const resolvedInputs = Object.fromEntries(Object.entries(action.instructionInputs || {}).map(([name, binding]) => [
+        name,
+        resolveConfiguredResource(binding, context, { preserveMissing: false }),
+      ]));
+      const value = String(action.instructionText || "").replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g, (match, name) => {
+        if (!Object.prototype.hasOwnProperty.call(resolvedInputs, name)) return "";
+        const resolved = resolvedInputs[name];
+        if (resolved == null) return "";
+        return typeof resolved === "string" ? resolved : JSON.stringify(resolved);
+      });
+      workflowVariables.variables[String(action.resourceName)] = value;
+      return { status: "completed", resourceName: String(action.resourceName), resourceType: "text", value, inputs: resolvedInputs };
+    },
+  },
+
+  {
     key: "COLLECTION_FILTER",
     displayName: "Collection Filter",
     description: "Filter a collection into a new collection using Flow conditions.",
