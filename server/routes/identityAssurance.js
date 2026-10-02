@@ -210,10 +210,12 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     }
     const ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code,markVerified:true});
     if(!ok){
-      await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"MFA_VERIFICATION",method:methodType,status:"FAILURE",
-        challengeType:challenge.challenge_type,ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId:challenge.context?.sessionId||null});
+      await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"MFA_ENROLLMENT",method:"TOTP",status:"FAILURE",
+        challengeType:challenge.challenge_type,ip:clientIp(req),userAgent:req.get("user-agent")||null});
       return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
     }
+    await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"MFA_ENROLLMENT",method:"TOTP",status:"SUCCESS",
+      challengeType:challenge.challenge_type,assuranceLevel:assurance,ip:clientIp(req),userAgent:req.get("user-agent")||null});
     const recoveryCodes=policy.effective.allowRecoveryCodes ? await ensureRecoveryCodes(user.company_id,user.id) : [];
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"TOTP",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
   });
@@ -236,7 +238,11 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       ok=await verifyTemporaryVerificationCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
       assurance="STANDARD";
     }
-    if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
+    if(!ok){
+      await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"MFA_VERIFICATION",method:methodType,status:"FAILURE",
+        challengeType:challenge.challenge_type,ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId:challenge.context?.sessionId||null});
+      return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
+    }
     if(assurancePolicy.effective.phishingResistantRequired){
       return res.status(403).json({success:false,code:"PHISHING_RESISTANT_MFA_REQUIRED",message:"A phishing-resistant passkey or security key is required"});
     }
@@ -332,6 +338,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       [user.company_id,user.id,String(req.body?.label||(challenge.context?.authenticatorKind==="SECURITY_KEY"?"Security Key":"Built-in Passkey")),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice",challenge.context?.authenticatorKind||"PLATFORM"]);
     const recoveryCodes=challenge.challenge_type==="LOGIN"&&effectivePolicy.effective.allowRecoveryCodes ? await ensureRecoveryCodes(user.company_id,user.id) : [];
     const assurance=effectivePolicy.effective.passkeyAssurance;
+    await writeVerificationHistory(db,{companyId:user.company_id,userId:user.id,eventType:"MFA_ENROLLMENT",
+      method:registeredKind,status:"SUCCESS",challengeType:challenge.challenge_type,assuranceLevel:assurance,
+      ip:clientIp(req),userAgent:req.get("user-agent")||null,sessionId:challenge.context?.sessionId||null});
     if(challenge.challenge_type==="STEP_UP"){
       const sid=challenge.context?.sessionId;
       if(!sid)return res.status(400).json({success:false,message:"Step-up session is missing"});
