@@ -71,9 +71,15 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
   const [pendingAction,setPendingAction]=useState(null)
   const [tempCodeHours,setTempCodeHours]=useState(1)
   const [generatedTempCode,setGeneratedTempCode]=useState(null)
+  const [verificationHistory,setVerificationHistory]=useState([])
 
   const load=async()=>{
     setError('')
+    if(mode==='history'){
+      const h=await apiRequest('/api/security/identity-verification-history?limit=500')
+      setVerificationHistory(h.data||[])
+      return
+    }
     const [a,p,d,u]=await Promise.all([
       apiRequest('/api/security/assurance'),
       apiRequest('/api/security/auth-providers'),
@@ -263,6 +269,13 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
   return <div className="space-y-4">
     {error?<div className="settings-error">{error}</div>:null}
     {message?<div className="settings-card"><strong>{message}</strong></div>:null}
+
+    {mode==='history'?<section className="settings-card overflow-x-auto">
+      <div className="flex items-center gap-2 pb-3"><div><strong>Identity Verification History</strong><p>Separate from sign-in history: records MFA, step-up and device-verification events.</p></div></div>
+      <table className="onepos-table w-full text-sm"><thead><tr><th>When</th><th>User</th><th>Event</th><th>Method</th><th>Status</th><th>Assurance</th><th>IP</th></tr></thead>
+      <tbody>{verificationHistory.map(row=><tr key={row.id}><td>{new Date(row.occurred_at).toLocaleString()}</td><td>{row.full_name||row.username||'—'}</td><td>{row.event_type}</td><td>{row.method||'—'}</td><td>{row.status}</td><td>{row.assurance_level||'—'}</td><td>{row.ip_address||'—'}</td></tr>)}</tbody></table>
+      {!verificationHistory.length?<p>No identity verification events recorded yet.</p>:null}
+    </section>:null}
 
     {mode==='assurance'?<>
       <section className="settings-card">
