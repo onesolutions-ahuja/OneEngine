@@ -1452,7 +1452,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         .replaceAll("{{startsAt}}", when)
         .replaceAll("{{endsAt}}", effectiveRecord.endsAt?new Date(effectiveRecord.endsAt).toISOString():"")
         .replaceAll("{{appointmentId}}", String(effectiveRecord.appointmentId||""));
-      const type=channel==="WHATSAPP"?"SEND_WHATSAPP":channel==="SMS"?"SEND_SMS":channel==="EMAIL"?"SEND_EMAIL":null;
+      const type=channel==="WHATSAPP"?"SEND_WHATSAPP":channel==="SMS"?"SEND_SMS":null;
       if(!type) return {status:"skipped",reason:`Booking channel ${channel||"UNKNOWN"} does not use mobile confirmation`};
       const result=await executeRegisteredAction({
         db,
