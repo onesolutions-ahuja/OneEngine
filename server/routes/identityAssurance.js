@@ -1,0 +1,274 @@
+import express from "express";
+import crypto from "node:crypto";
+import {
+  assuranceSatisfies, consumeChallenge, consumeRecoveryCode, createPendingChallenge,
+  findTrustedDevice, listMfaMethods, loadEffectiveAssurance, newDeviceToken,
+  replaceRecoveryCodes, startTotpEnrollment, trustDevice, verifyTotpMethod,
+} from "../services/identityAssurance.js";
+import { clientIp, createTrackedSession, writeLoginHistory } from "../services/identitySecurity.js";
+
+function publicMethod(row){
+  return {id:row.id,type:row.method_type,label:row.label||row.method_type,phishingResistant:row.phishing_resistant===true,lastUsedAt:row.last_used_at||null};
+}
+function safeProvider(row){
+  const cfg=row?.configuration&&typeof row.configuration==="object"?row.configuration:{};
+  return {
+    id:row.id,name:row.name,providerKey:row.provider_key,providerType:row.provider_type,
+    enabled:row.enabled===true,showOnLogin:row.show_on_login!==false,useOneEngineMfa:row.use_oneengine_mfa===true,
+    assuranceLevel:row.assurance_level||"STANDARD",configuration:cfg,hasCredentials:Boolean(row.credentials_encrypted),
+  };
+}
+function base64urlBuffer(value){return Buffer.from(String(value||""),"base64url");}
+
+export default function createIdentityAssuranceRouter({authenticate,authorize,db,createToken,encryptCredentials,decryptCredentials,writeAudit}) {
+  const router=express.Router();
+  const manage=[authenticate,authorize("settings.manage")];
+
+  async function finishChallenge(req,res,{challenge,user,assuranceLevel="HIGH",mfaMethod="MFA",trust=false,deviceName=null}){
+    const consumed=await consumeChallenge(db,challenge.id);
+    if(!consumed)return res.status(400).json({success:false,code:"MFA_CHALLENGE_EXPIRED",message:"Verification challenge has expired"});
+    const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    const deviceToken=trust&&policy.effective.trustedDeviceDays>0?newDeviceToken():null;
+    const device=deviceToken?await trustDevice(db,{
+      companyId:user.company_id,userId:user.id,token:deviceToken,name:deviceName,days:policy.effective.trustedDeviceDays,ip:clientIp(req),req
+    }):null;
+    const sessionId=await createTrackedSession(db,{
+      user,ip:clientIp(req),userAgent:req.get("user-agent")||null,authMethod:challenge.context?.authMethod||"PASSWORD",
+      settings:policy.settings,originHost:String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(",")[0].trim().toLowerCase()||null,
+    });
+    await db(`UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW(),mfa_method=$3,trusted_device_id=$4 WHERE id=$1`,
+      [sessionId,assuranceLevel,mfaMethod,device?.id||null]);
+    user.session_id=sessionId;
+    const token=createToken(user);
+    await writeLoginHistory(db,{user,identifier:user.email||user.username,status:"SUCCESS",reason:"MFA_VERIFIED",ip:clientIp(req),userAgent:req.get("user-agent")||null,authMethod:challenge.context?.authMethod||"PASSWORD",sessionId,req});
+    res.json({success:true,token,deviceToken,user:{
+      id:user.id,username:user.username,name:user.full_name,role:user.role_name,defaultLandingPage:user.default_landing_page||"dashboard",
+      companyId:user.company_id,storeId:user.store_id,mustChangePassword:user.must_change_password===true,
+    }});
+  }
+
+  async function pendingUser(challengeId,types=["LOGIN","STEP_UP","PASSKEY_REGISTRATION","PASSKEY_AUTHENTICATION"]){
+    const challenge=await import("../services/identityAssurance.js").then(m=>m.getPendingChallenge(db,challengeId,{types}));
+    if(!challenge)return {challenge:null,user:null};
+    const r=await db(`SELECT u.*,r.name role_name,COALESCE(r.default_landing_page,'dashboard') default_landing_page
+      FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.id=$1 AND u.company_id=$2 AND u.active=TRUE LIMIT 1`,[challenge.user_id,challenge.company_id]);
+    return {challenge,user:r.rows[0]||null};
+  }
+
+  router.get("/security/assurance",...manage,async(req,res)=>{
+    const [settings,providers,stepUps]=await Promise.all([
+      db("SELECT * FROM identity_security_settings WHERE company_id=$1",[req.user.companyId]),
+      db("SELECT * FROM identity_auth_providers WHERE company_id=$1 ORDER BY name",[req.user.companyId]),
+      db("SELECT * FROM identity_step_up_policies WHERE company_id=$1 ORDER BY resource_key",[req.user.companyId]),
+    ]);
+    res.json({success:true,data:{settings:settings.rows[0]||{},providers:providers.rows.map(safeProvider),stepUpPolicies:stepUps.rows}});
+  });
+
+  router.put("/security/assurance",...manage,async(req,res)=>{
+    const b=req.body||{};
+    const current=(await db("SELECT * FROM identity_security_settings WHERE company_id=$1",[req.user.companyId])).rows[0]||{};
+    const reqLevel=["STANDARD","HIGH"].includes(String(b.requiredLoginAssurance||current.required_login_assurance).toUpperCase())?String(b.requiredLoginAssurance||current.required_login_assurance).toUpperCase():"STANDARD";
+    const level=(key,currentKey)=>["STANDARD","HIGH"].includes(String(b[key]||current[currentKey]).toUpperCase())?String(b[key]||current[currentKey]).toUpperCase():current[currentKey];
+    const values={
+      mfaRequired:b.mfaRequired===undefined?current.mfa_required:b.mfaRequired===true,
+      phishingResistant:b.phishingResistantMfaRequired===undefined?current.phishing_resistant_mfa_required:b.phishingResistantMfaRequired===true,
+      trustSsoMfa:b.trustSsoMfa===undefined?current.trust_sso_mfa:b.trustSsoMfa===true,
+      trustedDeviceDays:Math.min(3650,Math.max(0,Number(b.trustedDeviceDays??current.trusted_device_days??30))),
+      stepUpPeriodMinutes:Math.min(1440,Math.max(1,Number(b.stepUpPeriodMinutes??current.step_up_period_minutes??15))),
+      requiredLoginAssurance:reqLevel,
+      passwordAssurance:level("passwordAssurance","password_assurance"),
+      totpAssurance:level("totpAssurance","totp_assurance"),
+      passkeyAssurance:level("passkeyAssurance","passkey_assurance"),
+      ssoAssurance:level("ssoAssurance","sso_assurance"),
+    };
+    if(values.phishingResistant && values.passkeyAssurance!=="HIGH")return res.status(400).json({success:false,message:"Passkey authentication must be High Assurance when phishing-resistant MFA is required."});
+    const r=await db(`UPDATE identity_security_settings SET mfa_required=$1,phishing_resistant_mfa_required=$2,trust_sso_mfa=$3,
+      trusted_device_days=$4,step_up_period_minutes=$5,required_login_assurance=$6,password_assurance=$7,totp_assurance=$8,
+      passkey_assurance=$9,sso_assurance=$10,updated_by=$11,updated_at=NOW() WHERE company_id=$12 RETURNING *`,
+      [values.mfaRequired,values.phishingResistant,values.trustSsoMfa,values.trustedDeviceDays,values.stepUpPeriodMinutes,
+       values.requiredLoginAssurance,values.passwordAssurance,values.totpAssurance,values.passkeyAssurance,values.ssoAssurance,req.user.id,req.user.companyId]);
+    await writeAudit?.(req.user.companyId,req.user.id,"security.assurance_updated","identity_security_settings",req.user.companyId,values);
+    res.json({success:true,data:r.rows[0]});
+  });
+
+  router.get("/auth/mfa/methods",authenticate,async(req,res)=>{
+    res.json({success:true,data:(await listMfaMethods(db,{companyId:req.user.companyId,userId:req.user.id})).map(publicMethod)});
+  });
+
+  router.post("/auth/mfa/totp/start",async(req,res)=>{
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
+    if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
+    const enrolled=await listMfaMethods(db,{companyId:user.company_id,userId:user.id});
+    if(enrolled.length)return res.status(409).json({success:false,message:"An MFA method is already enrolled. Verify an existing method."});
+    const method=await startTotpEnrollment(db,{companyId:user.company_id,userId:user.id,email:user.email||user.username,label:req.body?.label||"Authenticator"});
+    res.json({success:true,data:method});
+  });
+
+  router.post("/auth/mfa/totp/complete",async(req,res)=>{
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
+    if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
+    const ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code,markVerified:true});
+    if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
+    await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
+    const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.totpAssurance;
+    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"TOTP",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+  });
+
+  router.post("/auth/mfa/verify",async(req,res)=>{
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
+    if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
+    const methodType=String(req.body?.methodType||"TOTP").toUpperCase();
+    let ok=false,assurance="HIGH";
+    if(methodType==="TOTP"){
+      ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code});
+      assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.totpAssurance;
+    }else if(methodType==="RECOVERY_CODE"){
+      ok=await consumeRecoveryCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
+      assurance="HIGH";
+    }
+    if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
+    if(challenge.challenge_type==="STEP_UP"){
+      const sid=challenge.context?.sessionId;
+      if(!sid)return res.status(400).json({success:false,message:"Step-up session is missing"});
+      await consumeChallenge(db,challenge.id);
+      await db("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW(),mfa_method=$3 WHERE id=$1 AND user_id=$4",[sid,assurance,methodType,user.id]);
+      return res.json({success:true,assuranceLevel:assurance});
+    }
+    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:methodType,trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+  });
+
+  router.post("/auth/mfa/passkey/registration-options",async(req,res)=>{
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
+    if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
+    const {generateRegistrationOptions}=await import("@simplewebauthn/server");
+    const existing=(await listMfaMethods(db,{companyId:user.company_id,userId:user.id,includeUnverified:true})).filter(x=>x.method_type==="PASSKEY"&&x.credential_id);
+    const rpID=String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0].split(",")[0].trim();
+    const options=await generateRegistrationOptions({
+      rpName:"OneEngine",rpID,userName:user.email||user.username,userDisplayName:user.full_name||user.username,
+      userID:new TextEncoder().encode(user.id),
+      attestationType:"none",authenticatorSelection:{residentKey:"preferred",userVerification:"preferred"},
+      excludeCredentials:existing.map(x=>({id:x.credential_id,transports:Array.isArray(x.transports)?x.transports:[]})),
+    });
+    await db("UPDATE identity_mfa_challenges SET challenge=$2,context=context||$3::jsonb WHERE id=$1",[challenge.id,options.challenge,JSON.stringify({rpID})]);
+    res.json({success:true,data:options});
+  });
+
+  router.post("/auth/mfa/passkey/registration-verify",async(req,res)=>{
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
+    if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
+    const {verifyRegistrationResponse}=await import("@simplewebauthn/server");
+    const rpID=challenge.context?.rpID||String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0];
+    const origin=String(req.headers?.origin||`https://${rpID}`);
+    let verification;
+    try{verification=await verifyRegistrationResponse({response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:false});}
+    catch(error){return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});}
+    if(!verification.verified||!verification.registrationInfo)return res.status(401).json({success:false,message:"Passkey could not be verified"});
+    const info=verification.registrationInfo;
+    const cred=info.credential;
+    const id=cred?.id||req.body?.credential?.id;
+    const publicKey=Buffer.from(cred.publicKey).toString("base64url");
+    await db(`INSERT INTO identity_mfa_methods(company_id,user_id,method_type,label,credential_id,public_key,sign_count,transports,aaguid,discoverable,phishing_resistant,verified)
+      VALUES($1,$2,'PASSKEY',$3,$4,$5,$6,$7::jsonb,$8,$9,TRUE,TRUE)
+      ON CONFLICT(user_id,method_type,label) DO UPDATE SET credential_id=EXCLUDED.credential_id,public_key=EXCLUDED.public_key,
+       sign_count=EXCLUDED.sign_count,transports=EXCLUDED.transports,aaguid=EXCLUDED.aaguid,discoverable=EXCLUDED.discoverable,verified=TRUE,active=TRUE`,
+      [user.company_id,user.id,String(req.body?.label||"Passkey"),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice"]);
+    await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
+    const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.passkeyAssurance;
+    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+  });
+
+  router.post("/auth/mfa/passkey/options",async(req,res)=>{
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
+    if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
+    const methods=(await listMfaMethods(db,{companyId:user.company_id,userId:user.id})).filter(x=>x.method_type==="PASSKEY");
+    if(!methods.length)return res.status(409).json({success:false,message:"No passkey is enrolled"});
+    const {generateAuthenticationOptions}=await import("@simplewebauthn/server");
+    const rpID=String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0].split(",")[0].trim();
+    const options=await generateAuthenticationOptions({rpID,userVerification:"preferred",allowCredentials:methods.map(x=>({id:x.credential_id,transports:Array.isArray(x.transports)?x.transports:[]}))});
+    await db("UPDATE identity_mfa_challenges SET challenge=$2,context=context||$3::jsonb WHERE id=$1",[challenge.id,options.challenge,JSON.stringify({rpID})]);
+    res.json({success:true,data:options});
+  });
+
+  router.post("/auth/mfa/passkey/verify",async(req,res)=>{
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
+    if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
+    const credId=String(req.body?.credential?.id||"");
+    const r=await db("SELECT * FROM identity_mfa_methods WHERE company_id=$1 AND user_id=$2 AND method_type='PASSKEY' AND credential_id=$3 AND active=TRUE AND verified=TRUE LIMIT 1",[user.company_id,user.id,credId]);
+    const method=r.rows[0];if(!method)return res.status(401).json({success:false,message:"Passkey is not registered"});
+    const {verifyAuthenticationResponse}=await import("@simplewebauthn/server");
+    const rpID=challenge.context?.rpID||String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0];
+    const origin=String(req.headers?.origin||`https://${rpID}`);
+    let verification;
+    try{verification=await verifyAuthenticationResponse({
+      response:req.body?.credential,expectedChallenge:challenge.challenge,expectedOrigin:origin,expectedRPID:rpID,requireUserVerification:false,
+      credential:{id:method.credential_id,publicKey:base64urlBuffer(method.public_key),counter:Number(method.sign_count||0),transports:Array.isArray(method.transports)?method.transports:[]},
+    });}catch(error){return res.status(401).json({success:false,code:"PASSKEY_INVALID",message:"Passkey verification failed"});}
+    if(!verification.verified)return res.status(401).json({success:false,message:"Passkey verification failed"});
+    await db("UPDATE identity_mfa_methods SET sign_count=$2,last_used_at=NOW() WHERE id=$1",[method.id,verification.authenticationInfo?.newCounter||method.sign_count]);
+    if(challenge.challenge_type==="STEP_UP"){
+      await consumeChallenge(db,challenge.id);
+      await db("UPDATE identity_sessions SET assurance_level='HIGH',assurance_verified_at=NOW(),mfa_method='PASSKEY' WHERE id=$1 AND user_id=$2",[challenge.context?.sessionId,user.id]);
+      return res.json({success:true,assuranceLevel:"HIGH"});
+    }
+    return finishChallenge(req,res,{challenge,user,assuranceLevel:"HIGH",mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+  });
+
+  router.get("/security/trusted-devices",authenticate,async(req,res)=>{
+    const r=await db(`SELECT id,device_name,platform,browser,first_ip::text,last_ip::text,trusted_until,created_at,last_seen_at,revoked_at
+      FROM identity_trusted_devices WHERE company_id=$1 AND user_id=$2 ORDER BY last_seen_at DESC`,[req.user.companyId,req.user.id]);
+    res.json({success:true,data:r.rows});
+  });
+  router.post("/security/trusted-devices/:id/revoke",authenticate,async(req,res)=>{
+    await db("UPDATE identity_trusted_devices SET revoked_at=NOW() WHERE id=$1 AND company_id=$2 AND user_id=$3",[req.params.id,req.user.companyId,req.user.id]);
+    res.json({success:true});
+  });
+
+  router.put("/security/step-up/:resourceKey",...manage,async(req,res)=>{
+    const action=["ALLOW","RAISE","BLOCK"].includes(String(req.body?.action||"").toUpperCase())?String(req.body.action).toUpperCase():"RAISE";
+    const required=["STANDARD","HIGH"].includes(String(req.body?.requiredAssurance||"").toUpperCase())?String(req.body.requiredAssurance).toUpperCase():"HIGH";
+    const minutes=req.body?.reverifyAfterMinutes==null?null:Math.min(1440,Math.max(1,Number(req.body.reverifyAfterMinutes)||15));
+    const r=await db(`INSERT INTO identity_step_up_policies(company_id,resource_key,action,required_assurance,reverify_after_minutes,created_by,updated_by)
+      VALUES($1,$2,$3,$4,$5,$6,$6)
+      ON CONFLICT(company_id,resource_key) DO UPDATE SET action=EXCLUDED.action,required_assurance=EXCLUDED.required_assurance,
+        reverify_after_minutes=EXCLUDED.reverify_after_minutes,active=TRUE,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING *`,
+      [req.user.companyId,req.params.resourceKey,action,required,minutes,req.user.id]);
+    res.json({success:true,data:r.rows[0]});
+  });
+
+  router.get("/security/auth-providers",...manage,async(req,res)=>{
+    const r=await db("SELECT * FROM identity_auth_providers WHERE company_id=$1 ORDER BY name",[req.user.companyId]);
+    res.json({success:true,data:r.rows.map(safeProvider)});
+  });
+
+  router.post("/security/auth-providers",...manage,async(req,res)=>{
+    const b=req.body||{};const type=String(b.providerType||"OIDC").toUpperCase();
+    if(!["GOOGLE","APPLE","OIDC","SAML"].includes(type))return res.status(400).json({success:false,message:"Unsupported authentication provider type"});
+    const key=String(b.providerKey||b.name||"").trim().toLowerCase().replace(/[^a-z0-9_-]+/g,"-");
+    if(!key||!String(b.name||"").trim())return res.status(400).json({success:false,message:"Provider name and key are required"});
+    const credentials=b.credentials&&typeof b.credentials==="object"?encryptCredentials(b.credentials):null;
+    const r=await db(`INSERT INTO identity_auth_providers(company_id,name,provider_key,provider_type,enabled,show_on_login,use_oneengine_mfa,assurance_level,configuration,credentials_encrypted,created_by,updated_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$11) RETURNING *`,
+      [req.user.companyId,String(b.name).trim(),key,type,b.enabled===true,b.showOnLogin!==false,b.useOneEngineMfa===true,
+       String(b.assuranceLevel||"STANDARD").toUpperCase()==="HIGH"?"HIGH":"STANDARD",JSON.stringify(b.configuration||{}),credentials,req.user.id]);
+    res.status(201).json({success:true,data:safeProvider(r.rows[0])});
+  });
+
+  router.put("/security/auth-providers/:id",...manage,async(req,res)=>{
+    const current=(await db("SELECT * FROM identity_auth_providers WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId])).rows[0];
+    if(!current)return res.status(404).json({success:false,message:"Authentication provider not found"});
+    const b=req.body||{};const credentials=b.credentials&&typeof b.credentials==="object"?encryptCredentials(b.credentials):current.credentials_encrypted;
+    const r=await db(`UPDATE identity_auth_providers SET name=$1,enabled=$2,show_on_login=$3,use_oneengine_mfa=$4,assurance_level=$5,
+      configuration=$6::jsonb,credentials_encrypted=$7,updated_by=$8,updated_at=NOW() WHERE id=$9 AND company_id=$10 RETURNING *`,
+      [String(b.name??current.name).trim(),b.enabled===undefined?current.enabled:b.enabled===true,b.showOnLogin===undefined?current.show_on_login:b.showOnLogin!==false,
+       b.useOneEngineMfa===undefined?current.use_oneengine_mfa:b.useOneEngineMfa===true,String(b.assuranceLevel||current.assurance_level).toUpperCase()==="HIGH"?"HIGH":"STANDARD",
+       JSON.stringify(b.configuration??current.configuration??{}),credentials,req.user.id,current.id,req.user.companyId]);
+    res.json({success:true,data:safeProvider(r.rows[0])});
+  });
+
+  router.delete("/security/auth-providers/:id",...manage,async(req,res)=>{
+    await db("DELETE FROM identity_auth_providers WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId]);
+    res.json({success:true});
+  });
+
+  return router;
+}
