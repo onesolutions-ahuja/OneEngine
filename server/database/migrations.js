@@ -20,6 +20,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0027_identity_assurance_overrides",
   "0028_identity_provider_state",
   "0029_identity_device_activation",
+  "0030_identity_verification_methods",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -93,6 +94,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Trusted-device activation policy",
     up: client => client.query(
       readFileSync(new URL("./migrations/0029_identity_device_activation.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0030_identity_verification_methods",
+    version: "30",
+    name: "MFA verification method policy and temporary codes",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0030_identity_verification_methods.sql", import.meta.url), "utf8")
     ),
   },
 ]);
