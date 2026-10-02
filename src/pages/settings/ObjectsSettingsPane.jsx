@@ -732,9 +732,9 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                       <div className="objects-overview-rows">
                         <div><span>Default Record Type</span><strong>{defaultRecordType?.label || defaultRecordType?.name || 'Master'}</strong></div>
                         <div><span>Default Page Layout</span><strong>{defaultLayout?.name || defaultLayout?.label || defaultLayout?.layout_key || '—'}</strong></div>
-                        <div><span>Allow Search</span><strong><em className="objects-yes-pill">Yes</em></strong></div>
-                        <div><span>Allow Reports</span><strong><em className="objects-yes-pill">Yes</em></strong></div>
-                        <div><span>Allow Activities</span><strong><em className="objects-yes-pill">Yes</em></strong></div>
+                        <div><span>Allow Search</span><strong><em className={selected.config?.allowSearch === false ? 'objects-no-pill' : 'objects-yes-pill'}>{selected.config?.allowSearch === false ? 'No' : 'Yes'}</em></strong></div>
+                        <div><span>Allow Reports</span><strong><em className={selected.config?.allowReports === false ? 'objects-no-pill' : 'objects-yes-pill'}>{selected.config?.allowReports === false ? 'No' : 'Yes'}</em></strong></div>
+                        <div><span>Field History</span><strong><em className={selected.config?.trackHistory === false ? 'objects-no-pill' : 'objects-yes-pill'}>{selected.config?.trackHistory === false ? 'Disabled' : 'Enabled'}</em></strong></div>
                       </div>
                     </section>
 
