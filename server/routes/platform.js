@@ -4245,43 +4245,42 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const previous = previousResult.rows?.[0] || null;
         if (!previous) return res.status(409).json({ success: false, message: "Back navigation is not available" });
 
-        await db("BEGIN");
-        try {
+        await db(
+          "UPDATE platform_workflow_screen_sessions SET status='CANCELLED_BACK',updated_at=NOW() WHERE id=$1 AND company_id=$2",
+          [session.id, req.user.companyId]
+        );
+        if (session.step_run_id) {
           await db(
-            "UPDATE platform_workflow_screen_sessions SET status='CANCELLED_BACK',updated_at=NOW() WHERE id=$1 AND company_id=$2",
-            [session.id, req.user.companyId]
+            "UPDATE platform_workflow_step_runs SET status='PENDING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND run_id=$2",
+            [session.step_run_id, session.run_id]
           );
-          if (session.step_run_id) {
-            await db(
-              "UPDATE platform_workflow_step_runs SET status='PENDING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND run_id=$2",
-              [session.step_run_id, session.run_id]
-            );
-          }
-          await db(
-            "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',submitted_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
-            [previous.id, req.user.companyId]
-          );
-          if (previous.step_run_id) {
-            await db(
-              "UPDATE platform_workflow_step_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND run_id=$2",
-              [previous.step_run_id, previous.run_id]
-            );
-          }
-          await db(
-            "UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
-            [session.run_id, req.user.companyId]
-          );
-          await db("COMMIT");
-        } catch (error) {
-          await db("ROLLBACK").catch(() => {});
-          throw error;
         }
+        await db(
+          "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',submitted_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+          [previous.id, req.user.companyId]
+        );
+        if (previous.step_run_id) {
+          await db(
+            "UPDATE platform_workflow_step_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND run_id=$2",
+            [previous.step_run_id, previous.run_id]
+          );
+        }
+        await db(
+          "UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+          [session.run_id, req.user.companyId]
+        );
+        const earlierResult = await db(
+          `SELECT id FROM platform_workflow_screen_sessions
+            WHERE run_id=$1 AND company_id=$2 AND status='COMPLETED' AND created_at < $3
+            ORDER BY created_at DESC LIMIT 1`,
+          [previous.run_id, req.user.companyId, previous.created_at]
+        );
         return res.json({
           success: true,
           data: {
             status: "WAITING",
             screenSessionId: previous.id,
-            screen: { ...(previous.screen || {}), allowBack: true },
+            screen: { ...(previous.screen || {}), allowBack: previous.screen?.allowBack !== false && Boolean(earlierResult.rows?.[0]) },
             values: previous.values || {},
             navigation: "BACK",
           },
