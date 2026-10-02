@@ -6895,25 +6895,89 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       clauses.push(`store_id=$${params.length}`);
     }
     appendSystemReadScope(child, req, clauses, params);
+    const sharing = await buildPlatformSharingScope({ db, object: child, fields, req, access: "read", paramsOffset: params.length });
+    if (sharing.sql) {
+      clauses.push(sharing.sql);
+      params.push(...sharing.params);
+    }
+    const fieldByApiName = new Map(readableFields.map((field) => [field.api_name, field]));
+    const filterModel = parseRecordFilterModel(req.query);
+    if (!filterModel) return res.status(400).json({ success: false, message: "filterModel must be a JSON object" });
+    for (const [apiName, config] of Object.entries(filterModel)) {
+      const field = fieldByApiName.get(apiName);
+      if (!field) return res.status(400).json({ success: false, message: `Unknown or unavailable related-list filter field "${apiName}"` });
+      if (!config || typeof config !== "object" || Array.isArray(config)) continue;
+      const columnSql = platformFieldSql(field, child);
+      const selectedValues = Array.isArray(config.values) ? config.values.map(decodeFilterValue) : [];
+      if (selectedValues.length) {
+        const placeholders = selectedValues.map((item) => {
+          params.push(item);
+          return `${params.length}`;
+        });
+        clauses.push(`${columnSql} IN (${placeholders.join(",")})`);
+      }
+      const operator = String(config.operator || "");
+      const supported = new Set(["equals","not_equals","contains","not_contains","starts_with","greater_than","less_than","greater_or_equal","less_or_equal","is_blank","is_not_blank"]);
+      if (!operator || !supported.has(operator)) continue;
+      if (operator === "is_blank") {
+        clauses.push(`(${columnSql} IS NULL OR CAST(${columnSql} AS TEXT)='')`);
+        continue;
+      }
+      if (operator === "is_not_blank") {
+        clauses.push(`(${columnSql} IS NOT NULL AND CAST(${columnSql} AS TEXT)<>'')`);
+        continue;
+      }
+      const rawValue = decodeFilterValue(config.value);
+      if (rawValue === undefined || rawValue === null || rawValue === "") continue;
+      params.push(operator === "contains" || operator === "not_contains"
+        ? `%${String(rawValue)}%`
+        : operator === "starts_with"
+          ? `${String(rawValue)}%`
+          : rawValue);
+      const placeholder = `${params.length}`;
+      if (operator === "equals") clauses.push(`${columnSql}=${placeholder}`);
+      else if (operator === "not_equals") clauses.push(`(${columnSql}<>${placeholder} OR ${columnSql} IS NULL)`);
+      else if (operator === "contains") clauses.push(`CAST(${columnSql} AS TEXT) ILIKE ${placeholder}`);
+      else if (operator === "not_contains") clauses.push(`(CAST(${columnSql} AS TEXT) NOT ILIKE ${placeholder} OR ${columnSql} IS NULL)`);
+      else if (operator === "starts_with") clauses.push(`CAST(${columnSql} AS TEXT) ILIKE ${placeholder}`);
+      else if (operator === "greater_than") clauses.push(`${columnSql}>${placeholder}`);
+      else if (operator === "less_than") clauses.push(`${columnSql}<${placeholder}`);
+      else if (operator === "greater_or_equal") clauses.push(`${columnSql}>=${placeholder}`);
+      else if (operator === "less_or_equal") clauses.push(`${columnSql}<=${placeholder}`);
+    }
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    if (search && readableFields.length) {
+      params.push(`%${search}%`);
+      const searchParam = `${params.length}`;
+      clauses.push(`(${readableFields.map((field) => `CAST(${platformFieldSql(field, child)} AS TEXT) ILIKE ${searchParam}`).join(" OR ")})`);
+    }
     const limit = boundedInteger(req.query.limit ?? req.query.pageSize, 25, 100);
-    const offset = Math.max(Number.parseInt(req.query.offset || "0", 10) || 0, 0);
+    const count = await db(`SELECT COUNT(*)::int AS total FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}`, params);
+    const total = count.rows[0]?.total || 0;
+    const pages = total ? Math.ceil(total / limit) : 0;
+    const requestedPage = req.query.page !== undefined
+      ? boundedInteger(req.query.page, 1, Math.max(1, pages || 1))
+      : null;
+    const offset = requestedPage
+      ? (requestedPage - 1) * limit
+      : Math.max(Number.parseInt(req.query.offset || "0", 10) || 0, 0);
+    const page = requestedPage || (Math.floor(offset / limit) + 1);
     const sortField = typeof req.query.sortField === "string"
       ? readableFields.find((field) => field.api_name === req.query.sortField)
       : null;
+    if (req.query.sortField && !sortField) return res.status(400).json({ success: false, message: "Related-list sort field is not readable" });
     const direction = String(req.query.sortDirection || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
     const order = sortField ? ` ORDER BY ${platformFieldSql(sortField, child)} ${direction}` : " ORDER BY id ASC";
-    const count = await db(`SELECT COUNT(*)::int AS total FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}`, params);
     const dataParams = [...params, limit, offset];
     const result = await db(
-      `SELECT id${columns.length ? `, ${columns.join(", ")}` : ""} FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}${order} LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`,
+      `SELECT id${columns.length ? `, ${columns.join(", ")}` : ""} FROM "${child.source_table}" WHERE ${clauses.join(" AND ")}${order} LIMIT ${dataParams.length - 1} OFFSET ${dataParams.length}`,
       dataParams
     );
     const calculate = compileFormulas(childMetadata.fields);
     const hydrated = await hydrateExtensions(db, child, fields, result.rows, req);
     const calculated = await populateRollups(db, child, childMetadata.fields, hydrated.map((record) => calculate(record)), req);
     const records = calculated.map((record) => publicFormulaRecord(fields, record));
-    const total = count.rows[0]?.total || 0;
-    res.json({ success: true, data: records, records, relationship, pageSize: limit, offset, total });
+    res.json({ success: true, data: records, records, relationship, pageSize: limit, offset, total, page, pages });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ success: false, message: error.message });
     if (error instanceof FormulaError) return res.status(422).json({ success: false, code: error.code, message: error.message });
