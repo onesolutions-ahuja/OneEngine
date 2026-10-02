@@ -793,6 +793,18 @@ function WorkspaceField({ field, value, values = {}, onChange }) {
       })
     return <label><span>{field.label || field.api_name}</span><select value={value ?? ''} onChange={(e) => onChange(e.target.value)}><option value="">Select…</option>{options.map((o) => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o.value ?? o}</option>)}</select></label>
   }
-  const htmlType = ['number','decimal','currency'].includes(type) ? 'number' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : type === 'email' ? 'email' : type === 'phone' ? 'tel' : 'text'
-  return <label><span>{field.label || field.api_name}</span><input type={htmlType} value={value ?? ''} required={field.required === true} onChange={(e) => onChange(e.target.value)} /></label>
+  if (type === 'address') {
+    const address = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+    const patch = (key, nextValue) => onChange({ ...address, [key]: nextValue })
+    return <fieldset className="workspace-editor-structured"><legend>{field.label || field.api_name}</legend><input value={address.line1 || ''} placeholder="Address line 1" onChange={(e) => patch('line1', e.target.value)}/><input value={address.line2 || ''} placeholder="Address line 2" onChange={(e) => patch('line2', e.target.value)}/><input value={address.city || ''} placeholder="City" onChange={(e) => patch('city', e.target.value)}/><input value={address.region || ''} placeholder="County / Region" onChange={(e) => patch('region', e.target.value)}/><input value={address.postcode || ''} placeholder="Postcode" onChange={(e) => patch('postcode', e.target.value)}/><input value={address.country || ''} placeholder="Country" onChange={(e) => patch('country', e.target.value)}/></fieldset>
+  }
+  if (type === 'location') {
+    const location = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+    return <fieldset className="workspace-editor-structured"><legend>{field.label || field.api_name}</legend><input type="number" step="any" min="-90" max="90" value={location.latitude ?? location.lat ?? ''} placeholder="Latitude" onChange={(e) => onChange({ ...location, latitude: e.target.value === '' ? '' : Number(e.target.value) })}/><input type="number" step="any" min="-180" max="180" value={location.longitude ?? location.lng ?? location.lon ?? ''} placeholder="Longitude" onChange={(e) => onChange({ ...location, longitude: e.target.value === '' ? '' : Number(e.target.value) })}/></fieldset>
+  }
+  if (type === 'auto_number') return <label><span>{field.label || field.api_name}</span><output>{value || 'Generated on save'}</output></label>
+  if (['long_text','rich_text'].includes(type)) return <label><span>{field.label || field.api_name}</span><textarea rows={type === 'rich_text' ? 6 : 4} value={value ?? ''} onChange={(e) => onChange(e.target.value)}/></label>
+  if (type === 'json') return <label><span>{field.label || field.api_name}</span><textarea rows="6" value={typeof value === 'string' ? value : JSON.stringify(value ?? {}, null, 2)} onChange={(e) => { try { onChange(JSON.parse(e.target.value)) } catch {} }}/></label>
+  const htmlType = ['number','decimal','currency','percent'].includes(type) ? 'number' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : type === 'time' ? 'time' : type === 'email' ? 'email' : type === 'phone' ? 'tel' : type === 'url' ? 'url' : 'text'
+  return <label><span>{field.label || field.api_name}</span><input type={htmlType} step={['decimal','percent'].includes(type) ? 'any' : undefined} value={value ?? ''} required={field.required === true && type !== 'auto_number'} onChange={(e) => onChange(['number','decimal','currency','percent'].includes(type) && e.target.value !== '' ? Number(e.target.value) : e.target.value)} /></label>
 }
