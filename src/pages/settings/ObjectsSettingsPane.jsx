@@ -10,6 +10,7 @@ import RuleEditor from './Platform/RuleEditor.jsx'
 import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
 import ActionsAdmin from './Platform/ActionsAdmin.jsx'
 import ObjectActionEditor from './Platform/ObjectActionEditor.jsx'
+import ObjectButtonEditor from './Platform/ObjectButtonEditor.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import ObjectReportsAdmin from './Platform/ObjectReportsAdmin.jsx'
 import PermissionSetsAdmin from './Platform/PermissionSetsAdmin.jsx'
@@ -676,6 +677,14 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     onCancel={closeEditor}
                     onSaved={async () => { await refreshConfiguration(); closeEditor() }}
                   />
+                ) : editor?.kind === 'object-button' ? (
+                  <ObjectButtonEditor
+                    object={{ ...selected, id: selectedId }}
+                    button={editor.item || null}
+                    onError={(value) => setError(value || '')}
+                    onCancel={closeEditor}
+                    onSaved={async () => { await refreshConfiguration(); closeEditor() }}
+                  />
                 ) : activeTab === 'details' ? (
                   <div className="objects-overview-grid">
                     <section className="objects-overview-card">
@@ -926,16 +935,15 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                 ) : null}
 
                 {activeTab === 'buttons' ? (
-                  <div className="objects-config-list">
-                    <div className="objects-config-list-head">
-                      <strong>Buttons</strong>
-                      <button type="button" className="objects-config-add" onClick={() => { setActiveTab('layouts'); setEditor({ kind: 'layout', item: null, pageType: 'detail' }) }}><Plus size={13}/> Open Layout Builder</button>
-                    </div>
-                    <ObjectDataList title="Configured Buttons" rows={objectData.buttons}
+                  <div className="objects-config-list objects-config-list--stacked">
+                    <ObjectDataList title="Buttons, Links & Actions" rows={objectData.buttons}
                       primary={(row) => row.label || row.button_key || 'Button'}
-                      secondary={(row) => row.button_key || row.target_key || ''}
-                      meta={(row) => row.placement || row.variant || 'button'} />
-                    <div className="objects-detail-placeholder">Buttons and record-action bindings are authored in Forms / Layouts, where placement, variant and target metadata are stored.</div>
+                      secondary={(row) => `${row.button_key || ''}${row.target_key ? ` · ${row.target_type || 'action'}: ${row.target_key}` : ''}`}
+                      meta={(row) => `${row.placement || 'record'} · ${row.variant || 'primary'}`}
+                      actionLabel="Button / Action"
+                      onAdd={() => setEditor({ kind: 'object-button', item: null })}
+                      onRowClick={(row) => setEditor({ kind: 'object-button', item: row })} />
+                    <div className="objects-detail-placeholder">Create the reusable object action here, then place or reorder it in Forms / Layouts for record-type and device-specific experiences.</div>
                   </div>
                 ) : null}
 
