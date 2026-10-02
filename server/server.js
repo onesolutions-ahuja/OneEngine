@@ -2640,7 +2640,7 @@ async function startServer() {
       if (!companyId) throw Object.assign(new Error("Workflow automation requires a company context"), { retryable: false });
       if (preferredUserId) {
         const preferred = await db(
-          `SELECT u.id,u.role_id,u.store_id,u.till_id
+          `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS till_id
              FROM users u
              JOIN roles r ON r.id=u.role_id
             WHERE u.id=$1 AND u.company_id=$2 AND u.active=true
@@ -2656,7 +2656,7 @@ async function startServer() {
         );
       }
       const fallback = await db(
-        `SELECT u.id,u.role_id,u.store_id,u.till_id
+        `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS till_id
            FROM users u
            JOIN roles r ON r.id=u.role_id
           WHERE u.company_id=$1 AND u.active=true
