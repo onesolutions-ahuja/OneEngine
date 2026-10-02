@@ -129,6 +129,8 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
         phishingResistantMfaRequired:draft.phishing_resistant_mfa_required,
         trustSsoMfa:draft.trust_sso_mfa,
         trustedDeviceDays:draft.trusted_device_days,
+        deviceActivationRequired:draft.device_activation_required,
+        skipDeviceActivationOnTrustedNetwork:draft.skip_device_activation_on_trusted_network,
         stepUpPeriodMinutes:draft.step_up_period_minutes,
         requiredLoginAssurance:draft.required_login_assurance,
         passwordAssurance:draft.password_assurance,
@@ -194,6 +196,8 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
         <div className="settings-row"><div><strong>Require phishing-resistant MFA</strong><p>Only WebAuthn/passkey methods satisfy this policy.</p></div><Toggle label="Require phishing-resistant MFA" checked={draft.phishing_resistant_mfa_required===true} onChange={v=>setDraft(d=>({...d,phishing_resistant_mfa_required:v}))}/></div>
         <div className="settings-row"><div><strong>Trust MFA performed by SSO provider</strong><p>When enabled, an SSO provider mapped to High Assurance can satisfy MFA without a second OneEngine challenge.</p></div><Toggle label="Trust SSO MFA" checked={draft.trust_sso_mfa!==false} onChange={v=>setDraft(d=>({...d,trust_sso_mfa:v}))}/></div>
         <NumberRow label="Trusted device lifetime (days)" help="How long a device remains in the trusted-device registry. 0 disables device trust." value={draft.trusted_device_days??30} min={0} max={3650} onChange={v=>setDraft(d=>({...d,trusted_device_days:v}))}/>
+        <div className="settings-row"><div><strong>Require device activation</strong><p>Unknown browsers/devices must complete identity verification before a session is issued.</p></div><Toggle label="Require device activation" checked={draft.device_activation_required===true} onChange={v=>setDraft(d=>({...d,device_activation_required:v}))}/></div>
+        <div className="settings-row"><div><strong>Skip device activation on trusted networks</strong><p>Users on a configured trusted IP range can sign in from a new device without the separate activation challenge.</p></div><Toggle label="Skip device activation on trusted networks" checked={draft.skip_device_activation_on_trusted_network!==false} onChange={v=>setDraft(d=>({...d,skip_device_activation_on_trusted_network:v}))}/></div>
       </section>
 
       <section className="settings-card">
@@ -213,7 +217,7 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
         <h3 className="font-semibold">Sensitive Operation Policies</h3>
         {STEP_UP_RESOURCES.map(([key,label])=>{
           const p=stepPolicies[key]||{}
-          return <div className="settings-row" key={key}><div><strong>{label}</strong><p>{key}</p></div><div className="flex flex-wrap gap-2"><select value={p.action||'ALLOW'} onChange={e=>saveStepPolicy(key,{action:e.target.value,requiredAssurance:p.required_assurance||'HIGH',reverifyAfterMinutes:p.reverify_after_minutes??draft.step_up_period_minutes??15})}><option value="ALLOW">Allow</option><option value="RAISE">Raise to High Assurance</option><option value="BLOCK">Block</option></select>{(p.action||'ALLOW')==='RAISE'?<input type="number" min="1" max="1440" value={p.reverify_after_minutes??draft.step_up_period_minutes??15} onBlur={e=>saveStepPolicy(key,{action:'RAISE',requiredAssurance:'HIGH',reverifyAfterMinutes:Number(e.target.value)})} onChange={()=>{}} aria-label={`${label} reverify minutes`}/>:null}</div></div>
+          return <div className="settings-row" key={key}><div><strong>{label}</strong><p>{key}</p></div><div className="flex flex-wrap gap-2"><select value={p.action||'ALLOW'} onChange={e=>saveStepPolicy(key,{action:e.target.value,requiredAssurance:p.required_assurance||'HIGH',reverifyAfterMinutes:p.reverify_after_minutes??draft.step_up_period_minutes??15})}><option value="ALLOW">Allow</option><option value="RAISE">Raise to High Assurance</option><option value="BLOCK">Block</option></select>{(p.action||'ALLOW')==='RAISE'?<input type="number" min="1" max="1440" defaultValue={p.reverify_after_minutes??draft.step_up_period_minutes??15} onBlur={e=>saveStepPolicy(key,{action:'RAISE',requiredAssurance:'HIGH',reverifyAfterMinutes:Number(e.target.value)})} aria-label={`${label} reverify minutes`}/>:null}</div></div>
         })}
       </section>
 
