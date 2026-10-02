@@ -633,7 +633,7 @@ export const platformSchema = `
     ADD COLUMN IF NOT EXISTS visibility_scope VARCHAR(20) NOT NULL DEFAULT 'company',
     ADD COLUMN IF NOT EXISTS shared_role_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     ADD COLUMN IF NOT EXISTS filter_model JSONB NOT NULL DEFAULT '{}'::jsonb;
-  DO $ BEGIN
+  DO $$ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint WHERE conname='platform_list_views_visibility_scope_check'
     ) THEN
@@ -641,7 +641,7 @@ export const platformSchema = `
         ADD CONSTRAINT platform_list_views_visibility_scope_check
         CHECK (visibility_scope IN ('private','company','roles'));
     END IF;
-  END $;
+  END $$;
   CREATE TABLE IF NOT EXISTS platform_list_view_preferences (
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -707,7 +707,7 @@ export const platformSchema = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
-  DO $ BEGIN
+  DO $$ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint WHERE conname='platform_layout_assignments_device_check'
     ) THEN
@@ -715,7 +715,7 @@ export const platformSchema = `
         ADD CONSTRAINT platform_layout_assignments_device_check
         CHECK (device_profile IN ('any','desktop','tablet','mobile'));
     END IF;
-  END $;
+  END $$;
   CREATE INDEX IF NOT EXISTS idx_platform_layout_assignments_layout
     ON platform_layout_assignments(layout_id, active);
   CREATE INDEX IF NOT EXISTS idx_platform_layout_assignments_scope
@@ -751,7 +751,7 @@ export const platformSchema = `
      SET lifecycle_status=CASE WHEN active=true THEN 'ACTIVE' ELSE 'INACTIVE' END
    WHERE lifecycle_status IS NULL OR lifecycle_status NOT IN ('DRAFT','ACTIVE','INACTIVE');
   UPDATE platform_pages SET active_version=version WHERE active=true AND active_version IS NULL;
-  DO $ BEGIN
+  DO $$ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint WHERE conname='platform_pages_lifecycle_status_check'
     ) THEN
@@ -759,7 +759,7 @@ export const platformSchema = `
         ADD CONSTRAINT platform_pages_lifecycle_status_check
         CHECK (lifecycle_status IN ('DRAFT','ACTIVE','INACTIVE'));
     END IF;
-  END $;
+  END $$;
   CREATE TABLE IF NOT EXISTS platform_page_versions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     page_id UUID NOT NULL REFERENCES platform_pages(id) ON DELETE CASCADE,
@@ -850,7 +850,7 @@ export const platformSchema = `
      SET lifecycle_status=CASE WHEN active=true THEN 'ACTIVE' ELSE 'INACTIVE' END
    WHERE lifecycle_status IS NULL OR lifecycle_status NOT IN ('DRAFT','ACTIVE','INACTIVE');
   UPDATE platform_layouts SET active_version=version WHERE active=true AND active_version IS NULL;
-  DO $ BEGIN
+  DO $$ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint WHERE conname='platform_layouts_lifecycle_status_check'
     ) THEN
@@ -858,7 +858,7 @@ export const platformSchema = `
         ADD CONSTRAINT platform_layouts_lifecycle_status_check
         CHECK (lifecycle_status IN ('DRAFT','ACTIVE','INACTIVE'));
     END IF;
-  END $;
+  END $$;
   CREATE TABLE IF NOT EXISTS platform_layout_versions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     layout_id UUID NOT NULL REFERENCES platform_layouts(id) ON DELETE CASCADE,
