@@ -21,6 +21,10 @@ on:
       - "server/database/init.js"
       - "server/server.js"
 
+concurrency:
+  group: workflow-builder-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

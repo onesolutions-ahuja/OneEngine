@@ -17,10 +17,10 @@ const WORKFLOW_VISUAL_CSS = `
   }
   .workflow-builder-header {
     display: grid;
-    grid-template-columns: auto minmax(180px, .95fr) minmax(170px, .8fr) minmax(150px, .72fr) auto;
-    gap: 10px;
-    align-items: end;
-    padding: 12px;
+    grid-template-columns: auto minmax(210px, .8fr) minmax(0, 1.2fr);
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
     border: 1px solid var(--wf-border);
     border-radius: 14px;
     background: rgba(255,255,255,.98);
@@ -29,13 +29,45 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-builder-heading {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     margin-right: 4px;
+  }
+  .workflow-builder-back {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #d8dde6;
+    border-radius: 6px;
+    background: #fff;
+    color: #444;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .workflow-builder-title-copy { min-width: 0; }
+  .workflow-builder-title-copy small {
+    display: block;
+    margin-top: 2px;
+    color: #706e6b;
+    font-size: 9px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .workflow-builder-status {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 2px;
+    border-radius: 999px;
+    background: #f3f3f3;
+    padding: 2px 7px;
+    color: #444;
+    font-size: 8px;
+    font-weight: 700;
   }
   .workflow-builder-heading h2 {
     margin: 0;
     color: #13213a;
-    font-size: 21px;
+    font-size: 18px;
     line-height: 1.1;
     font-weight: 760;
     letter-spacing: -.025em;
@@ -56,9 +88,11 @@ const WORKFLOW_VISUAL_CSS = `
   }
   .workflow-builder-actions {
     display: flex;
+    min-width: 0;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
   }
   .workflow-save-button {
     min-height: 38px;
@@ -82,6 +116,8 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 12px;
     cursor: pointer;
   }
+  .workflow-icon-button { width: 34px; min-height: 34px; padding: 0; font-size: 16px; }
+  .workflow-cancel-button:disabled, .workflow-save-button:disabled { opacity: .45; cursor: not-allowed; }
   .workflow-ready-dot {
     width: 8px;
     height: 8px;
@@ -233,6 +269,16 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-resource-choice:hover { background: #f3f9ff; }
   .workflow-resource-choice strong { font-size: 11px; }
   .workflow-resource-choice small { color: #706e6b; font-size: 9px; line-height: 1.3; }
+  .workflow-manager-item { border-bottom: 1px solid #f1f3f6; }
+  .workflow-manager-item-row { display: grid; grid-template-columns: minmax(0,1fr) 28px; align-items: center; }
+  .workflow-manager-item-row .workflow-palette-item { width: 100%; border-bottom: 0; }
+  .workflow-manager-chevron { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: #706e6b; cursor: pointer; }
+  .workflow-manager-chevron:hover { background: #f3f3f3; }
+  .workflow-manager-detail { margin: -2px 6px 7px 34px; border-left: 2px solid #d8dde6; padding: 5px 8px; }
+  .workflow-manager-detail > div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-size: 8px; }
+  .workflow-manager-detail span { color: #706e6b; }
+  .workflow-manager-detail strong { max-width: 125px; overflow: hidden; color: #181818; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-manager-detail p { margin: 4px 0 0; color: #706e6b; font-size: 8px; line-height: 1.35; }
   .workflow-palette-group-title {
     margin: 12px 4px 6px;
     color: #94a3b8;
@@ -540,6 +586,13 @@ const WORKFLOW_VISUAL_CSS = `
     font-weight: 760;
     line-height: 1.25;
   }
+  .workflow-node-description {
+    position: absolute;
+    right: 34px;
+    top: 12px;
+    color: #706e6b;
+    font-size: 10px;
+  }
   .workflow-node-note {
     display: block;
     margin-top: 5px;
@@ -683,6 +736,49 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-node-menu.branch-menu > summary { width: 22px; height: 22px; font-size: 15px; }
   .workflow-branch-add { width: 24px; height: 24px; border: 1px solid #8fa6bf; border-radius: 999px; background: #fff; color: #0176d3; font-size: 16px; line-height: 20px; cursor: pointer; }
   .workflow-branch-add:hover { border-color: #0176d3; background: #f3f9ff; }
+  .workflow-owned-step { display: flex; width: 100%; flex-direction: column; align-items: center; gap: 7px; }
+  .workflow-branch-map-single { justify-content: center; overflow: visible; }
+  .workflow-branch-map-single > .workflow-branch-path { max-width: 210px; flex-grow: 0; }
+  .workflow-branch-path.is-fault .workflow-branch-label { color: #ba0517; }
+  .workflow-branch-path.is-fault .workflow-branch-line { background: #ea001e; }
+  .workflow-fault-map { margin-top: 4px; }
+  .workflow-start-paths { margin-top: 8px; }
+  .workflow-nested-paths { width: 100%; }
+  .workflow-nested-map {
+    width: 100%;
+    max-width: 100%;
+    margin: 5px 0 0;
+    transform: none;
+    overflow-x: auto;
+    padding: 16px 2px 2px;
+    gap: 6px;
+  }
+  .workflow-nested-map .workflow-branch-path { min-width: 118px; flex-basis: 118px; }
+  .workflow-branch-collapse {
+    position: absolute;
+    left: -24px;
+    top: 7px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border: 1px solid #c9c7c5;
+    border-radius: 999px;
+    background: #fff;
+    color: #444;
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .workflow-connector-label {
+    position: absolute;
+    left: calc(50% + 18px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: max-content;
+    color: #706e6b;
+    font-size: 8px;
+    font-weight: 700;
+  }
   .workflow-end-node {
     display: inline-flex;
     align-items: center;
@@ -696,6 +792,15 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 10px;
   }
   .workflow-end-node span { font-size: 7px; color: #706e6b; }
+  .workflow-action-picker { overflow: hidden; border: 1px solid #d8dde6; border-radius: 6px; background: #fff; }
+  .workflow-action-picker-search { position: relative; padding: 8px; border-bottom: 1px solid #eef1f6; }
+  .workflow-action-picker-search span { position: absolute; left: 17px; top: 17px; color: #706e6b; font-size: 11px; }
+  .workflow-action-picker-search input { width: 100%; min-height: 34px; box-sizing: border-box; border: 1px solid #c9c7c5; border-radius: 4px; padding: 6px 8px 6px 26px; font-size: 11px; }
+  .workflow-action-picker-scroll { max-height: 290px; overflow: auto; padding: 5px 7px 8px; }
+  .workflow-action-choice { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 4px; background: #fff; padding: 7px; text-align: left; cursor: pointer; }
+  .workflow-action-choice:hover { background: #f3f9ff; }
+  .workflow-action-choice strong { display: block; color: #181818; font-size: 10px; }
+  .workflow-action-choice small { display: block; margin-top: 2px; color: #706e6b; font-size: 8px; line-height: 1.25; }
 
   .workflow-properties-panel {
     padding: 11px;
@@ -788,7 +893,7 @@ const WORKFLOW_VISUAL_CSS = `
     .workflow-visual-shell.palette-collapsed { grid-template-columns: minmax(360px, 1fr) 300px; }
     .workflow-visual-shell.properties-collapsed { grid-template-columns: 210px minmax(360px, 1fr); }
     .workflow-builder-header {
-      grid-template-columns: auto minmax(170px, .9fr) minmax(160px, .75fr) minmax(145px, .7fr) auto;
+      grid-template-columns: auto minmax(190px, .8fr) minmax(0, 1.2fr);
     }
   }
   @media (max-width: 1050px) {
@@ -856,7 +961,7 @@ const actionOptions = [
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
   "ASSIGNMENT","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
-  "CONDITION","WAIT","RUN_SUBFLOW","STOP",
+  "CONDITION","WAIT","RUN_SUBFLOW",
 ]);
 
 const FLOW_ELEMENT_VISUALS = {
@@ -875,6 +980,10 @@ const FLOW_ELEMENT_VISUALS = {
 
 function flowElementVisual(type = "") {
   return FLOW_ELEMENT_VISUALS[String(type || "").toUpperCase()] || { icon: "⚡", color: "#0b5cab", family: "Action" };
+}
+
+function flowElementSupportsFaultPath(type = "") {
+  return !["CONDITION","LOOP","WAIT","ASSIGNMENT","STOP","CONSTANT","FORMULA","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
 }
 
 function flowApiName(label = "") {
@@ -905,6 +1014,7 @@ function makeStep(type = "CREATE_RECORD") {
       variableType: "text",
       operator: "set",
       value: "",
+      assignments: [],
       resourceName: "",
       resourceType: "text",
       resultType: "number",
@@ -937,6 +1047,7 @@ function makeStep(type = "CREATE_RECORD") {
       workflowInputs: {},
       condition: { type: "all", rules: [blankCondition()] },
       outcomes: [],
+      defaultLabel: "Default Outcome",
       defaultBranch: [],
       ifBranch: [],
       elseBranch: [],
@@ -1040,17 +1151,26 @@ function workflowActionIssue(step, definition = null) {
     if (!config.apiName || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(String(config.apiName))) return "Enter a valid API Name.";
   }
   if (step.type === "ASSIGNMENT") {
-    if (!config.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.variableName))) return "Enter a valid variable name.";
-    if (!config.variableType) return "Choose a variable type.";
-    if (!config.operator) return "Choose an assignment operation.";
+    if (config.resourceOnly === true) {
+      if (!config.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.variableName))) return "Enter a valid variable API Name.";
+      if (!config.variableType) return "Choose a variable data type.";
+    } else {
+      const assignments = Array.isArray(config.assignments) && config.assignments.length
+        ? config.assignments
+        : (config.variableName ? [{ variable: `variables.${config.variableName}`, variableType: config.variableType, operator: config.operator, value: config.value }] : []);
+      if (!assignments.length) return "Add at least one assignment.";
+      if (assignments.some((assignment) => !String(assignment?.variable || "").startsWith("variables."))) return "Choose a Variable for every assignment.";
+      if (assignments.some((assignment) => !assignment?.operator)) return "Choose an operator for every assignment.";
+    }
   }
   if (step.type === "CONDITION") {
     const outcomes = Array.isArray(config.outcomes) ? config.outcomes : [];
     if (outcomes.length) {
       if (outcomes.some((outcome) => !String(outcome?.label || "").trim())) return "Name every Decision outcome.";
       if (outcomes.some((outcome) => !conditionIsValid(outcome?.condition))) return "Complete every Decision outcome condition.";
-      const ids = outcomes.map((outcome) => String(outcome?.id || ""));
-      if (new Set(ids).size !== ids.length) return "Decision outcome identifiers must be unique.";
+      const apiNames = outcomes.map((outcome) => String(outcome?.apiName || flowApiName(outcome?.label || "")));
+      if (apiNames.some((apiName) => !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(apiName))) return "Enter a valid API Name for every Decision outcome.";
+      if (new Set(apiNames).size !== apiNames.length) return "Decision outcome API Names must be unique.";
       const seenTargets = new Set();
       for (const outcome of outcomes) {
         for (const targetId of outcome?.branch || []) {
@@ -1247,19 +1367,20 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         seenVariables.add(step.config.resourceName);
       }
       resources.push({ value: `${prefix}.value`, label: `${label} → Result`, type: step.config.resultType || "step output" });
-    } else if (step.type === "ASSIGNMENT" && step.config?.variableName) {
+    } else if (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true && step.config?.variableName) {
       if (!seenVariables.has(step.config.variableName)) {
         resources.push({
           value: `variables.${step.config.variableName}`,
-          label: `${step.config.variableName} · ${step.config.variableType || "text"}`,
+          label: `${step.config.variableName} · Variable · ${step.config.variableType || "text"}`,
           type: step.config.variableType || "variable",
         });
         seenVariables.add(step.config.variableName);
       }
+    } else if (step.type === "ASSIGNMENT") {
       resources.push({
         value: `${prefix}.value`,
         label: `${label} → Assigned Value`,
-        type: step.config.variableType || "step output",
+        type: "step output",
       });
     } else if (step.type === "LOOP" && step.config?.itemVariable) {
       resources.push(
@@ -1452,41 +1573,27 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
   );
 }
 
-function BranchStepPicker({ label, value = [], onChange, steps = [], currentIndex, candidateFilter = null }) {
-  const candidates = steps
-    .map((candidate, index) => ({ candidate, index }))
-    .filter(({ candidate, index }) => index > currentIndex && (!candidateFilter || candidateFilter(candidate, index)));
-  const selected = new Set(value || []);
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <div className="mb-2 text-xs font-semibold text-slate-700">{label}</div>
-      {!candidates.length ? <p className="text-xs text-slate-500">Add a later action, then assign it to this path.</p> : null}
-      <div className="space-y-1">
-        {candidates.map(({ candidate, index }) => (
-          <label key={candidate.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-700 hover:bg-white">
-            <input
-              type="checkbox"
-              checked={selected.has(candidate.id)}
-              onChange={(event) => {
-                const next = new Set(selected);
-                if (event.target.checked) next.add(candidate.id); else next.delete(candidate.id);
-                onChange([...next]);
-              }}
-            />
-            <span>{index + 1}. {candidate.label || getActionLabel(candidate.type)}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const isVariableResource = step.type === "ASSIGNMENT" && step.config?.resourceOnly === true;
   const isResource = ["CONSTANT","FORMULA"].includes(step.type) || isVariableResource;
-  const actionPickerOptions = registryOptions.filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","SCHEDULE_PATH","WHEN"].includes(option.value));
+  const [actionSearch, setActionSearch] = useState("");
+  const actionPickerOptions = registryOptions.filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","SCHEDULE_PATH","WHEN","STOP"].includes(option.value));
+  const visibleActionPickerOptions = actionPickerOptions.filter((option) => !actionSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || workflowActionCategory(option.value)}`.toLowerCase().includes(actionSearch.trim().toLowerCase()));
+  const actionPickerGroups = visibleActionPickerOptions.reduce((groups, option) => {
+    const category = option.category || workflowActionCategory(option.value) || "Actions";
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(option);
+    return groups;
+  }, {});
   const extraResources = workflowStepResources(allSteps, index, objectFieldCatalog);
+  const variableResourceOptions = allSteps.slice(0, index)
+    .filter((candidate) => candidate.type === "ASSIGNMENT" && candidate.config?.resourceOnly === true && candidate.config?.variableName)
+    .map((candidate) => ({
+      value: `variables.${candidate.config.variableName}`,
+      label: candidate.config.variableName,
+      type: candidate.config.variableType || "text",
+    }));
   const registryDefinition = registryOptions.find((option) => option.value === step.type) || null;
   const updateFieldMapping = (key, value) => {
     const fieldMappings = { ...(step.config?.fieldMappings || {}) };
@@ -1527,17 +1634,32 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Action</label>
-              <select className={inputClass} value="" onChange={(event) => {
-                const nextType = event.target.value;
-                if (!nextType) return;
-                const nextDefinition = registryOptions.find((option) => option.value === nextType);
-                const fresh = makeStep(nextType);
-                updateStep(index, { type: nextType, label: nextDefinition?.label || getActionLabel(nextType), config: { ...fresh.config, apiName: flowApiName(nextDefinition?.label || getActionLabel(nextType)) } });
-              }}>
-                <option value="">Choose an action</option>
-                {actionPickerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-              <p className="mt-1 text-[11px] text-slate-500">Choose a registered OneEngine action. The canvas still uses the standard Flow “Action” element.</p>
+              <div className="workflow-action-picker">
+                <div className="workflow-action-picker-search">
+                  <span>⌕</span>
+                  <input value={actionSearch} onChange={(event) => setActionSearch(event.target.value)} placeholder="Search actions..." aria-label="Search actions" />
+                </div>
+                <div className="workflow-action-picker-scroll">
+                  {Object.entries(actionPickerGroups).map(([category, options]) => (
+                    <div key={category}>
+                      <div className="workflow-palette-group-title">{category}</div>
+                      {options.map((option) => {
+                        const optionVisual = flowElementVisual(option.value);
+                        return <button key={option.value} type="button" className="workflow-action-choice" onClick={() => {
+                          const nextType = option.value;
+                          const fresh = makeStep(nextType);
+                          updateStep(index, { type: nextType, label: option.label || getActionLabel(nextType), config: { ...fresh.config, apiName: flowApiName(option.label || getActionLabel(nextType)) } });
+                        }}>
+                          <span className="workflow-palette-icon" style={{ background: optionVisual.color }}>{optionVisual.icon}</span>
+                          <span><strong>{option.label || option.value}</strong>{option.description ? <small>{option.description}</small> : null}</span>
+                        </button>;
+                      })}
+                    </div>
+                  ))}
+                  {!visibleActionPickerOptions.length ? <div className="workflow-palette-empty">No matching actions</div> : null}
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">Actions come from the OneEngine action registry, but they use the standard Flow Action element on the canvas.</p>
             </div>
           </div>
         );
@@ -1559,7 +1681,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               </select>
             </div>
             <ResourceOrLiteralInput label="Fixed value" value={step.config?.value ?? ""} onChange={(value) => updateConfig({ value })} rootObjectKey={rootObjectKey} extraResources={[]} type={step.config?.resourceType || "text"} required allowResource={false} />
-            <p className="text-[11px] text-slate-500">Constants are fixed for this workflow run and are exposed to later steps as Resources.</p>
+            <p className="text-[11px] text-slate-500">Constants keep the same value for the flow run and are available as Resources.</p>
           </div>
         );
       case "FORMULA":
@@ -1608,9 +1730,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <input className={inputClass} value={step.config?.itemVariable || "currentItem"} onChange={(event) => updateConfig({ itemVariable: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} />
               <p className="mt-1 text-[11px] text-slate-500">Steps inside the Loop can use this Resource to access the item being processed.</p>
             </div>
-            <BranchStepPicker label="Loop body steps" value={step.config?.bodyBranch || []} onChange={(bodyBranch) => updateConfig({ bodyBranch })} steps={allSteps} currentIndex={index} />
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-              Loop bodies support durable Wait. Completed iterations replay idempotently after resume, so already-finished side effects are not repeated.
+              Add elements to the <strong>For Each Item</strong> path using the + insertion points on the canvas. The flow continues on <strong>After Last</strong> when the collection is finished.
             </div>
           </div>
         );
@@ -1649,57 +1770,70 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <p className="text-[11px] text-slate-500">All selected records are updated in one scoped database operation rather than one update per Loop iteration.</p>
           </div>
         );
-      case "ASSIGNMENT":
+      case "ASSIGNMENT": {
+        const rows = Array.isArray(step.config?.assignments) && step.config.assignments.length
+          ? step.config.assignments
+          : (step.config?.variableName
+              ? [{ id: "legacy-assignment", variable: `variables.${step.config.variableName}`, variableType: step.config.variableType || "text", operator: step.config.operator || "set", value: step.config.value ?? "" }]
+              : [{ id: `assignment-${step.id}`, variable: "", variableType: "text", operator: "set", value: "" }]);
+        const setRows = (assignments) => updateConfig({ assignments, variableName: "", value: "" });
         return (
           <div className="space-y-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Variable name</label>
-              <input
-                className={inputClass}
-                value={step.config?.variableName || ""}
-                onChange={(event) => updateConfig({ variableName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })}
-                placeholder="e.g. followUpDate"
-              />
-              <p className="mt-1 text-[11px] text-slate-500">This becomes available to later steps as a Resource.</p>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Type</label>
-                <select className={inputClass} value={step.config?.variableType || "text"} onChange={(event) => updateConfig({ variableType: event.target.value, operator: "set", value: "" })}>
-                  <option value="text">Text</option>
-                  <option value="number">Number</option>
-                  <option value="boolean">Boolean</option>
-                  <option value="date">Date</option>
-                  <option value="datetime">Date / Time</option>
-                  <option value="record">Record</option>
-                  <option value="collection">Collection</option>
-                  <option value="object">Object</option>
-                </select>
+            {!variableResourceOptions.length ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                Create a Variable from Manager → New Resource before configuring an Assignment.
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Operation</label>
-                <select className={inputClass} value={step.config?.operator || "set"} onChange={(event) => updateConfig({ operator: event.target.value })}>
-                  <option value="set">Set value</option>
-                  {step.config?.variableType === "number" ? <option value="add">Add</option> : null}
-                  {step.config?.variableType === "number" ? <option value="subtract">Subtract</option> : null}
-                  {step.config?.variableType === "collection" ? <option value="append">Append to collection</option> : null}
-                </select>
-              </div>
-            </div>
-            <ResourceOrLiteralInput
-              label="Value"
-              value={step.config?.value ?? ""}
-              onChange={(value) => updateConfig({ value })}
-              rootObjectKey={rootObjectKey}
-              extraResources={extraResources}
-              type={step.config?.variableType || "string"}
-              required
-            />
-            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-              Later steps will find this under Resources as <strong>{step.config?.variableName ? `variables.${step.config.variableName}` : "your variable"}</strong>.
-            </div>
+            ) : null}
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Set Variable Values</div>
+            {rows.map((assignment, assignmentIndex) => {
+              const selectedVariable = variableResourceOptions.find((option) => option.value === assignment.variable);
+              const variableType = assignment.variableType || selectedVariable?.type || "text";
+              return <div key={assignment.id || assignmentIndex} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="grid gap-2 md:grid-cols-[1.1fr_.8fr_auto]">
+                  <label className="block text-xs font-medium text-slate-600">Variable
+                    <select className={inputClass} value={assignment.variable || ""} onChange={(event) => {
+                      const option = variableResourceOptions.find((item) => item.value === event.target.value);
+                      const next = [...rows];
+                      next[assignmentIndex] = { ...assignment, variable: event.target.value, variableType: option?.type || "text", operator: "set", value: "" };
+                      setRows(next);
+                    }}>
+                      <option value="">Select a Variable</option>
+                      {variableResourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label} · {option.type}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-medium text-slate-600">Operator
+                    <select className={inputClass} value={assignment.operator || "set"} onChange={(event) => {
+                      const next = [...rows];
+                      next[assignmentIndex] = { ...assignment, operator: event.target.value };
+                      setRows(next);
+                    }}>
+                      <option value="set">Equals</option>
+                      {variableType === "number" ? <option value="add">Add</option> : null}
+                      {variableType === "number" ? <option value="subtract">Subtract</option> : null}
+                      {variableType === "collection" ? <option value="append">Add</option> : null}
+                    </select>
+                  </label>
+                  <button type="button" className="self-end rounded border border-slate-200 px-2 py-2 text-xs text-red-600" disabled={rows.length <= 1} onClick={() => setRows(rows.filter((_, rowIndex) => rowIndex !== assignmentIndex))}>Remove</button>
+                </div>
+                <ResourceOrLiteralInput
+                  label="Value"
+                  value={assignment.value ?? ""}
+                  onChange={(value) => {
+                    const next = [...rows];
+                    next[assignmentIndex] = { ...assignment, value, variableType };
+                    setRows(next);
+                  }}
+                  rootObjectKey={rootObjectKey}
+                  extraResources={extraResources}
+                  type={variableType || "string"}
+                  required
+                />
+              </div>;
+            })}
+            <button type="button" className="text-sm text-blue-700" onClick={() => setRows([...rows, { id: `assignment-${Date.now()}`, variable: "", variableType: "text", operator: "set", value: "" }])}>+ Add Assignment</button>
           </div>
         );
+      }
       case "GET_RECORDS": {
         const filters = Array.isArray(step.config?.filters) ? step.config.filters : [];
         const updateFilter = (filterIndex, patch) => {
@@ -1927,11 +2061,11 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 const selected = availableWorkflows.find((item) => String(item.id) === String(event.target.value));
                 updateConfig({ workflowId: event.target.value, workflowInputs: {}, declaredOutputs: selected?.outputContract || [] });
               }}>
-                <option value="">Select a saved workflow</option>
+                <option value="">Select a saved flow</option>
                 {step.config?.workflowId && !availableWorkflows.some((item) => String(item.id) === String(step.config.workflowId)) ? <option value={step.config.workflowId} disabled>{step.config.workflowId} (unavailable)</option> : null}
                 {availableWorkflows.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
-              {!availableWorkflows.length ? <p className="text-xs text-slate-500">Save another active workflow before selecting a subflow.</p> : null}
+              {!availableWorkflows.length ? <p className="text-xs text-slate-500">Save another active flow before selecting a subflow.</p> : null}
             </div>
             {inputContract.length ? (
               <div className="space-y-2">
@@ -1953,7 +2087,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Input mapping</label>
                 <MappingEditor value={step.config?.workflowInputs || {}} onChange={(workflowInputs) => updateConfig({ workflowInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Subflow input" valueLabel="Map from resource" />
-                <p className="mt-1 text-[11px] text-slate-500">This workflow has no formal input contract yet, so legacy free-form mapping remains available.</p>
+                <p className="mt-1 text-[11px] text-slate-500">This flow has no formal input contract yet, so legacy free-form mapping remains available.</p>
               </div>
             )}
             {outputContract.length ? (
@@ -1974,45 +2108,63 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           : [{
               id: "outcome-1",
               label: "Outcome 1",
+              apiName: "Outcome_1",
               condition: step.config?.condition || { type: "all", rules: [blankCondition()] },
               branch: step.config?.ifBranch || [],
             }];
         const defaultBranch = configuredOutcomes.length ? (step.config?.defaultBranch || []) : (step.config?.elseBranch || []);
-        const setOutcomes = (nextOutcomes) => updateConfig({ outcomes: nextOutcomes, defaultBranch, condition: null, ifBranch: [], elseBranch: [] });
+        const defaultLabel = step.config?.defaultLabel || "Default Outcome";
+        const setOutcomes = (nextOutcomes) => updateConfig({ outcomes: nextOutcomes, defaultBranch, defaultLabel, condition: null, ifBranch: [], elseBranch: [] });
         return (
           <div className="space-y-4">
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-              Outcomes are checked from top to bottom. The first matching outcome runs; if none match, the Default path runs.
+              Outcomes are evaluated in the order shown. The first matching outcome runs. If none match, the Default Outcome runs.
             </div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Outcome Order</div>
             {outcomes.map((outcome, outcomeIndex) => (
               <div key={outcome.id || outcomeIndex} className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    className={inputClass}
-                    value={outcome.label || ""}
-                    onChange={(event) => {
+                <div className="flex items-start gap-2">
+                  <div className="grid flex-1 gap-2 md:grid-cols-2">
+                    <label className="block text-xs font-medium text-slate-600">Label
+                      <input
+                        className={inputClass}
+                        value={outcome.label || ""}
+                        onChange={(event) => {
+                          const nextLabel = event.target.value;
+                          const previousGenerated = flowApiName(outcome.label || "");
+                          const next = [...outcomes];
+                          next[outcomeIndex] = { ...outcome, label: nextLabel, apiName: !outcome.apiName || outcome.apiName === previousGenerated ? flowApiName(nextLabel) : outcome.apiName };
+                          setOutcomes(next);
+                        }}
+                        placeholder={`Outcome ${outcomeIndex + 1}`}
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-slate-600">API Name
+                      <input className={inputClass} value={outcome.apiName || flowApiName(outcome.label || `Outcome ${outcomeIndex + 1}`)} onChange={(event) => {
+                        const next = [...outcomes];
+                        next[outcomeIndex] = { ...outcome, apiName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") };
+                        setOutcomes(next);
+                      }} />
+                    </label>
+                  </div>
+                  <div className="flex gap-1 pt-4">
+                    <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === 0} title="Move outcome up" onClick={() => {
+                      if (outcomeIndex === 0) return;
                       const next = [...outcomes];
-                      next[outcomeIndex] = { ...outcome, label: event.target.value };
+                      [next[outcomeIndex - 1], next[outcomeIndex]] = [next[outcomeIndex], next[outcomeIndex - 1]];
                       setOutcomes(next);
-                    }}
-                    placeholder={`Outcome ${outcomeIndex + 1}`}
-                  />
-                  <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === 0} onClick={() => {
-                    if (outcomeIndex === 0) return;
-                    const next = [...outcomes];
-                    [next[outcomeIndex - 1], next[outcomeIndex]] = [next[outcomeIndex], next[outcomeIndex - 1]];
-                    setOutcomes(next);
-                  }}>↑</button>
-                  <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === outcomes.length - 1} onClick={() => {
-                    if (outcomeIndex >= outcomes.length - 1) return;
-                    const next = [...outcomes];
-                    [next[outcomeIndex], next[outcomeIndex + 1]] = [next[outcomeIndex + 1], next[outcomeIndex]];
-                    setOutcomes(next);
-                  }}>↓</button>
-                  <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-red-600" disabled={outcomes.length <= 1} onClick={() => {
-                    if (outcomes.length <= 1) return;
-                    setOutcomes(outcomes.filter((_, itemIndex) => itemIndex !== outcomeIndex));
-                  }}>Remove</button>
+                    }}>↑</button>
+                    <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === outcomes.length - 1} title="Move outcome down" onClick={() => {
+                      if (outcomeIndex >= outcomes.length - 1) return;
+                      const next = [...outcomes];
+                      [next[outcomeIndex], next[outcomeIndex + 1]] = [next[outcomeIndex + 1], next[outcomeIndex]];
+                      setOutcomes(next);
+                    }}>↓</button>
+                    <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-red-600" disabled={outcomes.length <= 1} onClick={() => {
+                      if (outcomes.length <= 1) return;
+                      setOutcomes(outcomes.filter((_, itemIndex) => itemIndex !== outcomeIndex));
+                    }}>Remove</button>
+                  </div>
                 </div>
                 <StepConditionEditor
                   objectKey={rootObjectKey}
@@ -2024,41 +2176,26 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                     setOutcomes(next);
                   }}
                 />
-                <BranchStepPicker
-                  label={`${outcome.label || `Outcome ${outcomeIndex + 1}`} path`}
-                  value={outcome.branch || []}
-                  onChange={(branch) => {
-                    const next = [...outcomes];
-                    next[outcomeIndex] = { ...outcome, branch };
-                    setOutcomes(next);
-                  }}
-                  steps={allSteps}
-                  currentIndex={index}
-                />
+                <p className="text-[11px] text-slate-500">Add elements to this outcome from the + insertion points on the canvas.</p>
               </div>
             ))}
             <button type="button" className="text-sm text-blue-700" disabled={outcomes.length >= 20} onClick={() => {
               const nextIndex = outcomes.length + 1;
+              const label = `Outcome ${nextIndex}`;
               setOutcomes([...outcomes, {
                 id: `outcome-${Date.now()}-${nextIndex}`,
-                label: `Outcome ${nextIndex}`,
+                label,
+                apiName: flowApiName(label),
                 condition: { type: "all", rules: [blankCondition()] },
                 branch: [],
               }]);
-            }}>+ Add outcome</button>
-            <BranchStepPicker
-              label="Default · No outcome matched"
-              value={defaultBranch}
-              onChange={(nextDefault) => updateConfig({
-                outcomes,
-                defaultBranch: nextDefault,
-                condition: null,
-                ifBranch: [],
-                elseBranch: [],
-              })}
-              steps={allSteps}
-              currentIndex={index}
-            />
+            }}>+ New Outcome</button>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <label className="block text-xs font-medium text-slate-600">Default Outcome Label
+                <input className={inputClass} value={defaultLabel} onChange={(event) => updateConfig({ outcomes, defaultBranch, defaultLabel: event.target.value, condition: null, ifBranch: [], elseBranch: [] })} />
+              </label>
+              <p className="mt-2 text-[11px] text-slate-500">This path runs only when no configured outcome matches. Add its elements from the canvas.</p>
+            </div>
           </div>
         );
       }
@@ -2094,9 +2231,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             ) : (
               <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Run at" value={step.config?.runAt || ""} onChange={(runAt) => updateConfig({ runAt })} />
             )}
-            <BranchStepPicker label="Scheduled path steps" value={step.config?.branch || []} onChange={(branch) => updateConfig({ branch })} steps={allSteps} currentIndex={index} />
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-              The immediate workflow continues. These selected steps run later as a durable child run and appear separately in Run History.
+              Add elements to this Scheduled Path from its + insertion points on the canvas. The Run Immediately path continues independently.
             </div>
           </div>
         );
@@ -2201,9 +2337,9 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 <label className="block space-y-1 text-xs text-slate-600">
                   <span>When this step fails</span>
                   <select className={inputClass} value={step.config?.faultMode || "FAIL"} onChange={(event) => updateConfig({ faultMode: event.target.value })}>
-                    <option value="FAIL">Fail the workflow</option>
+                    <option value="FAIL">Fail the flow</option>
                     <option value="CONTINUE">Continue to the next step</option>
-                    <option value="STOP">Stop the workflow without running later steps</option>
+                    <option value="STOP">Stop the flow without running later elements</option>
                     <option value="ROUTE">Run an error path</option>
                     <option value="RETRY">Retry, then use the error path or fail</option>
                   </select>
@@ -2219,15 +2355,11 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                   </label>
                 ) : null}
                 {["ROUTE","RETRY"].includes(step.config?.faultMode || "FAIL") ? (
-                  <BranchStepPicker
-                    label={step.config?.faultMode === "RETRY" ? "If retries still fail, run these steps" : "Run these steps if this element fails"}
-                    value={step.config?.faultBranch || []}
-                    onChange={(faultBranch) => updateConfig({ faultBranch })}
-                    steps={allSteps}
-                    currentIndex={index}
-                  />
+                  <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-[11px] text-red-700">
+                    Add recovery elements to the <strong>Fault</strong> path from the canvas. Fault resources such as Error message and How to fix are available to those elements.
+                  </div>
                 ) : null}
-                <p className="text-[11px] text-slate-500">Recovery steps can use Fault resources such as Error message and How to fix. Retry is capped at three attempts and recorded in Run History.</p>
+                <p className="text-[11px] text-slate-500">Retry is capped at three attempts and recorded in Run History.</p>
               </div>
           </details> : null}
         </div>
@@ -2241,7 +2373,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 }
 
 
-function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {} }) {
+function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [] }) {
   const [selectedId, setSelectedId] = useState("__start__");
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
@@ -2255,6 +2387,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [inspectorNewId, setInspectorNewId] = useState(null);
   const [clipboard, setClipboard] = useState(null);
   const [collapsedBranches, setCollapsedBranches] = useState({});
+  const [managerDetailId, setManagerDetailId] = useState(null);
+  const [startSnapshot, setStartSnapshot] = useState(null);
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -2274,8 +2408,42 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     if (failedId) setSelectedId(failedId);
   }, [debugTrace, workflow.steps]);
 
+  useEffect(() => {
+    if (selectedId === "__start__" && propertiesOpen && !startSnapshot) {
+      setStartSnapshot(JSON.parse(JSON.stringify(workflow)));
+    }
+  }, [selectedId, propertiesOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(`oneengine:flow-builder:collapsed:${workflowId || "new"}`);
+      setCollapsedBranches(stored ? JSON.parse(stored) : {});
+    } catch {
+      setCollapsedBranches({});
+    }
+  }, [workflowId]);
+
+  const toggleBranchCollapse = (stepId, collapsed) => {
+    setCollapsedBranches((current) => {
+      const next = { ...current, [stepId]: collapsed };
+      if (typeof window !== "undefined") {
+        try { window.localStorage.setItem(`oneengine:flow-builder:collapsed:${workflowId || "new"}`, JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
+  };
+
+  const inspectStart = () => {
+    setStartSnapshot(JSON.parse(JSON.stringify(workflow)));
+    setInspectorSnapshot(null);
+    setInspectorNewId(null);
+    setSelectedId("__start__");
+    setPropertiesOpen(true);
+  };
   const inspectStep = (stepId) => {
     const current = workflow.steps.find((step) => step.id === stepId);
+    setStartSnapshot(null);
     setInspectorSnapshot(current ? JSON.parse(JSON.stringify(current)) : null);
     setInspectorNewId(null);
     setSelectedId(stepId);
@@ -2312,18 +2480,22 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setInspectorNewId(null);
   };
   const finishInspector = () => {
+    setStartSnapshot(null);
     setInspectorSnapshot(null);
     setInspectorNewId(null);
     setPropertiesOpen(false);
   };
   const cancelInspector = () => {
-    if (inspectorNewId && selectedId === inspectorNewId) {
+    if (selectedId === "__start__" && startSnapshot) {
+      setWorkflow(JSON.parse(JSON.stringify(startSnapshot)));
+    } else if (inspectorNewId && selectedId === inspectorNewId) {
       removeStepById(inspectorNewId);
       setSelectedId("__start__");
     } else if (inspectorSnapshot) {
       const snapshot = JSON.parse(JSON.stringify(inspectorSnapshot));
       setWorkflow((current) => ({ ...current, steps: current.steps.map((step) => step.id === snapshot.id ? snapshot : step) }));
     }
+    setStartSnapshot(null);
     setInspectorSnapshot(null);
     setInspectorNewId(null);
     setPropertiesOpen(false);
@@ -2351,6 +2523,35 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       if (!branchTarget) {
         return { ...current, steps: [...current.steps.slice(0, index), step, ...current.steps.slice(index)] };
       }
+      if (branchTarget.kind && branchTarget.ownerId) {
+        const ownerIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(branchTarget.ownerId));
+        if (ownerIndex < 0) return { ...current, steps: [...current.steps, step] };
+        const owner = current.steps[ownerIndex];
+        const key = branchTarget.kind === "loop" ? "bodyBranch" : branchTarget.kind === "scheduled" ? "branch" : "faultBranch";
+        const targetIds = [...(owner.config?.[key] || [])];
+        const requestedPosition = Number.isInteger(branchTarget.position) ? branchTarget.position : targetIds.length;
+        const branchPosition = Math.max(0, Math.min(requestedPosition, targetIds.length));
+        let branchInsertAt = ownerIndex + 1;
+        if (branchPosition > 0) {
+          const previousIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[branchPosition - 1]));
+          if (previousIndex >= 0) branchInsertAt = previousIndex + 1;
+        } else if (targetIds.length) {
+          const firstIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[0]));
+          if (firstIndex >= 0) branchInsertAt = firstIndex;
+        }
+        const nextBranch = [...targetIds.slice(0, branchPosition), step.id, ...targetIds.slice(branchPosition)];
+        const nextSteps = [...current.steps];
+        nextSteps[ownerIndex] = {
+          ...owner,
+          config: {
+            ...(owner.config || {}),
+            [key]: nextBranch,
+            ...(branchTarget.kind === "fault" ? { faultMode: ["ROUTE","RETRY"].includes(String(owner.config?.faultMode || "").toUpperCase()) ? owner.config.faultMode : "ROUTE" } : {}),
+          },
+        };
+        nextSteps.splice(branchInsertAt, 0, step);
+        return { ...current, steps: nextSteps };
+      }
       const decisionIndex = current.steps.findIndex((candidate) => candidate.id === branchTarget.decisionId);
       if (decisionIndex < 0) return { ...current, steps: [...current.steps, step] };
       const decision = current.steps[decisionIndex];
@@ -2366,14 +2567,23 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         ? [...(decision.config?.defaultBranch || [])]
         : [...(decision.config?.elseBranch || [])];
       const targetIds = branchTarget.outcomeId === "__default__"
-        ? defaultBranch
-        : (outcomes.find((outcome) => String(outcome.id) === String(branchTarget.outcomeId))?.branch || []);
-      const targetIndexes = targetIds.map((id) => current.steps.findIndex((candidate) => candidate.id === id)).filter((itemIndex) => itemIndex >= 0);
-      const branchInsertAt = targetIndexes.length ? Math.max(...targetIndexes) + 1 : decisionIndex + 1;
-      if (branchTarget.outcomeId === "__default__") defaultBranch = [...defaultBranch, step.id];
+        ? [...defaultBranch]
+        : [...(outcomes.find((outcome) => String(outcome.id) === String(branchTarget.outcomeId))?.branch || [])];
+      const requestedPosition = Number.isInteger(branchTarget.position) ? branchTarget.position : targetIds.length;
+      const branchPosition = Math.max(0, Math.min(requestedPosition, targetIds.length));
+      let branchInsertAt = decisionIndex + 1;
+      if (branchPosition > 0) {
+        const previousIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[branchPosition - 1]));
+        if (previousIndex >= 0) branchInsertAt = previousIndex + 1;
+      } else if (targetIds.length) {
+        const firstIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[0]));
+        if (firstIndex >= 0) branchInsertAt = firstIndex;
+      }
+      const nextBranchIds = [...targetIds.slice(0, branchPosition), step.id, ...targetIds.slice(branchPosition)];
+      if (branchTarget.outcomeId === "__default__") defaultBranch = nextBranchIds;
       else {
         const outcomeIndex = outcomes.findIndex((outcome) => String(outcome.id) === String(branchTarget.outcomeId));
-        if (outcomeIndex >= 0) outcomes[outcomeIndex] = { ...outcomes[outcomeIndex], branch: [...(outcomes[outcomeIndex].branch || []), step.id] };
+        if (outcomeIndex >= 0) outcomes[outcomeIndex] = { ...outcomes[outcomeIndex], branch: nextBranchIds };
       }
       const nextSteps = [...current.steps];
       nextSteps[decisionIndex] = {
@@ -2416,9 +2626,12 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   };
   const addFaultPath = (step) => {
     const index = workflow.steps.findIndex((item) => item.id === step.id);
-    if (index < 0) return;
+    if (index < 0 || !flowElementSupportsFaultPath(step.type)) return;
     updateStep(index, { config: { ...(step.config || {}), faultMode: "ROUTE", faultBranch: step.config?.faultBranch || [] } });
-    inspectStep(step.id);
+    setBranchTarget({ kind: "fault", ownerId: step.id, position: (step.config?.faultBranch || []).length });
+    setInsertAt(null);
+    setPaletteTab("elements");
+    setPaletteOpen(true);
   };
   const dropAt = (event, index) => {
     event.preventDefault();
@@ -2436,7 +2649,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     });
   };
   const registeredActionOptions = registryOptions
-    .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","SCHEDULE_PATH"].includes(option.value));
+    .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","SCHEDULE_PATH","STOP"].includes(option.value));
   const palette = [
     ...registryOptions
       .filter((option) => SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(option.value))
@@ -2463,15 +2676,41 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     const mode = String(step.config?.faultMode || "FAIL").toUpperCase();
     return ["ROUTE","RETRY"].includes(mode) ? (step.config?.faultBranch || []).map(String) : [];
   }));
-  const decisionBranchTargetIds = new Set(workflow.steps.flatMap((step) => {
-    if (step.type !== "CONDITION") return [];
-    const outcomes = Array.isArray(step.config?.outcomes) && step.config.outcomes.length
-      ? step.config.outcomes
-      : [{ branch: step.config?.ifBranch || [] }];
-    return [...outcomes.flatMap((outcome) => outcome.branch || []), ...(step.config?.defaultBranch || step.config?.elseBranch || [])].map(String);
+  const ownedCanvasTargetIds = new Set(workflow.steps.flatMap((step) => {
+    const owned = [];
+    if (step.type === "CONDITION") {
+      const outcomes = Array.isArray(step.config?.outcomes) && step.config.outcomes.length
+        ? step.config.outcomes
+        : [{ branch: step.config?.ifBranch || [] }];
+      owned.push(...outcomes.flatMap((outcome) => outcome.branch || []), ...(step.config?.defaultBranch || step.config?.elseBranch || []));
+    }
+    if (step.type === "LOOP") owned.push(...(step.config?.bodyBranch || []));
+    if (step.type === "SCHEDULE_PATH") owned.push(...(step.config?.branch || []));
+    if (["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase())) owned.push(...(step.config?.faultBranch || []));
+    return owned.map(String);
   }));
-  const visibleCanvasSteps = managerElementSteps.filter(({ step }) => !decisionBranchTargetIds.has(String(step.id)));
+  const visibleCanvasSteps = managerElementSteps.filter(({ step }) => !ownedCanvasTargetIds.has(String(step.id)));
   const branchStepById = new Map(workflow.steps.map((step) => [String(step.id), step]));
+  const incomingPathCount = (stepId) => workflow.steps.reduce((count, owner) => {
+    const config = owner.config || {};
+    const references = [
+      ...(Array.isArray(config.outcomes) ? config.outcomes.flatMap((outcome) => outcome?.branch || []) : []),
+      ...(config.defaultBranch || []),
+      ...(config.ifBranch || []),
+      ...(config.elseBranch || []),
+      ...(config.bodyBranch || []),
+      ...(config.faultBranch || []),
+      ...(config.branch || []),
+    ];
+    return count + references.filter((id) => String(id) === String(stepId)).length;
+  }, 0);
+  const stepOutputCount = (stepId) => stepResources.filter((resource) => String(resource.value || "").startsWith(`steps.${stepId}.`)).length;
+  const resourceUsageCount = (step) => {
+    const resourceName = step.type === "ASSIGNMENT" ? step.config?.variableName : step.config?.resourceName;
+    if (!resourceName) return 0;
+    const needle = `variables.${resourceName}`;
+    return workflow.steps.filter((candidate) => candidate.id !== step.id && JSON.stringify(candidate.config || {}).includes(needle)).length;
+  };
   const addScheduledPath = () => {
     const path = makeStep("SCHEDULE_PATH");
     path.label = "Scheduled Path";
@@ -2503,6 +2742,84 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const resourceQuery = paletteSearch.trim().toLowerCase();
   const visibleGlobalResources = globalResources.filter((item) => !resourceQuery || `${item.label} ${item.detail} ${item.type}`.toLowerCase().includes(resourceQuery));
   const visibleStepResources = stepResources.filter((item) => !resourceQuery || `${item.label} ${item.type}`.toLowerCase().includes(resourceQuery));
+
+  function openPath(target) {
+    setBranchTarget(target);
+    setInsertAt(null);
+    setPaletteTab("elements");
+    setPaletteOpen(true);
+  }
+
+  function pathTarget(kind, ownerId, outcomeId, position) {
+    return kind === "decision"
+      ? { decisionId: ownerId, outcomeId, position }
+      : { kind, ownerId, position };
+  }
+
+  function renderOwnedPath({ ownerId, kind, ids = [], label, outcomeId = null, tone = "", depth = 0, ancestry = [] }) {
+    const children = ids.map((id) => branchStepById.get(String(id))).filter(Boolean);
+    return (
+      <div key={`${ownerId}-${kind}-${outcomeId || label}`} className={`workflow-branch-path ${tone ? `is-${tone}` : ""}`}>
+        <span className="workflow-branch-line" />
+        <span className="workflow-branch-label">{label}</span>
+        <div className="workflow-branch-stack">
+          <button type="button" className="workflow-branch-add" aria-label={`Add first element to ${label}`} onClick={() => openPath(pathTarget(kind, ownerId, outcomeId, 0))}>+</button>
+          {children.map((child, childIndex) => {
+            const childVisual = flowElementVisual(child.type);
+            const childIndexInFlow = workflow.steps.findIndex((item) => item.id === child.id);
+            const childCanCollapse = ["CONDITION","LOOP"].includes(child.type);
+            const childCollapsed = collapsedBranches[child.id] === true;
+            return (
+              <div key={child.id} className="workflow-owned-step">
+                <div className="workflow-branch-node-row">
+                  <button type="button" className={`workflow-branch-node-card ${selectedId === child.id ? "is-selected" : ""}`} onClick={() => inspectStep(child.id)}>
+                    <span className="workflow-branch-node-icon" style={{ background: childVisual.color }}>{childVisual.icon}</span>
+                    <span><small>{SALESFORCE_CORE_ELEMENT_TYPES.has(child.type) ? getActionLabel(child.type) : "Action"}</small><strong>{child.label || getActionLabel(child.type)}</strong></span>
+                  </button>
+                  {childCanCollapse ? <button type="button" className="workflow-branch-collapse" aria-label={childCollapsed ? "Expand paths" : "Collapse paths"} onClick={() => toggleBranchCollapse(child.id, !childCollapsed)}>{childCollapsed ? "▸" : "▾"}</button> : null}
+                  <details className="workflow-node-menu branch-menu">
+                    <summary aria-label={`Open actions for ${child.label || getActionLabel(child.type)}`}>⋮</summary>
+                    <div className="workflow-node-menu-popover">
+                      <button type="button" onClick={() => inspectStep(child.id)}>Edit Element</button>
+                      <button type="button" onClick={() => copyStep(child)}>Copy Element</button>
+                      <button type="button" onClick={() => cutStep(child)}>Cut Element</button>
+                      {flowElementSupportsFaultPath(child.type) ? <button type="button" onClick={() => addFaultPath(child)}>Add Fault Path</button> : null}
+                      <button type="button" className="is-danger" onClick={() => removeStep(childIndexInFlow)}>Delete Element</button>
+                    </div>
+                  </details>
+                </div>
+                {renderNestedPaths(child, depth + 1, ancestry)}
+                <button type="button" className="workflow-branch-add" aria-label={`Add element after ${child.label || getActionLabel(child.type)}`} onClick={() => openPath(pathTarget(kind, ownerId, outcomeId, childIndex + 1))}>+</button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function renderNestedPaths(owner, depth = 0, ancestry = []) {
+    if (!owner?.id || depth > 5 || ancestry.includes(String(owner.id))) return null;
+    const next = [...ancestry, String(owner.id)];
+    const collapsed = collapsedBranches[owner.id] === true;
+    const blocks = [];
+    if (owner.type === "CONDITION" && !collapsed) {
+      const outcomes = Array.isArray(owner.config?.outcomes) && owner.config.outcomes.length
+        ? owner.config.outcomes
+        : [{ id: "outcome-1", label: "Outcome 1", branch: owner.config?.ifBranch || [] }];
+      const paths = outcomes.map((outcome, i) => ({ id: outcome.id || `outcome-${i + 1}`, label: outcome.label || `Outcome ${i + 1}`, ids: outcome.branch || [] }));
+      paths.push({ id: "__default__", label: owner.config?.defaultLabel || "Default Outcome", ids: owner.config?.defaultBranch || owner.config?.elseBranch || [] });
+      blocks.push(<div key="decision" className="workflow-branch-map workflow-nested-map">{paths.map((p) => renderOwnedPath({ ownerId: owner.id, kind: "decision", outcomeId: p.id, ids: p.ids, label: p.label, depth, ancestry: next }))}</div>);
+    }
+    if (owner.type === "LOOP" && !collapsed) {
+      blocks.push(<div key="loop" className="workflow-branch-map workflow-branch-map-single workflow-nested-map">{renderOwnedPath({ ownerId: owner.id, kind: "loop", ids: owner.config?.bodyBranch || [], label: "For Each Item", depth, ancestry: next })}</div>);
+    }
+    if (["ROUTE","RETRY"].includes(String(owner.config?.faultMode || "FAIL").toUpperCase())) {
+      blocks.push(<div key="fault" className="workflow-branch-map workflow-branch-map-single workflow-nested-map">{renderOwnedPath({ ownerId: owner.id, kind: "fault", ids: owner.config?.faultBranch || [], label: "Fault", tone: "fault", depth, ancestry: next })}</div>);
+    }
+    return blocks.length ? <div className="workflow-nested-paths">{blocks}</div> : null;
+  }
+
   return (
     <div className={`workflow-visual-shell ${!paletteOpen ? "palette-collapsed" : ""} ${!propertiesOpen ? "properties-collapsed" : ""}`}>
       {paletteOpen ? <aside className="workflow-node-palette">
@@ -2514,11 +2831,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
         <div className="workflow-palette-search">
           <span>⌕</span>
-          <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder={paletteTab === "elements" ? "Search elements..." : "Search manager..."} aria-label={paletteTab === "elements" ? "Search workflow elements" : "Search workflow manager"} />
+          <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder={paletteTab === "elements" ? "Search elements..." : "Search manager..."} aria-label={paletteTab === "elements" ? "Search flow elements" : "Search flow manager"} />
         </div>
         {paletteTab === "elements" ? (
           <>
-            <p className="workflow-palette-help">{branchTarget ? "Choose an element for this decision path." : insertAt == null ? "Drag an element to the canvas, or use a + insertion point." : "Choose an element to insert at the selected point."}</p>
+            <p className="workflow-palette-help">{branchTarget ? "Choose an element for this outcome path." : insertAt == null ? "Use a + insertion point on the canvas, then choose an element." : "Choose an element to insert at the selected point."}</p>
             <div className="workflow-palette-scroll">
               {Object.entries(paletteGroups).map(([category, options]) => (
                 <div key={category}>
@@ -2527,10 +2844,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <button
                       key={option.value}
                       type="button"
-                      draggable
                       title={option.description || option.label}
                       aria-label={option.label || option.value}
-                      onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)}
                       onClick={() => addFromPalette(option.value, insertAt == null ? workflow.steps.length : insertAt)}
                       className="workflow-palette-item"
                     >
@@ -2562,22 +2877,49 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <div className="workflow-palette-scroll">
               {managerElementSteps.length ? <div className="workflow-palette-group-title">Elements</div> : null}
               {managerElementSteps.map(({ step, index }) => (
-                <button key={step.id} type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
-                  <span className="workflow-palette-item-copy">
-                    <strong>{step.label || getActionLabel(step.type)}</strong>
-                    <small>{getActionLabel(step.type)} · Step {index + 1}</small>
-                  </span>
-                </button>
+                <div key={step.id} className="workflow-manager-item">
+                  <div className="workflow-manager-item-row">
+                    <button type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
+                      <span className="workflow-palette-icon" style={{ background: flowElementVisual(step.type).color }}>{flowElementVisual(step.type).icon}</span>
+                      <span className="workflow-palette-item-copy">
+                        <strong>{step.label || getActionLabel(step.type)}</strong>
+                        <small>{SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action"} · Step {index + 1}</small>
+                      </span>
+                    </button>
+                    <button type="button" className="workflow-manager-chevron" aria-label={`Show details for ${step.label || getActionLabel(step.type)}`} onClick={() => setManagerDetailId((current) => current === step.id ? null : step.id)}>{managerDetailId === step.id ? "⌄" : "›"}</button>
+                  </div>
+                  {managerDetailId === step.id ? (
+                    <div className="workflow-manager-detail">
+                      <div><span>Type</span><strong>{SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action"}</strong></div>
+                      <div><span>API Name</span><strong>{step.config?.apiName || flowApiName(step.label || getActionLabel(step.type))}</strong></div>
+                      <div><span>Outputs</span><strong>{stepOutputCount(step.id)}</strong></div>
+                      <div><span>Incoming paths</span><strong>{incomingPathCount(step.id)}</strong></div>
+                      {step.config?.description ? <p>{step.config.description}</p> : null}
+                    </div>
+                  ) : null}
+                </div>
               ))}
               {resourceSteps.length ? <div className="workflow-palette-group-title">Resources</div> : null}
-              {resourceSteps.map(({ step, index }) => (
-                <button key={step.id} type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
-                  <span className="workflow-palette-item-copy">
-                    <strong>{step.type === "ASSIGNMENT" ? (step.config?.variableName || "New Variable") : (step.config?.resourceName || (step.type === "CONSTANT" ? "New Constant" : "New Formula"))}</strong>
-                    <small>{step.type === "ASSIGNMENT" ? `Variable · ${step.config?.variableType || "text"}` : step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}` : `Formula · ${step.config?.resultType || "number"}`}</small>
-                  </span>
-                </button>
-              ))}
+              {resourceSteps.map(({ step }) => {
+                const resourceLabel = step.type === "ASSIGNMENT" ? (step.config?.variableName || "New Variable") : (step.config?.resourceName || (step.type === "CONSTANT" ? "New Constant" : "New Formula"));
+                const resourceType = step.type === "ASSIGNMENT" ? `Variable · ${step.config?.variableType || "text"}` : step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}` : `Formula · ${step.config?.resultType || "number"}`;
+                return <div key={step.id} className="workflow-manager-item">
+                  <div className="workflow-manager-item-row">
+                    <button type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
+                      <span className="workflow-palette-item-copy"><strong>{resourceLabel}</strong><small>{resourceType}</small></span>
+                    </button>
+                    <button type="button" className="workflow-manager-chevron" aria-label={`Show details for ${resourceLabel}`} onClick={() => setManagerDetailId((current) => current === step.id ? null : step.id)}>{managerDetailId === step.id ? "⌄" : "›"}</button>
+                  </div>
+                  {managerDetailId === step.id ? (
+                    <div className="workflow-manager-detail">
+                      <div><span>Resource Type</span><strong>{step.type === "ASSIGNMENT" ? "Variable" : getActionLabel(step.type)}</strong></div>
+                      <div><span>Data Type</span><strong>{step.type === "ASSIGNMENT" ? (step.config?.variableType || "text") : step.type === "CONSTANT" ? (step.config?.resourceType || "text") : (step.config?.resultType || "number")}</strong></div>
+                      <div><span>Used by</span><strong>{resourceUsageCount(step)} element{resourceUsageCount(step) === 1 ? "" : "s"}</strong></div>
+                      {step.config?.description ? <p>{step.config.description}</p> : null}
+                    </div>
+                  ) : null}
+                </div>;
+              })}
               <div className="workflow-palette-group-title">Flow context</div>
               {visibleGlobalResources.map((resource) => (
                 <div key={resource.label} className="workflow-palette-item">
@@ -2601,20 +2943,20 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </>
         )}
       </aside> : null}
-      <main className="workflow-canvas-surface" onDragOver={(e) => e.preventDefault()} onDrop={(e) => dropAt(e, workflow.steps.length)}>
+      <main className="workflow-canvas-surface">
         <div className="workflow-canvas-toolbar">
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.7, Number((value - .1).toFixed(1))))}>−</button>
           <button type="button" aria-label="Reset zoom" title="Reset zoom" onClick={() => setCanvasZoom(1)}>{Math.round(canvasZoom * 100)}%</button>
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))))}>+</button>
-          <button type="button" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide elements" : "Show elements"}</button>
-          <button type="button" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide properties" : "Show properties"}</button>
+          <button type="button" title="Toggle Toolbox" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide Toolbox" : "Show Toolbox"}</button>
+          <button type="button" title="Toggle Properties" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide Properties" : "Show Properties"}</button>
         </div>
         {(insertAt != null || branchTarget) ? (
           <div className="workflow-add-element-popover" role="dialog" aria-label="Add Element">
             <div className="workflow-add-element-head">
               <div>
                 <strong>Add Element</strong>
-                <small>{branchTarget ? "Choose an element for this decision path" : "Choose an element to insert here"}</small>
+                <small>{branchTarget ? "Choose an element for this path" : "Choose an element to insert here"}</small>
               </div>
               <button type="button" aria-label="Close Add Element" onClick={() => { setInsertAt(null); setBranchTarget(null); }}>×</button>
             </div>
@@ -2629,7 +2971,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   <div className="workflow-add-element-grid">
                     <button type="button" onClick={() => pasteClipboard(insertAt == null ? workflow.steps.length : insertAt)}>
                       <span className="workflow-add-element-icon" style={{ background: flowElementVisual(clipboard.step.type).color }}>⧉</span>
-                      <span><strong>Paste Element</strong><small>{clipboard.step.label || getActionLabel(clipboard.step.type)} · {clipboard.mode === "cut" ? "Cut" : "Copied"}</small></span>
+                      <span><strong>Paste 1 Element</strong><small>{clipboard.step.label || getActionLabel(clipboard.step.type)} · {clipboard.mode === "cut" ? "Cut" : "Copied"}</small></span>
                     </button>
                   </div>
                 </div>
@@ -2652,83 +2994,87 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </div>
         ) : null}
         <div className="workflow-canvas-lane" style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top center" }}>
-          <button type="button" className="workflow-start-node" onClick={() => setSelectedId("__start__")} title="Configure when this workflow starts">
+          <button type="button" className="workflow-start-node" onClick={inspectStart} title="Configure when this flow starts">
             <span className="workflow-start-icon">▶</span>
             <span className="workflow-start-title">Start</span>
             <span className="workflow-start-note">{getTriggerLabel(workflow.trigger)}{workflow.conditions?.length ? ` · ${workflow.conditions.length} condition${workflow.conditions.length === 1 ? "" : "s"}` : ""}{scheduledPathSteps.length ? ` · ${scheduledPathSteps.length} scheduled path${scheduledPathSteps.length === 1 ? "" : "s"}` : ""}</span>
           </button>
-          <div className="workflow-node-connector"><button type="button" className="workflow-insert-button" aria-label="Add element after Start" onClick={() => { setBranchTarget(null); setInsertAt(0); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button></div>
+          {scheduledPathSteps.length ? (
+            <div className="workflow-branch-map workflow-start-paths" aria-label="Scheduled Paths">
+              {scheduledPathSteps.map(({ step: scheduledPath }) => renderOwnedPath({
+                ownerId: scheduledPath.id,
+                kind: "scheduled",
+                ids: scheduledPath.config?.branch || [],
+                label: scheduledPath.config?.pathLabel || "Scheduled Path",
+              }))}
+            </div>
+          ) : null}
+          <div className="workflow-node-connector">
+            {scheduledPathSteps.length ? <span className="workflow-connector-label">Run Immediately</span> : null}
+            <button type="button" className="workflow-insert-button" aria-label="Add element after Start" onClick={() => { setBranchTarget(null); setInsertAt(0); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
+          </div>
           {visibleCanvasSteps.map(({ step, index }) => {
             const visual = flowElementVisual(step.type);
             const elementKind = SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action";
-            const decisionOutcomes = step.type === "CONDITION"
+            const collapsed = collapsedBranches[step.id] === true;
+            const canCollapse = ["CONDITION","LOOP"].includes(step.type);
+            const outcomes = step.type === "CONDITION"
               ? (Array.isArray(step.config?.outcomes) && step.config.outcomes.length
                   ? step.config.outcomes
                   : [{ id: "outcome-1", label: "Outcome 1", branch: step.config?.ifBranch || [] }])
               : [];
             const decisionPaths = step.type === "CONDITION"
-              ? [...decisionOutcomes, { id: "__default__", label: "Default Outcome", branch: step.config?.defaultBranch || step.config?.elseBranch || [] }]
+              ? [
+                  ...outcomes.map((outcome, i) => ({ id: outcome.id || `outcome-${i + 1}`, label: outcome.label || `Outcome ${i + 1}`, ids: outcome.branch || [] })),
+                  { id: "__default__", label: step.config?.defaultLabel || "Default Outcome", ids: step.config?.defaultBranch || step.config?.elseBranch || [] },
+                ]
               : [];
-            const branchesCollapsed = collapsedBranches[step.id] === true;
-            return <div key={step.id} className={`workflow-node-wrap ${step.type === "CONDITION" ? "has-decision" : ""}`} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
-              <div className="workflow-node-row">
-                <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { inspectStep(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
-                  <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
-                  <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : elementKind}</span>
-                  <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
-                  {step.type === "LOOP" ? <span className="workflow-node-note">For Each Item</span> : null}
-                  {step.config?.faultMode && step.config.faultMode !== "FAIL" ? <span className="workflow-fault-badge">Fault path</span> : null}
-                </button>
-                {step.type === "CONDITION" ? <button type="button" className="workflow-decision-toggle" title={branchesCollapsed ? "Expand paths" : "Collapse paths"} aria-label={branchesCollapsed ? "Expand decision paths" : "Collapse decision paths"} onClick={() => setCollapsedBranches((current) => ({ ...current, [step.id]: !branchesCollapsed }))}>{branchesCollapsed ? "▸" : "▾"}</button> : null}
-                <details className="workflow-node-menu">
-                  <summary aria-label={`Open actions for ${step.label || getActionLabel(step.type)}`} title="Element actions">⋮</summary>
-                  <div className="workflow-node-menu-popover">
-                    <button type="button" onClick={() => inspectStep(step.id)}>Edit Element</button>
-                    <button type="button" onClick={() => copyStep(step)}>Copy Element</button>
-                    <button type="button" onClick={() => cutStep(step)}>Cut Element</button>
-                    {step.type !== "STOP" ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
-                    <button type="button" className="is-danger" onClick={() => removeStep(index)}>Delete Element</button>
-                  </div>
-                </details>
-              </div>
-              {step.type === "CONDITION" && !branchesCollapsed ? (
-                <div className="workflow-branch-map" aria-label="Decision paths">
-                  {decisionPaths.map((outcome, outcomeIndex) => {
-                    const isDefault = outcome.id === "__default__";
-                    const branchIds = outcome.branch || [];
-                    const branchSteps = branchIds.map((id) => branchStepById.get(String(id))).filter(Boolean);
-                    return <div key={outcome.id || outcomeIndex} className="workflow-branch-path">
-                      <span className="workflow-branch-line" />
-                      <span className="workflow-branch-label">{outcome.label || (isDefault ? "Default Outcome" : `Outcome ${outcomeIndex + 1}`)}</span>
-                      <div className="workflow-branch-stack">
-                        {branchSteps.map((branchStep) => {
-                          const branchVisual = flowElementVisual(branchStep.type);
-                          const branchIndex = workflow.steps.findIndex((candidate) => candidate.id === branchStep.id);
-                          return <div key={branchStep.id} className="workflow-branch-node-row">
-                            <button type="button" className={`workflow-branch-node-card ${selectedId === branchStep.id ? "is-selected" : ""}`} onClick={() => inspectStep(branchStep.id)}>
-                              <span className="workflow-branch-node-icon" style={{ background: branchVisual.color }}>{branchVisual.icon}</span>
-                              <span><small>{SALESFORCE_CORE_ELEMENT_TYPES.has(branchStep.type) ? getActionLabel(branchStep.type) : "Action"}</small><strong>{branchStep.label || getActionLabel(branchStep.type)}</strong></span>
-                            </button>
-                            <details className="workflow-node-menu branch-menu">
-                              <summary aria-label={`Open actions for ${branchStep.label || getActionLabel(branchStep.type)}`}>⋮</summary>
-                              <div className="workflow-node-menu-popover">
-                                <button type="button" onClick={() => inspectStep(branchStep.id)}>Edit Element</button>
-                                <button type="button" onClick={() => copyStep(branchStep)}>Copy Element</button>
-                                <button type="button" onClick={() => cutStep(branchStep)}>Cut Element</button>
-                                <button type="button" onClick={() => addFaultPath(branchStep)}>Add Fault Path</button>
-                                <button type="button" className="is-danger" onClick={() => removeStep(branchIndex)}>Delete Element</button>
-                              </div>
-                            </details>
-                          </div>;
-                        })}
-                        <button type="button" className="workflow-branch-add" aria-label={`Add element to ${outcome.label || (isDefault ? "Default Outcome" : `Outcome ${outcomeIndex + 1}`)}`} onClick={() => { setBranchTarget({ decisionId: step.id, outcomeId: isDefault ? "__default__" : outcome.id }); setInsertAt(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
-                      </div>
-                    </div>;
-                  })}
+            return (
+              <div key={step.id} className={`workflow-node-wrap ${canCollapse ? "has-branching" : ""}`}>
+                <div className="workflow-node-row">
+                  <button type="button" onClick={() => { inspectStep(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
+                    <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
+                    <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : elementKind}</span>
+                    <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
+                    {step.config?.description ? <span className="workflow-node-description" title={step.config.description}>ⓘ</span> : null}
+                    {step.type === "LOOP" ? <span className="workflow-node-note">For Each Item · After Last</span> : null}
+                    {step.config?.faultMode && step.config.faultMode !== "FAIL" ? <span className="workflow-fault-badge">Fault path</span> : null}
+                  </button>
+                  {canCollapse ? <button type="button" className="workflow-decision-toggle" title={collapsed ? "Expand paths" : "Collapse paths"} aria-label={collapsed ? "Expand paths" : "Collapse paths"} onClick={() => toggleBranchCollapse(step.id, !collapsed)}>{collapsed ? "▸" : "▾"}</button> : null}
+                  <details className="workflow-node-menu">
+                    <summary aria-label={`Open actions for ${step.label || getActionLabel(step.type)}`} title="Element actions">⋮</summary>
+                    <div className="workflow-node-menu-popover">
+                      <button type="button" onClick={() => inspectStep(step.id)}>Edit Element</button>
+                      <button type="button" onClick={() => copyStep(step)}>Copy Element</button>
+                      <button type="button" onClick={() => cutStep(step)}>Cut Element</button>
+                      {flowElementSupportsFaultPath(step.type) ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
+                      <button type="button" className="is-danger" onClick={() => removeStep(index)}>Delete Element</button>
+                    </div>
+                  </details>
                 </div>
-              ) : null}
-              <div className="workflow-node-connector"><button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setBranchTarget(null); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button></div>
-            </div>;
+
+                {step.type === "CONDITION" && !collapsed ? (
+                  <div className="workflow-branch-map" aria-label="Decision paths">
+                    {decisionPaths.map((p) => renderOwnedPath({ ownerId: step.id, kind: "decision", outcomeId: p.id, ids: p.ids, label: p.label, ancestry: [String(step.id)] }))}
+                  </div>
+                ) : null}
+                {step.type === "LOOP" && !collapsed ? (
+                  <div className="workflow-branch-map workflow-branch-map-single" aria-label="For Each Item path">
+                    {renderOwnedPath({ ownerId: step.id, kind: "loop", ids: step.config?.bodyBranch || [], label: "For Each Item", ancestry: [String(step.id)] })}
+                  </div>
+                ) : null}
+                {["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? (
+                  <div className="workflow-branch-map workflow-branch-map-single workflow-fault-map" aria-label="Fault path">
+                    {renderOwnedPath({ ownerId: step.id, kind: "fault", ids: step.config?.faultBranch || [], label: "Fault", tone: "fault", ancestry: [String(step.id)] })}
+                  </div>
+                ) : null}
+
+                <div className="workflow-node-connector">
+                  {step.type === "LOOP" ? <span className="workflow-connector-label">After Last</span> : null}
+                  <button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setBranchTarget(null); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
+                </div>
+              </div>
+            );
           })}
           {!visibleCanvasSteps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => { setInsertAt(0); setBranchTarget(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+ Add Element</button> : null}
           <div className="workflow-end-node"><span>■</span><strong>End</strong></div>
@@ -2742,10 +3088,17 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <div className="space-y-4 rounded-xl bg-white p-2">
             <div>
               <div className="text-sm font-semibold text-slate-800">Start</div>
-              <p className="mt-1 text-xs text-slate-500">Define exactly when this workflow is allowed to begin. Entry conditions are evaluated before any action runs.</p>
+              <p className="mt-1 text-xs text-slate-500">Define when the flow starts. Entry conditions are evaluated before any element runs.</p>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Trigger object</label>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Trigger</label>
+              <select aria-label="Flow trigger" className={inputClass} value={workflow.trigger || "manual"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
+                {!triggerOptions.some((option) => option.key === workflow.trigger) && workflow.trigger ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
+                {triggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Object</label>
               <PlatformFieldPicker
                 scopeKey={scopeKey}
                 includeObjectSelector
@@ -2754,15 +3107,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 onObjectChange={(object) => setWorkflow((current) => ({ ...current, object }))}
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Trigger</label>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">{getTriggerLabel(workflow.trigger)}</div>
-            </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
-                  <div className="text-xs font-semibold text-slate-700">Scheduled paths</div>
-                  <p className="mt-1 text-[11px] text-slate-500">Run selected steps later without using a Wait element in the immediate path.</p>
+                  <div className="text-xs font-semibold text-slate-700">Scheduled Paths</div>
+                  <p className="mt-1 text-[11px] text-slate-500">Configure paths that run later from this Start element.</p>
                 </div>
                 <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-blue-700" onClick={addScheduledPath}>+ Add path</button>
               </div>
@@ -2789,17 +3138,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     ) : (
                       <MetadataResourcePicker objectKey={workflow.object || ""} extraResources={[]} label="Date / time Resource" value={pathStep.config?.runAt || ""} onChange={(runAt) => updateScheduledPath(pathIndex, { runAt })} />
                     )}
-                    <BranchStepPicker
-                      label="Steps on this scheduled path"
-                      value={pathStep.config?.branch || []}
-                      onChange={(branch) => updateScheduledPath(pathIndex, { branch })}
-                      steps={workflow.steps}
-                      currentIndex={pathIndex}
-                      candidateFilter={(candidate) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(candidate.type)}
-                    />
+                    <p className="text-[11px] text-slate-500">Add elements to this path from the Scheduled Path branch on the canvas.</p>
                   </div>
                 ))}
-                {!scheduledPathSteps.length ? <div className="text-[11px] text-slate-500">No scheduled paths. Immediate workflow steps run normally.</div> : null}
+                {!scheduledPathSteps.length ? <div className="text-[11px] text-slate-500">No scheduled paths. The Run Immediately path runs normally.</div> : null}
               </div>
             </div>
 
@@ -2829,6 +3171,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   <p className="mt-2 text-[11px] text-slate-500">Use Changed / Changed to for a specific field transition. Use the option above when the full entry criteria should transition from false to true.</p>
                 </div>
               ) : <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Choose an object to configure record entry conditions.</div>}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+              <button type="button" className="workflow-cancel-button" onClick={cancelInspector}>Cancel</button>
+              <button type="button" className="workflow-save-button" onClick={finishInspector}>Done</button>
             </div>
           </div>
         ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
@@ -2927,11 +3273,57 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [savedTests, setSavedTests] = useState([]);
   const [workflowVersions, setWorkflowVersions] = useState([]);
   const [compareVersionId, setCompareVersionId] = useState(null);
-  const [testDraft, setTestDraft] = useState({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
+  const [testDraft, setTestDraft] = useState({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Flow completes" }] });
   const [testBusyId, setTestBusyId] = useState(null);
   const [editingTestId, setEditingTestId] = useState(null);
   const [versionsBusy, setVersionsBusy] = useState(false);
   const [objectFieldCatalog, setObjectFieldCatalog] = useState({});
+  const [flowHistory, setFlowHistory] = useState({ past: [], future: [], last: null, applying: false });
+
+  useEffect(() => {
+    const serialized = JSON.stringify(workflow);
+    setFlowHistory((current) => {
+      if (current.applying) return { ...current, last: serialized, applying: false };
+      if (!current.last) return { ...current, last: serialized };
+      if (current.last === serialized) return current;
+      return {
+        past: [...current.past.slice(-49), current.last],
+        future: [],
+        last: serialized,
+        applying: false,
+      };
+    });
+  }, [workflow]);
+
+  useEffect(() => {
+    setFlowHistory({ past: [], future: [], last: JSON.stringify(workflow), applying: false });
+  }, [workflowId]);
+
+  const undoFlowChange = () => {
+    if (!flowHistory.past.length) return;
+    const target = flowHistory.past[flowHistory.past.length - 1];
+    const current = flowHistory.last || JSON.stringify(workflow);
+    setFlowHistory({
+      past: flowHistory.past.slice(0, -1),
+      future: [current, ...flowHistory.future].slice(0, 50),
+      last: target,
+      applying: true,
+    });
+    setWorkflow(JSON.parse(target));
+  };
+
+  const redoFlowChange = () => {
+    if (!flowHistory.future.length) return;
+    const target = flowHistory.future[0];
+    const current = flowHistory.last || JSON.stringify(workflow);
+    setFlowHistory({
+      past: [...flowHistory.past, current].slice(-50),
+      future: flowHistory.future.slice(1),
+      last: target,
+      applying: true,
+    });
+    setWorkflow(JSON.parse(target));
+  };
 
 
   useEffect(() => {
@@ -2941,7 +3333,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         const options = Array.isArray(response?.data) ? response.data : [];
         if (options.length) setTriggerOptions(options);
       })
-      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load workflow triggers."])]));
+      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load flow triggers."])]));
   }, [scopeKey]);
 
   useEffect(() => {
@@ -2986,7 +3378,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         }));
         if (registry.length) setRegistryOptions(registry);
       })
-      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load workflow actions."])]));
+      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load flow actions."])]));
   }, [scopeKey]);
 
   useEffect(() => {
@@ -3059,7 +3451,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         }));
         setSavedWorkflows(workflows);
       })
-      .catch((error) => onError?.(error.message || "Unable to load workflows"));
+      .catch((error) => onError?.(error.message || "Unable to load flows"));
   }, [onError]);
 
   useEffect(() => {
@@ -3280,7 +3672,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     : resourceConflict
       ? resourceConflict
       : !actionSteps.length
-        ? "Add at least one action."
+        ? "Add at least one element."
         : actionIssues[0] || "";
   const contractEntries = [...(workflow.inputContract || []), ...(workflow.outputContract || [])];
   const invalidContractName = contractEntries.find((item) => !item?.name || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(item.name)));
@@ -3293,9 +3685,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       : duplicateOutput ? `Subflow output "${duplicateOutput.name}" is declared more than once.`
         : missingOutputSource ? `Choose a Resource for subflow output "${missingOutputSource.label || missingOutputSource.name || "output"}".`
           : "";
-  const reviewIssue = triggerIssue || entryConditionIssue || entryTransitionIssue || conditionIssue || actionsIssue || contractIssue || (!workflow.name ? "Enter a workflow name." : "");
+  const reviewIssue = triggerIssue || entryConditionIssue || entryTransitionIssue || conditionIssue || actionsIssue || contractIssue || (!workflow.name ? "Enter a flow name." : "");
   const guideSteps = [
-    { key: "trigger", label: "Trigger", status: (triggerIssue || entryTransitionIssue) ? "error" : "complete", message: triggerIssue || entryTransitionIssue },
+    { key: "trigger", label: "Start", status: (triggerIssue || entryTransitionIssue) ? "error" : "complete", message: triggerIssue || entryTransitionIssue },
     {
       key: "conditions",
       label: "Conditions",
@@ -3303,7 +3695,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       message: conditionIssue || (conditionSteps.length ? "" : "Optional"),
     },
     { key: "actions", label: "Actions", status: actionsIssue ? "error" : "complete", message: actionsIssue },
-    { key: "review", label: "Review", status: reviewIssue ? "error" : "complete", message: reviewIssue },
+    { key: "review", label: "Save", status: reviewIssue ? "error" : "complete", message: reviewIssue },
   ];
 
   const navigateGuide = (key) => {
@@ -3362,7 +3754,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const saveWorkflow = async (lifecycleOverride = null, { keepOpen = false, silent = false, forceNewVersion = false } = {}) => {
     const nextLifecycle = String(lifecycleOverride || workflow.lifecycleStatus || (workflow.active === true ? "ACTIVE" : "DRAFT")).toUpperCase();
     if (nextLifecycle === "ACTIVE" && reviewIssue) {
-      onError?.(`Cannot activate workflow: ${reviewIssue}`);
+      onError?.(`Cannot activate flow: ${reviewIssue}`);
       return null;
     }
     const payload = { ...buildWorkflowPayload(nextLifecycle), ...(forceNewVersion ? { forceNewVersion: true } : {}) };
@@ -3387,7 +3779,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => item.id !== nextId)]);
       if (embedded) onSaved?.({ ...workflow, ...saved, id: nextId });
       else if (!keepOpen) setShowBuilder(false);
-      if (!silent) onMessage?.(forceNewVersion ? `Workflow saved as version ${saved.version || savedWorkflow.version}.` : nextLifecycle === "ACTIVE" ? "Workflow activated." : "Workflow draft saved.");
+      if (!silent) onMessage?.(forceNewVersion ? `Flow saved as version ${saved.version || savedWorkflow.version}.` : nextLifecycle === "ACTIVE" ? "Flow activated." : "Flow draft saved.");
       return { id: nextId, workflow: savedWorkflow };
     } catch (error) {
       onError?.(error.message || "Unable to save workflow.");
@@ -3422,7 +3814,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       const response = await apiRequest(`/api/platform/rules/${id}/tests`);
       setSavedTests(Array.isArray(response?.data) ? response.data : []);
     } catch (error) {
-      onError?.(error.message || "Unable to load workflow tests.");
+      onError?.(error.message || "Unable to load flow tests.");
     }
   };
 
@@ -3434,14 +3826,14 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       const response = await apiRequest(`/api/platform/rules/${id}/versions`);
       setWorkflowVersions(Array.isArray(response?.data) ? response.data : []);
     } catch (error) {
-      onError?.(error.message || "Unable to load workflow versions.");
+      onError?.(error.message || "Unable to load flow versions.");
     } finally {
       setVersionsBusy(false);
     }
   };
 
   const assertionLabel = (assertion) => {
-    if (assertion.type === "RUN_STATUS") return `Workflow status is ${assertion.expected || "COMPLETED"}`;
+    if (assertion.type === "RUN_STATUS") return `Flow status is ${assertion.expected || "COMPLETED"}`;
     const step = workflow.steps.find((item) => String(item.id) === String(assertion.stepId || ""));
     if (assertion.type === "STEP_STATUS") return `${step?.label || "Step"} status is ${assertion.expected || "COMPLETED"}`;
     if (assertion.type === "DECISION_OUTCOME") return `${step?.label || "Decision"} outcome is ${assertion.expected || "selected outcome"}`;
@@ -3476,11 +3868,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         });
       }
       setEditingTestId(null);
-      setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
+      setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Flow completes" }] });
       await loadSavedTests(id);
-      onMessage?.(editingTestId ? "Workflow test updated." : "Workflow test saved.");
+      onMessage?.(editingTestId ? "Flow test updated." : "Flow test saved.");
     } catch (error) {
-      onError?.(error.message || "Unable to save workflow test.");
+      onError?.(error.message || "Unable to save flow test.");
     } finally {
       setTestBusyId(null);
     }
@@ -3495,13 +3887,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       recordId: config.recordId || "",
       assertions: Array.isArray(config.assertions) && config.assertions.length
         ? config.assertions.map((assertion) => ({ ...assertion }))
-        : [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }],
+        : [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Flow completes" }],
     });
   };
 
   const cancelTestEdit = () => {
     setEditingTestId(null);
-    setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
+    setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Flow completes" }] });
   };
 
   const runSavedTest = async (test) => {
@@ -3519,7 +3911,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       setDebugResult(result);
       await loadSavedTests();
     } catch (error) {
-      onError?.(error.message || "Unable to run saved workflow test.");
+      onError?.(error.message || "Unable to run saved flow test.");
     } finally {
       setTestBusyId(null);
     }
@@ -3532,7 +3924,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       if (String(editingTestId || "") === String(testId)) cancelTestEdit();
       await loadSavedTests();
     } catch (error) {
-      onError?.(error.message || "Unable to remove workflow test.");
+      onError?.(error.message || "Unable to remove flow test.");
     }
   };
 
@@ -3547,7 +3939,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     const removed = [...oldById.keys()].filter((id) => !currentById.has(id)).length;
     const changed = [...currentById.keys()].filter((id) => oldById.has(id) && JSON.stringify(currentById.get(id)) !== JSON.stringify(oldById.get(id))).length;
     const changes = [];
-    if (String(oldDefinition.name || "") !== String(currentDefinition.name || "")) changes.push("Workflow name changed");
+    if (String(oldDefinition.name || "") !== String(currentDefinition.name || "")) changes.push("Flow name changed");
     if (String(oldDefinition.trigger_key || "") !== String(currentDefinition.triggerKey || "")) changes.push("Trigger changed");
     if (String(oldDefinition.object_id || "") !== String(currentDefinition.objectId || "")) changes.push("Trigger object changed");
     if (JSON.stringify(oldDefinition.conditions || []) !== JSON.stringify(currentDefinition.conditions || [])) changes.push("Start conditions changed");
@@ -3566,7 +3958,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       await apiRequest(`/api/platform/rules/${workflowId}/versions/${version}/restore`, { method: "POST" });
       const response = await apiRequest("/api/platform/rules");
       const rule = (Array.isArray(response?.data) ? response.data : []).find((item) => String(item.id) === String(workflowId));
-      if (!rule) throw new Error("Restored workflow could not be reloaded");
+      if (!rule) throw new Error("Restored flow could not be reloaded");
       const restored = {
         ...rule,
         id: rule.id,
@@ -3614,7 +4006,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       await loadWorkflowVersions();
       onMessage?.(`Version ${version} restored as new draft version ${restored.version}.`);
     } catch (error) {
-      onError?.(error.message || "Unable to restore workflow version.");
+      onError?.(error.message || "Unable to restore flow version.");
     } finally {
       setVersionsBusy(false);
     }
@@ -3622,7 +4014,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
 
   const runDebug = async () => {
     if (reviewIssue) {
-      onError?.(`Fix the workflow before Debug: ${reviewIssue}`);
+      onError?.(`Fix the flow before Debug: ${reviewIssue}`);
       return;
     }
     setDebugRunning(true);
@@ -3779,49 +4171,33 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       <style>{WORKFLOW_VISUAL_CSS}</style>
       {builderLoadIssues.length ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <strong>Some workflow resources could not be loaded.</strong>
+          <strong>Some flow resources could not be loaded.</strong>
           <div className="mt-1 text-xs">{builderLoadIssues.join(" · ")}</div>
           <div className="mt-1 text-xs">Do not assume an empty dropdown means there are no records. Refresh after the connection/API issue is resolved.</div>
         </div>
       ) : null}
       <div id="workflow-trigger-section" className="workflow-builder-header">
         <div className="workflow-builder-heading">
-          <span className={`workflow-ready-dot ${reviewIssue ? "has-issue" : ""}`} title={reviewIssue || "Workflow ready"} />
-          <h2>Workflow Builder</h2>
+          <button type="button" className="workflow-builder-back" aria-label="Back to Flows" title="Back to Flows" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>←</button>
+          <span className={`workflow-ready-dot ${reviewIssue ? "has-issue" : ""}`} title={reviewIssue || "Flow ready"} />
+          <div className="workflow-builder-title-copy">
+            <h2>Flow Builder</h2>
+            <small>{workflow.name || "New Flow"} <span className="workflow-builder-status">{workflow.lifecycleStatus || "DRAFT"} · Version {workflow.version || 1}</span></small>
+          </div>
         </div>
         <div className="workflow-builder-field">
-          <label>Workflow name</label>
-          <input className={inputClass} value={workflow.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, name: event.target.value }))} placeholder="Workflow name" />
-        </div>
-        <div className="workflow-builder-field">
-          <label>Trigger object</label>
-          <PlatformFieldPicker
-            scopeKey={scopeKey}
-            includeObjectSelector
-            objectOnly
-            selectedObjectKey={workflow.object || ""}
-            onObjectChange={(object) => setWorkflow((current) => ({ ...current, object }))}
-          />
-        </div>
-        <div className="workflow-builder-field">
-          <label>Trigger</label>
-          <select aria-label="Workflow trigger" className={inputClass} value={workflow.trigger || "after_update"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
-            {scopeKey === "whatsapp_assistant" ? <option value="whatsapp_message_received">WhatsApp message received</option> : null}
-            {workflow.systemGenerated ? <option value="system_function">System function</option> : null}
-            {workflow.systemGenerated ? <option value="system_action">System action</option> : null}
-            {workflow.systemGenerated ? <option value="system_job">System job trigger</option> : null}
-            {isKioskExperience ? <option value="kiosk_experience">Kiosk experience</option> : null}
-            {!scopeKey ? triggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>) : null}
-          </select>
+          <label>Flow Label</label>
+          <input className={inputClass} value={workflow.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, name: event.target.value }))} placeholder="Flow label" />
         </div>
         <div className="workflow-builder-actions">
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>Tests</button>
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Versions</button>
+          <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.past.length} onClick={undoFlowChange} title="Undo" aria-label="Undo">↶</button>
+          <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.future.length} onClick={redoFlowChange} title="Redo" aria-label="Redo">↷</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Version History</button>
           <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} title={workflowId ? "Create an immutable Draft checkpoint" : "Save this workflow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>Save as New Version</button>
-          <button type="button" className="workflow-cancel-button" onClick={() => embedded ? onClose?.() : setShowBuilder(false)}>Cancel</button>
-          <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save Draft</button>
-          <button type="button" className="workflow-save-button" disabled={Boolean(reviewIssue)} title={reviewIssue || "Activate workflow"} onClick={() => saveWorkflow("ACTIVE")}>Activate</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} title={workflowId ? "Save this flow as a new version" : "Save this flow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>Save As</button>
+          <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save</button>
+          <button type="button" className="workflow-save-button" disabled={Boolean(reviewIssue)} title={reviewIssue || "Activate flow"} onClick={() => saveWorkflow("ACTIVE")}>Activate</button>
         </div>
       </div>
 
@@ -3830,7 +4206,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">Saved Tests</div>
-              <p className="mt-1 text-xs text-slate-500">Reusable rollback-safe tests. Assertions make regressions visible after future workflow edits.</p>
+              <p className="mt-1 text-xs text-slate-500">Reusable rollback-safe tests. Assertions make regressions visible after future flow edits.</p>
             </div>
             <button type="button" className="workflow-cancel-button" onClick={() => setTestsOpen(false)}>Close</button>
           </div>
@@ -3997,7 +4373,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <div className="text-base font-semibold text-slate-800">Debug / Test workflow</div>
+                <div className="text-base font-semibold text-slate-800">Debug / Test Flow</div>
                 <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
                   <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${debugMode === "debug" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setDebugMode("debug")}>Debug</button>
                   <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${debugMode === "test" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setDebugMode("test")}>Test</button>
@@ -4019,7 +4395,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             </div>
           ) : (
             <div className="mt-4 flex items-center justify-between gap-3">
-              <div className="text-xs text-slate-600">This workflow has no trigger object, so Debug will run with user/company/store context only.</div>
+              <div className="text-xs text-slate-600">This flow has no trigger object, so Debug will run with user/company/store context only.</div>
               <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue)} onClick={runDebug}>{debugRunning ? "Running…" : debugMode === "test" ? "Run Test" : "Run Debug"}</button>
             </div>
           )}
@@ -4041,7 +4417,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               ) : debugResult.status === "FAILED" ? (
                 <div className="mt-3 space-y-2 text-sm text-red-800">
                   <div><strong>{debugResult.friendlyError?.title || "A step failed"}</strong></div>
-                  <div>{debugResult.friendlyError?.whatHappened || debugResult.run?.error_text || "The workflow could not complete."}</div>
+                  <div>{debugResult.friendlyError?.whatHappened || debugResult.run?.error_text || "The flow could not complete."}</div>
                   <div className="rounded-lg bg-white/70 p-3"><strong>How to fix it:</strong> {debugResult.friendlyError?.howToFix || "Click the red step on the canvas and check its Properties."}</div>
                 </div>
               ) : debugResult.completedWithHandledError ? (
@@ -4056,7 +4432,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 </div>
               ) : debugResult.status === "NOT_STARTED" ? (
                 <div className="mt-2 text-sm text-amber-800">
-                  <div>{debugResult.friendlyError?.whatHappened || "The selected record did not meet the workflow Start conditions."}</div>
+                  <div>{debugResult.friendlyError?.whatHappened || "The selected record did not meet the flow Start conditions."}</div>
                   <div className="mt-2 rounded-lg bg-white/70 p-3 text-xs"><strong>What to do:</strong> {debugResult.friendlyError?.howToFix || "Choose another record or review the Start conditions."}</div>
                 </div>
               ) : debugMode === "test" && debugResult.testPassed === false ? (
@@ -4069,7 +4445,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-emerald-800">{debugMode === "test" ? "The workflow passed this test record. Green steps ran successfully; dashed green steps were safely simulated." : "Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action."}</p>
+                <p className="mt-2 text-sm text-emerald-800">{debugMode === "test" ? "The flow passed this test record. Green steps ran successfully; dashed green steps were safely simulated." : "Green steps ran successfully. Dashed green steps were simulated because they would contact an external service or perform an irreversible action."}</p>
               )}
             </div>
           ) : null}
@@ -4360,7 +4736,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : (
         <div id="workflow-canvas-section">
-          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} />
+          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} />
         </div>
       )}
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">

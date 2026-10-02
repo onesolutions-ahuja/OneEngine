@@ -114,6 +114,8 @@ test("approval work items show deadline reminder and escalation audit fields whe
   // In that state the detail pane is intentionally not rendered, so validate
   // the empty state instead of treating missing record-only fields as a UI bug.
   const emptyState = page.getByText("No approvals found",{exact:true});
+  const timing = page.getByText("Timing",{exact:true});
+  await expect(emptyState.or(timing)).toBeVisible({ timeout: 15_000 });
   if (await emptyState.isVisible().catch(() => false)) {
     await expect(page.getByText("Approval Administration",{exact:true})).toBeVisible();
     await expect(page.getByText("Queues / Groups",{exact:true})).toBeVisible();
@@ -121,7 +123,7 @@ test("approval work items show deadline reminder and escalation audit fields whe
     return;
   }
 
-  await expect(page.getByText("Timing",{exact:true})).toBeVisible();
+  await expect(timing).toBeVisible();
   await expect(page.getByText("Reminder",{exact:true})).toBeVisible();
   await expect(page.getByText("Escalated",{exact:true})).toBeVisible();
   await expect(page.getByText("Approval History",{exact:true})).toBeVisible();

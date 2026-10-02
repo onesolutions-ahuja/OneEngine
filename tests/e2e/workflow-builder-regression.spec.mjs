@@ -24,11 +24,16 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
     }
   });
   if (homeCompanyId) {
-    const homeClient = page.getByRole("button").filter({ hasText: homeCompanyId.slice(0, 8) }).first();
-    if (await homeClient.isVisible().catch(() => false)) {
-      await homeClient.click();
-      await expect.poll(() => page.evaluate(() => sessionStorage.getItem("onepos_developer_target_company_id") || "")).toBe(homeCompanyId);
-    }
+    // Developer metadata requests carry X-Acting-Company-Id. A previously
+    // selected client can persist across the shared E2E session, so force the
+    // Builder back to the authenticated user's own tenant before exercising
+    // executable workflow tests. This changes only the normal OneDeveloper
+    // target-company context; RBAC is still enforced by the server.
+    await page.evaluate((companyId) => {
+      sessionStorage.setItem("onepos_developer_target_company_id", companyId);
+    }, homeCompanyId);
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("onepos_developer_target_company_id") || "")).toBe(homeCompanyId);
   }
 
   const newWorkflow = page.getByRole("button", { name: /new workflow/i });
@@ -41,9 +46,9 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   // Unsaved workflows can be Debugged safely, but persisted-test/version controls
   // correctly remain unavailable until the first save.
   await expect(page.getByRole("button", { name: "Debug", exact: true })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Tests", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Versions", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Save as New Version", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "View Tests", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Version History", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save As", exact: true })).toBeDisabled();
 
   await page.getByRole("button", { name: "Debug", exact: true }).click();
   await expect(page.getByText("Debug / Test workflow", { exact: true })).toBeVisible();
@@ -55,30 +60,30 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   // Persist a harmless manual workflow so the regression exercises the real
   // version/test APIs rather than only checking their disabled pre-save state.
   const qaWorkflowName = `Workflow Builder E2E ${Date.now()}`;
-  await page.getByPlaceholder("Workflow name").fill(qaWorkflowName);
-  const initialTriggerSelect = page.getByLabel("Workflow trigger");
+  await page.getByPlaceholder("Flow label").fill(qaWorkflowName);
+  const initialTriggerSelect = page.getByLabel("Flow trigger");
   await initialTriggerSelect.selectOption("manual");
   await page.getByRole("button", { name: "Stop", exact: true }).first().click();
-  await page.getByRole("button", { name: "Save Draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
 
-  const workflowSearch = page.getByPlaceholder("Search Workflow");
+  const workflowSearch = page.getByPlaceholder(/Search workflows/i);
   await workflowSearch.fill(qaWorkflowName);
   const savedRow = page.locator(".onebuilder-list-row").filter({ hasText: qaWorkflowName }).first();
   await expect(savedRow).toBeVisible();
   await savedRow.click();
 
-  await expect(page.getByRole("button", { name: "Tests", exact: true })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Versions", exact: true })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Save as New Version", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "View Tests", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Version History", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save As", exact: true })).toBeEnabled();
 
-  await page.getByRole("button", { name: "Versions", exact: true }).click();
+  await page.getByRole("button", { name: "Version History", exact: true }).click();
   const versionHistory = page.getByText("Version History", { exact: true });
   await expect(versionHistory).toBeVisible();
   await expect(page.getByText(/^Version \d+$/).first()).toBeVisible();
   const versionPanel = versionHistory.locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
   await versionPanel.getByRole("button", { name: "Close", exact: true }).click();
 
-  await page.getByRole("button", { name: "Tests", exact: true }).click();
+  await page.getByRole("button", { name: "View Tests", exact: true }).click();
   await expect(page.getByText("Saved Tests", { exact: true })).toBeVisible();
   const qaTestName = `Manual workflow completes ${Date.now()}`;
   await page.getByPlaceholder(/Test name/i).fill(qaTestName);
@@ -91,11 +96,11 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(debugPanel.getByText("Test passed", { exact: true })).toBeVisible();
   await expect(debugPanel.getByText(/No database changes were kept/i)).toBeVisible();
   await debugPanel.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Tests", exact: true }).click();
+  await page.getByRole("button", { name: "View Tests", exact: true }).click();
 
   // Record-triggered Start configuration exposes Salesforce-style transition
   // semantics without requiring Changed operators on every individual field.
-  const triggerSelect = page.getByLabel("Workflow trigger");
+  const triggerSelect = page.getByLabel("Flow trigger");
   await triggerSelect.selectOption("after_update");
   await page.locator(".workflow-start-node").click();
   await expect(page.getByText("When conditions become true", { exact: true })).toBeVisible();
