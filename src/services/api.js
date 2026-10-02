@@ -195,8 +195,9 @@ const OE_CODE_RE = /^OE[A-Z][0-9]{2,3}$/
 function clientDebugCode(error, status = 0, payload = null) {
   const explicit = String(payload?.oeCode || payload?.code || error?.oeCode || '').toUpperCase()
   if (OE_CODE_RE.test(explicit)) return explicit
-  if (error?.code === 'API_TIMEOUT' || error?.name === 'TimeoutError') return 'OEN02'
-  if (error?.name === 'TypeError' || error?.name === 'NetworkError' || /failed to fetch|networkerror|network request failed/i.test(String(error?.message || ''))) return 'OEN01'
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'OEN03'
+  if (error?.code === 'API_TIMEOUT' || error?.name === 'TimeoutError') return 'OEN04'
+  if (error?.name === 'TypeError' || error?.name === 'NetworkError' || /failed to fetch|networkerror|network request failed/i.test(String(error?.message || ''))) return 'OEN02'
   if (status === 401) return 'OEU01'
   if (status === 403) return 'OER01'
   if (status === 404) return 'OEA04'
@@ -207,8 +208,10 @@ function clientDebugCode(error, status = 0, payload = null) {
 
 function defaultDebugMessage(code) {
   const messages = {
-    OEN01: 'OneEngine could not be reached. Check your connection and try again.',
-    OEN02: 'The request took too long. Please try again.',
+    OEN01: 'OneEngine is temporarily unavailable.',
+    OEN02: 'OneEngine service could not be reached.',
+    OEN03: 'This device appears to be offline.',
+    OEN04: 'OneEngine did not respond in time.',
     OEA01: 'The requested OneEngine service is unavailable.',
     OEA02: 'OneEngine could not complete this request.',
     OEA03: 'Too many requests. Please try again shortly.',
@@ -345,7 +348,7 @@ export async function apiRequest(path, options = {}) {
       const externalAbort = fetchOptions.signal?.aborted === true
       const retryableNetworkFailure =
         !externalAbort &&
-        (normalizedError?.code === 'API_TIMEOUT' || normalizedError?.oeCode === 'OEN01' || normalizedError?.oeCode === 'OEN02' || normalizedError?.name === 'TypeError' || normalizedError?.name === 'NetworkError')
+        (normalizedError?.code === 'API_TIMEOUT' || ['OEN01','OEN02','OEN03','OEN04'].includes(normalizedError?.oeCode) || normalizedError?.name === 'TypeError' || normalizedError?.name === 'NetworkError')
 
       if (attempt + 1 >= maxAttempts || !retryableNetworkFailure) throw normalizedError
       await delay(700)
