@@ -268,7 +268,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
        sign_count=EXCLUDED.sign_count,transports=EXCLUDED.transports,aaguid=EXCLUDED.aaguid,discoverable=EXCLUDED.discoverable,
        authenticator_kind=EXCLUDED.authenticator_kind,verified=TRUE,active=TRUE`,
       [user.company_id,user.id,String(req.body?.label||(challenge.context?.authenticatorKind==="SECURITY_KEY"?"Security Key":"Built-in Passkey")),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice",challenge.context?.authenticatorKind||"PLATFORM"]);
-    const recoveryCodes=await ensureRecoveryCodes(user.company_id,user.id);
+    const recoveryCodes=challenge.challenge_type==="LOGIN" ? await ensureRecoveryCodes(user.company_id,user.id) : [];
     const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.passkeyAssurance;
     if(challenge.challenge_type==="STEP_UP"){
       const sid=challenge.context?.sessionId;
