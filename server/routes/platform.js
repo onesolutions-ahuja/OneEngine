@@ -2268,7 +2268,10 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   });
 
   router.get("/platform/apps", ...manage, async (req, res) => {
-    const result = await db("SELECT * FROM platform_apps WHERE company_id=$1 AND active=true ORDER BY label", [req.user.companyId]);
+    const result = await db(
+      "SELECT * FROM platform_apps WHERE active=true AND (company_id IS NULL OR company_id=$1) ORDER BY CASE WHEN company_id=$1 THEN 0 ELSE 1 END,label",
+      [req.user.companyId]
+    );
     res.json({ success: true, data: result.rows });
   });
 
