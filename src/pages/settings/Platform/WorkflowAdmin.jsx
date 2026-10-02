@@ -1849,6 +1849,264 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 5px !important;
   }
 
+  /* ---------------------------------------------------------------
+     FIRST-CUT CANVAS GEOMETRY
+     Deliberately plain: boxes + straight split/merge connectors only.
+     No changes to palette, properties, workflow data, save or runtime.
+     --------------------------------------------------------------- */
+  .workflow-canvas-lane {
+    width: min(100%, 920px) !important;
+    margin: 24px auto 0 !important;
+    padding: 0 36px 64px !important;
+  }
+
+  .workflow-stage,
+  .workflow-node-wrap {
+    width: 360px !important;
+    max-width: 360px !important;
+    overflow: visible !important;
+  }
+
+  .workflow-start-node,
+  .workflow-node-card {
+    width: 360px !important;
+    min-width: 360px !important;
+    max-width: 360px !important;
+    min-height: 72px !important;
+    box-sizing: border-box !important;
+    border: 1px solid #b8c1cc !important;
+    border-radius: 6px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .workflow-start-node {
+    grid-template-columns: 38px minmax(0,1fr) !important;
+    gap: 12px !important;
+    padding: 12px 14px !important;
+  }
+
+  .workflow-start-icon {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+  }
+
+  .workflow-start-title,
+  .workflow-node-title {
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+    font-weight: 700 !important;
+  }
+
+  .workflow-start-note,
+  .workflow-node-note {
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+
+  .workflow-node-card {
+    padding: 12px 38px 12px 58px !important;
+  }
+
+  .workflow-node-icon {
+    left: 12px !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    font-size: 14px !important;
+  }
+
+  .workflow-node-card[data-node-type="CONDITION"] .workflow-node-icon {
+    left: 15px !important;
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .workflow-node-kind {
+    margin-bottom: 3px !important;
+    font-size: 9px !important;
+    line-height: 1 !important;
+  }
+
+  .workflow-node-connector {
+    width: 2px !important;
+    height: 54px !important;
+    background: #929eac !important;
+  }
+
+  .workflow-insert-button,
+  .workflow-branch-add {
+    width: 22px !important;
+    height: 22px !important;
+    border: 1px solid #929eac !important;
+    background: #fff !important;
+    color: #475569 !important;
+    box-shadow: none !important;
+    font-size: 14px !important;
+  }
+
+  .workflow-decision-stage {
+    width: 680px !important;
+    max-width: 680px !important;
+    margin: 0 50% !important;
+    transform: translateX(-50%) !important;
+    grid-template-rows: 28px 2px auto 2px 28px !important;
+  }
+
+  .workflow-decision-stage--nested {
+    width: 620px !important;
+    max-width: 620px !important;
+    margin: 8px 50% 0 !important;
+    transform: translateX(-50%) !important;
+  }
+
+  .workflow-decision-stem {
+    width: 2px !important;
+    height: 28px !important;
+    background: #929eac !important;
+  }
+
+  .workflow-decision-rail {
+    height: 2px !important;
+    background: #929eac !important;
+  }
+
+  .workflow-decision-map {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 80px !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .workflow-decision-map > .workflow-branch-path {
+    min-width: 0 !important;
+    padding: 20px 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .workflow-decision-map .workflow-branch-line,
+  .workflow-decision-map .workflow-branch-merge-line {
+    width: 2px !important;
+    background: #929eac !important;
+  }
+
+  .workflow-decision-map .workflow-branch-line {
+    height: 34px !important;
+  }
+
+  .workflow-decision-map .workflow-branch-merge-line {
+    height: 30px !important;
+  }
+
+  .workflow-decision-map .workflow-branch-label,
+  .workflow-decision-map .workflow-branch-label-input {
+    min-height: 0 !important;
+    margin: 0 0 12px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    color: #334155 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    line-height: 18px !important;
+    box-shadow: none !important;
+  }
+
+  .workflow-decision-map .workflow-branch-path:first-child .workflow-branch-label,
+  .workflow-decision-map .workflow-branch-path:first-child .workflow-branch-label-input {
+    border: 0 !important;
+    background: transparent !important;
+    color: #334155 !important;
+  }
+
+  .workflow-decision-map .workflow-branch-stack {
+    min-height: 92px !important;
+    gap: 14px !important;
+  }
+
+  .workflow-decision-map .workflow-branch-path.is-empty .workflow-branch-stack {
+    min-height: 92px !important;
+  }
+
+  .workflow-decision-map .workflow-branch-node-card {
+    width: 260px !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
+    min-height: 62px !important;
+    grid-template-columns: 34px minmax(0,1fr) !important;
+    gap: 10px !important;
+    padding: 10px 30px 10px 10px !important;
+    border: 1px solid #b8c1cc !important;
+    border-radius: 6px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .workflow-decision-map .workflow-branch-node-icon {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    font-size: 13px !important;
+  }
+
+  .workflow-decision-map .workflow-branch-node-card small {
+    font-size: 8px !important;
+  }
+
+  .workflow-decision-map .workflow-branch-node-card strong {
+    margin-top: 3px !important;
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+  }
+
+  .workflow-end-node {
+    min-width: 140px !important;
+    min-height: 48px !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    border: 1px solid #b8c1cc !important;
+    border-radius: 6px !important;
+    background: #fff !important;
+    padding: 10px 16px !important;
+    color: #1f2937 !important;
+    font-size: 12px !important;
+  }
+
+  .workflow-end-node span {
+    width: auto !important;
+    height: auto !important;
+    border: 0 !important;
+    background: transparent !important;
+    font-size: 8px !important;
+  }
+
+  @media (max-width: 1180px) {
+    .workflow-decision-stage {
+      width: 600px !important;
+      max-width: 600px !important;
+    }
+    .workflow-decision-stage--nested {
+      width: 540px !important;
+      max-width: 540px !important;
+    }
+    .workflow-decision-map {
+      gap: 56px !important;
+    }
+    .workflow-decision-map .workflow-branch-node-card {
+      width: 230px !important;
+      min-width: 230px !important;
+      max-width: 230px !important;
+    }
+  }
+
 `;
 
 const SCREEN_COMPONENT_TYPES = [
@@ -5369,7 +5627,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     const next = [...ancestry, String(owner.id)];
     const collapsed = collapsedBranches[owner.id] === true;
     const blocks = [];
-    if (owner.type === "CONDITION" && !collapsed) {
+    if (owner.type === "CONDITION") {
       const outcomes = Array.isArray(owner.config?.outcomes) && owner.config.outcomes.length
         ? owner.config.outcomes
         : [{ id: "outcome-1", label: "Outcome 1", branch: owner.config?.ifBranch || [] }];
@@ -5849,7 +6107,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   </details>
                 </div>
 
-                {step.type === "CONDITION" && !collapsed ? (
+                {step.type === "CONDITION" ? (
                   <div className="workflow-decision-stage" aria-label="Decision paths">
                     <span className="workflow-decision-stem workflow-decision-stem--in" aria-hidden="true" />
                     <span className="workflow-decision-rail workflow-decision-rail--top" aria-hidden="true" />
