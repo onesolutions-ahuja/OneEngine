@@ -1,5 +1,5 @@
 import { systemObject, isExtensionField, tenantFields, safeSystemFields, appendSystemReadScope } from "./platformSystemObjects.js";
-import { enrichFields, applyFieldSecurity, fieldValueError, normalizeFieldValue } from "./platformFieldValues.js";
+import { enrichFields, applyFieldSecurity, fieldValueError, normalizeFieldValue, formatAutoNumberValue } from "./platformFieldValues.js";
 import { compileFormulas, isCalculatedField } from "./platformFormula.js";
 import { validateConditionalRequired } from "./platformConditions.js";
 import { evaluateValidationRules } from "./platformValidation.js";
@@ -96,6 +96,20 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
   if (!previous) {
     for (const field of fields.filter(isExtensionField)) {
       const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+      if (field.field_type === "auto_number" && custom[field.api_name] === undefined) {
+        const start = Math.max(1, Number.parseInt(config.start ?? config.startNumber ?? 1, 10) || 1);
+        const counter = await db(
+          `INSERT INTO platform_auto_number_counters (field_id,company_id,next_value,updated_at)
+           VALUES ($1,$2,$3,NOW())
+           ON CONFLICT (field_id)
+           DO UPDATE SET next_value=platform_auto_number_counters.next_value+1,updated_at=NOW()
+           RETURNING next_value`,
+          [field.id, req.user.companyId, start + 1]
+        );
+        const sequence = Math.max(start, Number(counter.rows[0]?.next_value || (start + 1)) - 1);
+        custom[field.api_name] = formatAutoNumberValue(config, sequence);
+        continue;
+      }
       const defaultValue = config.defaultValue !== undefined ? config.defaultValue : config.default_value;
       if (defaultValue !== undefined && defaultValue !== null && custom[field.api_name] === undefined) {
         custom[field.api_name] = normalizeFieldValue(field, defaultValue);
