@@ -3261,9 +3261,9 @@
     --dock-icon-gap: 19.2px;
     width: 730px;
     max-width: calc(100vw - 24px);
-    height: 82px;
-    min-height: 82px;
-    padding: 18px 18px 10px;
+    height: 70px;
+    min-height: 70px;
+    padding: 6px 18px 10px;
     box-sizing: border-box;
     align-items: flex-end;
     gap: 0;
@@ -3283,10 +3283,10 @@
   }
 
   .dock-desktop-items .dock-item {
-    width: var(--dock-icon-size) !important;
+    width: var(--dock-icon-size);
     min-width: var(--dock-icon-size);
-    max-width: var(--dock-icon-size);
-    flex: 0 0 var(--dock-icon-size);
+    max-width: 76px;
+    flex: 0 0 auto;
     transform-origin: bottom center;
     z-index: 1;
   }
@@ -3339,10 +3339,10 @@
     width: 100%;
     max-width: none;
     min-width: 0;
-    height: 74px;
-    min-height: 74px;
+    height: 62px;
+    min-height: 62px;
     margin: 0;
-    padding: 12px 86px 10px 12px;
+    padding: 0 86px 8px 12px;
     box-sizing: border-box;
     display: block;
     position: relative;
@@ -3392,7 +3392,7 @@
   .dock-fixed-zone {
     position: absolute;
     right: 4px;
-    bottom: 9px;
+    bottom: 3px;
     width: 78px;
     height: 54px;
     display: grid;
