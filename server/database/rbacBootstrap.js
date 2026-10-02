@@ -1,4 +1,6 @@
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
+
+const PASSWORD_BCRYPT_ROUNDS = Math.max(10, Math.min(12, Number.parseInt(process.env.ONEPOS_BCRYPT_ROUNDS || "10", 10) || 10));
 
 export const ONEENGINE_MANAGE_PERMISSION = "oneengine.manage";
 
@@ -91,11 +93,26 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
 
   if (user.rows[0]) {
     // Bootstrap reconciles identity/RBAC only. Never rotate an existing user's
-    // password during deploy: doing so desynchronises browser/E2E credentials.
-    await pool.query(`UPDATE users SET company_id=$1,role_id=$2,username=$3,email=$3,full_name=$4,active=TRUE,updated_at=NOW() WHERE id=$5`, [company.id,roleId,email,name,user.rows[0].id]);
+    // password during deploy. If the configured bootstrap password still
+    // matches, rehash the SAME password at the calibrated work factor so
+    // authentication stays secure without making login unusably slow.
+    let reconciledHash = user.rows[0].password_hash;
+    if (password && reconciledHash) {
+      try {
+        const matchesConfiguredPassword = await bcrypt.compare(password, reconciledHash);
+        const currentRounds = bcrypt.getRounds(reconciledHash);
+        if (matchesConfiguredPassword && currentRounds !== PASSWORD_BCRYPT_ROUNDS) {
+          reconciledHash = await bcrypt.hash(password, PASSWORD_BCRYPT_ROUNDS);
+          console.log(`onePOS: calibrated bootstrap password hash cost from ${currentRounds} to ${PASSWORD_BCRYPT_ROUNDS}`);
+        }
+      } catch (error) {
+        console.warn("onePOS: bootstrap password hash calibration skipped", error?.message || error);
+      }
+    }
+    await pool.query(`UPDATE users SET company_id=$1,role_id=$2,username=$3,email=$3,full_name=$4,active=TRUE,password_hash=$5,updated_at=NOW() WHERE id=$6`, [company.id,roleId,email,name,reconciledHash,user.rows[0].id]);
   } else {
     if (!password) throw new Error("BOOTSTRAP_SUPERADMIN_PASSWORD is required to create the company Superadmin");
-    const hash = await bcrypt.hash(password,12);
+    const hash = await bcrypt.hash(password,PASSWORD_BCRYPT_ROUNDS);
     user = await pool.query(`INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,active,must_change_password) VALUES ($1,$2,$3,$3,$4,$5,TRUE,TRUE) RETURNING id,password_hash,company_id`, [company.id,roleId,email,hash,name]);
   }
 
