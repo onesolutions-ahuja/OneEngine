@@ -3,6 +3,7 @@ import { evaluateFieldCondition, evaluatePlatformCondition } from "../../../util
 import { isUuid, parseBooleanValue } from "../../../utils/recordDisplay.js";
 import { apiRequest } from "../../../services/api.js";
 import BooleanField from "../../../components/records/BooleanField.jsx";
+import { evaluateWorkflowFormula } from "../../../../server/services/platformFormula.js";
 
 function getFieldKey(field) {
   return (
@@ -133,38 +134,46 @@ function normalizeInitialValue(value, field) {
   return value;
 }
 
-function buildInitialValues(fields, initialValues) {
+function buildInitialValues(fields, initialValues, contextValues = {}) {
   const result = {
     ...(initialValues || {}),
   };
 
   for (const field of fields) {
     const key = getFieldKey(field);
-
-    if (!key) {
-      continue;
-    }
-
-    if (
-      !Object.prototype.hasOwnProperty.call(
-        result,
-        key
-      )
-    ) {
+    if (!key) continue;
+    if (!Object.prototype.hasOwnProperty.call(result, key)) {
       const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
-      const configuredDefault = config.defaultValue !== undefined ? config.defaultValue : config.default_value;
-      result[key] = normalizeInitialValue(
-        configuredDefault,
-        field
-      );
+      const configuredDefault = config.defaultFormula || config.default_formula
+        ? undefined
+        : (config.defaultValue !== undefined ? config.defaultValue : config.default_value);
+      result[key] = normalizeInitialValue(configuredDefault, field);
     } else {
-      result[key] = normalizeInitialValue(
-        result[key],
-        field
-      );
+      result[key] = normalizeInitialValue(result[key], field);
     }
   }
 
+  const user = contextValues?.user || {};
+  const formulaInputs = () => ({
+    ...Object.fromEntries(fields.map((field) => [getFieldKey(field), result[getFieldKey(field)] ?? null]).filter(([key]) => key)),
+    user_id: user.id ?? contextValues?.userId ?? null,
+    role_id: user.roleId ?? user.role_id ?? contextValues?.roleId ?? null,
+    company_id: user.companyId ?? user.company_id ?? contextValues?.companyId ?? null,
+    store_id: user.storeId ?? user.store_id ?? contextValues?.storeId ?? null,
+  });
+  for (const field of fields) {
+    const key = getFieldKey(field);
+    if (!key || Object.prototype.hasOwnProperty.call(initialValues || {}, key)) continue;
+    const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+    const expression = config.defaultFormula || config.default_formula;
+    if (!expression) continue;
+    try {
+      const value = evaluateWorkflowFormula(expression, formulaInputs());
+      if (value !== undefined && value !== null) result[key] = normalizeInitialValue(value, field);
+    } catch {
+      // The server is authoritative and returns the exact formula error on save.
+    }
+  }
   return result;
 }
 
@@ -451,7 +460,8 @@ export default function ObjectForm({
   const [values, setValues] = useState(() =>
     buildInitialValues(
       activeFields,
-      initialValues
+      initialValues,
+      contextValues || {}
     )
   );
 
@@ -464,7 +474,8 @@ export default function ObjectForm({
     setValues(
       buildInitialValues(
         activeFields,
-        initialValues
+        initialValues,
+        contextValues || {}
       )
     );
 
@@ -472,6 +483,7 @@ export default function ObjectForm({
   }, [
     activeFields,
     initialValuesKey,
+    contextValues,
   ]);
 
   const visibleFields = useMemo(
