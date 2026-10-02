@@ -1074,6 +1074,7 @@ const actionOptions = [
   { value: "ADD_RELATIONSHIP", label: "Add Relationship" },
   { value: "REMOVE_RELATIONSHIP", label: "Remove Relationship" },
   { value: "IN_APP_NOTIFICATION", label: "In-App Notification" },
+  { value: "EMAIL_ALERT", label: "Email Alert" },
   { value: "SEND_EMAIL", label: "Send Email" },
   { value: "SEND_SMS", label: "Send SMS" },
   { value: "SEND_WHATSAPP", label: "Send WhatsApp" },
@@ -1091,7 +1092,7 @@ const actionOptions = [
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
   "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","RUN_AGENT","SCREEN","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
-  "CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","RUN_SUBFLOW",
+  "CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","EMAIL_ALERT","RUN_SUBFLOW",
 ]);
 
 const FLOW_ELEMENT_VISUALS = {
@@ -1114,6 +1115,7 @@ const FLOW_ELEMENT_VISUALS = {
   UPDATE_RECORD: { icon: "✎", color: "#e83e8c", family: "Data" },
   DELETE_RECORD: { icon: "−", color: "#e83e8c", family: "Data" },
   RUN_SUBFLOW: { icon: "⇢", color: "#0b5cab", family: "Interaction" },
+  EMAIL_ALERT: { icon: "✉", color: "#0b5cab", family: "Interaction" },
   __ACTION__: { icon: "⚡", color: "#0b5cab", family: "Interaction" },
   __GROUP__: { icon: "▣", color: "#5c6ac4", family: "Logic" },
   __CONNECT__: { icon: "↪", color: "#5c6ac4", family: "Logic" },
@@ -1256,7 +1258,7 @@ function workflowActionCategory(type = "") {
   if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (["RUN_SUBFLOW","SCREEN","RUN_AGENT"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
-  if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
+  if (["EMAIL_ALERT","SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
   return "Actions";
 }
 
@@ -1438,7 +1440,7 @@ function workflowActionIssue(step, definition = null) {
     return conditionIsValid(config.condition) ? "" : "Complete the condition field/operator/value.";
   }
   if ((RECORD_ACTION_TYPES.has(step.type) || step.type === "GET_RECORDS") && !config.object) return "Choose the target object.";
-  if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP"].includes(step.type)) {
+  if (["EMAIL_ALERT","SEND_EMAIL","SEND_SMS","SEND_WHATSAPP"].includes(step.type)) {
     if (!config.templateId && !config.template) return "Choose a message template.";
     if (!config.recipient) return "Choose a recipient.";
   }
@@ -2660,10 +2662,11 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           </div>
         );
       }
+      case "EMAIL_ALERT":
       case "SEND_EMAIL":
       case "SEND_SMS":
       case "SEND_WHATSAPP": {
-        const available = providerAvailable[step.type === "SEND_EMAIL" ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP"];
+        const available = providerAvailable[["EMAIL_ALERT","SEND_EMAIL"].includes(step.type) ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP"];
         return (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -2675,7 +2678,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <select className={inputClass} value={step.config?.templateId || step.config?.template || ""} onChange={(event) => updateConfig({ templateId: event.target.value, template: "" })}>
                 <option value="">Select message template</option>
                 {messageTemplates
-                  .filter((template) => String(template.channel || "").toUpperCase() === (step.type === "SEND_EMAIL" ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP"))
+                  .filter((template) => String(template.channel || "").toUpperCase() === (["EMAIL_ALERT","SEND_EMAIL"].includes(step.type) ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP"))
                   .map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
               </select>
             </div>
