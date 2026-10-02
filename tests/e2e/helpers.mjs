@@ -126,7 +126,7 @@ export async function scrollWholePage(page) {
 }
 
 export async function clickSafeControls(page, limit = 30) {
-  const blocked = /delete|remove|disable|deactivate|refund|void|cancel sale|pay|checkout|send|install|uninstall|reset|sign out|logout|close till|cash out|submit|approve|reject/i;
+  const blocked = /delete|remove|disable|deactivate|activate|enable|refund|void|cancel sale|pay|checkout|send|install|uninstall|reset|revoke|disconnect|terminate|expire|unlock|save|create|update|apply|sign out|logout|close till|cash out|submit|approve|reject/i;
   const buttons = page.getByRole("button");
   const count = Math.min(await buttons.count(), limit);
   for (let i = 0; i < count; i += 1) {
