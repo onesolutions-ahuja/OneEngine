@@ -18,28 +18,36 @@ export function normalizeReportType(input = {}) {
   if (!label) throw new Error("Report type label is required");
   if (!/^[A-Za-z][A-Za-z0-9_]{1,99}$/.test(key)) throw new Error("Report type API key is invalid");
   if (!primaryObjectId) throw new Error("Primary object is required");
-  return { id: input.id || null, label: label.slice(0, 150), key, description: String(input.description || "").slice(0, 500), primaryObjectId, active: input.active !== false,
-    experience: input.experience && typeof input.experience === "object" ? input.experience : {},
-    relationships: arr(input.relationships, 3).map((item, index) => {
-      const relationshipId = String(item?.relationshipId || "").trim();
-      const joinType = String(item?.joinType || "WITH_OR_WITHOUT").toUpperCase();
-      const sourceRelationshipId = item?.sourceRelationshipId ? String(item.sourceRelationshipId).trim() : null;
-      const previous = arr(input.relationships, 3).slice(0, index);
-      if (!relationshipId) throw new Error(`Relationship ${index + 1} is required`);
-      if (!JOIN_TYPES.has(joinType)) throw new Error(`Relationship ${index + 1} join type is invalid`);
-      if (sourceRelationshipId && !previous.some((candidate) => String(candidate?.relationshipId || "") === sourceRelationshipId)) throw new Error(`Relationship ${index + 1} has an invalid parent path`);
-      let ancestorId = sourceRelationshipId;
-      while (ancestorId) {
-        const ancestor = previous.find((candidate) => String(candidate?.relationshipId || "") === String(ancestorId));
-        if (!ancestor) break;
-        if (String(ancestor.joinType || "WITH_OR_WITHOUT").toUpperCase() === "WITH_OR_WITHOUT" && joinType === "WITH") {
-          throw new Error(`Relationship ${index + 1} must remain optional because an earlier relationship in its path is optional`);
-        }
-        ancestorId = ancestor.sourceRelationshipId ? String(ancestor.sourceRelationshipId) : null;
-      }
-      return { relationshipId, sourceRelationshipId, joinType, alias: String(item?.alias || "").trim() || null };
-    }),
-    fieldVisibility: arr(input.fieldVisibility, 500).map((item) => ({ fieldKey: String(item?.fieldKey || ""), visible: item?.visible !== false, defaultSelected: item?.defaultSelected === true, category: String(item?.category || "Fields").slice(0, 100) })).filter((item) => item.fieldKey) };
+  const sourceRelationships = arr(input.relationships, 3);
+  const aliases = new Set();
+  const relationships = sourceRelationships.map((item, index) => {
+    const relationshipId = String(item?.relationshipId || "").trim();
+    const joinType = String(item?.joinType || "WITH_OR_WITHOUT").toUpperCase();
+    const sourceRelationshipId = item?.sourceRelationshipId ? String(item.sourceRelationshipId).trim() : null;
+    const previous = sourceRelationships.slice(0, index);
+    if (!relationshipId) throw new Error(`Relationship ${index + 1} is required`);
+    if (!JOIN_TYPES.has(joinType)) throw new Error(`Relationship ${index + 1} join type is invalid`);
+    if (sourceRelationshipId && !previous.some((candidate) => String(candidate?.relationshipId || "") === sourceRelationshipId)) throw new Error(`Relationship ${index + 1} has an invalid parent path`);
+    if (previous.some((candidate) => String(candidate?.relationshipId || "") === relationshipId && String(candidate?.sourceRelationshipId || "") === String(sourceRelationshipId || ""))) throw new Error(`Relationship ${index + 1} duplicates an existing relationship path`);
+    let ancestorId = sourceRelationshipId;
+    while (ancestorId) {
+      const ancestor = previous.find((candidate) => String(candidate?.relationshipId || "") === String(ancestorId));
+      if (!ancestor) break;
+      if (String(ancestor.joinType || "WITH_OR_WITHOUT").toUpperCase() === "WITH_OR_WITHOUT" && joinType === "WITH") throw new Error(`Relationship ${index + 1} must remain optional because an earlier relationship in its path is optional`);
+      ancestorId = ancestor.sourceRelationshipId ? String(ancestor.sourceRelationshipId) : null;
+    }
+    const alias = String(item?.alias || "").trim() || null;
+    if (alias && !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(alias)) throw new Error(`Relationship ${index + 1} alias is invalid`);
+    const aliasKey = alias ? alias.toLowerCase() : null;
+    if (aliasKey && aliases.has(aliasKey)) throw new Error(`Relationship ${index + 1} alias must be unique`);
+    if (aliasKey) aliases.add(aliasKey);
+    return { relationshipId, sourceRelationshipId, joinType, alias };
+  });
+  return {
+    id: input.id || null, label: label.slice(0, 150), key, description: String(input.description || "").slice(0, 500),
+    primaryObjectId, active: input.active !== false, experience: input.experience && typeof input.experience === "object" ? input.experience : {}, relationships,
+    fieldVisibility: arr(input.fieldVisibility, 500).map((item) => ({ fieldKey: String(item?.fieldKey || ""), visible: item?.visible !== false, defaultSelected: item?.defaultSelected === true, category: String(item?.category || "Fields").slice(0, 100) })).filter((item) => item.fieldKey),
+  };
 }
 
 export function normalizeCrossFilters(input = []) {

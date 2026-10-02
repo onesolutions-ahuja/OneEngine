@@ -6,6 +6,7 @@ import {
 import { apiRequest, loadSessionPermissions, getActingCompanyId, getStoredUser, setActingCompanyId } from '../../services/api'
 import { clearSettingsContextCache } from '../../services/settings'
 import OneBuilder from '../settings/OneBuilder'
+import { ReportTypeManager } from '../reports/ReportTypeDesigner.jsx'
 import ObjectsSettingsPane from '../settings/ObjectsSettingsPane'
 import WorkflowRunsAdmin from '../settings/Platform/WorkflowRunsAdmin'
 import WorkItemsAdmin from '../settings/Platform/WorkItemsAdmin'
@@ -22,6 +23,7 @@ const DEVELOPER_ITEMS = [
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
   { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
   { key: 'dashboard-builder', label: 'Dashboard Builder', icon: LayoutDashboard },
+  { key: 'report-types', label: 'Report Types', icon: ListChecks },
   { key: 'report-builder', label: 'Report Builder', icon: BarChart3 },
   { key: 'workflow-runs', label: 'Workflow Runs', icon: Workflow },
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
@@ -194,6 +196,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', onSection
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
             : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
+            : current.key === 'report-types' ? <ReportTypeManager />
             : current.key === 'report-builder' ? <OneBuilder initialTab="report" singleBuilder />
             : current.key === 'workflow-runs' ? <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'work-items' ? <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />

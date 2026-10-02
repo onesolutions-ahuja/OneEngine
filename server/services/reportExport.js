@@ -19,7 +19,7 @@ export function buildDetailsCsv({ columns = [], rows = [] }) {
   ].join("\r\n");
 }
 
-export async function buildFormattedXlsx({ report = {}, columns = [], rows = [], totals = {}, filters = [], groups = [] }) {
+export async function buildFormattedXlsx({ report = {}, columns = [], rows = [], totals = {}, filters = [], groups = [], rowGroups = [], columnGroups = [] }) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "OneEngine";
   workbook.created = new Date();
@@ -41,6 +41,6 @@ export async function buildFormattedXlsx({ report = {}, columns = [], rows = [],
   for (const row of rows || []) worksheet.addRow(keys.map((key) => row?.[key] ?? null));
   if (totals && Object.keys(totals).length) { worksheet.addRow([]); const totalRow = worksheet.addRow(keys.map((key, index) => index === 0 ? "Grand Total" : totals[key] ?? null)); totalRow.font = { bold: true }; }
   worksheet.columns.forEach((column, index) => { let max = labels[index]?.length || 10; column.eachCell({ includeEmpty: true }, (cell) => { max = Math.max(max, String(cell.value ?? "").length); }); column.width = Math.min(Math.max(max + 2, 10), 40); });
-  if (groups?.length) { const metadata = workbook.addWorksheet("Report Structure"); metadata.addRow(["Group", "Value", "Depth"]); for (const group of groups) metadata.addRow([group.field || group.__groupField || "", group.value || group.__groupValue || "", group.depth ?? group.__depth ?? ""]); }
+  if (groups?.length || rowGroups?.length || columnGroups?.length) { const metadata = workbook.addWorksheet("Report Structure"); metadata.addRow(["Type", "Group", "Value", "Depth"]); for (const group of groups || []) metadata.addRow(["Summary", group.field || group.__groupField || "", group.value ?? group.__groupValue ?? "", group.depth ?? group.__depth ?? ""]); for (const [index, field] of (rowGroups || []).entries()) metadata.addRow(["Matrix row", field, "", index]); for (const [index, field] of (columnGroups || []).entries()) metadata.addRow(["Matrix column", field, "", index]); }
   return workbook.xlsx.writeBuffer();
 }

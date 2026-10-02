@@ -843,8 +843,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     hasSystemPermission ? hasSystemPermission(req, "reports.custom.manage") : false
   );
   const canManageReportTypes = async (req) => (
-    (await canManageReports(req))
-    || (hasSystemPermission ? await hasSystemPermission(req, "platform.metadata.manage") : false)
+    hasSystemPermission ? hasSystemPermission(req, "platform.metadata.manage") : false
   );
   const reportTypeIsVisible = async (req, row) => {
     const status = String(
@@ -970,7 +969,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     res.json({ success: true, data: reportCapabilities() });
   });
 
-  router.get("/reports/custom/report-types", authenticate, authorize("reports.custom.view"), async (req, res) => {
+  router.get("/reports/custom/report-types", authenticate, authorize("reports.custom.view", "platform.metadata.manage"), async (req, res) => {
     try {
       const manage = await canManageReportTypes(req);
       const result = await db(`SELECT * FROM custom_report_types WHERE company_id=$1 ${manage ? "" : "AND active=TRUE"} ORDER BY active DESC,lower(label)`, [req.user.companyId]);
@@ -980,7 +979,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     } catch (error) { res.status(500).json({ success: false, message: "Unable to load report types" }); }
   });
 
-  router.post("/reports/custom/report-types", authenticate, authorize("reports.custom.manage"), async (req, res) => {
+  router.post("/reports/custom/report-types", authenticate, authorize("platform.metadata.manage"), async (req, res) => {
     try {
       const definition = normalizeReportType({ ...req.body, experience: normalizeReportTypeExperience(req.body?.experience || req.body) });
       const object = await db("SELECT id FROM platform_objects WHERE id=$1 AND active=TRUE AND (company_id IS NULL OR company_id=$2)", [definition.primaryObjectId, req.user.companyId]);
@@ -994,9 +993,11 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     } catch (error) { res.status(400).json({ success: false, message: error.message || "Unable to create report type" }); }
   });
 
-  router.put("/reports/custom/report-types/:id", authenticate, authorize("reports.custom.manage"), async (req, res) => {
+  router.put("/reports/custom/report-types/:id", authenticate, authorize("platform.metadata.manage"), async (req, res) => {
     try {
       const definition = normalizeReportType({ ...req.body, id: req.params.id, experience: normalizeReportTypeExperience(req.body?.experience || req.body) });
+      const object = await db("SELECT id FROM platform_objects WHERE id=$1 AND active=TRUE AND (company_id IS NULL OR company_id=$2)", [definition.primaryObjectId, req.user.companyId]);
+      if (!object.rows[0]) return res.status(400).json({ success: false, message: "Primary object is unavailable" });
       const result = await db(
         `UPDATE custom_report_types SET type_key=$3,label=$4,description=$5,primary_object_id=$6,definition=$7::jsonb,active=$8,updated_at=NOW()
          WHERE id=$1 AND company_id=$2 RETURNING *`,
@@ -1007,7 +1008,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     } catch (error) { res.status(400).json({ success: false, message: error.message || "Unable to update report type" }); }
   });
 
-  router.delete("/reports/custom/report-types/:id", authenticate, authorize("reports.custom.manage"), async (req, res) => {
+  router.delete("/reports/custom/report-types/:id", authenticate, authorize("platform.metadata.manage"), async (req, res) => {
     try {
       const existing = await db("SELECT id,label FROM custom_report_types WHERE id=$1 AND company_id=$2", [req.params.id, req.user.companyId]);
       if (!existing.rows[0]) return res.status(404).json({ success: false, message: "Report type not found" });
@@ -1195,7 +1196,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const definition=validateCustomReportDefinition(report.definition||{});
       const exportConfig=normalizeReportExport({view:req.query.view,format:req.query.format},definition.format||"tabular");
       const data=await executeCustomDefinition(req,definition);
-      const payload={report:{id:report.id,name:report.name,description:report.description,format:definition.format||"tabular"},columns:data.columns||[],rows:data.rows||[],totals:data.totals||{},groups:data.groups||[],filters:definition.filters||[]};
+      const payload={report:{id:report.id,name:report.name,description:report.description,format:definition.format||"tabular"},columns:data.columns||[],rows:data.rows||[],totals:data.totals||{},groups:data.groups||[],rowGroups:data.rowGroups||definition.rowGroups||[],columnGroups:data.columnGroups||definition.columnGroups||[],filters:definition.filters||[]};
       const filename=String(report.name||"report").replace(/[^A-Za-z0-9_-]+/g,"_").slice(0,80)||"report";
       if(exportConfig.view==="FORMATTED"){const buffer=await buildFormattedXlsx(payload);res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");res.setHeader("Content-Disposition",`attachment; filename="${filename}.xlsx"`);return res.send(Buffer.from(buffer));}
       const csv=buildDetailsCsv(payload);res.setHeader("Content-Type","text/csv; charset=utf-8");res.setHeader("Content-Disposition",`attachment; filename="${filename}.csv"`);return res.send(`\uFEFF${csv}`);

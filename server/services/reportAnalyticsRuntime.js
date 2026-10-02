@@ -369,5 +369,6 @@ export function runAnalytics(rows = [], definition = {}, baseColumns = []) {
     __conditionalFormatting: conditionalStyles(row, definition.conditionalFormatting || []),
     __drill: buildDrillPayload(row, definition),
   }));
-  return { ...result, columns: reportOutputColumns(result, definition, baseColumns), rows: rowsWithMetadata };
+  const groups = rowsWithMetadata.filter((row) => row?.__kind === "group").map((row) => ({ field: row.__groupField || null, value: row.__groupValue ?? null, depth: row.__depth ?? 0, path: Array.isArray(row.__path) ? row.__path : [], count: Number(row.__count || 0) }));
+  return { ...result, columns: reportOutputColumns(result, definition, baseColumns), rows: rowsWithMetadata, groups };
 }

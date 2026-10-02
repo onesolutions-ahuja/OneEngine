@@ -26,10 +26,6 @@ const APPROVAL_STRUCTURAL_COMPONENTS = [
   { key: 'rejection_action', label: 'Rejection action', category: 'Actions', icon: CircleDot },
 ]
 
-function objectKey(object) {
-  return object?.object_key || object?.api_name || object?.key || ''
-}
-
 function normalizeRegistry(input) {
   const rows = Array.isArray(input) ? input : []
   return rows.map((row) => ({
@@ -376,24 +372,11 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
         }
         const response = await apiRequest(selectedSavedId ? `/api/dashboards/${encodeURIComponent(selectedSavedId)}` : '/api/dashboards', { method: selectedSavedId ? 'PUT' : 'POST', body: JSON.stringify(payload) })
         if (response?.data?.id) setSelectedSavedId(response.data.id)
-      } else {
-        const object = objects.find((row) => String(row.id) === String(activeMeta.objectId))
-        if (!object || !activeMeta.label) throw new Error('Report label and object are required.')
-        const reportFields = [...new Set(items.filter((item) => item.key === 'field' && item.config?.field).map((item) => item.config.field))]
-        const filters = items.filter((item) => item.key === 'filter' && item.config?.field).map((item) => ({ field: item.config.field, operator: item.config.operator || 'eq', value: item.config.value }))
-        const groups = items.filter((item) => item.key === 'group' && item.config?.field).map((item) => item.config.field)
-        const metrics = items.filter((item) => item.key === 'metric').map((item) => ({ type: item.config?.type || 'count', ...(item.config?.field ? { field: item.config.field } : {}) }))
-        const sort = items.filter((item) => item.key === 'sort' && item.config?.field).map((item) => ({ field: item.config.field, direction: item.config?.direction === 'desc' ? 'desc' : 'asc' }))
-        const payload = { label: activeMeta.label, reportKey: activeMeta.reportKey || safeKey(activeMeta.label, 'report'), description: activeMeta.description || '', config: { fields: reportFields, filters, groupBy: groups[0] || null, metrics: metrics.length ? metrics : [{ type: 'count' }], sort } }
-        const response = await apiRequest(selectedSavedId ? `/api/platform/reports/${encodeURIComponent(selectedSavedId)}` : `/api/platform/objects/${encodeURIComponent(objectKey(object))}/reports`, { method: selectedSavedId ? 'PUT' : 'POST', body: JSON.stringify(payload) })
-        if (response?.data?.id) setSelectedSavedId(response.data.id)
+      } else if (tab === 'report') {
+        throw new Error('Reports are saved only through the Custom Report Builder.')
       }
       await loadBase()
       await loadSavedDefinitions(tab)
-      if (tab === 'report' && selectedObject) {
-        const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/reports`)
-        setSaved((current) => ({ ...current, report: Array.isArray(response?.data) ? response.data : [] }))
-      }
       setMessage('Saved.')
       setMode('list')
       setSelectedNodeId('')

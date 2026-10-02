@@ -25,7 +25,7 @@ import {
   PreviewControls,
   ReportExportDialog,
 } from "./ReportExperienceControls.jsx";
-import { AdvancedFilterEditor, ReportTypeManager } from "./ReportTypeDesigner.jsx";
+import { AdvancedFilterEditor } from "./ReportTypeDesigner.jsx";
 import ReportManagementPanel from "./ReportManagementPanel.jsx";
 
 const fresh = () => ({
@@ -79,7 +79,6 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [showExport,setShowExport]=useState(false);
-  const [showReportTypeDesigner,setShowReportTypeDesigner]=useState(false);
 
   const load=async()=>{
     try{
@@ -169,10 +168,9 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
   const outputColumns=(results?.columns||definition.fields||[]).map((column)=>typeof column==="string"?{key:column,label:fieldLabel(availableFields,column)}:column);
 
   if(loading)return <div className="onepos-empty">Loading custom reports…</div>;
-  if(showReportTypeDesigner)return <ReportTypeManager reportTypes={metadata.reportTypes||[]} onClose={()=>setShowReportTypeDesigner(false)} onRefresh={load}/>;
 
   return <div className="space-y-5">
-    <div className="onepos-page-header"><div><h1 className="onepos-page-title">{embedded?(editingId?"Edit Report":"Create Report"):"Report Builder"}</h1><p className="onepos-page-subtitle">One metadata definition for reports, dashboards and embedded analytics.</p></div><div className="flex gap-2">{metadata.canManage?<button type="button" className="onepos-btn onepos-btn-secondary" onClick={()=>setShowReportTypeDesigner(true)}>Report Types</button>:null}{!embedded?<button type="button" className="onepos-btn onepos-btn-primary" onClick={reset}>Create Report</button>:<button type="button" className="onepos-btn onepos-btn-secondary" onClick={()=>onClose?.()}>Close</button>}</div></div>
+    <div className="onepos-page-header"><div><h1 className="onepos-page-title">{embedded?(editingId?"Edit Report":"Create Report"):"Report Builder"}</h1><p className="onepos-page-subtitle">One metadata definition for reports, dashboards and embedded analytics.</p></div><div className="flex gap-2">{!embedded?<button type="button" className="onepos-btn onepos-btn-primary" onClick={reset}>Create Report</button>:<button type="button" className="onepos-btn onepos-btn-secondary" onClick={()=>onClose?.()}>Close</button>}</div></div>
     {error?<div className="onepos-alert onepos-alert-error">{error}</div>:null}{notice?<div className="onepos-alert onepos-alert-success">{notice}</div>:null}
 
     {!embedded?<ReportManagementPanel

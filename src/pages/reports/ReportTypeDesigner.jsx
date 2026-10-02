@@ -210,7 +210,7 @@ export function ReportTypeManager({ reportTypes=[], onRefresh, onClose }) {
   };
   if(creating||editing)return <ReportTypeDesigner initialValue={editing} onCancel={()=>{setCreating(false);setEditing(null);}} onSaved={refresh}/>;
   return <div className="space-y-4">
-    <div className="onepos-page-header"><div><h1 className="onepos-page-title">Custom Report Types</h1><p className="onepos-page-subtitle">Control report object relationships, field layout and deployment status.</p></div><div className="flex gap-2"><button type="button" className="onepos-btn onepos-btn-secondary" onClick={onClose}>Back to Reports</button><button type="button" className="onepos-btn onepos-btn-primary" onClick={()=>setCreating(true)}>New Report Type</button></div></div>
+    <div className="onepos-page-header"><div><h1 className="onepos-page-title">Custom Report Types</h1><p className="onepos-page-subtitle">Control report object relationships, field layout and deployment status.</p></div><div className="flex gap-2">{onClose?<button type="button" className="onepos-btn onepos-btn-secondary" onClick={onClose}>Back</button>:null}<button type="button" className="onepos-btn onepos-btn-primary" onClick={()=>setCreating(true)}>New Report Type</button></div></div>
     {error?<div className="onepos-alert onepos-alert-error">{error}</div>:null}
     <section className="onepos-card onepos-card-body">
       <div className="space-y-2">

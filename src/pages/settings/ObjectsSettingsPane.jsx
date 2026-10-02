@@ -13,7 +13,6 @@ import ObjectActionEditor from './Platform/ObjectActionEditor.jsx'
 import ObjectButtonEditor from './Platform/ObjectButtonEditor.jsx'
 import ListViewEditor from './Platform/ListViewEditor.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
-import ObjectReportsAdmin from './Platform/ObjectReportsAdmin.jsx'
 import PermissionSetsAdmin from './Platform/PermissionSetsAdmin.jsx'
 import AccessControlAdmin from './Platform/AccessControlAdmin.jsx'
 import ObjectAccessAdmin from './Platform/ObjectAccessAdmin.jsx'
@@ -38,7 +37,6 @@ const TABS = [
   ['approvals', 'Approval Processes'],
   ['assignment', 'Assignment Rules'],
   ['buttons', 'Buttons'],
-  ['reports', 'Reports'],
   ['sharing', 'Sharing'],
   ['automation-logs', 'Automation Logs'],
   ['permissions', 'Permissions'],
@@ -923,14 +921,6 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     actionLabel="Assignment Rule"
                     onAdd={() => setEditor({ kind: 'assignment', item: null })}
                     onRowClick={(row) => setEditor({ kind: 'assignment', item: row })} />
-                ) : null}
-
-                {activeTab === 'reports' ? (
-                  <ObjectReportsAdmin
-                    object={{ ...selected, id: selectedId }}
-                    onMessage={() => { void refreshConfiguration() }}
-                    onError={(value) => setError(value || '')}
-                  />
                 ) : null}
 
                 {activeTab === 'sharing' ? (
