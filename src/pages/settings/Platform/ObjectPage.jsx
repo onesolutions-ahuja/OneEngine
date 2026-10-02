@@ -821,11 +821,31 @@ export default function ObjectPage({
     return query.toString();
   }
 
+  function resolveMetadataUrl(template, record = {}) {
+    const raw = String(template || "").replace(/\{([A-Za-z_][A-Za-z0-9_.]*)\}/g, (_match, path) => {
+      const value = String(path).split(".").reduce((current, key) => current == null ? undefined : current[key], record);
+      return encodeURIComponent(value == null ? "" : String(value));
+    });
+    if (raw.startsWith("/") && !raw.startsWith("//")) return { url: raw, external: false };
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol === "https:") return { url: parsed.toString(), external: true };
+    } catch {}
+    return null;
+  }
+
   async function handleMetadataButton(button) {
     const targetType = button?.target_type || "action";
     const targetKey = button?.target_key || button?.action_key;
     if (targetType === "action" && targetKey === "RECORD_SAVE") return setRecordModal({ type: "edit" });
     if (targetType === "action" && targetKey === "RECORD_DELETE") return deleteSelectedRecord();
+    if (targetType === "url") {
+      const resolved = resolveMetadataUrl(targetKey, selectedRecord || {});
+      if (!resolved) return setError("This button has an unsafe or invalid URL.");
+      if (resolved.external) window.open(resolved.url, "_blank", "noopener,noreferrer");
+      else window.location.assign(resolved.url);
+      return;
+    }
     const recordKey = selectedRecord?.id || selectedRecord?.record_id;
     if (!recordKey || !button?.button_key) return setError("A record and registered button are required.");
     setExecutingAction(button.button_key);
