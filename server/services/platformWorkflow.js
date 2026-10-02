@@ -3842,6 +3842,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           const rows = resolveScreenResource(component.dataResource);
           next.rows = Array.isArray(rows) ? rows : [];
         }
+        if (component?.type === "FILE_UPLOAD") {
+          const targetRecord = component.fileRecordResource
+            ? resolveScreenResource(component.fileRecordResource)
+            : record?.id || null;
+          next.fileTarget = {
+            objectKey: component.fileObjectKey || object?.object_key || object?.objectKey || null,
+            recordId: targetRecord && typeof targetRecord === "object" ? targetRecord.id || null : targetRecord,
+            category: component.fileCategory || null,
+          };
+        }
         return next;
       });
       const stages = (Array.isArray(workflowVariables.variables?.__flowStages)
