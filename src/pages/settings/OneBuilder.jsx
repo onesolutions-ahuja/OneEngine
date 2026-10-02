@@ -404,6 +404,35 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     return listRows.filter((item) => `${rowTitle(item)} ${rowSubtitle(item)} ${item?.id || ''}`.toLowerCase().includes(query))
   }, [listRows, listQuery, tab])
 
+  const workflowObjectKey = (item) => String(
+    item?.object || item?.object_key || item?.objectKey || item?.trigger_object ||
+    item?.action?.object || item?.action?.objectKey || item?.definition?.object || ''
+  ).trim()
+
+  const workflowGroups = useMemo(() => {
+    if (tab !== 'workflow') return []
+    const objectLabelByKey = new Map()
+    objects.forEach((object) => {
+      const key = String(object?.object_key || object?.api_name || object?.key || object?.id || '').trim()
+      if (key) objectLabelByKey.set(key, object?.label || object?.name || key)
+      if (object?.id) objectLabelByKey.set(String(object.id), object?.label || object?.name || key || String(object.id))
+    })
+    const groups = new Map()
+    visibleListRows.forEach((item) => {
+      const key = workflowObjectKey(item)
+      const label = key ? (objectLabelByKey.get(key) || key) : 'System / No Object'
+      if (!groups.has(label)) groups.set(label, [])
+      groups.get(label).push(item)
+    })
+    return [...groups.entries()]
+      .map(([label, rows]) => ({ label, rows: [...rows].sort((a, b) => rowTitle(a).localeCompare(rowTitle(b))) }))
+      .sort((a, b) => {
+        if (a.label === 'System / No Object') return 1
+        if (b.label === 'System / No Object') return -1
+        return a.label.localeCompare(b.label)
+      })
+  }, [tab, visibleListRows, objects])
+
   if (tab === 'workflow' && mode === 'builder') {
     return (
       <div className="onebuilder-workflow-workspace" role="dialog" aria-modal="true" aria-label="Workflow Builder workspace">
@@ -492,17 +521,37 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
           </label>
           <div className="onebuilder-list-body">
             {(loading || listLoading) ? <div className="onebuilder-list-empty">Loading existing definitions…</div> : null}
-            {!loading && !listLoading && visibleListRows.length ? visibleListRows.map((item) => (
-              <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
-                <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
-                <span className="onebuilder-list-row-copy">
-                  <strong>{rowTitle(item)}</strong>
-                  <small>{rowSubtitle(item)}</small>
-                </span>
-                <span className="onebuilder-list-row-state">{item.active === false ? 'Inactive' : ''}</span>
-                <span className="onebuilder-list-row-edit" title="Open editor" aria-label="Open editor"><Pencil size={13}/></span>
-              </button>
-            )) : null}
+            {!loading && !listLoading && visibleListRows.length ? (
+              tab === 'workflow' ? workflowGroups.map((group) => (
+                <section key={group.label} className="onebuilder-workflow-group">
+                  <div className="onebuilder-workflow-group-head">
+                    <span>{group.label}</span>
+                    <small>{group.rows.length}</small>
+                  </div>
+                  {group.rows.map((item) => (
+                    <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
+                      <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
+                      <span className="onebuilder-list-row-copy">
+                        <strong>{rowTitle(item)}</strong>
+                        <small>{rowSubtitle(item)}</small>
+                      </span>
+                      <span className="onebuilder-list-row-state">{item.active === false ? 'Inactive' : ''}</span>
+                      <span className="onebuilder-list-row-edit" title="Open editor" aria-label="Open editor"><Pencil size={13}/></span>
+                    </button>
+                  ))}
+                </section>
+              )) : visibleListRows.map((item) => (
+                <button key={item.id} type="button" className="onebuilder-list-row" onClick={() => openSaved(item.id)}>
+                  <span className="onebuilder-list-row-icon"><ActiveTabIcon size={15}/></span>
+                  <span className="onebuilder-list-row-copy">
+                    <strong>{rowTitle(item)}</strong>
+                    <small>{rowSubtitle(item)}</small>
+                  </span>
+                  <span className="onebuilder-list-row-state">{item.active === false ? 'Inactive' : ''}</span>
+                  <span className="onebuilder-list-row-edit" title="Open editor" aria-label="Open editor"><Pencil size={13}/></span>
+                </button>
+              ))
+            ) : null}
             {!loading && !listLoading && !visibleListRows.length ? (
               <div className="onebuilder-list-empty">
                 <ActiveTabIcon size={28}/>
