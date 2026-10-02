@@ -1,0 +1,71 @@
+name: Apply Builder Final
+
+on:
+  push:
+    branches: ["builder-final-stage"]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild final patch
+        run: |
+          set -euo pipefail
+          cat .github/builder-final-patch/part-*.b64 | base64 -d | gzip -d > /tmp/builder-final.patch
+          test -s /tmp/builder-final.patch
+          echo "Patch bytes: $(wc -c </tmp/builder-final.patch)"
+
+      - name: Apply onto current main
+        run: |
+          set -euo pipefail
+          EXPECTED_MAIN="7ec9c7bb5d57f567dfb12e7d35238b2e4dc7d6a4"
+          git fetch origin main
+          ACTUAL_MAIN="$(git rev-parse origin/main)"
+          if [ "$ACTUAL_MAIN" != "$EXPECTED_MAIN" ]; then
+            echo "::error::main moved from $EXPECTED_MAIN to $ACTUAL_MAIN; reconcile before push"
+            exit 3
+          fi
+          git checkout -B builder-final-ready origin/main
+          patch -p1 --batch --forward < /tmp/builder-final.patch
+          if find . -name '*.rej' -print -quit | grep -q .; then
+            echo "::error::Patch produced reject files"
+            find . -name '*.rej' -print
+            exit 4
+          fi
+          git diff --check
+          echo "Changed files:"
+          git diff --name-only
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install --prefix server --no-audit --no-fund
+
+      - name: Final builder regression
+        run: |
+          set -euo pipefail
+          npm run build
+          npm run test:unit
+          npm run audit:workflow-coverage:enforce
+          (cd server && npm run build)
+
+      - name: Commit final builder batch
+        run: |
+          set -euo pipefail
+          git config user.name "OneEngine Builder Audit"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Complete Workflow Builder E2E UX and runtime fixes"
+          git push --force origin HEAD:builder-final-ready
