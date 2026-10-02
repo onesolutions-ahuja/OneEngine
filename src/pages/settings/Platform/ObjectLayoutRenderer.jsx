@@ -1,8 +1,10 @@
 ﻿import React from "react";
+import { evaluatePlatformCondition } from "../../../utils/platformConditions.js";
 
 export default function ObjectLayoutRenderer({
   layout,
   context = {},
+  fields = [],
   renderComponent,
 }) {
   if (!layout) return null;
@@ -18,6 +20,7 @@ export default function ObjectLayoutRenderer({
 
   const renderItems = (items, sectionKey = "flat") => (items || [])
     .filter((component) => component?.visible !== false)
+    .filter((component) => evaluatePlatformCondition(component?.visibilityCondition, fields, context))
     .map((component, index) => (
       <React.Fragment key={component?.id ?? `${sectionKey}-${index}`}>
         <div className={`object-layout-item object-layout-width-${String(component?.width || "full").replace("/", "-")}`}>
@@ -31,7 +34,10 @@ export default function ObjectLayoutRenderer({
   return (
     <div className="object-layout-renderer">
       {sections
-        ? sections.filter((section) => section?.visible !== false).map((section, sectionIndex) => {
+        ? sections
+          .filter((section) => section?.visible !== false)
+          .filter((section) => evaluatePlatformCondition(section?.visibilityCondition, fields, context))
+          .map((section, sectionIndex) => {
           const items = Array.isArray(section.items)
             ? section.items
             : Array.isArray(section.components)
