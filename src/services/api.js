@@ -604,6 +604,26 @@ export async function verifyMfa({ challengeId, methodId, methodType = 'TOTP', co
   return data
 }
 
+export async function startPasskeyLogin(identifier) {
+  return apiRequest('/api/auth/passkey/login/options', {
+    method: 'POST',
+    body: JSON.stringify({ identifier }),
+    timeoutMs: 10000,
+    retryGet: false,
+  })
+}
+
+export async function verifyPasskeyLogin({ challengeId, credential, trustDevice = false, deviceName = '' }) {
+  const data = await apiRequest('/api/auth/passkey/login/verify', {
+    method: 'POST',
+    body: JSON.stringify({ challengeId, credential, trustDevice, deviceName }),
+    timeoutMs: 10000,
+    retryGet: false,
+  })
+  if (data?.token) return storeCompletedLogin(data)
+  return data
+}
+
 export async function startPasskeyRegistration(challengeId, authenticatorKind = 'PLATFORM') {
   return apiRequest('/api/auth/mfa/passkey/registration-options', { method: 'POST', body: JSON.stringify({ challengeId, authenticatorKind }) })
 }
