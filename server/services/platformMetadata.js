@@ -590,7 +590,27 @@ export const platformSchema = `
     ADD COLUMN IF NOT EXISTS source_package_version VARCHAR(40),
     ADD COLUMN IF NOT EXISTS managed BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS package_required BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE;
+    ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    ADD COLUMN IF NOT EXISTS visibility_scope VARCHAR(20) NOT NULL DEFAULT 'company',
+    ADD COLUMN IF NOT EXISTS shared_role_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+  DO $ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname='platform_list_views_visibility_scope_check'
+    ) THEN
+      ALTER TABLE platform_list_views
+        ADD CONSTRAINT platform_list_views_visibility_scope_check
+        CHECK (visibility_scope IN ('private','company','roles'));
+    END IF;
+  END $;
+  CREATE TABLE IF NOT EXISTS platform_list_view_preferences (
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
+    list_view_id UUID REFERENCES platform_list_views(id) ON DELETE SET NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (company_id,user_id,object_id)
+  );
   CREATE TABLE IF NOT EXISTS platform_reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
