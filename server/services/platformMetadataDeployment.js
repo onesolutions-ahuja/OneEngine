@@ -545,7 +545,7 @@ async function rollbackMetadataDeploymentLegacy(db, { companyId, deploymentId, u
       }
       if (item.metadata_type === "listView") {
         if (item.before_state) await db("UPDATE platform_list_views SET label=$1,description=$2,columns=$3::jsonb,filters=$4::jsonb,sort=$5::jsonb,page_size=$6,is_default=$7,active=$8,updated_at=NOW() WHERE id=$9 AND company_id=$10", [item.before_state.label, item.before_state.description, JSON.stringify(item.before_state.columns || []), JSON.stringify(item.before_state.filters || {}), JSON.stringify(item.before_state.sort || {}), item.before_state.page_size, item.before_state.is_default, item.before_state.active, item.before_state.id, target]);
-        else await db("UPDATE platform_list_views SET active=false,updated_at=NOW() WHERE view_key=$1 AND company_id=$2", [item.metadata_key.split(":").pop(), target]);
+        else await db("UPDATE platform_list_views SET active=false,updated_at=NOW() WHERE view_key=$1 AND company_id=$2 AND owner_user_id IS NULL", [item.metadata_key.split(":").pop(), target]);
       }
       if (item.metadata_type === "app") {
         if (item.before_state) await db("UPDATE platform_apps SET label=$1,description=$2,config=$3::jsonb,active=$4,updated_at=NOW() WHERE id=$5 AND company_id=$6", [item.before_state.label, item.before_state.description, JSON.stringify(item.before_state.config || {}), item.before_state.active, item.before_state.id, target]);
