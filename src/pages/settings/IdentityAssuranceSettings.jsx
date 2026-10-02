@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { apiRequest, getPasskeyOptions, verifyMfa, verifyPasskey } from '../../services/api'
+import { apiRequest, getPasskeyOptions, startPasskeyRegistration, verifyMfa, verifyPasskey } from '../../services/api'
 
 const STEP_UP_RESOURCES = [
   ['SECURITY_CONFIGURATION','Security configuration'],
@@ -60,6 +60,8 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
   const [stepUp,setStepUp]=useState(null)
   const [stepCode,setStepCode]=useState('')
   const [pendingAction,setPendingAction]=useState(null)
+  const [tempCodeHours,setTempCodeHours]=useState(1)
+  const [generatedTempCode,setGeneratedTempCode]=useState(null)
 
   const load=async()=>{
     setError('')
@@ -121,6 +123,36 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
     finally{setBusy(false)}
   }
 
+  const registerStepPasskey=async(authenticatorKind='PLATFORM')=>{
+    try{
+      setBusy(true);setError('')
+      const options=await startPasskeyRegistration(stepUp.challengeId,authenticatorKind)
+      const credential=await navigator.credentials.create({publicKey:{
+        ...options.data,
+        challenge:publicKeyRequest({challenge:options.data.challenge,allowCredentials:[]}).challenge,
+        user:{...options.data.user,id:(()=>{
+          const text=String(options.data.user.id||'').replace(/-/g,'+').replace(/_/g,'/')
+          const padded=text+'='.repeat((4-text.length%4)%4)
+          return Uint8Array.from(atob(padded),ch=>ch.charCodeAt(0)).buffer
+        })()},
+        excludeCredentials:(options.data.excludeCredentials||[]).map(item=>{
+          const text=String(item.id||'').replace(/-/g,'+').replace(/_/g,'/')
+          const padded=text+'='.repeat((4-text.length%4)%4)
+          return {...item,id:Uint8Array.from(atob(padded),ch=>ch.charCodeAt(0)).buffer}
+        }),
+      }})
+      await apiRequest('/api/auth/mfa/passkey/registration-verify',{method:'POST',body:JSON.stringify({
+        challengeId:stepUp.challengeId,credential:credentialJson(credential),
+        label:authenticatorKind==='SECURITY_KEY'?'Security Key':'Built-in Passkey',authenticatorKind,
+      })})
+      const retry=pendingAction
+      setStepUp(null);setPendingAction(null);setStepCode('')
+      if(retry)await retry()
+      await load()
+    }catch(e){setError(e.message||'Passkey enrollment failed')}
+    finally{setBusy(false)}
+  }
+
   const saveAssurance=async()=>{
     setBusy(true);setError('');setMessage('')
     try{
@@ -137,6 +169,10 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
         totpAssurance:draft.totp_assurance,
         passkeyAssurance:draft.passkey_assurance,
         ssoAssurance:draft.sso_assurance,
+        allowTotp:draft.allow_totp,
+        allowPlatformPasskeys:draft.allow_platform_passkeys,
+        allowSecurityKeys:draft.allow_security_keys,
+        allowRecoveryCodes:draft.allow_recovery_codes,
       })}))
       setMessage('Identity assurance settings saved.');await load()
     }catch(e){setError(e.message)}finally{setBusy(false)}
@@ -183,6 +219,26 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
     const r=await apiRequest(`/api/security/mfa/users/${id}/methods`);setUserMethods(r.data||[])
   }
 
+  const generateTempCode=async()=>{
+    if(!userId)return
+    setGeneratedTempCode(null);setError('')
+    try{
+      const response=await guarded(()=>apiRequest(`/api/security/mfa/users/${userId}/temporary-code`,{method:'POST',body:JSON.stringify({expiresHours:tempCodeHours})}))
+      if(response?.data){
+        setGeneratedTempCode(response.data)
+        await loadMethods(userId)
+      }
+    }catch(e){setError(e.message||'Unable to generate temporary verification code')}
+  }
+
+  const expireTempCode=async()=>{
+    if(!userId)return
+    try{
+      await guarded(()=>apiRequest(`/api/security/mfa/users/${userId}/temporary-code/expire`,{method:'POST',body:'{}'}))
+      setGeneratedTempCode(null);await loadMethods(userId)
+    }catch(e){setError(e.message||'Unable to expire temporary verification code')}
+  }
+
   const stepPolicies=Object.fromEntries((data?.stepUpPolicies||[]).map(x=>[x.resource_key,x]))
 
   return <div className="space-y-4">
@@ -198,6 +254,10 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
         <NumberRow label="Trusted device lifetime (days)" help="How long a device remains in the trusted-device registry. 0 disables device trust." value={draft.trusted_device_days??30} min={0} max={3650} onChange={v=>setDraft(d=>({...d,trusted_device_days:v}))}/>
         <div className="settings-row"><div><strong>Require device activation</strong><p>Unknown browsers/devices must complete identity verification before a session is issued.</p></div><Toggle label="Require device activation" checked={draft.device_activation_required===true} onChange={v=>setDraft(d=>({...d,device_activation_required:v}))}/></div>
         <div className="settings-row"><div><strong>Skip device activation on trusted networks</strong><p>Users on a configured trusted IP range can sign in from a new device without the separate activation challenge.</p></div><Toggle label="Skip device activation on trusted networks" checked={draft.skip_device_activation_on_trusted_network!==false} onChange={v=>setDraft(d=>({...d,skip_device_activation_on_trusted_network:v}))}/></div>
+        <div className="settings-row"><div><strong>Allow authenticator apps (TOTP)</strong><p>Third-party apps that generate RFC 6238 codes. Default assurance is Standard.</p></div><Toggle label="Allow TOTP" checked={draft.allow_totp!==false} onChange={v=>setDraft(d=>({...d,allow_totp:v}))}/></div>
+        <div className="settings-row"><div><strong>Allow built-in passkeys</strong><p>Platform authenticators such as Windows Hello, Face ID, Touch ID and Android device authentication.</p></div><Toggle label="Allow built-in passkeys" checked={draft.allow_platform_passkeys!==false} onChange={v=>setDraft(d=>({...d,allow_platform_passkeys:v}))}/></div>
+        <div className="settings-row"><div><strong>Allow physical security keys</strong><p>Cross-platform FIDO2/WebAuthn security keys such as USB or NFC keys.</p></div><Toggle label="Allow security keys" checked={draft.allow_security_keys!==false} onChange={v=>setDraft(d=>({...d,allow_security_keys:v}))}/></div>
+        <div className="settings-row"><div><strong>Allow recovery codes</strong><p>One-time emergency recovery codes generated on first MFA enrollment.</p></div><Toggle label="Allow recovery codes" checked={draft.allow_recovery_codes!==false} onChange={v=>setDraft(d=>({...d,allow_recovery_codes:v}))}/></div>
       </section>
 
       <section className="settings-card">
@@ -223,8 +283,10 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
 
       <section className="settings-card">
         <h3 className="font-semibold">User MFA Methods</h3>
-        <div className="settings-row"><strong>User</strong><select value={userId} onChange={e=>loadMethods(e.target.value)}><option value="">Select user…</option>{mfaUsers.map(u=><option key={u.id} value={u.id}>{u.full_name||u.username} · {u.method_count||0} methods</option>)}</select></div>
-        {userMethods.map(m=><div className="settings-row" key={m.id}><div><strong>{m.label||m.method_type}</strong><p>{m.method_type}{m.phishing_resistant?' · phishing resistant':''}{m.last_used_at?` · last used ${new Date(m.last_used_at).toLocaleString()}`:''}</p></div>{m.active?<button type="button" onClick={async()=>{await guarded(()=>apiRequest(`/api/security/mfa/users/${userId}/methods/${m.id}/disconnect`,{method:'POST',body:'{}'}));await loadMethods(userId);await load()}}>Disconnect</button>:<span>Disconnected</span>}</div>)}
+        <div className="settings-row"><strong>User</strong><select value={userId} onChange={e=>{setGeneratedTempCode(null);loadMethods(e.target.value)}}><option value="">Select user…</option>{mfaUsers.map(u=><option key={u.id} value={u.id}>{u.full_name||u.username} · {u.method_count||0} methods</option>)}</select></div>
+        {userId?<div className="settings-row"><div><strong>Temporary Verification Code</strong><p>MFA recovery only. Valid for 1–24 hours and cannot activate an unknown device.</p></div><div className="flex flex-wrap gap-2"><input type="number" min="1" max="24" value={tempCodeHours} onChange={e=>setTempCodeHours(Math.min(24,Math.max(1,Number(e.target.value)||1)))} aria-label="Temporary code hours"/><button type="button" onClick={generateTempCode}>Generate</button></div></div>:null}
+        {generatedTempCode?<div className="settings-row"><div><strong>Temporary code — copy now</strong><p>This code won’t be shown again. Expires {new Date(generatedTempCode.expiresAt).toLocaleString()}.</p></div><code>{generatedTempCode.code}</code></div>:null}
+        {userMethods.map(m=><div className="settings-row" key={m.id}><div><strong>{m.label||m.method_type}</strong><p>{m.method_type}{m.authenticator_kind?` · ${m.authenticator_kind==='PLATFORM'?'built-in authenticator':'physical security key'}`:''}{m.phishing_resistant?' · phishing resistant':''}{m.expires_at?` · expires ${new Date(m.expires_at).toLocaleString()}`:''}{m.last_used_at?` · last used ${new Date(m.last_used_at).toLocaleString()}`:''}</p></div>{m.method_type==='TEMPORARY_CODE'?<button type="button" onClick={expireTempCode}>Expire now</button>:m.active?<button type="button" onClick={async()=>{await guarded(()=>apiRequest(`/api/security/mfa/users/${userId}/methods/${m.id}/disconnect`,{method:'POST',body:'{}'}));await loadMethods(userId);await load()}}>Disconnect</button>:<span>Disconnected</span>}</div>)}
       </section>
 
       <section className="settings-card">
@@ -281,8 +343,8 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
       <div className="record-dialog-body">
         {stepUp.availableMethods?.some(x=>x.type==='PASSKEY')?<button type="button" className="login-submit" onClick={()=>completeStep('PASSKEY')} disabled={busy}>Verify with passkey</button>:null}
         {stepUp.availableMethods?.some(x=>x.type==='TOTP')?<><label>Authenticator code<input value={stepCode} onChange={e=>setStepCode(e.target.value.replace(/\D/g,'').slice(0,6))}/></label><button type="button" className="login-submit" onClick={()=>completeStep('TOTP')} disabled={busy||stepCode.length!==6}>Verify</button></>:null}
-        <label>Recovery code<input value={stepCode} onChange={e=>setStepCode(e.target.value)}/></label>
-        <button type="button" onClick={()=>completeStep('RECOVERY_CODE')} disabled={busy||!stepCode.trim()}>Use recovery code</button>
+        {stepUp.enrollmentRequired&&stepUp.allowedEnrollmentMethods?.includes('PLATFORM_PASSKEY')?<button type="button" onClick={()=>registerStepPasskey('PLATFORM')} disabled={busy}>Set up built-in passkey</button>:null}
+        {stepUp.enrollmentRequired&&stepUp.allowedEnrollmentMethods?.includes('SECURITY_KEY')?<button type="button" onClick={()=>registerStepPasskey('SECURITY_KEY')} disabled={busy}>Set up physical security key</button>:null}
       </div>
       <div className="record-dialog-footer"><button type="button" onClick={()=>{setStepUp(null);setPendingAction(null);setStepCode('')}}>Cancel</button></div>
     </section></div>:null}
