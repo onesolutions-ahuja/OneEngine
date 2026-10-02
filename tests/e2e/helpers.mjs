@@ -36,7 +36,8 @@ async function restoreBrowserSession(page) {
     const token = sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token");
     if (!token) return { valid: false, status: 0 };
     try {
-      const response = await fetch("https://onepos.onrender.com/api/auth/me", {
+      // Use relative URL so it resolves to the current page's origin
+      const response = await fetch("./api/auth/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
       return { valid: response.ok, status: response.status };
@@ -147,7 +148,7 @@ export async function scrollWholePage(page) {
 }
 
 export async function clickSafeControls(page, limit = 30) {
-  const blocked = /delete|remove|disable|deactivate|activate|enable|refund|void|cancel sale|pay|checkout|send|install|uninstall|reset|revoke|disconnect|terminate|expire|unlock|save|create|update|apply|sign out|logout|close till|cash out|submit|approve|reject/i;
+  const blocked = /delete|remove|disable|deactivate|activate|enable|refund|void|cancel sale|pay|checkout|send|install|uninstall|reset|revoke|disconnect|terminate|expire|unlock|save|create|update|[...]
   const buttons = page.getByRole("button");
   const count = Math.min(await buttons.count(), limit);
   for (let i = 0; i < count; i += 1) {
