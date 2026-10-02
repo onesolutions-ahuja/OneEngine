@@ -4298,6 +4298,49 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     return errors;
   };
 
+  router.post("/platform/recommendations/reactions", authenticate, async (req, res) => {
+    try {
+      const recommendationKey = String(req.body?.recommendationKey || req.body?.recommendation_key || "").trim();
+      const reaction = String(req.body?.reaction || "").trim().toUpperCase();
+      if (!recommendationKey) return res.status(400).json({ success: false, message: "recommendationKey is required" });
+      if (!["ACCEPTED","REJECTED"].includes(reaction)) return res.status(400).json({ success: false, message: "reaction must be ACCEPTED or REJECTED" });
+
+      const objectId = req.body?.objectId || req.body?.object_id || null;
+      const recordId = req.body?.recordId || req.body?.record_id || null;
+      const workflowId = req.body?.workflowId || req.body?.workflow_id || null;
+
+      if (workflowId) {
+        const workflowResult = await db("SELECT id FROM platform_rules WHERE id=$1 AND company_id=$2 LIMIT 1", [workflowId, req.user.companyId]);
+        if (!workflowResult.rows.length) return res.status(404).json({ success: false, message: "Workflow not found" });
+      }
+      if (objectId) {
+        const objectResult = await db("SELECT id FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) LIMIT 1", [objectId, req.user.companyId]);
+        if (!objectResult.rows.length) return res.status(404).json({ success: false, message: "Object not found" });
+      }
+
+      const result = await db(
+        `INSERT INTO platform_recommendation_reactions
+           (company_id,recommendation_key,reaction,user_id,object_id,record_id,workflow_id,metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+         RETURNING id,recommendation_key,reaction,user_id,object_id,record_id,workflow_id,reacted_at`,
+        [
+          req.user.companyId,
+          recommendationKey,
+          reaction,
+          req.user.id || null,
+          objectId,
+          recordId,
+          workflowId,
+          JSON.stringify(req.body?.metadata && typeof req.body.metadata === "object" ? req.body.metadata : {}),
+        ]
+      );
+      return res.status(201).json({ success: true, data: result.rows[0] });
+    } catch (error) {
+      console.error("Recommendation reaction record error:", error);
+      return res.status(500).json({ success: false, message: "Unable to record recommendation response" });
+    }
+  });
+
   router.get("/platform/flow-sessions/:sessionId", ...manage, async (req, res) => {
     try {
       const result = await db(
