@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { evaluateFieldCondition, evaluatePlatformCondition } from "../../../utils/platformConditions.js";
 import { isUuid, parseBooleanValue } from "../../../utils/recordDisplay.js";
 import { apiRequest } from "../../../services/api.js";
@@ -158,6 +158,67 @@ function lookupObjectKey(field) {
 function lookupRecordLabel(record) {
   if (!record || typeof record !== "object") return "";
   return String(record.label || record.name || record.display_name || record.title || record.full_name || record.username || record.email || record.id || "");
+}
+
+function RichTextInput({ value, disabled, onChange, placeholder }) {
+  const ref = useRef(null);
+  const wrap = (left, right = left) => {
+    const input = ref.current;
+    if (!input || disabled) return;
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? start;
+    const current = String(value ?? "");
+    const selected = current.slice(start, end);
+    const next = current.slice(0, start) + left + selected + right + current.slice(end);
+    onChange(next);
+    window.requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(start + left.length, end + left.length);
+    });
+  };
+  return (
+    <div className="platform-rich-text">
+      <div className="platform-rich-text-toolbar">
+        <button type="button" disabled={disabled} onClick={() => wrap("**")}><strong>B</strong></button>
+        <button type="button" disabled={disabled} onClick={() => wrap("_")}><em>I</em></button>
+        <button type="button" disabled={disabled} onClick={() => wrap("[", "](https://)")}>Link</button>
+      </div>
+      <textarea
+        ref={ref}
+        value={value ?? ""}
+        disabled={disabled}
+        placeholder={placeholder}
+        rows={6}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <small>Rich text uses safe lightweight formatting: **bold**, _italic_, and [label](https://example.com).</small>
+    </div>
+  );
+}
+
+function AddressInput({ value, disabled, onChange }) {
+  const address = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const patch = (key, next) => onChange({ ...address, [key]: next });
+  return (
+    <div className="platform-structured-grid">
+      <input value={address.line1 || ""} disabled={disabled} placeholder="Address line 1" onChange={(event) => patch("line1", event.target.value)} />
+      <input value={address.line2 || ""} disabled={disabled} placeholder="Address line 2" onChange={(event) => patch("line2", event.target.value)} />
+      <input value={address.city || ""} disabled={disabled} placeholder="City" onChange={(event) => patch("city", event.target.value)} />
+      <input value={address.region || ""} disabled={disabled} placeholder="County / Region" onChange={(event) => patch("region", event.target.value)} />
+      <input value={address.postcode || ""} disabled={disabled} placeholder="Postcode" onChange={(event) => patch("postcode", event.target.value)} />
+      <input value={address.country || ""} disabled={disabled} placeholder="Country" onChange={(event) => patch("country", event.target.value)} />
+    </div>
+  );
+}
+
+function LocationInput({ value, disabled, onChange }) {
+  const location = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return (
+    <div className="platform-structured-grid platform-location-grid">
+      <input type="number" step="any" min="-90" max="90" value={location.latitude ?? location.lat ?? ""} disabled={disabled} placeholder="Latitude" onChange={(event) => onChange({ ...location, latitude: event.target.value === "" ? "" : Number(event.target.value) })} />
+      <input type="number" step="any" min="-180" max="180" value={location.longitude ?? location.lng ?? location.lon ?? ""} disabled={disabled} placeholder="Longitude" onChange={(event) => onChange({ ...location, longitude: event.target.value === "" ? "" : Number(event.target.value) })} />
+    </div>
+  );
 }
 
 function MetadataLookupInput({ field, value, disabled, onChange, placeholder }) {
@@ -523,6 +584,65 @@ export default function ObjectForm({
 
         break;
 
+      case "rich_text":
+        control = (
+          <RichTextInput
+            value={value}
+            disabled={commonProps.disabled}
+            placeholder={field?.placeholder || ""}
+            onChange={(nextValue) => updateValue(field, nextValue)}
+          />
+        );
+        break;
+
+      case "address":
+        control = <AddressInput value={value} disabled={commonProps.disabled} onChange={(nextValue) => updateValue(field, nextValue)} />;
+        break;
+
+      case "location":
+        control = <LocationInput value={value} disabled={commonProps.disabled} onChange={(nextValue) => updateValue(field, nextValue)} />;
+        break;
+
+      case "auto_number":
+        control = <output id={commonProps.id}>{value || "Generated on save"}</output>;
+        break;
+
+      case "time":
+        control = (
+          <input
+            {...commonProps}
+            type="time"
+            value={value ?? ""}
+            onChange={(event) => updateValue(field, event.target.value)}
+          />
+        );
+        break;
+
+      case "url":
+        control = (
+          <input
+            {...commonProps}
+            type="url"
+            value={value ?? ""}
+            placeholder={field?.placeholder || "https://"}
+            onChange={(event) => updateValue(field, event.target.value)}
+          />
+        );
+        break;
+
+      case "json":
+        control = (
+          <textarea
+            {...commonProps}
+            value={typeof value === "string" ? value : JSON.stringify(value ?? {}, null, 2)}
+            rows={6}
+            onChange={(event) => {
+              try { updateValue(field, JSON.parse(event.target.value)); } catch { /* keep editing until valid JSON */ }
+            }}
+          />
+        );
+        break;
+
       case "long_text":
         control = (
           <textarea
@@ -861,6 +981,15 @@ export default function ObjectForm({
           font-family: inherit;
           font-size: 11px;
         }
+
+        .platform-rich-text { display:grid; gap:6px; }
+        .platform-rich-text-toolbar { display:flex; gap:4px; }
+        .platform-rich-text-toolbar button { border:1px solid var(--border-color,#d1d5db); border-radius:6px; background:var(--card-background,#fff); padding:4px 7px; font-size:10px; cursor:pointer; }
+        .platform-rich-text small { color:var(--text-secondary,#64748b); font-size:9px; }
+        .platform-structured-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+        .platform-structured-grid > :first-child,.platform-structured-grid > :nth-child(2) { grid-column:1 / -1; }
+        .platform-location-grid > * { grid-column:auto !important; }
+        @media(max-width:640px){ .platform-structured-grid { grid-template-columns:1fr; } .platform-structured-grid > * { grid-column:auto !important; } }
 
         .platform-form-field textarea {
           min-height: 90px;
