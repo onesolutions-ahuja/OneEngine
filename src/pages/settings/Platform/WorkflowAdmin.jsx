@@ -1716,9 +1716,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <input className={inputClass} value={step.config?.itemVariable || "currentItem"} onChange={(event) => updateConfig({ itemVariable: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} />
               <p className="mt-1 text-[11px] text-slate-500">Steps inside the Loop can use this Resource to access the item being processed.</p>
             </div>
-            <BranchStepPicker label="Loop body steps" value={step.config?.bodyBranch || []} onChange={(bodyBranch) => updateConfig({ bodyBranch })} steps={allSteps} currentIndex={index} />
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-              Loop bodies support durable Wait. Completed iterations replay idempotently after resume, so already-finished side effects are not repeated.
+              Add elements to the <strong>For Each Item</strong> path using the + insertion points on the canvas. The flow continues on <strong>After Last</strong> when the collection is finished.
             </div>
           </div>
         );
@@ -2218,9 +2217,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             ) : (
               <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Run at" value={step.config?.runAt || ""} onChange={(runAt) => updateConfig({ runAt })} />
             )}
-            <BranchStepPicker label="Scheduled path steps" value={step.config?.branch || []} onChange={(branch) => updateConfig({ branch })} steps={allSteps} currentIndex={index} />
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-              The immediate workflow continues. These selected steps run later as a durable child run and appear separately in Run History.
+              Add elements to this Scheduled Path from its + insertion points on the canvas. The Run Immediately path continues independently.
             </div>
           </div>
         );
@@ -2343,15 +2341,11 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                   </label>
                 ) : null}
                 {["ROUTE","RETRY"].includes(step.config?.faultMode || "FAIL") ? (
-                  <BranchStepPicker
-                    label={step.config?.faultMode === "RETRY" ? "If retries still fail, run these steps" : "Run these steps if this element fails"}
-                    value={step.config?.faultBranch || []}
-                    onChange={(faultBranch) => updateConfig({ faultBranch })}
-                    steps={allSteps}
-                    currentIndex={index}
-                  />
+                  <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-[11px] text-red-700">
+                    Add recovery elements to the <strong>Fault</strong> path from the canvas. Fault resources such as Error message and How to fix are available to those elements.
+                  </div>
                 ) : null}
-                <p className="text-[11px] text-slate-500">Recovery steps can use Fault resources such as Error message and How to fix. Retry is capped at three attempts and recorded in Run History.</p>
+                <p className="text-[11px] text-slate-500">Retry is capped at three attempts and recorded in Run History.</p>
               </div>
           </details> : null}
         </div>
@@ -3052,14 +3046,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     ) : (
                       <MetadataResourcePicker objectKey={workflow.object || ""} extraResources={[]} label="Date / time Resource" value={pathStep.config?.runAt || ""} onChange={(runAt) => updateScheduledPath(pathIndex, { runAt })} />
                     )}
-                    <BranchStepPicker
-                      label="Steps on this scheduled path"
-                      value={pathStep.config?.branch || []}
-                      onChange={(branch) => updateScheduledPath(pathIndex, { branch })}
-                      steps={workflow.steps}
-                      currentIndex={pathIndex}
-                      candidateFilter={(candidate) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(candidate.type)}
-                    />
+                    <p className="text-[11px] text-slate-500">Add elements to this path from the Scheduled Path branch on the canvas.</p>
                   </div>
                 ))}
                 {!scheduledPathSteps.length ? <div className="text-[11px] text-slate-500">No scheduled paths. Immediate workflow steps run normally.</div> : null}
