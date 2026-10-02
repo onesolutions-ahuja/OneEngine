@@ -663,8 +663,48 @@ async function calculateFormulaRecords(db, object, fields, records, req, depth =
   return withPaths.map((record) => calculate(record));
 }
 
+function validateGeneralFieldConfig(field) {
+  const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+  const textTypes = new Set(["text", "long_text", "rich_text", "url", "email", "phone"]);
+  const numericTypes = new Set(["number", "decimal", "currency", "percent"]);
+  const externalIdTypes = new Set(["text", "number", "decimal", "email", "auto_number"]);
+  const uniqueTypes = new Set(["text", "number", "decimal", "email", "auto_number"]);
+
+  if (config.maxLength !== undefined && config.maxLength !== null) {
+    const maxLength = Number(config.maxLength);
+    if (!textTypes.has(field.field_type) || !Number.isInteger(maxLength) || maxLength < 1 || maxLength > 131072) {
+      throw new ConditionError("Maximum length is invalid for this field type");
+    }
+  }
+  if (config.precision !== undefined && config.precision !== null) {
+    const precision = Number(config.precision);
+    if (!numericTypes.has(field.field_type) || !Number.isInteger(precision) || precision < 1 || precision > 38) {
+      throw new ConditionError("Precision must be between 1 and 38 for numeric fields");
+    }
+    const scale = config.scale === undefined || config.scale === null ? 0 : Number(config.scale);
+    if (!Number.isInteger(scale) || scale < 0 || scale > 18 || scale > precision) {
+      throw new ConditionError("Decimal places must be between 0 and 18 and cannot exceed precision");
+    }
+  }
+  if (config.scale !== undefined && config.scale !== null && config.precision === undefined) {
+    const scale = Number(config.scale);
+    if (!numericTypes.has(field.field_type) || !Number.isInteger(scale) || scale < 0 || scale > 18) {
+      throw new ConditionError("Decimal places are invalid for this field type");
+    }
+  }
+  if (config.externalId === true && !externalIdTypes.has(field.field_type)) {
+    throw new ConditionError("External ID is available only for text, number, decimal, email, and auto-number fields");
+  }
+  if (config.unique === true && !uniqueTypes.has(field.field_type)) {
+    throw new ConditionError("Unique is available only for text, number, decimal, email, and auto-number fields");
+  }
+  if (config.defaultValue !== undefined && config.defaultValue !== null && ["formula", "rollup", "auto_number", "lookup"].includes(field.field_type)) {
+    throw new ConditionError("This field type cannot have a static default value");
+  }
+}
+
 async function validatePicklistDefinition(db, field, req) {
-  if (!["select", "picklist"].includes(field.field_type)) return;
+  if (!["select", "picklist", "multiselect"].includes(field.field_type)) return;
   const valueSetId = field.config?.valueSetId || field.config?.value_set_id;
   const local = localPicklistOptions(field);
   if (valueSetId && local.length) throw new ConditionError("Picklists cannot use both local values and a reusable value set");
@@ -680,10 +720,23 @@ async function validatePicklistDefinition(db, field, req) {
     if (seen.has(option.value)) throw new ConditionError(`Duplicate picklist value: ${option.value}`);
     seen.add(option.value);
   }
+  const dependent = field.config?.dependentPicklist || field.config?.dependent_picklist;
+  const configuredDefault = field.config?.defaultValue ?? field.config?.default_value;
+  if (dependent?.controllingField || dependent?.controlling_field) {
+    if (configuredDefault !== undefined && configuredDefault !== null && configuredDefault !== "") {
+      throw new ConditionError("Dependent picklists cannot define a default value");
+    }
+  } else if (configuredDefault !== undefined && configuredDefault !== null && configuredDefault !== "") {
+    const defaults = field.field_type === "multiselect"
+      ? (Array.isArray(configuredDefault) ? configuredDefault : [configuredDefault])
+      : [configuredDefault];
+    const activeValues = new Set(options.filter((option) => option.active !== false).map((option) => String(option.value)));
+    if (defaults.some((value) => !activeValues.has(String(value)))) throw new ConditionError("Picklist default must use an active configured value");
+  }
 }
 
 async function validateDependentPicklistDefinition(db, object, field, req) {
-  if (!["select", "picklist"].includes(field.field_type)) return;
+  if (!["select", "picklist", "multiselect"].includes(field.field_type)) return;
   const config = field.config?.dependentPicklist || field.config?.dependent_picklist;
   if (!config) return;
   if (typeof config !== "object" || Array.isArray(config)) {
@@ -733,20 +786,23 @@ async function validateDependentPicklistDefinition(db, object, field, req) {
 async function validateDependentPicklistValues(db, fields, record, req) {
   const fieldByApi = new Map((fields || []).map((field) => [field.api_name, field]));
   for (const field of fields || []) {
-    if (!["select", "picklist"].includes(field.field_type)) continue;
+    if (!["select", "picklist", "multiselect"].includes(field.field_type)) continue;
     const config = field.config?.dependentPicklist || field.config?.dependent_picklist;
     const controllingFieldApi = config?.controllingField || config?.controlling_field;
     if (!controllingFieldApi) continue;
 
     const dependentValue = record?.[field.api_name];
-    if (dependentValue === null || dependentValue === undefined || dependentValue === "") continue;
+    if (dependentValue === null || dependentValue === undefined || dependentValue === "" || (Array.isArray(dependentValue) && !dependentValue.length)) continue;
     const controllingValue = record?.[controllingFieldApi];
     if (controllingValue === null || controllingValue === undefined || controllingValue === "") {
       return `${field.label} requires ${fieldByApi.get(controllingFieldApi)?.label || controllingFieldApi} before a value can be selected`;
     }
-    const allowedControllers = config?.mappings?.[String(dependentValue)];
-    if (!Array.isArray(allowedControllers) || !allowedControllers.map(String).includes(String(controllingValue))) {
-      return `${field.label} value "${dependentValue}" is not available when ${fieldByApi.get(controllingFieldApi)?.label || controllingFieldApi} is "${controllingValue}"`;
+    const selectedValues = Array.isArray(dependentValue) ? dependentValue : [dependentValue];
+    for (const selected of selectedValues) {
+      const allowedControllers = config?.mappings?.[String(selected)];
+      if (!Array.isArray(allowedControllers) || !allowedControllers.map(String).includes(String(controllingValue))) {
+        return `${field.label} value "${selected}" is not available when ${fieldByApi.get(controllingFieldApi)?.label || controllingFieldApi} is "${controllingValue}"`;
+      }
     }
   }
   return null;
@@ -1991,6 +2047,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     if (systemObject(object) && sourceColumn) return res.status(400).json({ success: false, message: "Custom fields on system objects use extension storage, not business columns" });
     const storedConfig = systemObject(object) && !isCalculatedField({ field_type: fieldType }) ? { ...config, storage: "extension" } : config;
     try {
+      validateGeneralFieldConfig({ field_type: fieldType, config });
       await validatePicklistDefinition(db, { field_type: fieldType, options, config }, req);
     await validateDependentPicklistDefinition(db, object, { api_name: apiName, field_type: fieldType, options, config }, req);
       await validateLookupConfiguration(object.id, fieldType, config, req);
@@ -2033,6 +2090,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         if (req.body[api] !== undefined) candidate[column] = req.body[api];
       }
       if (req.body.options !== undefined) candidate.options = req.body.options;
+      validateGeneralFieldConfig(candidate);
       await validatePicklistDefinition(db, candidate, req);
     await validateDependentPicklistDefinition(db, object, candidate, req);
       await validateLookupConfiguration(field.object_id, candidate.field_type, candidate.config, req);
@@ -7547,7 +7605,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
     for (const [fieldId, values] of Object.entries(restrictions)) {
       const field = fieldsById.get(String(fieldId));
-      if (!field || !["select", "picklist"].includes(field.field_type)) {
+      if (!field || !["select", "picklist", "multiselect"].includes(field.field_type)) {
         throw new ConditionError("Record type restrictions must reference active picklist fields on this object");
       }
       if (!Array.isArray(values) || values.length === 0) {
@@ -7576,7 +7634,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     for (const field of fields) {
       const allowed = byField.get(field.id);
       if (!allowed || input[field.api_name] === undefined || input[field.api_name] === null || input[field.api_name] === "") continue;
-      if (!allowed.has(String(input[field.api_name]))) return `${field.label} is not available for record type ${recordType.label}`;
+      const selected = Array.isArray(input[field.api_name]) ? input[field.api_name] : [input[field.api_name]];
+      if (selected.some((value) => !allowed.has(String(value)))) return `${field.label} is not available for record type ${recordType.label}`;
     }
     return null;
   }
@@ -7691,10 +7750,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (["id", "company_id", "store_id"].includes(column) || ["company_id", "store_id"].includes(String(field.source_column || ""))) return { error: `Field "${apiName}" is managed by the server` };
       const valueError = fieldValueError(field, value);
       if (valueError) return { error: valueError };
-      if (["select", "picklist"].includes(field.field_type)) {
+      if (["select", "picklist", "multiselect"].includes(field.field_type)) {
         const options = await valueSetOptions(db, field, req);
-        const valid = options.some((option) => option.active !== false && option.value === String(value));
-        if (!valid) return { error: `${field.label} must be one of the active configured options` };
+        const allowed = new Set(options.filter((option) => option.active !== false).map((option) => String(option.value)));
+        const selected = field.field_type === "multiselect"
+          ? (Array.isArray(value) ? value : (typeof value === "string" ? value.split(/[;,]/).map((item) => item.trim()).filter(Boolean) : []))
+          : [value];
+        if (selected.some((item) => !allowed.has(String(item)))) return { error: `${field.label} must use active configured options` };
       }
       const lookup = await validateLookupReference(field, value, req, sourceRecord);
       if (lookup.error) return { error: lookup.error };
