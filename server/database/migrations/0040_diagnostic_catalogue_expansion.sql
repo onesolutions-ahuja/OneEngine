@@ -1,0 +1,70 @@
+INSERT INTO oneengine_debug_codes
+(code,category,title,user_message,internal_description,severity,retryable,active,built_in,match_pattern,sort_order,subsystem_key,cause_key)
+VALUES
+('OEUF01','Authentication','User not found','Invalid username or password.','No matching login identity exists. User-facing text intentionally does not reveal account existence.','INFO',FALSE,TRUE,TRUE,'USER_NOT_FOUND',200,'U','F'),
+('OEUP01','Authentication','Incorrect password','Invalid username or password.','Password verification failed for a known account.','INFO',FALSE,TRUE,TRUE,'INVALID_CREDENTIALS|INVALID_PASSWORD',201,'U','P'),
+('OEUL01','Authentication','Account locked','User account is locked.','Account lockout is active after failed login attempts or an administrative lock.','WARNING',FALSE,TRUE,TRUE,'ACCOUNT_LOCKED',202,'U','L'),
+('OEUD01','Authentication','Account disabled','User account is disabled.','The user record is inactive/disabled.','INFO',FALSE,TRUE,TRUE,'USER_DISABLED|account is disabled',203,'U','D'),
+('OEUE01','Authentication','Password expired','Your password has expired and must be changed.','Password age exceeded the configured password-expiry policy.','INFO',FALSE,TRUE,TRUE,'PASSWORD_EXPIRED',204,'U','E'),
+('OEUC01','Authentication','Password change required','You must change your password before continuing.','Account is flagged to change password at next sign-in.','INFO',FALSE,TRUE,TRUE,'MUST_CHANGE_PASSWORD|PASSWORD_CHANGE_REQUIRED',205,'U','C'),
+('OEUH01','Authentication','Login hours restricted','Login is not permitted at this time.','Configured login-hours policy blocks this login.','INFO',FALSE,TRUE,TRUE,'LOGIN_HOURS_RESTRICTED',206,'U','H'),
+('OEUI01','Authentication','Login IP restricted','Login from this network is not permitted.','Configured IP restriction blocks this login or session.','INFO',FALSE,TRUE,TRUE,'LOGIN_IP_RESTRICTED|LOGIN_IP_POLICY_EMPTY|SESSION_IP_CHANGED',207,'U','I'),
+('OEUW01','Authentication','Device activation required','This device must be verified before continuing.','Identity policy requires device activation or trusted-device verification.','INFO',FALSE,TRUE,TRUE,'DEVICE_ACTIVATION|DEVICE_NOT_TRUSTED|TRUSTED_DEVICE',208,'U','W'),
+('OEUS01','Session','Session invalid or expired','Please sign in again to continue.','Session expired, was revoked, timed out, or changed security context.','INFO',FALSE,TRUE,TRUE,'SESSION_REVOKED|SESSION_EXPIRED|SESSION_INACTIVITY_TIMEOUT|SESSION_DOMAIN_CHANGED',209,'U','S'),
+('OEUG01','SSO','SSO unavailable','Single sign-on is not available for this account.','SSO licence, provider configuration, account link or protocol is unavailable.','INFO',FALSE,TRUE,TRUE,'GOOGLE_SSO_REQUIRED|SSO_NOT_CONNECTED|provider_not_available|provider_not_configured|account_not_linked',210,'U','G'),
+('OEUK01','Passkey','Passkey verification failed','Passkey verification could not be completed.','WebAuthn/passkey credential verification or challenge validation failed.','WARNING',FALSE,TRUE,TRUE,'passkey|webauthn|credential.*verification',211,'U','K'),
+
+('OEDP01','Database','Database pool exhausted','OneEngine data services are temporarily busy.','Postgres connection pool/client slots are exhausted.','CRITICAL',TRUE,TRUE,TRUE,'too many clients|remaining connection slots|pool.*exhaust|connection pool',220,'D','P'),
+('OEDS01','Database','Database storage capacity reached','OneEngine data services are temporarily unavailable.','Database/storage capacity or disk quota has been reached.','CRITICAL',FALSE,TRUE,TRUE,'disk full|no space left|storage.*limit|database.*size.*limit|storage quota',221,'D','S'),
+('OEDM01','Database','Database migration failed','OneEngine could not complete platform startup.','A schema/database migration failed.','CRITICAL',FALSE,TRUE,TRUE,'migration .* failed|schema_migrations|DDL',222,'D','M'),
+('OEDT01','Database','Database transaction conflict','The data operation conflicted with another update. Please retry.','Deadlock, serialization failure, lock timeout or transaction conflict.','WARNING',TRUE,TRUE,TRUE,'deadlock|serialization failure|lock timeout|could not serialize',223,'D','T'),
+
+('OEWR01','Workflow','Workflow resource missing','The automation is missing a required resource.','A referenced workflow resource, object, record, variable or version is unavailable.','ERROR',FALSE,TRUE,TRUE,'resource.*unavailable|resource.*missing|record.*no longer exists|workflow version.*missing',230,'W','R'),
+('OEWF01','Workflow','Workflow formula failed','The automation could not evaluate a formula.','Formula expression evaluation failed.','ERROR',FALSE,TRUE,TRUE,'formula.*failed|formula.*invalid|evaluate.*formula',231,'W','F'),
+('OEWC01','Workflow','Workflow condition failed','The automation could not evaluate a condition.','Condition/branch evaluation failed.','ERROR',FALSE,TRUE,TRUE,'condition.*failed|evaluate.*condition',232,'W','C'),
+('OEWS01','Workflow','Subflow failed','A subflow could not be completed.','Child/subflow execution failed.','ERROR',FALSE,TRUE,TRUE,'subflow.*failed|child run.*failed',233,'W','S'),
+('OEWT01','Workflow','Workflow timeout','The automation took too long to complete.','Workflow/action execution timed out.','ERROR',TRUE,TRUE,TRUE,'workflow.*timeout|action.*timeout',234,'W','T'),
+('OEWJ01','Workflow','Workflow background job failed','The automation could not complete in the background.','Scheduled/event workflow background job failed or exhausted retries.','ERROR',TRUE,TRUE,TRUE,'platform job.*failed|scheduled workflow.*failed|job.*attempt',235,'W','J'),
+('OEWU01','Workflow','Workflow execution user unavailable','The automation cannot run with its configured user.','Workflow actor is missing, inactive or no longer has a valid RBAC role.','ERROR',FALSE,TRUE,TRUE,'workflow automation actor|no active RBAC execution user',236,'W','U'),
+('OEWP01','Workflow','Workflow permission denied','The automation does not have permission to complete this action.','Workflow execution failed an RBAC/permission check.','ERROR',FALSE,TRUE,TRUE,'workflow.*permission|automation.*permission',237,'W','P'),
+('OEWL01','Workflow','Workflow licence unavailable','The automation requires a feature that is not currently licensed.','Workflow execution failed an entitlement/licence check.','INFO',FALSE,TRUE,TRUE,'workflow.*licen[cs]e|workflow.*entitlement',238,'W','L'),
+('OEWI01','Workflow','Workflow integration action failed','The automation could not complete a connected-service action.','Workflow connector/integration action failed.','ERROR',TRUE,TRUE,TRUE,'workflow.*integration|connector workflow action',239,'W','I'),
+('OEWH01','Workflow','Workflow HTTP/webhook action failed','The automation could not reach an external endpoint.','Workflow HTTP_REQUEST/WEBHOOK action failed.','ERROR',TRUE,TRUE,TRUE,'HTTP_REQUEST|CALL_WEBHOOK|webhook action',240,'W','H'),
+('OEWX01','Workflow','Workflow rollback failed','The automation failed and could not fully roll back.','Workflow compensation/rollback encountered one or more failures.','CRITICAL',FALSE,TRUE,TRUE,'compensation.*failed|rollback.*failed',241,'W','X'),
+
+('OEPT01','Package','Trial expired','The free trial for this app has expired.','Promotional/trial entitlement has expired.','INFO',FALSE,TRUE,TRUE,'trial.*expired',250,'P','T'),
+('OEPE01','Package','Package entitlement unavailable','This app is not currently licensed.','Package entitlement is absent, inactive, expired or suspended.','INFO',FALSE,TRUE,TRUE,'NOT_LICENSED|NOT_ENTITLED|entitlement.*inactive|suspended_by_entitlement',251,'P','E'),
+('OEPM01','Package','Package manifest invalid','This app package could not be verified.','Trusted package manifest/signature/catalogue verification failed.','ERROR',FALSE,TRUE,TRUE,'manifest.*invalid|trusted package|catalogue.*invalid',252,'P','M'),
+
+('OEIT01','Integration','Integration token refresh failed','The connected service needs to be reconnected.','OAuth access token expired and refresh failed or is unavailable.','ERROR',FALSE,TRUE,TRUE,'token refresh|refresh token|token.*expired',260,'I','T'),
+('OEIP01','Integration','Provider rejected request','The connected service rejected the request.','External provider returned a non-success API response.','ERROR',FALSE,TRUE,TRUE,'provider.*40[0134]|provider rejected|remote.*rejected',261,'I','P'),
+('OEIM01','Integration','Integration mapping invalid','The connected-service mapping is incomplete or invalid.','Field/data mapping validation failed.','ERROR',FALSE,TRUE,TRUE,'mapping.*invalid|required mapping|field mapping',262,'I','M'),
+('OEIX01','Integration','Integration sync conflict','The connected-service data could not be reconciled.','Remote/local sync or reconciliation conflict.','ERROR',FALSE,TRUE,TRUE,'sync conflict|reconciliation conflict|record mismatch',263,'I','X'),
+
+('OEMD01','Payment','Payment declined','The payment was declined.','Payment provider/terminal explicitly declined the payment.','INFO',FALSE,TRUE,TRUE,'payment.*declined|DECLINED',270,'M','D'),
+('OEMT01','Payment','Payment timeout','The payment terminal did not respond in time.','Payment provider or terminal request timed out.','ERROR',TRUE,TRUE,TRUE,'payment.*timeout|terminal.*timeout',271,'M','T'),
+('OEMC01','Payment','Payment configuration invalid','The payment method is not configured correctly.','Payment tender/terminal/provider configuration is missing or invalid.','ERROR',FALSE,TRUE,TRUE,'payment.*not configured|terminal.*not configured|invalid payment line|Payments total',272,'M','C'),
+('OEMR01','Payment','Refund failed','The refund could not be completed.','Payment/provider refund operation failed.','ERROR',FALSE,TRUE,TRUE,'refund.*failed|refund.*rejected',273,'M','R'),
+('OEHP01','Hardware','Printer unavailable','The printer is unavailable.','Receipt/kitchen printer is offline, disconnected or not configured.','WARNING',TRUE,TRUE,TRUE,'printer.*offline|printer.*not configured|print.*failed',280,'H','P'),
+('OEHT01','Hardware','Card terminal unavailable','The card terminal is unavailable.','Assigned payment terminal is disconnected/offline/unavailable.','ERROR',TRUE,TRUE,TRUE,'terminal.*offline|terminal.*unavailable|terminal.*disconnected',281,'H','T'),
+('OEHS01','Hardware','Scanner unavailable','The scanner is unavailable.','Barcode scanner is disconnected or unavailable.','WARNING',TRUE,TRUE,TRUE,'scanner.*disconnected|scanner.*unavailable',282,'H','S'),
+('OEHD01','Hardware','Cash drawer failed','The cash drawer could not be opened.','Cash-drawer connector/action failed.','WARNING',TRUE,TRUE,TRUE,'cash drawer.*failed|drawer.*failed',283,'H','D'),
+
+('OEVS01','POS','Sale validation failed','The sale could not be completed.','Sale/cart/tender validation failed before persistence.','ERROR',FALSE,TRUE,TRUE,'sale.*validation|cart.*invalid|checkout.*invalid',290,'V','S'),
+('OEVN01','Inventory','Insufficient stock','There is not enough stock to complete this action.','Requested stock quantity exceeds available inventory.','INFO',FALSE,TRUE,TRUE,'insufficient stock|stock.*not enough',291,'V','N'),
+('OEVB01','Inventory','Batch or expiry issue','The required stock batch could not be used.','Batch/expiry/FEFO allocation failed.','ERROR',FALSE,TRUE,TRUE,'batch.*missing|expired batch|FEFO|expiry.*failed',292,'V','B'),
+('OEBP01','Purchasing','Purchase validation failed','The purchase could not be completed.','Purchase order/receipt/invoice validation failed.','ERROR',FALSE,TRUE,TRUE,'purchase.*invalid|receipt.*mismatch|invoice.*mismatch',293,'B','P'),
+('OEKC01','Customer','Customer unavailable','The customer record could not be used.','Customer missing/inactive/duplicate conflict.','ERROR',FALSE,TRUE,TRUE,'customer not found|duplicate customer|customer.*inactive',294,'K','C'),
+
+('OEGI01','Import','Import validation failed','The import file could not be processed.','CSV/file parse, required-column or mapping validation failed.','ERROR',FALSE,TRUE,TRUE,'CSV|import.*failed|required column|unsupported file',300,'G','I'),
+('OEQR01','Reporting','Report definition failed','The report could not be generated.','Report definition/datasource/query failed.','ERROR',FALSE,TRUE,TRUE,'report.*failed|datasource.*missing|report.*query',301,'Q','R'),
+('OEJP01','AI','AI provider unavailable','The assistant is temporarily unavailable.','AI provider/model request failed or provider unavailable.','ERROR',TRUE,TRUE,TRUE,'Gemini|AI provider|model.*unavailable',302,'J','P'),
+('OEJJ01','Jobs','Background job failed','A background operation could not be completed.','Generic platform background job failed.','ERROR',TRUE,TRUE,TRUE,'job failed|platform action job',303,'J','J'),
+('OEJR01','Jobs','Background job retries exhausted','A background operation could not be completed after retries.','Background job reached maximum attempts and is permanently failed.','ERROR',FALSE,TRUE,TRUE,'attempts.*5|retries exhausted|max attempts',304,'J','R'),
+('OEXR01','Trusted Runtime','Unregistered capability blocked','This operation is not registered in OneEngine.','Trusted Runtime blocked an unregistered mutation/capability.','ERROR',FALSE,TRUE,TRUE,'UNREGISTERED_CAPABILITY|Trusted Runtime API gate',305,'X','R'),
+('OEXC01','Trusted Runtime','Capability mismatch','This operation failed a trusted-runtime check.','Trusted Runtime capability does not match the requested operation.','ERROR',FALSE,TRUE,TRUE,'CAPABILITY_MISMATCH',306,'X','C')
+ON CONFLICT (code) DO UPDATE SET
+ category=EXCLUDED.category,title=EXCLUDED.title,user_message=EXCLUDED.user_message,
+ internal_description=EXCLUDED.internal_description,severity=EXCLUDED.severity,retryable=EXCLUDED.retryable,
+ active=TRUE,built_in=TRUE,match_pattern=EXCLUDED.match_pattern,sort_order=EXCLUDED.sort_order,
+ subsystem_key=EXCLUDED.subsystem_key,cause_key=EXCLUDED.cause_key,updated_at=NOW();
