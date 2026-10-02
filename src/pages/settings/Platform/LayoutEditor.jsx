@@ -933,46 +933,36 @@ export default function LayoutEditor({
             items: form.components.filter((component) => component.section_id === section.id),
           })),
         },
+        assignments: layoutAssignments.map((assignment) => ({
+          appId: assignment.appId || null,
+          recordTypeId: assignment.recordTypeId || null,
+          roleId: assignment.roleId || null,
+          deviceProfile: assignment.deviceProfile || "any",
+          requiredPermissions: assignment.requiredPermissions || [],
+          priority: Number(assignment.priority || 0),
+        })),
       };
 
-      const url = isNew
-        ? "/api/platform/layouts"
-        : `/api/platform/layouts/${layoutId}`;
+      const creatingDraft = !layoutId;
+      const url = creatingDraft
+        ? "/api/platform/layouts/draft"
+        : `/api/platform/layouts/${layoutId}/draft`;
 
-      const data = await apiRequest(url, { method: isNew ? "POST" : "PUT", body: JSON.stringify(payload) });
+      const data = await apiRequest(url, { method: creatingDraft ? "POST" : "PUT", body: JSON.stringify(payload) });
+      const saved = data?.data || data;
+      setSavedLayout(saved);
+      setAssignmentsTouched(false);
 
-      const saved =
-        data?.data || data;
-
-      const savedLayoutId = saved?.id || saved?.layout_id || layoutId;
-      if (savedLayoutId && (assignmentsTouched || (isNew && layoutAssignments.length > 0))) {
-        await apiRequest(`/api/platform/layouts/${encodeURIComponent(savedLayoutId)}/assignments`, {
-          method: "PUT",
-          body: JSON.stringify({
-            assignments: layoutAssignments.map((assignment) => ({
-              appId: assignment.appId || null,
-              recordTypeId: assignment.recordTypeId || null,
-              roleId: assignment.roleId || null,
-              deviceProfile: assignment.deviceProfile || "any",
-              requiredPermissions: assignment.requiredPermissions || [],
-              priority: Number(assignment.priority || 0),
-            })),
-          }),
-        });
-        setAssignmentsTouched(false);
-      }
-
-      if (
-        typeof onSave ===
-        "function"
-      ) {
+      if (typeof onSave === "function") {
         onSave(saved);
       }
+      return saved;
     } catch (err) {
       setError(
         err?.message ||
           "Unable to save layout."
       );
+      return null;
     } finally {
       setSaving(false);
     }
