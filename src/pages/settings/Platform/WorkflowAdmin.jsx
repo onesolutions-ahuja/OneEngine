@@ -1177,6 +1177,7 @@ function makeStep(type = "CREATE_RECORD") {
       stageLabel: "",
       stageOrder: 1,
       stageValue: "",
+      stageActive: true,
       collection: "",
       outputName: "",
       transformMappings: {},
@@ -2120,6 +2121,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <label className="block text-xs font-medium text-slate-600">Stage Value<input className={inputClass} value={step.config?.stageValue || ""} onChange={(event) => updateConfig({ stageValue: event.target.value })} /></label>
               <label className="block text-xs font-medium text-slate-600">Order<input className={inputClass} type="number" min="1" value={Number(step.config?.stageOrder || 1)} onChange={(event) => updateConfig({ stageOrder: Math.max(1, Number(event.target.value || 1)) })} /></label>
             </div>
+            <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={step.config?.stageActive !== false} onChange={(event) => updateConfig({ stageActive: event.target.checked })} /> Active by default</label>
           </div>
         );
       case "RECOMMENDATION_ASSIGNMENT": {
@@ -3967,6 +3969,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     { label: "$Record__Prior", detail: "The record values before the triggering update", type: "Global Variable" },
     { label: "$User", detail: "The user running the flow", type: "Global Variable" },
     { label: "$Flow.CurrentDateTime", detail: "The date and time when this flow runs", type: "Global Variable" },
+    { label: "$Flow.CurrentStage", detail: "The current Screen Flow stage", type: "Global Variable" },
+    { label: "$Flow.ActiveStages", detail: "Ordered active Screen Flow stages", type: "Global Variable" },
   ];
   const stepResources = workflowStepResources(workflow.steps, workflow.steps.length, objectFieldCatalog);
   const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(step.type) || (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true));
