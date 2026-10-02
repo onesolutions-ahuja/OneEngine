@@ -2989,7 +2989,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.email",
     executor: async (context) => executeProviderSpecificEmail({
       ...context,
       packageKey: "brevo_connector",
@@ -3005,7 +3004,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.email",
     executor: async (context) => executeProviderSpecificEmail({
       ...context,
       packageKey: "mailjet_connector",
