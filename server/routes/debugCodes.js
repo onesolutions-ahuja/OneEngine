@@ -104,7 +104,7 @@ export default function createDebugCodesRouter({ authenticate, authorize, db }) 
   });
 
   router.get("/platform/developer/debug-events", ...manage, async (req, res) => {
-    const rawCode = clean(req.query.code, 6).toUpperCase();
+    const rawCode = clean(req.query.code, 7).toUpperCase();
     const code = normalizeDebugCode(rawCode);
     const reference = clean(req.query.reference, 32).toUpperCase();
     const params = [];
