@@ -3,7 +3,7 @@ const DEFINITIONS = [
   { id: 'platform.developer.manage', prefixes: ['/api/platform/developer/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'platform.metadata.execute', prefixes: ['/api/platform/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'package.lifecycle', prefixes: ['/api/packages/', '/api/platform/packages/'], methods: ['POST','PUT','PATCH','DELETE'] },
-  { id: 'security.manage', prefixes: ['/api/platform/security'], methods: ['POST','PUT','PATCH','DELETE'] },
+  { id: 'security.manage', prefixes: ['/api/platform/security', '/api/security/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'admin.manage', prefixes: ['/api/admin/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'settings.manage', prefixes: ['/api/settings/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'payment.execute', prefixes: ['/api/payments', '/api/payment', '/api/checkout', '/api/till/payment'], methods: ['POST','PUT','PATCH','DELETE'] },
@@ -90,6 +90,7 @@ export function isPrivilegedMutation(path, method = 'GET') {
   const pathname = canonicalPath(path)
   return pathname.startsWith('/api/appointments')
     || pathname.startsWith('/api/platform/')
+    || pathname.startsWith('/api/security/')
     || pathname.startsWith('/api/packages/')
     || pathname.startsWith('/api/admin/')
     || pathname.startsWith('/api/settings/')
