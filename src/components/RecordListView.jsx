@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Check, FileDown, FileUp, Filter, GripVertical, Pencil, Plus, Search } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, FileDown, FileUp, Filter, GripVertical, Pencil, Plus, Search, Save, Trash2, X } from 'lucide-react'
 import DataLoaderWindow from './DataLoaderWindow'
 
 const valueFor = (column, row) => {
@@ -74,8 +74,24 @@ export default function RecordListView({
   onDataChanged,
   selectedRowId = null,
   onRowSelect,
+  searchValue,
+  onSearchChange,
+  selectable = false,
+  selectedRowIds = [],
+  onSelectionChange,
+  bulkActions = [],
+  onInlineEdit,
+  page = 1,
+  pageSize = 50,
+  total = null,
+  onPageChange,
 }) {
   const [query, setQuery] = useState('')
+  const resolvedQuery = onSearchChange ? (searchValue ?? '') : query
+  const setResolvedQuery = (value) => onSearchChange ? onSearchChange(value) : setQuery(value)
+  const [editingCell, setEditingCell] = useState(null)
+  const [editValue, setEditValue] = useState('')
+  const [savingCell, setSavingCell] = useState(false)
   const [sort, setSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
   const [filters, setFilters] = useState({})
   const [filterOpen, setFilterOpen] = useState(null)
@@ -138,8 +154,8 @@ export default function RecordListView({
   }, [rows, columns])
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    let result = !q
+    const q = resolvedQuery.trim().toLowerCase()
+    let result = onSearchChange || !q
       ? rows
       : rows.filter((row) =>
           searchKeys.some((key) => String(row?.[key] ?? '').toLowerCase().includes(q)),
@@ -185,7 +201,7 @@ export default function RecordListView({
 
       return sort.direction === 'asc' ? comparison : -comparison
     })
-  }, [rows, query, searchKeys, columns, sort, filters])
+  }, [rows, resolvedQuery, searchKeys, columns, sort, filters, onSearchChange])
 
   const toggleSort = (column) => {
     if (column.sortable === false) return
@@ -233,6 +249,51 @@ export default function RecordListView({
     })
   }
 
+  const selectedSet = useMemo(() => new Set((selectedRowIds || []).map(String)), [selectedRowIds])
+  const visibleIds = filtered.map((row) => String(row?.id ?? row?.record_id ?? '')).filter(Boolean)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id))
+
+  const changeSelection = (next) => onSelectionChange?.([...new Set(next.map(String))])
+  const toggleRowSelection = (row, checked) => {
+    const id = String(row?.id ?? row?.record_id ?? '')
+    if (!id) return
+    const next = new Set(selectedSet)
+    if (checked) next.add(id)
+    else next.delete(id)
+    changeSelection([...next])
+  }
+  const toggleAllVisible = (checked) => {
+    const next = new Set(selectedSet)
+    visibleIds.forEach((id) => checked ? next.add(id) : next.delete(id))
+    changeSelection([...next])
+  }
+
+  const beginInlineEdit = (row, column) => {
+    if (!onInlineEdit || column.editable === false) return
+    const id = row?.id ?? row?.record_id
+    if (!id) return
+    setEditingCell({ rowId: String(id), columnKey: column.key })
+    setEditValue(row?.[column.key] ?? '')
+  }
+
+  const cancelInlineEdit = () => {
+    setEditingCell(null)
+    setEditValue('')
+  }
+
+  const saveInlineEdit = async (row, column) => {
+    if (!onInlineEdit) return
+    setSavingCell(true)
+    try {
+      await onInlineEdit(row, column, editValue)
+      cancelInlineEdit()
+    } finally {
+      setSavingCell(false)
+    }
+  }
+
+  const totalPages = total == null ? null : Math.max(1, Math.ceil(Number(total || 0) / Math.max(1, Number(pageSize || 50))))
+
   const resolvedSubtitle = typeof subtitle === 'function'
     ? subtitle({ filteredCount: filtered.length, totalCount: rows.length })
     : subtitle
@@ -267,6 +328,21 @@ export default function RecordListView({
               </button>
             </div>
           ) : null}
+          {selectable && selectedSet.size ? (
+            <div className="record-bulk-actions" aria-label="Bulk actions">
+              <span>{selectedSet.size} selected</span>
+              {bulkActions.map((action) => (
+                <button
+                  type="button"
+                  key={action.key || action.label}
+                  disabled={action.disabled}
+                  onClick={() => action.onClick?.([...selectedSet])}
+                >
+                  {action.icon || null}{action.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <button type="button" className="record-create-button" disabled={!canCreate} onClick={onCreate}>
             <Plus size={15} />
             {createLabel}
@@ -280,8 +356,8 @@ export default function RecordListView({
         <label className="record-list-search">
           <Search size={15} />
           <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            value={resolvedQuery}
+            onChange={(event) => setResolvedQuery(event.target.value)}
             placeholder="Search records"
             aria-label={`Search ${title}`}
           />
@@ -301,6 +377,16 @@ export default function RecordListView({
           <table className="record-list-table">
             <thead>
               <tr>
+                {selectable ? (
+                  <th className="record-list-select-head">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      aria-label="Select all visible records"
+                      onChange={(event) => toggleAllVisible(event.target.checked)}
+                    />
+                  </th>
+                ) : null}
                 {canEdit ? <th className="record-list-edit-head"></th> : null}
                 {orderedColumns.map((column) => {
                   const activeSort = sort.key === column.key
@@ -442,6 +528,16 @@ export default function RecordListView({
                     onRowSelect(row)
                   }}
                 >
+                  {selectable ? (
+                    <td className="record-list-select-cell" onClick={(event) => event.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedSet.has(String(row?.id ?? row?.record_id ?? ''))}
+                        aria-label="Select record"
+                        onChange={(event) => toggleRowSelection(row, event.target.checked)}
+                      />
+                    </td>
+                  ) : null}
                   {canEdit ? (
                     <td className="record-list-edit-cell">
                       <button
@@ -454,16 +550,56 @@ export default function RecordListView({
                       </button>
                     </td>
                   ) : null}
-                  {orderedColumns.map((column) => (
-                    <td key={column.key} className="record-list-value-cell" data-label={column.label}>
-                      {column.render ? column.render(row) : (row?.[column.key] ?? '—')}
-                    </td>
-                  ))}
+                  {orderedColumns.map((column) => {
+                    const rowId = String(row?.id ?? row?.record_id ?? '')
+                    const isEditing = editingCell?.rowId === rowId && editingCell?.columnKey === column.key
+                    return (
+                      <td
+                        key={column.key}
+                        className={`record-list-value-cell ${onInlineEdit && column.editable !== false ? 'is-inline-editable' : ''}`}
+                        data-label={column.label}
+                        onDoubleClick={(event) => { event.stopPropagation(); beginInlineEdit(row, column) }}
+                      >
+                        {isEditing ? (
+                          <div className="record-inline-editor" onClick={(event) => event.stopPropagation()}>
+                            {column.editorType === 'select' ? (
+                              <select value={editValue ?? ''} onChange={(event) => setEditValue(event.target.value)}>
+                                <option value="">Select…</option>
+                                {(column.options || []).map((option) => {
+                                  const value = typeof option === 'object' ? option.value ?? option.key ?? option.label : option
+                                  const label = typeof option === 'object' ? option.label ?? option.name ?? value : option
+                                  return <option key={String(value)} value={String(value)}>{String(label)}</option>
+                                })}
+                              </select>
+                            ) : column.editorType === 'boolean' ? (
+                              <select value={String(editValue)} onChange={(event) => setEditValue(event.target.value === 'true')}>
+                                <option value="true">Active</option>
+                                <option value="false">Inactive</option>
+                              </select>
+                            ) : (
+                              <input
+                                type={column.editorType === 'number' ? 'number' : column.editorType === 'date' ? 'date' : column.editorType === 'datetime' ? 'datetime-local' : 'text'}
+                                value={editValue ?? ''}
+                                onChange={(event) => setEditValue(column.editorType === 'number' && event.target.value !== '' ? Number(event.target.value) : event.target.value)}
+                                autoFocus
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Escape') cancelInlineEdit()
+                                  if (event.key === 'Enter') saveInlineEdit(row, column)
+                                }}
+                              />
+                            )}
+                            <button type="button" aria-label="Save inline edit" disabled={savingCell} onClick={() => saveInlineEdit(row, column)}><Save size={12} /></button>
+                            <button type="button" aria-label="Cancel inline edit" disabled={savingCell} onClick={cancelInlineEdit}><X size={12} /></button>
+                          </div>
+                        ) : column.render ? column.render(row) : (row?.[column.key] ?? '—')}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={orderedColumns.length + (canEdit ? 1 : 0)} className="record-list-empty">
+                  <td colSpan={orderedColumns.length + (canEdit ? 1 : 0) + (selectable ? 1 : 0)} className="record-list-empty">
                     {emptyText}
                   </td>
                 </tr>
@@ -472,6 +608,16 @@ export default function RecordListView({
           </table>
         </div>
       )}
+      {onPageChange && totalPages ? (
+        <div className="record-list-pagination">
+          <span>{total == null ? "" : `${total} records`}</span>
+          <div>
+            <button type="button" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))}>Previous</button>
+            <span>Page {page} of {totalPages}</span>
+            <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))}>Next</button>
+          </div>
+        </div>
+      ) : null}
       {dataLoaderMode && objectKey ? (
         <DataLoaderWindow
           objectKey={objectKey}
@@ -481,6 +627,20 @@ export default function RecordListView({
           onImported={onDataChanged}
         />
       ) : null}
+      <style>{`
+        .record-bulk-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .record-bulk-actions span { font-size:11px; color:var(--text-secondary,#64748b); }
+        .record-bulk-actions button { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--border-color,#d1d5db); border-radius:7px; background:var(--card-background,#fff); padding:6px 8px; font-size:10px; cursor:pointer; }
+        .record-list-select-head, .record-list-select-cell { width:34px; text-align:center; }
+        .record-list-value-cell.is-inline-editable { cursor:text; }
+        .record-inline-editor { display:flex; align-items:center; gap:4px; min-width:140px; }
+        .record-inline-editor input, .record-inline-editor select { min-width:0; flex:1; border:1px solid var(--border-color,#d1d5db); border-radius:6px; padding:5px 6px; font-size:11px; }
+        .record-inline-editor button { display:grid; place-items:center; border:1px solid var(--border-color,#d1d5db); border-radius:6px; background:var(--card-background,#fff); padding:5px; cursor:pointer; }
+        .record-list-pagination { display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--border-color,#e5e7eb); padding:10px 12px; color:var(--text-secondary,#64748b); font-size:10px; }
+        .record-list-pagination > div { display:flex; align-items:center; gap:8px; }
+        .record-list-pagination button { border:1px solid var(--border-color,#d1d5db); border-radius:7px; background:var(--card-background,#fff); padding:5px 8px; font-size:10px; cursor:pointer; }
+        .record-list-pagination button:disabled { cursor:not-allowed; opacity:.45; }
+      `}</style>
     </div>
   )
 }
