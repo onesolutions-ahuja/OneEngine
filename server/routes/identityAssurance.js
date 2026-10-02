@@ -2,8 +2,8 @@ import express from "express";
 import crypto from "node:crypto";
 import {
   assuranceSatisfies, consumeChallenge, consumeRecoveryCode, createPendingChallenge,
-  findTrustedDevice, listMfaMethods, loadEffectiveAssurance, newDeviceToken,
-  replaceRecoveryCodes, startTotpEnrollment, trustDevice, verifyTotpMethod,
+  effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, newDeviceToken,
+  replaceRecoveryCodes, startTotpEnrollment, stepUpRequired, trustDevice, verifyTotpMethod,
 } from "../services/identityAssurance.js";
 import { clientIp, createTrackedSession, writeLoginHistory } from "../services/identitySecurity.js";
 
@@ -54,6 +54,19 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.id=$1 AND u.company_id=$2 AND u.active=TRUE LIMIT 1`,[challenge.user_id,challenge.company_id]);
     return {challenge,user:r.rows[0]||null};
   }
+
+  router.post("/auth/step-up/start",authenticate,async(req,res)=>{
+    const resourceKey=String(req.body?.resourceKey||"").trim().toUpperCase();
+    if(!resourceKey)return res.status(400).json({success:false,message:"resourceKey is required"});
+    const policy=await effectiveStepUpPolicy(db,{companyId:req.user.companyId,resourceKey});
+    if(!policy||policy.action==="ALLOW")return res.json({success:true,required:false,assuranceLevel:req.authSession?.assurance_level||"STANDARD"});
+    if(policy.action==="BLOCK")return res.status(403).json({success:false,code:"RESOURCE_BLOCKED",message:"This operation is blocked by security policy"});
+    if(!stepUpRequired({session:req.authSession,policy,defaultMinutes:15}))return res.json({success:true,required:false,assuranceLevel:req.authSession?.assurance_level||"HIGH"});
+    const methods=await listMfaMethods(db,{companyId:req.user.companyId,userId:req.user.id});
+    const challenge=await createPendingChallenge(db,{companyId:req.user.companyId,userId:req.user.id,type:"STEP_UP",
+      context:{sessionId:req.user.sid,resourceKey},minutes:10});
+    res.status(202).json({success:true,required:true,challengeId:challenge.id,availableMethods:methods.map(publicMethod)});
+  });
 
   router.get("/security/assurance",...manage,async(req,res)=>{
     const [settings,providers,stepUps]=await Promise.all([
