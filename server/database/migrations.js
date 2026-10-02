@@ -12,9 +12,18 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0009_secure_invoice_expiry_required",
   "0010_workflow_run_version",
   "0020_tenant_engine_manager_identity",
+  "0022_identity_access_security",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
+  {
+    key: "0022_identity_access_security",
+    version: "22",
+    name: "Identity access perimeter and session security",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0022_identity_access_security.sql", import.meta.url), "utf8")
+    ),
+  },
   {
     key: "0020_tenant_engine_manager_identity",
     version: "20",
