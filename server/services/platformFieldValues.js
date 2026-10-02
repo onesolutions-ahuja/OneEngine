@@ -35,7 +35,11 @@ export function normalizePicklistOptions(options) {
 }
 
 export function localPicklistOptions(field) {
-  return normalizePicklistOptions(field.options).filter((option) => option.value && option.label);
+  const options = normalizePicklistOptions(field.options).filter((option) => option.value && option.label);
+  const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+  return config.sortAlphabetically === true || config.sort_alphabetically === true
+    ? [...options].sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" }))
+    : options;
 }
 
 export function fieldValueError(field, value) {
@@ -80,12 +84,12 @@ export function fieldValueError(field, value) {
       return `${field.label} must contain valid latitude and longitude`;
     }
   }
-  if (type === "select" || type === "picklist") {
+  if ((type === "select" || type === "picklist") && config.restricted !== false) {
     const options = localPicklistOptions(field);
     const allowed = options.filter((option) => option.active !== false).map((option) => String(option.value));
     if (allowed.length && !allowed.includes(String(value))) return `${field.label} must be one of the configured options`;
   }
-  if (type === "multiselect") {
+  if (type === "multiselect" && config.restricted !== false) {
     const options = localPicklistOptions(field);
     const allowed = new Set(options.filter((option) => option.active !== false).map((option) => String(option.value)));
     let selected = Array.isArray(value) ? value : [];
@@ -118,12 +122,16 @@ export async function valueSetOptions(db, field, req) {
     "SELECT v.* FROM platform_value_set_values v JOIN platform_value_sets s ON s.id=v.value_set_id WHERE s.id=$1 AND s.company_id=$2 AND s.active=true ORDER BY v.display_order, v.label",
     [valueSetId, req.user.companyId]
   );
-  return result.rows.map((value) => ({
+  const options = result.rows.map((value) => ({
     label: value.label,
     value: value.value,
     active: value.active !== false,
     displayOrder: value.display_order,
   }));
+  const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+  return config.sortAlphabetically === true || config.sort_alphabetically === true
+    ? options.sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" }))
+    : options;
 }
 
 export async function enrichFields(db, fields, req) {
