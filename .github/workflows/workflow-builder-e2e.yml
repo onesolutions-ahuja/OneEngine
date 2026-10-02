@@ -9,6 +9,7 @@ on:
       - "src/pages/settings/Platform/WorkflowAdmin.jsx"
       - "src/pages/settings/Platform/WorkflowRunsAdmin.jsx"
       - "src/pages/settings/Platform/ApprovalProcessBuilder.jsx"
+      - "src/styles/modules.css"
       - "server/routes/platform.js"
       - "server/routes/platformSchedules.js"
       - "server/services/platformWorkflow.js"
