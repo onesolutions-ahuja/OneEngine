@@ -13,6 +13,7 @@ const FIELD_TYPES = [
   { value: "auto_number", label: "Auto Number" },
   { value: "address", label: "Address" },
   { value: "location", label: "Location" },
+  { value: "json", label: "JSON / Structured" },
   { value: "number", label: "Number" },
   { value: "decimal", label: "Decimal" },
   { value: "currency", label: "Currency" },
@@ -682,7 +683,7 @@ export default function FieldEditor({
             <label>
               <span>Formula result type</span>
                 <select value={form.resultType} onChange={event => update("resultType", event.target.value)}>
-                  {["number", "decimal", "currency", "text", "boolean", "date", "datetime", "email", "phone", "select", "picklist"].map(type => <option key={type} value={type}>{type}</option>)}
+                  {["number", "decimal", "currency", "percent", "text", "url", "time", "boolean", "date", "datetime", "email", "phone", "select", "picklist"].map(type => <option key={type} value={type}>{type}</option>)}
               </select>
             </label>
             <label className="platform-field-editor-wide">
