@@ -599,13 +599,14 @@ function ProcessPathView({ node, builderMode, data }) {
   );
 }
 
-function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverride }) {
+function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
+  const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
   if (key === "container") {
     return (
       <div className="cpb-container-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, node.columns || 2)}, minmax(0, 1fr))`, gap: (node.spacing || 3) * 4 }}>
-        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={onRecordClick} onButtonClick={onButtonClick} data={data} runtimeOverride={runtimeOverride?.[child.id]} />)}
+        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={onRecordClick} onButtonClick={onButtonClick} data={data} runtimeOverrides={runtimeOverrides} />)}
       </div>
     );
   }
@@ -639,7 +640,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   if (key === "spacer") return <div style={{ height: 16 + (Number(node.spacing) || 3) * 6 }} aria-hidden="true" />;
   if (key === "related_list") return <div className="cpb-empty">Related list{node.relationshipKey ? ` · ${node.relationshipKey}` : ""}</div>;
   if (key === "field_value") {
-    const value = runtimeOverride?.value;
+    const value = currentOverride?.value;
     return <div className="text-sm" style={{ color: "var(--text-primary, #374151)" }}>{value !== undefined ? formatRecordValue(value) : node.field ? `${String(node.field).replace(/_/g, " ")}` : "Field value"}</div>;
   }
   return <div className="text-sm" style={{ color: "var(--text-secondary, #64748b)" }}>{nodeLabel(node)}</div>;
@@ -780,7 +781,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                     data={runtimeOverrides[node.id]?.record
                       ? { ...collectionState, [node.id]: { ...(collectionState[node.id] || {}), records: [runtimeOverrides[node.id].record], total: 1, loading: false, error: "", placeholder: false } }
                       : collectionState}
-                    runtimeOverride={runtimeOverrides}
+                    runtimeOverrides={runtimeOverrides}
                   />
                 </RecordBoundNodeBoundary>
               </div>
