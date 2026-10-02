@@ -19,6 +19,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0026_identity_assurance",
   "0027_identity_assurance_overrides",
   "0028_identity_provider_state",
+  "0029_identity_device_activation",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -84,6 +85,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Authentication provider transaction state",
     up: client => client.query(
       readFileSync(new URL("./migrations/0028_identity_provider_state.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0029_identity_device_activation",
+    version: "29",
+    name: "Trusted-device activation policy",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0029_identity_device_activation.sql", import.meta.url), "utf8")
     ),
   },
 ]);
