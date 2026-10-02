@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
 import { compileFormulas, formulaPreviewDependencies, formulaReferences } from "../../../../server/services/platformFormula.js";
 import { toSafeApiName, withGeneratedApiName } from "./safeApiName.js";
+import WhereUsedPanel from "./WhereUsedPanel.jsx";
 
 const FIELD_TYPES = [
   { value: "text", label: "Text" },
@@ -48,6 +49,7 @@ export default function FieldEditor({
   fields = [],
   onSave,
   onCancel,
+  onNavigateDependency,
 }) {
   const isNew = !field?.id && !field?.field_id;
 
@@ -785,6 +787,16 @@ export default function FieldEditor({
 
           {conditionEditor("visibilityCondition", "Conditional Visibility")}
           {conditionEditor("requiredCondition", "Conditional Required")}
+
+          {!isNew ? (
+            <div className="platform-field-editor-wide">
+              <WhereUsedPanel
+                fieldId={field?.id || field?.field_id}
+                title="Where Used"
+                onNavigate={onNavigateDependency}
+              />
+            </div>
+          ) : null}
 
           <label className="platform-field-editor-wide">
             <span>Description</span>
