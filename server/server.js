@@ -467,10 +467,19 @@ function sensitiveResourceKey(req) {
   // Reads are included where the protected resource itself can expose sensitive
   // information (for example reports, auth providers and health/security views).
   if (/\/api\/security\/auth-providers(?:\/|$)/.test(path)) return "MANAGE_AUTH_PROVIDERS";
+  if (/\/api\/security\/policies(?:\/|$)/.test(path) && !/\/ip-ranges(?:\/|$)/.test(path)) return "MANAGE_LOGIN_ACCESS_POLICIES";
+  if (/\/api\/security\/settings(?:\/|$)/.test(path) && method !== "GET") {
+    const body=req.body||{};
+    if (["passwordExpiryDays","passwordHistoryCount","minimumPasswordLength","passwordComplexity","maximumInvalidLoginAttempts","lockoutMinutes","lockoutForever","minimumPasswordLifetimeHours"].some(key=>Object.prototype.hasOwnProperty.call(body,key))) return "MANAGE_PASSWORD_POLICIES";
+  }
   if (/\/api\/security\/(trusted-ranges|ip-ranges)(?:\/|$)/.test(path)
       || /\/api\/security\/policies\/[^/]+\/ip-ranges(?:\/|$)/.test(path)) return "MANAGE_IP_ADDRESSES";
   if (/\/api\/security\/users\/[^/]+\/unlock(?:\/|$)/.test(path)
       || /\/api\/auth\/password-reset/.test(path)) return "UNLOCK_RESET_PASSWORDS";
+  if (/\/api\/security\/mfa(?:\/|$)|\/api\/security\/trusted-devices(?:\/|$)/.test(path) && method !== "GET") return "MANAGE_MFA_UI";
+  if (/\/api\/(platform\/permission|platform\/permission-sets|platform\/permission-set-groups)(?:\/|$)/.test(path)) return "MANAGE_PERMISSION_SETS_PROFILES";
+  if (/\/api\/(settings\/roles|roles)(?:\/|$)/.test(path) && method !== "GET") return "MANAGE_ROLES";
+  if (/\/api\/platform\/security\/(sharing|groups|defaults|hierarchy)(?:\/|$)/.test(path)) return "MANAGE_SHARING";
   if (/\/api\/(admin\/users|settings\/users|platform\/objects\/employee)(?:\/|$)/.test(path)) return "MANAGE_USERS";
   if (/\/api\/(reports|custom-reports|dashboard|dashboard-builder)(?:\/|$)/.test(path)) return "REPORTS_DASHBOARDS";
   if (/\/api\/.*(?:export|data-export)(?:\/|$)/.test(path)) return "MANAGE_DATA_EXPORT";
