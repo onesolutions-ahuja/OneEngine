@@ -1218,6 +1218,11 @@ const WORKFLOW_VISUAL_CSS = `
     .workflow-branch-map { width: min(560px, calc(100vw - 690px)); }
   }
 
+  .workflow-subflow-interface { padding: 7px 10px !important; border-radius: 8px !important; }
+  .workflow-subflow-interface > summary { font-size: 10px !important; line-height: 20px; }
+  .workflow-subflow-interface[open] { padding: 9px 11px 11px !important; }
+  .workflow-subflow-interface[open] > p { margin-top: 6px !important; font-size: 9px !important; }
+
 `;
 
 const SCREEN_COMPONENT_TYPES = [
@@ -1331,6 +1336,29 @@ const FLOW_ELEMENT_VISUALS = {
 
 function flowElementVisual(type = "") {
   return FLOW_ELEMENT_VISUALS[String(type || "").toUpperCase()] || { icon: "⚡", color: "#0b5cab", family: "Action" };
+}
+
+function decisionConditionSummary(step, rootObjectKey = "Record") {
+  if (String(step?.type || "").toUpperCase() !== "CONDITION") return "";
+  const outcomes = Array.isArray(step?.config?.outcomes) ? step.config.outcomes : [];
+  const condition = outcomes[0]?.condition || step?.config?.condition || null;
+  const rules = Array.isArray(condition?.rules) ? condition.rules : Array.isArray(condition?.conditions) ? condition.conditions : [];
+  const rule = rules[0];
+  if (!rule?.field) return "";
+  const objectLabel = String(rootObjectKey || "Record").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  const fieldLabel = String(rule.field).split(".").pop().replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  const operatorLabel = {
+    is_not_empty: "is not empty",
+    is_empty: "is empty",
+    equals: "equals",
+    not_equals: "does not equal",
+    changed: "changed",
+    changed_to: "changed to",
+    greater_than: "is greater than",
+    less_than: "is less than",
+  }[rule.operator || "equals"] || String(rule.operator || "equals").replaceAll("_", " ");
+  const suffix = ["is_not_empty","is_empty","changed"].includes(rule.operator) ? "" : rule.value !== undefined && rule.value !== "" ? ` ${rule.value}` : "";
+  return `${objectLabel} ${fieldLabel} ${operatorLabel}${suffix}`;
 }
 
 function flowElementSupportsFaultPath(type = "") {
@@ -5165,6 +5193,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : elementKind}</span>
                     <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
                     {step.config?.description ? <span className="workflow-node-description" title={step.config.description}>ⓘ</span> : null}
+                    {step.type === "CONDITION" && decisionConditionSummary(step, workflow.object || workflow.objectKey) ? <span className="workflow-node-note">{decisionConditionSummary(step, workflow.object || workflow.objectKey)}</span> : null}
                     {step.type === "LOOP" ? <span className="workflow-node-note">For Each Item · After Last</span> : null}
                     {step.config?.faultMode && step.config.faultMode !== "FAIL" ? <span className="workflow-fault-badge">Fault path</span> : null}
                   </button>
@@ -6652,7 +6681,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : null}
 
-      <details className="relative z-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <details className="workflow-subflow-interface relative z-0 rounded-xl border border-slate-200 bg-white shadow-sm">
         <summary className="cursor-pointer text-sm font-semibold text-slate-800">Subflow interface</summary>
         <p className="mt-2 text-xs text-slate-500">Optional. Declare typed inputs and outputs when this workflow should be reusable from Run Subflow. Normal trigger-based workflows can leave this empty.</p>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
