@@ -4595,6 +4595,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           mode: step.metadata?.result?.mode || null,
           error: step.metadata?.friendlyError || step.metadata?.result?.friendlyError || (step.error_text ? { title: "This step failed but its error path handled the failure", whatHappened: step.error_text } : null),
         }));
+      const resourceHistory = (stepResult.rows || [])
+        .filter((step) => step.metadata?.resourceSnapshot)
+        .map((step) => ({
+          stepId: String(step.step_identifier || "").split("@")[0],
+          actionType: step.action_type || null,
+          status: step.status,
+          snapshot: step.metadata.resourceSnapshot,
+        }));
       const debugData = {
         status: finalStatus,
         run: runResult.rows[0] || run,
@@ -4607,6 +4615,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         rolledBack: true,
         externalActionsSimulated: true,
         variables: workflowVariables,
+        resourceHistory,
       };
       const assertions = Array.isArray(req.body?.assertions) ? req.body.assertions : [];
       const assertionResult = evaluateWorkflowAssertions(debugData, assertions, { record, user: req.user });
