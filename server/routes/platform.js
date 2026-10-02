@@ -7810,10 +7810,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (!field || !field.active || !field.api_name || !metadataColumn(field)) continue;
       const config = field.config && typeof field.config === "object" ? field.config : {};
       const isUnique = field.unique === true || config.unique === true || config.businessKey === true || config.business_key === true || config.uniqueBusinessKey === true || config.unique_business_key === true;
-      const api = String(field.api_name).toLowerCase();
-      if (isUnique || /(?:sku|barcode|code|external|serial|reference|number|identifier)$/.test(api) || /(?:sku|barcode|code|external|serial|reference|number|identifier)/.test(String(field.label || "").toLowerCase())) {
-        byName.set(api, field);
-      }
+      if (isUnique) byName.set(String(field.api_name).toLowerCase(), field);
     }
     return [...byName.values()];
   }
@@ -7908,7 +7905,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (raw === undefined || raw === null || raw === "") continue;
       const normalized = normalizeFieldValue(field, raw);
       if (normalized === null || normalized === "") continue;
-      const scope = [`${metadataColumn(field)}=$1`];
+      const column = metadataColumn(field);
+      const config = field.config && typeof field.config === "object" ? field.config : {};
+      const caseSensitive = config.uniqueCaseSensitive === true || config.unique_case_sensitive === true;
+      const caseInsensitiveText = !caseSensitive && ["text", "email"].includes(field.field_type);
+      const scope = [caseInsensitiveText ? `LOWER("${column}"::text)=LOWER($1::text)` : `"${column}"=$1`];
       const params = [normalized];
       if (object.company_scoped) { params.push(req.user.companyId); scope.push(`company_id=$${params.length}`); }
       if (object.store_scoped) {
