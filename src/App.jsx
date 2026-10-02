@@ -2369,10 +2369,11 @@ function Desktop({ onLock, onSignOut }) {
           canManageOneEngine ? (
             <OneDeveloperPage
               initialSection={routeState?.section || 'objects'}
-              onSectionChange={(section) => {
-                const next = { app: 'developer', section }
+              initialWorkflowId={routeState?.workflowId || ''}
+              onSectionChange={(section, options = {}) => {
+                const next = { app: 'developer', section, workflowId: options?.workflowId || '' }
                 setRouteState(next)
-                setRoute('developer', section)
+                setRoute('developer', section, options)
               }}
             />
           ) : <div className="module-state">OneEngine Manager permission required.</div>
