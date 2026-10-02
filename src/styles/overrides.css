@@ -3579,3 +3579,109 @@
   font-weight: 750;
   text-align: center;
 }
+
+
+/* --------------------------------------------------------------------------
+   2026-10-02 requested UX batch
+   -------------------------------------------------------------------------- */
+
+/* Floating dock: exact 6px viewport gap and visually balanced icon geometry. */
+@media (min-width: 681px) {
+  .dock-zone {
+    bottom: max(6px, env(safe-area-inset-bottom)) !important;
+  }
+}
+@media (min-width: 901px) {
+  .dock {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+  }
+  .dock-desktop-items .dock-icon-wrap {
+    transform: translateY(-1px);
+  }
+  .dock-fixed-zone .dock-separator {
+    height: 46px !important;
+    align-self: center !important;
+  }
+}
+@media (max-width: 900px) {
+  .dock-mobile-item .dock-icon-wrap {
+    transform: translateY(-1px);
+  }
+  .dock-fixed-zone .dock-separator {
+    height: calc(100% - 4px) !important;
+    align-self: center !important;
+  }
+}
+
+/* Jarvis glass surround uses the exact same dock-grey family. Keep the animated
+   video/core untouched; only the surround/background is harmonised. */
+.dock-jarves-slot .jarvis-orb-container::before {
+  background: rgba(54, 58, 66, .62) !important;
+  border-color: rgba(255,255,255,.26) !important;
+  box-shadow:
+    0 8px 20px rgba(18,24,36,.22),
+    inset 0 1px 0 rgba(255,255,255,.24),
+    inset 0 -1px 0 rgba(0,0,0,.10) !important;
+}
+
+/* OneDeveloper content should finish 6px above the floating dock, rather than
+   carrying the old oversized generic Settings footer clearance. */
+.onedeveloper-page .settings-content-body {
+  padding-bottom: 70px !important;
+}
+.onedeveloper-page .objects-settings-shell,
+.onedeveloper-page .onebuilder-list-view {
+  max-height: calc(100dvh - 98px);
+}
+
+/* Workflow list toolbar/search stays available while only the records scroll. */
+.onebuilder-list-view {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.onebuilder-list-header {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  flex: 0 0 auto;
+  background: #fff;
+}
+.onebuilder-list-search {
+  position: sticky;
+  top: 50px;
+  z-index: 5;
+  flex: 0 0 auto;
+  background: #f5f6f8;
+}
+.onebuilder-list-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+
+/* Workflow object groups are buttons and start collapsed. */
+.onebuilder-workflow-group-head {
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.onebuilder-workflow-group-head:hover {
+  background: #eef4fb;
+}
+.onebuilder-workflow-group-toggle {
+  width: 15px;
+  min-width: 15px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+}
+.onebuilder-workflow-group-head > span:nth-child(2) {
+  flex: 1 1 auto;
+}
