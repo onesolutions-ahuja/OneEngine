@@ -110,7 +110,9 @@ function normalizeInitialValue(value, field) {
 
   if (
     type === "number" ||
-    type === "decimal"
+    type === "decimal" ||
+    type === "currency" ||
+    type === "percent"
   ) {
     return value;
   }
