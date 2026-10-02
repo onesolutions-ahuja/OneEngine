@@ -2107,6 +2107,52 @@ const WORKFLOW_VISUAL_CSS = `
     }
   }
 
+  /* Continuous graph connectors: one SVG layer per Decision. */
+  .workflow-decision-stage {
+    position: relative !important;
+    isolation: isolate;
+  }
+  .workflow-decision-connectors {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .workflow-decision-connector-path {
+    fill: none;
+    stroke: #929eac;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+    stroke-linecap: square;
+    stroke-linejoin: round;
+  }
+  .workflow-decision-stage > .workflow-decision-stem,
+  .workflow-decision-stage > .workflow-decision-rail,
+  .workflow-decision-map .workflow-branch-line,
+  .workflow-decision-map .workflow-branch-merge-line {
+    visibility: hidden !important;
+  }
+  .workflow-decision-map {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+  .workflow-decision-map > .workflow-branch-path {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+  .workflow-decision-map .workflow-branch-label,
+  .workflow-decision-map .workflow-branch-label-input,
+  .workflow-decision-map .workflow-branch-stack,
+  .workflow-decision-map .workflow-owned-step,
+  .workflow-decision-map .workflow-branch-node-card,
+  .workflow-decision-map .workflow-branch-add {
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
 `;
 
 const SCREEN_COMPONENT_TYPES = [
@@ -5579,6 +5625,23 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       : { kind, ownerId, position };
   }
 
+  function renderDecisionConnectorSvg(pathCount) {
+    const count = Math.max(1, Number(pathCount || 1));
+    const centers = Array.from({ length: count }, (_, index) => ((index + 0.5) / count) * 100);
+    return (
+      <svg className="workflow-decision-connectors" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path className="workflow-decision-connector-path" d="M50 0 V14" />
+        {centers.map((x, index) => (
+          <path key={`split-${index}`} className="workflow-decision-connector-path" d={`M50 14 H${x} V29`} />
+        ))}
+        {centers.map((x, index) => (
+          <path key={`merge-${index}`} className="workflow-decision-connector-path" d={`M${x} 71 V86 H50`} />
+        ))}
+        <path className="workflow-decision-connector-path" d="M50 86 V100" />
+      </svg>
+    );
+  }
+
   function renderOwnedPath({ ownerId, kind, ids = [], label, outcomeId = null, tone = "", depth = 0, ancestry = [] }) {
     const children = ids.map((id) => branchStepById.get(String(id))).filter(Boolean);
     return (
@@ -5635,6 +5698,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       paths.push({ id: "__default__", label: owner.config?.defaultLabel || "Default Outcome", ids: owner.config?.defaultBranch || owner.config?.elseBranch || [] });
       blocks.push(
         <div key="decision" className="workflow-decision-stage workflow-decision-stage--nested">
+          {renderDecisionConnectorSvg(paths.length)}
           <span className="workflow-decision-stem workflow-decision-stem--in" aria-hidden="true" />
           <span className="workflow-decision-rail workflow-decision-rail--top" aria-hidden="true" />
           <div className="workflow-branch-map workflow-decision-map workflow-nested-map" style={{ "--workflow-branch-edge": `${50 / Math.max(1, paths.length)}%` }}>
@@ -6109,6 +6173,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
 
                 {step.type === "CONDITION" ? (
                   <div className="workflow-decision-stage" aria-label="Decision paths">
+                    {renderDecisionConnectorSvg(decisionPaths.length)}
                     <span className="workflow-decision-stem workflow-decision-stem--in" aria-hidden="true" />
                     <span className="workflow-decision-rail workflow-decision-rail--top" aria-hidden="true" />
                     <div className="workflow-branch-map workflow-decision-map" style={{ "--workflow-branch-edge": `${50 / Math.max(1, decisionPaths.length)}%` }}>
