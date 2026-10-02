@@ -116,6 +116,8 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 12px;
     cursor: pointer;
   }
+  .workflow-icon-button { width: 34px; min-height: 34px; padding: 0; font-size: 16px; }
+  .workflow-cancel-button:disabled, .workflow-save-button:disabled { opacity: .45; cursor: not-allowed; }
   .workflow-ready-dot {
     width: 8px;
     height: 8px;
@@ -2649,7 +2651,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
         {paletteTab === "elements" ? (
           <>
-            <p className="workflow-palette-help">{branchTarget ? "Choose an element for this decision path." : insertAt == null ? "Drag an element to the canvas, or use a + insertion point." : "Choose an element to insert at the selected point."}</p>
+            <p className="workflow-palette-help">{branchTarget ? "Choose an element for this outcome path." : insertAt == null ? "Use a + insertion point on the canvas, then choose an element." : "Choose an element to insert at the selected point."}</p>
             <div className="workflow-palette-scroll">
               {Object.entries(paletteGroups).map(([category, options]) => (
                 <div key={category}>
@@ -2658,10 +2660,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <button
                       key={option.value}
                       type="button"
-                      draggable
                       title={option.description || option.label}
                       aria-label={option.label || option.value}
-                      onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-element", option.value)}
                       onClick={() => addFromPalette(option.value, insertAt == null ? workflow.steps.length : insertAt)}
                       className="workflow-palette-item"
                     >
@@ -2759,7 +2759,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </>
         )}
       </aside> : null}
-      <main className="workflow-canvas-surface" onDragOver={(e) => e.preventDefault()} onDrop={(e) => dropAt(e, workflow.steps.length)}>
+      <main className="workflow-canvas-surface">
         <div className="workflow-canvas-toolbar">
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setCanvasZoom((value) => Math.max(.7, Number((value - .1).toFixed(1))))}>−</button>
           <button type="button" aria-label="Reset zoom" title="Reset zoom" onClick={() => setCanvasZoom(1)}>{Math.round(canvasZoom * 100)}%</button>
@@ -2828,9 +2828,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               ? [...decisionOutcomes, { id: "__default__", label: step.config?.defaultLabel || "Default Outcome", branch: step.config?.defaultBranch || step.config?.elseBranch || [] }]
               : [];
             const branchesCollapsed = collapsedBranches[step.id] === true;
-            return <div key={step.id} className={`workflow-node-wrap ${step.type === "CONDITION" ? "has-decision" : ""}`} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
+            return <div key={step.id} className={`workflow-node-wrap ${step.type === "CONDITION" ? "has-decision" : ""}`}>
               <div className="workflow-node-row">
-                <button type="button" draggable onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-flow-node", step.id)} onClick={() => { inspectStep(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
+                <button type="button" onClick={() => { inspectStep(step.id); onGuideStepChange?.(step.type === "CONDITION" ? "conditions" : "actions"); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""} ${step.enabled === false ? "is-disabled" : ""} ${["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase()) ? "is-fault-source" : ""} ${faultTargetIds.has(String(step.id)) ? "is-fault-target" : ""} ${["FAILED","FAULT_HANDLED"].includes(debugTrace?.[step.id]?.status) ? "is-debug-failed" : debugTrace?.[step.id]?.status === "COMPLETED" ? "is-debug-completed" : ""} ${debugTrace?.[step.id]?.simulated ? "is-debug-simulated" : ""}`}>
                   <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
                   <span className="workflow-node-kind">{debugTrace?.[step.id]?.status === "FAILED" ? "Debug failed" : debugTrace?.[step.id]?.status === "FAULT_HANDLED" ? "Debug fault handled" : debugTrace?.[step.id]?.simulated ? "Debug simulated" : debugTrace?.[step.id]?.status === "COMPLETED" ? "Debug passed" : elementKind}</span>
                   <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
@@ -3096,6 +3096,52 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [editingTestId, setEditingTestId] = useState(null);
   const [versionsBusy, setVersionsBusy] = useState(false);
   const [objectFieldCatalog, setObjectFieldCatalog] = useState({});
+  const [flowHistory, setFlowHistory] = useState({ past: [], future: [], last: null, applying: false });
+
+  useEffect(() => {
+    const serialized = JSON.stringify(workflow);
+    setFlowHistory((current) => {
+      if (current.applying) return { ...current, last: serialized, applying: false };
+      if (!current.last) return { ...current, last: serialized };
+      if (current.last === serialized) return current;
+      return {
+        past: [...current.past.slice(-49), current.last],
+        future: [],
+        last: serialized,
+        applying: false,
+      };
+    });
+  }, [workflow]);
+
+  useEffect(() => {
+    setFlowHistory({ past: [], future: [], last: JSON.stringify(workflow), applying: false });
+  }, [workflowId]);
+
+  const undoFlowChange = () => {
+    if (!flowHistory.past.length) return;
+    const target = flowHistory.past[flowHistory.past.length - 1];
+    const current = flowHistory.last || JSON.stringify(workflow);
+    setFlowHistory({
+      past: flowHistory.past.slice(0, -1),
+      future: [current, ...flowHistory.future].slice(0, 50),
+      last: target,
+      applying: true,
+    });
+    setWorkflow(JSON.parse(target));
+  };
+
+  const redoFlowChange = () => {
+    if (!flowHistory.future.length) return;
+    const target = flowHistory.future[0];
+    const current = flowHistory.last || JSON.stringify(workflow);
+    setFlowHistory({
+      past: [...flowHistory.past, current].slice(-50),
+      future: flowHistory.future.slice(1),
+      last: target,
+      applying: true,
+    });
+    setWorkflow(JSON.parse(target));
+  };
 
 
   useEffect(() => {
@@ -3962,6 +4008,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <input className={inputClass} value={workflow.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, name: event.target.value }))} placeholder="Flow label" />
         </div>
         <div className="workflow-builder-actions">
+          <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.past.length} onClick={undoFlowChange} title="Undo" aria-label="Undo">↶</button>
+          <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.future.length} onClick={redoFlowChange} title="Redo" aria-label="Redo">↷</button>
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Version History</button>
           <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
