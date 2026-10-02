@@ -8,7 +8,7 @@ export const BUTTON_VARIANTS = Object.freeze([
 ]);
 
 const VARIANT_KEYS = new Set(BUTTON_VARIANTS.map((item) => item.key));
-const TARGET_TYPES = new Set(["action", "workflow"]);
+const TARGET_TYPES = new Set(["action", "workflow", "url"]);
 
 export function normalizeButtonDefinition(input = {}) {
   const targetType = String(input.targetType || input.target_type || "action").trim().toLowerCase();
@@ -31,7 +31,14 @@ export function normalizeButtonDefinition(input = {}) {
 export function validateButtonDefinition(input = {}) {
   const button = normalizeButtonDefinition(input);
   if (!button.buttonKey || !button.label || !button.targetKey) throw new Error("buttonKey, label and targetKey are required");
-  if (!TARGET_TYPES.has(button.targetType)) throw new Error("Button targetType must be action or workflow");
+  if (!TARGET_TYPES.has(button.targetType)) throw new Error("Button targetType must be action, workflow, or url");
+  if (button.targetType === "url") {
+    const template = button.targetKey.replace(/\{[A-Za-z_][A-Za-z0-9_.]*\}/g, "value");
+    const isRelative = template.startsWith("/") && !template.startsWith("//");
+    let isHttps = false;
+    try { isHttps = new URL(template).protocol === "https:"; } catch {}
+    if (!isRelative && !isHttps) throw new Error("URL buttons must use an HTTPS URL or an app-relative path");
+  }
   if (!VARIANT_KEYS.has(button.variant)) throw new Error(`Unsupported button variant: ${button.variant}`);
   if (!button.visibilityRule || typeof button.visibilityRule !== "object" || Array.isArray(button.visibilityRule)) throw new Error("visibilityRule must be an object");
   if (!button.inputMappings || typeof button.inputMappings !== "object" || Array.isArray(button.inputMappings)) throw new Error("inputMappings must be an object");
