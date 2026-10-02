@@ -2389,6 +2389,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [collapsedBranches, setCollapsedBranches] = useState({});
   const [managerDetailId, setManagerDetailId] = useState(null);
   const [startSnapshot, setStartSnapshot] = useState(null);
+  const [pathActionDialog, setPathActionDialog] = useState(null);
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -2469,6 +2470,40 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         .filter((step) => String(step.id) !== String(stepId))
         .map((step) => ({ ...step, config: stripStepReferences(step.config || {}, stepId) })),
     }));
+  };
+  const ownedPathsForStep = (step) => {
+    const paths = [];
+    if (step?.type === "CONDITION") {
+      const outcomes = Array.isArray(step.config?.outcomes) && step.config.outcomes.length
+        ? step.config.outcomes
+        : [{ id: "outcome-1", label: "Outcome 1", branch: step.config?.ifBranch || [] }];
+      outcomes.forEach((outcome, index) => paths.push({ key: `decision:${outcome.id || index}`, kind: "decision", outcomeId: outcome.id || `outcome-${index + 1}`, label: outcome.label || `Outcome ${index + 1}`, ids: outcome.branch || [] }));
+      paths.push({ key: "decision:__default__", kind: "decision", outcomeId: "__default__", label: step.config?.defaultLabel || "Default Outcome", ids: step.config?.defaultBranch || step.config?.elseBranch || [] });
+    }
+    if (step?.type === "LOOP") paths.push({ key: "loop:body", kind: "loop", label: "For Each Item", ids: step.config?.bodyBranch || [] });
+    if (["ROUTE","RETRY"].includes(String(step?.config?.faultMode || "FAIL").toUpperCase())) paths.push({ key: "fault", kind: "fault", label: "Fault", ids: step.config?.faultBranch || [] });
+    return paths;
+  };
+  const collectOwnedIds = (seedIds = [], seen = new Set()) => {
+    for (const id of seedIds || []) {
+      const key = String(id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const child = workflow.steps.find((item) => String(item.id) === key);
+      if (child) ownedPathsForStep(child).forEach((path) => collectOwnedIds(path.ids, seen));
+    }
+    return seen;
+  };
+  const clearOwnedPath = (step, path) => {
+    const next = JSON.parse(JSON.stringify(step));
+    if (!path) return next;
+    if (path.kind === "decision") {
+      if (path.outcomeId === "__default__") next.config.defaultBranch = [];
+      else if (Array.isArray(next.config?.outcomes)) next.config.outcomes = next.config.outcomes.map((outcome) => String(outcome.id) === String(path.outcomeId) ? { ...outcome, branch: [] } : outcome);
+      else next.config.ifBranch = [];
+    } else if (path.kind === "loop") next.config.bodyBranch = [];
+    else if (path.kind === "fault") next.config.faultBranch = [];
+    return next;
   };
   const removeStep = (index) => {
     const stepId = workflow.steps[index]?.id;
@@ -2609,19 +2644,61 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     }
     insertPreparedStep(step, index);
   };
-  const copyStep = (step) => setClipboard({ mode: "copy", step: JSON.parse(JSON.stringify(step)) });
-  const cutStep = (step) => {
-    setClipboard({ mode: "cut", step: JSON.parse(JSON.stringify(step)) });
-    removeStepById(step.id);
-    if (selectedId === step.id) {
-      setSelectedId("__start__");
-      setPropertiesOpen(false);
-    }
+  const copyStep = (step) => setClipboard({ mode: "copy", step: JSON.parse(JSON.stringify(step)), bundle: [] });
+  const removeStepSet = (ids) => {
+    const remove = new Set([...ids].map(String));
+    setWorkflow((current) => ({
+      ...current,
+      steps: current.steps
+        .filter((item) => !remove.has(String(item.id)))
+        .map((item) => {
+          let config = item.config || {};
+          remove.forEach((id) => { config = stripStepReferences(config, id); });
+          return { ...item, config };
+        }),
+    }));
+  };
+  const deleteStepWithPathChoice = (step, keepKey = "__none__") => {
+    const paths = ownedPathsForStep(step);
+    const keepPath = paths.find((path) => path.key === keepKey) || null;
+    const keepIds = keepPath ? collectOwnedIds(keepPath.ids) : new Set();
+    const removeIds = new Set([String(step.id)]);
+    paths.filter((path) => path.key !== keepKey).forEach((path) => collectOwnedIds(path.ids, removeIds));
+    keepIds.forEach((id) => removeIds.delete(String(id)));
+    removeStepSet(removeIds);
+    setSelectedId("__start__");
+    setPropertiesOpen(false);
+    setPathActionDialog(null);
+  };
+  const cutStepWithPathChoice = (step, keepKey = "__none__") => {
+    const paths = ownedPathsForStep(step);
+    const keepPath = paths.find((path) => path.key === keepKey) || null;
+    const keepIds = keepPath ? collectOwnedIds(keepPath.ids) : new Set();
+    const cutIds = new Set();
+    paths.filter((path) => path.key !== keepKey).forEach((path) => collectOwnedIds(path.ids, cutIds));
+    keepIds.forEach((id) => cutIds.delete(String(id)));
+    let clipboardStep = keepPath ? clearOwnedPath(step, keepPath) : JSON.parse(JSON.stringify(step));
+    const bundle = workflow.steps.filter((item) => cutIds.has(String(item.id))).map((item) => JSON.parse(JSON.stringify(item)));
+    setClipboard({ mode: "cut", step: clipboardStep, bundle });
+    removeStepSet(new Set([String(step.id), ...cutIds]));
+    setSelectedId("__start__");
+    setPropertiesOpen(false);
+    setPathActionDialog(null);
+  };
+  const requestDeleteStep = (step) => {
+    const paths = ownedPathsForStep(step).filter((path) => path.ids?.length);
+    if (!paths.length) return deleteStepWithPathChoice(step);
+    setPathActionDialog({ mode: "delete", stepId: step.id, keepKey: "__none__", paths });
+  };
+  const requestCutStep = (step) => {
+    const paths = ownedPathsForStep(step).filter((path) => path.ids?.length);
+    if (!paths.length) return cutStepWithPathChoice(step);
+    setPathActionDialog({ mode: "cut", stepId: step.id, keepKey: "__none__", paths });
   };
   const pasteClipboard = (index = workflow.steps.length) => {
     if (!clipboard?.step) return;
     const step = prepareCopiedStep(clipboard.step, clipboard.mode === "cut");
-    insertPreparedStep(step, index);
+    insertPreparedStep(step, index, clipboard.mode === "cut" ? (clipboard.bundle || []) : []);
     if (clipboard.mode === "cut") setClipboard(null);
   };
   const addFaultPath = (step) => {
