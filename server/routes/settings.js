@@ -48,6 +48,27 @@ export default function createSettingsRouter({
     return deviceKey
   };
 
+  const claimSingleLegacyPaymentTerminal = async (req) => {
+    const deviceKey = deviceKeyFor(req)
+    const existing = await db(
+      `SELECT
+          COUNT(*) FILTER (WHERE device_key=$3 AND active=true)::int AS linked_count,
+          COUNT(*) FILTER (WHERE device_key='legacy-unassigned' AND active=true)::int AS legacy_count,
+          MIN(id) FILTER (WHERE device_key='legacy-unassigned' AND active=true) AS legacy_id
+         FROM payment_terminals
+        WHERE company_id=$1 AND store_id=$2`,
+      [req.user.companyId, req.user.storeId, deviceKey]
+    );
+    const row = existing.rows[0] || {};
+    if (Number(row.linked_count) === 0 && Number(row.legacy_count) === 1 && row.legacy_id) {
+      await db(
+        "UPDATE payment_terminals SET device_key=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3 AND store_id=$4 AND device_key='legacy-unassigned'",
+        [deviceKey,row.legacy_id,req.user.companyId,req.user.storeId]
+      );
+    }
+    return deviceKey
+  };
+
   router.get("/settings/payment-methods", authenticate, async (req, res) => {
     try {
       await ensureDefaultPaymentMethods(db, req.user.companyId);
@@ -919,7 +940,7 @@ export default function createSettingsRouter({
 
   router.get("/payment-terminals", authenticate, async (req, res) => {
     try {
-      const deviceKey = deviceKeyFor(req);
+      const deviceKey = await claimSingleLegacyPaymentTerminal(req);
       const result = await db(
         `SELECT id,store_id,provider,name,terminal_identifier,connection_url,
                 active,(api_credentials IS NOT NULL AND api_credentials <> '') AS has_credentials,
@@ -1054,6 +1075,7 @@ export default function createSettingsRouter({
   router.get("/health/devices", authenticate, async (req,res) => {
     try {
       const deviceKey=await claimLegacyHardware(req);
+      await claimSingleLegacyPaymentTerminal(req);
       const [hardwareResult,terminalResult]=await Promise.all([
         db(`SELECT id,device_type,device_name,connection_type,last_test_result,last_tested_at
               FROM hardware_configurations
