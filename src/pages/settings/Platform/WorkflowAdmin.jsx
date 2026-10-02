@@ -793,7 +793,6 @@ const WORKFLOW_VISUAL_CSS = `
   }
   .workflow-end-node span { font-size: 7px; color: #706e6b; }
   .workflow-flow-properties-panel,
-  .workflow-flow-properties-panel,
   .workflow-path-action-panel {
     position: fixed;
     z-index: 80;
@@ -979,7 +978,7 @@ const actionOptions = [
   { value: "RUN_SUBFLOW", label: "Subflow" },
   { value: "WEBHOOK", label: "Webhook" },
   { value: "CONDITION", label: "Decision" },
-  { value: "WAIT", label: "Pause" },
+  { value: "WAIT", label: "Wait for Amount of Time" },
   { value: "STOP", label: "End" },
 ];
 
@@ -3396,6 +3395,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [testsOpen, setTestsOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [flowPropertiesOpen, setFlowPropertiesOpen] = useState(false);
+  const [flowPropertiesSnapshot, setFlowPropertiesSnapshot] = useState(null);
   const [savedTests, setSavedTests] = useState([]);
   const [workflowVersions, setWorkflowVersions] = useState([]);
   const [compareVersionId, setCompareVersionId] = useState(null);
@@ -3424,6 +3424,22 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   useEffect(() => {
     setFlowHistory({ past: [], future: [], last: JSON.stringify(workflow), applying: false });
   }, [workflowId]);
+
+  const openFlowProperties = () => {
+    setFlowPropertiesSnapshot({ name: workflow.name || "", actionMetadata: JSON.parse(JSON.stringify(workflow.actionMetadata || {})) });
+    setFlowPropertiesOpen(true);
+  };
+  const cancelFlowProperties = () => {
+    if (flowPropertiesSnapshot) {
+      setWorkflow((current) => ({ ...current, name: flowPropertiesSnapshot.name, actionMetadata: flowPropertiesSnapshot.actionMetadata }));
+    }
+    setFlowPropertiesSnapshot(null);
+    setFlowPropertiesOpen(false);
+  };
+  const finishFlowProperties = () => {
+    setFlowPropertiesSnapshot(null);
+    setFlowPropertiesOpen(false);
+  };
 
   const undoFlowChange = () => {
     if (!flowHistory.past.length) return;
@@ -3856,7 +3872,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           scope: workflow.scope || "system",
         } : {}),
         ...(workflow.actionMetadata?.flowType ? { flowType: workflow.actionMetadata.flowType } : {}),
-        ...(workflow.actionMetadata?.apiName ? { apiName: workflow.actionMetadata.apiName } : {}),
+        apiName: workflow.actionMetadata?.apiName || flowApiName(workflow.name || "Flow"),
         ...(workflow.actionMetadata?.description ? { description: workflow.actionMetadata.description } : {}),
         ...(workflow.actionMetadata?.templateKey ? { templateKey: workflow.actionMetadata.templateKey } : {}),
         ...(workflow.actionMetadata?.defaultForNewDevices ? { defaultForNewDevices: true } : {}),
@@ -4316,7 +4332,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         <div className="workflow-builder-actions">
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.past.length} onClick={undoFlowChange} title="Undo" aria-label="Undo">↶</button>
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.future.length} onClick={redoFlowChange} title="Redo" aria-label="Redo">↷</button>
-          <button type="button" className="workflow-cancel-button" onClick={() => setFlowPropertiesOpen(true)}>View Properties</button>
+          <button type="button" className="workflow-cancel-button" onClick={openFlowProperties}>View Properties</button>
           {reviewIssue ? <button type="button" className="workflow-cancel-button workflow-icon-button" title={reviewIssue} aria-label="Show Errors" onClick={() => document.getElementById("workflow-review-section")?.scrollIntoView({ behavior: "smooth", block: "center" })}>!</button> : null}
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Edit History</button>
@@ -4331,7 +4347,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         <div className="workflow-flow-properties-panel" role="dialog" aria-label="Flow Properties">
           <div className="workflow-add-element-head">
             <div><strong>Flow Properties</strong><small>Version {workflow.version || 1}</small></div>
-            <button type="button" aria-label="Close Flow Properties" onClick={() => setFlowPropertiesOpen(false)}>×</button>
+            <button type="button" aria-label="Close Flow Properties" onClick={cancelFlowProperties}>×</button>
           </div>
           <div className="workflow-path-action-body space-y-3">
             <label>Flow Label
@@ -4357,7 +4373,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             </label>
             <div className="workflow-flow-property-readonly"><span>Type</span><strong>{workflow.actionMetadata?.flowType || "Autolaunched Flow"}</strong></div>
             <div className="workflow-path-action-buttons">
-              <button type="button" className="workflow-save-button" onClick={() => setFlowPropertiesOpen(false)}>Done</button>
+              <button type="button" className="workflow-cancel-button" onClick={cancelFlowProperties}>Cancel</button>
+              <button type="button" className="workflow-save-button" onClick={finishFlowProperties}>Done</button>
             </div>
           </div>
         </div>
