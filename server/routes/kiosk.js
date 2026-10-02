@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { resolvePrice } from "../services/pricingEngine.js";
 import { executeConnectorWorkflowAction } from "../services/platformWorkflow.js";
 import { resendInvoiceByChannel } from "../services/invoiceDelivery.js";
+import { packageDefinitions } from "../services/packageRegistry.js";
 
 const KIOSK_MODE_TTL = process.env.KIOSK_MODE_TTL || "12h";
 
@@ -680,6 +681,27 @@ export default function createKioskRouter({
 
   router.get("/kiosk/flows", authenticate, async (req, res) => {
     try {
+      if (String(req.query?.demo || "") === "1") {
+        const oneKiosk = packageDefinitions().find((definition) => definition.packageKey === "one_kiosk");
+        const workflows = Array.isArray(oneKiosk?.manifest?.workflows) ? oneKiosk.manifest.workflows : [];
+        return res.json({
+          success: true,
+          data: workflows.map((workflow, index) => ({
+            id: `one-kiosk-demo-${index + 1}`,
+            name: workflow.name,
+            trigger_key: workflow.triggerKey,
+            conditions: workflow.conditions || [],
+            action: workflow.action || {},
+            active: workflow.active !== false,
+            lifecycle_status: workflow.lifecycleStatus || "ACTIVE",
+            version: 1,
+            managed: true,
+            user_modified: false,
+            source_package_version: oneKiosk.version || null,
+            updated_at: null,
+          })),
+        });
+      }
       const displayFlowId = req.user?.mode === "kiosk_display" ? req.user.kioskDisplayFlowId || null : null;
       const result = await db(
         `SELECT id,name,trigger_key,conditions,action,active,lifecycle_status,version,
