@@ -3253,31 +3253,33 @@
 
 
 /* 2026-10-02 dock capacity/alignment correction.
-   Desktop reserves ten 40px app slots at 1.6x the former 12px gap (19.2px),
-   then a frozen divider/Jarvis zone. Mobile keeps Jarvis fixed and scrolls apps. */
+   Desktop keeps a fixed Jarvis reservation and divides the whole app lane into
+   equal slots based on the number of visible icons (up to ten). The 40px app
+   icons sit exactly 6px from both the top and bottom dock border. Mobile keeps
+   Jarvis fixed and scrolls apps. */
 @media (min-width: 901px) {
   .dock {
     --dock-icon-size: 40px;
-    --dock-icon-gap: 19.2px;
-    width: 730px;
+    width: 768px;
     max-width: calc(100vw - 24px);
-    height: 82px;
-    min-height: 82px;
-    padding: 18px 18px 10px;
+    height: 52px;
+    min-height: 52px;
+    padding: 6px 18px;
     box-sizing: border-box;
-    align-items: flex-end;
+    align-items: center;
     gap: 0;
   }
 
   .dock-desktop-items {
-    width: 592px; /* 10 * 40px icons + 10 * 19.2px spacing */
-    flex: 0 0 592px;
+    flex: 1 1 auto;
+    width: auto;
     min-width: 0;
-    display: flex;
-    align-items: flex-end;
-    gap: var(--dock-icon-gap);
-    padding-left: 8px;
-    padding-right: 8px;
+    height: var(--dock-icon-size);
+    display: grid;
+    grid-template-columns: repeat(var(--dock-item-count, 1), minmax(0, 1fr));
+    align-items: center;
+    gap: 0;
+    padding: 0;
     box-sizing: border-box;
     overflow: visible;
   }
@@ -3286,6 +3288,8 @@
     width: var(--dock-icon-size) !important;
     min-width: var(--dock-icon-size);
     max-width: var(--dock-icon-size);
+    height: var(--dock-icon-size);
+    justify-self: center;
     flex: 0 0 var(--dock-icon-size);
     transform-origin: bottom center;
     z-index: 1;
@@ -3300,12 +3304,12 @@
     width: 102px;
     min-width: 102px;
     flex: 0 0 102px;
-    height: 54px;
+    height: 40px;
     margin-left: 18px;
     display: grid;
     grid-template-columns: 1px 82px;
     column-gap: 19px;
-    align-items: end;
+    align-items: center;
     justify-content: end;
     position: relative;
     z-index: 20;
@@ -3314,15 +3318,16 @@
 
   .dock-fixed-zone .dock-separator {
     width: 1px;
-    height: 42px;
+    height: 40px;
     margin: 0;
-    align-self: end;
+    align-self: center;
   }
 
   .dock-fixed-zone .dock-jarves-slot {
     width: 82px;
     flex: 0 0 82px;
     height: 52px;
+    align-self: center;
   }
 }
 
