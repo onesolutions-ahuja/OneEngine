@@ -64,7 +64,9 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await workflowWorkspace.getByRole("button", { name: "View Properties", exact: true }).click();
   const flowProperties = page.getByRole("dialog", { name: "Flow Properties" });
   await expect(flowProperties).toBeVisible();
-  await flowProperties.getByPlaceholder("Flow Label").fill(qaWorkflowName);
+  const flowLabelInput = flowProperties.getByPlaceholder("Flow Label");
+  await expect(flowLabelInput).toBeVisible();
+  await flowLabelInput.fill(qaWorkflowName);
   await flowProperties.getByRole("button", { name: "Done", exact: true }).click();
   const initialTriggerSelect = page.getByLabel("Flow trigger");
   await initialTriggerSelect.selectOption("manual");
