@@ -101,6 +101,8 @@ import createPlatformSchedulesRouter from "./routes/platformSchedules.js";
 import createPlatformEventsRouter from "./routes/platformEvents.js";
 import { saveDomainConfiguration } from "./services/platformDomainRecords.js";
 import createAdvancedPlatformRouter from "./routes/advancedPlatform.js";
+import createDebugCodesRouter from "./routes/debugCodes.js";
+import { buildDebugPayload, classifyDebugCode, builtinDebugCode } from "./services/debugCodes.js";
 import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformMetadata.js";
 import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
 import { seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
@@ -160,6 +162,14 @@ const app = express();
 app.set("trust proxy", 1);
 
 const PORT = process.env.PORT || 10000;
+let httpServer = null;
+let runtimeReadiness = {
+  state: "starting",
+  oeCode: "OES01",
+  message: "OneEngine is starting. Please try again shortly.",
+  technicalMessage: null,
+  updatedAt: new Date().toISOString(),
+};
 
 
 /*
@@ -242,7 +252,7 @@ function createFixedWindowRateLimiter({ windowMs, max, keyPrefix }) {
     res.setHeader("RateLimit-Reset", String(Math.ceil(entry.resetAt / 1000)));
     if (entry.count > max) {
       res.setHeader("Retry-After", String(Math.ceil((entry.resetAt - now) / 1000)));
-      return res.status(429).json({ success: false, message: "Too many requests. Please try again later." });
+      return res.status(429).json({ success: false, code: "OEA03", oeCode: "OEA03", message: "Too many requests. Please try again shortly." });
     }
     next();
   };
@@ -278,6 +288,24 @@ app.use(createSelfCheckoutModeGate());
 app.use(createKioskModeGate());
 app.use(createTrustedRuntimeGate());
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
+
+// Keep the process reachable while core dependencies initialise. This lets the
+// browser receive an exact OneEngine code (for example OED02 for a database
+// resource limit) instead of incorrectly assuming that Render is merely starting.
+app.use("/api", (req, res, next) => {
+  if (req.path === "/health" || req.path === "/") return next();
+  if (runtimeReadiness.state === "ready") return next();
+  const definition = builtinDebugCode(runtimeReadiness.oeCode) || builtinDebugCode("OES01");
+  return res.status(503).json({
+    success: false,
+    code: definition.code,
+    oeCode: definition.code,
+    title: definition.title,
+    message: definition.userMessage,
+    retryable: definition.retryable === true,
+    reference: "STARTUP",
+  });
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -748,10 +776,17 @@ app.get("/api/health", async (req, res) => {
     packageRegistry.healthy === true &&
     !healthError;
 
+  const oeCode = healthy
+    ? null
+    : healthError
+      ? classifyDebugCode({ message: healthError }, 503)
+      : (runtimeReadiness.oeCode || "OES01");
+  const definition = oeCode ? (builtinDebugCode(oeCode) || builtinDebugCode("OEA01")) : null;
+
   res.status(healthy ? 200 : 503).json({
     success: healthy,
-    app: "onePOS",
-    status: healthy ? "online" : "unhealthy",
+    app: "OneEngine",
+    status: healthy ? "online" : runtimeReadiness.state,
     version: "0.2.0",
     database,
     platformBootstrap: {
@@ -759,7 +794,13 @@ app.get("/api/health", async (req, res) => {
       fingerprint: bootstrap.fingerprint || null,
     },
     packageRegistry,
-    ...(healthError ? { error: healthError } : {}),
+    ...(definition ? {
+      code: definition.code,
+      oeCode: definition.code,
+      title: definition.title,
+      message: definition.userMessage,
+      retryable: definition.retryable === true,
+    } : {}),
     time: new Date().toISOString(),
   });
 });
@@ -1757,6 +1798,7 @@ app.use(
 );
 app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
 app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasPermission }));
+app.use("/api", createDebugCodesRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
 app.use("/api", createIdentitySecurityRouter({ authenticate, authorize, db, writeAudit }));
@@ -2194,16 +2236,28 @@ app.post("/api/setup/database", authenticate, authorize("oneengine.manage"), asy
  * did not handle so clients receive a deterministic JSON response instead of
  * a hung request / browser "Failed to fetch".
  */
-app.use((error, req, res, next) => {
+app.use(async (error, req, res, next) => {
   if (res.headersSent) return next(error);
   const status = Number.isInteger(error?.status) && error.status >= 400 && error.status < 600
     ? error.status
     : 500;
   console.error("Unhandled API route error:", error);
-  return res.status(status).json({
-    success: false,
-    message: status >= 500 ? "Request failed" : (error?.message || "Request failed"),
-  });
+  try {
+    const payload = await buildDebugPayload(db, { error, status, req });
+    return res.status(status).json(payload);
+  } catch (debugError) {
+    console.error("OneEngine Debug boundary failed:", debugError);
+    const code = classifyDebugCode(error, status);
+    const definition = builtinDebugCode(code) || builtinDebugCode("OEA02");
+    return res.status(status).json({
+      success: false,
+      code: definition.code,
+      oeCode: definition.code,
+      title: definition.title,
+      message: definition.userMessage,
+      retryable: definition.retryable === true,
+    });
+  }
 });
 
 /*
@@ -2223,7 +2277,7 @@ app.get(["/", "/login", "/app", "/app/*", "/customer-display"], (req, res) => {
 /* Unknown API routes remain JSON; unknown browser routes go to the active frontend. */
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
-    return res.status(404).json({ success: false, message: "API endpoint not found" });
+    return res.status(404).json({ success: false, code: "OEA04", oeCode: "OEA04", message: "The requested service could not be found." });
   }
   return res.redirect(302, SMART_THEME_URL);
 });
@@ -2266,6 +2320,25 @@ async function markPlatformBootstrapCurrent(fingerprint) {
 
 async function startServer() {
   try {
+    // Bind before database/bootstrap work so startup dependency failures remain
+    // diagnosable from the UI instead of appearing as an unreachable server.
+    if (!httpServer) {
+      console.log(`onePOS: binding HTTP listener on ${PORT}`);
+      httpServer = app.listen(PORT, "0.0.0.0");
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error(`HTTP listener did not bind on port ${PORT}`)), 10000);
+        httpServer.once("listening", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        httpServer.once("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      });
+      console.log(`onePOS running on port ${PORT}`);
+    }
+
     const trustedRuntime = validateTrustedRuntime();
     const trustedPackages = validateTrustedPackageCatalogue();
     console.log(`OneEngine Trusted Runtime ${trustedRuntime.version.slice(0, 12)} (${trustedRuntime.count} capabilities; packages ${trustedPackages.digest.slice(0, 12)}/${trustedPackages.count})`);
@@ -2314,23 +2387,13 @@ async function startServer() {
       console.log(`onePOS: recovered ${recoveredCommands.rowCount} stale business command trace(s)`);
     }
 
-    // Bind the HTTP listener as soon as the core schema is ready. Platform
-    // metadata/bootstrap can take significantly longer on a cold Render start
-    // and must not keep /api/auth/login unreachable during that work.
-    console.log(`onePOS: binding HTTP listener on ${PORT}`);
-    const server = app.listen(PORT, "0.0.0.0");
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error(`HTTP listener did not bind on port ${PORT}`)), 10000);
-      server.once("listening", () => {
-        clearTimeout(timeout);
-        resolve();
-      });
-      server.once("error", (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      });
-    });
-    console.log(`onePOS running on port ${PORT}`);
+    runtimeReadiness = {
+      state: "ready",
+      oeCode: null,
+      message: "OneEngine is ready.",
+      technicalMessage: null,
+      updatedAt: new Date().toISOString(),
+    };
 
     // Reconcile the canonical company-bound Superadmin immediately after the
     // core schema and listener are ready. This is intentionally before the
@@ -3339,17 +3402,25 @@ async function startServer() {
     if (workerTimer?.unref) workerTimer.unref();
     const shutdown = () => {
       if (workerTimer) clearInterval(workerTimer);
-      server.close(() => process.exit(0));
+      httpServer?.close(() => process.exit(0));
     };
     process.once("SIGTERM", shutdown);
     process.once("SIGINT", shutdown);
   } catch (error) {
-    console.error(
-      "onePOS startup failed:",
-      error
-    );
-
-    process.exit(1);
+    console.error("onePOS startup failed:", error);
+    const oeCode = classifyDebugCode(error, 503);
+    const definition = builtinDebugCode(oeCode) || builtinDebugCode("OES02");
+    runtimeReadiness = {
+      state: "degraded",
+      oeCode: definition.code,
+      message: definition.userMessage,
+      technicalMessage: String(error?.message || error || ""),
+      updatedAt: new Date().toISOString(),
+    };
+    // If the HTTP listener itself could not bind there is no diagnostic surface
+    // to preserve, so fail normally. Dependency/bootstrap failures stay online
+    // in degraded mode and expose their OE code through /api/health.
+    if (!httpServer?.listening) process.exit(1);
   }
 }
 
