@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, PlugZap, RefreshCw } from "lucide-react";
+import { ConnectorFieldHelp, ConnectorSettingsCompact, ConnectorSettingsFooter, ConnectorSettingsModeActions } from "./ConnectorSettingsTemplates.jsx";
 import { apiRequest } from "../../services/api.js";
 
 const inputClass = "h-9 w-full border border-slate-300 rounded px-2 text-sm";
@@ -20,6 +21,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const [message, setMessage] = useState("");
   const [testActionValues, setTestActionValues] = useState({});
   const [runningTestAction, setRunningTestAction] = useState("");
+  const [settingsEditMode, setSettingsEditMode] = useState("view");
   const existingInstance = instances.find((instance) => instance.packageKey === packageKey) || null;
 
   const selectedApp = apps.find((app) => app.package_key === packageKey);
@@ -29,6 +31,11 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const selectedStore = stores.find((store) => store.id === storeId);
   const tills = Array.isArray(selectedStore?.tills) ? selectedStore.tills : [];
   const companyScoped = selectedApp?.manifest?.connectorApp?.scope === "company";
+  const visibleSchema = schema.filter((field) => !["action","readonly","store lookup","till lookup"].includes(field.type));
+  const credentialFirstSchema = [...visibleSchema].sort((a, b) => {
+    const credential = (field) => field.type === "secret" || /api|token|secret|password|credential|key/i.test(String(field.key || "") + " " + String(field.label || ""));
+    return Number(credential(b)) - Number(credential(a));
+  });
 
   const load = async ({ preserveFeedback = false } = {}) => {
     setLoading(true);
@@ -81,8 +88,11 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
       setFallbackOrder(String(existingInstance.fallbackOrder ?? 0));
       setStoreId(existingInstance.storeId || "");
       setTillId(existingInstance.tillId || "");
+      if (settingsMode) setSettingsEditMode("view");
+    } else if (settingsMode && packageKey) {
+      setSettingsEditMode("add");
     }
-  }, [packageKey, existingInstance?.id]);
+  }, [packageKey, existingInstance?.id, settingsMode]);
 
   const createInstance = async (event) => {
     event.preventDefault();
@@ -107,6 +117,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
         ? "Connection settings saved. Re-test the connection before enabling if credentials changed."
         : "Connector instance assigned. Test it before enabling.");
       await load();
+      if (settingsMode) setSettingsEditMode("view");
     } catch (saveError) {
       setError(saveError.message || "Unable to assign connector");
     } finally {
@@ -176,6 +187,177 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
       setWorkingId("");
     }
   };
+
+  const resetSettingsForm = () => {
+    const defaults = Object.fromEntries(schema
+      .filter((field) => Object.hasOwn(field, "default"))
+      .map((field) => [field.key, field.default]));
+    setConfiguration({ ...defaults, ...(existingInstance?.configuration || {}) });
+    setFallbackOrder(String(existingInstance?.fallbackOrder ?? 0));
+    setStoreId(existingInstance?.storeId || "");
+    setTillId(existingInstance?.tillId || "");
+    setSettingsEditMode(existingInstance ? "view" : "add");
+    setError("");
+    setMessage("");
+  };
+
+  const renderSettingsField = (field, disabled) => {
+    const value = configuration[field.key] ?? field.default ?? "";
+    const help = <ConnectorFieldHelp description={field.description} helpUrl={field.helpUrl} helpLabel={field.helpLabel} />;
+    return (
+      <label key={field.key} className="connector-settings-field">
+        <span className="connector-settings-field-label">{field.label || field.key}{field.required ? " *" : ""}</span>
+        {field.enum ? (
+          <select disabled={disabled} value={value} onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: event.target.value }))}>
+            {field.enum.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        ) : field.type === "boolean" ? (
+          <span className="connector-settings-checkbox-row">
+            <input disabled={disabled} type="checkbox" checked={Boolean(value)} onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: event.target.checked }))} />
+            <span>{Boolean(value) ? "Enabled" : "Disabled"}</span>
+          </span>
+        ) : (
+          <input
+            disabled={disabled}
+            type={field.type === "number" ? "number" : field.type === "secret" ? "password" : "text"}
+            autoComplete={field.type === "secret" ? "new-password" : undefined}
+            placeholder={field.type === "secret" && existingInstance?.credentialFields?.includes(field.key) ? "Saved securely — enter only to replace" : ""}
+            value={value}
+            onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: field.type === "number" ? Number(event.target.value) : event.target.value }))}
+          />
+        )}
+        {field.type === "secret" && existingInstance?.credentialFields?.includes(field.key) ? <small className="connector-field-secure">Saved securely</small> : null}
+        {help}
+      </label>
+    );
+  };
+
+  if (settingsMode) {
+    const mode = existingInstance ? settingsEditMode : "add";
+    const disabled = mode === "view";
+    const statusLabel = existingInstance?.enabled
+      ? "Connected"
+      : existingInstance?.health?.success === true
+        ? "Test passed"
+        : existingInstance
+          ? "Configured"
+          : "Not configured";
+    const statusTone = existingInstance?.enabled ? "is-success" : existingInstance?.health?.success === true ? "is-success" : "is-neutral";
+
+    if (loading) return <p className="connector-settings-loading">Loading connector settings…</p>;
+
+    if (!apps.length) {
+      return <div className="module-state">{dedicatedName} is not currently available as an active installed app for this company.</div>;
+    }
+
+    return (
+      <div className="connector-settings-standard-wrap">
+        {error ? <p role="alert" className="connector-settings-feedback is-error">{error}</p> : null}
+        {message ? <p role="status" className="connector-settings-feedback is-success">{message}</p> : null}
+        <ConnectorSettingsCompact
+          title={`${dedicatedName} Settings`}
+          description="Configure credentials, assignment and connection behaviour."
+          status={{ label: statusLabel, tone: statusTone }}
+          actions={(
+            <>
+              {existingInstance ? (
+                <button type="button" className="connector-settings-icon-button" onClick={() => testInstance(existingInstance)} disabled={workingId === existingInstance.id} title="Test connection">
+                  <PlugZap size={14} /> Test
+                </button>
+              ) : null}
+              <ConnectorSettingsModeActions
+                mode={mode}
+                saving={saving}
+                onEdit={() => setSettingsEditMode("edit")}
+                onCancel={resetSettingsForm}
+              />
+            </>
+          )}
+        >
+          <form onSubmit={createInstance} className="connector-settings-template-form">
+            <div className="connector-settings-fields-grid">
+              {credentialFirstSchema.map((field) => renderSettingsField(field, disabled))}
+              {!companyScoped ? (
+                <>
+                  <label className="connector-settings-field">
+                    <span className="connector-settings-field-label">Store *</span>
+                    <select disabled={disabled} required value={storeId} onChange={(event) => { setStoreId(event.target.value); setTillId(""); }}>
+                      <option value="">Select store</option>
+                      {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
+                    </select>
+                    <ConnectorFieldHelp description="Choose the store this connector is assigned to." />
+                  </label>
+                  <label className="connector-settings-field">
+                    <span className="connector-settings-field-label">Till / terminal *</span>
+                    <select disabled={disabled} required value={tillId} onChange={(event) => setTillId(event.target.value)}>
+                      <option value="">Select till</option>
+                      {tills.map((till) => <option key={till.id} value={till.id}>{till.name || till.terminalNumber}</option>)}
+                    </select>
+                    <ConnectorFieldHelp description="Choose the till or terminal that will use this connector." />
+                  </label>
+                </>
+              ) : null}
+              <label className="connector-settings-field">
+                <span className="connector-settings-field-label">Fallback order</span>
+                <select disabled={disabled} value={fallbackOrder} onChange={(event) => setFallbackOrder(event.target.value)}>
+                  <option value="0">Primary</option>
+                  <option value="1">Backup 1</option>
+                  <option value="2">Backup 2</option>
+                </select>
+                <ConnectorFieldHelp description="Controls provider priority when multiple connectors can perform the same action." />
+              </label>
+            </div>
+            <ConnectorSettingsFooter
+              mode={mode}
+              saving={saving}
+              onCancel={resetSettingsForm}
+              submitLabel={existingInstance ? "Save changes" : companyScoped ? "Add connection" : "Assign connector"}
+            />
+          </form>
+        </ConnectorSettingsCompact>
+
+        {existingInstance && testActions.length ? (
+          <div className="connector-settings-test-area">
+            {testActions
+              .filter((action) => !action.requiresEnabled || existingInstance.enabled)
+              .map((action) => {
+                const values = testActionValues[action.key] || Object.fromEntries(
+                  (action.fields || []).filter((field) => field.default !== undefined).map((field) => [field.key, field.default])
+                );
+                const missingRequired = (action.fields || []).some((field) => field.required && !String(values[field.key] ?? "").trim());
+                return (
+                  <div key={action.key} className="connector-sms-test-card rounded-lg border border-slate-200 bg-white p-4">
+                    <h3 className="text-sm font-semibold text-slate-900">{action.label || "Test action"}</h3>
+                    <p className="text-xs text-slate-500">{action.description || "Run an end-to-end connector test."}</p>
+                    <div className="grid grid-cols-1 gap-3 mt-3">
+                      {(action.fields || []).map((field) => (
+                        <label key={field.key} className="text-xs font-medium text-slate-600">
+                          {field.label || field.key}
+                          <input
+                            type={field.type === "tel" ? "tel" : "text"}
+                            maxLength={field.maxLength}
+                            placeholder={field.placeholder || ""}
+                            value={values[field.key] ?? ""}
+                            onChange={(event) => setTestActionValues((current) => ({
+                              ...current,
+                              [action.key]: { ...values, [field.key]: event.target.value },
+                            }))}
+                            className={`${inputClass} mt-1`}
+                          />
+                        </label>
+                      ))}
+                      <button type="button" onClick={() => runPackageTestAction(existingInstance, action)} disabled={runningTestAction === action.key || missingRequired} className="h-9 px-4 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50">
+                        {runningTestAction === action.key ? "Running…" : action.label || "Run test"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <section className={`mb-6 border border-slate-200 rounded-lg bg-white${settingsMode ? " connector-settings-panel" : ""}`}>
