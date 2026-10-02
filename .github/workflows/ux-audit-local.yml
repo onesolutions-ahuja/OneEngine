@@ -44,10 +44,6 @@ jobs:
       PORT: 10000
       JWT_SECRET: local-ux-audit-jwt-secret-not-for-production
       ONEPOS_DB_ENCRYPTION_KEY: local-ux-audit-db-key-not-for-production
-      BOOTSTRAP_SUPERADMIN_EMAIL: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
-      BOOTSTRAP_SUPERADMIN_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
-      ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
-      ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
       ONEPOS_E2E_BASE_URL: http://127.0.0.1:5173/
       ONEPOS_API_URL: http://127.0.0.1:10000
       VITE_API_BASE: http://127.0.0.1:10000
@@ -60,17 +56,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Verify configured QA credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$ONEPOS_E2E_USERNAME" || { echo "::error::ONEPOS_PLAYWRIGHT_USERNAME repo variable is missing"; exit 1; }
-          test -n "$ONEPOS_E2E_PASSWORD" || { echo "::error::ONEPOS_PLAYWRIGHT_PASSWORD repo variable is missing"; exit 1; }
-
       - name: Install frontend and server dependencies
         run: |
           npm ci
-          npm ci --prefix server
+          npm install --prefix server --no-audit --no-fund
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -101,6 +90,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export BOOTSTRAP_SUPERADMIN_EMAIL="superadmin@onepos.com"
+          export BOOTSTRAP_SUPERADMIN_PASSWORD="local-ux-audit-password"
           nohup node server/server.js > /tmp/oneengine-api.log 2>&1 &
           echo $! > /tmp/oneengine-api.pid
           for i in {1..120}; do
@@ -121,8 +112,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "UPDATE users SET must_change_password=FALSE, active=TRUE WHERE lower(username)=lower('$ONEPOS_E2E_USERNAME') OR lower(email)=lower('$ONEPOS_E2E_USERNAME');"
-          STATUS=$(curl -sS -o /tmp/local-login.json -w "%{http_code}"             -H "Content-Type: application/json"             --data-binary "$(node -e 'process.stdout.write(JSON.stringify({username:process.env.ONEPOS_E2E_USERNAME,password:process.env.ONEPOS_E2E_PASSWORD}))')"             http://127.0.0.1:10000/api/auth/login)
+          export ONEPOS_E2E_USERNAME="superadmin@onepos.com"
+          export ONEPOS_E2E_PASSWORD="local-ux-audit-password"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "UPDATE users SET must_change_password=FALSE, active=TRUE WHERE lower(username)=lower('superadmin@onepos.com') OR lower(email)=lower('superadmin@onepos.com');"
+          STATUS=$(curl -sS -o /tmp/local-login.json -w "%{http_code}" -H "Content-Type: application/json" --data-binary '{"username":"superadmin@onepos.com","password":"local-ux-audit-password"}' http://127.0.0.1:10000/api/auth/login)
           cat /tmp/local-login.json
           test "$STATUS" = "200"
 
@@ -140,6 +133,9 @@ jobs:
           exit 1
 
       - name: Run local UX audit
+        env:
+          ONEPOS_E2E_USERNAME: superadmin@onepos.com
+          ONEPOS_E2E_PASSWORD: local-ux-audit-password
         run: npx playwright test tests/e2e/ux-audit-local.spec.mjs --project=desktop-chromium
 
       - name: Upload browser evidence
