@@ -1,4 +1,5 @@
 name: OneEngine Cypress Deep E2E
+# Cypress Cloud recording is enabled when CYPRESS_RECORD_KEY is configured.
 
 on:
   workflow_dispatch:
