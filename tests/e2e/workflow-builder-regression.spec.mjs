@@ -10,6 +10,27 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   const failures = watchRuntimeFailures(page);
   await page.goto("developer/workflow-builder");
 
+  // Workflow execution is tenant-RBAC scoped. OneEngine Manager may author
+  // metadata for another tenant, but must not silently borrow a role from that
+  // tenant to execute its workflow. Run the executable part of this regression
+  // in the authenticated user's own company so workflow.execute is evaluated
+  // against the user's real company-bound role.
+  const homeCompanyId = await page.evaluate(() => {
+    try {
+      const user = JSON.parse(sessionStorage.getItem("onepos_user") || "{}");
+      return String(user.companyId || user.company_id || "");
+    } catch {
+      return "";
+    }
+  });
+  if (homeCompanyId) {
+    const homeClient = page.getByRole("button").filter({ hasText: homeCompanyId.slice(0, 8) }).first();
+    if (await homeClient.isVisible().catch(() => false)) {
+      await homeClient.click();
+      await expect.poll(() => page.evaluate(() => sessionStorage.getItem("onepos_developer_target_company_id") || "")).toBe(homeCompanyId);
+    }
+  }
+
   const newWorkflow = page.getByRole("button", { name: /new workflow/i });
   await expect(newWorkflow).toBeVisible({ timeout: 15_000 });
   await newWorkflow.click();
