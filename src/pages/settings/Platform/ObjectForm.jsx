@@ -619,7 +619,20 @@ export default function ObjectForm({
       const formulaKeys = new Set(activeFields.filter(field => getFieldType(field) === "formula").map(getFieldKey));
       await onSubmit?.(Object.fromEntries(Object.entries(values).filter(([key]) => !formulaKeys.has(key))));
     } catch (err) {
-      setSaveError(err?.message || "Unable to save record.");
+      const serverErrors = Array.isArray(err?.payload?.errors) ? err.payload.errors : [];
+      const fieldErrors = {};
+      const topErrors = [];
+      for (const item of serverErrors) {
+        if (item?.location === "field" && item?.field && visibleFieldKeys.has(item.field)) {
+          fieldErrors[item.field] = fieldErrors[item.field]
+            ? `${fieldErrors[item.field]}; ${item.message}`
+            : item.message;
+        } else if (item?.message) {
+          topErrors.push(item.message);
+        }
+      }
+      if (Object.keys(fieldErrors).length) setValidationErrors((current) => ({ ...current, ...fieldErrors }));
+      setSaveError(topErrors.length ? topErrors.join("; ") : (Object.keys(fieldErrors).length ? "" : (err?.message || "Unable to save record.")));
     } finally {
       setSubmitting(false);
     }
