@@ -67,16 +67,20 @@ export default function createIdentityProviderLoginRouter({db,createToken,decryp
     await db("UPDATE users SET last_login_at=NOW() WHERE id=$1",[user.id]);
     const assurance=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
     const baseAssurance=assertedHighAssurance||provider.assurance_level==="HIGH" ? "HIGH" : assurance.effective.ssoAssurance;
+    const activationSatisfied=!assurance.effective.deviceActivationRequired
+      || baseAssurance==="HIGH"
+      || (assurance.effective.skipDeviceActivationOnTrustedNetwork && access.trustedNetwork===true);
     const needsMfa=provider.use_oneengine_mfa===true
       || (assurance.effective.mfaRequired && !assurance.effective.trustSsoMfa)
       || assurance.effective.phishingResistantRequired
-      || !assuranceSatisfies(baseAssurance,assurance.effective.requiredLoginAssurance);
+      || !assuranceSatisfies(baseAssurance,assurance.effective.requiredLoginAssurance)
+      || !activationSatisfied;
     if(needsMfa){
       const methods=await listMfaMethods(db,{companyId:user.company_id,userId:user.id});
       const usable=methods.filter(m=>!assurance.effective.phishingResistantRequired||m.phishing_resistant===true);
       const challenge=await createPendingChallenge(db,{
         companyId:user.company_id,userId:user.id,type:"LOGIN",
-        context:{authMethod,providerId:provider.id,phishingResistantRequired:assurance.effective.phishingResistantRequired===true},
+        context:{authMethod,providerId:provider.id,phishingResistantRequired:assurance.effective.phishingResistantRequired===true,activationOnly:!activationSatisfied&&!assurance.effective.mfaRequired},
         minutes:10,
       });
       const target=new URL(safeReturnTo(returnTo));
