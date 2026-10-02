@@ -1058,6 +1058,7 @@ const actionOptions = [
   { value: "COLLECTION_SORT", label: "Collection Sort" },
   { value: "TRANSFORM", label: "Transform" },
   { value: "RECOMMENDATION_ASSIGNMENT", label: "Recommendation Assignment" },
+  { value: "RUN_AGENT", label: "Run Agent" },
   { value: "SCREEN", label: "Screen" },
   { value: "LOOP", label: "Loop" },
   { value: "SCHEDULE_PATH", label: "Scheduled Path" },
@@ -1088,7 +1089,7 @@ const actionOptions = [
 ];
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
-  "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","SCREEN","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
+  "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","RUN_AGENT","SCREEN","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
   "CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","RUN_SUBFLOW",
 ]);
 
@@ -1098,6 +1099,7 @@ const FLOW_ELEMENT_VISUALS = {
   COLLECTION_SORT: { icon: "⇅", color: "#fe9339", family: "Logic" },
   TRANSFORM: { icon: "⇄", color: "#e83e8c", family: "Data" },
   RECOMMENDATION_ASSIGNMENT: { icon: "★", color: "#fe9339", family: "Logic" },
+  RUN_AGENT: { icon: "✦", color: "#0b5cab", family: "Interaction" },
   SCREEN: { icon: "▤", color: "#0b5cab", family: "Interaction" },
   LOOP: { icon: "↻", color: "#fe9339", family: "Logic" },
   CONDITION: { icon: "◇", color: "#fe9339", family: "Logic" },
@@ -1174,6 +1176,9 @@ function makeStep(type = "CREATE_RECORD") {
       outputName: "",
       transformMappings: {},
       recommendationMappings: {},
+      agentPrompt: "",
+      agentContext: {},
+      agentOutputVariable: "agentResponse",
       screen: {
         label: "Screen",
         apiName: "Screen",
@@ -1248,7 +1253,7 @@ function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
   if (["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(key)) return "Resources";
   if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
-  if (["RUN_SUBFLOW","SCREEN"].includes(key)) return "Interaction";
+  if (["RUN_SUBFLOW","SCREEN","RUN_AGENT"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
   if (["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
   return "Actions";
@@ -1363,6 +1368,10 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "RECOMMENDATION_ASSIGNMENT") {
     if (!config.collection) return "Choose the source collection.";
     if (!config.recommendationMappings || !Object.keys(config.recommendationMappings).length) return "Map at least one recommendation field.";
+  }
+  if (step.type === "RUN_AGENT") {
+    if (!String(config.agentPrompt || "").trim()) return "Enter instructions or a prompt for the agent.";
+    if (!config.agentOutputVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.agentOutputVariable))) return "Enter a valid output Variable API Name.";
   }
     if (step.type === "LOOP") {
     if (!config.collection) return "Choose the collection to loop through.";
@@ -1682,6 +1691,16 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         { value: `${prefix}.recommendations`, label: `${label} → Recommendations`, type: "collection" },
         { value: `${prefix}.count`, label: `${label} → Recommendation Count`, type: "number" },
       );
+    } else if (step.type === "RUN_AGENT") {
+      if (step.config?.agentOutputVariable && !seenVariables.has(step.config.agentOutputVariable)) {
+        resources.push({
+          value: `variables.${step.config.agentOutputVariable}`,
+          label: `${step.config.agentOutputVariable} · Agent Output`,
+          type: "text",
+        });
+        seenVariables.add(step.config.agentOutputVariable);
+      }
+      resources.push({ value: `${prefix}.answer`, label: `${label} → Answer`, type: "text" });
     } else if (step.type === "LOOP" && step.config?.itemVariable) {
       resources.push(
         {
@@ -2111,6 +2130,30 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           </div>
         );
       }
+      case "RUN_AGENT":
+        return (
+          <div className="space-y-3">
+            <ResourceOrLiteralInput
+              label="Prompt / Instructions"
+              value={step.config?.agentPrompt || ""}
+              onChange={(agentPrompt) => updateConfig({ agentPrompt })}
+              rootObjectKey={rootObjectKey}
+              extraResources={extraResources}
+              required
+            />
+            <label className="block text-xs font-medium text-slate-600">Output Variable API Name
+              <input className={inputClass} value={step.config?.agentOutputVariable || "agentResponse"} onChange={(event) => updateConfig({ agentOutputVariable: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} />
+            </label>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Agent Context</label>
+              <MappingEditor value={step.config?.agentContext || {}} onChange={(agentContext) => updateConfig({ agentContext })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Context Name" valueLabel="Resource" />
+              <p className="mt-1 text-[11px] text-slate-500">Context is resolved from Flow resources before the agent runs. Credentials and unrestricted database access are never passed to the model.</p>
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+              Runs the configured OneEngine AI service and stores the answer in <strong>{step.config?.agentOutputVariable || "agentResponse"}</strong>.
+            </div>
+          </div>
+        );
       case "SCREEN": {
         const screen = step.config?.screen || { label: "Screen", apiName: "Screen", components: [] };
         const components = Array.isArray(screen.components) ? screen.components : [];
