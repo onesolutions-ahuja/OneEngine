@@ -58,16 +58,28 @@ jobs:
           set -euo pipefail
           PAYLOAD="$(jq -n --arg username "$ONEPOS_E2E_USERNAME" --arg password "$ONEPOS_E2E_PASSWORD" '{username:$username,password:$password,actingCompanyId:null}')"
           LOGIN_URL="${ONEPOS_E2E_API_BASE_URL%/}/api/auth/login"
-          STATUS="$(curl -sS -o /tmp/onepos-e2e-login.json -w '%{http_code}' \
-            -H 'Content-Type: application/json' \
-            -d "$PAYLOAD" \
-            "$LOGIN_URL")"
-          if [ "$STATUS" != "200" ] || [ "$(jq -r '.success // false' /tmp/onepos-e2e-login.json)" != "true" ]; then
+          for attempt in {1..12}; do
+            STATUS="$(curl -sS -o /tmp/onepos-e2e-login.json -w '%{http_code}' \
+              -H 'Content-Type: application/json' \
+              -d "$PAYLOAD" \
+              "$LOGIN_URL" || true)"
+            SUCCESS="$(jq -r '.success // false' /tmp/onepos-e2e-login.json 2>/dev/null || echo false)"
+            if [ "$STATUS" = "200" ] && [ "$SUCCESS" = "true" ]; then
+              echo "E2E credential check passed against API deployment."
+              exit 0
+            fi
             MESSAGE="$(jq -r '.message // "authentication rejected"' /tmp/onepos-e2e-login.json 2>/dev/null || echo 'authentication rejected')"
+            if [ "$STATUS" = "503" ] || [ "$STATUS" = "502" ] || [ "$STATUS" = "504" ]; then
+              echo "API not ready yet (HTTP $STATUS: $MESSAGE), retrying..."
+              sleep 10
+              continue
+            fi
             echo "::error::E2E login failed against API deployment (HTTP $STATUS): $MESSAGE"
             exit 1
-          fi
-          echo "E2E credential check passed against API deployment."
+          done
+          MESSAGE="$(jq -r '.message // "API did not become ready"' /tmp/onepos-e2e-login.json 2>/dev/null || echo 'API did not become ready')"
+          echo "::error::E2E API remained unavailable after warm-up retries: $MESSAGE"
+          exit 1
 
       - name: Run Playwright QA
         run: npx playwright test --project=desktop-chromium
