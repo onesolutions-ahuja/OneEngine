@@ -1,0 +1,16 @@
+name: Export Latest Workflow Admin
+on:
+  push:
+    branches: ["tmp-workflowadmin-latest"]
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: latest-workflow-admin
+          path: src/pages/settings/Platform/WorkflowAdmin.jsx
+          retention-days: 1
