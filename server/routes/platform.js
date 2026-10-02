@@ -27,7 +27,7 @@ import { moduleRuntimeAccess } from "../services/authorization.js";
 import { normalizeDeviceProfile } from "../services/runtimeAccess.js";
 import { buildRecordPathCatalog, resolveWorkflowResource } from "../services/platformRecordPaths.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "../services/licensing.js";
-import { resolvePageLayout } from "../services/platformLayoutResolver.js";
+import { resolvePageLayout, resolveAssignedPageLayout } from "../services/platformLayoutResolver.js";
 import { searchPlatformRecords } from "../services/platformSearch.js";
 import { PLATFORM_FIELD_TYPE_SET } from "../services/platformFieldTypes.js";
 import { listRegisteredPlatformActions } from "../services/platformActionRegistry.js";
@@ -5392,6 +5392,89 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       loadEffectivePermissionSets(db, req.user, req),
     ]);
     return result.rows.length > 0 || permissionSetAllowsSystemPermission(permissionSets, permission);
+  }
+
+  function layoutFormFactor(req) {
+    const raw = req.query?.formFactor
+      || req.query?.form_factor
+      || req.headers["x-oneengine-form-factor"]
+      || "desktop";
+    const value = String(raw).trim().toLowerCase();
+    return ["desktop", "tablet", "mobile"].includes(value) ? value : "desktop";
+  }
+
+  async function resolveLayoutApp(req) {
+    const requestedId = typeof req.query?.appId === "string" ? req.query.appId : "";
+    const requestedKey = typeof req.query?.appKey === "string"
+      ? req.query.appKey
+      : typeof req.headers["x-oneengine-app-key"] === "string"
+        ? req.headers["x-oneengine-app-key"]
+        : "";
+    if (!requestedId && !requestedKey) return null;
+    if (requestedId && !recordIdIsValid(requestedId)) return null;
+    if (requestedKey && !isSafeIdentifier(requestedKey)) return null;
+    const clauses = ["active=true", "(company_id IS NULL OR company_id=$1)"];
+    const params = [req.user.companyId];
+    if (requestedId) {
+      params.push(requestedId);
+      clauses.push(`id=${params.length}`);
+    } else {
+      params.push(requestedKey);
+      clauses.push(`app_key=${params.length}`);
+    }
+    const result = await db(
+      `SELECT * FROM platform_apps WHERE ${clauses.join(" AND ")}
+       ORDER BY CASE WHEN company_id=$1 THEN 0 ELSE 1 END LIMIT 1`,
+      params
+    );
+    return result.rows[0] || null;
+  }
+
+  async function resolveEffectiveLayoutForRequest({ objectId, pageType, recordTypeId = null, req }) {
+    const layoutsResult = await db(
+      `SELECT * FROM platform_layouts
+        WHERE object_id=$1 AND page_type=$2 AND active=true
+          AND (company_id IS NULL OR company_id=$3)
+        ORDER BY is_default DESC,updated_at DESC,id`,
+      [objectId, pageType, req.user.companyId]
+    );
+    const layouts = layoutsResult.rows || [];
+    if (!layouts.length) return null;
+
+    const layoutIds = layouts.map((layout) => layout.id);
+    const assignmentsResult = await db(
+      `SELECT * FROM platform_layout_assignments
+        WHERE layout_id=ANY($1::uuid[]) AND active=true
+          AND (company_id IS NULL OR company_id=$2)
+        ORDER BY priority DESC,updated_at DESC,id`,
+      [layoutIds, req.user.companyId]
+    );
+
+    const permissionCache = new Map();
+    const assignments = [];
+    for (const assignment of assignmentsResult.rows || []) {
+      const required = Array.isArray(assignment.required_permissions)
+        ? assignment.required_permissions.filter((permission) => typeof permission === "string" && permission.trim())
+        : [];
+      let allowed = true;
+      for (const permission of required) {
+        if (!permissionCache.has(permission)) permissionCache.set(permission, await hasExecutionPermission(req, permission));
+        if (!permissionCache.get(permission)) {
+          allowed = false;
+          break;
+        }
+      }
+      if (allowed) assignments.push(assignment);
+    }
+
+    const app = await resolveLayoutApp(req);
+    return resolveAssignedPageLayout(layouts, assignments, {
+      companyId: req.user.companyId,
+      roleId: req.user.roleId || null,
+      recordTypeId: recordTypeId || null,
+      appId: app?.id || null,
+      deviceProfile: layoutFormFactor(req),
+    });
   }
 
   router.get("/platform/runtime/settings-catalog", authenticate, async (req, res, next) => {
