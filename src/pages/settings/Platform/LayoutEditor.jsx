@@ -1038,6 +1038,33 @@ export default function LayoutEditor({
     if (form.page_type !== "detail") return null;
     return (
       <>
+        {fields.some((field) => ["picklist", "select"].includes(field?.field_type)) ? (
+          <>
+            <div className="pfb-panel-title">Record Guidance</div>
+            <div className="pfb-palette-list">
+              <button
+                type="button"
+                className="pfb-palette-item"
+                onClick={() => {
+                  const statusField = fields.find((field) => ["picklist", "select"].includes(field?.field_type));
+                  addComponent({
+                    type: "process_path",
+                    component_key: "process_path",
+                    label: "Process Path",
+                    fieldKey: statusField ? getFieldKey(statusField) : "",
+                    guidance: {},
+                    keyFields: {},
+                    visible: true,
+                  }, targetSectionId);
+                }}
+              >
+                <span className="pfb-check pfb-check-empty" aria-hidden="true" />
+                <span className="pfb-palette-label">Process Path</span>
+                <span className="pfb-palette-hint">Status guidance</span>
+              </button>
+            </div>
+          </>
+        ) : null}
         <div className="pfb-panel-title">Page Actions</div>
         <div className="pfb-palette-list">
           {RECORD_ACTIONS.map(([action, label]) => (
@@ -1781,6 +1808,63 @@ export default function LayoutEditor({
     );
   }
 
+  function renderProcessPathProperties(component, index) {
+    const selectedField = fields.find((field) => getFieldKey(field) === (component.fieldKey || component.field_key));
+    const stages = (Array.isArray(selectedField?.options) ? selectedField.options : [])
+      .filter((option) => option?.active !== false)
+      .map((option) => ({
+        value: String(typeof option === "object" ? option.value ?? option.key ?? option.label ?? "" : option),
+        label: String(typeof option === "object" ? option.label ?? option.name ?? option.value ?? "" : option),
+      }))
+      .filter((stage) => stage.value);
+    const guidance = component.guidance || {};
+    const keyFields = component.keyFields || component.key_fields || {};
+    return (
+      <>
+        <label className="pfb-field">
+          <span className="pfb-field-label">Status / Stage field</span>
+          <select
+            className="onepos-input"
+            value={component.fieldKey || component.field_key || ""}
+            onChange={(event) => updateComponent(index, "fieldKey", event.target.value)}
+          >
+            <option value="">Select a picklist field</option>
+            {fields.filter((field) => ["picklist", "select"].includes(field?.field_type)).map((field) => (
+              <option key={getFieldKey(field)} value={getFieldKey(field)}>{getFieldName(field)}</option>
+            ))}
+          </select>
+        </label>
+        {stages.map((stage) => (
+          <div className="pfb-process-stage-config" key={stage.value}>
+            <strong>{stage.label}</strong>
+            <label className="pfb-field">
+              <span className="pfb-field-label">Guidance</span>
+              <textarea
+                className="onepos-input"
+                rows="2"
+                value={guidance[stage.value] || ""}
+                onChange={(event) => updateComponent(index, "guidance", { ...guidance, [stage.value]: event.target.value })}
+                placeholder="What should the user do at this stage?"
+              />
+            </label>
+            <label className="pfb-field">
+              <span className="pfb-field-label">Key fields</span>
+              <input
+                className="onepos-input"
+                value={Array.isArray(keyFields[stage.value]) ? keyFields[stage.value].join(", ") : ""}
+                onChange={(event) => updateComponent(index, "keyFields", {
+                  ...keyFields,
+                  [stage.value]: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
+                })}
+                placeholder="amount, owner, due_date"
+              />
+            </label>
+          </div>
+        ))}
+      </>
+    );
+  }
+
   function renderContentProperties(component, index) {
     const isSpacer = component.type === "spacer";
     return (
@@ -1840,6 +1924,7 @@ export default function LayoutEditor({
           {component.type === "related_list" ? renderRelatedListProperties(component, index) : null}
           {component.type === "action" ? renderActionProperties(component, index) : null}
           {component.type === "button" ? renderButtonProperties(component, index) : null}
+          {component.type === "process_path" ? renderProcessPathProperties(component, index) : null}
           {["header", "text", "divider", "spacer"].includes(component.type) ? renderContentProperties(component, index) : null}
           {component.type !== "field" ? renderVisibilityEditor({
             value: component.visibilityCondition || null,
