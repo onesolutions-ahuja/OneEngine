@@ -48,7 +48,12 @@ export function fieldValueError(field, value) {
   const empty = value === null || value === undefined || value === "";
   if (empty) return field.required ? `${field.label} is required` : null;
 
-  const maxLength = Number.parseInt(config.maxLength ?? config.max_length, 10);
+  const configuredMaxLength = Number.parseInt(config.maxLength ?? config.max_length, 10);
+  const fixedMaxLength = { text: 255, text_area: 255, email: 80, phone: 40, url: 255 }[type];
+  const defaultAreaLength = ["long_text", "rich_text"].includes(type) ? 32768 : null;
+  const maxLength = Number.isFinite(configuredMaxLength) && configuredMaxLength > 0
+    ? (fixedMaxLength ? Math.min(fixedMaxLength, configuredMaxLength) : configuredMaxLength)
+    : (fixedMaxLength || defaultAreaLength);
   if (Number.isFinite(maxLength) && maxLength > 0 && typeof value === "string" && value.length > maxLength) {
     return `${field.label} must be ${maxLength} characters or fewer`;
   }
