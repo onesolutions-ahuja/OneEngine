@@ -1,7 +1,7 @@
 import express from "express";
 import { loadSecuritySettings, validateLoginHours } from "../services/identitySecurity.js";
 
-const COMPLEXITIES = new Set(["NONE","LETTER_NUMBER","THREE_OF_FOUR","ALL_FOUR"]);
+const COMPLEXITIES = new Set(["NONE","ALPHA_NUMERIC","ALPHA_NUMERIC_SPECIAL","NUM_UPPER_LOWER","NUM_UPPER_LOWER_SPECIAL","THREE_OF_FOUR"]);
 const SCOPES = new Set(["COMPANY","ROLE","USER"]);
 
 function bool(value, fallback = false) { return value === undefined ? fallback : value === true; }
@@ -76,7 +76,9 @@ export default function createIdentitySecurityRouter({ authenticate, authorize, 
   router.get("/security/principals", ...manage, async (req, res) => {
     const [roles, users] = await Promise.all([
       db("SELECT id,name FROM roles WHERE company_id=$1 ORDER BY name", [req.user.companyId]),
-      db("SELECT id,username,full_name,email FROM users WHERE company_id=$1 AND active=TRUE ORDER BY full_name,username", [req.user.companyId]),
+      db(`SELECT u.id,u.username,u.full_name,u.email,s.failed_login_attempts,s.locked_until
+            FROM users u LEFT JOIN identity_user_security_state s ON s.user_id=u.id
+           WHERE u.company_id=$1 AND u.active=TRUE ORDER BY u.full_name,u.username`, [req.user.companyId]),
     ]);
     res.json({ success: true, data: { roles: roles.rows, users: users.rows } });
   });
@@ -180,6 +182,16 @@ export default function createIdentitySecurityRouter({ authenticate, authorize, 
       WHERE id=$1 AND company_id=$2 RETURNING id`,[req.params.id,req.user.companyId]);
     if(!r.rows.length)return res.status(404).json({success:false,message:"Session not found"});
     await writeAudit?.(req.user.companyId,req.user.id,"security.session_revoked","identity_session",req.params.id,{});
+    res.json({success:true});
+  });
+
+  router.post("/security/users/:userId/unlock", ...manage, async(req,res)=>{
+    const user=await db("SELECT id FROM users WHERE id=$1 AND company_id=$2",[req.params.userId,req.user.companyId]);
+    if(!user.rows.length)return res.status(404).json({success:false,message:"User not found"});
+    await db(`INSERT INTO identity_user_security_state(user_id,company_id,failed_login_attempts,locked_until,updated_at)
+      VALUES($1,$2,0,NULL,NOW())
+      ON CONFLICT(user_id) DO UPDATE SET failed_login_attempts=0,locked_until=NULL,updated_at=NOW()`,[req.params.userId,req.user.companyId]);
+    await writeAudit?.(req.user.companyId,req.user.id,"security.user_unlocked","user",req.params.userId,{});
     res.json({success:true});
   });
 
