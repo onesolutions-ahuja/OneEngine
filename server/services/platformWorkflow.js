@@ -3594,10 +3594,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const rawScreen = action.screen || {};
       const resolveScreenResource = (value) => resolveConfiguredResource(value, { req, workflowVariables }, { preserveMissing: false });
       const components = (Array.isArray(rawScreen.components) ? rawScreen.components : []).map((component) => {
-        if (!component?.choiceResource) return { ...component };
-        const resolved = resolveScreenResource(component.choiceResource);
-        const choices = Array.isArray(resolved) ? resolved : resolved && typeof resolved === "object" && Object.prototype.hasOwnProperty.call(resolved, "label") ? [resolved] : [];
-        return { ...component, options: choices.map((choice) => ({ label: String(choice?.label ?? choice?.value ?? ""), value: choice?.value ?? choice?.label })).filter((choice) => choice.label) };
+        const next = { ...component };
+        if (component?.choiceResource) {
+          const resolved = resolveScreenResource(component.choiceResource);
+          const choices = Array.isArray(resolved) ? resolved : resolved && typeof resolved === "object" && Object.prototype.hasOwnProperty.call(resolved, "label") ? [resolved] : [];
+          next.options = choices.map((choice) => ({ label: String(choice?.label ?? choice?.value ?? ""), value: choice?.value ?? choice?.label })).filter((choice) => choice.label);
+        }
+        if (typeof component?.defaultValue === "string" && /^(?:\$|steps\.|variables\.)/.test(component.defaultValue)) {
+          next.defaultValue = resolveScreenResource(component.defaultValue);
+        }
+        if (component?.visibilityResource) {
+          next.visibilityInitialValue = resolveScreenResource(component.visibilityResource);
+        }
+        return next;
       });
       const stages = Object.values(workflowVariables.variables || {})
         .filter((value) => value && typeof value === "object" && !Array.isArray(value) && Number.isFinite(Number(value.order)) && value.label)
