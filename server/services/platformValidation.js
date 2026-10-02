@@ -47,6 +47,13 @@ export function validationRuleError(rule, fields) {
   if (!["before_create", "before_update", "before_save"].includes(rule.trigger_key)) return "Validation rules must run before create, update, or both";
   if (typeof rule.action.message !== "string" || !rule.action.message.trim() || rule.action.message.length > 500) return "Enter a validation message (1–500 characters)";
   if (!["all", "any"].includes(rule.action.match || "all")) return "Condition matching must be all or any";
+  const errorLocation = rule.action.errorLocation || rule.action.error_location || "top";
+  if (!["top", "field"].includes(errorLocation)) return "Validation error location must be top or field";
+  if (errorLocation === "field") {
+    const errorField = rule.action.errorField || rule.action.error_field;
+    const target = fields.find((field) => field.active && field.api_name === errorField);
+    if (!target || target.readable === false) return "Validation error field must reference a visible active field";
+  }
   if (!Array.isArray(rule.conditions) || !rule.conditions.length || rule.conditions.length > 50) return "Configure between 1 and 50 validation conditions";
   const available = new Map(fields.filter(f => f.active && (isExtensionField(f) || f.field_type === "formula" || f.field_type === "rollup" || (f.source_column && /^[a-z_][a-z0-9_]*$/.test(f.source_column)))).map(f => [f.api_name, { ...f, field_type: effectiveFieldType(f) }]));
   for (const condition of rule.conditions) {
@@ -89,7 +96,17 @@ export function evaluateValidationRules(rules, fields, record) {
       }
     });
     if ((rule.action.match || "all") === "any" ? matches.some(Boolean) : matches.every(Boolean)) {
-      errors.push({ ruleId: rule.id, message: rule.action.message.trim() });
+      const requestedLocation = rule.action.errorLocation || rule.action.error_location || "top";
+      const requestedField = rule.action.errorField || rule.action.error_field || null;
+      const target = requestedLocation === "field"
+        ? fields.find((field) => field.active && field.api_name === requestedField && field.readable !== false)
+        : null;
+      errors.push({
+        ruleId: rule.id,
+        message: rule.action.message.trim(),
+        location: target ? "field" : "top",
+        field: target?.api_name || null,
+      });
     }
   }
   return errors;
