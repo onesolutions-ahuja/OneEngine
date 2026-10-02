@@ -383,6 +383,71 @@ export async function login(username, password) {
   return { ...data, user: resolvedUser }
 }
 
+export async function loadAuthenticationProviders(email) {
+  const value = String(email || '').trim()
+  if (!value) return []
+  const response = await apiRequest(`/api/auth/providers?email=${encodeURIComponent(value)}`)
+  return Array.isArray(response?.data) ? response.data : []
+}
+
+export function startAuthenticationProvider(provider, email, returnTo = typeof window !== 'undefined' ? window.location.href : '') {
+  if (typeof window === 'undefined') return
+  const key = String(provider?.key || provider?.providerKey || '').trim()
+  const value = String(email || '').trim()
+  if (!key || !value) throw new Error('Email and authentication provider are required.')
+  const target = returnTo || window.location.href
+  const protocol = String(provider?.type || provider?.providerType || '').toUpperCase() === 'SAML' ? 'saml/start' : 'start'
+  window.location.assign(apiUrl(`/api/auth/provider/${encodeURIComponent(key)}/${protocol}?email=${encodeURIComponent(value)}&returnTo=${encodeURIComponent(target.split('#')[0])}`))
+}
+
+export function consumeAuthenticationProviderCallback() {
+  if (typeof window === 'undefined') return { handled: false }
+  const raw = String(window.location.hash || '').replace(/^#/, '')
+  if (!raw) return { handled: false }
+  const params = new URLSearchParams(raw)
+  const error = params.get('provider_error')
+  const token = params.get('provider_token')
+  const mfaChallenge = params.get('provider_mfa_challenge')
+  if (!error && !token && !mfaChallenge) return { handled: false }
+
+  window.history.replaceState({}, '', window.location.pathname + window.location.search)
+  if (error) {
+    const messages = {
+      provider_not_available: 'This authentication provider is not available for your account.',
+      provider_not_configured: 'This authentication provider is not fully configured.',
+      provider_protocol_mismatch: 'The configured authentication protocol does not match this provider.',
+      provider_cancelled: 'Authentication was cancelled.',
+      invalid_state: 'Authentication could not be verified. Please try again.',
+      missing_code: 'The provider did not return an authorization code.',
+      token_exchange_failed: 'Authentication token exchange failed.',
+      profile_lookup_failed: 'Your profile could not be loaded from the authentication provider.',
+      email_not_verified: 'Your email address was not verified by the authentication provider.',
+      account_not_linked: 'This external account is not linked to a OneEngine user.',
+      saml_invalid: 'The SAML response could not be verified.',
+      provider_login_failed: 'Authentication provider sign-in failed.',
+    }
+    return { handled: true, error: messages[error] || 'Authentication provider sign-in failed.' }
+  }
+  if (mfaChallenge) {
+    return {
+      handled: true,
+      mfaRequired: true,
+      challengeId: mfaChallenge,
+      enrollmentRequired: params.get('provider_mfa_enroll') === '1',
+      phishingResistantRequired: params.get('provider_mfa_phishing_resistant') === '1',
+    }
+  }
+  clearCompanyContext()
+  sessionStorage.removeItem('onepos_token')
+  sessionStorage.removeItem('onepos_user')
+  sessionStorage.removeItem('onepos.settings.context.v2')
+  sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
+  localStorage.removeItem('onepos_token')
+  localStorage.removeItem('onepos_user')
+  sessionStorage.setItem('onepos_token', token)
+  return { handled: true, token }
+}
+
 export async function startGoogleLogin(email, returnTo = typeof window !== 'undefined' ? window.location.href : '') {
   if (typeof window === 'undefined') return
   const loginEmail = String(email || '').trim()
