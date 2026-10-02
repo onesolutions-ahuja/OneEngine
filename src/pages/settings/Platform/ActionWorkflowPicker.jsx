@@ -34,6 +34,7 @@ const ON_CLICK_OPTIONS = [
   { value: "action", label: "Action" },
   { value: "navigate", label: "Navigate" },
   { value: "form_layout", label: "Open Form Layout" },
+  { value: "component", label: "Update Component" },
 ];
 
 export function describeInteraction(interaction) {
@@ -42,6 +43,7 @@ export function describeInteraction(interaction) {
   if (interaction.type === "action") return `Action · ${interaction.actionKey || "selected"}`;
   if (interaction.type === "navigate") return `Navigate · ${describeNavigationTarget(interaction.navigationTarget, interaction.navigateTo) || "target"}`;
   if (interaction.type === "form_layout") return `Form Layout · ${interaction.formLayoutLabel || interaction.formLayoutId || "selected"}`;
+  if (interaction.type === "component") return `Component · ${interaction.operation || "update"} → ${interaction.targetNodeLabel || interaction.targetNodeId || "target"}`;
   return "None";
 }
 /*
@@ -289,7 +291,7 @@ function FormLayoutInput({ objectKey, value, presentation, onChange, onPresentat
  * @param objectKey    the component's bound Platform Object key (prioritises compatible workflows)
  * @param onWorkflowCreated  optional callback for the newly created workflow { id, name }
  */
-export default function ActionWorkflowPicker({ interaction, onChange, objectKey = "", onWorkflowCreated = null }) {
+export default function ActionWorkflowPicker({ interaction, onChange, objectKey = "", onWorkflowCreated = null, targetComponents = [] }) {
   const [workflows, setWorkflows] = useState([]);
   const [actions, setActions] = useState([]);
   const [search, setSearch] = useState("");
@@ -426,6 +428,83 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
           onChange={(formLayoutId) => patch({ formLayoutId: formLayoutId || null })}
           onPresentationChange={(formPresentation) => patch({ formPresentation })}
         />
+      ) : null}
+
+      {type === "component" ? (
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-slate-500">Target component</label>
+            <select
+              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm"
+              value={interaction?.targetNodeId || ""}
+              onChange={(event) => {
+                const target = targetComponents.find((item) => item.id === event.target.value)
+                patch({ targetNodeId: event.target.value || null, targetNodeLabel: target?.label || undefined })
+              }}
+            >
+              <option value="">Select component…</option>
+              {targetComponents.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-slate-500">Operation</label>
+            <select
+              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm"
+              value={interaction?.operation || "set_record"}
+              onChange={(event) => patch({ operation: event.target.value })}
+            >
+              <option value="set_record">Set selected record</option>
+              <option value="filter_collection">Filter target collection</option>
+              <option value="set_value">Set target value</option>
+              <option value="refresh">Refresh target</option>
+            </select>
+          </div>
+          {interaction?.operation === "filter_collection" ? (
+            <>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-500">Source field</label>
+                <input
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm"
+                  value={interaction?.sourceField || ""}
+                  onChange={(event) => patch({ sourceField: event.target.value })}
+                  placeholder="e.g. customer_id"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-500">Target filter field</label>
+                <input
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm"
+                  value={interaction?.targetField || ""}
+                  onChange={(event) => patch({ targetField: event.target.value })}
+                  placeholder="e.g. customer_id"
+                />
+              </div>
+            </>
+          ) : null}
+          {interaction?.operation === "set_value" ? (
+            <>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-500">Source field</label>
+                <input
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm"
+                  value={interaction?.sourceField || ""}
+                  onChange={(event) => patch({ sourceField: event.target.value })}
+                  placeholder="e.g. name"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-500">Target value key</label>
+                <input
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm"
+                  value={interaction?.targetField || ""}
+                  onChange={(event) => patch({ targetField: event.target.value })}
+                  placeholder="e.g. value"
+                />
+              </div>
+            </>
+          ) : null}
+          <p className="text-[11px] text-slate-400">This runs entirely inside the page runtime and does not bypass record permissions.</p>
+        </div>
       ) : null}
 
       {/* The EXISTING Workflow Builder, overlaid in-screen. It receives the
