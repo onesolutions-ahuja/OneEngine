@@ -3624,6 +3624,62 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "RUN_AGENT",
+    displayName: "Run Agent",
+    description: "Run the configured OneEngine AI service with Flow inputs and capture its answer.",
+    schema: {
+      type: "object",
+      properties: {
+        agentPrompt: {},
+        agentContext: { type: "object" },
+        agentOutputVariable: { type: "string" },
+      },
+      required: ["agentPrompt","agentOutputVariable"],
+    },
+    validation: (action) => {
+      if (!String(action?.agentPrompt || "").trim()) throw new Error("Run Agent requires a prompt");
+      if (!action?.agentOutputVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.agentOutputVariable))) {
+        throw new Error("Run Agent requires a valid output Variable API Name");
+      }
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {}, agentService = null }) => {
+      const service = agentService || req?.app?.locals?.oneEngineAgent || null;
+      if (!service || typeof service.ask !== "function") throw new Error("OneEngine agent service is unavailable");
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const contextBase = { record, previousRecord, req, object, workflowVariables };
+      const promptValue = resolveConfiguredResource(action.agentPrompt, contextBase, { preserveMissing: false });
+      const prompt = String(promptValue ?? "").trim();
+      if (!prompt) throw new Error("Run Agent prompt resolved to an empty value");
+      const resolvedContext = {};
+      for (const [name, configured] of Object.entries(action.agentContext || {})) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(name))) continue;
+        resolvedContext[name] = resolveConfiguredResource(configured, contextBase, { preserveMissing: false });
+      }
+      const safeContext = {
+        companyId: req?.user?.companyId || null,
+        storeId: req?.user?.storeId || null,
+        roleId: req?.user?.roleId || null,
+        userId: req?.user?.id || null,
+        permissions: Array.isArray(req?.user?.permissions) ? req.user.permissions : [],
+        ...resolvedContext,
+      };
+      const result = await service.ask({ message: prompt, context: safeContext });
+      const outputVariable = String(action.agentOutputVariable);
+      workflowVariables.variables[outputVariable] = result.answer;
+      return {
+        status: "completed",
+        variableName: outputVariable,
+        value: result.answer,
+        answer: result.answer,
+        provider: result.provider || null,
+        model: result.model || null,
+        latencyMs: result.latencyMs || null,
+      };
+    },
+  },
+  {
     key: "SCREEN",
     displayName: "Screen",
     description: "Pause a flow and present a metadata-defined interactive screen.",
