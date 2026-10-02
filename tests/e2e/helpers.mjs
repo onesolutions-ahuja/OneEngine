@@ -32,8 +32,29 @@ async function restoreBrowserSession(page) {
     for (const [key, value] of Object.entries(state.local || {})) localStorage.setItem(key, value);
   }, state);
   await page.goto("./");
-  const authenticated = await page.evaluate(() => Boolean(sessionStorage.getItem("onepos_token")));
-  if (!authenticated) return false;
+  const validation = await page.evaluate(async () => {
+    const token = sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token");
+    if (!token) return { valid: false, status: 0 };
+    try {
+      const response = await fetch("https://onepos.onrender.com/api/auth/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return { valid: response.ok, status: response.status };
+    } catch {
+      return { valid: false, status: 0 };
+    }
+  });
+  if (!validation.valid) {
+    cachedBrowserSession = null;
+    await fs.rm(SESSION_CACHE_FILE, { force: true }).catch(() => {});
+    await page.evaluate(() => {
+      sessionStorage.removeItem("onepos_token");
+      sessionStorage.removeItem("onepos_user");
+      localStorage.removeItem("onepos_token");
+      localStorage.removeItem("onepos_user");
+    });
+    return false;
+  }
   await expect(page.getByPlaceholder("Email or username")).toBeHidden({ timeout: 15_000 });
   return true;
 }
