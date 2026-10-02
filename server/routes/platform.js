@@ -3001,6 +3001,77 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({ success: true, data: layout });
   });
 
+  router.post("/platform/layouts/resolve-preview", ...manage, async (req, res) => {
+    const object = await getObject(req.body?.objectId, req);
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
+    const pageType = req.body?.pageType || "detail";
+    if (!PAGE_TYPES.has(pageType)) return res.status(400).json({ success: false, message: "Invalid page type" });
+
+    const appId = req.body?.appId || null;
+    const recordTypeId = req.body?.recordTypeId || null;
+    const roleId = req.body?.roleId || null;
+    const deviceProfile = String(req.body?.deviceProfile || "desktop").toLowerCase();
+    const permissionKeys = Array.isArray(req.body?.permissionKeys)
+      ? [...new Set(req.body.permissionKeys.map((value) => String(value).trim()).filter(Boolean))]
+      : [];
+
+    if (!["desktop","tablet","mobile"].includes(deviceProfile)) {
+      return res.status(400).json({ success: false, message: "Preview device must be Desktop, Tablet or Mobile" });
+    }
+    if (appId) {
+      const app = await db("SELECT id FROM platform_apps WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [appId, req.user.companyId]);
+      if (!app.rows.length) return res.status(400).json({ success: false, message: "Preview app is not available" });
+    }
+    if (recordTypeId) {
+      const recordType = await db("SELECT id FROM platform_record_types WHERE id=$1 AND object_id=$2 AND active=true AND (company_id IS NULL OR company_id=$3)", [recordTypeId, object.id, req.user.companyId]);
+      if (!recordType.rows.length) return res.status(400).json({ success: false, message: "Preview record type is not available" });
+    }
+    if (roleId) {
+      const role = await db("SELECT id FROM roles WHERE id=$1 AND (company_id IS NULL OR company_id=$2)", [roleId, req.user.companyId]);
+      if (!role.rows.length) return res.status(400).json({ success: false, message: "Preview role is not available" });
+    }
+
+    const layoutResult = await db(
+      `SELECT * FROM platform_layouts
+        WHERE object_id=$1 AND page_type=$2 AND active=true
+          AND (company_id IS NULL OR company_id=$3)
+        ORDER BY is_default DESC,updated_at DESC,id`,
+      [object.id, pageType, req.user.companyId]
+    );
+    const layoutIds = layoutResult.rows.map((layout) => layout.id);
+    const assignmentResult = layoutIds.length
+      ? await db(
+          `SELECT * FROM platform_layout_assignments
+            WHERE layout_id=ANY($1::uuid[]) AND active=true
+              AND (company_id IS NULL OR company_id=$2)`,
+          [layoutIds, req.user.companyId]
+        )
+      : { rows: [] };
+
+    const permissionSet = new Set(permissionKeys);
+    const allowedAssignments = (assignmentResult.rows || []).filter((assignment) => {
+      const required = Array.isArray(assignment.required_permissions) ? assignment.required_permissions : [];
+      return required.every((permission) => permissionSet.has(String(permission)));
+    });
+
+    const winner = resolveAssignedPageLayout(layoutResult.rows, allowedAssignments, {
+      companyId: req.user.companyId,
+      roleId,
+      recordTypeId,
+      appId,
+      deviceProfile,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        layout: winner || null,
+        matched: Boolean(winner),
+        context: { appId, recordTypeId, roleId, deviceProfile, permissionKeys },
+      },
+    });
+  });
+
   router.get("/platform/layouts/:layoutId/assignments", ...manage, async (req, res) => {
     const layoutResult = await db(
       "SELECT * FROM platform_layouts WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
