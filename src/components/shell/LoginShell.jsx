@@ -21,7 +21,7 @@ export function CompanyContextLoading() {
   return (
     <main className="screen company-context-loading" role="status" aria-live="polite" aria-label="Setting up your workspace">
       <div className="company-context-loading__brand" aria-hidden="true">
-        <img className="company-context-loading__logo" src={`${import.meta.env.BASE_URL}icons/one-solutions-logo.webp`} alt="" />
+        <img className="company-context-loading__logo" src={`${import.meta.env.BASE_URL}icons/one-solutions-mark.svg`} alt="" />
       </div>
       <div className="company-context-loading__pulse" aria-hidden="true" />
       <strong>Setting up your workspace…</strong>
@@ -358,7 +358,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
         }}>
           <div className={`profile-avatar login-avatar${sessionMode ? '' : ' login-avatar--brand'}`} aria-label={sessionMode ? `${displayName} profile` : 'One Solutions'}>
             {sessionMode ? initial : (
-              <img className="login-brand-mark" src={`${import.meta.env.BASE_URL}icons/one-solutions-logo.webp`} alt="One Solutions" />
+              <img className="login-brand-mark" src={`${import.meta.env.BASE_URL}icons/one-solutions-mark.svg`} alt="One Solutions" />
             )}
           </div>
 
