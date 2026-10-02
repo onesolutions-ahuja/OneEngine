@@ -1052,6 +1052,7 @@ const actionOptions = [
   { value: "CONSTANT", label: "Constant" },
   { value: "FORMULA", label: "Formula" },
   { value: "TEXT_TEMPLATE", label: "Text Template" },
+  { value: "INSTRUCTION_TEMPLATE", label: "Instruction Template" },
   { value: "CHOICE", label: "Choice" },
   { value: "RECORD_CHOICE_SET", label: "Record Choice Set" },
   { value: "PICKLIST_CHOICE_SET", label: "Picklist Choice Set" },
@@ -1131,7 +1132,7 @@ function flowElementVisual(type = "") {
 }
 
 function flowElementSupportsFaultPath(type = "") {
-  return !["CONDITION","LOOP","SCREEN","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","ASSIGNMENT","STOP","CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
+  return !["CONDITION","LOOP","SCREEN","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","ASSIGNMENT","STOP","CONSTANT","FORMULA","TEXT_TEMPLATE","INSTRUCTION_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
 }
 
 function flowApiName(label = "") {
@@ -1169,6 +1170,8 @@ function makeStep(type = "CREATE_RECORD") {
       expression: "",
       formulaInputs: {},
       templateText: "",
+      instructionText: "",
+      instructionInputs: {},
       choiceLabel: "",
       choiceValue: "",
       choiceDataType: "text",
@@ -1264,7 +1267,7 @@ function getActionLabel(type) {
 
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
-  if (["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(key)) return "Resources";
+  if (["CONSTANT","FORMULA","TEXT_TEMPLATE","INSTRUCTION_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(key)) return "Resources";
   if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","LIMIT_REPETITIONS","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (["RUN_SUBFLOW","SCREEN","RUN_AGENT"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
@@ -1333,6 +1336,11 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "TEXT_TEMPLATE") {
     if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid text template name.";
     if (!String(config.templateText || "").trim()) return "Enter text for the Text Template.";
+  }
+  if (step.type === "INSTRUCTION_TEMPLATE") {
+    if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid Instruction Template API Name.";
+    if (!String(config.instructionText || "").trim()) return "Enter instructions for the Instruction Template.";
+    if (Object.keys(config.instructionInputs || {}).some((name) => !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(name)))) return "Instruction input names can only use letters, numbers and underscores.";
   }
   if (step.type === "CHOICE") {
     if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid Choice API Name.";
@@ -1670,11 +1678,11 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         seenVariables.add(step.config.resourceName);
       }
       resources.push({ value: `${prefix}.value`, label: `${label} → Result`, type: step.config.resultType || "element output" });
-    } else if (step.type === "TEXT_TEMPLATE" && step.config?.resourceName) {
+    } else if (["TEXT_TEMPLATE","INSTRUCTION_TEMPLATE"].includes(step.type) && step.config?.resourceName) {
       if (!seenVariables.has(step.config.resourceName)) {
         resources.push({
           value: `variables.${step.config.resourceName}`,
-          label: `${step.config.resourceName} · Text Template · Text`,
+          label: `${step.config.resourceName} · ${step.type === "INSTRUCTION_TEMPLATE" ? "Instruction Template" : "Text Template"} · Text`,
           type: "text",
         });
         seenVariables.add(step.config.resourceName);
@@ -2106,6 +2114,27 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
               Text Templates are Resources. They do not appear as canvas elements and can be selected anywhere a Text Resource is accepted.
+            </div>
+          </div>
+        );
+      case "INSTRUCTION_TEMPLATE":
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">API Name</label>
+              <input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="e.g. customerSummaryInstructions" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Instructions</label>
+              <textarea className={inputClass} rows={8} value={step.config?.instructionText || ""} onChange={(event) => updateConfig({ instructionText: event.target.value })} placeholder="Summarise the request for {{customerName}} and return the next best action." />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Named Inputs</label>
+              <MappingEditor value={step.config?.instructionInputs || {}} onChange={(instructionInputs) => updateConfig({ instructionInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Input Name" valueLabel="Resource / Value" />
+              <p className="mt-1 text-[11px] text-slate-500">Use {{inputName}} placeholders in the instructions. Each input can come from a Flow Resource or literal value.</p>
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+              The resolved instruction becomes a normal Text Resource. It can feed Run Agent, messages, webhooks, or subflows without provider-specific branding.
             </div>
           </div>
         );
@@ -4532,7 +4561,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   : step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}`
                     : step.type === "FORMULA" ? `Formula · ${step.config?.resultType || "number"}`
                       : step.type === "TEXT_TEMPLATE" ? "Text Template · Text"
-                        : step.type === "CHOICE" ? "Choice"
+                        : step.type === "INSTRUCTION_TEMPLATE" ? "Instruction Template · Text"
+                          : step.type === "CHOICE" ? "Choice"
                           : ["RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET"].includes(step.type) ? `${getActionLabel(step.type)} · Choices`
                             : step.type === "STAGE" ? "Stage · Progress" : getActionLabel(step.type);
                 return <div key={step.id} className="workflow-manager-item">
@@ -6160,7 +6190,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               <select className={inputClass} value={String(workflow.actionMetadata?.flowType || "AUTOLAUNCHED").toUpperCase()} onChange={(event) => {
                 const flowType = event.target.value;
                 setWorkflow((current) => {
-                  const nextTrigger = flowType === "SCREEN_FLOW" || flowType === "AUTOLAUNCHED" || flowType === "RECOMMENDATION_STRATEGY"
+                  const nextTrigger = flowType === "SCREEN_FLOW" || flowType === "AUTOLAUNCHED" || flowType === "RECOMMENDATION_STRATEGY" || flowType === "INSTRUCTION_FLOW"
                     ? "manual"
                     : flowType === "SCHEDULE_TRIGGERED"
                       ? "scheduled"
@@ -6178,6 +6208,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 <option value="PLATFORM_EVENT_TRIGGERED">Event-Triggered Flow</option>
                 <option value="SCREEN_FLOW">Screen Flow</option>
                 <option value="RECOMMENDATION_STRATEGY">Recommendation Strategy Flow</option>
+                <option value="INSTRUCTION_FLOW">Instruction Flow</option>
                 <option value="KIOSK_EXPERIENCE">Kiosk Experience</option>
               </select>
             </label>
