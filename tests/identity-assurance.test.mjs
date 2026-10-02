@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { assuranceSatisfies, effectiveAssurance } from '../server/services/identityAssurance.js'
+import { assuranceSatisfies, effectiveAssurance, mfaMethodAllowed } from '../server/services/identityAssurance.js'
 
 test('assurance hierarchy inherits tenant defaults when policy overrides are null',()=>{
   const settings={
@@ -40,4 +40,24 @@ test('high assurance satisfies standard and high while standard cannot satisfy h
   assert.equal(assuranceSatisfies('HIGH','HIGH'),true)
   assert.equal(assuranceSatisfies('STANDARD','STANDARD'),true)
   assert.equal(assuranceSatisfies('STANDARD','HIGH'),false)
+})
+
+
+test('TOTP defaults to standard assurance while passkeys default to high',()=>{
+  const result=effectiveAssurance({}, {})
+  assert.equal(result.totpAssurance,'STANDARD')
+  assert.equal(result.passkeyAssurance,'HIGH')
+})
+
+test('verification-method policy distinguishes TOTP built-in passkeys and security keys',()=>{
+  const effective={
+    allowTotp:false,
+    allowPlatformPasskeys:true,
+    allowSecurityKeys:false,
+    allowRecoveryCodes:true,
+  }
+  assert.equal(mfaMethodAllowed({method_type:'TOTP'},effective),false)
+  assert.equal(mfaMethodAllowed({method_type:'PASSKEY',authenticator_kind:'PLATFORM'},effective),true)
+  assert.equal(mfaMethodAllowed({method_type:'PASSKEY',authenticator_kind:'SECURITY_KEY'},effective),false)
+  assert.equal(mfaMethodAllowed({method_type:'RECOVERY_CODES'},effective),true)
 })
