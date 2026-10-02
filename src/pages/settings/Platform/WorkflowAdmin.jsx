@@ -1048,6 +1048,11 @@ const actionOptions = [
   { value: "CONSTANT", label: "Constant" },
   { value: "FORMULA", label: "Formula" },
   { value: "TEXT_TEMPLATE", label: "Text Template" },
+  { value: "CHOICE", label: "Choice" },
+  { value: "RECORD_CHOICE_SET", label: "Record Choice Set" },
+  { value: "PICKLIST_CHOICE_SET", label: "Picklist Choice Set" },
+  { value: "COLLECTION_CHOICE_SET", label: "Collection Choice Set" },
+  { value: "STAGE", label: "Stage" },
   { value: "ASSIGNMENT", label: "Assignment" },
   { value: "COLLECTION_FILTER", label: "Collection Filter" },
   { value: "COLLECTION_SORT", label: "Collection Sort" },
@@ -1114,7 +1119,7 @@ function flowElementVisual(type = "") {
 }
 
 function flowElementSupportsFaultPath(type = "") {
-  return !["CONDITION","LOOP","SCREEN","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","ASSIGNMENT","STOP","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
+  return !["CONDITION","LOOP","SCREEN","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","ASSIGNMENT","STOP","CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
 }
 
 function flowApiName(label = "") {
@@ -1152,6 +1157,17 @@ function makeStep(type = "CREATE_RECORD") {
       expression: "",
       formulaInputs: {},
       templateText: "",
+      choiceLabel: "",
+      choiceValue: "",
+      choiceDataType: "text",
+      choiceLabelField: "",
+      choiceValueField: "id",
+      fieldApiName: "",
+      choiceLabelPath: "",
+      choiceValuePath: "",
+      stageLabel: "",
+      stageOrder: 1,
+      stageValue: "",
       collection: "",
       outputName: "",
       transformMappings: {},
@@ -1225,7 +1241,7 @@ function getActionLabel(type) {
 
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
-  if (["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(key)) return "Resources";
+  if (["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(key)) return "Resources";
   if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (["RUN_SUBFLOW","SCREEN"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
@@ -1294,6 +1310,29 @@ function workflowActionIssue(step, definition = null) {
     if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid text template name.";
     if (!String(config.templateText || "").trim()) return "Enter text for the Text Template.";
   }
+  if (step.type === "CHOICE") {
+    if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid Choice API Name.";
+    if (!String(config.choiceLabel || "").trim()) return "Enter a Choice label.";
+  }
+  if (step.type === "RECORD_CHOICE_SET") {
+    if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid Record Choice Set API Name.";
+    if (!config.object) return "Choose an object for the Record Choice Set.";
+    if (!config.choiceLabelField) return "Choose a label field.";
+    if (!config.choiceValueField) return "Choose a value field.";
+  }
+  if (step.type === "PICKLIST_CHOICE_SET") {
+    if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid Picklist Choice Set API Name.";
+    if (!config.object || !config.fieldApiName) return "Choose an object and picklist field.";
+  }
+  if (step.type === "COLLECTION_CHOICE_SET") {
+    if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid Collection Choice Set API Name.";
+    if (!config.collection) return "Choose a source collection.";
+    if (!config.choiceLabelPath || !config.choiceValuePath) return "Choose label and value paths.";
+  }
+  if (step.type === "STAGE") {
+    if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid Stage API Name.";
+    if (!String(config.stageLabel || "").trim()) return "Enter a Stage label.";
+  }
   if (step.type === "SCREEN") {
     const screen = config.screen || {};
     if (!String(screen.label || "").trim()) return "Enter a Screen label.";
@@ -1340,7 +1379,7 @@ function workflowActionIssue(step, definition = null) {
     if (!config.fieldMappings || !Object.keys(config.fieldMappings).length) return "Map at least one field to update.";
   }
   if (step.type === "__ACTION__") return "Choose an action.";
-  if (!["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type) && config.resourceOnly !== true) {
+  if (!["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(step.type) && config.resourceOnly !== true) {
     if (!config.apiName || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(String(config.apiName))) return "Enter a valid API Name.";
   }
   if (step.type === "ASSIGNMENT") {
@@ -1570,6 +1609,24 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         seenVariables.add(step.config.resourceName);
       }
       resources.push({ value: `${prefix}.value`, label: `${label} → Text`, type: "text" });
+    } else if (["CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET"].includes(step.type) && step.config?.resourceName) {
+      if (!seenVariables.has(step.config.resourceName)) {
+        resources.push({
+          value: `variables.${step.config.resourceName}`,
+          label: `${step.config.resourceName} · ${getActionLabel(step.type)}`,
+          type: step.type === "CHOICE" ? "choice" : "choice_collection",
+        });
+        seenVariables.add(step.config.resourceName);
+      }
+    } else if (step.type === "STAGE" && step.config?.resourceName) {
+      if (!seenVariables.has(step.config.resourceName)) {
+        resources.push({
+          value: `variables.${step.config.resourceName}`,
+          label: `${step.config.resourceName} · Stage`,
+          type: "stage",
+        });
+        seenVariables.add(step.config.resourceName);
+      }
     } else if (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true && step.config?.variableName) {
       if (!seenVariables.has(step.config.variableName)) {
         resources.push({
@@ -1803,7 +1860,7 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
 function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const isVariableResource = step.type === "ASSIGNMENT" && step.config?.resourceOnly === true;
-  const isResource = ["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type) || isVariableResource;
+  const isResource = ["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(step.type) || isVariableResource;
   const [actionSearch, setActionSearch] = useState("");
   const actionPickerOptions = registryOptions.filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH","WHEN","STOP"].includes(option.value));
   const visibleActionPickerOptions = actionPickerOptions.filter((option) => !actionSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || workflowActionCategory(option.value)}`.toLowerCase().includes(actionSearch.trim().toLowerCase()));
@@ -1959,6 +2016,57 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
           </div>
         );
+      case "CHOICE":
+        return (
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label>
+            <label className="block text-xs font-medium text-slate-600">Choice Label<input className={inputClass} value={step.config?.choiceLabel || ""} onChange={(event) => updateConfig({ choiceLabel: event.target.value })} /></label>
+            <ResourceOrLiteralInput label="Stored Value" value={step.config?.choiceValue ?? ""} onChange={(choiceValue) => updateConfig({ choiceValue })} rootObjectKey={rootObjectKey} extraResources={extraResources} />
+            <label className="block text-xs font-medium text-slate-600">Data Type<select className={inputClass} value={step.config?.choiceDataType || "text"} onChange={(event) => updateConfig({ choiceDataType: event.target.value })}><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
+          </div>
+        );
+      case "RECORD_CHOICE_SET":
+        return (
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label>
+            <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, choiceLabelField: "", choiceValueField: "id", filters: [] })} />
+            <div className="grid gap-2 md:grid-cols-2">
+              <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.choiceLabelField || ""} label="Choice Label Field" onChange={(choiceLabelField) => updateConfig({ choiceLabelField })} />
+              <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.choiceValueField || "id"} label="Choice Value Field" onChange={(choiceValueField) => updateConfig({ choiceValueField })} />
+            </div>
+            <label className="block text-xs font-medium text-slate-600">Maximum Choices<input className={inputClass} type="number" min="1" max="200" value={Number(step.config?.limit || 50)} onChange={(event) => updateConfig({ limit: Math.max(1, Math.min(200, Number(event.target.value || 50))) })} /></label>
+          </div>
+        );
+      case "PICKLIST_CHOICE_SET":
+        return (
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label>
+            <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, fieldApiName: "" })} />
+            <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.fieldApiName || ""} label="Picklist Field" onChange={(fieldApiName) => updateConfig({ fieldApiName })} />
+          </div>
+        );
+      case "COLLECTION_CHOICE_SET":
+        return (
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label>
+            <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "collection" || String(resource.value || "").endsWith(".records") || String(resource.value || "").endsWith(".collection"))} label="Source Collection" value={step.config?.collection || ""} onChange={(collection) => updateConfig({ collection })} />
+            <div className="grid gap-2 md:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-600">Label Path<input className={inputClass} value={step.config?.choiceLabelPath || ""} onChange={(event) => updateConfig({ choiceLabelPath: event.target.value })} placeholder="name" /></label>
+              <label className="block text-xs font-medium text-slate-600">Value Path<input className={inputClass} value={step.config?.choiceValuePath || ""} onChange={(event) => updateConfig({ choiceValuePath: event.target.value })} placeholder="id" /></label>
+            </div>
+          </div>
+        );
+      case "STAGE":
+        return (
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label>
+            <label className="block text-xs font-medium text-slate-600">Stage Label<input className={inputClass} value={step.config?.stageLabel || ""} onChange={(event) => updateConfig({ stageLabel: event.target.value })} /></label>
+            <div className="grid gap-2 md:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-600">Stage Value<input className={inputClass} value={step.config?.stageValue || ""} onChange={(event) => updateConfig({ stageValue: event.target.value })} /></label>
+              <label className="block text-xs font-medium text-slate-600">Order<input className={inputClass} type="number" min="1" value={Number(step.config?.stageOrder || 1)} onChange={(event) => updateConfig({ stageOrder: Math.max(1, Number(event.target.value || 1)) })} /></label>
+            </div>
+          </div>
+        );
       case "SCREEN": {
         const screen = step.config?.screen || { label: "Screen", apiName: "Screen", components: [] };
         const components = Array.isArray(screen.components) ? screen.components : [];
@@ -2050,6 +2158,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                       </> : null}
                       {["RADIO","CHECKBOX_GROUP","SELECT","MULTI_SELECT"].includes(component.type) ? (
                         <div className="space-y-2">
+                          <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => ["choice","choice_collection"].includes(resource.type))} label="Choice Resource (optional)" value={component.choiceResource || ""} onChange={(choiceResource) => updateComponent(componentIndex, { choiceResource })} />
                           <div className="text-[11px] font-semibold text-slate-600">Choices</div>
                           {(component.options || []).map((option, optionIndex) => <div key={optionIndex} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
                             <input className={inputClass} value={option.label || ""} onChange={(event) => {
@@ -3478,7 +3587,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       steps.splice(targetIndex, 1);
 
       if (String(sourceId) === "__start__") {
-        const firstExecutable = steps.findIndex((item) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(item.type) && item.config?.resourceOnly !== true);
+        const firstExecutable = steps.findIndex((item) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH"].includes(item.type) && item.config?.resourceOnly !== true);
         const insertAt = firstExecutable < 0 ? steps.length : firstExecutable;
         steps.splice(insertAt, 0, target);
         return {
@@ -3592,7 +3701,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         addChain(config.branch || [], "__start__");
       }
     });
-    const top = workflow.steps.filter((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true && !owned.has(String(step.id)));
+    const top = workflow.steps.filter((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true && !owned.has(String(step.id)));
     const explicitStart = workflow.actionMetadata?.builderLayout?.startStepId;
     const startTarget = explicitStart && top.some((step) => String(step.id) === String(explicitStart)) ? explicitStart : top[0]?.id;
     if (startTarget) edges.push(["__start__", String(startTarget)]);
@@ -3636,12 +3745,12 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setPaletteOpen(true);
   };
   const registeredActionOptions = registryOptions
-    .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH","STOP"].includes(option.value));
+    .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH","STOP"].includes(option.value));
   const palette = [
     ...(layoutMode === "AUTO" ? [{ value: "__GROUP__", label: "Group", description: "Organize related elements in a named, collapsible section.", category: "Logic" }] : []),
     ...(layoutMode === "AUTO" && insertAt != null && !branchTarget && insertAt > 0 ? [{ value: "__CONNECT__", label: "Connect to element", description: "Create a Go To connector to a nonconsecutive element.", category: "Logic" }] : []),
     ...registryOptions
-      .filter((option) => SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(option.value))
+      .filter((option) => SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH"].includes(option.value))
       .map((option) => ({ ...option, category: option.value === "RUN_SUBFLOW" ? "Interaction" : workflowActionCategory(option.value) })),
     ...(registeredActionOptions.length ? [{ value: "__ACTION__", label: "Action", description: "Run a registered OneEngine action", category: "Interaction" }] : []),
   ].filter((option) => !paletteSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || ""}`.toLowerCase().includes(paletteSearch.trim().toLowerCase()));
@@ -3659,8 +3768,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     { label: "$Flow.CurrentDateTime", detail: "The date and time when this flow runs", type: "Global Variable" },
   ];
   const stepResources = workflowStepResources(workflow.steps, workflow.steps.length, objectFieldCatalog);
-  const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type) || (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true));
-  const managerElementSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true);
+  const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(step.type) || (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true));
+  const managerElementSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true);
   const scheduledPathSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => step.type === "SCHEDULE_PATH");
   const faultTargetIds = new Set(workflow.steps.flatMap((step) => {
     const mode = String(step.config?.faultMode || "FAIL").toUpperCase();
@@ -3704,7 +3813,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const addScheduledPath = () => {
     const path = makeStep("SCHEDULE_PATH");
     path.label = "Scheduled Path";
-    const insertAt = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(step.type));
+    const insertAt = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH"].includes(step.type));
     const target = insertAt < 0 ? workflow.steps.length : insertAt;
     setWorkflow((current) => ({ ...current, steps: [...current.steps.slice(0, target), path, ...current.steps.slice(target)] }));
     setSelectedId("__start__");
@@ -3720,10 +3829,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       resource.label = "Variable";
       resource.config = { ...resource.config, resourceOnly: true, variableName: "", variableType: "text", operator: "set", value: "", availableForInput: false, availableForOutput: false };
     } else {
-      resource.label = type === "CONSTANT" ? "Constant" : type === "FORMULA" ? "Formula" : "Text Template";
+      resource.label = getActionLabel(type);
       resource.config = { ...resource.config, resourceOnly: true };
     }
-    const firstActionIndex = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type) && step.config?.resourceOnly !== true);
+    const firstActionIndex = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(step.type) && step.config?.resourceOnly !== true);
     const insertAt = firstActionIndex < 0 ? workflow.steps.length : firstActionIndex;
     setWorkflow((current) => ({ ...current, steps: [...current.steps.slice(0, insertAt), resource, ...current.steps.slice(insertAt)] }));
     setSelectedId(resource.id);
@@ -3976,6 +4085,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   <button type="button" className="workflow-resource-choice" onClick={() => addResource("CONSTANT")}><strong>Constant</strong><small>Store a fixed value for this flow.</small></button>
                   <button type="button" className="workflow-resource-choice" onClick={() => addResource("FORMULA")}><strong>Formula</strong><small>Calculate a value when the resource is used.</small></button>
                   <button type="button" className="workflow-resource-choice" onClick={() => addResource("TEXT_TEMPLATE")}><strong>Text Template</strong><small>Build reusable text with Flow merge resources.</small></button>
+                  <button type="button" className="workflow-resource-choice" onClick={() => addResource("CHOICE")}><strong>Choice</strong><small>Create one reusable label/value choice.</small></button>
+                  <button type="button" className="workflow-resource-choice" onClick={() => addResource("RECORD_CHOICE_SET")}><strong>Record Choice Set</strong><small>Build choices from records.</small></button>
+                  <button type="button" className="workflow-resource-choice" onClick={() => addResource("PICKLIST_CHOICE_SET")}><strong>Picklist Choice Set</strong><small>Reuse picklist field values.</small></button>
+                  <button type="button" className="workflow-resource-choice" onClick={() => addResource("COLLECTION_CHOICE_SET")}><strong>Collection Choice Set</strong><small>Map a Flow collection into choices.</small></button>
+                  <button type="button" className="workflow-resource-choice" onClick={() => addResource("STAGE")}><strong>Stage</strong><small>Define progress stages for Screen Flow.</small></button>
                 </div>
               ) : null}
             </div>
@@ -4010,8 +4124,15 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               )) : null}
               {(managerFilter === "all" ? resourceSteps.length : resourceSteps.some(({ step }) => resourceUsageCount(step) === 0)) ? <div className="workflow-palette-group-title">Resources</div> : null}
               {resourceSteps.filter(({ step }) => managerFilter === "all" || resourceUsageCount(step) === 0).map(({ step }) => {
-                const resourceLabel = step.type === "ASSIGNMENT" ? (step.config?.variableName || "New Variable") : (step.config?.resourceName || (step.type === "CONSTANT" ? "New Constant" : step.type === "FORMULA" ? "New Formula" : "New Text Template"));
-                const resourceType = step.type === "ASSIGNMENT" ? `Variable · ${step.config?.variableType || "text"}` : step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}` : step.type === "FORMULA" ? `Formula · ${step.config?.resultType || "number"}` : "Text Template · Text";
+                const resourceLabel = step.type === "ASSIGNMENT" ? (step.config?.variableName || "New Variable") : (step.config?.resourceName || `New ${getActionLabel(step.type)}`);
+                const resourceType = step.type === "ASSIGNMENT"
+                  ? `Variable · ${step.config?.variableType || "text"}`
+                  : step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}`
+                    : step.type === "FORMULA" ? `Formula · ${step.config?.resultType || "number"}`
+                      : step.type === "TEXT_TEMPLATE" ? "Text Template · Text"
+                        : step.type === "CHOICE" ? "Choice"
+                          : ["RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET"].includes(step.type) ? `${getActionLabel(step.type)} · Choices`
+                            : step.type === "STAGE" ? "Stage · Progress" : getActionLabel(step.type);
                 return <div key={step.id} className="workflow-manager-item">
                   <div className="workflow-manager-item-row">
                     <button type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
@@ -4022,7 +4143,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   {managerDetailId === step.id ? (
                     <div className="workflow-manager-detail">
                       <div><span>Resource Type</span><strong>{step.type === "ASSIGNMENT" ? "Variable" : getActionLabel(step.type)}</strong></div>
-                      <div><span>Data Type</span><strong>{step.type === "ASSIGNMENT" ? (step.config?.variableType || "text") : step.type === "CONSTANT" ? (step.config?.resourceType || "text") : step.type === "FORMULA" ? (step.config?.resultType || "number") : "text"}</strong></div>
+                      <div><span>Data Type</span><strong>{step.type === "ASSIGNMENT" ? (step.config?.variableType || "text") : step.type === "CONSTANT" ? (step.config?.resourceType || "text") : step.type === "FORMULA" ? (step.config?.resultType || "number") : step.type === "STAGE" ? "stage" : ["CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET"].includes(step.type) ? "choice" : "text"}</strong></div>
                       <div><span>Used by</span><strong>{resourceUsageCount(step)} element{resourceUsageCount(step) === 1 ? "" : "s"}</strong></div>
                       {step.config?.description ? <p>{step.config.description}</p> : null}
                     </div>
@@ -4975,12 +5096,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   for (const step of enabledSteps) {
     const name = step.type === "ASSIGNMENT"
       ? step.config?.variableName
-      : ["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type)
+      : ["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE"].includes(step.type)
         ? step.config?.resourceName
         : null;
     if (!name) continue;
     const kind = step.type === "ASSIGNMENT" ? "VARIABLE" : step.type;
-    const type = step.type === "ASSIGNMENT" ? step.config?.variableType : step.type === "CONSTANT" ? step.config?.resourceType : step.type === "FORMULA" ? step.config?.resultType : "text";
+    const type = step.type === "ASSIGNMENT" ? step.config?.variableType : step.type === "CONSTANT" ? step.config?.resourceType : step.type === "FORMULA" ? step.config?.resultType : step.type === "STAGE" ? "stage" : ["CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET"].includes(step.type) ? "choice" : "text";
     const previous = resourceDeclarations.get(name);
     if (!previous) {
       resourceDeclarations.set(name, { kind, type });
