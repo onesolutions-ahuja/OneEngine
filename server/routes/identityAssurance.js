@@ -326,7 +326,10 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   router.put("/security/auth-providers/:id",...manage,async(req,res)=>{
     const current=(await db("SELECT * FROM identity_auth_providers WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId])).rows[0];
     if(!current)return res.status(404).json({success:false,message:"Authentication provider not found"});
-    const b=req.body||{};const credentials=b.credentials&&typeof b.credentials==="object"?encryptCredentials(b.credentials):current.credentials_encrypted;
+    const b=req.body||{};
+    const suppliedCredentials=b.credentials&&typeof b.credentials==="object"?b.credentials:null;
+    const hasSuppliedCredential=suppliedCredentials&&Object.values(suppliedCredentials).some((value)=>String(value??"").trim()!=="");
+    const credentials=hasSuppliedCredential?encryptCredentials(suppliedCredentials):current.credentials_encrypted;
     const r=await db(`UPDATE identity_auth_providers SET name=$1,enabled=$2,show_on_login=$3,use_oneengine_mfa=$4,assurance_level=$5,
       configuration=$6::jsonb,credentials_encrypted=$7,updated_by=$8,updated_at=NOW() WHERE id=$9 AND company_id=$10 RETURNING *`,
       [String(b.name??current.name).trim(),b.enabled===undefined?current.enabled:b.enabled===true,b.showOnLogin===undefined?current.show_on_login:b.showOnLogin!==false,
