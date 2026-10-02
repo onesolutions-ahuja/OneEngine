@@ -5,7 +5,7 @@ import FormRenderer from "./FormRenderer.jsx";
 import RecordModal from "../../../components/RecordModal.jsx";
 import ObjectHistory from "./ObjectHistory.jsx";
 import ObjectRecordDetail from "./ObjectRecordDetail.jsx";
-import ObjectList from "../../../components/records/ObjectList.jsx";
+import RecordListView from "../../../components/RecordListView.jsx";
 import { formatRecordDisplayValue, isTechnicalRecordField } from "../../../utils/recordDisplay.js";
 
 function getObjectKey(object) {
@@ -172,6 +172,13 @@ export default function ObjectPage({
 
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [listViews, setListViews] = useState([]);
+  const [activeListViewId, setActiveListViewId] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [recordTotal, setRecordTotal] = useState(0);
+  const [selectedRowIds, setSelectedRowIds] = useState([]);
+  const [displayMode, setDisplayMode] = useState("split");
   const activeFields = useMemo(
     () => fields.filter((field) => field?.active !== false && !isTechnicalRecordField(field)),
     [fields]
@@ -183,18 +190,6 @@ export default function ObjectPage({
      lifecycle) stay out of the surface instead of 403-ing at click time. */
   const canWriteRecords = !suppliedFields;
   const selfServiceView = Boolean(suppliedFields);
-  const filteredRecords = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return records;
-    return records.filter((record) =>
-      activeFields.some((field) =>
-        getSearchValue(getFieldValue(record, field))
-          .toLowerCase()
-          .includes(query)
-      )
-    );
-  }, [records, activeFields, search]);
-
   const resolvedObjectKey = useMemo(
     () =>
       objectKey ||
@@ -214,6 +209,7 @@ export default function ObjectPage({
       if (!selfServiceView) {
         loadDetailLayout();
         loadRecordButtons();
+        loadListViews();
       }
     }
   }, [objectMetadata]);
@@ -229,7 +225,18 @@ export default function ObjectPage({
     objectMetadata,
     recordId,
     suppliedRecord,
+    activeListViewId,
+    page,
   ]);
+
+  useEffect(() => {
+    if (!objectMetadata || suppliedRecord) return undefined;
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      loadRecords({ pageOverride: 1, searchOverride: search });
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     const key = getObjectKey(objectMetadata);
@@ -349,6 +356,20 @@ export default function ObjectPage({
         err?.message ||
           "Unable to load object fields."
       );
+    }
+  }
+
+  async function loadListViews() {
+    if (selfServiceView) return;
+    const objectId = objectMetadata?.id || objectMetadata?.object_id;
+    if (!objectId) return;
+    try {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectId)}/list-views`);
+      const views = Array.isArray(response?.data) ? response.data : [];
+      setListViews(views);
+      setActiveListViewId((current) => current || views.find((view) => view.is_default)?.id || views[0]?.id || "");
+    } catch {
+      setListViews([]);
     }
   }
 
@@ -517,7 +538,7 @@ export default function ObjectPage({
     return setError(`${component.label || component.action} is configured, but no safe executor is available for this action.`);
   }
 
-  async function loadRecords() {
+  async function loadRecords({ pageOverride = null, searchOverride = null } = {}) {
     const key = getObjectKey(objectMetadata);
 
     if (!key) {
@@ -527,8 +548,16 @@ export default function ObjectPage({
     setRecordsLoading(true);
 
     try {
+      const query = new URLSearchParams();
+      if (activeListViewId) query.set("listViewId", activeListViewId);
+      const requestedPage = pageOverride || page || 1;
+      query.set("page", String(requestedPage));
+      if (!activeListViewId) query.set("pageSize", String(pageSize || 50));
+      const requestedSearch = searchOverride === null ? search : searchOverride;
+      if (requestedSearch?.trim()) query.set("search", requestedSearch.trim());
+
       const data = await apiRequest(
-        `/api/platform/objects/${encodeURIComponent(key)}/records`
+        `/api/platform/objects/${encodeURIComponent(key)}/records?${query.toString()}`
       );
 
       const loaded =
@@ -542,6 +571,10 @@ export default function ObjectPage({
         : [];
 
       setRecords(safeRecords);
+      setRecordTotal(Number(data?.total ?? safeRecords.length));
+      setPageSize(Number(data?.pageSize ?? pageSize ?? 50));
+      if (Number(data?.page) && Number(data.page) !== page) setPage(Number(data.page));
+      setSelectedRowIds((current) => current.filter((id) => safeRecords.some((record) => String(record?.id ?? record?.record_id) === String(id))));
 
       if (recordId) {
         const matching = safeRecords.find(
@@ -565,6 +598,35 @@ export default function ObjectPage({
       setRecordsLoading(false);
     }
   }
+
+  async function inlineEditRecord(record, column, value) {
+    const id = record?.id || record?.record_id;
+    if (!id || !column?.key) return;
+    await apiRequest(`/api/platform/objects/${encodeURIComponent(resolvedObjectKey)}/records/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ data: { [column.key]: value } }),
+    });
+    await loadRecords();
+  }
+
+  async function deleteSelectedRecords(ids) {
+    if (!ids?.length) return;
+    if (!window.confirm(`Delete ${ids.length} selected record${ids.length === 1 ? "" : "s"}?`)) return;
+    setRecordsLoading(true);
+    try {
+      for (const id of ids) {
+        await apiRequest(`/api/platform/objects/${encodeURIComponent(resolvedObjectKey)}/records/${encodeURIComponent(id)}`, { method: "DELETE" });
+      }
+      setSelectedRowIds([]);
+      if (selectedRecord && ids.map(String).includes(String(selectedRecord?.id || selectedRecord?.record_id))) setSelectedRecord(null);
+      await loadRecords();
+    } catch (err) {
+      setError(err?.message || "Unable to delete selected records.");
+    } finally {
+      setRecordsLoading(false);
+    }
+  }
+
 
   function handleRecordSelect(record) {
     setSelectedRecord(record);
@@ -665,25 +727,32 @@ export default function ObjectPage({
       ) : null}
 
 
-      <div className="platform-object-layout">
+      <div className={`platform-object-layout ${displayMode === "table" ? "platform-object-layout-table" : ""}`}>
         <section className="platform-object-records">
           <div className="platform-section-header">
-            <div>
-              <h3>Records</h3>
-              <span>Metadata-driven records</span>
-            </div>
-            {canWriteRecords ? (
-              <div className="flex gap-2">
-                <button type="button" className="platform-secondary-button" onClick={() => setRecordModal({ type: "quick_create" })}>Quick Create</button>
-                <button type="button" className="platform-secondary-button" onClick={() => setRecordModal((current) => current?.type === "create" ? null : { type: "create" })}>+ New Record</button>
+            <div className="platform-list-view-heading">
+              <div>
+                <h3>Records</h3>
+                <span>{recordTotal} record{recordTotal === 1 ? "" : "s"}</span>
               </div>
-            ) : null}
-
-            {recordsLoading ? (
-              <span className="platform-loading-label">
-                Loading…
-              </span>
-            ) : null}
+              {!selfServiceView && listViews.length ? (
+                <select
+                  className="platform-list-view-select"
+                  value={activeListViewId}
+                  onChange={(event) => { setActiveListViewId(event.target.value); setPage(1); }}
+                  aria-label="Saved list view"
+                >
+                  {listViews.map((view) => <option key={view.id} value={view.id}>{view.label}{view.is_default ? " · Default" : ""}</option>)}
+                </select>
+              ) : null}
+              {!selfServiceView ? (
+                <div className="platform-list-mode" role="group" aria-label="Record display">
+                  <button type="button" className={displayMode === "table" ? "active" : ""} onClick={() => setDisplayMode("table")}>Table</button>
+                  <button type="button" className={displayMode === "split" ? "active" : ""} onClick={() => setDisplayMode("split")}>Split</button>
+                </div>
+              ) : null}
+            </div>
+            {recordsLoading ? <span className="platform-loading-label">Loading…</span> : null}
           </div>
           {recordModal?.type === "create" ? (
             <RecordModal open mode="create" title="Create record" size="lg" className={layoutPresentationClass(createLayout || detailLayout)} onClose={() => setRecordModal(null)} formId="platform-create-record-form">
@@ -713,48 +782,62 @@ export default function ObjectPage({
             </RecordModal>
           ) : null}
 
-          {records.length === 0 ? (
-            <div className="platform-object-empty compact">
-              <strong>No records available</strong>
-
-              <span>
-                This object currently has no records
-                available through the platform API.
-              </span>
+          <RecordListView
+            title={objectLabel}
+            subtitle={() => activeListViewId ? (listViews.find((view) => String(view.id) === String(activeListViewId))?.description || "Saved list view") : "All records"}
+            rows={records}
+            columns={(activeListViewId && listViews.find((view) => String(view.id) === String(activeListViewId))?.columns?.length
+              ? listViews.find((view) => String(view.id) === String(activeListViewId)).columns
+                  .map((key) => activeFields.find((field) => getFieldKey(field) === key))
+                  .filter(Boolean)
+              : activeFields
+            ).map((field) => ({
+              key: getFieldKey(field),
+              label: getFieldLabel(field),
+              render: (row) => formatRecordDisplayValue(getFieldValue(row, field), field),
+              editable: canWriteRecords && field.writable !== false && !["formula", "rollup", "lookup"].includes(field.field_type),
+              editorType: ["select", "picklist"].includes(field.field_type) ? "select"
+                : field.field_type === "boolean" ? "boolean"
+                : ["number", "decimal", "currency"].includes(field.field_type) ? "number"
+                : field.field_type === "date" ? "date"
+                : field.field_type === "datetime" ? "datetime"
+                : "text",
+              options: field.options || [],
+            }))}
+            searchKeys={activeFields.map(getFieldKey)}
+            searchValue={search}
+            onSearchChange={(value) => setSearch(value)}
+            createLabel="New Record"
+            canCreate={canWriteRecords}
+            canEdit={canWriteRecords}
+            onCreate={() => setRecordModal({ type: "create" })}
+            onEdit={(record) => { setSelectedRecord(record); setRecordModal({ type: "edit" }); }}
+            onInlineEdit={canWriteRecords ? inlineEditRecord : undefined}
+            loading={recordsLoading}
+            error={error}
+            emptyText="No matching records."
+            objectKey={resolvedObjectKey}
+            objectLabel={objectLabel}
+            onDataChanged={loadRecords}
+            selectedRowId={selectedRecord?.id || selectedRecord?.record_id || null}
+            onRowSelect={(record) => handleRecordSelect(record)}
+            selectable={canWriteRecords}
+            selectedRowIds={selectedRowIds}
+            onSelectionChange={setSelectedRowIds}
+            bulkActions={canWriteRecords ? [{ key: "delete", label: "Delete", onClick: deleteSelectedRecords }] : []}
+            page={page}
+            pageSize={pageSize}
+            total={recordTotal}
+            onPageChange={(nextPage) => setPage(nextPage)}
+          />
+          {canWriteRecords ? (
+            <div className="platform-quick-create-row">
+              <button type="button" className="platform-secondary-button" onClick={() => setRecordModal({ type: "quick_create" })}>Quick Create</button>
             </div>
-          ) : (
-            /* THE shared global list presentation — one design for every
-               object (no page-specific tables). Columns come from object
-               field metadata; the first field is the clickable primary; the
-               Active field renders as the status pill. */
-            <ObjectList
-              records={filteredRecords}
-              columns={activeFields.map((field) => ({
-                key: getFieldKey(field),
-                label: getFieldLabel(field),
-                primary: false,
-                format: (value) => formatRecordDisplayValue(value, field),
-              }))}
-              primaryColumn={activeFields.length ? getFieldKey(activeFields[0]) : "name"}
-              statusColumn={
-                activeFields.some((field) => getFieldType(field) === "boolean")
-                  ? {
-                      key: getFieldKey(activeFields.find((field) => getFieldType(field) === "boolean")),
-                      labels: { on: "Active", off: "Inactive" },
-                      tones: { on: "success", off: "neutral" },
-                    }
-                  : null
-              }
-              onOpenRecord={(record) => handleRecordSelect(record)}
-              loading={recordsLoading}
-              searchPlaceholder={`Search ${objectLabel}...`}
-              emptyMessage="No matching records"
-              emptyHint="Try a different search."
-            />
-          )}
+          ) : null}
         </section>
 
-        <aside className="platform-object-detail">
+        <aside className={`platform-object-detail ${displayMode === "table" ? "platform-object-detail-hidden" : ""}`}>
           <div className="platform-section-header">
             <div>
               <h3>Record</h3>
@@ -1049,6 +1132,64 @@ export default function ObjectPage({
 
         .platform-object-empty.compact {
           padding: 35px 20px;
+        }
+
+        .platform-list-view-heading {
+          display: flex;
+          min-width: 0;
+          align-items: center;
+          gap: 10px;
+          flex: 1;
+          flex-wrap: wrap;
+        }
+
+        .platform-list-view-select {
+          max-width: 260px;
+          border: 1px solid var(--border-color, #d1d5db);
+          border-radius: 7px;
+          background: var(--card-background, #fff);
+          color: var(--text-primary, #1f2937);
+          padding: 6px 8px;
+          font-size: 10px;
+        }
+
+        .platform-list-mode {
+          display: inline-flex;
+          overflow: hidden;
+          border: 1px solid var(--border-color, #d1d5db);
+          border-radius: 7px;
+        }
+
+        .platform-list-mode button {
+          border: 0;
+          border-right: 1px solid var(--border-color, #d1d5db);
+          background: var(--card-background, #fff);
+          padding: 6px 9px;
+          color: var(--text-secondary, #64748b);
+          font-size: 10px;
+          cursor: pointer;
+        }
+
+        .platform-list-mode button:last-child { border-right: 0; }
+        .platform-list-mode button.active {
+          background: var(--muted-background, #f1f5f9);
+          color: var(--text-primary, #1f2937);
+          font-weight: 700;
+        }
+
+        .platform-object-layout-table {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .platform-object-detail-hidden {
+          display: none;
+        }
+
+        .platform-quick-create-row {
+          display: flex;
+          justify-content: flex-end;
+          padding: 10px 12px;
+          border-top: 1px solid var(--border-color, #e5e7eb);
         }
 
         @media (max-width: 950px) {
