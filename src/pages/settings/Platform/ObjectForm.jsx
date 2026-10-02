@@ -707,6 +707,7 @@ export default function ObjectForm({
           <input
             {...commonProps}
             type="time"
+            step="0.001"
             value={value ?? ""}
             onChange={(event) => updateValue(field, event.target.value)}
           />
@@ -738,6 +739,7 @@ export default function ObjectForm({
         );
         break;
 
+      case "text_area":
       case "long_text":
         control = (
           <textarea
