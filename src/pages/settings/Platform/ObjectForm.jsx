@@ -138,8 +138,10 @@ function buildInitialValues(fields, initialValues) {
         key
       )
     ) {
+      const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+      const configuredDefault = config.defaultValue !== undefined ? config.defaultValue : config.default_value;
       result[key] = normalizeInitialValue(
-        undefined,
+        configuredDefault,
         field
       );
     } else {
@@ -162,7 +164,62 @@ function lookupRecordLabel(record) {
   return String(record.label || record.name || record.display_name || record.title || record.full_name || record.username || record.email || record.id || "");
 }
 
-function RichTextInput({ value, disabled, onChange, placeholder }) {
+function lookupFilterDefinition(field) {
+  const filter = field?.config?.lookupFilter || field?.config?.lookup_filter;
+  if (!filter || typeof filter !== "object" || Array.isArray(filter) || filter.active === false) return null;
+  return {
+    match: filter.match === "any" ? "any" : "all",
+    conditions: Array.isArray(filter.conditions) ? filter.conditions : [],
+  };
+}
+
+function lookupConditionValue(condition, sourceValues, contextValues) {
+  const source = condition?.valueSource || condition?.value_source || "literal";
+  if (source === "source_field") return sourceValues?.[condition?.sourceField || condition?.source_field];
+  if (source === "user") {
+    const key = condition?.userField || condition?.user_field || "id";
+    const user = contextValues?.user || {};
+    if (key === "id") return user.id || contextValues?.userId;
+    if (key === "roleId") return user.roleId || user.role_id || contextValues?.roleId;
+    if (key === "companyId") return user.companyId || user.company_id || contextValues?.companyId;
+    if (key === "storeId") return user.storeId || user.store_id || contextValues?.storeId;
+    return null;
+  }
+  return condition?.value;
+}
+
+function lookupConditionMatches(condition, targetRecord, sourceValues, contextValues) {
+  const left = targetRecord?.[condition?.targetField || condition?.target_field];
+  const operator = condition?.operator || "equals";
+  if (operator === "is_empty") return left === null || left === undefined || left === "";
+  if (operator === "is_not_empty") return left !== null && left !== undefined && left !== "";
+  const right = lookupConditionValue(condition, sourceValues, contextValues);
+  if (operator === "equals") return String(left ?? "") === String(right ?? "");
+  if (operator === "not_equals") return String(left ?? "") !== String(right ?? "");
+  if (operator === "contains") return String(left ?? "").toLowerCase().includes(String(right ?? "").toLowerCase());
+  if (left === null || left === undefined || right === null || right === undefined) return false;
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  const numeric = Number.isFinite(leftNumber) && Number.isFinite(rightNumber);
+  const a = numeric ? leftNumber : String(left);
+  const b = numeric ? rightNumber : String(right);
+  if (operator === "greater_than") return a > b;
+  if (operator === "greater_than_or_equal") return a >= b;
+  if (operator === "less_than") return a < b;
+  if (operator === "less_than_or_equal") return a <= b;
+  return false;
+}
+
+function applyLookupFilter(field, rows, sourceValues, contextValues) {
+  const filter = lookupFilterDefinition(field);
+  if (!filter || !filter.conditions.length) return rows;
+  return rows.filter((record) => {
+    const matches = filter.conditions.map((condition) => lookupConditionMatches(condition, record, sourceValues, contextValues));
+    return filter.match === "any" ? matches.some(Boolean) : matches.every(Boolean);
+  });
+}
+
+function RichTextInput({ value, disabled, onChange, placeholder, maxLength }) {
   const ref = useRef(null);
   const wrap = (left, right = left) => {
     const input = ref.current;
@@ -191,6 +248,7 @@ function RichTextInput({ value, disabled, onChange, placeholder }) {
         disabled={disabled}
         placeholder={placeholder}
         rows={6}
+        maxLength={maxLength || undefined}
         onChange={(event) => onChange(event.target.value)}
       />
       <small>Rich text uses safe lightweight formatting: **bold**, _italic_, and [label](https://example.com).</small>
@@ -223,7 +281,7 @@ function LocationInput({ value, disabled, onChange }) {
   );
 }
 
-function MetadataLookupInput({ field, value, disabled, onChange, placeholder }) {
+function MetadataLookupInput({ field, value, disabled, onChange, placeholder, sourceValues, contextValues }) {
   const objectKey = lookupObjectKey(field);
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState([]);
@@ -239,7 +297,7 @@ function MetadataLookupInput({ field, value, disabled, onChange, placeholder }) 
         const suffix = query.trim() ? `&search=${encodeURIComponent(query.trim())}` : "";
         const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey)}/records?pageSize=20${suffix}`);
         const rows = response?.records || response?.data || [];
-        if (alive) setOptions(Array.isArray(rows) ? rows : []);
+        if (alive) setOptions(applyLookupFilter(field, Array.isArray(rows) ? rows : [], sourceValues, contextValues));
       } catch {
         if (alive) setOptions([]);
       } finally {
@@ -247,7 +305,7 @@ function MetadataLookupInput({ field, value, disabled, onChange, placeholder }) 
       }
     }, 180);
     return () => { alive = false; window.clearTimeout(timer); };
-  }, [objectKey, query, open]);
+  }, [objectKey, query, open, field, sourceValues, contextValues]);
 
   if (!objectKey) {
     return (
@@ -332,6 +390,8 @@ function getInputType(field) {
 
     case "number":
     case "decimal":
+    case "currency":
+    case "percent":
       return "number";
 
     case "date":
@@ -592,6 +652,7 @@ export default function ObjectForm({
             value={value}
             disabled={commonProps.disabled}
             placeholder={field?.placeholder || ""}
+            maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || undefined}
             onChange={(nextValue) => updateValue(field, nextValue)}
           />
         );
@@ -706,6 +767,8 @@ export default function ObjectForm({
             value={value}
             disabled={commonProps.disabled}
             placeholder={field?.placeholder || `Search ${label}…`}
+            sourceValues={values}
+            contextValues={contextValues}
             onChange={(nextValue) => updateValue(field, nextValue)}
           />
         );
@@ -719,10 +782,11 @@ export default function ObjectForm({
             type={getInputType(field)}
             value={value}
             step={
-              type === "decimal"
-                ? "any"
+              ["number", "decimal", "currency", "percent"].includes(type)
+                ? (Number.isFinite(Number(field?.config?.scale)) ? String(1 / (10 ** Number(field.config.scale))) : "any")
                 : undefined
             }
+            maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || undefined}
             placeholder={
               field?.placeholder || ""
             }
@@ -732,7 +796,9 @@ export default function ObjectForm({
 
               if (
                 type === "number" ||
-                type === "decimal"
+                type === "decimal" ||
+                type === "currency" ||
+                type === "percent"
               ) {
                 if (nextValue === "") {
                   updateValue(
@@ -790,9 +856,9 @@ export default function ObjectForm({
 
         {control}
 
-        {field?.description ? (
+        {(field?.config?.helpText || field?.config?.help_text || field?.description) ? (
           <div className="platform-form-help">
-            {field.description}
+            {field?.config?.helpText || field?.config?.help_text || field.description}
           </div>
         ) : null}
 
