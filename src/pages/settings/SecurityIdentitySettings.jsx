@@ -9,6 +9,7 @@ const emptyPolicy = () => ({
   name: 'New Access Policy', description: '', scopeType: 'ROLE', scopeId: '', priority: 100,
   timezone: 'Europe/London', enforceLoginIp: false, active: true, loginHours: {},
   mfaRequired:null, phishingResistantMfaRequired:null, requiredLoginAssurance:null, trustedDeviceDays:null, trustSsoMfa:null,
+  deviceActivationRequired:null, skipDeviceActivationOnTrustedNetwork:null,
 })
 
 function Toggle({ checked, onChange, disabled=false, label }) {
@@ -180,6 +181,8 @@ export default function SecurityIdentitySettings() {
           <div className="settings-row"><div><strong>Login assurance level</strong><p>Override the minimum session level required at login.</p></div><select value={policyDraft.requiredLoginAssurance??'INHERIT'} onChange={e=>setPolicyDraft(d=>({...d,requiredLoginAssurance:e.target.value==='INHERIT'?null:e.target.value}))}><option value="INHERIT">Inherit</option><option value="STANDARD">Standard</option><option value="HIGH">High Assurance</option></select></div>
           <div className="settings-row"><div><strong>Trusted device lifetime</strong><p>Blank means inherit the tenant default.</p></div><input type="number" min="0" max="3650" value={policyDraft.trustedDeviceDays??''} placeholder="Inherit" onChange={e=>setPolicyDraft(d=>({...d,trustedDeviceDays:e.target.value===''?null:Number(e.target.value)}))}/></div>
           <div className="settings-row"><div><strong>Trust SSO provider MFA</strong><p>Choose whether high-assurance SSO can satisfy MFA for this scope.</p></div><select value={policyDraft.trustSsoMfa===null?'INHERIT':policyDraft.trustSsoMfa?'YES':'NO'} onChange={e=>setPolicyDraft(d=>({...d,trustSsoMfa:e.target.value==='INHERIT'?null:e.target.value==='YES'}))}><option value="INHERIT">Inherit</option><option value="YES">Trust SSO MFA</option><option value="NO">Require OneEngine MFA</option></select></div>
+          <div className="settings-row"><div><strong>Device activation</strong><p>Require verification on unknown devices, or inherit the tenant default.</p></div><select value={policyDraft.deviceActivationRequired===null?'INHERIT':policyDraft.deviceActivationRequired?'REQUIRE':'NOT_REQUIRED'} onChange={e=>setPolicyDraft(d=>({...d,deviceActivationRequired:e.target.value==='INHERIT'?null:e.target.value==='REQUIRE'}))}><option value="INHERIT">Inherit</option><option value="REQUIRE">Require activation</option><option value="NOT_REQUIRED">Do not require</option></select></div>
+          <div className="settings-row"><div><strong>Trusted-network activation bypass</strong><p>Choose whether trusted IP ranges bypass unknown-device activation for this scope.</p></div><select value={policyDraft.skipDeviceActivationOnTrustedNetwork===null?'INHERIT':policyDraft.skipDeviceActivationOnTrustedNetwork?'YES':'NO'} onChange={e=>setPolicyDraft(d=>({...d,skipDeviceActivationOnTrustedNetwork:e.target.value==='INHERIT'?null:e.target.value==='YES'}))}><option value="INHERIT">Inherit</option><option value="YES">Skip on trusted network</option><option value="NO">Always verify new device</option></select></div>
           <div className="settings-row"><strong>Active</strong><Toggle label="Policy active" checked={policyDraft.active!==false} onChange={v=>setPolicyDraft(d=>({...d,active:v}))}/></div>
           <div className="metadata-settings-form-actions"><button className="is-primary" disabled={saving} onClick={savePolicy}>{policyId?'Save policy':'Create policy'}</button></div>
         </section>
@@ -213,6 +216,7 @@ function fromPolicy(p){
     active:p.active!==false,loginHours:p.login_hours||{},
     mfaRequired:p.mfa_required??null,phishingResistantMfaRequired:p.phishing_resistant_mfa_required??null,
     requiredLoginAssurance:p.required_login_assurance??null,trustedDeviceDays:p.trusted_device_days??null,trustSsoMfa:p.trust_sso_mfa??null,
+    deviceActivationRequired:p.device_activation_required??null,skipDeviceActivationOnTrustedNetwork:p.skip_device_activation_on_trusted_network??null,
   }
 }
 
