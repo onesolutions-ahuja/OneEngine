@@ -7,8 +7,8 @@ import {
   normalizeRunAs,
 } from "./analyticsManagement.js";
 
-export const COMPONENT_TYPES = Object.freeze(["kpi", "chart", "pie", "donut", "bar", "line", "gauge", "funnel", "scatter", "table", "text", "image", "clock_widget", "calendar_widget", "weather_widget", "folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile"]);
-export const CHART_TYPES = Object.freeze(["bar", "line", "pie", "donut", "gauge", "funnel", "scatter"]);
+export const COMPONENT_TYPES = Object.freeze(["kpi", "chart", "pie", "donut", "bar", "line", "gauge", "funnel", "scatter", "combo", "table", "text", "image", "clock_widget", "calendar_widget", "weather_widget", "folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile"]);
+export const CHART_TYPES = Object.freeze(["bar", "line", "pie", "donut", "gauge", "funnel", "scatter", "combo"]);
 export const KPI_SIZES = Object.freeze(["small", "medium", "large"]);
 export const VALUE_FORMATS = Object.freeze(["number", "currency", "percent"]);
 export const DATE_RANGES = Object.freeze([
@@ -98,6 +98,11 @@ export const DASHBOARD_COMPONENTS = Object.freeze([
   { key: "pie", label: "Pie Chart", kind: "chart", categoryField: true, valueField: true, maxCategories: true },
   { key: "donut", label: "Donut Chart", kind: "chart", categoryField: true, valueField: true, maxCategories: true },
   { key: "bar", label: "Bar Chart", kind: "chart", categoryField: true, valueField: true, sort: true, limit: true },
+  { key: "line", label: "Line Chart", kind: "chart", categoryField: true, valueField: true, limit: true },
+  { key: "gauge", label: "Gauge", kind: "chart", valueField: true },
+  { key: "funnel", label: "Funnel", kind: "chart", categoryField: true, valueField: true, limit: true },
+  { key: "scatter", label: "Scatter", kind: "chart", categoryField: true, valueField: true, limit: true },
+  { key: "combo", label: "Combo Chart", kind: "chart", categoryField: true, valueField: true, limit: true },
   { key: "table", label: "Table / List", kind: "record" },
   { key: "text", label: "Text", kind: "content" },
   { key: "image", label: "Image", kind: "content" },
@@ -192,6 +197,8 @@ export function validateDashboardDefinition(input = {}) {
         labelField: config.labelField ? String(config.labelField) : null,
         seriesField: config.seriesField ? String(config.seriesField) : null,
         xField: config.xField ? String(config.xField) : null,
+        yFields: [...new Set((Array.isArray(config.yFields) ? config.yFields : config.valueField ? [config.valueField] : []).map(String))].slice(0,4),
+        secondaryAxisFields: [...new Set((Array.isArray(config.secondaryAxisFields) ? config.secondaryAxisFields : []).map(String))].slice(0,4),
         chartType: CHART_TYPES.includes(config.chartType) ? config.chartType : null,
         format: VALUE_FORMATS.includes(config.format) ? config.format : "number",
         size: KPI_SIZES.includes(config.size) ? config.size : "medium",
@@ -201,6 +208,11 @@ export function validateDashboardDefinition(input = {}) {
         dateRange: DATE_RANGES.includes(config.dateRange) ? config.dateRange : null,
         orientation: config.orientation === "horizontal" ? "horizontal" : "vertical",
         stacked: config.stacked === true,
+        normalizeToPercent: config.normalizeToPercent === true,
+        showLegend: config.showLegend !== false,
+        showValues: config.showValues === true,
+        showGrid: config.showGrid !== false,
+        referenceLines: Array.isArray(config.referenceLines) ? config.referenceLines.slice(0,10).map((line)=>({label:String(line?.label||"").slice(0,100),value:Number(line?.value||0),axis:line?.axis==="secondary"?"secondary":"primary"})) : [],
         showMarkers: config.showMarkers !== false,
         showTotal: config.showTotal !== false,
         targetMode: config.targetMode === "field" ? "field" : "fixed",

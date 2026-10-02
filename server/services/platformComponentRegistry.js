@@ -103,6 +103,13 @@ export const PLATFORM_COMPONENTS = Object.freeze([
     defaults: { title: "Scatter", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, xField: null, valueField: null, labelField: null, limit: 60, dateRange: "this_month", drillAction: null }, layout: { w: 6, h: 4 } },
   },
   {
+    key: "combo_chart", label: "Combo Chart", category: "dashboard", kind: "chart", bindable: false, dashboard: true,
+    supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
+    runtimeKind: "analytics", rendererKey: "combo",
+    configurable: ["report","categoryField","metrics","secondaryAxisFields","filters","filterLogic","sort","limit","dateRange","referenceLines","conditionalFormatting","drillAction"],
+    defaults: { title: "Combo Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, yFields: [], secondaryAxisFields: [], labelField: null, limit: 24, showLegend: true, showValues: false, showGrid: true, referenceLines: [], dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 8, h: 4 } },
+  },
+  {
     key: "analytics_table", label: "Analytics Table", category: "dashboard", kind: "record", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "table",

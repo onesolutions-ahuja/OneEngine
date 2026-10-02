@@ -85,7 +85,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const config = component.config || {};
   const report = config.report || {};
   const isPlatform = report.dataSource === "platform_object";
-  const isChart = ["pie","donut","bar","line","gauge","funnel","scatter","chart"].includes(component.type);
+  const isChart = ["pie","donut","bar","line","gauge","funnel","scatter","combo","chart"].includes(component.type);
   const isUtility = ["clock_widget", "calendar_widget", "weather_widget"].includes(component.type);
   const isImage = component.type === "image";
   const { objects, error: objectsError } = useObjects();
@@ -99,7 +99,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const setReport = (patch) => onChange({ ...component, config: { ...config, report: { ...report, ...patch } } });
   const num = (patch) => (event) => setConfig({ [patch]: Number(event.target.value) });
   const layout = (patch) => (event) => onChange({ ...component, layout: { ...component.layout, [patch]: Number(event.target.value) } });
-  const selectGroup = (value) => { setConfig({ labelField: value || null }); setReport({ fields: [...new Set([config.valueField, value].filter(Boolean))], groupBy: value ? [value] : [] }); };
+  const selectGroup = (value) => { const metricFields = component.type === "combo" ? (config.yFields?.length ? config.yFields : [config.valueField]) : [config.valueField]; setConfig({ labelField: value || null }); setReport({ fields: [...new Set([...metricFields, value].filter(Boolean))], groupBy: value ? [value] : [] }); };
   /* Keep the report definition valid: every selected metric must also be in
      `fields`, and a Platform Object metric must carry its aggregate summary. */
   const selectMetric = (value) => {
@@ -109,6 +109,12 @@ export default function DashboardComponentProperties({ component, onChange }) {
     setReport({ fields: [...new Set([value, report.groupBy[0]].filter(Boolean))], summaries: isPlatform ? [{ aggregate, field: value }] : [] });
   };
   const selectAggregate = (value) => { setConfig({ aggregate: value }); if (config.valueField) setReport({ summaries: [{ aggregate: value, field: config.valueField }] }); };
+  const selectComboMetrics = (values) => {
+    const yFields = [...new Set(values)].slice(0,4);
+    const summaries = isPlatform ? yFields.map((field) => ({ aggregate: aggregatesForFieldType(typeOf(field))[0] || "COUNT", field })) : [];
+    setConfig({ valueField: yFields[0] || null, yFields, secondaryAxisFields: (config.secondaryAxisFields || []).filter((field) => yFields.includes(field)) });
+    setReport({ fields: [...new Set([...yFields, ...(report.groupBy || [])])], summaries });
+  };
   return <div className="mt-3 grid gap-3 md:grid-cols-2">
     <div className="md:col-span-2"><span className={LABEL}>Title</span><input className={FIELD} style={STYLE} value={component.title || ""} onChange={(event) => onChange({ ...component, title: event.target.value })} /></div>
     {component.type === "text" ? <div className="md:col-span-2"><span className={LABEL}>Content</span><textarea className={FIELD} rows={3} style={STYLE} value={config.content || ""} onChange={(event) => setConfig({ content: event.target.value })} /></div> : isImage ? <>
@@ -140,7 +146,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
     </> : <>
       <div><span className={LABEL}>Data source</span><select className={FIELD} style={STYLE} value={report.dataSource || "sales"} onChange={(event) => setReport({ dataSource: event.target.value, objectId: null, fields: [], groupBy: [], filters: [] })}><option value="sales">Sales (reporting engine)</option><option value="platform_object">Platform Object</option></select></div>
       {isPlatform ? <div><span className={LABEL}>Object</span><select className={FIELD} style={STYLE} value={report.objectId || ""} onChange={(event) => setReport({ objectId: event.target.value, fields: [], groupBy: [], filters: [] })}><option value="">{objectsError || (loading ? "Loading fields…" : "Select an Object")}</option>{objects.map((object) => <option key={object.id} value={object.id}>{object.label || object.object_key}</option>)}</select>{fieldsError ? <p className="text-xs" style={{ color: "#b91c1c" }}>{fieldsError}</p> : null}</div> : null}
-      <div><span className={LABEL}>Metric field</span><select data-testid="metric-field" className={FIELD} style={STYLE} value={config.valueField || ""} onChange={(event) => selectMetric(event.target.value)}><option value="">Select a metric</option>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select>{isPlatform && report.objectId && !loading && !metrics.length ? <p className="text-xs" style={{ color: "var(--onepos-text-muted)" }}>This Object has no aggregatable fields.</p> : null}</div>
+      {component.type === "combo" ? <><div><span className={LABEL}>Metric fields (up to 4)</span><select multiple data-testid="metric-fields" className={FIELD} style={STYLE} value={config.yFields?.length ? config.yFields : (config.valueField ? [config.valueField] : [])} onChange={(event) => selectComboMetrics(Array.from(event.target.selectedOptions).map((option) => option.value))}>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div><div><span className={LABEL}>Secondary axis</span><select multiple className={FIELD} style={STYLE} value={config.secondaryAxisFields || []} onChange={(event) => setConfig({ secondaryAxisFields: Array.from(event.target.selectedOptions).map((option) => option.value).filter((field) => (config.yFields || []).includes(field)) })}>{(config.yFields || []).map((field) => <option key={field} value={field}>{metrics.find((item) => item.key === field)?.label || field}</option>)}</select></div></> : <div><span className={LABEL}>Metric field</span><select data-testid="metric-field" className={FIELD} style={STYLE} value={config.valueField || ""} onChange={(event) => selectMetric(event.target.value)}><option value="">Select a metric</option>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select>{isPlatform && report.objectId && !loading && !metrics.length ? <p className="text-xs" style={{ color: "var(--onepos-text-muted)" }}>This Object has no aggregatable fields.</p> : null}</div>}
       {isPlatform ? <div><span className={LABEL}>Aggregation</span><select data-testid="aggregate" className={FIELD} style={STYLE} value={config.aggregate || "COUNT"} onChange={(event) => selectAggregate(event.target.value)}>{aggregates.map((aggregate) => <option key={aggregate} value={aggregate}>{aggregate}</option>)}</select></div> : null}
       <div><span className={LABEL}>{isChart ? "Category / group field" : "Label field (optional)"}</span><select className={FIELD} style={STYLE} value={config.labelField || ""} onChange={(event) => selectGroup(event.target.value)}><option value="">None</option>{groups.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div>
       <div><span className={LABEL}>Date range</span><select data-testid="date-range" className={FIELD} style={STYLE} value={config.dateRange || ""} onChange={(event) => setConfig({ dateRange: event.target.value || null })}><option value="">Report default</option>{DASHBOARD_DATE_RANGES.map((range) => <option key={range.key} value={range.key}>{range.label}</option>)}</select></div>

@@ -27,12 +27,15 @@ function Tooltip({ point, formatValue, format }) {
 export function LineChart({ points = [], config = {}, formatValue, onPointClick }) {
   const [hovered, setHovered] = useState(null);
   const shown = points.slice(0, config.limit || 40);
+  const referenceLines = (config.referenceLines || []).filter((line) => (line?.axis || "primary") === "primary");
   const scaled = useMemo(() => scalePoints(shown), [shown]);
   if (!scaled.length) return null;
   const path = scaled.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
   return (
     <div className="relative h-full min-h-[150px]">
       <svg viewBox="0 0 100 78" preserveAspectRatio="none" className="h-full w-full overflow-visible" role="img" aria-label="Line chart">
+        {config.showGrid !== false ? [17.5,35,52.5].map((y) => <line key={y} x1="0" y1={y} x2="100" y2={y} stroke="var(--onepos-border)" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />) : null}
+        {referenceLines.map((line,index) => { const values=[...shown.map((point)=>Number(point.value)||0),Number(line.value)||0,0]; const min=Math.min(...values),max=Math.max(...values),range=max-min||1; const y=70-((Number(line.value||0)-min)/range)*70; return <g key={`${line.label||"reference"}-${index}`}><line x1="0" y1={y} x2="100" y2={y} stroke="var(--onepos-text-muted)" strokeDasharray="3 3" strokeWidth="1" vectorEffect="non-scaling-stroke"/><title>{line.label||"Reference"}: {formatValue(line.value,config.format)}</title></g>; })}
         <path d={path} fill="none" stroke="var(--onepos-accent-600)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
         {config.showMarkers !== false ? scaled.map((point, index) => (
           <circle key={`${point.label}-${index}`} cx={point.x} cy={point.y} r="2.5"
@@ -97,7 +100,7 @@ export function ScatterChart({ points = [], config = {}, formatValue, onPointCli
   const [hovered, setHovered] = useState(null);
   const shown = points.slice(0, config.limit || 60);
   if (!shown.length) return null;
-  const xs = shown.map((point, index) => Number(point.xValue ?? index));
+  const xs = shown.map((point, index) => Number.isFinite(Number(point.xValue)) ? Number(point.xValue) : index);
   const ys = shown.map((point) => Number(point.value) || 0);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys, 0), maxY = Math.max(...ys, 0);
   const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
@@ -111,6 +114,8 @@ export function ScatterChart({ points = [], config = {}, formatValue, onPointCli
       <svg viewBox="0 0 100 100" className="h-full w-full" role="img" aria-label="Scatter chart">
         <line x1="5" y1="95" x2="95" y2="95" stroke="var(--onepos-border)" />
         <line x1="5" y1="5" x2="5" y2="95" stroke="var(--onepos-border)" />
+        {config.showGrid !== false ? [27.5,50,72.5].map((y) => <line key={y} x1="5" y1={y} x2="95" y2={y} stroke="var(--onepos-border)" strokeWidth="0.5" />) : null}
+        {(config.referenceLines || []).filter((line)=>(line?.axis||"primary")==="primary").map((line,index)=>{const value=Number(line.value)||0;const domain=[...ys,value,0];const lo=Math.min(...domain),hi=Math.max(...domain),span=hi-lo||1;const y=95-((value-lo)/span)*90;return <line key={`${line.label||"reference"}-${index}`} x1="5" y1={y} x2="95" y2={y} stroke="var(--onepos-text-muted)" strokeDasharray="3 3"><title>{line.label||"Reference"}: {formatValue(value,config.format)}</title></line>;})}
         {scaled.map((point, index) => <circle key={`${point.label}-${index}`} cx={point.x} cy={point.y} r="3"
           fill={`var(--dash-series-${(index % 6) + 1}, var(--onepos-accent-600))`}
           tabIndex={0}
@@ -163,13 +168,15 @@ export function ComboChart({ rows = [], config = {}, formatValue, onPointClick }
     <div className="relative h-full min-h-[170px]">
       <svg viewBox="0 0 100 100" className="h-full w-full" role="img" aria-label="Combo chart">
         <line x1="6" y1="92" x2="96" y2="92" stroke="var(--onepos-border)" />
+        {config.showGrid !== false ? [14,33.5,53,72.5].map((y)=><line key={y} x1="6" y1={y} x2="96" y2={y} stroke="var(--onepos-border)" strokeWidth="0.5" />) : null}
+        {(config.referenceLines || []).map((line,index)=>{const secondaryAxis=line?.axis==="secondary";const max=secondaryAxis?secondaryMax:primaryMax;const y=92-(Math.abs(Number(line.value)||0)/max)*78;return <line key={`${secondaryAxis?"secondary":"primary"}-${index}`} x1="6" y1={y} x2="96" y2={y} stroke={secondaryAxis?"var(--onepos-accent-600)":"var(--onepos-text-muted)"} strokeDasharray="3 3"><title>{line.label||"Reference"}: {formatValue(line.value,config.format)}</title></line>;})}
         {primaryFields.map((field, fieldIndex) => rows.map((row, index) => {
           const value = Number(row?.[field]) || 0;
           const height = (Math.abs(value) / primaryMax) * 78;
           const width = Math.max(2, Math.min(8, 72 / Math.max(rows.length, 1) / Math.max(primaryFields.length, 1)));
           const offset = (fieldIndex - (primaryFields.length - 1) / 2) * (width + 0.8);
           const label = String(row?.[categoryField] ?? "");
-          return <rect key={`${field}-${index}`} x={x(index) - width / 2 + offset} y={92 - height} width={width} height={height} rx="1" fill={`var(--dash-series-${(fieldIndex % 6) + 1}, var(--onepos-accent-600))`} onClick={() => onPointClick?.({ label, value, field })}><title>{label}: {formatValue(value, config.format)}</title></rect>;
+          return <rect key={`${field}-${index}`} x={x(index) - width / 2 + offset} y={92 - height} width={width} height={height} rx="1" fill={`var(--dash-series-${(fieldIndex % 6) + 1}, var(--onepos-accent-600))`} onClick={() => onPointClick?.({ label, value, field, row })}><title>{label}: {formatValue(value, config.format)}</title></rect>;
         }))}
         {secondaryFields.map((field, index) => <path key={field} d={linePath(field, secondaryMax)} fill="none" stroke={`var(--dash-series-${((primaryFields.length + index) % 6) + 1}, var(--onepos-accent-600))`} strokeWidth="2" vectorEffect="non-scaling-stroke" />)}
       </svg>

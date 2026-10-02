@@ -164,7 +164,13 @@ export function applyDashboardGlobalFilters(component, globalDefinitions = [], v
     if (!mapping) continue;
     const value = values[definition.key] ?? definition.defaultValue;
     if (value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) continue;
-    filters.push({ field: mapping.reportField, operator: mapping.operator, value });
+    if (definition.type === "date" && report.dataSource === "sales" && mapping.reportField === "date") {
+      const date = String(value);
+      filters.push({ field: "date", operator: "custom", from: date, to: date });
+      continue;
+    }
+    const operator = definition.type === "multi_select" && Array.isArray(value) ? "in" : mapping.operator;
+    filters.push({ field: mapping.reportField, operator, value });
   }
   return { ...component, config: { ...component.config, report: { ...report, filters } } };
 }

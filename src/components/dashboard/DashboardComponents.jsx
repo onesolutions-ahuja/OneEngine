@@ -53,7 +53,7 @@ export function seriesFrom(config, result) {
   const valueField = config?.valueField || columns.find((key) => key !== config?.labelField);
   const labelField = config?.labelField || columns.find((key) => key !== valueField);
   return rows
-    .map((row) => ({ label: labelField ? String(displayCellValue(row[labelField]) ?? "—") : "Total", value: Number(row[valueField]) || 0 }))
+    .map((row, index) => { const rawX = config?.xField ? Number(row?.[config.xField]) : index; return { label: labelField ? String(displayCellValue(row[labelField]) ?? "—") : "Total", value: Number(row[valueField]) || 0, xValue: Number.isFinite(rawX) ? rawX : index, row }; })
     .filter((point) => Number.isFinite(point.value));
 }
 
@@ -71,10 +71,10 @@ export function multiSeriesFrom(config, result) {
       key,
       label: key,
       points: categories.map((category) => {
-        const value = rows
-          .filter((row) => String(displayCellValue(row[categoryField]) ?? "—") === category && String(displayCellValue(row[seriesField]) ?? "—") === key)
-          .reduce((sum, row) => sum + (Number(row[valueField]) || 0), 0);
-        return { label: category, value };
+        const matchingRows = rows
+          .filter((row) => String(displayCellValue(row[categoryField]) ?? "—") === category && String(displayCellValue(row[seriesField]) ?? "—") === key);
+        const value = matchingRows.reduce((sum, row) => sum + (Number(row[valueField]) || 0), 0);
+        return { label: category, value, row: matchingRows[0] || null };
       }),
     })),
   };
@@ -126,32 +126,32 @@ function Legend({ arcs, config }) {
 }
 
 
-function PieChart({ points, config, donut }) {
+function PieChart({ points, config, donut, onPointClick }) {
   if (!points.length) return <Empty />;
   const arcs = slices(points).slice(0, config?.maxCategories || 6);
   const total = arcs.reduce((sum, arc) => sum + arc.value, 0);
   return <div className="h-full flex flex-col items-center justify-center sm:flex-row gap-4">
     <svg viewBox="0 0 100 100" className="h-32 w-32 shrink-0" role="img" aria-label={donut ? "Donut chart" : "Pie chart"}>
       <title>{donut ? "Donut chart" : "Pie chart"}</title>
-      {arcs.map((arc) => <path key={arc.label} d={arc.d} fill={arc.color}><title>{arc.label}: {formatValue(arc.value, config?.format, config?.currency)}</title></path>)}
+      {arcs.map((arc) => <path key={arc.label} d={arc.d} fill={arc.color} tabIndex={0} onClick={() => onPointClick?.(arc)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onPointClick?.(arc); }}><title>{arc.label}: {formatValue(arc.value, config?.format, config?.currency)}</title></path>)}
       {donut && <path d={arcs.map((arc) => arc.inner).join(" ")} fill="var(--onepos-surface-raised)" />}
       {donut && <text x="50" y="48" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--onepos-text-heading)">{formatValue(total, config?.format, config?.currency)}</text>}
       {donut && <text x="50" y="60" textAnchor="middle" fontSize="5.5" fill="var(--onepos-text-muted)">Total</text>}
     </svg>
-    <Legend arcs={arcs} config={config} />
+    {config?.showLegend !== false ? <Legend arcs={arcs} config={config} /> : null}
   </div>;
 }
 
-function BarChart({ points, config }) {
+function BarChart({ points, config, onPointClick }) {
   if (!points.length) return <Empty />;
   const shown = points.slice(0, config?.limit || 12);
   const max = Math.max(...shown.map((point) => Math.abs(point.value)), 0);
   return <div className="h-full flex flex-col">
     <div className="flex-1 min-h-[140px] flex items-end gap-1.5 pt-2" style={{ borderBottom: "1px solid var(--onepos-border)" }}>
       {shown.map((point) => (
-        <div key={point.label} className="flex-1 min-w-0 flex flex-col items-center justify-end h-full" title={`${point.label}: ${formatValue(point.value, config?.format)}`}>
+        <button type="button" key={point.label} className="flex-1 min-w-0 flex flex-col items-center justify-end h-full border-0 bg-transparent p-0" title={`${point.label}: ${formatValue(point.value, config?.format)}`} onClick={() => onPointClick?.(point)}>
           <div className="w-full rounded-t transition-[height] duration-300" style={{ height: `${max ? Math.max((Math.abs(point.value) / max) * 100, 2) : 2}%`, background: "var(--onepos-accent-600)" }} />
-        </div>
+        </button>
       ))}
     </div>
     <div className="flex gap-1.5 mt-1.5">
@@ -353,7 +353,7 @@ export function renderDashboardComponent(component, result, state) {
   const type = component.type === "chart" ? (config.chartType || "bar") : component.type;
   const multi = multiSeriesFrom(config, result);
   const drill = (point) => {
-    const action = config.drillAction || result?.data?.drillAction;
+    const action = point?.row?.__drill || point?.__drill || config.drillAction || result?.data?.drillAction;
     if (!action || typeof window === "undefined") return;
     window.dispatchEvent(new CustomEvent("oneengine:analytics-drill", {
       detail: { drill: action, point, componentId: component.id },
@@ -362,11 +362,11 @@ export function renderDashboardComponent(component, result, state) {
   const formatter = (value, format) => formatValue(value, format, config.currency);
   const body = {
     kpi: <MetricTile points={points} config={config} />,
-    pie: <PieChart points={points} config={config} />,
-    donut: <PieChart points={points} config={config} donut />,
+    pie: <PieChart points={points} config={config} onPointClick={drill} />
+    donut: <PieChart points={points} config={config} donut onPointClick={drill} />
     bar: config.seriesField
       ? <MultiSeriesBarChart series={multi.series} categories={multi.categories} config={config} formatValue={formatter} onPointClick={drill} />
-      : <BarChart points={points} config={config} />,
+      : <BarChart points={points} config={config} onPointClick={drill} />
     line: <LineChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
     gauge: <GaugeChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
     funnel: <FunnelChart points={points} config={config} formatValue={formatter} onPointClick={drill} />,
