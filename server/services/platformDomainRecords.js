@@ -278,7 +278,7 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
   for (const field of fields.filter(field => {
     if (isCalculatedField(field)) return false;
     const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
-    return config.trackHistory !== false && config.track_history !== false;
+    return config.trackHistory === true || config.track_history === true;
   })) {
     const oldValue = previous ? before[field.api_name] ?? null : null;
     const newValue = candidate[field.api_name] ?? null;
