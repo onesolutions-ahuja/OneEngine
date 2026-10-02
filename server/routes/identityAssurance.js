@@ -152,7 +152,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const usable=methods.filter((method)=>mfaMethodAllowed(method,policy.effective))
       .filter((method)=>!policy.effective.phishingResistantRequired||method.phishing_resistant===true)
       .filter((method)=>assuranceSatisfies(methodAssurance(method,policy.effective),requiredAssurance));
-    const temporaryCode=challenge.challenge_type==="LOGIN"&&!challenge.context?.activationOnly&&!policy.effective.phishingResistantRequired
+    const temporaryCode=challenge.challenge_type==="LOGIN"&&!challenge.context?.deviceActivationPending&&!policy.effective.phishingResistantRequired
       &&assuranceSatisfies("STANDARD",requiredAssurance)
       ? await activeTemporaryVerificationCode(db,{companyId:user.company_id,userId:user.id}) : null;
     const availableMethods=[
@@ -223,7 +223,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       if(assurancePolicy.effective.allowRecoveryCodes)ok=await consumeRecoveryCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
       assurance="STANDARD";
     }else if(methodType==="TEMPORARY_CODE"){
-      if(challenge.context?.activationOnly)return res.status(403).json({success:false,code:"TEMP_CODE_NOT_VALID_FOR_DEVICE_ACTIVATION",message:"Temporary verification codes can satisfy MFA but cannot activate a new device"});
+      if(challenge.context?.deviceActivationPending)return res.status(403).json({success:false,code:"TEMP_CODE_NOT_VALID_FOR_DEVICE_ACTIVATION",message:"Temporary verification codes can satisfy MFA but cannot activate a new device"});
       ok=await verifyTemporaryVerificationCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
       assurance="STANDARD";
     }
@@ -247,7 +247,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       await db("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW(),mfa_method=$3 WHERE id=$1 AND user_id=$4",[sid,assurance,methodType,user.id]);
       return res.json({success:true,assuranceLevel:assurance});
     }
-    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:methodType,trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:methodType,trust:methodType==="TEMPORARY_CODE"?false:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
   });
 
   router.post("/auth/mfa/passkey/registration-options",async(req,res)=>{
