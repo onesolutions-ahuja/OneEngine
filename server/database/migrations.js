@@ -29,6 +29,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0036_connected_app_user_assignments",
   "0037_data_email_delegated_admin",
   "0038_passkey_passwordless_login",
+  "0039_diagnostic_code_v2",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -174,6 +175,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Tenant-controlled passwordless passkey sign-in",
     up: client => client.query(
       readFileSync(new URL("./migrations/0038_passkey_passwordless_login.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0039_diagnostic_code_v2",
+    version: "39",
+    name: "Expand OneEngine debug codes to subsystem and cause taxonomy",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0039_diagnostic_code_v2.sql", import.meta.url), "utf8")
     ),
   },
 ]);
