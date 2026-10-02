@@ -4,6 +4,7 @@ import express from "express";
 import { DUPLICATE_EMAIL_MESSAGE, normalizeEmail } from "../services/userIdentity.js";
 import { domainAllowed } from "../services/accountPolicy.js";
 import { toSafeApiName } from "../services/platformMetadata.js";
+import { delegatedAdminContext, delegatedRoleAssignable, delegatedUserAllowed } from "../services/delegatedAdministration.js";
 import {
   JARVES_ALLOWANCE_RESULTS,
   getJarvesLicenceState,
@@ -98,7 +99,10 @@ export default function createAdminRouter({
    */
   router.get("/admin/users", authenticate, authorize("user.view"), async (req, res) => {
     try {
-      const result = await db("SELECT u.id, u.username, u.full_name, u.email, u.active, u.store_id, s.name AS store_name, u.role_id, r.name AS role_name, u.jarves_enabled FROM users u LEFT JOIN stores s ON s.id=u.store_id LEFT JOIN roles r ON r.id=u.role_id WHERE u.company_id=$1 ORDER BY u.full_name", [req.user.companyId]);
+      const delegated=await delegatedAdminContext(db,{companyId:req.user.companyId,userId:req.user.id});
+      const result = delegated.delegated
+        ? await db("SELECT u.id, u.username, u.full_name, u.email, u.active, u.store_id, s.name AS store_name, u.role_id, r.name AS role_name, u.jarves_enabled FROM users u LEFT JOIN stores s ON s.id=u.store_id LEFT JOIN roles r ON r.id=u.role_id WHERE u.company_id=$1 AND u.role_id=ANY($2::uuid[]) ORDER BY u.full_name", [req.user.companyId,delegated.scopedRoleIds])
+        : await db("SELECT u.id, u.username, u.full_name, u.email, u.active, u.store_id, s.name AS store_name, u.role_id, r.name AS role_name, u.jarves_enabled FROM users u LEFT JOIN stores s ON s.id=u.store_id LEFT JOIN roles r ON r.id=u.role_id WHERE u.company_id=$1 ORDER BY u.full_name", [req.user.companyId]);
       res.json({ success: true, data: result.rows });
     } catch (error) {
       res.status(500).json({ success: false, message: "Unable to load users" });
@@ -233,7 +237,10 @@ export default function createAdminRouter({
    */
   router.get("/admin/roles", authenticate, authorize("role.manage"), async (req, res) => {
     try {
-      const result = await db("SELECT r.id,r.name,r.description,r.is_system_role,r.managed_by_platform,r.parent_role_id,p.name AS parent_role_name,(SELECT COUNT(*)::int FROM users u WHERE u.role_id=r.id AND u.active) AS user_count FROM roles r LEFT JOIN roles p ON p.id=r.parent_role_id AND p.company_id=r.company_id WHERE r.company_id=$1 ORDER BY r.name", [req.user.companyId]);
+      const delegated=await delegatedAdminContext(db,{companyId:req.user.companyId,userId:req.user.id});
+      const result = delegated.delegated
+        ? await db("SELECT r.id,r.name,r.description,r.is_system_role,r.managed_by_platform,r.parent_role_id,p.name AS parent_role_name,(SELECT COUNT(*)::int FROM users u WHERE u.role_id=r.id AND u.active) AS user_count FROM roles r LEFT JOIN roles p ON p.id=r.parent_role_id AND p.company_id=r.company_id WHERE r.company_id=$1 AND r.id=ANY($2::uuid[]) ORDER BY r.name", [req.user.companyId,delegated.assignableRoleIds])
+        : await db("SELECT r.id,r.name,r.description,r.is_system_role,r.managed_by_platform,r.parent_role_id,p.name AS parent_role_name,(SELECT COUNT(*)::int FROM users u WHERE u.role_id=r.id AND u.active) AS user_count FROM roles r LEFT JOIN roles p ON p.id=r.parent_role_id AND p.company_id=r.company_id WHERE r.company_id=$1 ORDER BY r.name", [req.user.companyId]);
       res.json({ success: true, data: result.rows });
     } catch (error) {
       res.status(500).json({ success: false, message: "Unable to load roles" });
@@ -555,6 +562,8 @@ export default function createAdminRouter({
     const { username, fullName, password, roleId = null, storeId = null } = req.body;
     const email = normalizeEmail(req.body?.email);
     if (!username || !fullName || !password) return res.status(400).json({ success: false, message: "Username, full name and password are required" });
+    const delegatedRole=await delegatedRoleAssignable(db,{companyId:req.user.companyId,actorUserId:req.user.id,roleId});
+    if(!delegatedRole.allowed)return res.status(403).json({success:false,message:"This role is outside your delegated administration scope"});
     try {
       const policy = await db("SELECT c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled FROM companies c JOIN company_settings cs ON cs.company_id=c.id WHERE c.id=$1", [req.user.companyId]);
       const accountPolicy = policy.rows[0] || {};
@@ -579,6 +588,12 @@ export default function createAdminRouter({
    */
   router.put("/admin/users/:id", authenticate, authorize("user.edit"), async (req, res) => {
     try {
+      const delegatedTarget=await delegatedUserAllowed(db,{companyId:req.user.companyId,actorUserId:req.user.id,targetUserId:req.params.id});
+      if(!delegatedTarget.allowed)return res.status(delegatedTarget.notFound?404:403).json({success:false,message:delegatedTarget.notFound?"User not found":"This user is outside your delegated administration scope"});
+      if(req.body.roleId){
+        const delegatedRole=await delegatedRoleAssignable(db,{companyId:req.user.companyId,actorUserId:req.user.id,roleId:req.body.roleId});
+        if(!delegatedRole.allowed)return res.status(403).json({success:false,message:"This role is outside your delegated administration scope"});
+      }
       const existingAccess = await requireOneEngineForProtectedUser(req, req.params.id);
       if (!existingAccess.ok) return res.status(existingAccess.status).json({ success: false, message: existingAccess.message });
       if (req.body.roleId) {
@@ -613,6 +628,8 @@ export default function createAdminRouter({
    */
   router.post("/admin/users/:id/reset-password", authenticate, authorize("user.manage"), async (req, res) => {
     try {
+      const delegatedTarget=await delegatedUserAllowed(db,{companyId:req.user.companyId,actorUserId:req.user.id,targetUserId:req.params.id});
+      if(!delegatedTarget.allowed)return res.status(delegatedTarget.notFound?404:403).json({success:false,message:delegatedTarget.notFound?"User not found":"This user is outside your delegated administration scope"});
       const existingAccess = await requireOneEngineForProtectedUser(req, req.params.id);
       if (!existingAccess.ok) return res.status(existingAccess.status).json({ success: false, message: existingAccess.message });
       const { newPassword, confirmPassword } = req.body || {};
@@ -635,6 +652,8 @@ export default function createAdminRouter({
    */
   router.delete("/admin/users/:id", authenticate, authorize("user.delete"), async (req, res) => {
     try {
+      const delegatedTarget=await delegatedUserAllowed(db,{companyId:req.user.companyId,actorUserId:req.user.id,targetUserId:req.params.id});
+      if(!delegatedTarget.allowed)return res.status(delegatedTarget.notFound?404:403).json({success:false,message:delegatedTarget.notFound?"User not found":"This user is outside your delegated administration scope"});
       const existingAccess = await requireOneEngineForProtectedUser(req, req.params.id);
       if (!existingAccess.ok) return res.status(existingAccess.status).json({ success: false, message: existingAccess.message });
       const result = await db(
