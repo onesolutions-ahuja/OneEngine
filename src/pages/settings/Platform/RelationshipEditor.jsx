@@ -81,6 +81,7 @@ export default function RelationshipEditor({
   const [form, setForm] = useState({
     ...EMPTY_RELATIONSHIP,
     ...(relationship || {}),
+    name: relationship?.label || relationship?.name || relationship?.relationship_key || "",
     ...(isNew && initialObjectId ? { parent_object_id: initialObjectId } : {}),
   });
 
