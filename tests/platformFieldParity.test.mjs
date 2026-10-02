@@ -6,6 +6,10 @@ import { fieldValueError, formatAutoNumberValue, normalizeFieldValue } from "../
 test("field constraints enforce max length, precision and scale", () => {
   assert.equal(fieldValueError({ label:"Code", field_type:"text", required:false, config:{ maxLength:5 } }, "ABCDEF"), "Code must be 5 characters or fewer");
   assert.equal(fieldValueError({ label:"Notes", field_type:"text_area", required:false, config:{ maxLength:255 } }, "x".repeat(256)), "Notes must be 255 characters or fewer");
+  assert.equal(fieldValueError({ label:"Notes", field_type:"text_area", required:false, config:{} }, "x".repeat(256)), "Notes must be 255 characters or fewer");
+  assert.equal(fieldValueError({ label:"Email", field_type:"email", required:false, config:{} }, "a".repeat(72) + "@example.com"), "Email must be 80 characters or fewer");
+  assert.equal(fieldValueError({ label:"Phone", field_type:"phone", required:false, config:{} }, "1".repeat(41)), "Phone must be 40 characters or fewer");
+  assert.equal(fieldValueError({ label:"Description", field_type:"long_text", required:false, config:{} }, "x".repeat(32769)), "Description must be 32768 characters or fewer");
   assert.equal(fieldValueError({ label:"Amount", field_type:"decimal", required:false, config:{ precision:5, scale:2 } }, "123.456"), "Amount supports at most 2 decimal places");
   assert.equal(fieldValueError({ label:"Amount", field_type:"decimal", required:false, config:{ precision:5, scale:2 } }, "1234.56"), "Amount supports at most 5 digits");
   assert.equal(fieldValueError({ label:"Amount", field_type:"decimal", required:false, config:{ precision:5, scale:2 } }, "123.45"), null);
