@@ -76,9 +76,10 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const resourceKey=String(req.body?.resourceKey||"").trim().toUpperCase();
     if(!resourceKey)return res.status(400).json({success:false,message:"resourceKey is required"});
     const configuredPolicy=await effectiveStepUpPolicy(db,{companyId:req.user.companyId,resourceKey});
-    const policy=configuredPolicy|| (resourceKey==="TEMPORARY_MFA_CODE"
-      ? {action:"RAISE",required_assurance:"HIGH",reverify_after_minutes:15}
-      : null);
+    const governancePolicy=resourceKey==="MANAGE_CONNECTED_APPS" ? await loadApiPolicy(db,req.user.companyId) : null;
+    const policy=configuredPolicy
+      || (resourceKey==="TEMPORARY_MFA_CODE" ? {action:"RAISE",required_assurance:"HIGH",reverify_after_minutes:15} : null)
+      || (governancePolicy?.require_high_assurance_for_app_admin===true ? {action:"RAISE",required_assurance:"HIGH",reverify_after_minutes:15} : null);
     if(!policy||policy.action==="ALLOW")return res.json({success:true,required:false,assuranceLevel:req.authSession?.assurance_level||"STANDARD"});
     if(policy.action==="BLOCK")return res.status(403).json({success:false,code:"RESOURCE_BLOCKED",message:"This operation is blocked by security policy"});
     if(!stepUpRequired({session:req.authSession,policy,defaultMinutes:15}))return res.json({success:true,required:false,assuranceLevel:req.authSession?.assurance_level||"HIGH"});
