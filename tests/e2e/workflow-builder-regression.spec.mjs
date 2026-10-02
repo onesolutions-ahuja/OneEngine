@@ -72,8 +72,8 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await initialTriggerSelect.selectOption("manual");
   await page.getByRole("button", { name: "Add element after Start", exact: true }).click();
   const stopPalette = page.locator(".workflow-node-palette");
-  await stopPalette.getByLabel("Search flow elements").fill("Stop");
-  await stopPalette.getByRole("button", { name: "Stop", exact: true }).click();
+  await stopPalette.getByLabel("Search flow elements").fill("End");
+  await stopPalette.getByRole("button", { name: "End", exact: true }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   const workflowSearch = page.getByPlaceholder(/Search workflows/i);
