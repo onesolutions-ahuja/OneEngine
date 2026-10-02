@@ -1387,6 +1387,11 @@ function workflowActionIssue(step, definition = null) {
     if (screen.components.some((component) => component.type === "DATA_TABLE" && !component.dataResource)) return "Choose a row collection for every Data Table.";
     if (screen.components.some((component) => component.type === "CUSTOM_COMPONENT" && (!component.registryKey || component.registryConfigError))) return "Complete every registered screen component configuration.";
     if (screen.components.some((component) => component.type === "PROGRESS" && !component.stageResource && !screen.currentStageResource)) return "Choose a Stage Resource for every Progress Indicator.";
+    if (screen.components.some((component) => component.type === "IMAGE" && !String(component.source || "").trim())) return "Choose an image URL or Resource for every Image component.";
+    if (screen.components.some((component) => component.type === "LINK" && !String(component.href || "").trim())) return "Choose a destination for every Link component.";
+    if (screen.components.some((component) => component.minLength !== "" && component.maxLength !== "" && component.minLength !== undefined && component.maxLength !== undefined && Number(component.minLength) > Number(component.maxLength))) return "A component minimum length cannot be greater than its maximum length.";
+    if (screen.components.some((component) => component.min !== "" && component.max !== "" && component.min !== undefined && component.max !== undefined && Number(component.min) > Number(component.max))) return "A numeric component minimum cannot be greater than its maximum.";
+    if (screen.components.some((component) => component.step !== "" && component.step !== undefined && Number(component.step) <= 0)) return "Numeric component step values must be greater than zero.";
     if (config.showFooter !== false) {
       if (!String(screen.nextLabel || "Next").trim()) return "Enter a Next button label.";
       if (config.allowBack !== false && !String(screen.backLabel || "Previous").trim()) return "Enter a Previous button label.";
@@ -2389,6 +2394,36 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                       {component.type === "DISPLAY_TEXT" ? (
                         <label className="block text-xs font-medium text-slate-600">Content<textarea className={inputClass} rows={4} value={component.text || ""} onChange={(event) => updateComponent(componentIndex, { text: event.target.value })} /></label>
                       ) : null}
+                      {component.type === "IMAGE" ? (
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <ResourceOrLiteralInput label="Image URL / Resource" value={component.source || ""} onChange={(source) => updateComponent(componentIndex, { source })} rootObjectKey={rootObjectKey} extraResources={extraResources} />
+                          <label className="block text-xs font-medium text-slate-600">Alternative Text<input className={inputClass} value={component.altText || ""} onChange={(event) => updateComponent(componentIndex, { altText: event.target.value })} /></label>
+                        </div>
+                      ) : null}
+                      {component.type === "LINK" ? (
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <ResourceOrLiteralInput label="Destination URL / Resource" value={component.href || ""} onChange={(href) => updateComponent(componentIndex, { href })} rootObjectKey={rootObjectKey} extraResources={extraResources} />
+                          <label className="block text-xs font-medium text-slate-600">Open Link
+                            <select className={inputClass} value={component.linkTarget || "same"} onChange={(event) => updateComponent(componentIndex, { linkTarget: event.target.value })}><option value="same">In the same view</option><option value="new">In a new tab</option></select>
+                          </label>
+                        </div>
+                      ) : null}
+                      {component.type === "SECTION" ? (
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <label className="block text-xs font-medium text-slate-600">Heading<input className={inputClass} value={component.heading || component.label || ""} onChange={(event) => updateComponent(componentIndex, { heading: event.target.value })} /></label>
+                          <label className="flex items-end gap-2 pb-2 text-xs text-slate-600"><input type="checkbox" checked={component.collapsible === true} onChange={(event) => updateComponent(componentIndex, { collapsible: event.target.checked })} /> Collapsible section</label>
+                        </div>
+                      ) : null}
+                      {component.type === "COLUMNS" ? (
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <label className="block text-xs font-medium text-slate-600">Columns
+                            <select className={inputClass} value={String(component.columnCount || 2)} onChange={(event) => updateComponent(componentIndex, { columnCount: Number(event.target.value) })}><option value="2">2 columns</option><option value="3">3 columns</option><option value="4">4 columns</option></select>
+                          </label>
+                          <label className="block text-xs font-medium text-slate-600">Gap
+                            <select className={inputClass} value={component.columnGap || "normal"} onChange={(event) => updateComponent(componentIndex, { columnGap: event.target.value })}><option value="compact">Compact</option><option value="normal">Normal</option><option value="wide">Wide</option></select>
+                          </label>
+                        </div>
+                      ) : null}
                       {component.type === "RECORD_PICKER" ? (
                         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                           <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={component.objectKey || ""} onObjectChange={(objectKey) => updateComponent(componentIndex, { objectKey })} />
@@ -2458,6 +2493,15 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                           <label className="block text-xs font-medium text-slate-600">Default Value<input className={inputClass} value={component.defaultValue ?? ""} onChange={(event) => updateComponent(componentIndex, { defaultValue: event.target.value })} /></label>
                           <label className="block text-xs font-medium text-slate-600">Placeholder<input className={inputClass} value={component.placeholder || ""} onChange={(event) => updateComponent(componentIndex, { placeholder: event.target.value })} /></label>
                         </div>
+                        {["TEXT","TEXT_AREA","EMAIL","PASSWORD"].includes(component.type) ? <div className="grid gap-2 md:grid-cols-2">
+                          <label className="block text-xs font-medium text-slate-600">Minimum Length<input className={inputClass} type="number" min="0" value={component.minLength ?? ""} onChange={(event) => updateComponent(componentIndex, { minLength: event.target.value === "" ? "" : Math.max(0, Number(event.target.value)) })} /></label>
+                          <label className="block text-xs font-medium text-slate-600">Maximum Length<input className={inputClass} type="number" min="1" value={component.maxLength ?? ""} onChange={(event) => updateComponent(componentIndex, { maxLength: event.target.value === "" ? "" : Math.max(1, Number(event.target.value)) })} /></label>
+                        </div> : null}
+                        {["NUMBER","SLIDER"].includes(component.type) ? <div className="grid gap-2 md:grid-cols-3">
+                          <label className="block text-xs font-medium text-slate-600">Minimum<input className={inputClass} type="number" value={component.min ?? ""} onChange={(event) => updateComponent(componentIndex, { min: event.target.value === "" ? "" : Number(event.target.value) })} /></label>
+                          <label className="block text-xs font-medium text-slate-600">Maximum<input className={inputClass} type="number" value={component.max ?? ""} onChange={(event) => updateComponent(componentIndex, { max: event.target.value === "" ? "" : Number(event.target.value) })} /></label>
+                          <label className="block text-xs font-medium text-slate-600">Step<input className={inputClass} type="number" min="0.000001" step="any" value={component.step ?? ""} onChange={(event) => updateComponent(componentIndex, { step: event.target.value === "" ? "" : Number(event.target.value) })} /></label>
+                        </div> : null}
                         <label className="block text-xs font-medium text-slate-600">Help Text<input className={inputClass} value={component.helpText || ""} onChange={(event) => updateComponent(componentIndex, { helpText: event.target.value })} /></label>
                         <div className="grid gap-2 md:grid-cols-2">
                           <label className="block text-xs font-medium text-slate-600">Validate Input Formula
