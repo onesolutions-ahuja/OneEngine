@@ -2,6 +2,22 @@ import { toSafeApiName } from "./platformMetadata.js";
 import { tenantFields } from "./platformSystemObjects.js";
 import { loadEffectivePermissionSets, mergePermissionSetFieldAccess } from "./platformPermissionSets.js";
 
+export function formatAutoNumberValue(config = {}, sequence, date = new Date()) {
+  const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const startPadding = Math.max(0, Math.min(20, Number.parseInt(config?.padding ?? 0, 10) || 0));
+  const number = String(sequence).padStart(startPadding, "0");
+  const tokens = {
+    "{YYYY}": String(safeDate.getUTCFullYear()),
+    "{YY}": String(safeDate.getUTCFullYear()).slice(-2),
+    "{MM}": String(safeDate.getUTCMonth() + 1).padStart(2, "0"),
+    "{DD}": String(safeDate.getUTCDate()).padStart(2, "0"),
+  };
+  const expand = (value) => Object.entries(tokens).reduce((text, [token, replacement]) => text.replaceAll(token, replacement), String(value || ""));
+  const formatted = `${expand(config?.prefix)}${number}${expand(config?.suffix)}`;
+  if (formatted.length > 30) throw new Error("Auto-number value exceeds the 30-character limit");
+  return formatted;
+}
+
 export function normalizePicklistOptions(options) {
   return (Array.isArray(options) ? options : []).map((option, index) => {
     if (typeof option === "string" || typeof option === "number") {
