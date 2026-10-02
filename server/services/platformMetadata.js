@@ -841,6 +841,37 @@ export const platformSchema = `
   ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS layout_key VARCHAR(100) NOT NULL DEFAULT '';
   ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS record_type_id UUID REFERENCES platform_record_types(id) ON DELETE CASCADE;
   ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE;
+  ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';
+  ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS active_version INTEGER;
+  ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS draft_version INTEGER;
+  ALTER TABLE platform_layouts ADD COLUMN IF NOT EXISTS draft_definition JSONB;
+  UPDATE platform_layouts
+     SET lifecycle_status=CASE WHEN active=true THEN 'ACTIVE' ELSE 'INACTIVE' END
+   WHERE lifecycle_status IS NULL OR lifecycle_status NOT IN ('DRAFT','ACTIVE','INACTIVE');
+  UPDATE platform_layouts SET active_version=version WHERE active=true AND active_version IS NULL;
+  DO $ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname='platform_layouts_lifecycle_status_check'
+    ) THEN
+      ALTER TABLE platform_layouts
+        ADD CONSTRAINT platform_layouts_lifecycle_status_check
+        CHECK (lifecycle_status IN ('DRAFT','ACTIVE','INACTIVE'));
+    END IF;
+  END $;
+  CREATE TABLE IF NOT EXISTS platform_layout_versions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    layout_id UUID NOT NULL REFERENCES platform_layouts(id) ON DELETE CASCADE,
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    definition JSONB NOT NULL,
+    lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT'
+      CHECK (lifecycle_status IN ('DRAFT','ACTIVE','INACTIVE')),
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(layout_id,version)
+  );
+  CREATE INDEX IF NOT EXISTS idx_platform_layout_versions_layout ON platform_layout_versions(layout_id,version DESC);
   DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='platform_layouts'::regclass AND conname='platform_layouts_page_type_check') THEN
       ALTER TABLE platform_layouts DROP CONSTRAINT platform_layouts_page_type_check;
