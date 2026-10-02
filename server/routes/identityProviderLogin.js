@@ -32,6 +32,42 @@ function providerPublic(row){
 function decodeJwtJson(segment){
   return JSON.parse(Buffer.from(String(segment||""),"base64url").toString("utf8"));
 }
+async function oidcMetadata(cfg){
+  const discoveryUrl=String(cfg?.discoveryUrl||"").trim();
+  if(!discoveryUrl)return {};
+  const response=await fetch(discoveryUrl,{headers:{Accept:"application/json"}});
+  if(!response.ok)throw new Error("OIDC discovery document is unavailable");
+  const metadata=await response.json();
+  return metadata&&typeof metadata==="object"?metadata:{};
+}
+
+function audienceMatches(aud,clientId){
+  return Array.isArray(aud)?aud.map(String).includes(String(clientId)):String(aud||"")===String(clientId);
+}
+
+async function verifyOidcIdToken(idToken,{clientId,nonce,issuer,jwksUri}){
+  const parts=String(idToken||"").split(".");
+  if(parts.length!==3)throw new Error("OIDC ID token is malformed");
+  const header=decodeJwtJson(parts[0]),claims=decodeJwtJson(parts[1]);
+  if(!["RS256","RS384","RS512","ES256","ES384"].includes(String(header.alg||""))||!header.kid)throw new Error("OIDC ID token algorithm is unsupported");
+  const response=await fetch(String(jwksUri||""),{headers:{Accept:"application/json"}});
+  if(!response.ok)throw new Error("OIDC signing keys are unavailable");
+  const jwks=await response.json();
+  const jwk=(jwks.keys||[]).find(key=>key.kid===header.kid);
+  if(!jwk)throw new Error("OIDC signing key is unavailable");
+  const key=crypto.createPublicKey({key:jwk,format:"jwk"});
+  const algorithms={RS256:"RSA-SHA256",RS384:"RSA-SHA384",RS512:"RSA-SHA512",ES256:"SHA256",ES384:"SHA384"};
+  const valid=crypto.verify(algorithms[header.alg],Buffer.from(`${parts[0]}.${parts[1]}`),key,Buffer.from(parts[2],"base64url"));
+  if(!valid)throw new Error("OIDC ID token signature is invalid");
+  const now=Math.floor(Date.now()/1000);
+  if(issuer&&String(claims.iss)!==String(issuer))throw new Error("OIDC issuer is invalid");
+  if(!audienceMatches(claims.aud,clientId))throw new Error("OIDC audience is invalid");
+  if(Number(claims.exp||0)<=now)throw new Error("OIDC ID token is expired");
+  if(Number(claims.iat||0)>now+300)throw new Error("OIDC ID token issued-at time is invalid");
+  if(nonce&&String(claims.nonce||"")!==String(nonce))throw new Error("OIDC nonce is invalid");
+  return claims;
+}
+
 async function verifyAppleIdToken(idToken,{clientId,nonce,jwksUri="https://appleid.apple.com/auth/keys",issuer="https://appleid.apple.com"}){
   const parts=String(idToken||"").split(".");if(parts.length!==3)throw new Error("Apple ID token is malformed");
   const header=decodeJwtJson(parts[0]),claims=decodeJwtJson(parts[1]);
@@ -120,9 +156,10 @@ export default function createIdentityProviderLoginRouter({db,createToken,decryp
     if(!["OIDC","APPLE","GOOGLE"].includes(provider.provider_type))return res.redirect(providerErrorRedirect(returnTo,"provider_protocol_mismatch"));
     const cfg=provider.configuration||{},cred=credentials(provider,decryptCredentials);
     const isApple=provider.provider_type==="APPLE";
-    const authorizationEndpoint=String(cfg.authorizationEndpoint||(isApple?"https://appleid.apple.com/auth/authorize":"")).trim();
-    const tokenEndpoint=String(cfg.tokenEndpoint||(isApple?"https://appleid.apple.com/auth/token":"")).trim();
-    const userInfoEndpoint=String(cfg.userInfoEndpoint||"").trim();
+    const discovered=!isApple&&cfg.discoveryUrl?await oidcMetadata(cfg):{};
+    const authorizationEndpoint=String(cfg.authorizationEndpoint||discovered.authorization_endpoint||(isApple?"https://appleid.apple.com/auth/authorize":"")).trim();
+    const tokenEndpoint=String(cfg.tokenEndpoint||discovered.token_endpoint||(isApple?"https://appleid.apple.com/auth/token":"")).trim();
+    const userInfoEndpoint=String(cfg.userInfoEndpoint||discovered.userinfo_endpoint||"").trim();
     const clientId=String(cred.clientId||cfg.clientId||"").trim();
     const redirectUri=String(cfg.redirectUri||"").trim();
     if(!authorizationEndpoint||!tokenEndpoint||(!isApple&&!userInfoEndpoint)||!clientId||!redirectUri)return res.redirect(providerErrorRedirect(returnTo,"provider_not_configured"));
@@ -163,7 +200,8 @@ export default function createIdentityProviderLoginRouter({db,createToken,decryp
       const code=String(input.code||"");if(!code)return res.redirect(providerErrorRedirect(returnTo,"missing_code"));
       const verifier=decryptCredentials(state.auth_verifier)?.verifier;
       const clientId=String(cred.clientId||cfg.clientId||"");
-      const tokenEndpoint=String(cfg.tokenEndpoint||(state.provider_type==="APPLE"?"https://appleid.apple.com/auth/token":""));
+      const discovered=state.provider_type!=="APPLE"&&cfg.discoveryUrl?await oidcMetadata(cfg):{};
+      const tokenEndpoint=String(cfg.tokenEndpoint||discovered.token_endpoint||(state.provider_type==="APPLE"?"https://appleid.apple.com/auth/token":""));
       const params=new URLSearchParams({grant_type:"authorization_code",code,redirect_uri:String(cfg.redirectUri||""),client_id:clientId});
       if(cred.clientSecret)params.set("client_secret",String(cred.clientSecret));
       if(cfg.usePkce!==false&&verifier)params.set("code_verifier",verifier);
@@ -175,10 +213,18 @@ export default function createIdentityProviderLoginRouter({db,createToken,decryp
         if(!tokens.id_token)return res.redirect(providerErrorRedirect(returnTo,"token_exchange_failed"));
         profile=await verifyAppleIdToken(tokens.id_token,{clientId,nonce:state.auth_nonce,jwksUri:cfg.jwksUri||undefined,issuer:cfg.issuer||undefined});
       }else{
-        if(!tokens.access_token)return res.redirect(providerErrorRedirect(returnTo,"token_exchange_failed"));
-        const profileResponse=await fetch(String(cfg.userInfoEndpoint),{headers:{Authorization:`Bearer ${tokens.access_token}`,Accept:"application/json"}});
-        if(!profileResponse.ok)return res.redirect(providerErrorRedirect(returnTo,"profile_lookup_failed"));
-        profile=await profileResponse.json();
+        if(!tokens.id_token)return res.redirect(providerErrorRedirect(returnTo,"id_token_missing"));
+        const issuer=String(cfg.issuer||discovered.issuer||"").trim();
+        const jwksUri=String(cfg.jwksUri||discovered.jwks_uri||"").trim();
+        if(!issuer||!jwksUri)return res.redirect(providerErrorRedirect(returnTo,"provider_not_configured"));
+        const idClaims=await verifyOidcIdToken(tokens.id_token,{clientId,nonce:state.auth_nonce,issuer,jwksUri});
+        profile={...idClaims};
+        const userInfoEndpoint=String(cfg.userInfoEndpoint||discovered.userinfo_endpoint||"").trim();
+        if(tokens.access_token&&userInfoEndpoint){
+          const profileResponse=await fetch(userInfoEndpoint,{headers:{Authorization:`Bearer ${tokens.access_token}`,Accept:"application/json"}});
+          if(!profileResponse.ok)return res.redirect(providerErrorRedirect(returnTo,"profile_lookup_failed"));
+          profile={...profile,...await profileResponse.json()};
+        }
       }
       const emailClaim=String(cfg.emailClaim||"email");const email=String(profile[emailClaim]||profile.email||"").trim().toLowerCase();
       if(!email||email!==String(state.auth_login_email||"").toLowerCase())return res.redirect(providerErrorRedirect(returnTo,"account_not_linked"));
