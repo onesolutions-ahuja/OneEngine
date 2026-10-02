@@ -1396,22 +1396,63 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     validation: () => undefined,
     async: false,
     requiredPermissions: ["communications.send"],
-    executor: async ({ action, db, companyId, req, record }) => {
+    executor: async ({ action, db, companyId, req, record, previousRecord, object, workflowVariables }) => {
       const tenantId=companyId||req?.user?.companyId;
-      const channel=String(record?.channel||action?.channel||"").toUpperCase();
-      const recipient=action?.recipient||record?.customerPhone||record?.sender||null;
-      if(!recipient) return {status:"skipped",reason:"No booking recipient"};
-      const startsAt=record?.startsAt||null;
-      const when=startsAt
-        ? new Date(startsAt).toLocaleString("en-GB",{timeZone:"Europe/London",dateStyle:"medium",timeStyle:"short"})
-        : "the selected time";
-      const defaultMessage=`Your ${record?.serviceName||"appointment"} appointment is booked for ${when}.`;
-      const template=String(action?.message||defaultMessage);
+      let appointmentContext={};
+      const appointmentId=record?.appointmentId||record?.appointment_id||action?.appointmentId||null;
+      if(tenantId&&appointmentId){
+        const result=await db(
+          `SELECT a.id,a.starts_at,a.ends_at,a.customer_phone,a.customer_email,a.source_channel,
+                  s.name AS service_name,r.timezone AS resource_timezone
+             FROM appointments a
+             LEFT JOIN appointment_services s ON s.id=a.service_id AND s.company_id=a.company_id
+             LEFT JOIN appointment_resources r ON r.id=a.resource_id AND r.company_id=a.company_id
+            WHERE a.id=$1 AND a.company_id=$2
+            LIMIT 1`,
+          [appointmentId,tenantId]
+        );
+        appointmentContext=result.rows[0]||{};
+      }
+      const effectiveRecord={
+        ...appointmentContext,
+        ...(record||{}),
+        appointmentId:record?.appointmentId||record?.appointment_id||appointmentContext.id||appointmentId||null,
+        serviceName:record?.serviceName||record?.service_name||appointmentContext.service_name||null,
+        startsAt:record?.startsAt||record?.starts_at||appointmentContext.starts_at||null,
+        endsAt:record?.endsAt||record?.ends_at||appointmentContext.ends_at||null,
+        timezone:record?.timezone||record?.resourceTimezone||record?.resource_timezone||appointmentContext.resource_timezone||null,
+        customerPhone:record?.customerPhone||record?.customer_phone||appointmentContext.customer_phone||null,
+        customerEmail:record?.customerEmail||record?.customer_email||appointmentContext.customer_email||null,
+      };
+      const bindingContext={record:effectiveRecord,previousRecord,req,object,workflowVariables};
+      const configuredChannel=resolveConfiguredResource(action?.channel,bindingContext);
+      const channel=String(configuredChannel||effectiveRecord.channel||appointmentContext.source_channel||"").toUpperCase();
+      const configuredRecipient=resolveConfiguredResource(action?.recipient||action?.to,bindingContext);
+      const recipient=configuredRecipient
+        || (channel==="EMAIL"?effectiveRecord.customerEmail:null)
+        || effectiveRecord.customerPhone
+        || effectiveRecord.sender
+        || null;
+      if(!recipient) return {status:"failed",reason:"Booking confirmation recipient is not configured"};
+      const templateSource=action?.message||action?.body||action?.text||null;
+      if(!templateSource) return {status:"failed",reason:"Booking confirmation message is not configured in Flow metadata"};
+      const startsAt=effectiveRecord.startsAt||null;
+      const timezone=resolveConfiguredResource(action?.timezone,bindingContext)||effectiveRecord.timezone||null;
+      let when=startsAt?new Date(startsAt).toISOString():"";
+      if(startsAt&&timezone){
+        try{
+          when=new Intl.DateTimeFormat("en-GB",{timeZone:String(timezone),dateStyle:"medium",timeStyle:"short"}).format(new Date(startsAt));
+        }catch{
+          return {status:"failed",reason:"Booking confirmation timezone is invalid"};
+        }
+      }
+      const template=String(resolveConfiguredResource(templateSource,bindingContext)??templateSource);
       const message=template
-        .replaceAll("{{serviceName}}", String(record?.serviceName||"appointment"))
+        .replaceAll("{{serviceName}}", String(effectiveRecord.serviceName||""))
         .replaceAll("{{startsAt}}", when)
-        .replaceAll("{{appointmentId}}", String(record?.appointmentId||""));
-      const type=channel==="WHATSAPP"?"SEND_WHATSAPP":channel==="SMS"?"SEND_SMS":null;
+        .replaceAll("{{endsAt}}", effectiveRecord.endsAt?new Date(effectiveRecord.endsAt).toISOString():"")
+        .replaceAll("{{appointmentId}}", String(effectiveRecord.appointmentId||""));
+      const type=channel==="WHATSAPP"?"SEND_WHATSAPP":channel==="SMS"?"SEND_SMS":channel==="EMAIL"?"SEND_EMAIL":null;
       if(!type) return {status:"skipped",reason:`Booking channel ${channel||"UNKNOWN"} does not use mobile confirmation`};
       const result=await executeRegisteredAction({
         db,
