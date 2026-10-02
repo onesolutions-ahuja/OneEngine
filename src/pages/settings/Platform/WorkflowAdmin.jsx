@@ -1078,6 +1078,7 @@ const FLOW_ELEMENT_VISUALS = {
   RUN_SUBFLOW: { icon: "⇢", color: "#0b5cab", family: "Interaction" },
   __ACTION__: { icon: "⚡", color: "#0b5cab", family: "Interaction" },
   __GROUP__: { icon: "▣", color: "#5c6ac4", family: "Logic" },
+  __CONNECT__: { icon: "↪", color: "#5c6ac4", family: "Logic" },
 };
 
 function flowElementVisual(type = "") {
@@ -2692,6 +2693,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [connectFromId, setConnectFromId] = useState(null);
   const [groupTargetId, setGroupTargetId] = useState(null);
+  const [autoConnectSourceId, setAutoConnectSourceId] = useState(null);
   const paletteRef = useRef(null);
   const canvasRef = useRef(null);
   const propertiesRef = useRef(null);
@@ -3017,6 +3019,17 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setPropertiesOpen(true);
   };
   const addFromPalette = (type, index = workflow.steps.length) => {
+    if (type === "__CONNECT__") {
+      const source = workflow.steps[Math.max(0, index - 1)];
+      if (source) {
+        setAutoConnectSourceId(source.id);
+        setSelectedId(source.id);
+        setPaletteOpen(false);
+        setInsertAt(null);
+        setBranchTarget(null);
+      }
+      return;
+    }
     if (type === "__GROUP__") {
       createEmptyGroupAt(index);
       return;
@@ -3425,6 +3438,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH","STOP"].includes(option.value));
   const palette = [
     ...(layoutMode === "AUTO" ? [{ value: "__GROUP__", label: "Group", description: "Organize related elements in a named, collapsible section.", category: "Logic" }] : []),
+    ...(layoutMode === "AUTO" && insertAt != null && !branchTarget && insertAt > 0 ? [{ value: "__CONNECT__", label: "Connect to element", description: "Create a Go To connector to a nonconsecutive element.", category: "Logic" }] : []),
     ...registryOptions
       .filter((option) => SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(option.value))
       .map((option) => ({ ...option, category: option.value === "RUN_SUBFLOW" ? "Interaction" : workflowActionCategory(option.value) })),
@@ -3542,7 +3556,19 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const firstStepIdForGroup = (group) => (group?.stepIds || []).find((id) => visibleCanvasSteps.some(({ step }) => String(step.id) === String(id))) || null;
   const anchoredGroupBeforeStep = (stepId) => builderGroups.find((group) => !(group.stepIds || []).length && String(group.anchorBeforeId || "__end__") === String(stepId)) || null;
   const endAnchoredGroups = builderGroups.filter((group) => !(group.stepIds || []).length && String(group.anchorBeforeId || "__end__") === "__end__");
-  const createEmptyGroupAt = (index = workflow.steps.length) => {
+  const connectAutoLayoutTarget = (targetId) => {
+    const sourceIndex = workflow.steps.findIndex((step) => String(step.id) === String(autoConnectSourceId));
+    const targetIndex = workflow.steps.findIndex((step) => String(step.id) === String(targetId));
+    if (sourceIndex < 0 || targetIndex <= sourceIndex) {
+      setAutoConnectSourceId(null);
+      return;
+    }
+    updateStep(sourceIndex, { config: { ...(workflow.steps[sourceIndex]?.config || {}), nextStepId: targetId } });
+    setSelectedId(targetId);
+    setAutoConnectSourceId(null);
+    setPropertiesOpen(true);
+  };
+    const createEmptyGroupAt = (index = workflow.steps.length) => {
     const label = typeof window !== "undefined" ? window.prompt("Group name", "New Group") : "New Group";
     if (!String(label || "").trim()) return;
     const description = typeof window !== "undefined" ? window.prompt("Group description (optional)", "") : "";
@@ -3709,7 +3735,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
         {paletteTab === "elements" ? (
           <>
-            <p className="workflow-palette-help">{layoutMode === "FREEFORM" ? "Drag an element onto the canvas." : branchTarget ? "Choose an element for this path." : insertAt == null ? "Use a + insertion point on the canvas to add an element or Group." : "Choose an element to insert at the selected point."}</p>
+            <p className="workflow-palette-help">{layoutMode === "FREEFORM" ? "Drag an element onto the canvas." : autoConnectSourceId ? "Select the element that this Go To connector should target." : branchTarget ? "Choose an element for this path." : insertAt == null ? "Use a + insertion point on the canvas to add an element or Group." : "Choose an element, Group, or Connect to element."}</p>
             <div className="workflow-palette-scroll">
               {Object.entries(paletteGroups).map(([category, options]) => (
                 <div key={category}>
@@ -3842,6 +3868,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))))}>+</button>
           <button type="button" title="Zoom to Fit" onClick={zoomToFit}>Fit</button>
           <button type="button" title="Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(true)}>⌨</button>
+          {autoConnectSourceId ? <button type="button" title="Cancel Go To connector" onClick={() => setAutoConnectSourceId(null)}>Cancel Go To</button> : null}
           <button type="button" title={builderErrors.length ? "Show Errors" : "Show Warnings"} onClick={() => setIssuesOpen(true)}>
             {builderErrors.length ? `Errors ${builderErrors.length}` : builderWarnings.length ? `Warnings ${builderWarnings.length}` : "Checks ✓"}
           </button>
@@ -4138,7 +4165,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
 
                 <div className="workflow-node-connector">
                   {step.type === "LOOP" ? <span className="workflow-connector-label">After Last</span> : null}
-                  <button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setGroupTargetId(null); setBranchTarget(null); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
+                  {step.config?.nextStepId ? <span className="workflow-connector-label">Go To → {workflow.steps.find((item) => String(item.id) === String(step.config.nextStepId))?.label || "Element"}</span> : null}
+                  <button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setAutoConnectSourceId(null); setGroupTargetId(null); setBranchTarget(null); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
                 </div>
                 </>}
               </div>
