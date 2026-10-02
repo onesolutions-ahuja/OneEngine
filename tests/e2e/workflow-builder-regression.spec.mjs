@@ -154,3 +154,44 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
 
   expect(failures, failures.join("\n")).toEqual([]);
 });
+
+
+test("email provider actions use metadata resources instead of hardcoded recipients", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("developer/workflow-builder");
+
+  const newWorkflow = page.getByRole("button", { name: /new workflow/i });
+  await expect(newWorkflow).toBeVisible({ timeout: 15_000 });
+  await newWorkflow.click();
+
+  // New workflows must not silently carry an executable sample recipient.
+  await page.getByRole("button", { name: "Add element after Start", exact: true }).click();
+  const search = page.getByLabel("Search flow elements");
+  await search.fill("Send Email - Brevo");
+  const brevo = page.getByRole("button", { name: "Send Email - Brevo", exact: true });
+  await expect(brevo).toBeEnabled();
+  await brevo.click();
+
+  await expect(page.getByText("Brevo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Recipient email *", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Resource", exact: true }).first()).toBeVisible();
+
+  // Content can be selected as metadata template or authored without code.
+  const contentSource = page.getByText("Content source", { exact: true }).locator("..").getByRole("combobox");
+  await expect(contentSource).toHaveValue("TEMPLATE");
+  await contentSource.selectOption("CUSTOM");
+  await expect(page.getByText("Subject *", { exact: true })).toBeVisible();
+  await expect(page.getByText("Message body *", { exact: true })).toBeVisible();
+
+  // Mailjet uses the same no-code contract, rather than a separate raw JSON editor.
+  await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
+  await page.getByRole("button", { name: "Add element after Start", exact: true }).click();
+  await search.fill("Send Email - Mailjet");
+  const mailjet = page.getByRole("button", { name: "Send Email - Mailjet", exact: true });
+  await expect(mailjet).toBeEnabled();
+  await mailjet.click();
+  await expect(page.getByText("Mailjet", { exact: true })).toBeVisible();
+  await expect(page.getByText("Recipient email *", { exact: true })).toBeVisible();
+
+  expect(failures, failures.join("\n")).toEqual([]);
+});
