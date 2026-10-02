@@ -189,14 +189,15 @@ function RecordTable({ result }) {
 function Card({ component, state, children }) {
   const type = component.type === "chart" ? (component.config?.chartType || "bar") : component.type;
   const spec = DASHBOARD_COMPONENTS.find((entry) => entry.key === type);
+  const isSmartClock = type === "clock_widget";
   return <section
     data-testid={`dashboard-component-${component.id}`}
     data-component-type={type}
     aria-label={component.title || spec?.label || "Dashboard component"}
-    className="flex flex-col min-h-0 h-full"
-    style={{ background: "var(--onepos-card-bg, var(--onepos-surface-raised))", border: "var(--onepos-card-border-width, 1px) solid var(--onepos-card-border, var(--onepos-border))", borderRadius: "var(--onepos-card-radius, 16px)", boxShadow: "var(--onepos-shadow-card, none)", padding: "var(--onepos-card-pad, 18px)" }}
+    className={`flex flex-col min-h-0 h-full ${isSmartClock ? "dashboard-card--smart-clock" : ""}`}
+    style={isSmartClock ? undefined : { background: "var(--onepos-card-bg, var(--onepos-surface-raised))", border: "var(--onepos-card-border-width, 1px) solid var(--onepos-card-border, var(--onepos-border))", borderRadius: "var(--onepos-card-radius, 16px)", boxShadow: "var(--onepos-shadow-card, none)", padding: "var(--onepos-card-pad, 18px)" }}
   >
-    {component.title ? <h2 className="text-sm font-semibold mb-3 truncate" style={{ color: "var(--onepos-text-heading)" }}>{component.title}</h2> : null}
+    {component.title && !isSmartClock ? <h2 className="text-sm font-semibold mb-3 truncate" style={{ color: "var(--onepos-text-heading)" }}>{component.title}</h2> : null}
     <div className="flex-1 min-h-0">
       <State state={state}>{children}</State>
     </div>
@@ -275,9 +276,9 @@ function UtilityClock({ config }) {
     time = now.toLocaleTimeString();
     date = now.toLocaleDateString();
   }
-  return <div className="h-full flex flex-col items-center justify-center text-center">
-    <div className="text-4xl font-semibold tabular-nums tracking-tight" style={{ color: "var(--onepos-text-heading)" }}>{time}</div>
-    {config?.showDate !== false ? <div className="mt-2 text-sm" style={{ color: "var(--onepos-text-secondary)" }}>{date}</div> : null}
+  return <div className="dashboard-smart-clock">
+    <div className="dashboard-smart-clock-time">{time}</div>
+    {config?.showDate !== false ? <div className="dashboard-smart-clock-date">{date}</div> : null}
   </div>;
 }
 
