@@ -1225,6 +1225,87 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
   return { status: "PENDING", duplicate: false, request };
 }
 
+async function executeProviderSpecificEmail({
+  packageKey,
+  actionKey,
+  db,
+  action,
+  req,
+  companyId,
+  stepRunId,
+  record,
+  previousRecord,
+  object,
+  workflowVariables,
+  connectorDrivers,
+  writeAudit,
+}) {
+  const company = companyId || req?.user?.companyId;
+  if (!company) return { status: "failed", provider: packageKey, error: "Company scope is required" };
+  const connection = await db(
+    `SELECT c.id
+       FROM integration_connections c
+       JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
+       JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=c.company_id
+        AND i.status='active' AND i.suspended_by_entitlement=FALSE
+      WHERE c.company_id=$1
+        AND c.connector_package_key=$2
+        AND c.enabled=TRUE
+        AND UPPER(COALESCE(c.connection_status,''))='CONNECTED'
+        AND COALESCE((c.last_test_result->>'success')::boolean,FALSE)=TRUE
+      ORDER BY c.fallback_order ASC,c.updated_at DESC
+      LIMIT 1`,
+    [company, packageKey]
+  );
+  const connectorInstanceId = connection.rows[0]?.id || null;
+  if (!connectorInstanceId) {
+    return {
+      status: "failed",
+      provider: packageKey,
+      error: `${packageKey === "brevo_connector" ? "Brevo" : "Mailjet"} connector is not configured, tested and enabled`,
+    };
+  }
+  const resolvedAction = resolveCommunicationWorkflowAction(
+    action,
+    record,
+    object,
+    workflowVariables,
+    req,
+    previousRecord
+  );
+  const execution = await executeConnectorWorkflowAction({
+    action: {
+      ...resolvedAction,
+      key: actionKey,
+      capability: "email.send",
+      connectorInstanceId,
+    },
+    payload: resolvedAction,
+    db,
+    companyId: company,
+    connectorDrivers,
+    req,
+    writeAudit,
+    actorUserId: req?.user?.id || null,
+  });
+  if (!execution.success) {
+    return {
+      status: "failed",
+      provider: packageKey,
+      error: execution.message || execution.code || "Email connector failed",
+      connectorInstanceId,
+    };
+  }
+  return {
+    status: "sent",
+    provider: packageKey,
+    connectorInstanceId,
+    providerMessageId: execution.result?.providerMessageId || null,
+    result: execution.result || null,
+    stepRunId: stepRunId || null,
+  };
+}
+
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,
   {
@@ -2898,6 +2979,38 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
+  },
+  {
+    key: "SEND_EMAIL_BREVO",
+    displayName: "Send Email - Brevo",
+    description: "Send an email through the tenant's installed Brevo connector.",
+    validation: (action) => {
+      if (!action?.recipient && !action?.to) throw new Error("Send Email - Brevo requires a recipient");
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    requiredEntitlement: "communications.email",
+    executor: async (context) => executeProviderSpecificEmail({
+      ...context,
+      packageKey: "brevo_connector",
+      actionKey: "SEND_EMAIL_BREVO",
+    }),
+  },
+  {
+    key: "SEND_EMAIL_MAILJET",
+    displayName: "Send Email - Mailjet",
+    description: "Send an email through the tenant's installed Mailjet connector.",
+    validation: (action) => {
+      if (!action?.recipient && !action?.to) throw new Error("Send Email - Mailjet requires a recipient");
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    requiredEntitlement: "communications.email",
+    executor: async (context) => executeProviderSpecificEmail({
+      ...context,
+      packageKey: "mailjet_connector",
+      actionKey: "SEND_EMAIL_MAILJET",
+    }),
   },
   {
     key: "EMAIL_ALERT",
