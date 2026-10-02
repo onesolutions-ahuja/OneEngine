@@ -527,6 +527,24 @@ function parseRecordFilters(query) {
   }
 }
 
+function parseRecordFilterModel(query) {
+  const raw = query?.filterModel ?? query?.filter_model;
+  if (raw === undefined || raw === "") return {};
+  if (typeof raw === "object" && !Array.isArray(raw)) return raw;
+  if (typeof raw !== "string") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeFilterValue(value) {
+  if (typeof value !== "string") return value;
+  try { return JSON.parse(value); } catch { return value; }
+}
+
 function parseCsv(text) {
   if (typeof text !== "string") return { headers: [], rows: [] };
   const lines = text.replace(/\r\n/g, "\n").split("\n").filter((line) => line.trim() !== "");
@@ -6567,6 +6585,8 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const fieldByApiName = new Map(readableFields.map((field) => [field.api_name, field]));
       const filters = parseRecordFilters(req.query);
       if (!filters) return res.status(400).json({ success: false, message: "filter must be a JSON object" });
+      const filterModel = parseRecordFilterModel(req.query);
+      if (!filterModel) return res.status(400).json({ success: false, message: "filterModel must be a JSON object" });
       const clauses = [];
       const params = [];
       if (object.company_scoped) {
@@ -6605,6 +6625,49 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
 
         clauses.push(values.length === 1 ? `${platformFieldSql(field, object)}=${placeholders[0]}` : `${platformFieldSql(field, object)} IN (${placeholders.join(",")})`);
       }
+      for (const [apiName, config] of Object.entries(filterModel)) {
+        const field = fieldByApiName.get(apiName);
+        if (!field) return res.status(400).json({ success: false, message: `Unknown or unavailable filter field "${apiName}"` });
+        if (!config || typeof config !== "object" || Array.isArray(config)) continue;
+        const columnSql = platformFieldSql(field, object);
+        const selectedValues = Array.isArray(config.values) ? config.values.map(decodeFilterValue) : [];
+        if (selectedValues.length) {
+          const placeholders = selectedValues.map((item) => {
+            params.push(item);
+            return `${params.length}`;
+          });
+          clauses.push(`${columnSql} IN (${placeholders.join(",")})`);
+        }
+        const operator = String(config.operator || "");
+        const supported = new Set(["equals","not_equals","contains","not_contains","starts_with","greater_than","less_than","greater_or_equal","less_or_equal","is_blank","is_not_blank"]);
+        if (!operator || !supported.has(operator)) continue;
+        if (operator === "is_blank") {
+          clauses.push(`(${columnSql} IS NULL OR CAST(${columnSql} AS TEXT)='')`);
+          continue;
+        }
+        if (operator === "is_not_blank") {
+          clauses.push(`(${columnSql} IS NOT NULL AND CAST(${columnSql} AS TEXT)<>'')`);
+          continue;
+        }
+        const rawValue = decodeFilterValue(config.value);
+        if (rawValue === undefined || rawValue === null || rawValue === "") continue;
+        params.push(operator === "contains" || operator === "not_contains"
+          ? `%${String(rawValue)}%`
+          : operator === "starts_with"
+            ? `${String(rawValue)}%`
+            : rawValue);
+        const placeholder = `${params.length}`;
+        if (operator === "equals") clauses.push(`${columnSql}=${placeholder}`);
+        else if (operator === "not_equals") clauses.push(`(${columnSql}<>${placeholder} OR ${columnSql} IS NULL)`);
+        else if (operator === "contains") clauses.push(`CAST(${columnSql} AS TEXT) ILIKE ${placeholder}`);
+        else if (operator === "not_contains") clauses.push(`(CAST(${columnSql} AS TEXT) NOT ILIKE ${placeholder} OR ${columnSql} IS NULL)`);
+        else if (operator === "starts_with") clauses.push(`CAST(${columnSql} AS TEXT) ILIKE ${placeholder}`);
+        else if (operator === "greater_than") clauses.push(`${columnSql}>${placeholder}`);
+        else if (operator === "less_than") clauses.push(`${columnSql}<${placeholder}`);
+        else if (operator === "greater_or_equal") clauses.push(`${columnSql}>=${placeholder}`);
+        else if (operator === "less_or_equal") clauses.push(`${columnSql}<=${placeholder}`);
+      }
+
       const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
       if (search) {
         if (!readableFields.length) return res.status(400).json({ success: false, message: "Search requires a stored readable field" });
@@ -6621,8 +6684,12 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const page = pages ? Math.min(boundedInteger(req.query.page, 1, pages), pages) : 1;
       const offset = (page - 1) * pageSize;
       const dataParams = [...params, pageSize, offset];
-      const sort = listView && listView.sort && typeof listView.sort === "object" ? normalizeListViewSort(listView.sort) : { field: null, direction: "asc" };
+      const savedSort = listView && listView.sort && typeof listView.sort === "object" ? normalizeListViewSort(listView.sort) : { field: null, direction: "asc" };
+      const requestedSortField = typeof req.query.sortField === "string" ? req.query.sortField : null;
+      const requestedSortDirection = String(req.query.sortDirection || "asc").toLowerCase() === "desc" ? "desc" : "asc";
+      const sort = requestedSortField ? { field: requestedSortField, direction: requestedSortDirection } : savedSort;
       const sortField = sort.field ? fieldByApiName.get(sort.field) : null;
+      if (requestedSortField && !sortField) return res.status(400).json({ success: false, message: "Sort field is not readable on this object" });
       const orderClause = sortField
         ? ` ORDER BY ${platformFieldSql(sortField, object)} ${sort.direction === "desc" ? "DESC" : "ASC"}`
         : ` ORDER BY id ASC`;
