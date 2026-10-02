@@ -213,7 +213,7 @@ export default function ObjectFieldRenderer({
           disabled={disabled}
           placeholder={placeholder}
           rows={6}
-          maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || undefined}
+          maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || (fieldType === "text_area" ? 255 : 32768)}
           onChange={(event) => handleChange(event.target.value)}
         />
       );
@@ -346,6 +346,7 @@ export default function ObjectFieldRenderer({
       control = (
         <input
           type="email"
+          maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || 80}
           value={value ?? ""}
           disabled={disabled}
           placeholder={
@@ -366,6 +367,7 @@ export default function ObjectFieldRenderer({
       control = (
         <input
           type="tel"
+          maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || 40}
           value={value ?? ""}
           disabled={disabled}
           placeholder={
@@ -386,6 +388,7 @@ export default function ObjectFieldRenderer({
       control = (
         <input
           type="url"
+          maxLength={Number(field?.config?.maxLength ?? field?.config?.max_length) || 255}
           value={value ?? ""}
           disabled={disabled}
           placeholder={
