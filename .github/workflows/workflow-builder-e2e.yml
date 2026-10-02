@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/workflow-builder-e2e.yml"
       - "tests/e2e/workflow-builder-regression.spec.mjs"
+      - "tests/e2e/helpers.mjs"
       - "src/pages/settings/Platform/WorkflowAdmin.jsx"
       - "src/pages/settings/Platform/WorkflowRunsAdmin.jsx"
       - "src/pages/settings/Platform/ApprovalProcessBuilder.jsx"
