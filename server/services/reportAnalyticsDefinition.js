@@ -128,6 +128,7 @@ export function normalizeAdvancedReportDefinition(definition = {}) {
     summaries: asArray(definition.summaries, 30).map((summary) => ({ aggregate: String(summary?.aggregate || "COUNT").toUpperCase(), field: String(summary?.field || ""), alias: summary?.alias ? String(summary.alias) : null, showGrandTotal: summary?.showGrandTotal !== false, showSubtotals: summary?.showSubtotals !== false })),
     buckets: asArray(definition.buckets, 20).map(normalizeBucket), rowFormulas: asArray(definition.rowFormulas, 20).map((formula, index) => normalizeFormula(formula, index, "row")),
     summaryFormulas: asArray(definition.summaryFormulas, 20).map((formula, index) => normalizeFormula(formula, index, "summary")),
+    crossBlockFormulas: format === "joined" ? asArray(definition.crossBlockFormulas, 20).map((formula, index) => normalizeFormula(formula, index, "cross_block")) : [],
     sort: asArray(definition.sort, 20).map((item) => ({ field: String(item?.field || ""), direction: String(item?.direction || "asc").toLowerCase() === "desc" ? "desc" : "asc", nulls: String(item?.nulls || "last").toLowerCase() === "first" ? "first" : "last" })),
     rowLimit: Math.min(Math.max(Number(definition.rowLimit || 1000), 1), 1000), showDetails: definition.showDetails !== false, showSubtotals: definition.showSubtotals !== false, showGrandTotal: definition.showGrandTotal !== false,
     presentation: { type: PRESENTATIONS.has(String(definition.presentation?.type)) ? String(definition.presentation.type) : "table", xField: definition.presentation?.xField ? String(definition.presentation.xField) : null, yField: definition.presentation?.yField ? String(definition.presentation.yField) : null, seriesField: definition.presentation?.seriesField ? String(definition.presentation.seriesField) : null, stacked: definition.presentation?.stacked === true, orientation: definition.presentation?.orientation === "horizontal" ? "horizontal" : "vertical", showLegend: definition.presentation?.showLegend !== false, showValues: definition.presentation?.showValues === true },
@@ -135,6 +136,7 @@ export function normalizeAdvancedReportDefinition(definition = {}) {
     blocks: format === "joined" ? asArray(definition.blocks, 5).map(normalizeBlock) : [], commonGroups: format === "joined" ? uniqueStrings(definition.commonGroups, 10) : [] };
   validateFilterLogic(normalized.filterLogic, normalized.filters.length);
   if (format === "matrix" && (!rowGroups.length || !columnGroups.length)) throw new Error("Matrix reports require at least one row group and one column group");
+  if (format === "matrix" && !normalized.summaries.length) throw new Error("Matrix reports require at least one summary value");
   if (format === "joined" && normalized.blocks.length < 2) throw new Error("Joined reports require at least two report blocks");
   for (const summary of normalized.summaries) if (!AGGREGATES.has(summary.aggregate)) throw new Error(`Invalid aggregate ${summary.aggregate}`);
   return normalized;

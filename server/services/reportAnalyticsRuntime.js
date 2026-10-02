@@ -196,8 +196,8 @@ function summarizeRows(rows, summaries) {
 
 export function shapeSummary(rows = [], definition = {}) {
   const groups = definition.rowGroups || definition.groupBy || [];
-  if (!groups.length) return { rows, totals: summarizeRows(rows, definition.summaries) };
-
+  const totals = definition.showGrandTotal === false ? {} : summarizeRows(rows, definition.summaries);
+  if (!groups.length) return { rows: definition.showDetails === false ? [] : rows, totals };
   const tree = new Map();
   for (const row of rows) {
     let cursor = tree;
@@ -209,20 +209,23 @@ export function shapeSummary(rows = [], definition = {}) {
       cursor = node.children;
     }
   }
-
   const flatten = (map, depth = 0, path = []) => {
     const output = [];
     for (const [value, node] of map.entries()) {
       const currentPath = [...path, value];
       output.push({
         __kind: "group", __depth: depth, __path: currentPath, __groupField: groups[depth], __groupValue: value, __count: node.rows.length,
-        ...summarizeRows(node.rows, definition.summaries),
+        [groups[depth]]: value,
+        ...(definition.showSubtotals === false ? {} : summarizeRows(node.rows, definition.summaries)),
       });
-      output.push(...flatten(node.children, depth + 1, currentPath));
+      if (node.children.size) output.push(...flatten(node.children, depth + 1, currentPath));
+      else if (definition.showDetails !== false) {
+        for (const row of node.rows) output.push({ ...row, __kind: "detail", __depth: depth + 1, __path: currentPath });
+      }
     }
     return output;
   };
-  return { rows: flatten(tree), totals: summarizeRows(rows, definition.summaries) };
+  return { rows: flatten(tree), totals };
 }
 
 export function shapeMatrix(rows = [], definition = {}) {
@@ -231,7 +234,7 @@ export function shapeMatrix(rows = [], definition = {}) {
   if (!rowGroups.length || !columnGroups.length) throw new Error("Matrix output requires row and column groups");
   const rowKey = (row) => rowGroups.map((field) => String(row[field] ?? "")).join(" | ");
   const columnKey = (row) => columnGroups.map((field) => String(row[field] ?? "")).join(" | ");
-  const columns = [...new Set(rows.map(columnKey))];
+  const columnValues = [...new Set(rows.map(columnKey))];
   const grouped = new Map();
   for (const row of rows) {
     const key = rowKey(row);
@@ -241,23 +244,31 @@ export function shapeMatrix(rows = [], definition = {}) {
   const matrixRows = [];
   for (const [, group] of grouped) {
     const output = { __rowGroup: group.label };
-    for (const column of columns) {
+    for (const column of columnValues) {
       const subset = group.rows.filter((row) => columnKey(row) === column);
       for (const summary of definition.summaries || []) {
-        const alias = summary.alias || `${String(summary.aggregate).toLowerCase()}_${summary.field}`;
-        output[`${column}::${alias}`] = aggregate(subset.map((row) => row[summary.field]), String(summary.aggregate).toUpperCase());
+        const alias = summary.alias || (String(summary.aggregate).toLowerCase() + "_" + summary.field);
+        output[column + "::" + alias] = aggregate(subset.map((row) => row[summary.field]), String(summary.aggregate).toUpperCase());
       }
     }
     matrixRows.push(output);
   }
-  return { rows: matrixRows, columns, rowGroups, columnGroups, totals: summarizeRows(rows, definition.summaries) };
+  const columns = [{ key: "__rowGroup", label: rowGroups.join(" / ") || "Row Group" }];
+  for (const column of columnValues) {
+    for (const summary of definition.summaries || []) {
+      const alias = summary.alias || (String(summary.aggregate).toLowerCase() + "_" + summary.field);
+      columns.push({ key: column + "::" + alias, label: column + " · " + alias });
+    }
+  }
+  return { rows: matrixRows, columns, rowGroups, columnGroups, totals: definition.showGrandTotal === false ? {} : summarizeRows(rows, definition.summaries) };
 }
 
-export function applySummaryFormulas(result, formulas = []) {
+export function applySummaryFormulas(result, formulas = [], applyToRows = true) {
   if (!formulas.length) return result;
   const totals = { ...(result.totals || {}) };
   for (const formula of formulas) totals[formula.key] = evaluateFormula(formula.expression, totals);
   const rows = (result.rows || []).map((row) => {
+    if (!applyToRows || row?.__kind === "detail") return row;
     const next = { ...row };
     for (const formula of formulas) next[formula.key] = evaluateFormula(formula.expression, next);
     return next;
@@ -324,13 +335,39 @@ export function buildDrillPayload(row, definition = {}) {
     filters: action.passFilters === false ? [] : [...(definition.filters || []), ...(action.mappings || []).map((mapping) => ({ field: mapping.target, operator: "equals", value: row[mapping.source] }))] };
 }
 
-export function runAnalytics(rows = [], definition = {}) {
+function reportOutputColumns(result, definition = {}, baseColumns = []) {
+  if (definition.format === "matrix") return result.columns || [];
+  const base = (baseColumns || []).map((column) => typeof column === "string" ? { key: column, label: column } : column);
+  const visibleBase = definition.format === "summary" && definition.showDetails === false
+    ? base.filter((column) => (definition.rowGroups || definition.groupBy || []).includes(column.key))
+    : base;
+  const byKey = new Map(visibleBase.map((column) => [column.key, column]));
+  const add = (key, label = key) => { if (key && !byKey.has(key)) byKey.set(key, { key, label }); };
+  for (const bucket of definition.buckets || []) add(bucket.key, bucket.label || bucket.key);
+  for (const formula of definition.rowFormulas || []) add(formula.key, formula.label || formula.key);
+  if (definition.format === "summary") {
+    for (const group of definition.rowGroups || definition.groupBy || []) add(group, group);
+    for (const summary of definition.summaries || []) {
+      const alias = summary.alias || (String(summary.aggregate).toLowerCase() + "_" + summary.field);
+      add(alias, alias);
+    }
+  }
+  for (const formula of definition.summaryFormulas || []) add(formula.key, formula.label || formula.key);
+  return [...byKey.values()];
+}
+
+export function runAnalytics(rows = [], definition = {}, baseColumns = []) {
   let nextRows = applyBuckets(rows, definition.buckets || []);
   nextRows = applyRowFormulas(nextRows, definition.rowFormulas || []);
   let result;
   if (definition.format === "matrix") result = shapeMatrix(nextRows, definition);
   else if (definition.format === "summary") result = shapeSummary(nextRows, definition);
-  else result = { rows: nextRows, totals: summarizeRows(nextRows, definition.summaries || []) };
-  result = applySummaryFormulas(result, definition.summaryFormulas || []);
-  return { ...result, rows: (result.rows || []).map((row) => ({ ...row, __conditionalFormatting: conditionalStyles(row, definition.conditionalFormatting || []), __drill: buildDrillPayload(row, definition) })) };
+  else result = { rows: nextRows, totals: definition.showGrandTotal === false ? {} : summarizeRows(nextRows, definition.summaries || []) };
+  result = applySummaryFormulas(result, definition.summaryFormulas || [], definition.format !== "tabular");
+  const rowsWithMetadata = (result.rows || []).map((row) => ({
+    ...row,
+    __conditionalFormatting: conditionalStyles(row, definition.conditionalFormatting || []),
+    __drill: buildDrillPayload(row, definition),
+  }));
+  return { ...result, columns: reportOutputColumns(result, definition, baseColumns), rows: rowsWithMetadata };
 }

@@ -30,7 +30,7 @@ export async function executeAnalyticsDefinition(definition, executeBase, { prev
         rowLimit: preview ? Math.min(Number(block.rowLimit || 100), 100) : Number(block.rowLimit || definition.rowLimit || 1000),
       };
       const raw = await executeBase(blockDefinition, { preview, blockIndex: index });
-      const shaped = runAnalytics(raw.rows || [], blockDefinition);
+      const shaped = runAnalytics(raw.rows || [], blockDefinition, raw.columns || []);
       blocks.push({
         key: block.key || `block_${index + 1}`,
         label: block.label || `Block ${index + 1}`,
@@ -45,7 +45,7 @@ export async function executeAnalyticsDefinition(definition, executeBase, { prev
     joined = applyCrossBlockFormulas(joined, definition.crossBlockFormulas || []);
     return {
       format: "joined",
-      columns: joined.rows.length ? Object.keys(joined.rows[0]).filter((key) => !key.startsWith("__")) : [],
+      columns: joined.rows.length ? [{ key: "__commonGroup", label: "Common Group" }, ...Object.keys(joined.rows[0]).filter((key) => !key.startsWith("__")).map((key) => ({ key, label: key }))] : [],
       rows: joined.rows,
       commonGroups: joined.commonGroups,
       blocks: blocks.map(({ key, label, columns, shaped }) => ({ key, label, columns, shaped })),
@@ -53,10 +53,9 @@ export async function executeAnalyticsDefinition(definition, executeBase, { prev
   }
 
   const raw = await executeBase(definition, { preview });
-  const shaped = runAnalytics(raw.rows || [], definition);
+  const shaped = runAnalytics(raw.rows || [], definition, raw.columns || []);
   return {
     format: definition.format || "tabular",
-    columns: raw.columns || [],
     ...shaped,
   };
 }

@@ -1093,28 +1093,38 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       for(const row of due.rows||[]){
         const subscription=normalizeSubscription(row.definition);
         if(!subscriptionIsDue(subscription,now))continue;
-        const actorResult=await db(
-          `SELECT u.id,u.company_id,u.role_id,u.username,u.full_name,
-                  COALESCE(array_agg(p.code) FILTER (WHERE p.code IS NOT NULL),'{}') AS permissions
-             FROM users u
-             LEFT JOIN role_permissions rp ON rp.role_id=u.role_id
-             LEFT JOIN permissions p ON p.id=rp.permission_id
-            WHERE u.id=$1 AND u.company_id=$2 AND u.active=TRUE
-            GROUP BY u.id,u.company_id,u.role_id,u.username,u.full_name`,
-          [row.user_id,row.company_id]
-        );
-        const actor=actorResult.rows[0];
-        if(!actor){await db("UPDATE report_subscriptions SET last_run_at=NOW(),last_status='FAILED' WHERE id=$1",[row.id]);continue;}
-        const syntheticReq=Object.create(req);
-        syntheticReq.user={...req.user,id:actor.id,companyId:actor.company_id,roleId:actor.role_id,username:actor.username,full_name:actor.full_name,permissions:Array.isArray(actor.permissions)?actor.permissions:req.user.permissions,storeId:req.user.storeId};
-        const data=await executeCustomDefinition(syntheticReq,row.report_definition||{});
-        const matched=subscriptionConditionMatches(subscription,data);
-        let event=null;
-        if(matched){
-          event=await publishPlatformEvent({db,companyId:row.company_id,eventType:"report.subscription_due",actorUserId:actor.id,idempotencyKey:`report-subscription:${row.id}:${now.toISOString().slice(0,16)}`,payload:{subscriptionId:row.id,reportId:row.report_id,userId:row.user_id,delivery:subscription.delivery,recipients:subscription.recipients,condition:subscription.condition,result:{format:data.format,columns:data.columns,totals:data.totals||{},rowCount:(data.rows||[]).length,rows:(data.rows||[]).slice(0,100)}}});
+        try {
+          const actorResult=await db(
+            "SELECT u.id,u.company_id,u.role_id,u.username,u.full_name FROM users u WHERE u.id=$1 AND u.company_id=$2 AND u.active=TRUE",
+            [row.user_id,row.company_id]
+          );
+          const actor=actorResult.rows[0];
+          if(!actor) throw new Error("Subscription owner is unavailable");
+          const storeResult=await db(
+            `SELECT us.store_id
+               FROM user_stores us
+               JOIN stores s ON s.id=us.store_id
+              WHERE us.user_id=$1 AND us.active=TRUE AND s.company_id=$2 AND s.active=TRUE
+              ORDER BY s.name,us.store_id LIMIT 1`,
+            [actor.id,actor.company_id]
+          );
+          const syntheticReq=Object.create(req);
+          syntheticReq.user={...req.user,id:actor.id,companyId:actor.company_id,roleId:actor.role_id,username:actor.username,full_name:actor.full_name,storeId:storeResult.rows?.[0]?.store_id||null};
+          if(hasSystemPermission && !(await hasSystemPermission(syntheticReq,"reports.custom.view"))) {
+            throw new Error("Subscription owner no longer has reports.custom.view");
+          }
+          const data=await executeCustomDefinition(syntheticReq,row.report_definition||{});
+          const matched=subscriptionConditionMatches(subscription,data);
+          let event=null;
+          if(matched){
+            event=await publishPlatformEvent({db,companyId:row.company_id,eventType:"report.subscription_due",actorUserId:actor.id,idempotencyKey:`report-subscription:${row.id}:${now.toISOString().slice(0,16)}`,payload:{subscriptionId:row.id,reportId:row.report_id,userId:row.user_id,delivery:subscription.delivery,recipients:subscription.recipients,condition:subscription.condition,result:{format:data.format,columns:data.columns,totals:data.totals||{},rowCount:(data.rows||[]).length,rows:(data.rows||[]).slice(0,100)}}});
+          }
+          await db("UPDATE report_subscriptions SET last_run_at=NOW(),last_delivery_at=CASE WHEN $2 THEN NOW() ELSE last_delivery_at END,last_status=$3 WHERE id=$1",[row.id,matched,matched?"QUEUED":"SKIPPED"]);
+          executed.push({id:row.id,reportId:row.report_id,userId:row.user_id,matched,eventId:event?.event?.id||null,status:matched?"QUEUED":"SKIPPED"});
+        } catch(subscriptionError) {
+          await db("UPDATE report_subscriptions SET last_run_at=NOW(),last_status='FAILED' WHERE id=$1",[row.id]);
+          executed.push({id:row.id,reportId:row.report_id,userId:row.user_id,matched:false,status:"FAILED",error:subscriptionError?.message||"Subscription execution failed"});
         }
-        await db("UPDATE report_subscriptions SET last_run_at=NOW(),last_delivery_at=CASE WHEN $2 THEN NOW() ELSE last_delivery_at END,last_status=$3 WHERE id=$1",[row.id,matched,matched?"QUEUED":"SKIPPED"]);
-        executed.push({id:row.id,reportId:row.report_id,userId:row.user_id,matched,eventId:event?.event?.id||null});
       }
       res.json({success:true,data:executed});
     } catch(error){res.status(500).json({success:false,message:error.message||"Unable to run due subscriptions"});}
