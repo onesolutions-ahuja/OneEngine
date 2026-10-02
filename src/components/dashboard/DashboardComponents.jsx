@@ -9,6 +9,13 @@ import { useEffect, useState } from "react";
  */
 import { DASHBOARD_COMPONENTS } from "./platformDashboard.js";
 import { formatDateValue } from "../../utils/dateFormat.js";
+import {
+  FunnelChart,
+  GaugeChart,
+  LineChart,
+  MultiSeriesBarChart,
+  ScatterChart,
+} from "./AdvancedDashboardCharts.jsx";
 
 /* Raw timestamps arrive as "2026-09-25T23:00:00.000Z" strings; anything in
    this shape is presented through the shared date formatter instead. */
@@ -44,6 +51,29 @@ export function seriesFrom(config, result) {
   return rows
     .map((row) => ({ label: labelField ? String(displayCellValue(row[labelField]) ?? "—") : "Total", value: Number(row[valueField]) || 0 }))
     .filter((point) => Number.isFinite(point.value));
+}
+
+export function multiSeriesFrom(config, result) {
+  const rows = Array.isArray(result?.data?.rows) ? result.data.rows : [];
+  const categoryField = config?.labelField;
+  const seriesField = config?.seriesField;
+  const valueField = config?.valueField;
+  if (!categoryField || !seriesField || !valueField) return { categories: [], series: [] };
+  const categories = [...new Set(rows.map((row) => String(displayCellValue(row[categoryField]) ?? "—")))];
+  const keys = [...new Set(rows.map((row) => String(displayCellValue(row[seriesField]) ?? "—")))];
+  return {
+    categories,
+    series: keys.map((key) => ({
+      key,
+      label: key,
+      points: categories.map((category) => {
+        const value = rows
+          .filter((row) => String(displayCellValue(row[categoryField]) ?? "—") === category && String(displayCellValue(row[seriesField]) ?? "—") === key)
+          .reduce((sum, row) => sum + (Number(row[valueField]) || 0), 0);
+        return { label: category, value };
+      }),
+    })),
+  };
 }
 
 function Empty({ children }) {
@@ -306,11 +336,25 @@ export function renderDashboardComponent(component, result, state) {
   }
   const points = seriesFrom(config, result);
   const type = component.type === "chart" ? (config.chartType || "bar") : component.type;
+  const multi = multiSeriesFrom(config, result);
+  const drill = (point) => {
+    const action = config.drillAction || result?.data?.drillAction;
+    if (!action || typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("oneengine:analytics-drill", {
+      detail: { drill: action, point, componentId: component.id },
+    }));
+  };
   const body = {
     kpi: <MetricTile points={points} config={config} />,
     pie: <PieChart points={points} config={config} />,
     donut: <PieChart points={points} config={config} donut />,
-    bar: <BarChart points={points} config={config} />,
+    bar: config.seriesField
+      ? <MultiSeriesBarChart series={multi.series} categories={multi.categories} config={config} formatValue={formatValue} onPointClick={drill} />
+      : <BarChart points={points} config={config} />,
+    line: <LineChart points={points} config={config} formatValue={formatValue} onPointClick={drill} />,
+    gauge: <GaugeChart points={points} config={config} formatValue={formatValue} onPointClick={drill} />,
+    funnel: <FunnelChart points={points} config={config} formatValue={formatValue} onPointClick={drill} />,
+    scatter: <ScatterChart points={points} config={config} formatValue={formatValue} onPointClick={drill} />,
     table: <RecordTable result={result} />,
   }[type] || <Empty />;
   return <Card component={component} state={state}>{body}</Card>;

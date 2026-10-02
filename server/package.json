@@ -20,7 +20,8 @@
     "pg": "^8.23.0",
     "@simplewebauthn/server": "^13.2.2",
     "@node-saml/node-saml": "^5.1.0",
-    "bcrypt": "^6.0.0"
+    "bcrypt": "^6.0.0",
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {}
 }

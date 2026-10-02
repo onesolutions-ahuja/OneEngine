@@ -7,6 +7,7 @@ import DashboardComponentProperties from "../../components/dashboard/DashboardCo
 // Format, Size, Maximum categories, Width and Height controls.
 import { DASHBOARD_SALES_FIELDS, applyLayout } from "../../components/dashboard/platformDashboard.js";
 import { componentIcon, registryForBuilder, useComponentRegistry } from "../settings/Platform/componentRegistry.js";
+import { DashboardFilterEditor, DashboardRunAsEditor, ResponsiveLayoutMode, responsiveComponents } from "../../components/dashboard/DashboardManagementControls.jsx";
 
 /*
  * The EXISTING Dashboard Builder, extended (not replaced). It offers the same
@@ -15,7 +16,7 @@ import { componentIcon, registryForBuilder, useComponentRegistry } from "../sett
  * conditions, formatting and size. Everything it writes is dashboard metadata;
  * the Dashboard page renders that metadata through the same runtime.
  */
-const empty = { name: "", description: "", components: [], filters: [] };
+const empty = { name: "", description: "", components: [], filters: [], global_filters: [], responsive_layouts: { desktop: [], tablet: [], mobile: [] }, run_as_mode: "VIEWER", run_as_user_id: null };
 const AGGREGATE_FIELDS = DASHBOARD_SALES_FIELDS.filter((f) => f.aggregate);
 const CARD = { background: "var(--onepos-card-bg, var(--onepos-surface-raised))", border: "1px solid var(--onepos-border)", borderRadius: "var(--onepos-card-radius, 16px)" };
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
@@ -83,6 +84,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   const [defaultId, setDefaultId] = useState("");
   const [defaultPriority, setDefaultPriority] = useState("100");
   const [permissions, setPermissions] = useState({ codes: [] });
+  const [layoutMode, setLayoutMode] = useState("desktop");
 
   const selectedIndex = Math.max(0, (current?.components || []).findIndex((component) => component.id === selectedId));
   const selectedComponent = (current?.components || [])[selectedIndex] || null;
@@ -114,6 +116,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   const canAssignDefaults = permissions.codes.includes("dashboard.assign_default");
   const canEdit = permissions.codes.includes("dashboard.edit");
   const canCreate = permissions.codes.includes("dashboard.create");
+  const canManage = permissions.codes.includes("dashboard.manage");
 
   const persistAccess = async (access) => {
     const response = await apiRequest(`/api/dashboards/${current.id}/access`, { method: "PUT", body: JSON.stringify({ access }) });
@@ -189,7 +192,12 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   };
 
 
-  const addComponent = (type) => setCurrent((value) => ({ ...(value || empty), components: [...(value?.components || []), blankComponent(type)] }));
+  const addComponent = (registryKey) => {
+    const spec = dashboardPalette.find((item) => item.key === registryKey);
+    const type = spec?.rendererKey || registryKey;
+    const component = { ...blankComponent(type), registryKey };
+    setCurrent((value) => ({ ...(value || empty), components: [...(value?.components || []), component] }));
+  };
   const updateComponent = (index, next) => setCurrent((value) => {
     const components = [...(value?.components || [])];
     components[index] = next;
@@ -267,11 +275,26 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
         <div className="p-4 space-y-4" style={CARD} data-testid="dashboard-security-panel">
           <div>
             <div className="font-semibold text-sm">DATA VISIBILITY</div>
-            <label className="mt-2 flex items-center gap-2 text-sm">
-              <input type="checkbox" checked readOnly aria-label="Run as Dashboard Viewer" />
-              Run as Dashboard Viewer
-            </label>
+            <div className="mt-2">
+              <DashboardRunAsEditor
+                mode={current.run_as_mode || "VIEWER"}
+                userId={current.run_as_user_id || ""}
+                users={principals?.users || []}
+                onChange={({ mode, userId }) => {
+                  if (mode === "FIXED_USER" && !canManage) {
+                    setError("dashboard.manage permission is required to configure a fixed run-as user");
+                    return;
+                  }
+                  setCurrent({ ...current, run_as_mode: mode, run_as_user_id: userId || null });
+                }}
+              />
+            </div>
           </div>
+          <DashboardFilterEditor
+            filters={current.global_filters || []}
+            components={current.components || []}
+            onChange={(global_filters) => setCurrent({ ...current, global_filters })}
+          />
           {current.id && principals && canShare ? <>
             <section data-testid="dashboard-sharing-panel">
               <h2 className="font-semibold text-sm">ACCESS &amp; SHARING</h2>
@@ -327,17 +350,32 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
             renders through <DashboardGrid>, so what is arranged here is exactly
             what the runtime renders. */}
         <div className="p-4" style={CARD} data-testid="dashboard-layout-panel">
-          <div className="font-semibold text-sm mb-1">Layout</div>
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <div className="font-semibold text-sm">Layout</div>
+            <ResponsiveLayoutMode value={layoutMode} onChange={setLayoutMode} />
+          </div>
           <p className="text-xs mb-3" style={{ color: "var(--onepos-text-muted)" }}>
-            {preview ? "Live preview rendered by the shared dashboard runtime." : "Drag components to reorder and resize them. Positions and sizes are saved with the dashboard."}
+            {preview ? "Live preview rendered by the shared dashboard runtime." : `Editing ${layoutMode} layout. Drag components to reorder and resize them.`}
           </p>
           <DashboardLayoutCanvas
-            components={applyLayout(current.components || [])}
+            components={applyLayout(layoutMode === "desktop"
+              ? current.components || []
+              : responsiveComponents(current.components || [], current.responsive_layouts || {}, layoutMode))}
             results={preview ? runtime : []}
             loading={false}
             selectedId={selectedId}
             onSelect={(id) => { setSelectedId(id); setInspectorTab("properties"); }}
-            onChange={(components) => setCurrent({ ...current, components })}
+            onChange={(components) => {
+              if (layoutMode === "desktop") {
+                setCurrent({ ...current, components });
+                return;
+              }
+              const responsive_layouts = {
+                ...(current.responsive_layouts || { desktop: [], tablet: [], mobile: [] }),
+                [layoutMode]: components.map((component) => ({ id: component.id, ...component.layout })),
+              };
+              setCurrent({ ...current, responsive_layouts });
+            }}
           />
           {!(current.components || []).length ? <p className="text-sm mt-3" style={{ color: "var(--onepos-text-muted)" }}>No components yet — add a Metric, Pie, Donut or Bar.</p> : null}
         </div>

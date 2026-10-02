@@ -70,6 +70,72 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
            VALUES ('company.scope.all','Company-wide data scope','View company-wide data across stores when the feature permission also allows access')
            ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description`
         );
+    CREATE TABLE IF NOT EXISTS custom_report_types (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type_key VARCHAR(100) NOT NULL,
+      label VARCHAR(150) NOT NULL,
+      description VARCHAR(500),
+      primary_object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE RESTRICT,
+      definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(company_id, type_key)
+    );
+    ALTER TABLE custom_reports ADD COLUMN IF NOT EXISTS report_type_id UUID REFERENCES custom_report_types(id) ON DELETE SET NULL;
+    CREATE TABLE IF NOT EXISTS dashboard_user_state (
+      dashboard_id UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      filter_values JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (dashboard_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS report_folders (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name VARCHAR(150) NOT NULL,
+      description VARCHAR(500),
+      visibility VARCHAR(20) NOT NULL DEFAULT 'PRIVATE' CHECK (visibility IN ('PRIVATE','SHARED')),
+      access JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(company_id, name)
+    );
+    ALTER TABLE custom_reports ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES report_folders(id) ON DELETE SET NULL;
+    CREATE TABLE IF NOT EXISTS report_user_preferences (
+      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      report_id UUID NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
+      favourite BOOLEAN NOT NULL DEFAULT FALSE,
+      last_viewed_at TIMESTAMPTZ,
+      view_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, report_id)
+    );
+    CREATE TABLE IF NOT EXISTS report_subscriptions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      report_id UUID NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      last_run_at TIMESTAMPTZ,
+      last_delivery_at TIMESTAMPTZ,
+      last_status VARCHAR(20),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS report_snapshots (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      report_id UUID NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
+      captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      period_key VARCHAR(80),
+      summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+      row_count INTEGER NOT NULL DEFAULT 0
+    );
         await client.query(
           `INSERT INTO role_permissions (role_id,permission_id)
            SELECT DISTINCT r.id,p_scope.id
@@ -1478,7 +1544,10 @@ async function initializeLegacyDatabase(pool) {
       UNIQUE(company_id, api_key)
     );
     ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS api_key VARCHAR(100) NOT NULL DEFAULT 'dashboard';
+    ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS global_filters JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS responsive_layouts JSONB NOT NULL DEFAULT '{"desktop":[],"tablet":[],"mobile":[]}'::jsonb;
     ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS run_as_mode VARCHAR(20) NOT NULL DEFAULT 'VIEWER';
+    ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS run_as_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
     ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS access JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS default_assignments JSONB NOT NULL DEFAULT '[]'::jsonb;
     CREATE INDEX IF NOT EXISTS idx_dashboards_company_api_key ON dashboards(company_id,api_key);

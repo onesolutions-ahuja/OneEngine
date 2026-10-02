@@ -5,6 +5,7 @@ import {
   componentByKey,
   componentCategoryLabel,
   componentIcon,
+  createRegisteredComponent,
   normalizedRegistry,
   useComponentRegistry,
 } from "./componentRegistry.js";
@@ -252,6 +253,7 @@ export default function CustomPageBuilder({ onMessage, onError }) {
 
   const newNodeFor = (componentKey) => {
     const meta = componentMeta(componentKey);
+    if (meta.runtimeKind === "analytics") return createRegisteredComponent(meta, "PAGE");
     if (componentKey === "container") return { id: uid("container"), componentKey, label: meta.label, size: "medium", columns: 2, spacing: 3, children: [] };
     if (componentKey === "multi_container") {
       return {

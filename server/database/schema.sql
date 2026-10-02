@@ -420,6 +420,76 @@ CREATE TABLE IF NOT EXISTS custom_report_users (
 CREATE INDEX IF NOT EXISTS idx_custom_report_users_user
 ON custom_report_users(user_id, report_id);
 
+CREATE TABLE IF NOT EXISTS custom_report_types (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type_key VARCHAR(100) NOT NULL,
+    label VARCHAR(150) NOT NULL,
+    description VARCHAR(500),
+    primary_object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE RESTRICT,
+    definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(company_id, type_key)
+);
+CREATE INDEX IF NOT EXISTS idx_custom_report_types_company_active ON custom_report_types(company_id, active, lower(label));
+ALTER TABLE custom_reports ADD COLUMN IF NOT EXISTS report_type_id UUID REFERENCES custom_report_types(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS report_folders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(150) NOT NULL,
+    description VARCHAR(500),
+    visibility VARCHAR(20) NOT NULL DEFAULT 'PRIVATE' CHECK (visibility IN ('PRIVATE','SHARED')),
+    access JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(company_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_report_folders_company ON report_folders(company_id, lower(name));
+ALTER TABLE custom_reports ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES report_folders(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS report_user_preferences (
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    report_id UUID NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
+    favourite BOOLEAN NOT NULL DEFAULT FALSE,
+    last_viewed_at TIMESTAMPTZ,
+    view_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, report_id)
+);
+CREATE INDEX IF NOT EXISTS idx_report_user_preferences_recent ON report_user_preferences(user_id, last_viewed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_report_user_preferences_favourite ON report_user_preferences(user_id, favourite, last_viewed_at DESC);
+
+CREATE TABLE IF NOT EXISTS report_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    report_id UUID NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_run_at TIMESTAMPTZ,
+    last_delivery_at TIMESTAMPTZ,
+    last_status VARCHAR(20),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_report_subscriptions_due ON report_subscriptions(company_id, active, updated_at);
+
+CREATE TABLE IF NOT EXISTS report_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    report_id UUID NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
+    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    period_key VARCHAR(80),
+    summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+    row_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_report_snapshots_report_time ON report_snapshots(report_id, captured_at DESC);
+
 CREATE TABLE IF NOT EXISTS dashboards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -429,7 +499,10 @@ CREATE TABLE IF NOT EXISTS dashboards (
     description VARCHAR(500),
     components JSONB NOT NULL DEFAULT '[]'::jsonb,
     filters JSONB NOT NULL DEFAULT '[]'::jsonb,
+    global_filters JSONB NOT NULL DEFAULT '[]'::jsonb,
+    responsive_layouts JSONB NOT NULL DEFAULT '{"desktop":[],"tablet":[],"mobile":[]}'::jsonb,
     run_as_mode VARCHAR(20) NOT NULL DEFAULT 'VIEWER' CHECK (run_as_mode IN ('VIEWER','FIXED_USER')),
+    run_as_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     access JSONB NOT NULL DEFAULT '[]'::jsonb,
     default_assignments JSONB NOT NULL DEFAULT '[]'::jsonb,
     archived_at TIMESTAMPTZ,
@@ -447,6 +520,14 @@ CREATE INDEX IF NOT EXISTS idx_dashboards_company_name ON dashboards(company_id,
 CREATE TABLE IF NOT EXISTS dashboard_users (
     dashboard_id UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (dashboard_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS dashboard_user_state (
+    dashboard_id UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    filter_values JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (dashboard_id, user_id)
 );
 

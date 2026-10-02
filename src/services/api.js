@@ -386,6 +386,46 @@ export async function apiRequest(path, options = {}) {
   throw lastError || new Error('Request failed')
 }
 
+export async function apiDownload(path, options = {}) {
+  const method = String(options.method || "GET").toUpperCase()
+  const capability = resolveTrustedCapability(path, method)
+  if (isPrivilegedMutation(path, method) && !capability) {
+    throw Object.assign(new Error("This operation is not registered in OneEngine Trusted Runtime"), {
+      status: 403,
+      code: "UNREGISTERED_CAPABILITY",
+    })
+  }
+  const kioskRuntime = typeof window !== "undefined" && /\/kiosk-runtime\/?$/.test(window.location.pathname)
+  const kioskDisplay = typeof window !== "undefined" && /\/kiosk-display\/?$/.test(window.location.pathname)
+  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || "") : ""
+  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || "") : ""
+  const token = kioskToken || displayToken || sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token")
+  const response = await fetchWithTimeout(apiUrl(path), {
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...trustedRuntimeHeaders(capability),
+      ...contextHeaders(path, options.headers),
+    },
+  }, options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS)
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`
+    try {
+      const payload = await response.json()
+      if (payload?.message) message = payload.message
+    } catch {}
+    throw new Error(message)
+  }
+  const disposition = response.headers.get("content-disposition") || ""
+  const filename = disposition.match(/filename="([^"]+)"/i)?.[1] || "report-export"
+  return {
+    blob: await response.blob(),
+    filename,
+    contentType: response.headers.get("content-type") || "application/octet-stream",
+  }
+}
+
+
 export async function login(username, password) {
   /*
    * A fresh password login must not inherit an old bearer token from a

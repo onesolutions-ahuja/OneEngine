@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
+import renderDashboardComponent from "../dashboard/DashboardComponents.jsx";
 import {
   SECTION_WIDTHS,
   multiContainerColumns,
@@ -599,8 +600,30 @@ function ProcessPathView({ node, builderMode, data }) {
   );
 }
 
+function AnalyticsNodeView({ node }) {
+  const component = useMemo(() => ({
+    id: node.id,
+    registryKey: node.componentKey,
+    type: node.rendererKey || node.componentKey,
+    title: node.title || node.label || "",
+    config: node.config || {},
+    layout: node.layout || { w: 6, h: 4 },
+  }), [node]);
+  const [state,setState]=useState({loading:true,result:null,error:""});
+  useEffect(()=>{
+    let live=true;
+    setState({loading:true,result:null,error:""});
+    apiRequest("/api/dashboards/run",{method:"POST",body:JSON.stringify({name:"Embedded analytics",description:"",components:[component],filters:[],global_filters:[],run_as_mode:"VIEWER"})})
+      .then((response)=>{if(!live)return;const result=response?.success?response.data?.components?.find((item)=>String(item.id)===String(component.id)):null;setState({loading:false,result,error:response?.success?"":response?.message||"Unable to load analytics component"});})
+      .catch((error)=>{if(live)setState({loading:false,result:null,error:error?.message||"Unable to load analytics component"});});
+    return()=>{live=false;};
+  },[component]);
+  return renderDashboardComponent(component,state.result,state.loading?"loading":state.error?"error":"ready");
+}
+
 function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
+  if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
   if (key === "container") {

@@ -90,6 +90,17 @@ export const FALLBACK_COMPONENT_REGISTRY = [
   { key: "file_viewer", label: "File Viewer", category: "record", kind: "record", bindable: true, recordBound: true },
   { key: "signature", label: "Signature", category: "record", kind: "record", bindable: true, recordBound: true },
   { key: "button", label: "Custom Button", category: "action", kind: "action", reserved: true },
+  { key: "kpi", label: "Metric / KPI", category: "dashboard", kind: "metric", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "kpi", defaults: { title: "Metric", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, format: "number", size: "medium", dateRange: "this_month" }, layout: { w: 3, h: 2 } } },
+  { key: "bar_chart", label: "Bar Chart", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "bar", defaults: { title: "Bar Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, seriesField: null, stacked: false, limit: 12, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
+  { key: "line_chart", label: "Line Chart", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "line", defaults: { title: "Line Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, showMarkers: true, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
+  { key: "pie_chart", label: "Pie Chart", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "pie", defaults: { title: "Pie Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, maxCategories: 8, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
+  { key: "donut_chart", label: "Donut Chart", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "donut", defaults: { title: "Donut Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, maxCategories: 8, showTotal: true, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
+  { key: "gauge_chart", label: "Gauge", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "gauge", defaults: { title: "Gauge", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, targetMode: "fixed", targetValue: 100, dateRange: "this_month" }, layout: { w: 4, h: 4 } } },
+  { key: "funnel_chart", label: "Funnel", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "funnel", defaults: { title: "Funnel", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, limit: 8, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
+  { key: "scatter_chart", label: "Scatter", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "scatter", defaults: { title: "Scatter", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, xField: null, valueField: null, labelField: null, limit: 60, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
+  { key: "analytics_table", label: "Analytics Table", category: "dashboard", kind: "record", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "table", defaults: { title: "Table", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, rowLimit: 50 }, layout: { w: 12, h: 5 } } },
+  { key: "dashboard_text", label: "Dashboard Text", category: "dashboard", kind: "content", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "text", defaults: { title: "Text", config: { content: "" }, layout: { w: 6, h: 3 } } },
+
 ];
 
 /* ---------------------------------------------------------------------------
@@ -214,6 +225,8 @@ export function normalizeComponent(component) {
     supportsPageContext: source.supportsPageContext === true || source.supports_page_context === true || source.page === true || source.supportsPageContext === "true",
     supportsRecordContext: source.supportsRecordContext === true || source.supports_record_context === true || source.recordBound === true || source.supportsRecordContext === "true",
     rendererKey: source.rendererKey || source.renderer_key || key,
+    runtimeKind: source.runtimeKind || source.runtime_kind || null,
+    defaults: source.defaults && typeof source.defaults === "object" ? source.defaults : {},
     permissions: normalizeArray(source.permissions || source.requiredPermissions || source.required_permissions),
     packageOwnership: source.packageOwnership || source.package_ownership || "shared",
     configurable: Array.isArray(source.configurable) ? source.configurable : [],
@@ -293,4 +306,34 @@ export function componentKeyForFieldType(fieldType, registry = FALLBACK_COMPONEN
   };
   const key = aliases[type] || "text_input";
   return registry.some((component) => component.key === key) ? key : "text_input";
+}
+
+export function createRegisteredComponent(component, builder = "PAGE") {
+  const spec = normalizeComponent(component);
+  const defaults = typeof structuredClone === "function"
+    ? structuredClone(spec.defaults || {})
+    : JSON.parse(JSON.stringify(spec.defaults || {}));
+  const id = typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `component_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  if (String(builder).toUpperCase() === "DASHBOARD") {
+    return {
+      id,
+      registryKey: spec.key,
+      type: spec.rendererKey || spec.key,
+      title: defaults.title || spec.label,
+      config: defaults.config || {},
+      layout: { x: 0, y: 0, w: 6, h: 4, ...(defaults.layout || {}) },
+    };
+  }
+  return {
+    id,
+    componentKey: spec.key,
+    rendererKey: spec.rendererKey || spec.key,
+    runtimeKind: spec.runtimeKind || null,
+    label: spec.label,
+    title: defaults.title || spec.label,
+    config: defaults.config || {},
+    layout: defaults.layout || {},
+  };
 }

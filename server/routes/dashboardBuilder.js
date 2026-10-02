@@ -6,6 +6,8 @@ import { buildPlatformObjectQuery } from "../services/reportableSources.js";
 
 import { toSafeApiName } from "../services/platformMetadata.js";
 import { DATE_RANGES, DEFAULT_DASHBOARD_DEFINITION, mergeDashboardFilters, normalizeDashboardIdentity, validateDashboardDefinition } from "../services/dashboardBuilder.js";
+import { applyDashboardGlobalFilters } from "../services/analyticsManagement.js";
+import { resolveDashboardExecutionUser } from "../services/analyticsSecurity.js";
 import { dashboardAccessAtLeast, dashboardPrincipalExists, loadDashboardPrincipalContext, resolveDashboardAccess, resolveDefaultDashboard } from "../services/dashboardSecurity.js";
 import { loadPlatformReportContext } from "../services/platformReportSecurity.js";
 
@@ -179,6 +181,10 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
   }
 
 
+  function componentsWithGlobalFilters(components, definitions, values) {
+    return (components || []).map((component) => applyDashboardGlobalFilters(component, definitions || [], values || {}));
+  }
+
   async function runComponent(req, component, dashboardFilters) {
 
     if (component.type === "text") return { id: component.id, type: component.type, data: { content: component.config.content } };
@@ -305,7 +311,10 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
         return res.json({ success: true, data: validateDashboardDefinition({
           name: resolved.dashboard.name, description: resolved.dashboard.description,
           components: resolved.dashboard.components, filters: resolved.dashboard.filters,
+          global_filters: resolved.dashboard.global_filters || [],
+          responsive_layouts: resolved.dashboard.responsive_layouts || {},
           run_as_mode: resolved.dashboard.run_as_mode,
+          run_as_user_id: resolved.dashboard.run_as_user_id || null,
         }) });
       }
       res.json({ success: true, data: validateDashboardDefinition(structuredClone(DEFAULT_DASHBOARD_DEFINITION)) });
@@ -322,10 +331,10 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
 
     try {
 
-      const definition = validateDashboardDefinition(req.body || {});
-
-      const results = await Promise.all((definition.components || []).map((component) => runComponent(req, component, definition.filters || [])));
-
+      const definition = validateDashboardDefinition({ ...(req.body || {}), run_as_mode: "VIEWER", run_as_user_id: null });
+      const globalValues = req.body?.globalFilterValues && typeof req.body.globalFilterValues === "object" ? req.body.globalFilterValues : {};
+      const components = componentsWithGlobalFilters(definition.components, definition.global_filters, globalValues);
+      const results = await Promise.all(components.map((component) => runComponent(req, component, definition.filters || [])));
       res.json({ success: true, data: { definition, components: results } });
 
     } catch (error) { res.status(400).json({ success: false, message: error.message || "Unable to run this dashboard" }); }
@@ -338,6 +347,28 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
 
     catch (error) { res.status(500).json({ success: false, message: "Unable to load dashboards" }); }
 
+  });
+
+  router.get("/dashboards/:id/state", authenticate, viewPermission, async (req, res) => {
+    try {
+      const found = await dashboard(req, req.params.id, "VIEW");
+      if (!found) return res.status(404).json({ success: false, message: "Dashboard not found" });
+      const result = await db("SELECT filter_values,updated_at FROM dashboard_user_state WHERE dashboard_id=$1 AND user_id=$2", [req.params.id,req.user.id]);
+      res.json({ success: true, data: result.rows[0] || { filter_values: {} } });
+    } catch (error) { res.status(500).json({ success:false,message:"Unable to load dashboard state" }); }
+  });
+
+  router.put("/dashboards/:id/state", authenticate, viewPermission, async (req, res) => {
+    try {
+      const found = await dashboard(req, req.params.id, "VIEW");
+      if (!found) return res.status(404).json({ success: false, message: "Dashboard not found" });
+      const filterValues = req.body?.filterValues && typeof req.body.filterValues === "object" ? req.body.filterValues : {};
+      await db(`INSERT INTO dashboard_user_state(dashboard_id,user_id,filter_values,updated_at)
+        VALUES($1,$2,$3::jsonb,NOW())
+        ON CONFLICT(dashboard_id,user_id) DO UPDATE SET filter_values=EXCLUDED.filter_values,updated_at=NOW()`,
+        [req.params.id,req.user.id,JSON.stringify(filterValues)]);
+      res.json({ success:true,data:{ filter_values: filterValues } });
+    } catch (error) { res.status(400).json({ success:false,message:"Unable to save dashboard state" }); }
   });
 
   router.get("/dashboards/:id", authenticate, viewPermission, async (req, res) => {
@@ -363,7 +394,7 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
 
     try {
 
-      const value = validateDashboardDefinition({ ...req.body, access: [], default_assignments: [], run_as_mode: "VIEWER" });
+      const value = validateDashboardDefinition({ ...req.body, access: [], default_assignments: [] });
       const identity = normalizeDashboardIdentity(value, value.name);
       const duplicate = await db("SELECT id FROM dashboards WHERE company_id=$1 AND archived_at IS NULL AND lower(name)=lower($2) LIMIT 1", [req.user.companyId, value.name]);
 
@@ -372,11 +403,12 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
       const keyConflict = await db("SELECT id FROM dashboards WHERE company_id=$1 AND archived_at IS NULL AND lower(api_key)=lower($2) LIMIT 1", [req.user.companyId, identity.apiKey]);
       if (keyConflict.rows[0]) return res.status(409).json({ success: false, message: "A dashboard with this API key already exists." });
 
-      const result = await db(`INSERT INTO dashboards(company_id,created_by,name,description,api_key,components,filters,run_as_mode,access,default_assignments)
-
-        VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9::jsonb,$10::jsonb) RETURNING *`,
-
-        [req.user.companyId, req.user.id, value.name, value.description, identity.apiKey, JSON.stringify(value.components), JSON.stringify(value.filters), value.run_as_mode, JSON.stringify(value.access), JSON.stringify(value.default_assignments)]);
+      const result = await db(`INSERT INTO dashboards(company_id,created_by,name,description,api_key,components,filters,global_filters,responsive_layouts,run_as_mode,run_as_user_id,access,default_assignments)
+        VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12::jsonb,$13::jsonb) RETURNING *`,
+        [req.user.companyId, req.user.id, value.name, value.description, identity.apiKey,
+          JSON.stringify(value.components), JSON.stringify(value.filters), JSON.stringify(value.global_filters),
+          JSON.stringify(value.responsive_layouts), value.run_as_mode, value.run_as_user_id,
+          JSON.stringify(value.access), JSON.stringify(value.default_assignments)]);
 
       res.status(201).json({ success: true, data: result.rows[0] });
 
@@ -394,7 +426,11 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
 
       const value = validateDashboardDefinition({ ...req.body, name: req.body.name || current.name,
         apiKey: req.body.apiKey || req.body.api_key || req.body.metadataKey || current.api_key || current.apiKey || toSafeApiName(req.body.name || current.name, "dashboard"),
-        access: current.access || [], default_assignments: current.default_assignments || [], run_as_mode: current.run_as_mode || "VIEWER" });
+        access: current.access || [], default_assignments: current.default_assignments || [],
+        run_as_mode: req.body.run_as_mode || req.body.runAsMode || current.run_as_mode || "VIEWER",
+        run_as_user_id: req.body.run_as_user_id || req.body.runAsUserId || current.run_as_user_id || null,
+        global_filters: req.body.global_filters || req.body.globalFilters || current.global_filters || [],
+        responsive_layouts: req.body.responsive_layouts || req.body.responsiveLayouts || current.responsive_layouts || {} });
       const identity = normalizeDashboardIdentity(value, current.name);
       const duplicateName = await db("SELECT id FROM dashboards WHERE company_id=$1 AND archived_at IS NULL AND id<>$2 AND lower(name)=lower($3) LIMIT 1", [req.user.companyId, current.id, value.name]);
 
@@ -403,9 +439,13 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
       const keyConflict = await db("SELECT id FROM dashboards WHERE company_id=$1 AND archived_at IS NULL AND id<>$2 AND lower(api_key)=lower($3) LIMIT 1", [req.user.companyId, current.id, identity.apiKey]);
       if (keyConflict.rows[0]) return res.status(409).json({ success: false, message: "A dashboard with this API key already exists." });
 
-      const result = await db(`UPDATE dashboards SET name=$1,description=$2,api_key=$3,components=$4::jsonb,filters=$5::jsonb,run_as_mode=$6,access=$7::jsonb,default_assignments=$8::jsonb,updated_at=NOW()
-
-        WHERE id=$9 AND company_id=$10 RETURNING *`, [value.name, value.description, identity.apiKey, JSON.stringify(value.components), JSON.stringify(value.filters), value.run_as_mode, JSON.stringify(value.access), JSON.stringify(value.default_assignments), req.params.id, req.user.companyId]);
+      const result = await db(`UPDATE dashboards
+        SET name=$1,description=$2,api_key=$3,components=$4::jsonb,filters=$5::jsonb,global_filters=$6::jsonb,
+            responsive_layouts=$7::jsonb,run_as_mode=$8,run_as_user_id=$9,access=$10::jsonb,default_assignments=$11::jsonb,updated_at=NOW()
+        WHERE id=$12 AND company_id=$13 RETURNING *`,
+        [value.name,value.description,identity.apiKey,JSON.stringify(value.components),JSON.stringify(value.filters),
+          JSON.stringify(value.global_filters),JSON.stringify(value.responsive_layouts),value.run_as_mode,value.run_as_user_id,
+          JSON.stringify(value.access),JSON.stringify(value.default_assignments),req.params.id,req.user.companyId]);
 
       res.json({ success: true, data: result.rows[0] });
 
@@ -533,11 +573,31 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
   router.post("/dashboards/:id/run", authenticate, viewPermission, async (req, res) => {
     try {
       const row = await dashboard(req, req.params.id, "VIEW");
-      if (!row) return res.status(404).json({ success: false, message: "Dashboard not found" });
-      const definition = validateDashboardDefinition({ name: row.name, description: row.description, components: row.components, filters: row.filters, run_as_mode: "VIEWER" });
-      const results = await Promise.all((definition.components || []).map((component) => runComponent(req, component, definition.filters || [])));
-      res.json({ success: true, data: { definition, components: results } });
-    } catch (error) { res.status(500).json({ success: false, message: "Unable to run this dashboard" }); }
+      if (!row) return res.status(404).json({ success:false,message:"Dashboard not found" });
+      const definition = validateDashboardDefinition({
+        name: row.name,
+        description: row.description,
+        apiKey: row.api_key,
+        components: row.components,
+        filters: Array.isArray(req.body?.filters) ? req.body.filters : row.filters,
+        global_filters: row.global_filters || [],
+        responsive_layouts: row.responsive_layouts || {},
+        run_as_mode: row.run_as_mode || "VIEWER",
+        run_as_user_id: row.run_as_user_id || null,
+        access: row.access || [],
+        default_assignments: row.default_assignments || [],
+      });
+      let executionReq=req;
+      if(definition.run_as_mode==="FIXED_USER"){
+        const executionUser=await resolveDashboardExecutionUser(db,definition,req.user);
+        executionReq=Object.create(req);
+        executionReq.user=executionUser;
+      }
+      const globalValues=req.body?.globalFilterValues&&typeof req.body.globalFilterValues==="object"?req.body.globalFilterValues:{};
+      const components=componentsWithGlobalFilters(definition.components,definition.global_filters,globalValues);
+      const results=await Promise.all(components.map((component)=>runComponent(executionReq,component,definition.filters||[])));
+      res.json({success:true,data:{definition,components:results}});
+    } catch(error){res.status(400).json({success:false,message:error.message||"Unable to run this dashboard"});}
   });
 
   return router;

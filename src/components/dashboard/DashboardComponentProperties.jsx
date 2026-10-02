@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { DASHBOARD_DATE_RANGES, DASHBOARD_SALES_FIELDS, DATE_FILTER_FIELDS, SUMMARY_COLUMN, aggregatesForFieldType, operatorsForFieldType, platformFieldChoices } from "./platformDashboard.js";
+import { ConditionalFormattingEditor, DrillActionEditor } from "../../pages/reports/ReportAdvancedEditors.jsx";
 
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
 const STYLE = { borderColor: "var(--onepos-border)", background: "var(--onepos-surface-raised)", color: "var(--onepos-text-primary)" };
@@ -69,7 +70,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const config = component.config || {};
   const report = config.report || {};
   const isPlatform = report.dataSource === "platform_object";
-  const isChart = ["pie", "donut", "bar", "chart"].includes(component.type);
+  const isChart = ["pie","donut","bar","line","gauge","funnel","scatter","chart"].includes(component.type);
   const isUtility = ["clock_widget", "calendar_widget", "weather_widget"].includes(component.type);
   const { objects, error: objectsError } = useObjects();
   const { fields, loading, error: fieldsError } = useFields(isPlatform ? report.objectId : null);
@@ -125,7 +126,34 @@ export default function DashboardComponentProperties({ component, onChange }) {
       {isChart ? <><div><span className={LABEL}>Maximum categories</span><input type="number" min={2} max={25} data-testid="max-categories" className={FIELD} style={STYLE} value={config.maxCategories ?? 6} onChange={num("maxCategories")} /></div><div><span className={LABEL}>Limit</span><input type="number" min={1} max={200} className={FIELD} style={STYLE} value={config.limit ?? 12} onChange={num("limit")} /></div></> : null}
       <div><span className={LABEL}>Width (grid columns, 1–12)</span><input type="number" min={1} max={12} data-testid="width" className={FIELD} style={STYLE} value={component.layout?.w ?? 6} onChange={layout("w")} /></div>
       <div><span className={LABEL}>Height</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.h ?? 4} onChange={layout("h")} /></div>
+      {isChart ? <>
+        {component.type === "bar" || component.type === "chart" ? <><div><span className={LABEL}>Orientation</span><select className={FIELD} style={STYLE} value={config.orientation || "vertical"} onChange={(event) => setConfig({ orientation: event.target.value })}><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.stacked === true} onChange={(event) => setConfig({ stacked: event.target.checked })}/>Stack series</label></> : null}
+        {component.type === "line" || (component.type === "chart" && config.chartType === "line") ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.showMarkers !== false} onChange={(event) => setConfig({ showMarkers: event.target.checked })}/>Show markers</label> : null}
+        {component.type === "donut" ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.showTotal !== false} onChange={(event) => setConfig({ showTotal: event.target.checked })}/>Show total</label> : null}
+        {component.type === "gauge" ? <>
+          <div><span className={LABEL}>Target mode</span><select className={FIELD} style={STYLE} value={config.targetMode || "fixed"} onChange={(event) => setConfig({ targetMode: event.target.value })}><option value="fixed">Fixed target</option><option value="field">Field target</option></select></div>
+          {config.targetMode === "field" ? <div><span className={LABEL}>Target field</span><select className={FIELD} style={STYLE} value={config.targetField || ""} onChange={(event) => setConfig({ targetField: event.target.value })}><option value="">Select field</option>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div> : <div><span className={LABEL}>Target value</span><input type="number" className={FIELD} style={STYLE} value={config.targetValue ?? 100} onChange={num("targetValue")} /></div>}
+        </> : null}
+      </> : null}
       <ConditionEditor component={component} onChange={onChange} fields={fields} />
+      <div className="md:col-span-2">
+        <ConditionalFormattingEditor
+          rules={config.conditionalFormatting || []}
+          onChange={(conditionalFormatting) => setConfig({ conditionalFormatting })}
+          fields={[
+            ...(isPlatform ? choices.all : DASHBOARD_SALES_FIELDS),
+            ...(config.valueField && config.aggregate ? [{ key: SUMMARY_COLUMN(config.aggregate, config.valueField), label: "Calculated metric" }] : []),
+          ]}
+        />
+      </div>
+      <div className="md:col-span-2">
+        <DrillActionEditor
+          action={config.drillAction}
+          onChange={(drillAction) => setConfig({ drillAction })}
+          reports={[]}
+          fields={isPlatform ? choices.all : DASHBOARD_SALES_FIELDS}
+        />
+      </div>
     </>}
     <p className="md:col-span-2 text-xs" data-testid="value-column" style={{ color: "var(--onepos-text-muted)" }}>Value column: <code>{isPlatform && config.aggregate && config.valueField ? SUMMARY_COLUMN(config.aggregate, config.valueField) : config.valueField || "not selected"}</code></p>
   </div>;

@@ -1,4 +1,4 @@
-import { apiRequest } from "./api.js";
+import { apiDownload, apiRequest } from "./api.js";
 
 export function getCustomReportMetadata() {
   return apiRequest("/api/reports/custom/metadata");
@@ -61,4 +61,19 @@ export function updateCustomReportUsers(id, userIds) {
     method: "PUT",
     body: JSON.stringify({ userIds }),
   });
+}
+
+export function getReportFolders() { return apiRequest("/api/reports/custom/folders"); }
+export function createReportFolder(folder) { return apiRequest("/api/reports/custom/folders", { method:"POST", body:JSON.stringify(folder) }); }
+export function updateReportFolder(id, folder) { return apiRequest(`/api/reports/custom/folders/${encodeURIComponent(id)}`, { method:"PUT", body:JSON.stringify(folder) }); }
+export function moveReportToFolder(id, folderId) { return apiRequest(`/api/reports/custom/${encodeURIComponent(id)}/folder`, { method:"PUT", body:JSON.stringify({ folderId }) }); }
+export function setReportFavourite(id, favourite) { return apiRequest(`/api/reports/custom/${encodeURIComponent(id)}/favourite`, { method:"PUT", body:JSON.stringify({ favourite }) }); }
+export function getReportNavigation() { return apiRequest("/api/reports/custom/navigation"); }
+export function getReportSubscriptions(id) { return apiRequest(`/api/reports/custom/${encodeURIComponent(id)}/subscriptions`); }
+export function createReportSubscription(id, definition) { return apiRequest(`/api/reports/custom/${encodeURIComponent(id)}/subscriptions`, { method:"POST", body:JSON.stringify(definition) }); }
+export function deleteReportSubscription(id, subscriptionId) { return apiRequest(`/api/reports/custom/${encodeURIComponent(id)}/subscriptions/${encodeURIComponent(subscriptionId)}`, { method:"DELETE" }); }
+export function getReportHistory(id) { return apiRequest(`/api/reports/custom/${encodeURIComponent(id)}/history`); }
+export function exportCustomReport(id, { view="DETAILS", format="CSV" } = {}) {
+  const query = new URLSearchParams({ view, format });
+  return apiDownload(`/api/reports/custom/${encodeURIComponent(id)}/export?${query.toString()}`);
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, Pencil, RefreshCw } from 'lucide-react'
 import { apiRequest, getAvailableStores } from '../../services/api'
+import DashboardGrid from '../../components/dashboard/DashboardGrid.jsx'
 
 const DATE_RANGES = [
   ['all_time', 'All time'],
@@ -137,38 +138,45 @@ export default function DashboardPage({ onOpenBuilder }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [dateRange, setDateRange] = useState('this_month')
-  const [currency, setCurrency] = useState('GBP')
+  const [globalFilterValues, setGlobalFilterValues] = useState({})
   const [dashboardStores, setDashboardStores] = useState(() => getAvailableStores())
   const [dashboardStoreId, setDashboardStoreId] = useState(() => {
     const stores = getAvailableStores()
     return stores.length === 1 ? String(stores[0].id) : ''
   })
+  const [viewportMode, setViewportMode] = useState(() => (
+    typeof window === 'undefined' ? 'desktop' : window.innerWidth < 640 ? 'mobile' : window.innerWidth < 1024 ? 'tablet' : 'desktop'
+  ))
 
   useEffect(() => {
     let live = true
-    Promise.all([
-      apiRequest('/api/dashboards').catch(() => null),
-      apiRequest('/api/settings').catch(() => null),
-    ]).then(([dashboards, settings]) => {
-      if (!live) return
-      setAvailable(dashboards?.success ? dashboards.data || [] : [])
-      setCurrency(settings?.data?.company?.currency || 'GBP')
-    })
+    apiRequest('/api/dashboards').then((dashboards) => {
+      if (live) setAvailable(dashboards?.success ? dashboards.data || [] : [])
+    }).catch(() => {})
     return () => { live = false }
   }, [])
 
-  const loadDashboard = useCallback(async (dashboardId = '', range = '') => {
+  useEffect(() => {
+    const onResize = () => setViewportMode(window.innerWidth < 640 ? 'mobile' : window.innerWidth < 1024 ? 'tablet' : 'desktop')
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const loadDashboard = useCallback(async (dashboardId = '', range = dateRange, filterValues = globalFilterValues) => {
     try {
       setLoading(true)
       setError('')
       let value
       if (dashboardId) {
-        const saved = await apiRequest(`/api/dashboards/${dashboardId}`)
+        const saved = await apiRequest(`/api/dashboards/${encodeURIComponent(dashboardId)}`)
         if (saved?.success) value = {
+          id: saved.data.id,
           name: saved.data.name,
           description: saved.data.description,
           components: saved.data.components || [],
           filters: saved.data.filters || [],
+          global_filters: saved.data.global_filters || [],
+          responsive_layouts: saved.data.responsive_layouts || {},
         }
       }
       if (!value) {
@@ -176,34 +184,37 @@ export default function DashboardPage({ onOpenBuilder }) {
         if (!fallback?.success) throw new Error(fallback?.message || 'Unable to load dashboard')
         value = fallback.data
       }
-      setDefinition(value)
 
-      // Dashboard store scope is independent from the store-bound Till runtime.
-      // One mapped store is selected automatically. Multi-store users default
-      // to All mapped stores, and every requested store is still validated by
-      // the backend canAccessStore/RBAC path before a report executes.
+      if (value?.id) {
+        const state = await apiRequest(`/api/dashboards/${encodeURIComponent(value.id)}/state`).catch(() => null)
+        if (state?.success && Object.keys(filterValues || {}).length === 0) {
+          filterValues = state.data?.filter_values || {}
+          setGlobalFilterValues(filterValues)
+        }
+      }
+
+      setDefinition(value)
       const stores = dashboardStores.length ? dashboardStores : getAvailableStores()
-      const scopedStoreIds = dashboardStoreId
-        ? [dashboardStoreId]
-        : stores.map((store) => String(store.id)).filter(Boolean)
+      const scopedStoreIds = dashboardStoreId ? [dashboardStoreId] : stores.map((store) => String(store.id)).filter(Boolean)
       const filters = [
         ...(value.filters || []).filter((filter) => filter?.field !== 'date' && filter?.field !== 'store'),
         ...(range ? [{ field: 'date', operator: range }] : (value.filters || []).filter((filter) => filter?.field === 'date')),
         ...(scopedStoreIds.length ? [{ field: 'store', operator: 'in', value: scopedStoreIds }] : []),
       ]
-      const run = await apiRequest('/api/dashboards/run', {
-        method: 'POST',
-        body: JSON.stringify({ ...value, filters }),
-      })
-      setResults(run?.success ? run.data?.components || [] : [])
+      const endpoint = value.id ? `/api/dashboards/${encodeURIComponent(value.id)}/run` : '/api/dashboards/run'
+      const body = value.id ? { filters, globalFilterValues: filterValues } : { ...value, filters, globalFilterValues: filterValues }
+      const run = await apiRequest(endpoint, { method: 'POST', body: JSON.stringify(body) })
+      if (!run?.success) throw new Error(run?.message || 'Unable to run dashboard')
+      setResults(run.data?.components || [])
     } catch (err) {
       setError(err?.message || 'Unable to load dashboard')
     } finally {
       setLoading(false)
     }
-  }, [dashboardStoreId, dashboardStores])
+  }, [dashboardStoreId, dashboardStores, dateRange, globalFilterValues])
 
-  useEffect(() => { void loadDashboard(activeId, dateRange) }, [activeId, dashboardStoreId])
+  useEffect(() => { void loadDashboard(activeId, dateRange, globalFilterValues) }, [activeId, dashboardStoreId])
+
   useEffect(() => {
     const handleStoreChange = () => {
       const stores = getAvailableStores()
@@ -211,44 +222,67 @@ export default function DashboardPage({ onOpenBuilder }) {
       if (stores.length === 1) setDashboardStoreId(String(stores[0].id))
       else if (dashboardStoreId && !stores.some((store) => String(store.id) === String(dashboardStoreId))) setDashboardStoreId('')
     }
-    const handleDashboardScope = (event) => {
-      const requested = String(event?.detail?.storeId || '')
-      const stores = getAvailableStores()
-      if (!requested || stores.some((store) => String(store.id) === requested)) setDashboardStoreId(requested)
-    }
     window.addEventListener('onepos:store-context-changed', handleStoreChange)
-    window.addEventListener('onepos:dashboard-store-scope-changed', handleDashboardScope)
-    return () => {
-      window.removeEventListener('onepos:store-context-changed', handleStoreChange)
-      window.removeEventListener('onepos:dashboard-store-scope-changed', handleDashboardScope)
-    }
+    return () => window.removeEventListener('onepos:store-context-changed', handleStoreChange)
   }, [dashboardStoreId])
 
-  const ordered = useMemo(() => {
-    const rank = { clock_widget: 0, kpi: 0, modern_kpi_card: 0, text: 1, pie: 2, donut: 2, chart: 2, bar: 2, table: 3 }
-    return [...(definition?.components || [])].sort((a, b) => (rank[a.type] ?? 9) - (rank[b.type] ?? 9))
-  }, [definition])
+  useEffect(() => {
+    const handleDrill = (event) => {
+      const drill = event?.detail?.drill
+      if (!drill) return
+      if (drill.type === 'url' && drill.targetId) window.open(drill.targetId, '_blank', 'noopener,noreferrer')
+      else window.dispatchEvent(new CustomEvent(`oneengine:open-${drill.type || 'report'}`, { detail: drill }))
+    }
+    window.addEventListener('oneengine:analytics-drill', handleDrill)
+    return () => window.removeEventListener('oneengine:analytics-drill', handleDrill)
+  }, [])
 
-  if (error && !definition) return <section className="dashboard-page"><div className="dashboard-error"><strong>Unable to load dashboard</strong><span>{error}</span><button onClick={() => loadDashboard(activeId, dateRange)}>Retry</button></div></section>
+  const components = useMemo(() => {
+    const overrides = new Map((definition?.responsive_layouts?.[viewportMode] || []).map((item) => [String(item.id), item]))
+    return (definition?.components || []).map((component) => {
+      const override = overrides.get(String(component.id))
+      return override ? { ...component, layout: { ...component.layout, ...override } } : component
+    })
+  }, [definition, viewportMode])
+
+  const updateGlobalFilters = async (next) => {
+    setGlobalFilterValues(next)
+    if (definition?.id) {
+      await apiRequest(`/api/dashboards/${encodeURIComponent(definition.id)}/state`, {
+        method: 'PUT',
+        body: JSON.stringify({ filterValues: next }),
+      }).catch(() => null)
+    }
+    await loadDashboard(activeId, dateRange, next)
+  }
+
+  if (error && !definition) return <section className="dashboard-page"><div className="dashboard-error"><strong>Unable to load dashboard</strong><span>{error}</span><button onClick={() => loadDashboard(activeId, dateRange, globalFilterValues)}>Retry</button></div></section>
 
   return <section className="dashboard-page">
     <header className="dashboard-header">
       <div><span>Dashboards</span><h1>{definition?.name || 'Dashboard'}</h1><p>{definition?.description || 'Overview of your business performance.'}</p></div>
       <div className="dashboard-actions">
         <select value={activeId} onChange={(event) => setActiveId(event.target.value)} aria-label="Dashboard view">
-          <option value="">{definition?.name || 'Default dashboard'} (Default)</option>
+          <option value="">Default dashboard</option>
           {available.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
-        <label><CalendarDays size={14}/><select value={dateRange} aria-label="Dashboard date range" onChange={(event) => { setDateRange(event.target.value); void loadDashboard(activeId, event.target.value) }}>{DATE_RANGES.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-        <button type="button" onClick={() => loadDashboard(activeId, dateRange)}><RefreshCw size={14}/></button>
+        <label><CalendarDays size={14}/><select value={dateRange} aria-label="Dashboard date range" onChange={(event) => { const next=event.target.value; setDateRange(next); void loadDashboard(activeId,next,globalFilterValues) }}>{DATE_RANGES.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        <button type="button" onClick={() => loadDashboard(activeId,dateRange,globalFilterValues)}><RefreshCw size={14}/></button>
         {onOpenBuilder ? <button type="button" onClick={onOpenBuilder}><Pencil size={14}/> Edit</button> : null}
       </div>
     </header>
+    {(definition?.global_filters || []).length ? <div className="onepos-card onepos-card-body flex flex-wrap items-end gap-3 mb-4">
+      {(definition.global_filters || []).map((filter) => <label key={filter.key} className="onepos-label min-w-[170px]">{filter.label}
+        <select className="onepos-input mt-1" value={globalFilterValues[filter.key] ?? filter.defaultValue ?? ''} onChange={(event) => updateGlobalFilters({ ...globalFilterValues, [filter.key]: event.target.value })}>
+          {filter.allowAll !== false ? <option value="">All</option> : null}
+          {(filter.options || []).map((option) => <option key={String(option.value)} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>)}
+      <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={() => updateGlobalFilters({})}>Reset filters</button>
+    </div> : null}
     {error ? <div className="dashboard-inline-error">{error}</div> : null}
-    <div className="dashboard-grid">
-      {ordered.map((component) => <ComponentCard key={component.id} component={component} result={results.find((item) => item.id === component.id)} loading={loading} currency={currency} onRetry={() => loadDashboard(activeId, dateRange)} />)}
-      {!loading && !ordered.length ? <div className="dash-empty">This dashboard has no components yet.</div> : null}
-    </div>
+    <DashboardGrid components={components} results={results} loading={loading} />
     {loading && definition ? <div className="dashboard-refreshing">Refreshing…</div> : null}
   </section>
 }
+

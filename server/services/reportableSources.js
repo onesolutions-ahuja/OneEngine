@@ -1,4 +1,14 @@
 import { isSafeIdentifier } from "./platformMetadata.js";
+import {
+  fieldComparisonSql,
+  normalizeAdvancedFieldFilter,
+  normalizeCrossFilters,
+  relativeDateSql,
+} from "./reportTypeDefinition.js";
+import {
+  compileFilterLogic,
+  normalizeAdvancedReportDefinition,
+} from "./reportAnalyticsDefinition.js";
 
 export const STANDARD_REPORT_SOURCES = [
   {
@@ -31,31 +41,20 @@ export const STANDARD_REPORT_SOURCES = [
   },
 ];
 
-const OPERATORS = new Set(["equals", "not_equals", "contains", "starts_with", "is_blank", "is_not_blank", "gt", "gte", "lt", "lte", "between", "in"]);
-const AGGREGATES = new Set(["COUNT", "SUM", "AVG", "MIN", "MAX"]);
+const OPERATORS = new Set([
+  "equals", "not_equals", "contains", "starts_with", "is_blank", "is_not_blank",
+  "gt", "gte", "lt", "lte", "between", "in",
+  "equals_field", "not_equals_field", "gt_field", "gte_field", "lt_field", "lte_field",
+  "relative_date",
+]);
+const AGGREGATES = new Set(["COUNT", "COUNT_DISTINCT", "SUM", "AVG", "MIN", "MAX"]);
 
 export function normalizePlatformReportDefinition(definition = {}) {
+  const advanced = normalizeAdvancedReportDefinition(definition);
   return {
-    ...definition,
+    ...advanced,
     dataSource: "platform_object",
     objectId: String(definition.objectId || ""),
-    fields: [...new Set((Array.isArray(definition.fields) ? definition.fields : []).map(String))],
-    filters: Array.isArray(definition.filters) ? definition.filters.slice(0, 20) : [],
-    filterLogic: ["all", "any"].includes(String(definition.filterLogic || "all").toLowerCase())
-      ? String(definition.filterLogic || "all").toLowerCase()
-      : "all",
-    groupBy: Array.isArray(definition.groupBy) ? [...new Set(definition.groupBy.map(String))] : [],
-    summaries: Array.isArray(definition.summaries) ? definition.summaries.slice(0, 10) : [],
-    sort: Array.isArray(definition.sort) ? definition.sort.slice(0, 10) : [],
-    presentation: definition.presentation && typeof definition.presentation === "object"
-      ? {
-        type: ["table", "summary", "bar", "line", "pie", "donut"].includes(String(definition.presentation.type))
-          ? String(definition.presentation.type)
-          : "table",
-        xField: definition.presentation.xField ? String(definition.presentation.xField) : null,
-        yField: definition.presentation.yField ? String(definition.presentation.yField) : null,
-      }
-      : { type: "table", xField: null, yField: null },
   };
 }
 
@@ -83,8 +82,10 @@ export function validatePlatformReportDefinition(definition, object, fields, rel
   const normalized = normalizePlatformReportDefinition(definition);
   if (!object?.id || !object.source_table || !isSafeIdentifier(object.source_table)) throw new Error("Report object is not available");
   const fieldMap = buildFieldMap(fields, relationships);
+  const relationshipByKey = relationshipMap(relationships);
   if (!normalized.fields.length || normalized.fields.some((key) => !fieldMap.has(key))) throw new Error("Select at least one valid report field");
-  if (normalized.groupBy.some((key) => !fieldMap.has(key))) throw new Error("Invalid grouping field");
+  if (normalized.rowGroups.some((key) => !fieldMap.has(key))) throw new Error("Invalid row grouping field");
+  if (normalized.columnGroups.some((key) => !fieldMap.has(key))) throw new Error("Invalid column grouping field");
   for (const summary of normalized.summaries) {
     const key = String(summary?.field || "");
     const aggregate = String(summary?.aggregate || "").toUpperCase();
@@ -95,13 +96,23 @@ export function validatePlatformReportDefinition(definition, object, fields, rel
       throw new Error(`Aggregate ${aggregate} is not valid for ${key}`);
     }
   }
+  normalized.filters = normalized.filters.map(normalizeAdvancedFieldFilter);
+  normalized.crossFilters = normalizeCrossFilters(definition.crossFilters || []);
   for (const filter of normalized.filters) {
     if (!fieldMap.has(String(filter?.field)) || !OPERATORS.has(String(filter?.operator))) throw new Error("Invalid report filter");
+    if (filter.compareField && !fieldMap.has(String(filter.compareField))) throw new Error("Invalid comparison field");
   }
   for (const item of normalized.sort) {
     if (!fieldMap.has(String(item?.field)) || !["asc", "desc"].includes(String(item?.direction).toLowerCase())) throw new Error("Invalid sort field");
   }
   return normalized;
+}
+
+function relationshipMap(relationships = []) {
+  return new Map(relationships.map((relationship) => [
+    String(relationship.relationship_key || relationship.key || ""),
+    relationship,
+  ]));
 }
 
 function fieldExpression(field, alias = "r", relationshipAliases = {}) {
@@ -128,9 +139,12 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
     relationshipAliases[key] = alias;
     const localColumn = relationship.local_source_column || relationship.localSourceColumn;
     const targetColumn = relationship.target_source_column || relationship.targetSourceColumn;
+    const joinKeyword = String(relationship.reportJoinType || relationship.joinType || "").toUpperCase() === "WITH"
+      ? "INNER JOIN"
+      : "LEFT JOIN";
     joins.push(localColumn && isSafeIdentifier(localColumn) && targetColumn && isSafeIdentifier(targetColumn)
-      ? `LEFT JOIN "${targetTable}" ${alias} ON ${alias}."${targetColumn}" = r."${localColumn}"`
-      : `LEFT JOIN "${targetTable}" ${alias} ON ${alias}."${childColumn}" = r."id"`);
+      ? `${joinKeyword} "${targetTable}" ${alias} ON ${alias}."${targetColumn}" = r."${localColumn}"`
+      : `${joinKeyword} "${targetTable}" ${alias} ON ${alias}."${childColumn}" = r."id"`);
   }
   let next = params.length + 1;
   if (object.store_scoped === true) {
@@ -163,6 +177,17 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
     const field = fieldMap.get(String(filter.field));
     const expression = fieldExpression(field, "r", relationshipAliases);
     const operator = String(filter.operator);
+    if (filter.compareField) {
+      const comparisonField = fieldMap.get(String(filter.compareField));
+      filterClauses.push(fieldComparisonSql(operator, expression, fieldExpression(comparisonField, "r", relationshipAliases)));
+      continue;
+    }
+    if (operator === "relative_date") {
+      const compiled = relativeDateSql(filter.relativeDate || filter.value || {}, expression, params, next);
+      filterClauses.push(compiled.clause);
+      next = compiled.nextParamIndex;
+      continue;
+    }
     if (["is_blank", "is_not_blank"].includes(operator)) {
       filterClauses.push(`${expression} IS ${operator === "is_blank" ? "" : "NOT "}NULL`);
       continue;
@@ -191,17 +216,78 @@ export function buildPlatformObjectQuery(definition, object, fields, companyId, 
     }
     next += 1;
   }
-  if (filterClauses.length) where.push(`(${filterClauses.join(normalized.filterLogic === "any" ? " OR " : " AND ")})`);
+  if (filterClauses.length) where.push(`(${compileFilterLogic(normalized.filterLogic, filterClauses)})`);
+
+  for (const crossFilter of normalized.crossFilters || []) {
+    const relationship = relationshipByKey.get(String(crossFilter.relationshipKey));
+    if (!relationship) throw new Error(`Unknown cross-filter relationship ${crossFilter.relationshipKey}`);
+    const targetTable = relationship.target_source_table || relationship.source_table;
+    const localColumn = relationship.local_source_column || relationship.localSourceColumn || "id";
+    const targetColumn = relationship.target_source_column || relationship.targetSourceColumn || relationship.child_source_column || relationship.childSourceColumn;
+    if (!isSafeIdentifier(targetTable) || !isSafeIdentifier(localColumn) || !isSafeIdentifier(targetColumn)) {
+      throw new Error("Cross-filter relationship mapping is invalid");
+    }
+    const alias = `xf${where.length + 1}`;
+    const subfilters = [];
+    for (const raw of crossFilter.subfilters || []) {
+      const subfilter = normalizeAdvancedFieldFilter(raw);
+      const targetField = (relationship.fields || []).find((candidate) => fieldKey(candidate) === subfilter.field);
+      if (!targetField) throw new Error(`Invalid cross-filter field ${subfilter.field}`);
+      const expression = fieldExpression({ ...targetField, relationshipKey: null }, alias, {});
+      if (subfilter.compareField) {
+        const comparison = (relationship.fields || []).find((candidate) => fieldKey(candidate) === subfilter.compareField);
+        if (!comparison) throw new Error("Invalid cross-filter comparison field");
+        subfilters.push(fieldComparisonSql(subfilter.operator, expression, fieldExpression({ ...comparison, relationshipKey: null }, alias, {})));
+        continue;
+      }
+      if (subfilter.operator === "relative_date") {
+        const compiled = relativeDateSql(subfilter.relativeDate || subfilter.value || {}, expression, params, next);
+        subfilters.push(compiled.clause);
+        next = compiled.nextParamIndex;
+        continue;
+      }
+      if (["is_blank", "is_not_blank"].includes(subfilter.operator)) {
+        subfilters.push(`${expression} IS ${subfilter.operator === "is_blank" ? "" : "NOT "}NULL`);
+        continue;
+      }
+      const op = subfilter.operator === "equals" ? "="
+        : subfilter.operator === "not_equals" ? "<>"
+          : subfilter.operator === "gt" ? ">"
+            : subfilter.operator === "gte" ? ">="
+              : subfilter.operator === "lt" ? "<"
+                : subfilter.operator === "lte" ? "<="
+                  : null;
+      if (!op) throw new Error(`Unsupported cross-filter operator ${subfilter.operator}`);
+      subfilters.push(`${expression} ${op} $${next}`);
+      params.push(subfilter.value);
+      next += 1;
+    }
+    const companyClause = relationship.target_company_scoped === true ? ` AND ${alias}.company_id = $1` : "";
+    const exists = `EXISTS (SELECT 1 FROM "${targetTable}" ${alias} WHERE ${alias}."${targetColumn}" = r."${localColumn}"${companyClause}${subfilters.length ? ` AND ${subfilters.join(" AND ")}` : ""})`;
+    where.push(crossFilter.type === "WITHOUT" ? `NOT ${exists}` : exists);
+  }
   const selected = normalized.fields.map((key) => `${fieldExpression(fieldMap.get(key), "r", relationshipAliases)} AS "${key}"`);
   const groupKeys = [...new Set([
-    ...normalized.groupBy,
+    ...normalized.rowGroups,
+    ...normalized.columnGroups,
     ...(normalized.summaries.length ? normalized.fields : []),
   ])];
   const groups = groupKeys.map((key) => fieldExpression(fieldMap.get(key), "r", relationshipAliases));
-  const summaries = normalized.summaries.map((summary) => `${String(summary.aggregate).toUpperCase()}(${summary.aggregate === "COUNT" ? "*" : fieldExpression(fieldMap.get(String(summary.field)), "r", relationshipAliases)}) AS "${summary.aggregate.toLowerCase()}_${summary.field}"`);
+  const summaries = normalized.summaries.map((summary) => {
+    const aggregate = String(summary.aggregate).toUpperCase();
+    const expression = fieldExpression(fieldMap.get(String(summary.field)), "r", relationshipAliases);
+    const sql = aggregate === "COUNT"
+      ? "COUNT(*)"
+      : aggregate === "COUNT_DISTINCT"
+        ? `COUNT(DISTINCT ${expression})`
+        : `${aggregate}(${expression})`;
+    const alias = summary.alias || `${aggregate.toLowerCase()}_${summary.field}`;
+    return `${sql} AS "${alias}"`;
+  });
   const select = [...selected, ...summaries];
-  const order = (normalized.sort.length ? normalized.sort : normalized.groupBy.map((field) => ({ field, direction: "asc" })))
-    .map((item) => `"${item.field}" ${String(item.direction).toLowerCase() === "asc" ? "ASC" : "DESC"}`).join(", ");
-  const sql = `SELECT ${select.join(", ")} FROM "${object.source_table}" r ${joins.join(" ")} WHERE ${where.join(" AND ")}${groups.length ? ` GROUP BY ${groups.join(", ")}` : ""}${order ? ` ORDER BY ${order}` : ""} LIMIT ${Math.min(Math.max(Number(limit) || 1000, 1), 1000)}`;
+  const order = (normalized.sort.length ? normalized.sort : normalized.rowGroups.map((field) => ({ field, direction: "asc", nulls: "last" })))
+    .map((item) => `"${item.field}" ${String(item.direction).toLowerCase() === "asc" ? "ASC" : "DESC"} NULLS ${String(item.nulls).toLowerCase() === "first" ? "FIRST" : "LAST"}`).join(", ");
+  const requestedLimit = Math.min(Number(normalized.rowLimit || limit || 1000), Number(limit || 1000), 1000);
+  const sql = `SELECT ${select.join(", ")} FROM "${object.source_table}" r ${joins.join(" ")} WHERE ${where.join(" AND ")}${groups.length ? ` GROUP BY ${groups.join(", ")}` : ""}${order ? ` ORDER BY ${order}` : ""} LIMIT ${Math.max(requestedLimit, 1)}`;
   return { sql, params, definition: normalized };
 }
