@@ -44,7 +44,7 @@ async function verifyAppleIdToken(idToken,{clientId,nonce,jwksUri="https://apple
   if(!valid)throw new Error("Apple ID token signature is invalid");
   const now=Math.floor(Date.now()/1000);
   if(claims.iss!==issuer||String(claims.aud)!==String(clientId)||Number(claims.exp||0)<=now)throw new Error("Apple ID token claims are invalid");
-  if(nonce&&claims.nonce&&String(claims.nonce)!==String(nonce))throw new Error("Apple ID token nonce is invalid");
+  if(nonce&&String(claims.nonce||"")!==String(nonce))throw new Error("Apple ID token nonce is invalid");
   return claims;
 }
 
