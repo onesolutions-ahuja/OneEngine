@@ -114,7 +114,7 @@ function makeColumns(fields, listView = null) {
   }))
 }
 
-export default function WorkspacePage({ initialObjectKey = '', initialRecordId = '', onRouteChange = null }) {
+export default function WorkspacePage({ initialObjectKey = '', initialRecordId = '', appKey = '', onRouteChange = null }) {
   const [objects, setObjects] = useState([])
   const [query, setQuery] = useState('')
   const [selectedKey, setSelectedKey] = useState(initialObjectKey || '')
@@ -214,8 +214,8 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
   useEffect(() => {
     if (!selectedKey) return
-    onRouteChange?.(selectedKey, selectedId || '')
-  }, [selectedKey, selectedId])
+    onRouteChange?.(selectedKey, selectedId || '', appKey || '')
+  }, [selectedKey, selectedId, appKey])
 
   const selectedObject = objects.find((item) => objectKey(item) === selectedKey) || null
 
@@ -289,7 +289,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     }
     let live = true
     setLoadingDetail(true)
-    apiRequest(`/api/platform/runtime/record-page?objectKey=${encodeURIComponent(objectKey(selectedObject))}&recordId=${encodeURIComponent(selectedId)}&formFactor=${encodeURIComponent(formFactor)}`)
+    apiRequest(`/api/platform/runtime/record-page?objectKey=${encodeURIComponent(objectKey(selectedObject))}&recordId=${encodeURIComponent(selectedId)}&formFactor=${encodeURIComponent(formFactor)}${appKey ? `&appKey=${encodeURIComponent(appKey)}` : ''}`)
       .then((response) => {
         if (live) setDetail(response?.data || null)
       })
@@ -344,6 +344,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       formFactor,
     })
     if (recordTypeId) query.set('recordTypeId', recordTypeId)
+    if (appKey) query.set('appKey', appKey)
     const response = await apiRequest(`/api/platform/layouts/effective?${query.toString()}`)
     return response?.data || null
   }
@@ -475,7 +476,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     setActionBusy(button.button_key)
     setError('')
     try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/buttons/${encodeURIComponent(button.button_key)}/execute?formFactor=${encodeURIComponent(formFactor)}`, {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/buttons/${encodeURIComponent(button.button_key)}/execute?formFactor=${encodeURIComponent(formFactor)}${appKey ? `&appKey=${encodeURIComponent(appKey)}` : ''}`, {
         method: 'POST',
         body: JSON.stringify({}),
       })
@@ -509,7 +510,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     setActionBusy(actionKey)
     setError('')
     try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/actions/${encodeURIComponent(actionKey)}/execute?formFactor=${encodeURIComponent(formFactor)}`, {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/actions/${encodeURIComponent(actionKey)}/execute?formFactor=${encodeURIComponent(formFactor)}${appKey ? `&appKey=${encodeURIComponent(appKey)}` : ''}`, {
         method: 'POST',
         body: JSON.stringify({}),
       })
