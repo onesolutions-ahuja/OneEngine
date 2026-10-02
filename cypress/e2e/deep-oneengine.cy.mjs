@@ -149,7 +149,7 @@ describe("OneEngine deep deployed E2E", () => {
   it("Workflow Builder left search and Add Element search use independent state", () => {
     visitAuthenticated("developer/workflow-builder");
 
-    cy.contains("button", /new workflow/i).click();
+    cy.get('button[aria-label="New Workflow"]').click();
 
     cy.get(".workflow-node-palette", { timeout: 30000 }).should("be.visible");
     cy.get('.workflow-node-palette input[aria-label="Search flow elements"]').clear().type("Assignment");
