@@ -86,6 +86,20 @@ export default function FieldEditor({
     autoNumberSuffix: field?.config?.suffix || "",
     autoNumberStart: Number(field?.config?.start ?? field?.config?.startNumber ?? 1),
     autoNumberPadding: Number(field?.config?.padding ?? 0),
+    helpText: field?.config?.helpText || field?.config?.help_text || "",
+    defaultValue: field?.config?.defaultValue ?? field?.config?.default_value ?? "",
+    maxLength: field?.config?.maxLength ?? field?.config?.max_length ?? "",
+    precision: field?.config?.precision ?? "",
+    scale: field?.config?.scale ?? field?.config?.decimalPlaces ?? field?.config?.decimal_places ?? "",
+    unique: field?.config?.unique === true,
+    externalId: field?.config?.externalId === true || field?.config?.external_id === true,
+    uniqueCaseSensitive: field?.config?.uniqueCaseSensitive === true || field?.config?.unique_case_sensitive === true,
+    lookupFilter: {
+      active: field?.config?.lookupFilter?.active === true || field?.config?.lookup_filter?.active === true,
+      required: (field?.config?.lookupFilter?.required ?? field?.config?.lookup_filter?.required) !== false,
+      match: field?.config?.lookupFilter?.match || field?.config?.lookup_filter?.match || "all",
+      conditions: field?.config?.lookupFilter?.conditions || field?.config?.lookup_filter?.conditions || [],
+    },
     options: Array.isArray(field?.options) ? field.options : [],
   });
 
@@ -96,6 +110,7 @@ export default function FieldEditor({
   const [formulaPreviewValues, setFormulaPreviewValues] = useState({});
   const [formulaPathPreviewValues, setFormulaPathPreviewValues] = useState({});
   const [recordPaths, setRecordPaths] = useState({ rootObjectKey: "", items: [] });
+  const [lookupTargetFields, setLookupTargetFields] = useState([]);
 
   let formulaDependencies = [];
   let formulaPathReferences = [];
@@ -159,6 +174,27 @@ export default function FieldEditor({
       .catch((err) => setError(err?.message || "Unable to load relationships."));
   }, [form.field_type, object?.id]);
 
+  useEffect(() => {
+    if (form.field_type !== "lookup" || !object?.id || !form.lookupRelationshipKey) {
+      setLookupTargetFields([]);
+      return;
+    }
+    const relationship = relationships.find((item) => item.relationship_key === form.lookupRelationshipKey);
+    if (!relationship) return;
+    const targetObjectId = String(relationship.parent_object_id) === String(object.id)
+      ? relationship.child_object_id
+      : relationship.parent_object_id;
+    if (!targetObjectId) return;
+    apiRequest(`/api/platform/objects/${encodeURIComponent(targetObjectId)}/record-paths?depth=1`)
+      .then((response) => {
+        const root = response?.rootObjectKey || "";
+        setLookupTargetFields((Array.isArray(response?.data) ? response.data : [])
+          .filter((item) => item.kind === "field" && item.path.split(".").length === 2)
+          .map((item) => ({ apiName: item.path.startsWith(`${root}.`) ? item.path.slice(root.length + 1) : item.path.split(".").pop(), label: item.label, fieldType: item.fieldType })));
+      })
+      .catch((err) => setError(err?.message || "Unable to load lookup target fields."));
+  }, [form.field_type, form.lookupRelationshipKey, relationships, object?.id]);
+
   function update(name, value) {
     setForm((current) => ({
       ...current,
@@ -173,6 +209,48 @@ export default function FieldEditor({
 
   function updateDuplicateMatching(name, value) {
     setForm((current) => ({ ...current, duplicateMatching: { ...current.duplicateMatching, [name]: value } }));
+  }
+
+  function updateLookupFilter(patch) {
+    setForm((current) => ({ ...current, lookupFilter: { ...current.lookupFilter, ...patch } }));
+  }
+
+  function addLookupFilterCondition() {
+    setForm((current) => ({
+      ...current,
+      lookupFilter: {
+        ...current.lookupFilter,
+        active: true,
+        conditions: [...(current.lookupFilter?.conditions || []), {
+          targetField: lookupTargetFields[0]?.apiName || "",
+          operator: "equals",
+          valueSource: "source_field",
+          sourceField: fields[0]?.api_name || "",
+          value: "",
+          userField: "id",
+        }],
+      },
+    }));
+  }
+
+  function updateLookupFilterCondition(index, patch) {
+    setForm((current) => ({
+      ...current,
+      lookupFilter: {
+        ...current.lookupFilter,
+        conditions: (current.lookupFilter?.conditions || []).map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item),
+      },
+    }));
+  }
+
+  function removeLookupFilterCondition(index) {
+    setForm((current) => ({
+      ...current,
+      lookupFilter: {
+        ...current.lookupFilter,
+        conditions: (current.lookupFilter?.conditions || []).filter((_, itemIndex) => itemIndex !== index),
+      },
+    }));
   }
 
   function addOption() {
@@ -355,6 +433,22 @@ export default function FieldEditor({
           ...(form.field_type === "lookup" ? {
             relationshipKey: form.lookupRelationshipKey || null,
             relatedObjectKey: form.lookupRelatedObjectKey || null,
+            lookupFilter: form.lookupFilter?.active ? {
+              active: true,
+              required: form.lookupFilter.required !== false,
+              match: form.lookupFilter.match === "any" ? "any" : "all",
+              conditions: form.lookupFilter.conditions || [],
+            } : null,
+          } : {}),
+          ...(!["formula", "rollup", "auto_number"].includes(form.field_type) ? {
+            helpText: String(form.helpText || "").trim(),
+            ...(form.defaultValue !== "" ? { defaultValue: form.defaultValue } : { defaultValue: null }),
+            ...(form.maxLength !== "" ? { maxLength: Math.max(1, Number(form.maxLength)) } : { maxLength: null }),
+            ...(form.precision !== "" ? { precision: Math.max(1, Number(form.precision)) } : { precision: null }),
+            ...(form.scale !== "" ? { scale: Math.max(0, Number(form.scale)) } : { scale: null }),
+            unique: form.unique === true,
+            externalId: form.externalId === true,
+            uniqueCaseSensitive: form.unique === true && form.uniqueCaseSensitive === true,
           } : {}),
           ...(form.field_type === "auto_number" ? {
             prefix: form.autoNumberPrefix || "",
@@ -694,6 +788,56 @@ export default function FieldEditor({
               <small>
                 Lookup values must come from an existing relationship. The relationship supplies the target object and tenant-safe reference.
               </small>
+              <div className="platform-dependent-picklist">
+                <label className="platform-checkbox">
+                  <input type="checkbox" checked={form.lookupFilter?.active === true} onChange={(event) => updateLookupFilter({ active: event.target.checked })} />
+                  <span><strong>Lookup Filter</strong><small>Limit which related records users can choose.</small></span>
+                </label>
+                {form.lookupFilter?.active ? (
+                  <>
+                    <label><span>Match</span><select value={form.lookupFilter.match || "all"} onChange={(event) => updateLookupFilter({ match: event.target.value })}><option value="all">ALL conditions</option><option value="any">ANY condition</option></select></label>
+                    <label className="platform-checkbox">
+                      <input type="checkbox" checked={form.lookupFilter.required !== false} onChange={(event) => updateLookupFilter({ required: event.target.checked })} />
+                      <span><strong>Required filter</strong><small>Reject values that do not satisfy the filter.</small></span>
+                    </label>
+                    {(form.lookupFilter.conditions || []).map((condition, index) => (
+                      <div key={`lookup-filter-${index}`} className="platform-field-editor-option">
+                        <select value={condition.targetField || ""} onChange={(event) => updateLookupFilterCondition(index, { targetField: event.target.value })}>
+                          <option value="">Target field…</option>
+                          {lookupTargetFields.map((candidate) => <option key={candidate.apiName} value={candidate.apiName}>{candidate.label} ({candidate.apiName})</option>)}
+                        </select>
+                        <select value={condition.operator || "equals"} onChange={(event) => updateLookupFilterCondition(index, { operator: event.target.value })}>
+                          {["equals","not_equals","greater_than","greater_than_or_equal","less_than","less_than_or_equal","contains","is_empty","is_not_empty"].map((operator) => <option key={operator} value={operator}>{operator.replaceAll("_", " ")}</option>)}
+                        </select>
+                        {!["is_empty","is_not_empty"].includes(condition.operator) ? (
+                          <>
+                            <select value={condition.valueSource || "source_field"} onChange={(event) => updateLookupFilterCondition(index, { valueSource: event.target.value })}>
+                              <option value="source_field">Field on this record</option>
+                              <option value="literal">Fixed value</option>
+                              <option value="user">Current user/session</option>
+                            </select>
+                            {condition.valueSource === "literal" ? (
+                              <input value={condition.value ?? ""} placeholder="Value" onChange={(event) => updateLookupFilterCondition(index, { value: event.target.value })} />
+                            ) : condition.valueSource === "user" ? (
+                              <select value={condition.userField || "id"} onChange={(event) => updateLookupFilterCondition(index, { userField: event.target.value })}>
+                                <option value="id">User ID</option><option value="roleId">Role ID</option><option value="companyId">Company ID</option><option value="storeId">Store ID</option>
+                              </select>
+                            ) : (
+                              <select value={condition.sourceField || ""} onChange={(event) => updateLookupFilterCondition(index, { sourceField: event.target.value })}>
+                                <option value="">Source field…</option>
+                                {fields.filter((candidate) => candidate.active !== false).map((candidate) => <option key={candidate.api_name} value={candidate.api_name}>{candidate.label} ({candidate.api_name})</option>)}
+                              </select>
+                            )}
+                          </>
+                        ) : null}
+                        <button type="button" onClick={() => removeLookupFilterCondition(index)}>Remove</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={addLookupFilterCondition}>Add filter condition</button>
+                    <small>Filters can compare a target field with a field on this record, a fixed value, or current user/session context.</small>
+                  </>
+                ) : null}
+              </div>
             </fieldset>
           ) : null}
 
@@ -787,6 +931,32 @@ export default function FieldEditor({
 
           {conditionEditor("visibilityCondition", "Conditional Visibility")}
           {conditionEditor("requiredCondition", "Conditional Required")}
+
+          {!["formula", "rollup", "auto_number"].includes(form.field_type) ? (
+            <fieldset className="platform-field-editor-wide">
+              <legend>Field behaviour</legend>
+              <label className="platform-field-editor-wide"><span>Help text</span><input value={form.helpText || ""} maxLength={255} onChange={(event) => update("helpText", event.target.value)} placeholder="Guidance shown below the field to users" /></label>
+              {!["lookup","address","location","json","multiselect"].includes(form.field_type) ? (
+                <label><span>Default value</span><input type={["number","decimal","currency","percent"].includes(form.field_type) ? "number" : form.field_type === "date" ? "date" : form.field_type === "datetime" ? "datetime-local" : "text"} value={form.defaultValue ?? ""} onChange={(event) => update("defaultValue", event.target.value)} /></label>
+              ) : null}
+              {["text","long_text","rich_text","url","email","phone"].includes(form.field_type) ? (
+                <label><span>Maximum length</span><input type="number" min="1" max="100000" value={form.maxLength ?? ""} onChange={(event) => update("maxLength", event.target.value)} placeholder="No additional limit" /></label>
+              ) : null}
+              {["number","decimal","currency","percent"].includes(form.field_type) ? (
+                <>
+                  <label><span>Precision</span><input type="number" min="1" max="38" value={form.precision ?? ""} onChange={(event) => update("precision", event.target.value)} placeholder="Digits" /></label>
+                  <label><span>Decimal places</span><input type="number" min="0" max="18" value={form.scale ?? ""} onChange={(event) => update("scale", event.target.value)} placeholder="Scale" /></label>
+                </>
+              ) : null}
+              {["text","number","decimal","email","auto_number"].includes(form.field_type) ? (
+                <>
+                  <label className="platform-checkbox"><input type="checkbox" checked={form.externalId === true} onChange={(event) => update("externalId", event.target.checked)} /><span><strong>External ID</strong><small>Use this field as an external-system key for Data Loader/API matching. It is not automatically unique.</small></span></label>
+                  <label className="platform-checkbox"><input type="checkbox" checked={form.unique === true} onChange={(event) => update("unique", event.target.checked)} /><span><strong>Unique</strong><small>Prevent duplicate values for this field.</small></span></label>
+                  {form.unique && ["text","email"].includes(form.field_type) ? <label className="platform-checkbox"><input type="checkbox" checked={form.uniqueCaseSensitive === true} onChange={(event) => update("uniqueCaseSensitive", event.target.checked)} /><span><strong>Case sensitive</strong><small>Treat ABC and abc as different values.</small></span></label> : null}
+                </>
+              ) : null}
+            </fieldset>
+          ) : null}
 
           {!isNew ? (
             <div className="platform-field-editor-wide">
