@@ -1953,7 +1953,7 @@ function Desktop({ onLock, onSignOut }) {
     void refreshStoreApps({ silent: true })
   }, [])
 
-  const refreshStoreApps = async ({ silent = false } = {}) => {
+  const refreshStoreApps = async ({ silent = false, allowCacheFallback = true } = {}) => {
     if (storeRefreshInFlightRef.current) return storeRefreshInFlightRef.current
     const request = (async () => {
       if (!silent) setStoreAppsLoading(true)
@@ -1966,14 +1966,15 @@ function Desktop({ onLock, onSignOut }) {
         setStoreAppsLoaded(true)
         return rows
       } catch (error) {
-        const cached = readMarketplaceCache()
+        const cached = allowCacheFallback ? readMarketplaceCache() : []
         if (cached.length) {
           setStoreApps(cached)
           setStoreAppsLoaded(true)
         } else {
+          setStoreApps([])
           setStoreAppsLoaded(false)
         }
-        setStoreAppsError(error?.message || 'Unable to load apps. Please retry.')
+        setStoreAppsError(error?.message || 'Unable to load the live app catalogue. Please retry.')
         return cached
       } finally {
         if (!silent) setStoreAppsLoading(false)
@@ -1989,7 +1990,7 @@ function Desktop({ onLock, onSignOut }) {
     let live = true
     ;(async () => {
       if (!live) return
-      await refreshStoreApps()
+      await refreshStoreApps({ allowCacheFallback: false })
     })()
     return () => { live = false }
   }, [launcherOpen, topPanel])
