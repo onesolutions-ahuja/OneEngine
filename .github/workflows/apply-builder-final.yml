@@ -25,7 +25,7 @@ jobs:
       - name: Apply onto current main
         run: |
           set -euo pipefail
-          EXPECTED_MAIN="7ec9c7bb5d57f567dfb12e7d35238b2e4dc7d6a4"
+          EXPECTED_MAIN="93a5d57b824e42e3ee47a96f808806f04aebed18"
           git fetch origin main
           ACTUAL_MAIN="$(git rev-parse origin/main)"
           if [ "$ACTUAL_MAIN" != "$EXPECTED_MAIN" ]; then
