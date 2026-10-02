@@ -26,6 +26,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0033_identity_verification_history",
   "0034_oneengine_debug_system",
   "0035_security_governance",
+  "0036_connected_app_user_assignments",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -147,6 +148,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Security governance, connected apps and trusted origins",
     up: client => client.query(
       readFileSync(new URL("./migrations/0035_security_governance.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0036_connected_app_user_assignments",
+    version: "36",
+    name: "Connected-app approved user assignments",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0036_connected_app_user_assignments.sql", import.meta.url), "utf8")
     ),
   },
 ]);
