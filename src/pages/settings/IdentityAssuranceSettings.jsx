@@ -2,9 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { apiRequest, getPasskeyOptions, startPasskeyRegistration, verifyMfa, verifyPasskey } from '../../services/api'
 
 const STEP_UP_RESOURCES = [
-  ['SECURITY_CONFIGURATION','Security configuration'],
+  ['REPORTS_DASHBOARDS','Reports and dashboards'],
+  ['MANAGE_ENCRYPTION_KEYS','Manage encryption keys'],
+  ['MANAGE_AUTH_PROVIDERS','Manage authentication providers'],
+  ['MANAGE_CERTIFICATES','Manage certificates and keys'],
+  ['MANAGE_CONNECTED_APPS','Manage connected apps'],
+  ['MANAGE_DATA_EXPORT','Manage data export'],
+  ['MANAGE_IP_ADDRESSES','Manage IP addresses'],
+  ['MANAGE_USERS','Manage users'],
+  ['UNLOCK_RESET_PASSWORDS','Unlock users and reset passwords'],
+  ['VIEW_HEALTH_CHECK','View security health check'],
+  ['SECURITY_CONFIGURATION','Other security configuration'],
   ['ACCESS_CONTROL_ADMIN','Access-control administration'],
-  ['USER_ADMIN','User administration'],
   ['DEPLOYMENT_ADMIN','Deployments and releases'],
 ]
 
