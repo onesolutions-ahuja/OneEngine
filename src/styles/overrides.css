@@ -3255,19 +3255,22 @@
 /* 2026-10-02 dock capacity/alignment correction.
    Desktop keeps a fixed Jarvis reservation and divides the whole app lane into
    equal slots based on the number of visible icons (up to ten). The 40px app
-   icons sit exactly 6px from both the top and bottom dock border. Mobile keeps
-   Jarvis fixed and scrolls apps. */
+   icons sit exactly 12px from both the top and bottom dock border. The icon
+   lane stays bottom-aligned so the original Framer Motion magnification keeps
+   the same upward "lift" behaviour as before. Mobile keeps Jarvis fixed and
+   scrolls apps. */
 @media (min-width: 901px) {
   .dock {
     --dock-icon-size: 40px;
     width: 768px;
     max-width: calc(100vw - 24px);
-    height: 52px;
-    min-height: 52px;
-    padding: 6px 18px;
+    height: 64px;
+    min-height: 64px;
+    padding: 12px 18px;
     box-sizing: border-box;
-    align-items: center;
+    align-items: flex-end;
     gap: 0;
+    overflow: visible;
   }
 
   .dock-desktop-items {
@@ -3277,7 +3280,7 @@
     height: var(--dock-icon-size);
     display: grid;
     grid-template-columns: repeat(var(--dock-item-count, 1), minmax(0, 1fr));
-    align-items: center;
+    align-items: end;
     gap: 0;
     padding: 0;
     box-sizing: border-box;
@@ -3290,8 +3293,10 @@
     max-width: var(--dock-icon-size);
     height: var(--dock-icon-size);
     justify-self: center;
+    align-self: end;
     flex: 0 0 var(--dock-icon-size);
-    transform-origin: bottom center;
+    transform-origin: bottom center !important;
+    will-change: transform;
     z-index: 1;
   }
 
@@ -3309,7 +3314,7 @@
     display: grid;
     grid-template-columns: 1px 82px;
     column-gap: 19px;
-    align-items: center;
+    align-items: end;
     justify-content: end;
     position: relative;
     z-index: 20;
@@ -3320,14 +3325,14 @@
     width: 1px;
     height: 40px;
     margin: 0;
-    align-self: center;
+    align-self: end;
   }
 
   .dock-fixed-zone .dock-jarves-slot {
     width: 82px;
     flex: 0 0 82px;
     height: 52px;
-    align-self: center;
+    align-self: end;
   }
 }
 
