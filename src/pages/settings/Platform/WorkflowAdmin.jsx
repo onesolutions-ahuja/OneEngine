@@ -241,6 +241,16 @@ const WORKFLOW_VISUAL_CSS = `
     letter-spacing: -2px;
   }
   .workflow-palette-item::after { content: none; }
+  .workflow-palette-item.is-browse-only,
+  .workflow-palette-item:disabled {
+    opacity: 1;
+    cursor: default;
+  }
+  .workflow-palette-item.is-browse-only:hover,
+  .workflow-palette-item:disabled:hover {
+    background: transparent;
+    box-shadow: none;
+  }
   .workflow-palette-icon {
     display: grid;
     place-items: center;
@@ -1162,7 +1172,7 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "LOOP") {
     if (!config.collection) return "Choose the collection to loop through.";
     if (!config.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.itemVariable))) return "The Loop Current Item resource could not be generated.";
-    if (!Array.isArray(config.bodyBranch) || !config.bodyBranch.length) return "Choose at least one step for the Loop body.";
+    if (!Array.isArray(config.bodyBranch) || !config.bodyBranch.length) return "Add at least one element to the For Each Item path.";
   }
   if (step.type === "BULK_UPDATE_RECORDS") {
     if (!config.object) return "Choose the target object.";
@@ -1379,7 +1389,7 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         });
         seenVariables.add(step.config.resourceName);
       }
-      resources.push({ value: `${prefix}.value`, label: `${label} → Value`, type: step.config.resourceType || "step output" });
+      resources.push({ value: `${prefix}.value`, label: `${label} → Value`, type: step.config.resourceType || "element output" });
     } else if (step.type === "FORMULA" && step.config?.resourceName) {
       if (!seenVariables.has(step.config.resourceName)) {
         resources.push({
@@ -1389,7 +1399,7 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         });
         seenVariables.add(step.config.resourceName);
       }
-      resources.push({ value: `${prefix}.value`, label: `${label} → Result`, type: step.config.resultType || "step output" });
+      resources.push({ value: `${prefix}.value`, label: `${label} → Result`, type: step.config.resultType || "element output" });
     } else if (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true && step.config?.variableName) {
       if (!seenVariables.has(step.config.variableName)) {
         resources.push({
@@ -1403,7 +1413,7 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
       resources.push({
         value: `${prefix}.value`,
         label: `${label} → Assigned Value`,
-        type: "step output",
+        type: "element output",
       });
     } else if (step.type === "LOOP" && step.config?.itemVariable) {
       resources.push(
@@ -1434,11 +1444,11 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         });
       }
     } else if (step.type === "CREATE_RECORD") {
-      resources.push({ value: `${prefix}.created.id`, label: `${label} → Created Record ID`, type: "step output" });
+      resources.push({ value: `${prefix}.created.id`, label: `${label} → Created Record ID`, type: "element output" });
     } else if (step.type === "UPDATE_RECORD") {
-      resources.push({ value: `${prefix}.updated.id`, label: `${label} → Updated Record ID`, type: "step output" });
+      resources.push({ value: `${prefix}.updated.id`, label: `${label} → Updated Record ID`, type: "element output" });
     } else if (step.type === "RUN_SUBFLOW") {
-      resources.push({ value: `${prefix}.runId`, label: `${label} → Child Run ID`, type: "step output" });
+      resources.push({ value: `${prefix}.runId`, label: `${label} → Child Run ID`, type: "element output" });
       for (const output of step.config?.declaredOutputs || []) {
         if (!output?.name) continue;
         resources.push({ value: `${prefix}.outputs.${output.name}`, label: `${label} → ${output.label || output.name}`, type: output.type || "subflow output" });
@@ -2345,13 +2355,13 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
       {["FAILED","FAULT_HANDLED"].includes(debugInfo?.status) && debugInfo?.error ? (
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-red-600">{debugInfo?.status === "FAULT_HANDLED" ? "Debug fault handled" : "Debug failure"}</div>
-          <div className="mt-1 font-semibold">{debugInfo.error.title || "This step could not complete"}</div>
+          <div className="mt-1 font-semibold">{debugInfo.error.title || "This element could not complete"}</div>
           <div className="mt-2 text-xs leading-5">{debugInfo.error.whatHappened || "The step failed during Debug."}</div>
           <div className="mt-3 rounded-lg border border-red-100 bg-white/80 p-3 text-xs leading-5"><strong>How to fix it:</strong> {debugInfo.error.howToFix || "Check this step's required values and Resources, then run Debug again."}</div>
         </div>
       ) : debugInfo?.status === "COMPLETED" ? (
         <div className={`mt-4 rounded-xl border p-3 text-xs ${debugInfo.simulated ? "border-blue-200 bg-blue-50 text-blue-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
-          {debugInfo.simulated ? "This step was simulated in Debug mode. No external or irreversible action was performed." : "This step completed successfully in the last Debug run."}
+          {debugInfo.simulated ? "This element was simulated in Debug mode. No external or irreversible action was performed." : "This element completed successfully in the last Debug run."}
         </div>
       ) : null}
 
@@ -2362,10 +2372,10 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <summary className="cursor-pointer text-xs font-semibold text-slate-700">On Error</summary>
               <div className="mt-3 space-y-3">
                 <label className="block space-y-1 text-xs text-slate-600">
-                  <span>When this step fails</span>
+                  <span>When this element fails</span>
                   <select className={inputClass} value={step.config?.faultMode || "FAIL"} onChange={(event) => updateConfig({ faultMode: event.target.value })}>
                     <option value="FAIL">Fail the flow</option>
-                    <option value="CONTINUE">Continue to the next step</option>
+                    <option value="CONTINUE">Continue to the next element</option>
                     <option value="STOP">Stop the flow without running later elements</option>
                     <option value="ROUTE">Run an error path</option>
                     <option value="RETRY">Retry, then use the error path or fail</option>
@@ -2799,6 +2809,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     groups[category].push(option);
     return groups;
   }, {});
+  const paletteInsertionActive = insertAt != null || Boolean(branchTarget);
   const globalResources = [
     { label: "$Record", detail: "The record that triggered the flow", type: "Global Variable" },
     { label: "$Record__Prior", detail: "The record values before the triggering update", type: "Global Variable" },
@@ -2976,7 +2987,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
         {paletteTab === "elements" ? (
           <>
-            <p className="workflow-palette-help">{branchTarget ? "Choose an element for this outcome path." : insertAt == null ? "Use a + insertion point on the canvas, then choose an element." : "Choose an element to insert at the selected point."}</p>
+            <p className="workflow-palette-help">{branchTarget ? "Choose an element for this path." : insertAt == null ? "Use a + insertion point on the canvas to choose where the element belongs." : "Choose an element to insert at the selected point."}</p>
             <div className="workflow-palette-scroll">
               {Object.entries(paletteGroups).map(([category, options]) => (
                 <div key={category}>
@@ -2987,8 +2998,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                       type="button"
                       title={option.description || option.label}
                       aria-label={option.label || option.value}
-                      onClick={() => addFromPalette(option.value, insertAt == null ? workflow.steps.length : insertAt)}
-                      className="workflow-palette-item"
+                      onClick={() => { if (paletteInsertionActive) addFromPalette(option.value, insertAt == null ? workflow.steps.length : insertAt); }}
+                      disabled={!paletteInsertionActive}
+                      className={`workflow-palette-item ${!paletteInsertionActive ? "is-browse-only" : ""}`}
                     >
                       <span className="workflow-palette-icon" style={{ background: flowElementVisual(option.value).color }}>{flowElementVisual(option.value).icon}</span>
                       <span className="workflow-palette-item-copy">
@@ -3399,7 +3411,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [workflow, setWorkflow] = useState(() => {
     if (normalizedInitialWorkflow) return normalizedInitialWorkflow;
     return {
-      name: scopeKey === "whatsapp_assistant" ? "WhatsApp Assistant Workflow" : "",
+      name: scopeKey === "whatsapp_assistant" ? "WhatsApp Assistant Flow" : "",
       object: "",
       trigger: scopeKey === "whatsapp_assistant" ? "whatsapp_message_received" : "manual",
       version: 1,
@@ -3996,7 +4008,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         status,
         faultHandled: result?.faultHandled === true,
         simulated: result?.simulated === true,
-        error: stepRun.metadata?.friendlyError || result?.friendlyError || (stepRun.error_text ? { title: "This step could not complete", whatHappened: stepRun.error_text, howToFix: "Open the step Properties and check its required values and Resources." } : null),
+        error: stepRun.metadata?.friendlyError || result?.friendlyError || (stepRun.error_text ? { title: "This element could not complete", whatHappened: stepRun.error_text, howToFix: "Open the element Properties and check its required values and Resources." } : null),
       };
       if (!current || status === "FAILED" || (current.status !== "FAILED" && status === "COMPLETED")) trace[baseId] = next;
     }
@@ -4312,7 +4324,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   setWorkflow({
                     ...item,
                     id: null,
-                    name: `${item.name || "Workflow"} Copy`,
+                    name: `${item.name || "Flow"} Copy`,
                     lifecycleStatus: "DRAFT",
                     active: false,
                     version: 1,
@@ -4461,14 +4473,14 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                   <div key={assertionIndex} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
                     <div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
                       <select className={inputClass} value={assertion.type || "RUN_STATUS"} onChange={(event) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { type: event.target.value, expected: event.target.value === "RUN_STATUS" ? "COMPLETED" : "", stepId: "", resource: "" } : item) }))}>
-                        <option value="RUN_STATUS">Workflow result</option>
-                        <option value="STEP_STATUS">Step result</option>
+                        <option value="RUN_STATUS">Flow result</option>
+                        <option value="STEP_STATUS">Element result</option>
                         <option value="DECISION_OUTCOME">Decision outcome</option>
                         <option value="RESOURCE_EQUALS">Resource equals</option>
                       </select>
                       {["STEP_STATUS","DECISION_OUTCOME"].includes(assertion.type) ? (
                         <select className={inputClass} value={assertion.stepId || ""} onChange={(event) => setTestDraft((current) => ({ ...current, assertions: current.assertions.map((item, index) => index === assertionIndex ? { ...item, stepId: event.target.value, expected: "" } : item) }))}>
-                          <option value="">Select step</option>
+                          <option value="">Select element</option>
                           {workflow.steps.filter((step) => assertion.type !== "DECISION_OUTCOME" || step.type === "CONDITION").map((step) => <option key={step.id} value={step.id}>{step.label || getActionLabel(step.type)}</option>)}
                         </select>
                       ) : assertion.type === "RESOURCE_EQUALS" ? (
@@ -4646,16 +4658,16 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                 </div>
               ) : debugResult.status === "FAILED" ? (
                 <div className="mt-3 space-y-2 text-sm text-red-800">
-                  <div><strong>{debugResult.friendlyError?.title || "A step failed"}</strong></div>
+                  <div><strong>{debugResult.friendlyError?.title || "An element failed"}</strong></div>
                   <div>{debugResult.friendlyError?.whatHappened || debugResult.run?.error_text || "The flow could not complete."}</div>
                   <div className="rounded-lg bg-white/70 p-3"><strong>How to fix it:</strong> {debugResult.friendlyError?.howToFix || "Click the red step on the canvas and check its Properties."}</div>
                 </div>
               ) : debugResult.completedWithHandledError ? (
                 <div className="mt-3 space-y-2 text-sm text-amber-800">
-                  <div>The workflow continued through an On Error path. The failed step remains red so you can see what was handled.</div>
+                  <div>The flow continued through a Fault path. The failed element remains red so you can see what was handled.</div>
                   {(debugResult.handledFaults || []).map((fault, index) => (
                     <div key={`${fault.stepId}-${index}`} className="rounded-lg bg-white/80 p-3 text-xs">
-                      <strong>{fault.error?.title || "Handled step failure"}</strong>
+                      <strong>{fault.error?.title || "Handled element failure"}</strong>
                       {fault.error?.whatHappened ? <div className="mt-1">{fault.error.whatHappened}</div> : null}
                     </div>
                   ))}
