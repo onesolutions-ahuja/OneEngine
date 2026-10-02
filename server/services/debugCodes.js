@@ -63,6 +63,9 @@ export const BUILTIN_DEBUG_CODES = Object.freeze([
   { code:"OEUS01", subsystem:"U", cause:"S", category:"Session", title:"Session invalid or expired", userMessage:"Please sign in again to continue.", internalDescription:"Session expired, was revoked, timed out, or changed security context.", severity:"INFO", retryable:false, matchPattern:"SESSION_REVOKED|SESSION_EXPIRED|SESSION_INACTIVITY_TIMEOUT|SESSION_DOMAIN_CHANGED" },
   { code:"OEUG01", subsystem:"U", cause:"G", category:"SSO", title:"SSO unavailable", userMessage:"Single sign-on is not available for this account.", internalDescription:"SSO licence, provider configuration, account link or protocol is unavailable.", severity:"INFO", retryable:false, matchPattern:"GOOGLE_SSO_REQUIRED|SSO_NOT_CONNECTED|provider_not_available|provider_not_configured|account_not_linked" },
   { code:"OEUK01", subsystem:"U", cause:"K", category:"Passkey", title:"Passkey verification failed", userMessage:"Passkey verification could not be completed.", internalDescription:"WebAuthn/passkey credential verification or challenge validation failed.", severity:"WARNING", retryable:false, matchPattern:"passkey|webauthn|credential.*verification" },
+  { code:"OEUV01", subsystem:"U", cause:"V", category:"Authentication", title:"Login input invalid", userMessage:"Enter the required sign-in details.", internalDescription:"Required authentication input is missing or invalid before credential verification.", severity:"INFO", retryable:false, matchPattern:"LOGIN_INPUT_REQUIRED" },
+  { code:"OEUP02", subsystem:"U", cause:"P", category:"Authentication", title:"Incorrect PIN", userMessage:"The PIN is incorrect.", internalDescription:"PIN verification failed.", severity:"INFO", retryable:false, matchPattern:"INVALID_PIN" },
+  { code:"OEUP03", subsystem:"U", cause:"P", category:"Authentication", title:"PIN not configured", userMessage:"No PIN is configured for this user.", internalDescription:"PIN unlock was attempted before a PIN was configured.", severity:"INFO", retryable:false, matchPattern:"PIN_NOT_SET" },
 
   // Database / Neon
   { code:"OEDP01", subsystem:"D", cause:"P", category:"Database", title:"Database pool exhausted", userMessage:"OneEngine data services are temporarily busy.", internalDescription:"Postgres connection pool/client slots are exhausted.", severity:"CRITICAL", retryable:true, matchPattern:"too many clients|remaining connection slots|pool.*exhaust|connection pool" },
@@ -161,6 +164,8 @@ export function classifyDebugCode(error, status = 500) {
     SESSION_REVOKED:"OEUS01", SESSION_EXPIRED:"OEUS01", SESSION_INACTIVITY_TIMEOUT:"OEUS01",
     SESSION_IP_CHANGED:"OEUI01", SESSION_DOMAIN_CHANGED:"OEUS01",
     GOOGLE_SSO_REQUIRED:"OEUG01", SSO_NOT_CONNECTED:"OEUG01",
+    LOGIN_INPUT_REQUIRED:"OEUV01", INVALID_PIN:"OEUP02", PIN_NOT_SET:"OEUP03",
+    IDENTITY_DATABASE_UNAVAILABLE:"OEDC01",
     STEP_UP_REQUIRED:"OERS01", RESOURCE_BLOCKED:"OERS01",
     NOT_LICENSED:"OEPE01", NOT_ENTITLED:"OEPE01", NOT_INSTALLED:"OEPD01",
     UNREGISTERED_CAPABILITY:"OEXR01", CAPABILITY_MISMATCH:"OEXC01",
