@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
@@ -83,6 +83,63 @@ function makeColumns(fields, listView = null) {
   }))
 }
 
+function savedViewFiltersToUi(filters) {
+  const normalized = Array.isArray(filters)
+    ? filters
+    : filters && typeof filters === 'object'
+      ? Object.entries(filters).map(([field, value]) => ({
+          field,
+          operator: Array.isArray(value) ? 'in' : 'equals',
+          value,
+        }))
+      : []
+  const result = {}
+  for (const item of normalized) {
+    if (!item?.field) continue
+    const current = result[item.field] || { values: [], operator: '', value: '' }
+    if (item.operator === 'in') {
+      const values = Array.isArray(item.value) ? item.value : [item.value]
+      current.values = values.map((value) => JSON.stringify(value))
+    } else {
+      current.operator = item.operator || 'equals'
+      current.value = ['is_blank','is_not_blank'].includes(current.operator) ? '' : (item.value ?? '')
+    }
+    result[item.field] = current
+  }
+  return result
+}
+
+function uiFiltersToMetadata(filters = {}) {
+  const result = []
+  for (const [field, config] of Object.entries(filters || {})) {
+    const selected = Array.isArray(config?.values) ? config.values : []
+    if (selected.length) {
+      result.push({
+        field,
+        operator: 'in',
+        value: selected.map((item) => {
+          try { return JSON.parse(item) } catch { return item }
+        }),
+      })
+    }
+    if (config?.operator) {
+      result.push({
+        field,
+        operator: config.operator,
+        value: ['is_blank','is_not_blank'].includes(config.operator) ? null : config.value,
+      })
+    }
+  }
+  return result
+}
+
+function savedViewSortToUi(sort) {
+  return {
+    key: typeof sort?.field === 'string' ? sort.field : '',
+    direction: String(sort?.direction || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc',
+  }
+}
+
 export default function WorkspacePage({ initialObjectKey = '', initialRecordId = '', onRouteChange = null }) {
   const [objects, setObjects] = useState([])
   const [query, setQuery] = useState('')
@@ -102,6 +159,13 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const [relatedState, setRelatedState] = useState({ key: '', loading: false, rows: [], error: '' })
   const [historyState, setHistoryState] = useState({ loading: false, rows: [], error: '' })
   const [actionBusy, setActionBusy] = useState('')
+  const [activeListViewId, setActiveListViewId] = useState('')
+  const [listSearch, setListSearch] = useState('')
+  const [listFilters, setListFilters] = useState({})
+  const [listSort, setListSort] = useState({ key: '', direction: 'asc' })
+  const [pageInfo, setPageInfo] = useState({ page: 1, pageSize: 50, total: 0, pages: 0 })
+  const rowRequestRef = useRef(0)
+  const searchTimerRef = useRef(null)
 
   useEffect(() => {
     let live = true
@@ -154,7 +218,63 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
   const selectedObject = objects.find((item) => objectKey(item) === selectedKey) || null
 
-  const loadObject = async (object = selectedObject, forceRefresh = false) => {
+  useEffect(() => () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+  }, [])
+
+  const loadRows = async ({
+    object = selectedObject,
+    listViewId = activeListViewId,
+    page = 1,
+    search = listSearch,
+    filters = listFilters,
+    sort = listSort,
+  } = {}) => {
+    if (!object) return
+    const requestId = ++rowRequestRef.current
+    const key = objectKey(object)
+    setLoadingRows(true)
+    setError('')
+    try {
+      const params = new URLSearchParams()
+      params.set('page', String(Math.max(1, Number(page) || 1)))
+      if (listViewId) params.set('listViewId', listViewId)
+      if (search?.trim()) params.set('search', search.trim())
+      params.set('viewFilters', JSON.stringify(uiFiltersToMetadata(filters)))
+      if (sort?.key) {
+        params.set('sortField', sort.key)
+        params.set('sortDirection', sort.direction === 'desc' ? 'desc' : 'asc')
+      }
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?${params.toString()}`)
+      if (requestId !== rowRequestRef.current) return
+      const nextRows = Array.isArray(response?.records)
+        ? response.records
+        : Array.isArray(response?.data)
+          ? response.data
+          : []
+      setRows(nextRows)
+      setPageInfo({
+        page: Number(response?.page || page || 1),
+        pageSize: Number(response?.pageSize || 50),
+        total: Number(response?.total || 0),
+        pages: Number(response?.pages || 0),
+      })
+      setSelectedId((current) => {
+        if (current && nextRows.some((row) => String(row.id) === String(current))) return current
+        if (initialRecordId && current && String(current) === String(initialRecordId)) return current
+        return nextRows[0]?.id || ''
+      })
+    } catch (err) {
+      if (requestId !== rowRequestRef.current) return
+      setRows([])
+      setPageInfo({ page: 1, pageSize: 50, total: 0, pages: 0 })
+      setError(err?.message || 'Unable to load records')
+    } finally {
+      if (requestId === rowRequestRef.current) setLoadingRows(false)
+    }
+  }
+
+  const loadObject = async (object = selectedObject, forceRefresh = false, preferredListViewId = '') => {
     if (!object) return
     const key = objectKey(object)
     setLoadingRows(true)
@@ -165,26 +285,17 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`),
       ])
       const meta = workspaceRes?.data || {}
-      const listViewId = meta?.defaultListView?.id || ''
-      const recordPath = `/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
-      const recordRes = await cachedGet(recordPath, {
-        cacheKey: `workspace:records:${key}:${listViewId || 'default'}`,
-        forceRefresh,
-        onFresh: (fresh) => {
-          const nextRows = Array.isArray(fresh?.records) ? fresh.records : Array.isArray(fresh?.data) ? fresh.data : []
-          setRows(nextRows)
-        },
-      })
       const nextFields = Array.isArray(meta.fields) ? meta.fields : []
-      const nextRows = Array.isArray(recordRes?.records)
-        ? recordRes.records
-        : Array.isArray(recordRes?.data)
-          ? recordRes.data
-          : []
+      const nextViews = Array.isArray(meta.listViews) ? meta.listViews : []
+      const preferred = nextViews.find((view) => String(view.id) === String(preferredListViewId || activeListViewId || ''))
+      const selectedView = preferred || meta.defaultListView || nextViews[0] || null
+      const nextViewId = selectedView?.id || ''
+      const nextFilters = savedViewFiltersToUi(selectedView?.filters)
+      const nextSort = savedViewSortToUi(selectedView?.sort)
+
       setFields(nextFields)
-      setRows(nextRows)
       setRuntimeMeta({
-        listViews: meta.listViews || [],
+        listViews: nextViews,
         defaultListView: meta.defaultListView || null,
         recordTypes: meta.recordTypes || [],
         relationships: meta.relationships || [],
@@ -194,21 +305,24 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         buttons: meta.buttons || [],
       })
       setPermissions(permissionRes?.data || null)
-      const first = nextRows[0]?.id || ''
-      setSelectedId((current) => {
-        if (current && nextRows.some((row) => String(row.id) === String(current))) return current
-        if (initialRecordId && nextRows.some((row) => String(row.id) === String(initialRecordId))) return initialRecordId
-        return first
-      })
+      setActiveListViewId(nextViewId)
+      setListSearch('')
+      setListFilters(nextFilters)
+      setListSort(nextSort)
+      await loadRows({ object, listViewId: nextViewId, page: 1, search: '', filters: nextFilters, sort: nextSort })
     } catch (err) {
       setFields([])
       setRows([])
       setPermissions(null)
       setRuntimeMeta({ listViews: [], defaultListView: null, recordTypes: [], relationships: [], layouts: [], buttons: [] })
+      setActiveListViewId('')
+      setListSearch('')
+      setListFilters({})
+      setListSort({ key: '', direction: 'asc' })
+      setPageInfo({ page: 1, pageSize: 50, total: 0, pages: 0 })
       setSelectedId('')
       setDetail(null)
       setError(err?.message || 'Unable to load records')
-    } finally {
       setLoadingRows(false)
     }
   }
@@ -255,6 +369,74 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     return () => { live = false }
   }, [selectedId, selectedKey])
 
+  const handleListViewChange = async (viewId) => {
+    if (!selectedObject) return
+    const view = runtimeMeta.listViews.find((item) => String(item.id) === String(viewId)) || null
+    const nextFilters = savedViewFiltersToUi(view?.filters)
+    const nextSort = savedViewSortToUi(view?.sort)
+    setActiveListViewId(view?.id || '')
+    setListSearch('')
+    setListFilters(nextFilters)
+    setListSort(nextSort)
+    await loadRows({ object: selectedObject, listViewId: view?.id || '', page: 1, search: '', filters: nextFilters, sort: nextSort })
+  }
+
+  const handleListSearchChange = (value) => {
+    setListSearch(value)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      void loadRows({ object: selectedObject, listViewId: activeListViewId, page: 1, search: value, filters: listFilters, sort: listSort })
+    }, 250)
+  }
+
+  const handleListFiltersChange = (next) => {
+    setListFilters(next)
+    void loadRows({ object: selectedObject, listViewId: activeListViewId, page: 1, search: listSearch, filters: next, sort: listSort })
+  }
+
+  const handleListSortChange = (next) => {
+    setListSort(next)
+    void loadRows({ object: selectedObject, listViewId: activeListViewId, page: 1, search: listSearch, filters: listFilters, sort: next })
+  }
+
+  const handlePageChange = (page) => {
+    void loadRows({ object: selectedObject, listViewId: activeListViewId, page, search: listSearch, filters: listFilters, sort: listSort })
+  }
+
+  const saveListView = async (state, mode) => {
+    if (!selectedObject) return
+    const activeView = runtimeMeta.listViews.find((item) => String(item.id) === String(activeListViewId)) || null
+    let label = activeView?.label || 'My View'
+    if (mode === 'new') {
+      label = window.prompt('Name this personal list view', activeView?.label ? `${activeView.label} Copy` : `My ${objectLabel(selectedObject)}`)?.trim()
+      if (!label) return
+    }
+    try {
+      setError('')
+      const payload = {
+        label,
+        columns: state.columns,
+        filters: state.filters,
+        sort: state.sort,
+        pageSize: state.pageSize,
+        ...(mode === 'new' ? { scope: 'PERSONAL' } : {}),
+      }
+      const response = await apiRequest(
+        mode === 'new'
+          ? `/api/platform/objects/${encodeURIComponent(selectedObject.id)}/list-views`
+          : `/api/platform/list-views/${encodeURIComponent(activeListViewId)}`,
+        {
+          method: mode === 'new' ? 'POST' : 'PUT',
+          body: JSON.stringify(payload),
+        },
+      )
+      const saved = response?.data || null
+      await loadObject(selectedObject, true, saved?.id || activeListViewId)
+    } catch (err) {
+      setError(err?.message || 'Unable to save list view')
+    }
+  }
+
   const filteredObjects = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return objects
@@ -263,7 +445,8 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     )
   }, [objects, query])
 
-  const columns = useMemo(() => makeColumns(fields, runtimeMeta.defaultListView), [fields, runtimeMeta.defaultListView])
+  const activeListView = runtimeMeta.listViews.find((item) => String(item.id) === String(activeListViewId)) || runtimeMeta.defaultListView || null
+  const columns = useMemo(() => makeColumns(fields, activeListView), [fields, activeListView])
   const searchKeys = useMemo(() => columns.map((column) => column.key), [columns])
   const canCreate = permissions?.can_create === true
   const canEdit = permissions?.can_edit === true
@@ -324,7 +507,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       if (response?.success === false) throw new Error(response.message || 'Unable to save record')
       const relatedToRefresh = editor.relatedRelationship || null
       setEditor(null)
-      await loadObject(selectedObject, true)
+      await loadObject(selectedObject, true, saved?.id || activeListViewId)
       const savedId = response?.data?.id
       if (savedId && key === objectKey(selectedObject)) setSelectedId(savedId)
       if (relatedToRefresh) await loadRelated(relatedToRefresh)
@@ -337,7 +520,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     if (!selectedObject || !selectedId || !canDelete || !window.confirm('Delete this record?')) return
     try {
       await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}`, { method: 'DELETE' })
-      await loadObject(selectedObject, true)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
     } catch (err) {
       setError(err?.message || 'Unable to delete record')
     }
@@ -361,7 +544,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         body: JSON.stringify({}),
       })
       if (response?.success === false) throw new Error(response.message || 'Action failed')
-      await loadObject(selectedObject, true)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
     } catch (err) {
       setError(err?.message || 'Unable to execute action')
     } finally {
@@ -394,7 +577,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         body: JSON.stringify({}),
       })
       if (response?.success === false) throw new Error(response.message || 'Action failed')
-      await loadObject(selectedObject, true)
+      await loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })
     } catch (err) {
       setError(err?.message || 'Unable to execute configured action')
     } finally {
@@ -471,7 +654,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         {selectedObject ? (
           <RecordListView
             title={objectLabel(selectedObject)}
-            subtitle={`${rows.length} records`}
+            subtitle={`${pageInfo.total} records`}
             rows={rows}
             columns={columns}
             searchKeys={searchKeys}
@@ -483,9 +666,23 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             error={error}
             objectKey={objectKey(selectedObject)}
             objectLabel={objectLabel(selectedObject)}
-            onDataChanged={() => loadObject(selectedObject, true)}
+            onDataChanged={() => loadRows({ object: selectedObject, listViewId: activeListViewId, page: pageInfo.page, search: listSearch, filters: listFilters, sort: listSort })}
             selectedRowId={selectedId}
             onRowSelect={(row) => { setSelectedId(row.id); setDetailTab('details') }}
+            listViews={runtimeMeta.listViews}
+            activeListViewId={activeListViewId}
+            onListViewChange={handleListViewChange}
+            onSaveListView={saveListView}
+            canUpdateActiveView={Boolean(activeListView?.owner_user_id || activeListView?.scope === 'PERSONAL')}
+            serverMode
+            searchValue={listSearch}
+            onSearchChange={handleListSearchChange}
+            sortValue={listSort}
+            onSortChange={handleListSortChange}
+            filtersValue={listFilters}
+            onFiltersChange={handleListFiltersChange}
+            pageInfo={pageInfo}
+            onPageChange={handlePageChange}
           />
         ) : <div className="workspace-state">Select an object.</div>}
       </main>
