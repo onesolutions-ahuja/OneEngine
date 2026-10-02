@@ -514,6 +514,76 @@ async function validatePicklistDefinition(db, field, req) {
   }
 }
 
+async function validateDependentPicklistDefinition(db, object, field, req) {
+  if (!["select", "picklist"].includes(field.field_type)) return;
+  const config = field.config?.dependentPicklist || field.config?.dependent_picklist;
+  if (!config) return;
+  if (typeof config !== "object" || Array.isArray(config)) {
+    throw new ConditionError("Dependent picklist configuration must be an object");
+  }
+  const controllingFieldApi = String(config.controllingField || config.controlling_field || "").trim();
+  if (!isSafeIdentifier(controllingFieldApi)) {
+    throw new ConditionError("Dependent picklist must reference a valid controlling field");
+  }
+  if (controllingFieldApi === field.api_name) {
+    throw new ConditionError("A picklist cannot control itself");
+  }
+  const controllerResult = await db(
+    "SELECT * FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND active=true AND (company_id IS NULL OR company_id=$3) LIMIT 1",
+    [object.id, controllingFieldApi, req.user.companyId]
+  );
+  const controller = controllerResult.rows[0];
+  if (!controller || !["select", "picklist", "boolean"].includes(controller.field_type)) {
+    throw new ConditionError("Controlling field must be an active picklist or boolean field on the same object");
+  }
+
+  const dependentOptions = await valueSetOptions(db, field, req);
+  const dependentValues = new Set(dependentOptions.filter((option) => option.active !== false).map((option) => String(option.value)));
+  const controllingValues = controller.field_type === "boolean"
+    ? new Set(["true", "false"])
+    : new Set((await valueSetOptions(db, controller, req)).filter((option) => option.active !== false).map((option) => String(option.value)));
+
+  const mappings = config.mappings;
+  if (!mappings || typeof mappings !== "object" || Array.isArray(mappings)) {
+    throw new ConditionError("Dependent picklist mappings must be an object");
+  }
+  for (const [dependentValue, allowedControllers] of Object.entries(mappings)) {
+    if (!dependentValues.has(String(dependentValue))) {
+      throw new ConditionError(`Dependent picklist mapping references unknown value "${dependentValue}"`);
+    }
+    if (!Array.isArray(allowedControllers)) {
+      throw new ConditionError("Each dependent picklist mapping must contain an array of controlling values");
+    }
+    for (const controllerValue of allowedControllers) {
+      if (!controllingValues.has(String(controllerValue))) {
+        throw new ConditionError(`Dependent picklist mapping references unknown controlling value "${controllerValue}"`);
+      }
+    }
+  }
+}
+
+async function validateDependentPicklistValues(db, fields, record, req) {
+  const fieldByApi = new Map((fields || []).map((field) => [field.api_name, field]));
+  for (const field of fields || []) {
+    if (!["select", "picklist"].includes(field.field_type)) continue;
+    const config = field.config?.dependentPicklist || field.config?.dependent_picklist;
+    const controllingFieldApi = config?.controllingField || config?.controlling_field;
+    if (!controllingFieldApi) continue;
+
+    const dependentValue = record?.[field.api_name];
+    if (dependentValue === null || dependentValue === undefined || dependentValue === "") continue;
+    const controllingValue = record?.[controllingFieldApi];
+    if (controllingValue === null || controllingValue === undefined || controllingValue === "") {
+      return `${field.label} requires ${fieldByApi.get(controllingFieldApi)?.label || controllingFieldApi} before a value can be selected`;
+    }
+    const allowedControllers = config?.mappings?.[String(dependentValue)];
+    if (!Array.isArray(allowedControllers) || !allowedControllers.map(String).includes(String(controllingValue))) {
+      return `${field.label} value "${dependentValue}" is not available when ${fieldByApi.get(controllingFieldApi)?.label || controllingFieldApi} is "${controllingValue}"`;
+    }
+  }
+  return null;
+}
+
 function parseRecordFilters(query) {
   const raw = query?.filter ?? query?.filters;
   if (raw === undefined || raw === "") return {};
@@ -1754,6 +1824,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const storedConfig = systemObject(object) && !isCalculatedField({ field_type: fieldType }) ? { ...config, storage: "extension" } : config;
     try {
       await validatePicklistDefinition(db, { field_type: fieldType, options, config }, req);
+    await validateDependentPicklistDefinition(db, object, { api_name: apiName, field_type: fieldType, options, config }, req);
       await validateLookupConfiguration(object.id, fieldType, config, req);
       await checkFormulaChange(object.id, { api_name: apiName, field_type: fieldType, source_column: sourceColumn, required, writable, config: storedConfig, active: true, readable: true }, null, req);
       const names = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id IS NULL OR company_id=$3)", [object.id, apiName, req.user.companyId]);
@@ -1793,6 +1864,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       }
       if (req.body.options !== undefined) candidate.options = req.body.options;
       await validatePicklistDefinition(db, candidate, req);
+    await validateDependentPicklistDefinition(db, object, candidate, req);
       await validateLookupConfiguration(field.object_id, candidate.field_type, candidate.config, req);
       await checkFormulaChange(field.object_id, candidate, field.id, req);
       if (field.active === true && candidate.active === false) {
@@ -7035,6 +7107,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
     const candidate = { ...current, ...Object.fromEntries(values.map(({ field, value }) => [field.api_name, value])) };
     try {
+      const dependentPicklistError = await validateDependentPicklistValues(db, fields, candidate, req);
+      if (dependentPicklistError) return { status: 422, code: "DEPENDENT_PICKLIST_INVALID", message: dependentPicklistError };
       const calculated = compileFormulas(fields)(candidate);
       const withRollups = await populateRollups(db, object, fields, [calculated], req);
       const resolved = Array.isArray(withRollups) && withRollups.length ? withRollups[0] : calculated;
