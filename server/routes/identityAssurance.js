@@ -294,6 +294,29 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     res.json({success:true,data:safeProvider(r.rows[0])});
   });
 
+  router.post("/security/auth-providers/:id/test",...manage,async(req,res)=>{
+    const provider=(await db("SELECT * FROM identity_auth_providers WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId])).rows[0];
+    if(!provider)return res.status(404).json({success:false,message:"Authentication provider not found"});
+    const cfg=provider.configuration||{};
+    try{
+      if(["OIDC","APPLE","GOOGLE"].includes(provider.provider_type)){
+        const urls=[cfg.authorizationEndpoint,cfg.tokenEndpoint,cfg.userInfoEndpoint].filter(Boolean);
+        if(urls.length<3)return res.status(400).json({success:false,message:"Authorization, token and user-info endpoints are required"});
+        for(const value of urls){const url=new URL(String(value));if(url.protocol!=="https:")throw new Error("Provider endpoints must use HTTPS");}
+        const discovery=cfg.discoveryUrl?await fetch(String(cfg.discoveryUrl),{headers:{Accept:"application/json"}}):null;
+        if(discovery&&!discovery.ok)throw new Error(`Discovery endpoint returned HTTP ${discovery.status}`);
+        return res.json({success:true,data:{ok:true,message:"OIDC provider configuration is valid.",discovery:discovery?await discovery.json():null}});
+      }
+      if(provider.provider_type==="SAML"){
+        if(!cfg.entryPoint||!cfg.issuer||!cfg.idpCert)throw new Error("SAML entry point, issuer/entity ID, and IdP certificate are required");
+        const entry=new URL(String(cfg.entryPoint));if(entry.protocol!=="https:")throw new Error("SAML entry point must use HTTPS");
+        if(!/BEGIN CERTIFICATE/.test(String(cfg.idpCert)))throw new Error("IdP certificate must be PEM encoded");
+        return res.json({success:true,data:{ok:true,message:"SAML provider configuration is valid."}});
+      }
+      return res.status(400).json({success:false,message:"Unsupported provider type"});
+    }catch(error){return res.status(400).json({success:false,message:error.message||"Provider configuration is invalid"});}
+  });
+
   router.delete("/security/auth-providers/:id",...manage,async(req,res)=>{
     await db("DELETE FROM identity_auth_providers WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId]);
     res.json({success:true});
