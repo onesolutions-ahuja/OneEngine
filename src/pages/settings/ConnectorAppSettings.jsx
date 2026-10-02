@@ -6,6 +6,8 @@ function connectorTitle(packageKey) {
   if (packageKey === "one_connect_dojo") return "One Connect - Dojo";
   if (packageKey === "one_connect_sumup") return "One Connect - SumUp";
   if (packageKey === "smsgate_connector") return "SMSGate";
+  if (packageKey === "brevo_connector") return "Brevo Connect";
+  if (packageKey === "mailjet_connector") return "Mailjet Connect";
   return String(packageKey || "Connector").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
