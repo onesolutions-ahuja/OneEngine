@@ -824,16 +824,18 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       const fields = await enrichFields(db, await applyFieldSecurity(db, fieldsResult.rows, req), req);
       const pageType = req.query.pageType || req.query.page_type || "detail";
       if (!PAGE_TYPES.has(pageType)) return res.status(400).json({ success: false, message: "Invalid page type" });
-      const layouts = await db(
-        `SELECT * FROM platform_layouts
-          WHERE object_id=$1 AND page_type=$2 AND active=true
-            AND (company_id IS NULL OR company_id=$3)
-            AND (role_id IS NULL OR role_id=$4)
-          ORDER BY CASE WHEN role_id=$4 THEN 0 WHEN is_default=true THEN 1 WHEN company_id=$3 THEN 2 ELSE 3 END,
-            updated_at DESC,id`,
-        [object.id, pageType, req.user.companyId, req.user.roleId || null]
-      );
-      res.json({ success: true, data: { object, fields, layout: resolvePageLayout(layouts.rows) } });
+      const requestedRecordTypeId = typeof req.query.recordTypeId === "string" ? req.query.recordTypeId : null;
+      const recordType = requestedRecordTypeId ? await resolveRecordType(object, requestedRecordTypeId, req) : null;
+      if (requestedRecordTypeId && !recordType) {
+        return res.status(400).json({ success: false, message: "Record type is not available for this object" });
+      }
+      const layout = await resolveEffectiveLayoutForRequest({
+        objectId: object.id,
+        pageType,
+        recordTypeId: recordType?.id || null,
+        req,
+      });
+      res.json({ success: true, data: { object, fields, layout, recordType: recordType || null } });
     } catch (error) {
       console.error("Runtime platform form error:", error);
       res.status(500).json({ success: false, message: "Unable to load runtime platform form" });
@@ -2929,16 +2931,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (!object) return res.status(404).json({ success: false, message: "Object not found" });
     const pageType = req.query.pageType || req.query.page_type || "detail";
     if (!PAGE_TYPES.has(pageType)) return res.status(400).json({ success: false, message: "Invalid page type" });
-    const result = await db(
-      `SELECT * FROM platform_layouts
-       WHERE object_id=$1 AND page_type=$2 AND active=true
-         AND (company_id IS NULL OR company_id=$3)
-         AND (role_id IS NULL OR role_id=$4)
-       ORDER BY CASE WHEN role_id=$4 THEN 0 WHEN is_default=true THEN 1 WHEN company_id=$3 THEN 2 ELSE 3 END,
-         updated_at DESC, id`,
-      [object.id, pageType, req.user.companyId, req.user.roleId || null]
-    );
-    res.json({ success: true, data: resolvePageLayout(result.rows) });
+    const requestedRecordTypeId = typeof req.query.recordTypeId === "string" ? req.query.recordTypeId : null;
+    const recordType = requestedRecordTypeId ? await resolveRecordType(object, requestedRecordTypeId, req) : null;
+    if (requestedRecordTypeId && !recordType) {
+      return res.status(400).json({ success: false, message: "Record type is not available for this object" });
+    }
+    const layout = await resolveEffectiveLayoutForRequest({
+      objectId: object.id,
+      pageType,
+      recordTypeId: recordType?.id || null,
+      req,
+    });
+    res.json({ success: true, data: layout });
   });
 
   router.post("/platform/layouts/:layoutId/clone", ...manage, async (req, res) => {
