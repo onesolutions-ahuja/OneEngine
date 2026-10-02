@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Check, FileDown, FileUp, Filter, GripVertical, Pencil, Plus, Search } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, FileDown, FileUp, Filter, GripVertical, Pencil, Plus, Save, Search } from 'lucide-react'
 import DataLoaderWindow from './DataLoaderWindow'
 
 const valueFor = (column, row) => {
@@ -46,6 +46,30 @@ const matchesOperator = (raw, operator, expected) => {
   return true
 }
 
+const serializeFilters = (filters = {}) => {
+  const result = []
+  for (const [field, config] of Object.entries(filters || {})) {
+    const selected = Array.isArray(config?.values) ? config.values : []
+    if (selected.length) {
+      result.push({
+        field,
+        operator: 'in',
+        value: selected.map((item) => {
+          try { return JSON.parse(item) } catch { return item }
+        }),
+      })
+    }
+    if (config?.operator) {
+      result.push({
+        field,
+        operator: config.operator,
+        value: ['is_blank', 'is_not_blank'].includes(config.operator) ? null : config.value,
+      })
+    }
+  }
+  return result
+}
+
 const layoutKey = (title) => {
   let userId = 'anonymous'
   try {
@@ -74,10 +98,37 @@ export default function RecordListView({
   onDataChanged,
   selectedRowId = null,
   onRowSelect,
+  listViews = [],
+  activeListViewId = '',
+  onListViewChange = null,
+  onSaveListView = null,
+  canUpdateActiveView = false,
+  serverMode = false,
+  searchValue,
+  onSearchChange,
+  sortValue,
+  onSortChange,
+  filtersValue,
+  onFiltersChange,
+  pageInfo = null,
+  onPageChange = null,
 }) {
-  const [query, setQuery] = useState('')
-  const [sort, setSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
-  const [filters, setFilters] = useState({})
+  const [localQuery, setLocalQuery] = useState('')
+  const [localSort, setLocalSort] = useState({ key: columns[0]?.key || '', direction: 'asc' })
+  const [localFilters, setLocalFilters] = useState({})
+  const query = searchValue !== undefined ? searchValue : localQuery
+  const sort = sortValue !== undefined ? sortValue : localSort
+  const filters = filtersValue !== undefined ? filtersValue : localFilters
+  const setQuery = (next) => onSearchChange ? onSearchChange(next) : setLocalQuery(next)
+  const setSort = (next) => onSortChange ? onSortChange(next) : setLocalSort(next)
+  const setFilters = (next) => {
+    if (onFiltersChange) {
+      const resolved = typeof next === 'function' ? next(filters) : next
+      onFiltersChange(resolved)
+      return
+    }
+    setLocalFilters(next)
+  }
   const [filterOpen, setFilterOpen] = useState(null)
   const [draggingKey, setDraggingKey] = useState(null)
   const [dataLoaderMode, setDataLoaderMode] = useState(null)
@@ -138,6 +189,7 @@ export default function RecordListView({
   }, [rows, columns])
 
   const filtered = useMemo(() => {
+    if (serverMode) return Array.isArray(rows) ? rows : []
     const q = query.trim().toLowerCase()
     let result = !q
       ? rows
@@ -185,7 +237,7 @@ export default function RecordListView({
 
       return sort.direction === 'asc' ? comparison : -comparison
     })
-  }, [rows, query, searchKeys, columns, sort, filters])
+  }, [rows, query, searchKeys, columns, sort, filters, serverMode])
 
   const toggleSort = (column) => {
     if (column.sortable === false) return
@@ -245,6 +297,52 @@ export default function RecordListView({
           {resolvedSubtitle ? <p>{resolvedSubtitle}</p> : null}
         </div>
         <div className="record-list-header-actions">
+          {listViews.length ? (
+            <label className="record-list-view-picker">
+              <span className="sr-only">List view</span>
+              <select value={activeListViewId || ''} onChange={(event) => onListViewChange?.(event.target.value)}>
+                {listViews.map((view) => (
+                  <option key={view.id} value={view.id}>
+                    {view.scope === 'PERSONAL' || view.owner_user_id ? 'My · ' : ''}{view.label}{view.is_default ? ' · Default' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {onSaveListView && activeListViewId ? (
+            <div className="record-data-actions" aria-label="List view tools">
+              {canUpdateActiveView ? (
+                <button
+                  type="button"
+                  className="record-data-icon"
+                  title="Save current view"
+                  aria-label="Save current view"
+                  onClick={() => onSaveListView({
+                    columns: orderedColumns.map((column) => column.key),
+                    filters: serializeFilters(filters),
+                    sort: { field: sort?.key || null, direction: sort?.direction || 'asc' },
+                    pageSize: pageInfo?.pageSize || 50,
+                  }, 'update')}
+                >
+                  <Save size={15} />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="record-data-icon"
+                title="Save as a personal view"
+                aria-label="Save as a personal view"
+                onClick={() => onSaveListView({
+                  columns: orderedColumns.map((column) => column.key),
+                  filters: serializeFilters(filters),
+                  sort: { field: sort?.key || null, direction: sort?.direction || 'asc' },
+                  pageSize: pageInfo?.pageSize || 50,
+                }, 'new')}
+              >
+                <Copy size={15} />
+              </button>
+            </div>
+          ) : null}
           {objectKey ? (
             <div className="record-data-actions" aria-label="Data tools">
               <button
@@ -472,6 +570,31 @@ export default function RecordListView({
           </table>
         </div>
       )}
+      {pageInfo && Number(pageInfo.pages || 0) > 1 ? (
+        <div className="record-list-pagination" aria-label="Record pages">
+          <button
+            type="button"
+            className="record-data-icon"
+            disabled={Number(pageInfo.page || 1) <= 1}
+            onClick={() => onPageChange?.(Number(pageInfo.page || 1) - 1)}
+            aria-label="Previous page"
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <span>Page {pageInfo.page || 1} of {pageInfo.pages || 1} · {pageInfo.total || 0} records</span>
+          <button
+            type="button"
+            className="record-data-icon"
+            disabled={Number(pageInfo.page || 1) >= Number(pageInfo.pages || 1)}
+            onClick={() => onPageChange?.(Number(pageInfo.page || 1) + 1)}
+            aria-label="Next page"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      ) : pageInfo && Number(pageInfo.total || 0) >= 0 ? (
+        <div className="record-list-pagination"><span>{pageInfo.total || 0} records</span></div>
+      ) : null}
       {dataLoaderMode && objectKey ? (
         <DataLoaderWindow
           objectKey={objectKey}
