@@ -3,6 +3,7 @@ import ObjectFieldRenderer from "./ObjectFieldRenderer.jsx";
 import ObjectLayoutRenderer from "./ObjectLayoutRenderer.jsx";
 import ObjectForm from "./ObjectForm.jsx";
 import ObjectRecordView from "../../../components/records/ObjectRecordView.jsx";
+import ProcessPath from "../../../components/platform/ProcessPath.jsx";
 import { fieldKey, normalizeFormDefinition } from "./formDefinition.js";
 import { isTechnicalRecordField } from "../../../utils/recordDisplay.js";
 
@@ -25,6 +26,8 @@ export default function FormRenderer({
   formId,
   embedded = false,
   contextValues = {},
+  canEditProcessPath = false,
+  onProcessStageChange,
 }) {
   const normalized = useMemo(() => normalizeFormDefinition(definition), [definition]);
   const visibleFields = useMemo(
@@ -124,6 +127,9 @@ export default function FormRenderer({
         fields={visibleFields}
         context={{ ...contextValues, record: initialValues }}
         renderComponent={(component) => {
+          if (component.type === "process_path") {
+            return <ProcessPath component={component} fields={visibleFields} record={initialValues} canEdit={canEditProcessPath} onStageChange={onProcessStageChange} />;
+          }
           if (component.type === "field") {
             const field = fieldMap.get(component.field_key);
             return field ? <ObjectFieldRenderer field={{ ...field, label: component.label || field.label }} value={valueFor(initialValues, field)} mode="display" /> : null;
