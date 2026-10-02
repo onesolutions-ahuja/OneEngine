@@ -15,7 +15,7 @@ export function effectiveAssurance(settings, policy) {
     deviceActivationRequired: pick("device_activation_required") === true,
     skipDeviceActivationOnTrustedNetwork: pick("skip_device_activation_on_trusted_network") !== false,
     passwordAssurance: String(settings?.password_assurance || "STANDARD").toUpperCase(),
-    totpAssurance: String(settings?.totp_assurance || "HIGH").toUpperCase(),
+    totpAssurance: String(settings?.totp_assurance || "STANDARD").toUpperCase(),
     passkeyAssurance: String(settings?.passkey_assurance || "HIGH").toUpperCase(),
     ssoAssurance: String(settings?.sso_assurance || "STANDARD").toUpperCase(),
     stepUpPeriodMinutes: Math.max(1, Number(settings?.step_up_period_minutes || 15)),
