@@ -1,4 +1,5 @@
 import { assertTrustedJobKind } from "./trustedRuntime.js";
+import { classifyDebugCode } from "./debugCodes.js";
 
 const MAX_ATTEMPTS = 5;
 
@@ -35,7 +36,11 @@ export async function completePlatformJob({ db, id }) {
 }
 
 export async function failPlatformJob({ db, id, error, retryable = true }) {
-  const result = await db("UPDATE platform_action_jobs SET attempts=attempts+1,last_error=$2,status=CASE WHEN $3=false OR attempts+1 >= $4 THEN 'FAILED' ELSE 'PENDING' END,next_attempt_at=CASE WHEN $3=false OR attempts+1 >= $4 THEN NULL ELSE NOW() + ((POWER(2, attempts + 1) || ' minutes')::interval) END,updated_at=NOW() WHERE id=$1 RETURNING *", [id, String(error?.message || error || "Job failed").slice(0, 2000), retryable, MAX_ATTEMPTS]);
+  const oeCode = classifyDebugCode(error, Number(error?.status || error?.statusCode || 500));
+  const result = await db(
+    "UPDATE platform_action_jobs SET attempts=attempts+1,last_error=$2,last_error_code=$3,status=CASE WHEN $4=false OR attempts+1 >= $5 THEN 'FAILED' ELSE 'PENDING' END,next_attempt_at=CASE WHEN $4=false OR attempts+1 >= $5 THEN NULL ELSE NOW() + ((POWER(2, attempts + 1) || ' minutes')::interval) END,updated_at=NOW() WHERE id=$1 RETURNING *",
+    [id, String(error?.message || error || "Job failed").slice(0, 2000), oeCode, retryable, MAX_ATTEMPTS]
+  );
   return result.rows[0] || null;
 }
 
