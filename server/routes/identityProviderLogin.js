@@ -80,7 +80,7 @@ export default function createIdentityProviderLoginRouter({db,createToken,decryp
       const usable=methods.filter(m=>!assurance.effective.phishingResistantRequired||m.phishing_resistant===true);
       const challenge=await createPendingChallenge(db,{
         companyId:user.company_id,userId:user.id,type:"LOGIN",
-        context:{authMethod,providerId:provider.id,phishingResistantRequired:assurance.effective.phishingResistantRequired===true,activationOnly:!activationSatisfied&&!assurance.effective.mfaRequired},
+        context:{authMethod,providerId:provider.id,phishingResistantRequired:assurance.effective.phishingResistantRequired===true,activationOnly:!activationSatisfied&&!assurance.effective.mfaRequired,deviceActivationPending:!activationSatisfied},
         minutes:10,
       });
       const target=new URL(safeReturnTo(returnTo));
