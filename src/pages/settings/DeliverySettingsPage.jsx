@@ -34,6 +34,9 @@ export default function DeliverySettingsPage({ channel = 'email' }) {
   const [message,setMessage]=useState('')
   const [error,setError]=useState('')
   const [testToken,setTestToken]=useState('')
+  const [testRecipient,setTestRecipient]=useState('')
+  const [testSaleId,setTestSaleId]=useState('')
+  const [testSending,setTestSending]=useState(false)
 
   const fields=useMemo(()=>CHANNEL_FIELDS[channel]||[],[channel])
 
@@ -85,6 +88,19 @@ export default function DeliverySettingsPage({ channel = 'email' }) {
     finally{setTesting(false)}
   }
 
+  const sendTest=async()=>{
+    try{
+      setTestSending(true);setError('');setMessage('')
+      const response=await apiRequest(`/api/invoice-delivery/${channel}/test-send`,{
+        method:'POST',
+        body:JSON.stringify({saleId:testSaleId.trim(),recipient:testRecipient.trim()})
+      })
+      if(response?.success===false) throw new Error(response?.message||'Test send failed.')
+      setMessage(response?.message||`${label} test sent successfully.`)
+    }catch(err){setError(err?.message||'Test send failed.')}
+    finally{setTestSending(false)}
+  }
+
   if(loading) return <div className="delivery-settings-state">Loading {label} delivery settings…</div>
 
   return <div className="delivery-settings">
@@ -119,9 +135,21 @@ export default function DeliverySettingsPage({ channel = 'email' }) {
       <button type="button" className={`mac-switch ${configuration.auto_send_enabled?'is-on':''}`} onClick={()=>setConfiguration(v=>({...v,auto_send_enabled:!v.auto_send_enabled}))}><span/></button>
     </div>
 
+    {channel==='email'?<>
+      <div className="settings-row">
+        <div><strong>Test recipient email</strong><p>Send a real test using the configured email delivery provider.</p></div>
+        <input type="email" value={testRecipient} placeholder="name@example.com" onChange={e=>setTestRecipient(e.target.value)}/>
+      </div>
+      <div className="settings-row">
+        <div><strong>Test sale ID</strong><p>The generic Email Connector sends the real invoice template, so choose a sale from this company for the test.</p></div>
+        <input value={testSaleId} placeholder="Sale ID" onChange={e=>setTestSaleId(e.target.value)}/>
+      </div>
+    </>:null}
+
     <div className="delivery-settings-actions">
-      <button type="button" className="settings-secondary-button" disabled={testing||saving} onClick={test}><RefreshCw size={14}/>{testing?'Testing…':'Test connection'}</button>
-      <button type="button" className="module-primary-button" disabled={saving||testing} onClick={save}><Save size={14}/>{saving?'Saving…':'Save'}</button>
+      <button type="button" className="settings-secondary-button" disabled={testing||saving||testSending} onClick={test}><RefreshCw size={14}/>{testing?'Testing…':'Test connection'}</button>
+      {channel==='email'?<button type="button" className="settings-secondary-button" disabled={testSending||!testRecipient.trim()||!testSaleId.trim()} onClick={sendTest}><Send size={14}/>{testSending?'Sending…':'Send test email'}</button>:null}
+      <button type="button" className="module-primary-button" disabled={saving||testing||testSending} onClick={save}><Save size={14}/>{saving?'Saving…':'Save'}</button>
     </div>
   </div>
 }
