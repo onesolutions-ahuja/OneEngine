@@ -2900,6 +2900,35 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "EMAIL_ALERT",
+    displayName: "Email Alert",
+    description: "Send a reusable email-template alert through the configured email provider.",
+    validation: (action) => {
+      if (!action?.recipient && !action?.to) throw new Error("Email Alert requires a recipient");
+      if (!action?.templateId && !action?.template) throw new Error("Email Alert requires an email template");
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    requiredEntitlement: "communications.email",
+    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
+      const company = companyId || req?.user?.companyId;
+      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
+      if (!provider.configured) {
+        return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
+      }
+      const resolvedAction = resolveCommunicationWorkflowAction({ ...action, type: "SEND_EMAIL" }, record, object, workflowVariables, req, previousRecord);
+      const job = await enqueuePlatformJob({
+        db,
+        companyId: company,
+        kind: "SEND_EMAIL",
+        payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId },
+        runAt: new Date(),
+        idempotencyKey: action.idempotencyKey || `${company}:email-alert:${stepRunId || action.id || JSON.stringify(action)}`,
+      });
+      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
+    },
+  },
+  {
     key: "SEND_SMS",
     displayName: "Send SMS",
     description: "Queue an SMS using the configured SMS provider.",
