@@ -24,8 +24,29 @@ export function localPicklistOptions(field) {
 
 export function fieldValueError(field, value) {
   const type = field.field_type;
+  const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
   const empty = value === null || value === undefined || value === "";
   if (empty) return field.required ? `${field.label} is required` : null;
+
+  const maxLength = Number.parseInt(config.maxLength ?? config.max_length, 10);
+  if (Number.isFinite(maxLength) && maxLength > 0 && typeof value === "string" && value.length > maxLength) {
+    return `${field.label} must be ${maxLength} characters or fewer`;
+  }
+
+  if (["number", "decimal", "currency", "percent"].includes(type)) {
+    const numeric = Number(value);
+    const precision = Number.parseInt(config.precision, 10);
+    const scale = Number.parseInt(config.scale ?? config.decimalPlaces ?? config.decimal_places, 10);
+    if (Number.isFinite(scale) && scale >= 0) {
+      const raw = String(value).trim().replace(/^[-+]/, "").toLowerCase().split("e")[0];
+      const decimals = (raw.split(".")[1] || "").length;
+      if (decimals > scale) return `${field.label} supports at most ${scale} decimal places`;
+    }
+    if (Number.isFinite(precision) && precision > 0) {
+      const digits = String(Math.abs(numeric)).replace(/[^0-9]/g, "").replace(/^0+/, "").length || 1;
+      if (digits > precision) return `${field.label} supports at most ${precision} digits`;
+    }
+  }
   if (["text", "long_text", "rich_text", "email", "phone", "url", "time", "auto_number", "multiselect"].includes(type) && typeof value !== "string" && !Array.isArray(value)) return `${field.label} must be text`;
   if (["number", "decimal", "currency", "percent"].includes(type) && (!((typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isFinite(Number(value))))) return `${field.label} must be a valid number`;
   if (type === "boolean" && ![true, false, 0, 1, "true", "false", "0", "1"].includes(value)) return `${field.label} must be boolean`;
