@@ -937,7 +937,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             ON platform_approval_delegations(company_id,user_id,active,starts_at,ends_at);
         `);
       },
-    },,
+    },
     {
       key: "0034_approval_version_manager_escalation",
       version: "34",
