@@ -30,6 +30,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0037_data_email_delegated_admin",
   "0038_passkey_passwordless_login",
   "0039_diagnostic_code_v2",
+  "0040_diagnostic_catalogue_expansion",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -183,6 +184,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Expand OneEngine debug codes to subsystem and cause taxonomy",
     up: client => client.query(
       readFileSync(new URL("./migrations/0039_diagnostic_code_v2.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0040_diagnostic_catalogue_expansion",
+    version: "40",
+    name: "Expand OneEngine diagnostic catalogue across platform failures",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0040_diagnostic_catalogue_expansion.sql", import.meta.url), "utf8")
     ),
   },
 ]);
