@@ -157,6 +157,9 @@ async function validateLayoutDefinition(db, definition, object, req) {
           inputMappings: component.input_mappings || {},
           config: component.config || {},
         });
+        if (button.targetType === "url") {
+          continue;
+        }
         if (button.targetType === "workflow") {
           const target = await db(
             `SELECT id FROM platform_rules WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND (id::text=$3 OR name=$3) LIMIT 1`,
@@ -1507,6 +1510,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   });
 
   async function resolveButtonTarget(req, button, objectId = req.params.objectId) {
+    if (button.targetType === "url") return { url: button.targetKey };
     if (button.targetType === "workflow") {
       const result = await db(
         `SELECT id,name,lifecycle_status,active FROM platform_rules
