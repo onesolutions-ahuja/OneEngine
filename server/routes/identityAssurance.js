@@ -75,7 +75,12 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const challenge=await createPendingChallenge(db,{companyId:req.user.companyId,userId:req.user.id,type:"STEP_UP",
       context:{sessionId:req.user.sid,resourceKey},minutes:10});
     res.status(202).json({success:true,required:true,challengeId:challenge.id,availableMethods:methods.map(publicMethod),
-      enrollmentRequired:methods.length===0,requiredAssurance:policy.required_assurance||"HIGH"});
+      enrollmentRequired:methods.length===0,requiredAssurance:policy.required_assurance||"HIGH",
+      allowedEnrollmentMethods:[
+        ...(assurance.effective.allowPlatformPasskeys?["PLATFORM_PASSKEY"]:[]),
+        ...(assurance.effective.allowSecurityKeys?["SECURITY_KEY"]:[]),
+        ...(assuranceSatisfies(assurance.effective.totpAssurance,policy.required_assurance||"HIGH")&&assurance.effective.allowTotp?["TOTP"]:[]),
+      ]});
   });
 
   router.get("/security/assurance",...manage,async(req,res)=>{
@@ -205,8 +210,8 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   });
 
   router.post("/auth/mfa/passkey/registration-options",async(req,res)=>{
-    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
-    if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
+    if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
     const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
     const kind=String(req.body?.authenticatorKind||"PLATFORM").toUpperCase()==="SECURITY_KEY"?"SECURITY_KEY":"PLATFORM";
     if(kind==="PLATFORM"&&!policy.effective.allowPlatformPasskeys)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Built-in passkeys are disabled by security policy"});
@@ -225,7 +230,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   });
 
   router.post("/auth/mfa/passkey/registration-verify",async(req,res)=>{
-    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
+    const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN","STEP_UP"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
     const {verifyRegistrationResponse}=await import("@simplewebauthn/server");
     const rpID=challenge.context?.rpID||String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0];
@@ -246,6 +251,13 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       [user.company_id,user.id,String(req.body?.label||(challenge.context?.authenticatorKind==="SECURITY_KEY"?"Security Key":"Built-in Passkey")),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice",challenge.context?.authenticatorKind||"PLATFORM"]);
     const recoveryCodes=await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
     const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.passkeyAssurance;
+    if(challenge.challenge_type==="STEP_UP"){
+      const sid=challenge.context?.sessionId;
+      if(!sid)return res.status(400).json({success:false,message:"Step-up session is missing"});
+      await consumeChallenge(db,challenge.id);
+      await db("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW(),mfa_method='PASSKEY' WHERE id=$1 AND user_id=$3",[sid,assurance,user.id]);
+      return res.json({success:true,assuranceLevel:assurance,recoveryCodes});
+    }
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
   });
 
