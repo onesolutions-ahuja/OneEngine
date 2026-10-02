@@ -93,6 +93,15 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
   const type = typeId ? types.rows.find(type => type.id === typeId) : null;
   if (typeId && !type) throw new PlatformRecordError("Record type is unavailable");
   const restrictions = typeId ? (await db("SELECT field_id,value,active FROM platform_record_type_picklist_values WHERE record_type_id=$1", [typeId])).rows : [];
+  if (!previous) {
+    for (const field of fields.filter(isExtensionField)) {
+      const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+      const defaultValue = config.defaultValue !== undefined ? config.defaultValue : config.default_value;
+      if (defaultValue !== undefined && defaultValue !== null && custom[field.api_name] === undefined) {
+        custom[field.api_name] = normalizeFieldValue(field, defaultValue);
+      }
+    }
+  }
   if (!previous && type) {
     for (const field of fields.filter(isExtensionField)) {
       if (type.default_values?.[field.api_name] !== undefined) custom[field.api_name] = type.default_values[field.api_name];
@@ -111,7 +120,14 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
   for (const field of fields.filter(isExtensionField)) {
     const value = values[field.api_name];
     const allowed = restrictions.filter(item => item.field_id === field.id);
-    if (allowed.length && value != null && value !== "" && !allowed.some(item => item.active !== false && item.value === value)) throw new PlatformRecordError(`${field.label} is unavailable for this record type`);
+    if (allowed.length && value != null && value !== "") {
+      let selected = Array.isArray(value) ? value : [value];
+      if (field.field_type === "multiselect" && typeof value === "string") {
+        try { const parsed = JSON.parse(value); if (Array.isArray(parsed)) selected = parsed; } catch { selected = value.split(/[;,]/).map(item => item.trim()).filter(Boolean); }
+      }
+      const activeAllowed = new Set(allowed.filter(item => item.active !== false).map(item => String(item.value)));
+      if (selected.some(item => !activeAllowed.has(String(item)))) throw new PlatformRecordError(`${field.label} is unavailable for this record type`);
+    }
     if (field.field_type === "lookup" && value != null && value !== "") {
       const targetKey = field.config?.relatedObjectKey || field.config?.related_object_key || field.config?.objectKey;
       const target = (await db("SELECT * FROM platform_objects WHERE object_key=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [targetKey, req.user.companyId])).rows[0];
@@ -122,10 +138,34 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
     }
   }
   }
-  await validateExtensionReferences(custom);
+  await validateExtensionReferences({ ...core, ...custom });
+  async function validateExtensionUniqueness(values) {
+    for (const field of fields.filter(isExtensionField)) {
+      const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+      if (config.unique !== true) continue;
+      const value = values?.[field.api_name];
+      if (value === null || value === undefined || value === "") continue;
+      const params = [object.id, req.user.companyId, field.api_name, record.id];
+      let predicate;
+      if (config.uniqueCaseSensitive === true || typeof value !== "string") {
+        params.push(JSON.stringify(value));
+        predicate = `custom_values->$3 = $5::jsonb`;
+      } else {
+        params.push(String(value));
+        predicate = `LOWER(custom_values->>$3)=LOWER($5)`;
+      }
+      const duplicate = await db(
+        `SELECT record_id FROM platform_record_associations WHERE object_id=$1 AND company_id=$2 AND record_id<>$4 AND custom_values ? $3 AND ${predicate} LIMIT 1`,
+        params
+      );
+      if (duplicate.rows.length) throw new PlatformRecordError(`${field.label} must be unique`, 409);
+    }
+  }
+
   for (const field of access.filter(field => field.source_column)) {
     if ((field.readable === false || field.writable === false) && JSON.stringify(core[field.api_name]) !== JSON.stringify(before[field.api_name])) throw new PlatformRecordError(`Field ${field.label} is not editable`, 403);
   }
+  await validateExtensionUniqueness({ ...core, ...custom });
   const rules = await db("SELECT * FROM platform_rules WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) AND trigger_key IN ($3,'before_save') AND action->>'type'='validation' ORDER BY id", [object.id, req.user.companyId, previous ? "before_update" : "before_create"]);
   const calculate = compileFormulas(fields);
   const validate = values => {
@@ -152,6 +192,7 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
   });
   candidate = automated.record;
   await validateExtensionReferences(candidate);
+  await validateExtensionUniqueness(candidate);
   const persisted = await db("INSERT INTO platform_record_associations (object_id,record_id,company_id,record_type_id,custom_values) VALUES ($1,$2,$3,$4,$5::jsonb) ON CONFLICT (object_id,record_id) DO UPDATE SET record_type_id=EXCLUDED.record_type_id,custom_values=EXCLUDED.custom_values,updated_at=NOW() WHERE platform_record_associations.company_id=EXCLUDED.company_id RETURNING record_id", [object.id, record.id, req.user.companyId, typeId, JSON.stringify(custom)]);
   if (!persisted.rows.length) throw new PlatformRecordError("Record association ownership mismatch", 403);
   for (const field of fields.filter(field => !isCalculatedField(field))) {
