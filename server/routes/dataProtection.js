@@ -36,6 +36,29 @@ export default function createDataProtectionRouter({authenticate,authorize,db,wr
     return {payload:gzipSync(Buffer.from(JSON.stringify(snapshot))),rowCount:total};
   }
 
+  const generateExport=async(companyId,requestedBy=null,includeAuditLogs=true)=>{
+    const built=await exportSnapshot(companyId,{includeAuditLogs});
+    const r=await db(`INSERT INTO data_export_runs(company_id,requested_by,row_count,payload) VALUES($1,$2,$3,$4) RETURNING id,status,row_count,expires_at,created_at`,
+      [companyId,requestedBy,built.rowCount,built.payload]);
+    return r.rows[0];
+  };
+
+  const runScheduledExports=async()=>{
+    try{
+      const due=await db(`UPDATE data_export_settings
+        SET next_run_at=CASE frequency WHEN 'WEEKLY' THEN NOW()+INTERVAL '7 days' WHEN 'MONTHLY' THEN NOW()+INTERVAL '1 month' ELSE NULL END,
+            updated_at=NOW()
+        WHERE enabled=TRUE AND frequency IN ('WEEKLY','MONTHLY') AND (next_run_at IS NULL OR next_run_at<=NOW())
+        RETURNING company_id,include_audit_logs`);
+      for(const row of due.rows){
+        try{await generateExport(row.company_id,null,row.include_audit_logs!==false);}catch(error){console.error("Scheduled data export failed",row.company_id,error);}
+      }
+    }catch(error){console.error("Scheduled data export scan failed",error);}
+  };
+  const exportTimer=setInterval(()=>void runScheduledExports(),60*60*1000);
+  exportTimer.unref?.();
+  setTimeout(()=>void runScheduledExports(),30_000).unref?.();
+
   router.get("/security/data/export-settings",...dataManage,async(req,res)=>{
     const r=await db("SELECT * FROM data_export_settings WHERE company_id=$1",[req.user.companyId]);
     res.json({success:true,data:r.rows[0]||{company_id:req.user.companyId,enabled:false,frequency:"MANUAL",include_attachments:false,include_audit_logs:true}});
@@ -53,11 +76,9 @@ export default function createDataProtectionRouter({authenticate,authorize,db,wr
   });
   router.post("/security/data/exports",...dataManage,async(req,res)=>{
     const settings=(await db("SELECT * FROM data_export_settings WHERE company_id=$1",[req.user.companyId])).rows[0]||{};
-    const built=await exportSnapshot(req.user.companyId,{includeAuditLogs:settings.include_audit_logs!==false});
-    const r=await db(`INSERT INTO data_export_runs(company_id,requested_by,row_count,payload) VALUES($1,$2,$3,$4) RETURNING id,status,row_count,expires_at,created_at`,
-      [req.user.companyId,req.user.id,built.rowCount,built.payload]);
-    await audit(req,"security.data_export_generated","data_export",r.rows[0].id,{rowCount:built.rowCount});
-    res.status(201).json({success:true,data:r.rows[0]});
+    const generated=await generateExport(req.user.companyId,req.user.id,settings.include_audit_logs!==false);
+    await audit(req,"security.data_export_generated","data_export",generated.id,{rowCount:generated.row_count});
+    res.status(201).json({success:true,data:generated});
   });
   router.get("/security/data/exports",...dataManage,async(req,res)=>{
     const r=await db("SELECT id,status,row_count,expires_at,created_at FROM data_export_runs WHERE company_id=$1 ORDER BY created_at DESC LIMIT 50",[req.user.companyId]);
@@ -106,7 +127,7 @@ export default function createDataProtectionRouter({authenticate,authorize,db,wr
       const fields=await db("SELECT api_name,source_column FROM platform_fields WHERE object_id=$1 AND active=TRUE AND api_name=ANY($2::text[])",[object.id,names]);
       const cols=fields.rows.map(f=>f.source_column).filter(x=>isSafeIdentifier(x)&&!SENSITIVE_COLUMN.test(x));
       if(!cols.length)return res.status(409).json({success:false,message:"No safe mapped fields are available to anonymize"});
-      result=await db(`UPDATE "${object.source_table}" SET ${cols.map(c=>'"'+c+'"=NULL').join(",")},updated_at=NOW() WHERE company_id=$1 AND "${policy.date_field}" < NOW()-($2*INTERVAL '1 day') RETURNING id`,[req.user.companyId,policy.age_days]);
+      result=await db(`UPDATE "${object.source_table}" SET ${cols.map(c=>'"'+c+'"=NULL').join(",")} WHERE company_id=$1 AND "${policy.date_field}" < NOW()-($2*INTERVAL '1 day') RETURNING id`,[req.user.companyId,policy.age_days]);
     }
     await audit(req,"security.retention_policy_run","data_retention_policy",policy.id,{affected:result.rowCount||result.rows.length,action:policy.action});
     res.json({success:true,data:{affected:result.rowCount||result.rows.length,action:policy.action}});
