@@ -4084,6 +4084,255 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   }
 
+  const loadScreenFlowRuntime = async (session, req) => {
+    const runResult = await db(
+      "SELECT * FROM platform_workflow_runs WHERE id=$1 AND company_id=$2 LIMIT 1",
+      [session.run_id, req.user.companyId]
+    );
+    const run = runResult.rows[0] || null;
+    if (!run) throw Object.assign(new Error("Screen Flow run no longer exists"), { status: 404 });
+
+    const workflowResult = await db(
+      "SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",
+      [run.workflow_id, req.user.companyId]
+    );
+    let workflow = workflowResult.rows[0] || null;
+    if (!workflow) throw Object.assign(new Error("Screen Flow definition no longer exists"), { status: 404 });
+
+    const pinnedVersion = Number(run.workflow_version || workflow.active_version || workflow.version || 1);
+    const versionResult = await db(
+      "SELECT definition FROM platform_workflow_versions WHERE company_id=$1 AND workflow_id=$2 AND version=$3 LIMIT 1",
+      [req.user.companyId, workflow.id, pinnedVersion]
+    );
+    if (versionResult.rows[0]?.definition && typeof versionResult.rows[0].definition === "object") {
+      workflow = { ...workflow, ...versionResult.rows[0].definition, id: workflow.id, company_id: workflow.company_id };
+    }
+
+    let object = null;
+    let record = null;
+    let fields = [];
+    if (run.object_id) {
+      const objectResult = await db(
+        "SELECT * FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) LIMIT 1",
+        [run.object_id, req.user.companyId]
+      );
+      object = objectResult.rows[0] || null;
+      if (object?.id) {
+        const fieldsResult = await db(
+          "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
+          [object.id, req.user.companyId]
+        );
+        fields = fieldsResult.rows || [];
+      }
+      if (object?.source_table && run.record_id) {
+        if (!isSafeIdentifier(object.source_table)) throw Object.assign(new Error("Screen Flow record source is invalid"), { status: 422 });
+        const params = [run.record_id];
+        let where = "id=$1";
+        if (object.company_scoped !== false) {
+          params.push(req.user.companyId);
+          where += ` AND company_id=${params.length}`;
+        }
+        if (object.store_scoped && req.user.storeId) {
+          params.push(req.user.storeId);
+          where += ` AND store_id=${params.length}`;
+        }
+        const recordResult = await db(`SELECT * FROM "${object.source_table}" WHERE ${where} LIMIT 1`, params);
+        record = recordResult.rows[0] || null;
+      }
+    }
+
+    return {
+      run,
+      workflow,
+      pinnedVersion,
+      actions: Array.isArray(workflow.action?.actions) ? workflow.action.actions : [],
+      object,
+      record,
+      fields,
+    };
+  };
+
+  const validateScreenSubmission = (screen, values = {}) => {
+    const errors = {};
+    for (const component of Array.isArray(screen?.components) ? screen.components : []) {
+      const name = String(component?.name || "").trim();
+      if (!name || component?.input === false) continue;
+      const value = values?.[name];
+      const hidden = component?.visible === false;
+      if (hidden) continue;
+      const empty = value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
+      if (component?.required === true && empty) {
+        errors[name] = component.requiredMessage || `${component.label || name} is required`;
+        continue;
+      }
+      if (!empty && component?.type === "EMAIL" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) {
+        errors[name] = component.validationMessage || "Enter a valid email address";
+      }
+      if (!empty && component?.type === "NUMBER") {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) errors[name] = component.validationMessage || "Enter a valid number";
+        if (Number.isFinite(numeric) && component.min != null && numeric < Number(component.min)) errors[name] = component.validationMessage || `Enter a value of at least ${component.min}`;
+        if (Number.isFinite(numeric) && component.max != null && numeric > Number(component.max)) errors[name] = component.validationMessage || `Enter a value no greater than ${component.max}`;
+      }
+      if (!empty && component?.pattern) {
+        try {
+          if (!(new RegExp(component.pattern)).test(String(value))) errors[name] = component.validationMessage || "The value is not valid";
+        } catch {}
+      }
+    }
+    return errors;
+  };
+
+  router.get("/platform/flow-sessions/:sessionId", ...manage, async (req, res) => {
+    try {
+      const result = await db(
+        `SELECT id,workflow_id,run_id,step_run_id,step_identifier,status,screen,values,history,expires_at,submitted_at,created_at,updated_at
+           FROM platform_workflow_screen_sessions
+          WHERE id=$1 AND company_id=$2
+          LIMIT 1`,
+        [req.params.sessionId, req.user.companyId]
+      );
+      const session = result.rows[0] || null;
+      if (!session) return res.status(404).json({ success: false, message: "Screen session not found" });
+      if (session.expires_at && new Date(session.expires_at).getTime() < Date.now() && session.status === "ACTIVE") {
+        await db("UPDATE platform_workflow_screen_sessions SET status='EXPIRED',updated_at=NOW() WHERE id=$1", [session.id]);
+        session.status = "EXPIRED";
+      }
+      return res.json({ success: true, data: session });
+    } catch (error) {
+      console.error("Screen Flow session load error:", error);
+      return res.status(500).json({ success: false, message: "Unable to load Screen Flow session" });
+    }
+  });
+
+  router.post("/platform/flow-sessions/:sessionId/submit", ...manage, async (req, res) => {
+    try {
+      const sessionResult = await db(
+        "SELECT * FROM platform_workflow_screen_sessions WHERE id=$1 AND company_id=$2 LIMIT 1",
+        [req.params.sessionId, req.user.companyId]
+      );
+      const session = sessionResult.rows[0] || null;
+      if (!session) return res.status(404).json({ success: false, message: "Screen session not found" });
+      if (session.status !== "ACTIVE") return res.status(409).json({ success: false, message: `Screen session is ${String(session.status || "closed").toLowerCase()}` });
+      if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
+        await db("UPDATE platform_workflow_screen_sessions SET status='EXPIRED',updated_at=NOW() WHERE id=$1", [session.id]);
+        return res.status(410).json({ success: false, message: "Screen session has expired" });
+      }
+
+      const navigation = String(req.body?.navigation || "NEXT").toUpperCase();
+      if (!["NEXT","FINISH","BACK"].includes(navigation)) return res.status(400).json({ success: false, message: "Invalid Screen Flow navigation action" });
+
+      if (navigation === "BACK") {
+        const history = Array.isArray(session.history) ? session.history : [];
+        if (!session.screen?.allowBack || !history.length) return res.status(409).json({ success: false, message: "Back navigation is not available" });
+        const previous = history[history.length - 1];
+        await db(
+          "UPDATE platform_workflow_screen_sessions SET screen=$1::jsonb,values=$2::jsonb,history=$3::jsonb,updated_at=NOW() WHERE id=$4 AND company_id=$5",
+          [JSON.stringify(previous.screen || {}), JSON.stringify(previous.values || {}), JSON.stringify(history.slice(0, -1)), session.id, req.user.companyId]
+        );
+        return res.json({ success: true, data: { status: "ACTIVE", screenSessionId: session.id, screen: previous.screen || {}, values: previous.values || {}, navigation: "BACK" } });
+      }
+
+      const values = req.body?.values && typeof req.body.values === "object" && !Array.isArray(req.body.values) ? req.body.values : {};
+      const errors = validateScreenSubmission(session.screen || {}, values);
+      if (Object.keys(errors).length) return res.status(422).json({ success: false, message: "Complete the required screen values", errors });
+
+      const runtime = await loadScreenFlowRuntime(session, req);
+      const workflowVariables = session.workflow_variables && typeof session.workflow_variables === "object"
+        ? JSON.parse(JSON.stringify(session.workflow_variables))
+        : { variables: {}, steps: {} };
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      if (!workflowVariables.steps || typeof workflowVariables.steps !== "object") workflowVariables.steps = {};
+
+      for (const component of Array.isArray(session.screen?.components) ? session.screen.components : []) {
+        const name = String(component?.name || "").trim();
+        if (!name || component?.input === false || !Object.prototype.hasOwnProperty.call(values, name)) continue;
+        workflowVariables.variables[name] = values[name];
+      }
+
+      const historyEntry = { screen: session.screen || {}, values, submittedAt: new Date().toISOString() };
+      await db(
+        `UPDATE platform_workflow_screen_sessions
+            SET status='COMPLETED',values=$1::jsonb,workflow_variables=$2::jsonb,
+                history=(COALESCE(history,'[]'::jsonb) || $3::jsonb),submitted_at=NOW(),updated_at=NOW()
+          WHERE id=$4 AND company_id=$5`,
+        [JSON.stringify(values), JSON.stringify(workflowVariables), JSON.stringify([historyEntry]), session.id, req.user.companyId]
+      );
+
+      if (session.step_run_id) {
+        await db(
+          `UPDATE platform_workflow_step_runs
+              SET status='COMPLETED',completed_at=NOW(),
+                  metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW()
+            WHERE id=$2 AND run_id=$3`,
+          [JSON.stringify({ screenSessionId: session.id, result: { status: "completed", values, navigation } }), session.step_run_id, session.run_id]
+        );
+      }
+      await db(
+        "UPDATE platform_workflow_runs SET status='RUNNING',completed_at=NULL,error_text=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+        [session.run_id, req.user.companyId]
+      );
+
+      const results = await executeWorkflowActions({
+        actions: runtime.actions,
+        allActions: runtime.actions,
+        db,
+        req,
+        companyId: req.user.companyId,
+        userId: req.user.id || null,
+        object: runtime.object,
+        fields: runtime.fields,
+        record: runtime.record,
+        previousRecord: runtime.run.metadata?.initialPreviousRecord || null,
+        recordId: runtime.run.record_id || null,
+        storeId: req.user.storeId || null,
+        tillId: req.user.tillId || null,
+        runId: session.run_id,
+        workflowVersion: runtime.pinnedVersion,
+        trigger: runtime.run.trigger_key || runtime.workflow.trigger_key,
+        workflowVariables,
+      });
+
+      const waiting = workflowResultsContainStatus(results, "waiting");
+      await db(
+        `UPDATE platform_workflow_runs
+            SET status=$1,
+                completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,
+                updated_at=NOW()
+          WHERE id=$3 AND company_id=$4`,
+        [waiting ? "WAITING" : "COMPLETED", JSON.stringify({ finalVariables: workflowVariables, screenNavigation: navigation }), session.run_id, req.user.companyId]
+      );
+
+      const nextSessionResult = waiting
+        ? await db(
+            `SELECT id,status,screen,values,history,expires_at
+               FROM platform_workflow_screen_sessions
+              WHERE run_id=$1 AND company_id=$2 AND status='ACTIVE'
+              ORDER BY created_at DESC LIMIT 1`,
+            [session.run_id, req.user.companyId]
+          )
+        : { rows: [] };
+      const nextSession = nextSessionResult.rows[0] || null;
+
+      return res.json({
+        success: true,
+        data: {
+          status: waiting ? "WAITING" : "COMPLETED",
+          runId: session.run_id,
+          screenSessionId: nextSession?.id || null,
+          screen: nextSession?.screen || null,
+          values: nextSession?.values || {},
+          navigation,
+          variables: workflowVariables,
+        },
+      });
+    } catch (error) {
+      console.error("Screen Flow submit error:", error);
+      return res.status(error.status || 500).json({ success: false, message: error.message || "Unable to continue Screen Flow" });
+    }
+  });
+
   router.post("/platform/rules/debug", ...manage, async (req, res) => runWorkflowDebugRequest(req, res, null));
   router.post("/platform/rules/:ruleId/debug", ...manage, async (req, res) => runWorkflowDebugRequest(req, res, req.params.ruleId));
 
