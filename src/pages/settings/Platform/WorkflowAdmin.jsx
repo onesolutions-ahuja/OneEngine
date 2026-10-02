@@ -2509,7 +2509,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedElementIds, setSelectedElementIds] = useState([]);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const [infoDialog, setInfoDialog] = useState(null);
+  const paletteRef = useRef(null);
   const canvasRef = useRef(null);
+  const propertiesRef = useRef(null);
   const laneRef = useRef(null);
   const historyRef = useRef([]);
   const historyIndexRef = useRef(-1);
@@ -2925,6 +2929,32 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           return;
         }
       }
+      if (!editable && key === "f6") {
+        event.preventDefault();
+        focusCycle();
+        return;
+      }
+      if (!editable && layoutMode === "FREEFORM" && (key === "backspace" || key === "delete")) {
+        const ids = selectedElementIds.length ? selectedElementIds : selectedStep ? [String(selectedStep.id)] : [];
+        if (ids.length) {
+          event.preventDefault();
+          ids.forEach((id) => {
+            const step = workflow.steps.find((item) => String(item.id) === String(id));
+            if (step) requestDeleteStep(step);
+          });
+          setSelectedElementIds([]);
+          return;
+        }
+      }
+      if (!editable && (event.ctrlKey || event.metaKey) && key === "i" && selectedStep) {
+        event.preventDefault();
+        setInfoDialog({
+          title: selectedStep.label || getActionLabel(selectedStep.type),
+          type: SALESFORCE_CORE_ELEMENT_TYPES.has(selectedStep.type) ? getActionLabel(selectedStep.type) : "Action",
+          description: selectedStep.config?.description || "No description has been added.",
+        });
+        return;
+      }
       if (!editable && (event.ctrlKey || event.metaKey) && !event.altKey && key === "/") {
         event.preventDefault();
         setShortcutHelpOpen(true);
@@ -2977,7 +3007,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedStep, selectedIndex, clipboard, branchTarget, insertAt, workflow.steps]);
+  }, [selectedStep, selectedIndex, selectedElementIds, clipboard, branchTarget, insertAt, workflow.steps, layoutMode]);
   const undoFlowChange = () => {
     if (historyIndexRef.current <= 0) return;
     historyIndexRef.current -= 1;
@@ -3196,6 +3226,21 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const visibleGlobalResources = globalResources.filter((item) => !resourceQuery || `${item.label} ${item.detail} ${item.type}`.toLowerCase().includes(resourceQuery));
   const visibleStepResources = stepResources.filter((item) => !resourceQuery || `${item.label} ${item.type}`.toLowerCase().includes(resourceQuery));
 
+  const builderErrors = workflow.steps
+    .map((step, index) => ({ step, index, message: workflowActionIssue(step, registryOptions.find((option) => option.value === step.type) || null) }))
+    .filter((item) => item.message);
+  const builderWarnings = workflow.steps
+    .map((step, index) => ({ step, index, message: !String(step.config?.description || "").trim() && step.config?.resourceOnly !== true ? "Consider adding a description so other builders can understand this element." : "" }))
+    .filter((item) => item.message);
+  const focusCycle = () => {
+    const panels = [paletteRef.current, canvasRef.current, propertiesRef.current].filter(Boolean);
+    if (!panels.length) return;
+    const active = document.activeElement;
+    const currentIndex = panels.findIndex((panel) => panel === active || panel?.contains?.(active));
+    const next = panels[(currentIndex + 1 + panels.length) % panels.length];
+    next?.focus?.();
+  };
+
   function openPath(target) {
     setBranchTarget(target);
     setInsertAt(null);
@@ -3275,7 +3320,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
 
   return (
     <div className={`workflow-visual-shell ${!paletteOpen ? "palette-collapsed" : ""} ${!propertiesOpen ? "properties-collapsed" : ""}`}>
-      {paletteOpen ? <aside className="workflow-node-palette">
+      {paletteOpen ? <aside ref={paletteRef} tabIndex={-1} className="workflow-node-palette">
         <div className="workflow-palette-head">
           <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
             <button type="button" className={`rounded-md px-2 py-1 text-[10px] font-semibold ${paletteTab === "elements" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setPaletteTab("elements")}>Elements</button>
@@ -3400,7 +3445,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           </>
         )}
       </aside> : null}
-      <main ref={canvasRef} className="workflow-canvas-surface" onDragOver={(event) => { if (layoutMode === "FREEFORM") event.preventDefault(); }} onDrop={(event) => { if (layoutMode === "FREEFORM") onFreeformDrop(event); }}>
+      <main ref={canvasRef} tabIndex={-1} className="workflow-canvas-surface" onDragOver={(event) => { if (layoutMode === "FREEFORM") event.preventDefault(); }} onDrop={(event) => { if (layoutMode === "FREEFORM") onFreeformDrop(event); }}>
         <div className="workflow-canvas-toolbar">
           <span className="workflow-layout-toggle" aria-label="Canvas layout">
             <button type="button" className={layoutMode === "AUTO" ? "is-active" : ""} onClick={() => setLayoutMode("AUTO")}>Auto-Layout</button>
@@ -3413,6 +3458,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setCanvasZoom((value) => Math.min(1.3, Number((value + .1).toFixed(1))))}>+</button>
           <button type="button" title="Zoom to Fit" onClick={zoomToFit}>Fit</button>
           <button type="button" title="Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(true)}>⌨</button>
+          <button type="button" title={builderErrors.length ? "Show Errors" : "Show Warnings"} onClick={() => setIssuesOpen(true)}>
+            {builderErrors.length ? `Errors ${builderErrors.length}` : builderWarnings.length ? `Warnings ${builderWarnings.length}` : "Checks ✓"}
+          </button>
           {selectionMode ? (
             <>
               <button type="button" disabled={!selectedElementIds.length} title="Copy selected elements" onClick={copySelectedElements}>Copy {selectedElementIds.length || ""} Element{selectedElementIds.length === 1 ? "" : "s"}</button>
@@ -3422,6 +3470,36 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" title="Toggle Toolbox" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide Toolbox" : "Show Toolbox"}</button>
           <button type="button" title="Toggle Properties" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide Properties" : "Show Properties"}</button>
         </div>
+        {issuesOpen ? (
+          <div className="workflow-path-action-panel" role="dialog" aria-label="Errors and Warnings">
+            <div className="workflow-add-element-head">
+              <div><strong>Errors and Warnings</strong><small>Resolve errors before activation.</small></div>
+              <button type="button" aria-label="Close Errors and Warnings" onClick={() => setIssuesOpen(false)}>×</button>
+            </div>
+            <div className="workflow-path-action-body">
+              <div className="space-y-3">
+                {builderErrors.length ? <div>
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-red-600">Errors</div>
+                  <div className="space-y-1">{builderErrors.map(({ step, message }) => <button key={step.id} type="button" className="workflow-resource-choice" onClick={() => { inspectStep(step.id); setIssuesOpen(false); }}><strong>{step.label || getActionLabel(step.type)}</strong><small>{message}</small></button>)}</div>
+                </div> : null}
+                {builderWarnings.length ? <div>
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-amber-600">Warnings</div>
+                  <div className="space-y-1">{builderWarnings.map(({ step, message }) => <button key={step.id} type="button" className="workflow-resource-choice" onClick={() => { inspectStep(step.id); setIssuesOpen(false); }}><strong>{step.label || getActionLabel(step.type)}</strong><small>{message}</small></button>)}</div>
+                </div> : null}
+                {!builderErrors.length && !builderWarnings.length ? <div className="text-xs text-emerald-700">No builder errors or warnings.</div> : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {infoDialog ? (
+          <div className="workflow-path-action-panel" role="dialog" aria-label="Element Description">
+            <div className="workflow-add-element-head">
+              <div><strong>{infoDialog.title}</strong><small>{infoDialog.type}</small></div>
+              <button type="button" aria-label="Close Element Description" onClick={() => setInfoDialog(null)}>×</button>
+            </div>
+            <div className="workflow-path-action-body"><p>{infoDialog.description}</p></div>
+          </div>
+        ) : null}
         {shortcutHelpOpen ? (
           <div className="workflow-path-action-panel" role="dialog" aria-label="Keyboard Shortcuts">
             <div className="workflow-add-element-head">
@@ -3438,6 +3516,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 <div className="flex justify-between gap-4"><span>Zoom in / out</span><strong>Ctrl/Cmd + Alt + = / -</strong></div>
                 <div className="flex justify-between gap-4"><span>Zoom to fit</span><strong>Ctrl/Cmd + Alt + 1</strong></div>
                 <div className="flex justify-between gap-4"><span>Reset zoom</span><strong>Ctrl/Cmd + Alt + 0</strong></div>
+                <div className="flex justify-between gap-4"><span>Select multiple elements</span><strong>Shift + Click · Free-Form</strong></div>
+                <div className="flex justify-between gap-4"><span>Delete selected elements</span><strong>Delete / Backspace · Free-Form</strong></div>
+                <div className="flex justify-between gap-4"><span>View description</span><strong>Ctrl/Cmd + I</strong></div>
+                <div className="flex justify-between gap-4"><span>Switch panel focus</span><strong>F6</strong></div>
                 <div className="flex justify-between gap-4"><span>Shortcut help</span><strong>Ctrl/Cmd + /</strong></div>
               </div>
             </div>
@@ -3546,7 +3628,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               const elementKind = SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action";
               return <div key={step.id} className="workflow-freeform-node" style={{ left: pos.x, top: pos.y }} draggable onDragEnd={(event) => onFreeformDragEnd(event, step.id, index)}>
                 <div className="workflow-node-row">
-                  <button type="button" onClick={() => inspectStep(step.id)} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id ? "is-selected" : ""}`}>
+                  <button type="button" onClick={(event) => { if (event.shiftKey) { toggleElementSelection(step.id); return; } inspectStep(step.id); }} data-node-type={step.type} className={`workflow-node-card ${selectedId === step.id || selectedElementIds.includes(String(step.id)) ? "is-selected" : ""}`}>
                     <span className="workflow-node-icon" style={{ background: visual.color }}>{visual.icon}</span>
                     <span className="workflow-node-kind">{elementKind}</span>
                     <span className="workflow-node-title">{step.label || getActionLabel(step.type)}</span>
@@ -3655,7 +3737,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
         )}
       </main>
-      {propertiesOpen ? <aside className="workflow-properties-panel">
+      {propertiesOpen ? <aside ref={propertiesRef} tabIndex={-1} className="workflow-properties-panel">
         <div className="workflow-properties-tabs">
           <span className="workflow-properties-tab is-active">Properties</span>
         </div>
