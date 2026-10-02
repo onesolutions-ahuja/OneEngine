@@ -261,7 +261,15 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
       })
       if (result?.token) onUnlock()
     } catch (err) {
-      setError(err?.message || 'Passkey sign-in failed')
+      const code=String(err?.payload?.code||err?.code||'').toUpperCase()
+      const message=String(err?.payload?.message||err?.message||'')
+      if(code==='PASSKEY_NOT_ENROLLED'||/no passkey is enrolled/i.test(message)){
+        setError('No passkey is set up for this account yet. Sign in with your password, then open My Profile and choose Add passkey.')
+      }else if(code==='PASSKEY_LOGIN_DISABLED'||/passkey sign-in is disabled/i.test(message)){
+        setError('Passkey sign-in is disabled by your company security settings.')
+      }else{
+        setError(err?.message || 'Passkey sign-in failed')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -293,7 +301,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
         <form className="login-glass-card" onSubmit={submit}>
           <div className={`profile-avatar login-avatar${sessionMode ? '' : ' login-avatar--brand'}`} aria-label={sessionMode ? `${displayName} profile` : 'One Solutions'}>
             {sessionMode ? initial : (
-              <img className="login-brand-mark" src="./icons/one-solutions-mark.svg" alt="" aria-hidden="true" />
+              <img className="login-brand-mark" src="./icons/one-solutions-lockup.svg" alt="One Solutions" />
             )}
           </div>
 
@@ -473,6 +481,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
               >
                 Sign in with passkey
               </button>
+              <div className="login-passkey-hint">First time? Sign in with your password, then add a passkey from My Profile.</div>
 
               <div className="login-divider" aria-hidden="true"><span>or</span></div>
 
