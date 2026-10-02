@@ -79,7 +79,7 @@ export default function SecurityGovernanceSettings(){
         <div className="settings-row"><strong>Refresh-token days</strong><input type="number" value={app.refreshTokenDays} onChange={e=>setApp(d=>({...d,refreshTokenDays:e.target.value}))}/></div>
         <div className="settings-row"><strong>IP policy</strong><select value={app.ipPolicy} onChange={e=>setApp(d=>({...d,ipPolicy:e.target.value}))}><option value="ENFORCE">Enforce</option><option value="RELAX">Relax</option></select></div>
         <div className="settings-row"><strong>Require High Assurance</strong><input type="checkbox" checked={app.requireHighAssurance} onChange={e=>setApp(d=>({...d,requireHighAssurance:e.target.checked}))}/></div>
-        <div className="metadata-settings-form-actions"><button type="button" className="is-primary" onClick={async()=>{try{await apiRequest('/api/security/governance/connected-apps/'+encodeURIComponent(app.appKey),{method:'PUT',body:JSON.stringify({...app,allowedScopes:app.allowedScopes.split(/[\\s,]+/).filter(Boolean),refreshTokenDays:app.refreshTokenDays?Number(app.refreshTokenDays):null})});setApp(null);await load()}catch(e){setError(e.message)}}}>Save connected-app policy</button></div>
+        <div className="metadata-settings-form-actions"><button type="button" className="is-primary" onClick={async()=>{try{await apiRequest('/api/security/governance/connected-apps/'+encodeURIComponent(app.appKey),{method:'PUT',body:JSON.stringify({...app,allowedScopes:app.allowedScopes.split(/[\s,]+/).filter(Boolean),refreshTokenDays:app.refreshTokenDays?Number(app.refreshTokenDays):null})});setApp(null);await load()}catch(e){setError(e.message)}}}>Save connected-app policy</button></div>
       </section>:null}
     </div>:null}
 
