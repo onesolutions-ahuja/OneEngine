@@ -5990,7 +5990,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   router.post("/platform/objects/:objectKey/records/:recordId/buttons/:buttonKey/execute", authenticate, async (req, res, next) => {
     try {
       if (!recordIdIsValid(req.params.recordId)) return res.status(400).json({ success: false, message: "Invalid record identifier" });
-      const { object } = await getRecordMetadata(req.params.objectKey, req);
+      const { object, fields } = await getRecordMetadata(req.params.objectKey, req);
       if (!object || !object.source_table || !isSafeIdentifier(object.source_table)) return res.status(404).json({ success: false, message: "Object records are not available" });
       const buttonResult = await db(
         `SELECT * FROM platform_buttons WHERE object_id=$1 AND button_key=$2 AND active=true AND (company_id IS NULL OR company_id=$3) LIMIT 1`,
@@ -6011,6 +6011,22 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const recordResult = await db(`SELECT * FROM "${object.source_table}" WHERE ${recordClauses.join(" AND ")}`, recordParams);
       if (!recordResult.rows.length) return res.status(404).json({ success: false, message: "Record not found" });
       const record = recordResult.rows[0];
+      const association = await db(
+        "SELECT record_type_id FROM platform_record_associations WHERE object_id=$1 AND record_id=$2 AND company_id=$3 LIMIT 1",
+        [object.id, req.params.recordId, req.user.companyId]
+      );
+      const recordTypeId = association.rows[0]?.record_type_id || null;
+      try {
+        const visibilityContext = await buildUiConditionContext(req, { record, object, recordTypeId });
+        if (!evaluatePlatformCondition(button.visibility_rule, fields, visibilityContext)) {
+          return res.status(404).json({ success: false, message: "Registered button is not available for this record" });
+        }
+      } catch (error) {
+        if (error instanceof ConditionError) {
+          return res.status(422).json({ success: false, code: error.code, message: "Registered button visibility metadata is invalid" });
+        }
+        throw error;
+      }
 
       if (button.target_type === "workflow") {
         const workflowResult = await db(
@@ -6101,32 +6117,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     try {
       if (!recordIdIsValid(req.params.recordId)) return res.status(400).json({ success: false, message: "Invalid record identifier" });
 
-      const { object } = await getRecordMetadata(req.params.objectKey, req);
+      const { object, fields } = await getRecordMetadata(req.params.objectKey, req);
       if (!object || !object.source_table || !isSafeIdentifier(object.source_table)) {
         return res.status(404).json({ success: false, message: "Object records are not available" });
       }
-
-      const layoutResult = await db(
-        `SELECT l.definition
-         FROM platform_layouts l
-         WHERE l.object_id=$1 AND l.page_type='detail' AND l.active=true
-           AND (l.company_id IS NULL OR l.company_id=$2)
-         AND (l.role_id IS NULL OR l.role_id=$3)`,
-        [object.id, req.user.companyId, req.user.roleId || null]
-      );
-      const selectedLayout = resolvePageLayout(layoutResult.rows);
-      const components = normalizePageDefinition(selectedLayout?.definition).components;
-      const component = components.find((candidate, index) =>
-        candidate?.type === "action" &&
-        candidate?.visible !== false &&
-        configuredActionKey(candidate, index) === req.params.actionKey
-      );
-      if (!component) return res.status(404).json({ success: false, message: "Configured record action not found" });
-
-      const action = String(component.action || "").toLowerCase();
-      const permission = action === "run_workflow" ? "workflow.execute" : action === "call_function" ? "functions.execute" : null;
-      if (!permission) return res.status(400).json({ success: false, message: "This record action is not executable" });
-      if (!(await hasExecutionPermission(req, permission))) return res.status(403).json({ success: false, message: "You do not have permission to execute this action" });
 
       const recordClauses = ["id=$1"];
       const recordParams = [req.params.recordId];
@@ -6146,6 +6140,42 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       );
       if (!recordResult.rows.length) return res.status(404).json({ success: false, message: "Record not found" });
       const record = recordResult.rows[0];
+
+      const association = await db(
+        "SELECT record_type_id FROM platform_record_associations WHERE object_id=$1 AND record_id=$2 AND company_id=$3 LIMIT 1",
+        [object.id, req.params.recordId, req.user.companyId]
+      );
+      const recordTypeId = association.rows[0]?.record_type_id || null;
+      const selectedLayout = await resolveEffectiveLayoutForRequest({
+        objectId: object.id,
+        pageType: "detail",
+        recordTypeId,
+        req,
+      });
+      const components = normalizePageDefinition(selectedLayout?.definition).components;
+      const component = components.find((candidate, index) =>
+        candidate?.type === "action" &&
+        candidate?.visible !== false &&
+        configuredActionKey(candidate, index) === req.params.actionKey
+      );
+      if (!component) return res.status(404).json({ success: false, message: "Configured record action not found" });
+
+      try {
+        const visibilityContext = await buildUiConditionContext(req, { record, object, recordTypeId });
+        if (!evaluatePlatformCondition(component.visibilityCondition, fields, visibilityContext)) {
+          return res.status(404).json({ success: false, message: "Configured record action is not available for this record" });
+        }
+      } catch (error) {
+        if (error instanceof ConditionError) {
+          return res.status(422).json({ success: false, code: error.code, message: "Configured action visibility metadata is invalid" });
+        }
+        throw error;
+      }
+
+      const action = String(component.action || "").toLowerCase();
+      const permission = action === "run_workflow" ? "workflow.execute" : action === "call_function" ? "functions.execute" : null;
+      if (!permission) return res.status(400).json({ success: false, message: "This record action is not executable" });
+      if (!(await hasExecutionPermission(req, permission))) return res.status(403).json({ success: false, message: "You do not have permission to execute this action" });
 
       if (action === "call_function") {
         const functionKey = component.functionKey || component.function_key;
