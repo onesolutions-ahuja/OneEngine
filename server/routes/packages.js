@@ -1,6 +1,6 @@
 import express from "express";
 
-import { comparePackageVersions, provisionPackageMetadata, removePackageMetadata, resolveFeaturePlan, resolvePackagePlan } from "../services/packageRegistry.js";
+import { comparePackageVersions, provisionPackageMetadata, removePackageMetadata, resolveFeaturePlan, resolvePackagePlan, verifyPublicPackageRegistry } from "../services/packageRegistry.js";
 import { executeTenantReleaseUpgrade } from "../services/appReleaseManager.js";
 
 import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing.js";
@@ -357,6 +357,16 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
   router.get("/packages/marketplace", authenticate, async (req, res) => {
     try {
+      const registryHealth = await verifyPublicPackageRegistry(db);
+      if (!registryHealth.healthy) {
+        return res.status(503).json({
+          success: false,
+          code: "PACKAGE_REGISTRY_STALE",
+          message: "oneStore catalogue is updating. Please retry shortly.",
+          registry: registryHealth,
+        });
+      }
+
 
       const result = await db(
         `SELECT p.*, m.module_key
