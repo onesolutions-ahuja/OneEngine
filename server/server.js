@@ -80,6 +80,7 @@ import createPlatformSecurityRouter from "./routes/platformSecurity.js";
 import createIdentitySecurityRouter from "./routes/identitySecurity.js";
 import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
+import createSecurityGovernanceRouter from "./routes/securityGovernance.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
@@ -199,7 +200,11 @@ const isAllowedOrigin = (origin) => {
 };
 app.use(cors({
   origin(origin, callback) {
-    callback(isAllowedOrigin(origin) ? null : new Error("CORS origin not allowed"), isAllowedOrigin(origin));
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    if (!origin) return callback(null, true);
+    db("SELECT 1 FROM security_trusted_origins WHERE origin=$1 AND origin_type='CORS' AND active=TRUE LIMIT 1", [origin])
+      .then((result) => callback(result.rows.length ? null : new Error("CORS origin not allowed"), result.rows.length > 0))
+      .catch(() => callback(new Error("CORS origin not allowed"), false));
   },
   credentials: true,
   allowedHeaders: [
@@ -1804,6 +1809,7 @@ app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
 app.use("/api", createIdentitySecurityRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createIdentityAssuranceRouter({ authenticate, authorize, db, createToken, encryptCredentials, decryptCredentials, writeAudit }));
 app.use("/api", createIdentityProviderLoginRouter({ db, createToken, decryptCredentials, encryptCredentials }));
+app.use("/api", createSecurityGovernanceRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createHospitalityRouter({ authenticate, authorize, db, pool, canAccessStore }));
 app.use("/api", createClientWebShopRouter({
   authenticate,
