@@ -18,6 +18,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0025_identity_lockout_forever",
   "0026_identity_assurance",
   "0027_identity_assurance_overrides",
+  "0028_identity_provider_state",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -75,6 +76,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Layered MFA and assurance policy overrides",
     up: client => client.query(
       readFileSync(new URL("./migrations/0027_identity_assurance_overrides.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0028_identity_provider_state",
+    version: "28",
+    name: "Authentication provider transaction state",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0028_identity_provider_state.sql", import.meta.url), "utf8")
     ),
   },
 ]);
