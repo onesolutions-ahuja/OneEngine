@@ -71,7 +71,7 @@ function MetadataField({field,value,onChange}){
   let control=null
   if(type==='boolean'){
     control=<button type="button" className={`mac-switch ${value===true?'is-on':''}`} disabled={disabled} onClick={()=>onChange(value!==true)}><span/></button>
-  }else if(type==='long_text'){
+  }else if(['text_area','long_text','rich_text'].includes(type)){
     control=<textarea rows={3} value={value??''} disabled={disabled} required={field?.required===true} onChange={e=>onChange(e.target.value)}/>
   }else if(type==='picklist'||type==='select'){
     control=<select value={value??''} disabled={disabled} required={field?.required===true} onChange={e=>onChange(e.target.value)}><option value="">Select {label}</option>{optionsOf(field).map(o=><option key={String(optionValue(o))} value={String(optionValue(o))}>{String(optionLabel(o))}</option>)}</select>
