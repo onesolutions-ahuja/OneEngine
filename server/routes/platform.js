@@ -665,7 +665,7 @@ async function calculateFormulaRecords(db, object, fields, records, req, depth =
 
 function validateGeneralFieldConfig(field) {
   const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
-  const textTypes = new Set(["text", "long_text", "rich_text", "url", "email", "phone"]);
+  const textTypes = new Set(["text", "text_area", "long_text", "rich_text", "url", "email", "phone"]);
   const numericTypes = new Set(["number", "decimal", "currency", "percent"]);
   const externalIdTypes = new Set(["text", "number", "decimal", "email", "auto_number"]);
   const uniqueTypes = new Set(["text", "number", "decimal", "email", "auto_number"]);
@@ -680,8 +680,8 @@ function validateGeneralFieldConfig(field) {
   }
   if (config.precision !== undefined && config.precision !== null) {
     const precision = Number(config.precision);
-    if (!numericTypes.has(field.field_type) || !Number.isInteger(precision) || precision < 1 || precision > 38) {
-      throw new ConditionError("Precision must be between 1 and 38 for numeric fields");
+    if (!numericTypes.has(field.field_type) || !Number.isInteger(precision) || precision < 1 || precision > 18) {
+      throw new ConditionError("Precision must be between 1 and 18 for numeric fields");
     }
     const scale = config.scale === undefined || config.scale === null ? 0 : Number(config.scale);
     if (!Number.isInteger(scale) || scale < 0 || scale > 18 || scale > precision) {
@@ -702,6 +702,10 @@ function validateGeneralFieldConfig(field) {
   }
   if (config.defaultValue !== undefined && config.defaultValue !== null && ["formula", "rollup", "auto_number", "lookup"].includes(field.field_type)) {
     throw new ConditionError("This field type cannot have a static default value");
+  }
+  if (config.defaultValue !== undefined && config.defaultValue !== null && !["select", "picklist", "multiselect", "formula", "rollup", "auto_number", "lookup"].includes(field.field_type)) {
+    const defaultError = fieldValueError({ ...field, required: false }, config.defaultValue);
+    if (defaultError) throw new ConditionError(`Default value is invalid: ${defaultError}`);
   }
   if (config.defaultFormula || config.default_formula) {
     if (["formula", "rollup", "auto_number", "lookup", "address", "location", "json"].includes(field.field_type)) {
