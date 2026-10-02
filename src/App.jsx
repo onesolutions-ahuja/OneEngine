@@ -64,7 +64,7 @@ class LazyLoadBoundary extends Component {
     if (!this.state.error) return this.props.children
     return (
       <div className="route-loading" role="alert">
-        <span>Unable to load this page. <strong>Error OEF02</strong></span>
+        <span>Unable to load this page. <strong>Error OEFL01</strong></span>
         <button type="button" onClick={this.retry}>Retry</button>
       </div>
     )
