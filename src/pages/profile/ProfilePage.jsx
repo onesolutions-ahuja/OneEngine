@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, UserRound } from 'lucide-react'
-import { apiRequest, getPasskeyOptions, verifyMfa, verifyPasskey } from '../../services/api'
+import { apiRequest, getPasskeyOptions, startPasskeyRegistration, verifyMfa, verifyPasskey } from '../../services/api'
 
 function valueLabel(value) {
   if (value === true) return 'Yes'
@@ -24,6 +24,9 @@ export default function ProfilePage({ onBack }) {
   const [stepUp,setStepUp]=useState(null)
   const [stepCode,setStepCode]=useState('')
   const [pendingDisconnect,setPendingDisconnect]=useState(null)
+  const [passkeyPolicy,setPasskeyPolicy]=useState({allowPasskeyLogin:false,allowPlatformPasskeys:false,allowSecurityKeys:false})
+  const [passkeyBusy,setPasskeyBusy]=useState(false)
+  const [message,setMessage]=useState('')
 
   useEffect(() => {
     let live = true
@@ -32,12 +35,18 @@ export default function ProfilePage({ onBack }) {
       apiRequest('/api/platform/runtime/my-record'),
       apiRequest('/api/security/mfa/methods').catch(()=>({data:[]})),
       apiRequest('/api/security/trusted-devices').catch(()=>({data:[]})),
+      apiRequest('/api/auth/mfa/passkey/policy').catch(()=>({data:{}})),
     ])
-      .then(([response,methods,devices]) => {
+      .then(([response,methods,devices,passkey]) => {
         if (!live) return
         setRuntime(response?.data || null)
         setMfaMethods(methods?.data||[])
         setTrustedDevices(devices?.data||[])
+        setPasskeyPolicy({
+          allowPasskeyLogin:passkey?.data?.allowPasskeyLogin===true,
+          allowPlatformPasskeys:passkey?.data?.allowPlatformPasskeys===true,
+          allowSecurityKeys:passkey?.data?.allowSecurityKeys===true,
+        })
         setError('')
       })
       .catch((err) => {
@@ -55,12 +64,47 @@ export default function ProfilePage({ onBack }) {
     return Uint8Array.from(atob(padded),ch=>ch.charCodeAt(0)).buffer
   }
   const encode=(value)=>value?btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''):null
-  const credentialJson=(credential)=>({
-    id:credential.id,rawId:encode(credential.rawId),type:credential.type,authenticatorAttachment:credential.authenticatorAttachment||undefined,
-    clientExtensionResults:credential.getClientExtensionResults?.()||{},
-    response:{clientDataJSON:encode(credential.response?.clientDataJSON),authenticatorData:encode(credential.response?.authenticatorData),
-      signature:encode(credential.response?.signature),userHandle:encode(credential.response?.userHandle)},
+  const credentialJson=(credential)=>{
+    const response=credential.response||{}
+    return {
+      id:credential.id,rawId:encode(credential.rawId),type:credential.type,authenticatorAttachment:credential.authenticatorAttachment||undefined,
+      clientExtensionResults:credential.getClientExtensionResults?.()||{},
+      response:{
+        clientDataJSON:encode(response.clientDataJSON),
+        attestationObject:encode(response.attestationObject),
+        authenticatorData:encode(response.authenticatorData),
+        signature:encode(response.signature),
+        userHandle:encode(response.userHandle),
+        transports:typeof response.getTransports==='function'?response.getTransports():undefined,
+      },
+    }
+  }
+
+  const creationOptions=(options)=>({
+    ...options,
+    challenge:decode(options.challenge),
+    user:{...options.user,id:decode(options.user?.id)},
+    excludeCredentials:(options.excludeCredentials||[]).map(item=>({...item,id:decode(item.id)})),
   })
+
+  const addPasskey=async(authenticatorKind='PLATFORM')=>{
+    try{
+      setPasskeyBusy(true);setError('');setMessage('')
+      if(!window.PublicKeyCredential||!navigator.credentials)throw new Error('Passkeys are not supported on this browser or device.')
+      const start=await apiRequest('/api/auth/mfa/passkeys/enrollment/start',{method:'POST',body:'{}'})
+      const options=await startPasskeyRegistration(start.challengeId,authenticatorKind)
+      const credential=await navigator.credentials.create({publicKey:creationOptions(options.data)})
+      await apiRequest('/api/auth/mfa/passkey/registration-verify',{method:'POST',body:JSON.stringify({
+        challengeId:start.challengeId,
+        credential:credentialJson(credential),
+        label:authenticatorKind==='SECURITY_KEY'?'Security Key':'Built-in Passkey',
+      })})
+      const methods=await apiRequest('/api/security/mfa/methods')
+      setMfaMethods(methods.data||[])
+      setMessage(authenticatorKind==='SECURITY_KEY'?'Security key added.':'Passkey added. You can now use Face ID, Touch ID, Windows Hello or your device biometric when supported.')
+    }catch(e){setError(e.message||'Unable to add passkey')}
+    finally{setPasskeyBusy(false)}
+  }
 
   const disconnectMethod=async(methodId)=>{
     try{
@@ -127,6 +171,10 @@ export default function ProfilePage({ onBack }) {
         </div>
         <div className="profile-fields">
           <div className="profile-field-row"><span>Identity verification methods</span><strong>{mfaMethods.length}</strong></div>
+          {message?<div className="profile-field-row"><span>Passkeys</span><strong>{message}</strong></div>:null}
+          {passkeyPolicy.allowPlatformPasskeys?<div className="profile-field-row"><span>Face ID / Touch ID / Windows Hello / device biometric</span><button type="button" disabled={passkeyBusy} onClick={()=>void addPasskey('PLATFORM')}>{passkeyBusy?'Working…':'Add passkey'}</button></div>:null}
+          {passkeyPolicy.allowSecurityKeys?<div className="profile-field-row"><span>Physical FIDO2 security key</span><button type="button" disabled={passkeyBusy} onClick={()=>void addPasskey('SECURITY_KEY')}>{passkeyBusy?'Working…':'Add security key'}</button></div>:null}
+          {passkeyPolicy.allowPasskeyLogin?<div className="profile-field-row"><span>Passwordless sign-in</span><strong>Enabled by company policy</strong></div>:<div className="profile-field-row"><span>Passwordless sign-in</span><strong>Disabled by company policy</strong></div>}
           {mfaMethods.map((method)=><div className="profile-field-row" key={method.id}><span>{method.label||method.type||method.method_type}</span><button type="button" onClick={()=>void disconnectMethod(method.id)}>Disconnect</button></div>)}
           <div className="profile-field-row"><span>Trusted devices</span><strong>{trustedDevices.filter(d=>!d.revoked_at).length}</strong></div>
           {trustedDevices.filter(d=>!d.revoked_at).map((device)=><div className="profile-field-row" key={device.id}><span>{device.device_name||device.browser||'Device'}</span><button type="button" onClick={async()=>{try{await apiRequest(`/api/security/trusted-devices/${device.id}/revoke`,{method:'POST',body:'{}'});const r=await apiRequest('/api/security/trusted-devices');setTrustedDevices(r.data||[])}catch(e){setError(e.message||'Unable to revoke trusted device')}}}>Revoke</button></div>)}
