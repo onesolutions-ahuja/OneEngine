@@ -325,10 +325,13 @@ export function createTenantPoolManager(options = {}) {
   }
 
   function getPoolForHostname(hostname) {
-    const tenant = resolveTenantFromHostname(hostname, env, { defaultTenantKey: "default" });
-    if (hostIsLocalDefault(hostname)) {
+    const host = stripPort(normalizeHostname(hostname || "localhost"));
+    const renderHost = stripPort(normalizeHostname(env.RENDER_EXTERNAL_HOSTNAME || ""));
+    const renderServiceHost = env.RENDER_SERVICE_NAME ? `${String(env.RENDER_SERVICE_NAME).trim().toLowerCase()}.onrender.com` : "";
+    if (hostIsLocalDefault(host) || (renderHost && host === renderHost) || (renderServiceHost && host === renderServiceHost)) {
       return env.DATABASE_URL ? getPoolForTenant("default", env.DATABASE_URL) : null;
     }
+    const tenant = resolveTenantFromHostname(host, env, { defaultTenantKey: "default" });
     if (!tenant || !tenant.tenantKey || tenant.status === "unknown" || tenant.status === "disabled") {
       return null;
     }
