@@ -96,6 +96,11 @@ export default function DeliverySettingsPage({ channel = 'email' }) {
       <button type="button" className={`mac-switch ${enabled?'is-on':''}`} onClick={()=>setEnabled(v=>!v)} aria-label={`Enable ${label} delivery`}><span/></button>
     </div>
 
+    {channel==='email'?<div className="settings-alert">
+      <strong>Sender domain guidance</strong>
+      <div>For a professional From address, verify the sender and authenticate a domain you own with your email provider. Free mailbox domains such as Gmail, Yahoo or Outlook may be rewritten or have lower deliverability depending on the provider.</div>
+    </div>:null}
+
     {fields.map(([key,title,placeholder])=><div className="settings-row" key={key}>
       <div><strong>{title}</strong><p>{fieldHelp(key)}</p></div>
       <input value={configuration[key]??''} placeholder={placeholder} onChange={e=>setConfiguration(v=>({...v,[key]:e.target.value}))}/>
@@ -129,8 +134,8 @@ function fieldHelp(key){
     api_base_url:'HTTPS provider endpoint used for delivery.',
     default_country_code:'Applied when a phone number has no country prefix.',
     message_template:'Use {link} where the secure receipt/invoice link should appear.',
-    email_provider:'Provider identifier such as SMTP or HTTP API.',
-    from_address:'Email address customers receive messages from.',
+    email_provider:'Provider identifier such as SMTP or HTTP API. Sender verification and domain authentication are managed by the provider you choose.',
+    from_address:'Email address customers receive messages from. Verify this sender with your chosen provider. For branded sending and better deliverability, authenticate a domain you own and use an address on that domain.',
     from_name:'Display name shown in the customer inbox.',
     smtp_host:'SMTP server hostname.',
     smtp_port:'SMTP server port.',
