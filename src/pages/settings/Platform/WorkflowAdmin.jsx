@@ -1065,6 +1065,7 @@ const FLOW_ELEMENT_VISUALS = {
   DELETE_RECORD: { icon: "−", color: "#e83e8c", family: "Data" },
   RUN_SUBFLOW: { icon: "⇢", color: "#0b5cab", family: "Interaction" },
   __ACTION__: { icon: "⚡", color: "#0b5cab", family: "Interaction" },
+  __GROUP__: { icon: "▣", color: "#5c6ac4", family: "Logic" },
 };
 
 function flowElementVisual(type = "") {
@@ -2524,6 +2525,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [highlightedPathKey, setHighlightedPathKey] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [connectFromId, setConnectFromId] = useState(null);
+  const [groupTargetId, setGroupTargetId] = useState(null);
   const paletteRef = useRef(null);
   const canvasRef = useRef(null);
   const propertiesRef = useRef(null);
@@ -2849,13 +2851,30 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setPropertiesOpen(true);
   };
   const addFromPalette = (type, index = workflow.steps.length) => {
+    if (type === "__GROUP__") {
+      createEmptyGroupAt(index);
+      return;
+    }
     const step = makeStep(type);
     const definition = registryOptions.find((option) => option.value === type);
     if (definition?.label) {
       step.label = definition.label;
       step.config.apiName = flowApiName(definition.label);
     }
+    const targetGroupId = groupTargetId;
     insertPreparedStep(step, index);
+    if (targetGroupId) {
+      setWorkflow((current) => ({
+        ...current,
+        actionMetadata: {
+          ...(current.actionMetadata || {}),
+          builderGroups: (current.actionMetadata?.builderGroups || []).map((group) => String(group.id) === String(targetGroupId)
+            ? { ...group, stepIds: [...(group.stepIds || []), step.id], anchorBeforeId: group.anchorBeforeId || "__end__" }
+            : group),
+        },
+      }));
+      setGroupTargetId(null);
+    }
   };
   const copyStep = (step) => setClipboard({ mode: "copy", step: JSON.parse(JSON.stringify(step)), steps: [JSON.parse(JSON.stringify(step))], bundle: [] });
   const toggleElementSelection = (stepId) => {
@@ -3239,6 +3258,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const registeredActionOptions = registryOptions
     .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH","STOP"].includes(option.value));
   const palette = [
+    ...(layoutMode === "AUTO" ? [{ value: "__GROUP__", label: "Group", description: "Organize related elements in a named, collapsible section.", category: "Logic" }] : []),
     ...registryOptions
       .filter((option) => SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(option.value))
       .map((option) => ({ ...option, category: option.value === "RUN_SUBFLOW" ? "Interaction" : workflowActionCategory(option.value) })),
@@ -3354,7 +3374,42 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const builderGroups = Array.isArray(workflow.actionMetadata?.builderGroups) ? workflow.actionMetadata.builderGroups : [];
   const groupForStep = (stepId) => builderGroups.find((group) => (group.stepIds || []).map(String).includes(String(stepId))) || null;
   const firstStepIdForGroup = (group) => (group?.stepIds || []).find((id) => visibleCanvasSteps.some(({ step }) => String(step.id) === String(id))) || null;
-  const createGroupFromSelection = () => {
+  const anchoredGroupBeforeStep = (stepId) => builderGroups.find((group) => !(group.stepIds || []).length && String(group.anchorBeforeId || "__end__") === String(stepId)) || null;
+  const endAnchoredGroups = builderGroups.filter((group) => !(group.stepIds || []).length && String(group.anchorBeforeId || "__end__") === "__end__");
+  const createEmptyGroupAt = (index = workflow.steps.length) => {
+    const label = typeof window !== "undefined" ? window.prompt("Group name", "New Group") : "New Group";
+    if (!String(label || "").trim()) return;
+    const description = typeof window !== "undefined" ? window.prompt("Group description (optional)", "") : "";
+    const nextVisible = visibleCanvasSteps.find(({ index: stepIndex }) => stepIndex >= index)?.step?.id || "__end__";
+    const group = {
+      id: `group-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      label: String(label).trim(),
+      apiName: flowApiName(String(label).trim()),
+      description: String(description || "").trim(),
+      stepIds: [],
+      anchorBeforeId: String(nextVisible),
+    };
+    setWorkflow((current) => ({
+      ...current,
+      actionMetadata: {
+        ...(current.actionMetadata || {}),
+        builderGroups: [...(current.actionMetadata?.builderGroups || []), group],
+      },
+    }));
+    setInsertAt(null);
+    setBranchTarget(null);
+    setGroupTargetId(null);
+    setPaletteOpen(true);
+    setPaletteTab("elements");
+  };
+  const addElementInsideGroup = (groupId, index) => {
+    setGroupTargetId(groupId);
+    setBranchTarget(null);
+    setInsertAt(index);
+    setPaletteTab("elements");
+    setPaletteOpen(true);
+  };
+    const createGroupFromSelection = () => {
     const selected = visibleCanvasSteps.filter(({ step }) => selectedElementIds.includes(String(step.id))).map(({ step }) => String(step.id));
     if (!selected.length) return;
     const label = typeof window !== "undefined" ? window.prompt("Group name", "New Group") : "New Group";
@@ -3396,6 +3451,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   };
 
   function openPath(target) {
+    setGroupTargetId(null);
     setBranchTarget(target);
     setInsertAt(null);
     setPaletteTab("elements");
@@ -3487,7 +3543,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
         {paletteTab === "elements" ? (
           <>
-            <p className="workflow-palette-help">{layoutMode === "FREEFORM" ? "Drag an element onto the canvas." : branchTarget ? "Choose an element for this path." : insertAt == null ? "Use a + insertion point on the canvas to choose where the element belongs." : "Choose an element to insert at the selected point."}</p>
+            <p className="workflow-palette-help">{layoutMode === "FREEFORM" ? "Drag an element onto the canvas." : branchTarget ? "Choose an element for this path." : insertAt == null ? "Use a + insertion point on the canvas to add an element or Group." : "Choose an element to insert at the selected point."}</p>
             <div className="workflow-palette-scroll">
               {Object.entries(paletteGroups).map(([category, options]) => (
                 <div key={category}>
@@ -3831,10 +3887,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           ) : null}
           <div className="workflow-node-connector">
             {scheduledPathSteps.length ? <span className="workflow-connector-label">Run Immediately</span> : null}
-            <button type="button" className="workflow-insert-button" aria-label="Add element after Start" onClick={() => { setBranchTarget(null); setInsertAt(0); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
+            <button type="button" className="workflow-insert-button" aria-label="Add element after Start" onClick={() => { setGroupTargetId(null); setBranchTarget(null); setInsertAt(0); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
           </div>
           {visibleCanvasSteps.map(({ step, index }) => {
             const group = groupForStep(step.id);
+            const anchoredEmptyGroup = anchoredGroupBeforeStep(step.id);
             const firstGroupStepId = group ? firstStepIdForGroup(group) : null;
             const isGroupFirst = group && String(firstGroupStepId) === String(step.id);
             if (group && collapsedGroups[group.id] === true && !isGroupFirst) return null;
@@ -3855,11 +3912,21 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               : [];
             return (
               <div key={step.id} className={`workflow-node-wrap ${canCollapse ? "has-branching" : ""}`}>
+                {anchoredEmptyGroup ? <div className="workflow-group-card">
+                  <div className="workflow-group-head">
+                    <div><strong>{anchoredEmptyGroup.label}</strong>{anchoredEmptyGroup.description ? <small>{anchoredEmptyGroup.description}</small> : <small>Empty group</small>}</div>
+                    <div className="workflow-group-actions">
+                      <button type="button" onClick={() => addElementInsideGroup(anchoredEmptyGroup.id, index)}>+ Add Element</button>
+                      <button type="button" onClick={() => deleteGroup(anchoredEmptyGroup.id)}>Delete Group</button>
+                    </div>
+                  </div>
+                </div> : null}
                 {isGroupFirst ? <div className="workflow-group-card">
                   <div className="workflow-group-head">
                     <div><strong>{group.label}</strong>{group.description ? <small>{group.description}</small> : <small>{group.stepIds.length} elements</small>}</div>
                     <div className="workflow-group-actions">
                       <button type="button" onClick={() => toggleGroupCollapse(group.id, collapsedGroups[group.id] !== true)}>{collapsedGroups[group.id] === true ? "Expand" : "Collapse"}</button>
+                      <button type="button" onClick={() => addElementInsideGroup(group.id, index + 1)}>+ Add Element</button>
                       <button type="button" onClick={() => deleteGroup(group.id)}>Ungroup</button>
                     </div>
                   </div>
@@ -3905,13 +3972,22 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
 
                 <div className="workflow-node-connector">
                   {step.type === "LOOP" ? <span className="workflow-connector-label">After Last</span> : null}
-                  <button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setBranchTarget(null); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
+                  <button type="button" className="workflow-insert-button" aria-label={`Add element after ${step.label || getActionLabel(step.type)}`} onClick={() => { setGroupTargetId(null); setBranchTarget(null); setInsertAt(index + 1); setPaletteTab("elements"); setPaletteOpen(true); }}>+</button>
                 </div>
                 </>}
               </div>
             );
           })}
           {!visibleCanvasSteps.length ? <button type="button" className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-sm text-blue-700" onClick={() => { setInsertAt(0); setBranchTarget(null); setPaletteTab("elements"); setPaletteOpen(true); }}>+ Add Element</button> : null}
+          {endAnchoredGroups.map((group) => <div key={group.id} className="workflow-group-card">
+            <div className="workflow-group-head">
+              <div><strong>{group.label}</strong>{group.description ? <small>{group.description}</small> : <small>Empty group</small>}</div>
+              <div className="workflow-group-actions">
+                <button type="button" onClick={() => addElementInsideGroup(group.id, workflow.steps.length)}>+ Add Element</button>
+                <button type="button" onClick={() => deleteGroup(group.id)}>Delete Group</button>
+              </div>
+            </div>
+          </div>)}
           <div className="workflow-end-node"><span>■</span><strong>End</strong></div>
         </div>
         )}
