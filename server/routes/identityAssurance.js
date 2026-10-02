@@ -129,16 +129,17 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       allowPlatformPasskeys:b.allowPlatformPasskeys===undefined?current.allow_platform_passkeys:b.allowPlatformPasskeys!==false,
       allowSecurityKeys:b.allowSecurityKeys===undefined?current.allow_security_keys:b.allowSecurityKeys!==false,
       allowRecoveryCodes:b.allowRecoveryCodes===undefined?current.allow_recovery_codes:b.allowRecoveryCodes!==false,
+      allowPasskeyLogin:b.allowPasskeyLogin===undefined?current.allow_passkey_login:b.allowPasskeyLogin!==false,
     };
     if(values.phishingResistant && values.passkeyAssurance!=="HIGH")return res.status(400).json({success:false,message:"Passkey authentication must be High Assurance when phishing-resistant MFA is required."});
     const r=await db(`UPDATE identity_security_settings SET mfa_required=$1,phishing_resistant_mfa_required=$2,trust_sso_mfa=$3,
       trusted_device_days=$4,device_activation_required=$5,skip_device_activation_on_trusted_network=$6,
       step_up_period_minutes=$7,required_login_assurance=$8,password_assurance=$9,totp_assurance=$10,
       passkey_assurance=$11,sso_assurance=$12,allow_totp=$13,allow_platform_passkeys=$14,allow_security_keys=$15,allow_recovery_codes=$16,
-      updated_by=$17,updated_at=NOW() WHERE company_id=$18 RETURNING *`,
+      allow_passkey_login=$17,updated_by=$18,updated_at=NOW() WHERE company_id=$19 RETURNING *`,
       [values.mfaRequired,values.phishingResistant,values.trustSsoMfa,values.trustedDeviceDays,values.deviceActivationRequired,values.skipDeviceActivationOnTrustedNetwork,
        values.stepUpPeriodMinutes,values.requiredLoginAssurance,values.passwordAssurance,values.totpAssurance,values.passkeyAssurance,values.ssoAssurance,
-       values.allowTotp,values.allowPlatformPasskeys,values.allowSecurityKeys,values.allowRecoveryCodes,req.user.id,req.user.companyId]);
+       values.allowTotp,values.allowPlatformPasskeys,values.allowSecurityKeys,values.allowRecoveryCodes,values.allowPasskeyLogin,req.user.id,req.user.companyId]);
     await writeAudit?.(req.user.companyId,req.user.id,"security.assurance_updated","identity_security_settings",req.user.companyId,values);
     res.json({success:true,data:r.rows[0]});
   });
