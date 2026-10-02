@@ -19,7 +19,7 @@ export async function loadApiPolicy(db,companyId){
   const r=await db("SELECT * FROM security_api_policies WHERE company_id=$1",[companyId]);
   return r.rows[0]||{
     company_id:companyId,enforce_connected_app_policy:false,require_pkce:true,
-    require_high_assurance_for_app_admin:true,default_refresh_token_days:30,max_refresh_token_days:180,
+    require_high_assurance_for_app_admin:false,default_refresh_token_days:30,max_refresh_token_days:180,
     allowed_grant_types:["authorization_code","refresh_token"],
   };
 }
