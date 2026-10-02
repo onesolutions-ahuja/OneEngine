@@ -1,0 +1,156 @@
+name: OneEngine Local UX Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["ux-audit"]
+    paths:
+      - ".github/workflows/ux-audit-local.yml"
+      - "tests/e2e/ux-audit-local.spec.mjs"
+      - "src/**"
+      - "server/**"
+      - "package.json"
+      - "package-lock.json"
+      - "playwright.config.mjs"
+
+concurrency:
+  group: oneengine-local-ux-audit
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ux-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: oneengine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d oneengine"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/oneengine
+      PORT: 10000
+      JWT_SECRET: local-ux-audit-jwt-secret-not-for-production
+      ONEPOS_DB_ENCRYPTION_KEY: local-ux-audit-db-key-not-for-production
+      BOOTSTRAP_SUPERADMIN_EMAIL: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
+      BOOTSTRAP_SUPERADMIN_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
+      ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
+      ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
+      ONEPOS_E2E_BASE_URL: http://127.0.0.1:5173/
+      ONEPOS_API_URL: http://127.0.0.1:10000
+      VITE_API_BASE: http://127.0.0.1:10000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify configured QA credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ONEPOS_E2E_USERNAME" || { echo "::error::ONEPOS_PLAYWRIGHT_USERNAME repo variable is missing"; exit 1; }
+          test -n "$ONEPOS_E2E_PASSWORD" || { echo "::error::ONEPOS_PLAYWRIGHT_PASSWORD repo variable is missing"; exit 1; }
+
+      - name: Install frontend and server dependencies
+        run: |
+          npm ci
+          npm ci --prefix server
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare local database
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f server/database/schema.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies (name, legal_name, email, currency, timezone, active)
+          SELECT 'onePOS Demo', 'onePOS Demo Ltd', 'demo@onepos.com', 'GBP', 'Europe/London', TRUE
+          WHERE NOT EXISTS (SELECT 1 FROM companies WHERE lower(name)=lower('onePOS Demo'));
+
+          INSERT INTO company_settings (company_id)
+          SELECT id FROM companies c
+          WHERE lower(c.name)=lower('onePOS Demo')
+            AND NOT EXISTS (SELECT 1 FROM company_settings cs WHERE cs.company_id=c.id);
+
+          INSERT INTO stores (company_id, name, code, active)
+          SELECT c.id, 'Main Store', 'MAIN', TRUE
+          FROM companies c
+          WHERE lower(c.name)=lower('onePOS Demo')
+            AND NOT EXISTS (SELECT 1 FROM stores s WHERE s.company_id=c.id);
+          SQL
+
+      - name: Start local API
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup node server/server.js > /tmp/oneengine-api.log 2>&1 &
+          echo $! > /tmp/oneengine-api.pid
+          for i in {1..120}; do
+            if curl -fsS http://127.0.0.1:10000/api/health >/tmp/health.json 2>/dev/null; then
+              cat /tmp/health.json
+              break
+            fi
+            if ! kill -0 "$(cat /tmp/oneengine-api.pid)" 2>/dev/null; then
+              echo "::error::Local API exited during startup"
+              cat /tmp/oneengine-api.log
+              exit 1
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:10000/api/health >/dev/null || { cat /tmp/oneengine-api.log; exit 1; }
+
+      - name: Normalize local QA user
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "UPDATE users SET must_change_password=FALSE, active=TRUE WHERE lower(username)=lower('$ONEPOS_E2E_USERNAME') OR lower(email)=lower('$ONEPOS_E2E_USERNAME');"
+          STATUS=$(curl -sS -o /tmp/local-login.json -w "%{http_code}"             -H "Content-Type: application/json"             --data-binary "$(node -e 'process.stdout.write(JSON.stringify({username:process.env.ONEPOS_E2E_USERNAME,password:process.env.ONEPOS_E2E_PASSWORD}))')"             http://127.0.0.1:10000/api/auth/login)
+          cat /tmp/local-login.json
+          test "$STATUS" = "200"
+
+      - name: Start local frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm run dev -- --host 127.0.0.1 > /tmp/oneengine-vite.log 2>&1 &
+          echo $! > /tmp/oneengine-vite.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:5173/ >/dev/null 2>&1; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/oneengine-vite.log
+          exit 1
+
+      - name: Run local UX audit
+        run: npx playwright test tests/e2e/ux-audit-local.spec.mjs --project=desktop-chromium
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oneengine-local-ux-audit
+          path: |
+            playwright-report/
+            test-results/
+            /tmp/oneengine-api.log
+            /tmp/oneengine-vite.log
+          if-no-files-found: ignore
+          retention-days: 14
