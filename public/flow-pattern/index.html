@@ -16,11 +16,13 @@
     .flow-icon{display:flex;width:36px;height:36px;flex:0 0 36px;align-items:center;justify-content:center;border-radius:8px}
     .tone-sky{background:rgba(14,165,233,.15);color:#0284c7}.tone-violet{background:rgba(139,92,246,.15);color:#7c3aed}.tone-amber{background:rgba(245,158,11,.15);color:#d97706}.tone-emerald{background:rgba(16,185,129,.15);color:#059669}.tone-primary{background:rgba(30,41,59,.15);color:#1e293b}.tone-slate{background:rgba(100,116,139,.14);color:#475569}
     .flow-copy{min-width:0}.flow-label{font-size:14px;font-weight:600;line-height:1.2;color:var(--foreground)}.flow-sub{margin-top:2px;font-size:11px;color:var(--muted-foreground)}
-    .node-actions{position:absolute;top:-11px;right:-11px;display:flex;gap:4px;z-index:6;opacity:0;transition:opacity .15s ease}.flow-node:hover .node-actions,.flow-node:focus-within .node-actions{opacity:1}
-    .node-action{width:23px;height:23px;border:1px solid var(--border);border-radius:999px;background:#fff;color:#334155;display:grid;place-items:center;padding:0;font-size:15px;line-height:1;cursor:pointer;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+    .node-action{position:absolute;width:23px;height:23px;border:1px solid var(--border);border-radius:999px;background:#fff;color:#334155;display:grid;place-items:center;padding:0;font-size:15px;line-height:1;cursor:pointer;box-shadow:0 1px 3px rgba(15,23,42,.12);z-index:6;opacity:0;transition:opacity .15s ease,background .15s ease}
+    .flow-node:hover .node-action,.flow-node:focus-within .node-action{opacity:1}
+    .node-action.add{right:-34px;top:50%;transform:translateY(-50%)}
+    .node-action.remove{right:-11px;top:-11px}
     .node-action:hover{background:#f8fafc}.node-action.remove:hover{color:#dc2626;border-color:#fecaca;background:#fff7f7}
     .react-flow__handle{background:var(--primary)!important;border:2px solid var(--background)!important;width:12px!important;height:12px!important}
-    .react-flow__edge-path{stroke:var(--flow-edge);stroke-width:1.6}.react-flow__edge.animated path{stroke-dasharray:5;animation-duration:.8s}
+    .react-flow__edge-path{stroke:var(--flow-edge);stroke-width:1.8;stroke-dasharray:7 6}.react-flow__edge.animated path{stroke-dasharray:7 6;animation-duration:.7s}
     .react-flow__controls{border-radius:10px!important;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06)!important}.react-flow__controls button{background:var(--card)!important;border-bottom:1px solid var(--border)!important;color:var(--foreground)!important}
     .react-flow__attribution{background:transparent!important;font-size:10px!important}
   </style>
@@ -37,21 +39,20 @@ import {ReactFlow,Background,Controls,Handle,Position,addEdge,useNodesState,useE
 import {Inbox,ShieldCheck,Database,Cpu,Send,Plus,Minus,Box} from "https://esm.sh/lucide-react@0.575.0?external=react";
 
 const h=React.createElement;
-const baseEdgeStyle={stroke:"var(--flow-edge)",strokeWidth:1.6};
+const baseEdgeStyle={stroke:"var(--flow-edge)",strokeWidth:1.8,strokeDasharray:"7 6"};
+const makeEdge=(edge)=>({...edge,animated:true,type:edge.type||"smoothstep",style:{...baseEdgeStyle,...(edge.style||{})},markerEnd:edge.markerEnd||{type:MarkerType.ArrowClosed}});
 const iconMap={Inbox,ShieldCheck,Database,Cpu,Send,Box};
 let sequence=6;
 
 const StepNode=memo(function StepNode({id,data}){
   const Icon=iconMap[data.iconKey]||Box;
   return h("div",{className:"flow-node"},
-    !data.isFirst&&h(Handle,{type:"target",position:Position.Left}),
+    !data.isFirst&&h(Handle,{type:"target",position:Position.Top}),
     h("div",{className:`flow-icon ${data.color}`},h(Icon,{size:17})),
     h("div",{className:"flow-copy"},h("div",{className:"flow-label"},data.label),h("div",{className:"flow-sub"},data.sub)),
-    h("div",{className:"node-actions"},
-      h("button",{className:"node-action",type:"button",title:"Add node",onClick:(event)=>{event.stopPropagation();data.onAdd(id)}},h(Plus,{size:14})),
-      h("button",{className:"node-action remove",type:"button",title:"Remove node",onClick:(event)=>{event.stopPropagation();data.onRemove(id)}},h(Minus,{size:14}))
-    ),
-    !data.isLast&&h(Handle,{type:"source",position:Position.Right})
+    h("button",{className:"node-action add",type:"button",title:"Add node",onClick:(event)=>{event.stopPropagation();data.onAdd(id)}},h(Plus,{size:14})),
+    h("button",{className:"node-action remove",type:"button",title:"Remove node",onClick:(event)=>{event.stopPropagation();data.onRemove(id)}},h(Minus,{size:14})),
+    !data.isLast&&h(Handle,{type:"source",position:Position.Bottom})
   );
 });
 
@@ -67,20 +68,20 @@ function App(){
     decorate({id:"5",type:"step",position:{x:740,y:130},data:{iconKey:"Send",label:"Respond",sub:"JSON response",color:"tone-primary",isLast:true}})
   ]);
   const [edges,setEdges,onEdgesChange]=useEdgesState([
-    {id:"e1-2",source:"1",target:"2",type:"smoothstep",style:baseEdgeStyle,markerEnd:{type:MarkerType.ArrowClosed}},
-    {id:"e1-3",source:"1",target:"3",type:"smoothstep",style:baseEdgeStyle,markerEnd:{type:MarkerType.ArrowClosed}},
-    {id:"e2-4",source:"2",target:"4",type:"smoothstep",style:baseEdgeStyle,markerEnd:{type:MarkerType.ArrowClosed}},
-    {id:"e3-4",source:"3",target:"4",type:"smoothstep",style:baseEdgeStyle,markerEnd:{type:MarkerType.ArrowClosed}},
-    {id:"e4-5",source:"4",target:"5",animated:true,style:{...baseEdgeStyle,stroke:"var(--primary)",strokeWidth:2.5},markerEnd:{type:MarkerType.ArrowClosed}}
+    makeEdge({id:"e1-2",source:"1",target:"2"}),
+    makeEdge({id:"e1-3",source:"1",target:"3"}),
+    makeEdge({id:"e2-4",source:"2",target:"4"}),
+    makeEdge({id:"e3-4",source:"3",target:"4"}),
+    makeEdge({id:"e4-5",source:"4",target:"5",style:{stroke:"var(--primary)",strokeWidth:2.2}})
   ]);
 
   onAddRef.current=(sourceId)=>{
     const source=nodes.find((node)=>node.id===sourceId);
     if(!source)return;
     const id=`n${sequence++}`;
-    const newNode=decorate({id,type:"step",position:{x:source.position.x+240,y:source.position.y+90},data:{iconKey:"Box",label:`Step ${sequence-1}`,sub:"New node",color:"tone-slate"}});
+    const newNode=decorate({id,type:"step",position:{x:source.position.x,y:source.position.y+170},data:{iconKey:"Box",label:`Step ${sequence-1}`,sub:"New node",color:"tone-slate"}});
     setNodes((current)=>current.map((node)=>node.id===sourceId?decorate({...node,data:{...node.data,isLast:false}}):node).concat(newNode));
-    setEdges((current)=>current.concat({id:`e${sourceId}-${id}`,source:sourceId,target:id,type:"smoothstep",style:baseEdgeStyle,markerEnd:{type:MarkerType.ArrowClosed}}));
+    setEdges((current)=>current.concat(makeEdge({id:`e${sourceId}-${id}`,source:sourceId,target:id})));
   };
 
   onRemoveRef.current=(nodeId)=>{
@@ -90,7 +91,7 @@ function App(){
 
   return h("div",{className:"flow-page"},h(ReactFlow,{
     nodes,edges,nodeTypes:{step:StepNode},onNodesChange,onEdgesChange,
-    onConnect:(connection)=>setEdges((current)=>addEdge({...connection,style:baseEdgeStyle},current)),
+    onConnect:(connection)=>setEdges((current)=>addEdge(makeEdge(connection),current)),
     fitView:true,fitViewOptions:{padding:.3}
   },h(Background,{variant:BackgroundVariant.Dots,gap:18,size:1.2}),h(Controls,{showInteractive:false})));
 }
