@@ -70,7 +70,7 @@ async function providerRequest(provider, configuration, path, { method = "GET", 
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     const response = await fetch(url, {
       method,
@@ -100,7 +100,7 @@ async function providerRequest(provider, configuration, path, { method = "GET", 
     return payload;
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw Object.assign(new Error("Email provider request timed out"), { code: "TIMEOUT", retryable: true });
+      throw Object.assign(new Error("Email provider request timed out"), { code: "PROVIDER_TIMEOUT", retryable: true });
     }
     throw error;
   } finally {
