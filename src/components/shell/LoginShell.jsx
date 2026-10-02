@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeGoogleOAuthCallback, getPasskeyOptions, getStoredUser, hasSession, login, startGoogleLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPin } from '../../services/api'
+import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeAuthenticationProviderCallback, consumeGoogleOAuthCallback, getPasskeyOptions, getStoredUser, hasSession, loadAuthenticationProviders, login, startAuthenticationProvider, startGoogleLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPin } from '../../services/api'
 import { useClock } from './DesktopDock'
 
 export function CompanyContextLoading() {
@@ -30,9 +30,13 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const [mfaCode, setMfaCode] = useState('')
   const [totpSetup, setTotpSetup] = useState(null)
   const [trustDevice, setTrustDevice] = useState(false)
+  const [providers, setProviders] = useState([])
+  const [recoveryCodes, setRecoveryCodes] = useState([])
 
   useEffect(() => {
-    const result = consumeGoogleOAuthCallback()
+    const providerResult = consumeAuthenticationProviderCallback()
+    const googleResult = providerResult.handled ? { handled: false } : consumeGoogleOAuthCallback()
+    const result = providerResult.handled ? providerResult : googleResult
     if (!result.handled) return
     if (result.error) {
       setError(result.error)
@@ -46,6 +50,15 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
       void loadMfaChallenge(result.challengeId, result)
     }
   }, [])
+
+  useEffect(() => {
+    const value = username.trim()
+    if (!value || !value.includes('@')) { setProviders([]); return }
+    const timer = window.setTimeout(() => {
+      loadAuthenticationProviders(value).then(setProviders).catch(() => setProviders([]))
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [username])
 
   const time = useMemo(
     () =>
@@ -144,6 +157,10 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
       const result = totpSetup
         ? await completeTotpEnrollment({ challengeId:mfa.challengeId, methodId:method, code:mfaCode, trustDevice, deviceName:browserDeviceName() })
         : await verifyMfa({ challengeId:mfa.challengeId, methodId:method, methodType:'TOTP', code:mfaCode, trustDevice, deviceName:browserDeviceName() })
+      if (Array.isArray(result?.recoveryCodes) && result.recoveryCodes.length) {
+        setRecoveryCodes(result.recoveryCodes)
+        return
+      }
       if (result?.token) onUnlock()
     } catch (err) { setError(err?.message || 'Verification failed') }
     finally { setSubmitting(false) }
@@ -168,6 +185,10 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
         challengeId:mfa.challengeId, credential:credentialToJson(credential), label:'Passkey',
         trustDevice, deviceName:browserDeviceName(),
       })
+      if (Array.isArray(result?.recoveryCodes) && result.recoveryCodes.length) {
+        setRecoveryCodes(result.recoveryCodes)
+        return
+      }
       if (result?.token) onUnlock()
     } catch (err) { setError(err?.message || 'Passkey setup failed') }
     finally { setSubmitting(false) }
@@ -278,6 +299,16 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
                 Sign Out
               </button>
             </>
+          ) : recoveryCodes.length ? (
+            <>
+              <div className="login-title">Save your recovery codes</div>
+              <div className="login-subtitle">Each code can be used once if your normal MFA method is unavailable.</div>
+              <div className="login-mfa-setup">
+                <code style={{whiteSpace:'pre-wrap'}}>{recoveryCodes.join('\n')}</code>
+                <small>Store these somewhere secure. They will not be shown again.</small>
+              </div>
+              <button className="login-submit" type="button" onClick={()=>onUnlock()}>I saved these codes</button>
+            </>
           ) : mfa?.challengeId ? (
             <>
               <div className="login-title">Verify your identity</div>
@@ -386,6 +417,21 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
               ) : null}
 
               <div className="login-divider" aria-hidden="true"><span>or</span></div>
+
+              {providers.map((provider) => (
+                <button
+                  key={provider.key}
+                  className="google-signin-button"
+                  type="button"
+                  onClick={() => {
+                    try { setSubmitting(true); setError(''); startAuthenticationProvider(provider, username.trim()) }
+                    catch (err) { setError(err?.message || 'Unable to start SSO.'); setSubmitting(false) }
+                  }}
+                  disabled={submitting || !username.trim()}
+                >
+                  Continue with {provider.name}
+                </button>
+              ))}
 
               <button
                 className="google-signin-button"
