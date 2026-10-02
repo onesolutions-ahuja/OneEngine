@@ -198,6 +198,7 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
         allowPlatformPasskeys:draft.allow_platform_passkeys,
         allowSecurityKeys:draft.allow_security_keys,
         allowRecoveryCodes:draft.allow_recovery_codes,
+        allowPasskeyLogin:draft.allow_passkey_login,
       })}))
       setMessage('Identity assurance settings saved.');await load()
     }catch(e){setError(e.message)}finally{setBusy(false)}
@@ -294,6 +295,7 @@ export default function IdentityAssuranceSettings({mode='assurance'}) {
         <div className="settings-row"><div><strong>Skip device activation on trusted networks</strong><p>Users on a configured trusted IP range can sign in from a new device without the separate activation challenge.</p></div><Toggle label="Skip device activation on trusted networks" checked={draft.skip_device_activation_on_trusted_network!==false} onChange={v=>setDraft(d=>({...d,skip_device_activation_on_trusted_network:v}))}/></div>
         <div className="settings-row"><div><strong>Allow authenticator apps (TOTP)</strong><p>Third-party apps that generate RFC 6238 codes. Default assurance is Standard.</p></div><Toggle label="Allow TOTP" checked={draft.allow_totp!==false} onChange={v=>setDraft(d=>({...d,allow_totp:v}))}/></div>
         <div className="settings-row"><div><strong>Allow built-in passkeys</strong><p>Platform authenticators such as Windows Hello, Face ID, Touch ID and Android device authentication.</p></div><Toggle label="Allow built-in passkeys" checked={draft.allow_platform_passkeys!==false} onChange={v=>setDraft(d=>({...d,allow_platform_passkeys:v}))}/></div>
+        <div className="settings-row"><div><strong>Allow passkey sign-in</strong><p>Lets enrolled users sign in without entering a password using Face ID, Touch ID, Windows Hello, Android biometrics or another approved passkey. This is controlled per company and can be turned off at any time.</p></div><Toggle label="Allow passkey sign-in" checked={draft.allow_passkey_login!==false} onChange={v=>setDraft(d=>({...d,allow_passkey_login:v}))}/></div>
         <div className="settings-row"><div><strong>Allow physical security keys</strong><p>Cross-platform FIDO2/WebAuthn security keys such as USB or NFC keys.</p></div><Toggle label="Allow security keys" checked={draft.allow_security_keys!==false} onChange={v=>setDraft(d=>({...d,allow_security_keys:v}))}/></div>
         <div className="settings-row"><div><strong>Allow recovery codes</strong><p>One-time emergency recovery codes generated on first MFA enrollment.</p></div><Toggle label="Allow recovery codes" checked={draft.allow_recovery_codes!==false} onChange={v=>setDraft(d=>({...d,allow_recovery_codes:v}))}/></div>
       </section>
