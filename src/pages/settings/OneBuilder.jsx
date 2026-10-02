@@ -6,7 +6,7 @@ import {
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
 import CustomReportsAdmin from '../reports/CustomReportsAdmin.jsx'
-import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
+import WorkflowAdmin, { FLOW_TYPE_OPTIONS } from './Platform/WorkflowAdmin.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import CustomPageBuilder from './Platform/CustomPageBuilder.jsx'
 
@@ -133,6 +133,10 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const [paletteSearch, setPaletteSearch] = useState('')
   const [selectedNodeId, setSelectedNodeId] = useState('')
   const [mode, setMode] = useState('list')
+  const [workflowDraft, setWorkflowDraft] = useState(null)
+  const [workflowNewDialogOpen, setWorkflowNewDialogOpen] = useState(false)
+  const [workflowNewStep, setWorkflowNewStep] = useState('source')
+  const [workflowNewType, setWorkflowNewType] = useState('')
   const [sideTab, setSideTab] = useState('components')
   const [canvas, setCanvas] = useState({ workflow: [], approval: [], dashboard: [], report: [] })
   const [meta, setMeta] = useState({
@@ -299,7 +303,13 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   }
 
   const newDefinition = () => {
-    if (tab === 'workflow') onWorkflowClose?.()
+    if (tab === 'workflow') {
+      onWorkflowClose?.()
+      setWorkflowNewStep('source')
+      setWorkflowNewType('')
+      setWorkflowNewDialogOpen(true)
+      return
+    }
     setMode('builder')
     setSideTab('components')
     setSelectedSavedId('')
@@ -307,11 +317,49 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     setCanvas((current) => ({ ...current, [tab]: [] }))
     setMeta((current) => ({
       ...current,
-      [tab]: tab === 'workflow' ? { name: '', objectId: '', triggerKey: triggers[0]?.key || '', active: false }
-        : tab === 'approval' ? { name: '', objectId: '', active: false }
-          : tab === 'dashboard' ? { name: '', description: '', apiKey: '' }
-            : { label: '', description: '', objectId: '', reportKey: '' },
+      [tab]: tab === 'approval' ? { name: '', objectId: '', active: false }
+        : tab === 'dashboard' ? { name: '', description: '', apiKey: '' }
+          : { label: '', description: '', objectId: '', reportKey: '' },
     }))
+  }
+
+  const createWorkflowDraft = () => {
+    if (!workflowNewType) return
+    const type = String(workflowNewType).toUpperCase()
+    const trigger = type === 'RECORD_TRIGGERED' ? 'after_save'
+      : type === 'SCHEDULE_TRIGGERED' ? 'scheduled'
+        : type === 'PLATFORM_EVENT_TRIGGERED' ? (triggers.find((option) => option.kind === 'event')?.key || 'manual')
+          : 'manual'
+    setWorkflowDraft({
+      name: '',
+      object: '',
+      trigger,
+      version: 1,
+      lifecycleStatus: 'DRAFT',
+      active: false,
+      runtimeActive: false,
+      activeVersion: null,
+      draftVersion: null,
+      entryTransition: 'EVERY_TIME',
+      inputContract: [],
+      outputContract: [],
+      actionMetadata: {
+        apiName: '',
+        description: '',
+        flowType: type,
+        optimizeFor: 'ACTIONS_AND_RELATED_RECORDS',
+        includeAsyncPath: false,
+        schedule: { scheduleType: 'DAILY', timezone: '', definition: { time: '' } },
+        builderLayout: { mode: 'AUTO', positions: {} },
+        builderGroups: [],
+      },
+      steps: [],
+    })
+    setSelectedSavedId('')
+    setSelectedNodeId('')
+    setSideTab('components')
+    setWorkflowNewDialogOpen(false)
+    setMode('builder')
   }
 
   const openSaved = async (id) => {
@@ -321,6 +369,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     setError('')
     try {
       if (tab === 'workflow') {
+        setWorkflowDraft(null)
         if (!saved.workflow.some((item) => String(item.id) === String(id))) {
           throw new Error('Workflow definition is no longer available. Refresh the list and try again.')
         }
@@ -452,11 +501,12 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
         <div className="onebuilder-workflow-window">
           <WorkflowAdmin
             embedded
-            initialWorkflow={selectedSavedId ? saved.workflow.find((item) => String(item.id) === String(selectedSavedId)) || null : null}
+            initialWorkflow={workflowDraft || (selectedSavedId ? saved.workflow.find((item) => String(item.id) === String(selectedSavedId)) || null : null)}
             onMessage={(value) => setMessage(value || '')}
             onError={(value) => setError(value || '')}
             onClose={() => {
               setMode('list')
+              setWorkflowDraft(null)
               setSelectedSavedId('')
               setSelectedNodeId('')
               setSideTab('components')
@@ -467,6 +517,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
             onSaved={() => {
               setMessage('Saved.')
               setMode('list')
+              setWorkflowDraft(null)
               setSelectedSavedId('')
               setSelectedNodeId('')
               setSideTab('components')
@@ -509,6 +560,56 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
       </div>
       ) : null}
 
+      {workflowNewDialogOpen ? (
+        <div className="onebuilder-new-flow-backdrop" role="dialog" aria-modal="true" aria-label="New Flow">
+          <div className="onebuilder-new-flow-dialog">
+            <header>
+              <div>
+                <strong>New Flow</strong>
+                <span>{workflowNewStep === 'source' ? 'Choose how you want to start.' : 'Choose the type of flow you want to build.'}</span>
+              </div>
+              <button type="button" aria-label="Close New Flow" onClick={() => setWorkflowNewDialogOpen(false)}>×</button>
+            </header>
+            {workflowNewStep === 'source' ? (
+              <div className="onebuilder-new-flow-body">
+                <div className="onebuilder-new-flow-heading">How do you want to start?</div>
+                <button type="button" className="onebuilder-new-flow-source is-selected" aria-pressed="true">
+                  <span className="onebuilder-new-flow-icon">＋</span>
+                  <span><strong>Start From Scratch</strong><small>Choose a flow type and configure the automation yourself.</small></span>
+                </button>
+              </div>
+            ) : (
+              <div className="onebuilder-new-flow-body">
+                <div className="onebuilder-new-flow-heading">Select a Flow Type</div>
+                <div className="onebuilder-new-flow-grid">
+                  {FLOW_TYPE_OPTIONS.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`onebuilder-new-flow-type ${workflowNewType === option.key ? 'is-selected' : ''}`}
+                      aria-pressed={workflowNewType === option.key}
+                      onClick={() => setWorkflowNewType(option.key)}
+                    >
+                      <span className="onebuilder-new-flow-icon">{option.icon}</span>
+                      <span><strong>{option.label}</strong><small>{option.description}</small></span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <footer>
+              <span>{workflowNewStep === 'type' ? <button type="button" className="onebuilder-new-flow-secondary" onClick={() => setWorkflowNewStep('source')}>Back</button> : null}</span>
+              <span className="onebuilder-new-flow-actions">
+                <button type="button" className="onebuilder-new-flow-secondary" onClick={() => setWorkflowNewDialogOpen(false)}>Cancel</button>
+                {workflowNewStep === 'source'
+                  ? <button type="button" className="onebuilder-new-flow-primary" onClick={() => setWorkflowNewStep('type')}>Next</button>
+                  : <button type="button" className="onebuilder-new-flow-primary" disabled={!workflowNewType} onClick={createWorkflowDraft}>Create</button>}
+              </span>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
       {error ? <div className="onebuilder-error">{error}</div> : null}
 
       {tab === 'page' ? (
@@ -524,7 +625,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
               <button type="button" className="onebuilder-list-add" onClick={() => void loadSavedDefinitions(tab)} title={`Refresh ${activeTab?.label}`} aria-label={`Refresh ${activeTab?.label}`} disabled={listLoading}>
                 <RefreshCw size={14} className={listLoading ? 'is-spinning' : ''}/>
               </button>
-              <button type="button" className="onebuilder-list-add" onClick={newDefinition} title={`New ${activeTab?.label}`} aria-label={`New ${activeTab?.label}`}>
+              <button type="button" className="onebuilder-list-add" onClick={newDefinition} title={tab === 'workflow' ? 'New Flow' : `New ${activeTab?.label}`} aria-label={tab === 'workflow' ? 'New Flow' : `New ${activeTab?.label}`}>
                 <Plus size={15}/>
               </button>
             </div>

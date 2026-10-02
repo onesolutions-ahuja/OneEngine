@@ -4069,7 +4069,7 @@ const TRIGGER_LABELS = {
 };
 const getTriggerLabel = (value) => TRIGGER_LABELS[value] || value || "Manual trigger";
 
-const FLOW_TYPE_OPTIONS = [
+export const FLOW_TYPE_OPTIONS = [
   { key: "SCREEN_FLOW", label: "Screen Flow", icon: "▤", description: "Guide a user through screens and collect input." },
   { key: "RECORD_TRIGGERED", label: "Record-Triggered Flow", icon: "◉", description: "Run automatically when a record is created, updated, or deleted." },
   { key: "SCHEDULE_TRIGGERED", label: "Schedule-Triggered Flow", icon: "◷", description: "Run at a specified time and frequency." },
