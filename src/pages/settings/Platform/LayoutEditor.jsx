@@ -2137,19 +2137,78 @@ export default function LayoutEditor({
           >
             {previewMode ? "Close Preview" : "Preview"}
           </button>
-          <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={onCancel} disabled={saving}>
+          {layoutId ? (
+            <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={() => setShowVersions((value) => !value)} disabled={lifecycleBusy}>
+              Versions
+            </button>
+          ) : null}
+          {savedLayout?.active ? (
+            <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={deactivateLayout} disabled={lifecycleBusy || saving}>
+              Deactivate
+            </button>
+          ) : null}
+          <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={onCancel} disabled={saving || lifecycleBusy}>
             Cancel
           </button>
-          <button type="submit" className="onepos-btn onepos-btn-sm onepos-btn-primary" disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+          <button type="submit" className="onepos-btn onepos-btn-sm onepos-btn-secondary" disabled={saving || lifecycleBusy}>
+            {saving ? "Saving…" : "Save Draft"}
+          </button>
+          <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-primary" onClick={activateLayout} disabled={saving || lifecycleBusy}>
+            {lifecycleBusy ? "Working…" : "Activate"}
           </button>
         </div>
       </header>
+
+      <div className="pfb-lifecycle-strip">
+        {savedLayout?.draft_version ? (
+          <span className="onepos-badge onepos-badge-warning">Draft v{savedLayout.draft_version}</span>
+        ) : savedLayout?.active ? (
+          <span className="onepos-badge onepos-badge-success">Active v{savedLayout.active_version || savedLayout.version || 1}</span>
+        ) : layoutId ? (
+          <span className="onepos-badge onepos-badge-neutral">Inactive</span>
+        ) : (
+          <span className="onepos-badge onepos-badge-neutral">Unsaved draft</span>
+        )}
+        <span>
+          {savedLayout?.draft_version
+            ? "Runtime continues using the active version until Activate."
+            : "Draft changes do not affect runtime until activation."}
+        </span>
+      </div>
+
+      {showVersions && layoutId ? (
+        <div className="pfb-version-panel">
+          {versions.length ? versions.map((version) => (
+            <div className="pfb-version-row" key={version.id || version.version}>
+              <strong>v{version.version}</strong>
+              <span>{version.lifecycle_status}</span>
+              <span>{version.created_at ? new Date(version.created_at).toLocaleString() : ""}</span>
+              <button
+                type="button"
+                className="onepos-btn onepos-btn-sm onepos-btn-secondary"
+                disabled={lifecycleBusy}
+                onClick={() => restoreLayoutVersion(version.version)}
+              >
+                Restore as Draft
+              </button>
+            </div>
+          )) : (
+            <span className="pfb-version-empty">No versions yet.</span>
+          )}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="onepos-alert onepos-alert-error pfb-alert">{error}</div>
       ) : null}
       <style>{`
+        .pfb-lifecycle-strip { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid var(--border-color,#e5e7eb); color:var(--text-secondary,#64748b); font-size:10px; }
+        .pfb-version-panel { display:grid; margin:8px 12px; border:1px solid var(--border-color,#e5e7eb); border-radius:9px; overflow:hidden; background:var(--card-background,#fff); }
+        .pfb-version-row { display:grid; grid-template-columns:auto auto 1fr auto; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--border-color,#eef2f7); font-size:10px; }
+        .pfb-version-row:last-child { border-bottom:0; }
+        .pfb-version-row > span { color:var(--text-secondary,#64748b); }
+        .pfb-version-empty { padding:10px; color:var(--text-secondary,#64748b); font-size:10px; }
+        @media (max-width:760px) { .pfb-version-row { grid-template-columns:1fr auto; } }
         .pfb-activation { grid-column: 1 / -1; display:grid; gap:10px; margin-top:8px; padding-top:12px; border-top:1px solid var(--border-color,#e5e7eb); }
         .pfb-activation-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
         .pfb-activation-head strong { display:block; font-size:12px; }
