@@ -122,6 +122,7 @@ const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/Del
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
+const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
 const OneAssistantPage = lazyWithRecovery(() => import('./pages/assistant/OneAssistantPage'))
 const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
@@ -193,6 +194,7 @@ const SETTINGS_VISUALS = {
   'security-identity': { icon: Shield, tone: 'blue', searchTerms: ['security', 'identity', 'ip range', 'trusted network', 'login hours', 'password policy', 'session', 'login history'] },
   'mfa-administration': { icon: ShieldCheck, tone: 'blue', searchTerms: ['mfa', 'verification', 'temporary code', 'trusted device'] },
   'identity-verification-history': { icon: ShieldCheck, tone: 'blue', searchTerms: ['identity verification history', 'mfa audit', 'verification events', 'step up'] },
+  'security-governance': { icon: ShieldCheck, tone: 'blue', searchTerms: ['security health', 'oauth', 'connected apps', 'trusted origins', 'credential vault', 'certificates', 'keys'] },
   'ai-assistant': { icon: Sparkles, tone: 'purple' },
   connections: { icon: Cable, tone: 'purple' },
   'uber-eats': { icon: Cable, tone: 'purple' },
@@ -1338,6 +1340,8 @@ function SettingsPage({ onOpenProfile }) {
                 <MfaAdministrationSettings />
               ) : current?.key === 'identity-verification-history' ? (
                 <IdentityAssuranceSettings mode="history" />
+              ) : current?.key === 'security-governance' ? (
+                <SecurityGovernanceSettings />
               ) : current?.key === 'users' ? (
                 <RecordListView
                   title="Users"
