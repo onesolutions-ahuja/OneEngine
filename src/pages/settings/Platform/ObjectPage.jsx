@@ -916,8 +916,60 @@ export default function ObjectPage({
                   }}
                   aria-label="Saved list view"
                 >
-                  {listViews.map((view) => <option key={view.id} value={view.id}>{view.label}{view.is_default ? " · Default" : ""}</option>)}
+                  {listViews.map((view) => <option key={view.id} value={view.id}>{view.label}{view.is_pinned ? " · Pinned" : view.is_default ? " · Default" : ""}</option>)}
                 </select>
+              ) : null}
+              {!selfServiceView ? (
+                <div className="platform-list-view-actions">
+                  <details className="platform-column-picker">
+                    <summary>Columns</summary>
+                    <div className="platform-column-picker-menu">
+                      {activeFields.map((field) => {
+                        const key = getFieldKey(field);
+                        const checked = visibleColumnKeys.includes(key);
+                        return (
+                          <label key={key}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={checked && visibleColumnKeys.length === 1}
+                              onChange={(event) => {
+                                setVisibleColumnKeys((current) => event.target.checked
+                                  ? [...current.filter((item) => item !== key), key]
+                                  : current.filter((item) => item !== key));
+                              }}
+                            />
+                            <span>{getFieldLabel(field)}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </details>
+                  <button
+                    type="button"
+                    className="platform-secondary-button"
+                    onClick={() => setListViewDialog({ mode: "create", label: "", description: "", pin: false })}
+                  >
+                    Save as New
+                  </button>
+                  {activeListView?.can_edit === true ? (
+                    <button
+                      type="button"
+                      className="platform-secondary-button"
+                      onClick={() => setListViewDialog({ mode: "edit", label: activeListView.label || "", description: activeListView.description || "", pin: activeListView.is_pinned === true })}
+                    >
+                      Update View
+                    </button>
+                  ) : null}
+                  {activeListView ? (
+                    <button type="button" className="platform-secondary-button" onClick={pinActiveListView}>
+                      {activeListView.is_pinned ? "Unpin" : "Pin"}
+                    </button>
+                  ) : null}
+                  {activeListView?.can_edit === true ? (
+                    <button type="button" className="platform-secondary-button" onClick={deleteActiveListView}>Delete View</button>
+                  ) : null}
+                </div>
               ) : null}
               {!selfServiceView ? (
                 <div className="platform-list-mode" role="group" aria-label="Record display">
@@ -929,6 +981,58 @@ export default function ObjectPage({
             </div>
             {recordsLoading ? <span className="platform-loading-label">Loading…</span> : null}
           </div>
+          {listViewDialog ? (
+            <RecordModal
+              open
+              mode="edit"
+              title={listViewDialog.mode === "edit" ? "Update List View" : "Save List View"}
+              subtitle="Columns, filters, sorting and page size are saved with the view."
+              size="md"
+              onClose={() => setListViewDialog(null)}
+            >
+              <form
+                className="platform-list-view-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  persistListView(listViewDialog.mode, listViewDialog);
+                }}
+              >
+                <label>
+                  <span>View name</span>
+                  <input
+                    value={listViewDialog.label || ""}
+                    onChange={(event) => setListViewDialog((current) => ({ ...current, label: event.target.value }))}
+                    placeholder="My open customers"
+                    autoFocus
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Description</span>
+                  <textarea
+                    rows="3"
+                    value={listViewDialog.description || ""}
+                    onChange={(event) => setListViewDialog((current) => ({ ...current, description: event.target.value }))}
+                    placeholder="Optional"
+                  />
+                </label>
+                {listViewDialog.mode === "create" ? (
+                  <label className="platform-list-view-pin">
+                    <input
+                      type="checkbox"
+                      checked={listViewDialog.pin === true}
+                      onChange={(event) => setListViewDialog((current) => ({ ...current, pin: event.target.checked }))}
+                    />
+                    <span>Pin this view for me</span>
+                  </label>
+                ) : null}
+                <div className="platform-list-view-form-actions">
+                  <button type="button" className="platform-secondary-button" onClick={() => setListViewDialog(null)}>Cancel</button>
+                  <button type="submit" className="onepos-btn onepos-btn-primary">{listViewDialog.mode === "edit" ? "Save Changes" : "Save View"}</button>
+                </div>
+              </form>
+            </RecordModal>
+          ) : null}
           {recordModal?.type === "create" ? (
             <RecordModal open mode="create" title="Create record" size="lg" className={layoutPresentationClass(createLayout || detailLayout)} onClose={() => setRecordModal(null)} formId="platform-create-record-form">
             <div className="platform-create-record">
@@ -1350,6 +1454,93 @@ export default function ObjectPage({
           color: var(--text-primary, #1f2937);
           padding: 6px 8px;
           font-size: 10px;
+        }
+
+        .platform-list-view-actions {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+
+        .platform-column-picker {
+          position: relative;
+        }
+
+        .platform-column-picker > summary {
+          list-style: none;
+          border: 1px solid var(--border-color, #d1d5db);
+          border-radius: 8px;
+          background: var(--card-background, #fff);
+          padding: 8px 12px;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .platform-column-picker > summary::-webkit-details-marker { display: none; }
+
+        .platform-column-picker-menu {
+          position: absolute;
+          z-index: 50;
+          top: calc(100% + 5px);
+          left: 0;
+          width: 250px;
+          max-height: 320px;
+          overflow: auto;
+          border: 1px solid var(--border-color, #d1d5db);
+          border-radius: 9px;
+          background: var(--card-background, #fff);
+          padding: 7px;
+          box-shadow: 0 12px 28px rgba(15, 23, 42, .14);
+        }
+
+        .platform-column-picker-menu label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px;
+          font-size: 10px;
+          cursor: pointer;
+        }
+
+        .platform-list-view-form {
+          display: grid;
+          gap: 14px;
+        }
+
+        .platform-list-view-form > label {
+          display: grid;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .platform-list-view-form input[type="text"],
+        .platform-list-view-form input:not([type]),
+        .platform-list-view-form textarea {
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid var(--border-color, #d1d5db);
+          border-radius: 8px;
+          background: var(--card-background, #fff);
+          color: var(--text-primary, #1f2937);
+          padding: 9px 10px;
+          font: inherit;
+        }
+
+        .platform-list-view-pin {
+          display: flex !important;
+          grid-template-columns: none !important;
+          align-items: center;
+          gap: 8px !important;
+        }
+
+        .platform-list-view-form-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          padding-top: 4px;
         }
 
         .platform-list-mode {
