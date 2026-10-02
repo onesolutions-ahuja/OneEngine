@@ -121,6 +121,7 @@ const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/Con
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
+const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
 const OneAssistantPage = lazyWithRecovery(() => import('./pages/assistant/OneAssistantPage'))
 const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
@@ -190,6 +191,7 @@ const SETTINGS_VISUALS = {
   users: { icon: Users, tone: 'blue', searchTerms: ['user', 'username', 'email', 'role', 'store', 'active', 'inactive'] },
   'roles-permissions': { icon: ShieldCheck, tone: 'blue', searchTerms: ['role', 'permission', 'permissions', 'parent role', 'system role', 'custom role'] },
   'security-identity': { icon: Shield, tone: 'blue', searchTerms: ['security', 'identity', 'ip range', 'trusted network', 'login hours', 'password policy', 'session', 'login history'] },
+  'mfa-administration': { icon: ShieldCheck, tone: 'blue', searchTerms: ['mfa', 'verification', 'temporary code', 'trusted device', 'identity verification history'] },
   'ai-assistant': { icon: Sparkles, tone: 'purple' },
   connections: { icon: Cable, tone: 'purple' },
   'uber-eats': { icon: Cable, tone: 'purple' },
@@ -1331,6 +1333,8 @@ function SettingsPage({ onOpenProfile }) {
                 <AiAssistantSettings />
               ) : current?.key === 'security-identity' ? (
                 <SecurityIdentitySettings />
+              ) : current?.key === 'mfa-administration' ? (
+                <MfaAdministrationSettings />
               ) : current?.key === 'users' ? (
                 <RecordListView
                   title="Users"
