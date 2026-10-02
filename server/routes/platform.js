@@ -3,7 +3,7 @@ import express from "express";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
 import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
-import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS } from "../services/platformFormula.js";
+import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, workflowFormulaReferences } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
 import { executePlatformAutomations } from "../services/platformAutomation.js";
 import { hasConfiguredCommunicationProvider } from "../services/platformWorkflow.js";
@@ -703,6 +703,13 @@ function validateGeneralFieldConfig(field) {
   if (config.defaultValue !== undefined && config.defaultValue !== null && ["formula", "rollup", "auto_number", "lookup"].includes(field.field_type)) {
     throw new ConditionError("This field type cannot have a static default value");
   }
+  if (config.defaultFormula || config.default_formula) {
+    if (["formula", "rollup", "auto_number", "lookup", "address", "location", "json"].includes(field.field_type)) {
+      throw new ConditionError("This field type cannot have a formula default");
+    }
+    try { workflowFormulaReferences(config.defaultFormula || config.default_formula); }
+    catch (error) { throw new ConditionError(`Default formula is invalid: ${error.message}`); }
+  }
 }
 
 async function validatePicklistDefinition(db, field, req) {
@@ -724,8 +731,10 @@ async function validatePicklistDefinition(db, field, req) {
   }
   const dependent = field.config?.dependentPicklist || field.config?.dependent_picklist;
   const configuredDefault = field.config?.defaultValue ?? field.config?.default_value;
+  const configuredDefaultFormula = field.config?.defaultFormula || field.config?.default_formula;
   if (dependent?.controllingField || dependent?.controlling_field) {
-    if (configuredDefault !== undefined && configuredDefault !== null && configuredDefault !== "") {
+    if (field.config?.restricted === false) throw new ConditionError("Dependent picklists must use restricted values");
+    if ((configuredDefault !== undefined && configuredDefault !== null && configuredDefault !== "") || configuredDefaultFormula) {
       throw new ConditionError("Dependent picklists cannot define a default value");
     }
   } else if (configuredDefault !== undefined && configuredDefault !== null && configuredDefault !== "") {
@@ -7751,7 +7760,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (["id", "company_id", "store_id"].includes(column) || ["company_id", "store_id"].includes(String(field.source_column || ""))) return { error: `Field "${apiName}" is managed by the server` };
       const valueError = fieldValueError(field, value);
       if (valueError) return { error: valueError };
-      if (["select", "picklist", "multiselect"].includes(field.field_type)) {
+      if (["select", "picklist", "multiselect"].includes(field.field_type) && (field.config?.restricted !== false || field.config?.dependentPicklist || field.config?.dependent_picklist)) {
         const options = await valueSetOptions(db, field, req);
         const allowed = new Set(options.filter((option) => option.active !== false).map((option) => String(option.value)));
         const selected = field.field_type === "multiselect"
@@ -8165,7 +8174,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const value = evaluateWorkflowFormula(expression, formulaInputs());
         if (value !== undefined && value !== null) values[field.api_name] = value;
       } catch (error) {
-        return { __defaultError: `${field.label} default formula failed: ${error.message}`, ...values };
+        return { ...values, __defaultError: `${field.label} default formula failed: ${error.message}` };
       }
     }
     return values;
