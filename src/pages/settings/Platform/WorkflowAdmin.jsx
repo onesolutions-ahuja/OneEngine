@@ -5624,6 +5624,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [paletteSearch, setPaletteSearch] = useState("");
+  const [addElementSearch, setAddElementSearch] = useState("");
   const [startTriggerSearch, setStartTriggerSearch] = useState("");
   const [paletteTab, setPaletteTab] = useState("elements");
   const [insertAt, setInsertAt] = useState(null);
@@ -6660,21 +6661,32 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   };
   const registeredActionOptions = registryOptions
     .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH","STOP"].includes(option.value));
-  const palette = [
+  const paletteOptions = [
     ...(layoutMode === "AUTO" ? [{ value: "__GROUP__", label: "Group", description: "Organize related elements in a named, collapsible section.", category: "Logic" }] : []),
     ...(layoutMode === "AUTO" && insertAt != null && !branchTarget && insertAt > 0 ? [{ value: "__CONNECT__", label: "Connect to element", description: "Create a Go To connector to a nonconsecutive element.", category: "Logic" }] : []),
     ...registryOptions
       .filter((option) => SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","TEXT_TEMPLATE","CHOICE","RECORD_CHOICE_SET","PICKLIST_CHOICE_SET","COLLECTION_CHOICE_SET","STAGE","SCHEDULE_PATH"].includes(option.value))
       .map((option) => ({ ...option, category: option.value === "RUN_SUBFLOW" ? "Interaction" : workflowActionCategory(option.value) })),
-    ...(registeredActionOptions.length ? [{ value: "__ACTION__", label: "Action", description: "Run a registered OneEngine action", category: "Interaction" }] : []),
-  ].filter((option) => !paletteSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || ""}`.toLowerCase().includes(paletteSearch.trim().toLowerCase()));
-  const paletteGroups = palette.reduce((groups, option) => {
+    ...registeredActionOptions.map((option) => ({
+      ...option,
+      category: option.category || workflowActionCategory(option.value) || "App Actions",
+    })),
+  ];
+  const matchesPaletteQuery = (option, query) => !query.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || ""}`.toLowerCase().includes(query.trim().toLowerCase());
+  const palette = paletteOptions.filter((option) => matchesPaletteQuery(option, paletteSearch));
+  const addElementPalette = paletteOptions.filter((option) => matchesPaletteQuery(option, addElementSearch));
+  const groupPalette = (options) => options.reduce((groups, option) => {
     const category = option.category || "App Actions";
     if (!groups[category]) groups[category] = [];
     groups[category].push(option);
     return groups;
   }, {});
+  const paletteGroups = groupPalette(palette);
+  const addElementPaletteGroups = groupPalette(addElementPalette);
   const paletteInsertionActive = insertAt != null || Boolean(branchTarget);
+  useEffect(() => {
+    if (paletteInsertionActive) setAddElementSearch("");
+  }, [insertAt, branchTarget]);
   const globalResources = [
     { label: "$Record", detail: "The record that triggered the flow", type: "Global Variable" },
     { label: "$Record__Prior", detail: "The record values before the triggering update", type: "Global Variable" },
@@ -7362,7 +7374,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             </div>
             <div className="workflow-add-element-search">
               <span>⌕</span>
-              <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder="Search elements..." autoFocus />
+              <input value={addElementSearch} onChange={(event) => setAddElementSearch(event.target.value)} placeholder="Search elements..." autoFocus />
             </div>
             <div className="workflow-add-element-groups">
               {clipboard?.step ? (
@@ -7376,7 +7388,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   </div>
                 </div>
               ) : null}
-              {Object.entries(paletteGroups).map(([category, options]) => (
+              {Object.entries(addElementPaletteGroups).map(([category, options]) => (
                 <div key={category} className="workflow-add-element-group">
                   <div className="workflow-palette-group-title">{category}</div>
                   <div className="workflow-add-element-grid">
@@ -7389,7 +7401,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   </div>
                 </div>
               ))}
-              {!palette.length ? <div className="workflow-palette-empty">No matching elements</div> : null}
+              {!addElementPalette.length ? <div className="workflow-palette-empty">No matching elements</div> : null}
             </div>
           </div>
         ) : null}
