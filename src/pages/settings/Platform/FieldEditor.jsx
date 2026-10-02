@@ -464,7 +464,9 @@ export default function FieldEditor({
             ...(form.defaultMode === "formula"
               ? { defaultValue: null, defaultFormula: String(form.defaultFormula || "").trim() || null }
               : { defaultFormula: null, ...(form.defaultValue !== "" && !(form.dependentPicklist?.controllingField && ["picklist","select","multiselect"].includes(form.field_type)) ? { defaultValue: form.defaultValue } : { defaultValue: null }) }),
-            ...(form.maxLength !== "" ? { maxLength: Math.max(1, Number(form.maxLength)) } : { maxLength: null }),
+            ...(["text","long_text","rich_text"].includes(form.field_type) && form.maxLength !== ""
+              ? { maxLength: Math.max(1, Number(form.maxLength)) }
+              : { maxLength: null }),
             ...(form.precision !== "" ? { precision: Math.max(1, Number(form.precision)) } : { precision: null }),
             ...(form.scale !== "" ? { scale: Math.max(0, Number(form.scale)) } : { scale: null }),
             unique: form.unique === true,
@@ -984,8 +986,10 @@ export default function FieldEditor({
               ) : form.defaultMode !== "formula" && !["lookup","address","location","json","multiselect"].includes(form.field_type) ? (
                 <label><span>Default value</span><input type={["number","decimal","currency","percent"].includes(form.field_type) ? "number" : form.field_type === "date" ? "date" : form.field_type === "datetime" ? "datetime-local" : form.field_type === "time" ? "time" : "text"} value={form.defaultValue ?? ""} onChange={(event) => update("defaultValue", event.target.value)} /></label>
               ) : null}
-              {["text","text_area","long_text","rich_text","url","email","phone"].includes(form.field_type) ? (
-                <label><span>Maximum length</span><input type="number" min={["long_text","rich_text"].includes(form.field_type) ? 256 : 1} max={["long_text","rich_text"].includes(form.field_type) ? 131072 : 255} value={form.maxLength ?? ""} onChange={(event) => update("maxLength", event.target.value)} placeholder={["long_text","rich_text"].includes(form.field_type) ? "256–131072" : "1–255"} /></label>
+              {["text","long_text","rich_text"].includes(form.field_type) ? (
+                <label><span>Maximum length</span><input type="number" min={["long_text","rich_text"].includes(form.field_type) ? 256 : 1} max={["long_text","rich_text"].includes(form.field_type) ? 131072 : 255} value={form.maxLength ?? ""} onChange={(event) => update("maxLength", event.target.value)} placeholder={["long_text","rich_text"].includes(form.field_type) ? "32768 default · 256–131072" : "255 default · 1–255"} /></label>
+              ) : ["text_area","email","phone","url"].includes(form.field_type) ? (
+                <div className="platform-field-editor-wide"><small>{form.field_type === "email" ? "Email fields accept up to 80 characters." : form.field_type === "phone" ? "Phone fields accept up to 40 characters." : "This field accepts up to 255 characters."}</small></div>
               ) : null}
               {["number","decimal","currency","percent"].includes(form.field_type) ? (
                 <>
