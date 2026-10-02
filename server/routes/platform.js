@@ -672,8 +672,10 @@ function validateGeneralFieldConfig(field) {
 
   if (config.maxLength !== undefined && config.maxLength !== null) {
     const maxLength = Number(config.maxLength);
-    if (!textTypes.has(field.field_type) || !Number.isInteger(maxLength) || maxLength < 1 || maxLength > 131072) {
-      throw new ConditionError("Maximum length is invalid for this field type");
+    const maxAllowed = ["long_text", "rich_text"].includes(field.field_type) ? 131072 : 255;
+    const minAllowed = ["long_text", "rich_text"].includes(field.field_type) ? 256 : 1;
+    if (!textTypes.has(field.field_type) || !Number.isInteger(maxLength) || maxLength < minAllowed || maxLength > maxAllowed) {
+      throw new ConditionError(`Maximum length for ${field.field_type} must be between ${minAllowed} and ${maxAllowed}`);
     }
   }
   if (config.precision !== undefined && config.precision !== null) {
