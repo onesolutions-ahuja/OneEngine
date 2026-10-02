@@ -184,6 +184,61 @@ describe("OneEngine deep deployed E2E", () => {
       .and("contain.text", "A record is deleted");
   });
 
+  it("Workflow Builder parity gate: flow type is chosen before Builder and is not editable in Flow Properties", () => {
+    visitAuthenticated("developer/workflow-builder");
+
+    cy.get('button[aria-label="New Workflow"]').click();
+    cy.get('[role="dialog"][aria-label="New Flow"]').should("be.visible");
+    cy.contains("button", "Record-Triggered Flow").click();
+
+    cy.get(".workflow-properties-panel", { timeout: 30000 }).should("contain.text", "Configure Start");
+    cy.get(".workflow-properties-panel").should("contain.text", "Select Object");
+    cy.get(".workflow-properties-panel").should("contain.text", "Trigger the Flow When");
+
+    cy.get('.workflow-builder-header button[aria-label="View Properties"]').click();
+    cy.get('[role="dialog"][aria-label="Flow Properties"]').should("be.visible");
+    cy.get('[role="dialog"][aria-label="Flow Properties"]').should("not.contain.text", "Flow Type");
+  });
+
+  it("Workflow Builder parity gate: button bar and Toolbox follow the Salesforce interaction model", () => {
+    visitAuthenticated("developer/workflow-builder");
+
+    cy.get('button[aria-label="New Workflow"]').click();
+    cy.contains("button", "Record-Triggered Flow").click();
+
+    cy.get(".workflow-node-palette", { timeout: 30000 }).should("contain.text", "Toolbox");
+    cy.get(".workflow-node-palette").should("contain.text", "Elements").and("contain.text", "Manager");
+
+    cy.get(".workflow-builder-header").within(() => {
+      cy.contains("button", "Auto-Layout").should("be.visible");
+      cy.contains("button", "Debug").should("be.visible");
+      cy.contains("button", "Save As").should("be.visible");
+      cy.contains("button", "Save").should("be.visible");
+      cy.contains("button", "Activate").should("be.visible");
+    });
+  });
+
+  it("Workflow Builder parity gate: record-triggered Debug uses Setup/Details and preserves triggering-record setup in-session", () => {
+    visitAuthenticated("developer/workflow-builder");
+
+    cy.get('button[aria-label="New Workflow"]').click();
+    cy.contains("button", "Record-Triggered Flow").click();
+
+    cy.get(".workflow-builder-header").contains("button", "Debug").click();
+    cy.get(".workflow-debug-drawer", { timeout: 30000 }).should("be.visible");
+    cy.get(".workflow-debug-drawer").should("contain.text", "Setup");
+    cy.get(".workflow-debug-drawer").should("contain.text", "Details");
+
+    cy.get(".workflow-debug-drawer").contains("Run the Flow As If the Record Is").parent().find("select").select("updated");
+    cy.get(".workflow-debug-drawer").contains("Use a specific triggering record").find('input[type="checkbox"]').check();
+    cy.get('.workflow-debug-drawer input[aria-label="Search debug record"]').should("be.visible");
+
+    cy.get(".workflow-debug-drawer").contains("button", "Close").click();
+    cy.get(".workflow-builder-header").contains("button", "Debug").click();
+    cy.get(".workflow-debug-drawer").contains("Run the Flow As If the Record Is").parent().find("select").should("have.value", "updated");
+    cy.get(".workflow-debug-drawer").contains("Use a specific triggering record").find('input[type="checkbox"]').should("be.checked");
+  });
+
   it("Workflow Builder left search and Add Element search use independent state", () => {
     visitAuthenticated("developer/workflow-builder");
 

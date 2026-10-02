@@ -3,15 +3,9 @@ name: OneEngine Cypress Deep E2E
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main"]
-    paths:
-      - "src/**"
-      - "public/**"
-      - "server/**"
-      - "cypress/**"
-      - "cypress.config.mjs"
-      - ".github/workflows/cypress-deep-e2e.yml"
+  workflow_run:
+    workflows: ["Deploy OneEngine to GitHub Pages"]
+    types: [completed]
 
 concurrency:
   group: oneengine-cypress-deep-e2e
@@ -19,6 +13,7 @@ concurrency:
 
 jobs:
   deep-e2e:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -28,7 +23,10 @@ jobs:
       ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
       CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout deployed commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -42,12 +40,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for i in {1..30}; do
+          EXPECTED_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          for i in {1..36}; do
             FRONT=0
             API=0
             curl -fsSL "$ONEPOS_E2E_BASE_URL" >/dev/null && FRONT=1 || true
             curl -fsSL "$ONEPOS_E2E_API_BASE_URL/api/health" >/dev/null && API=1 || true
             if [ "$FRONT" = "1" ] && [ "$API" = "1" ]; then
+              echo "Testing deployed Pages after successful deployment for commit $EXPECTED_SHA"
               exit 0
             fi
             sleep 10
