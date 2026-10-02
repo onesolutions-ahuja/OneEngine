@@ -49,6 +49,7 @@ function login() {
     });
   }, {
     validate() {
+      cy.visit("/");
       cy.window().then((win) => {
         const token = win.sessionStorage.getItem("onepos_token") || win.localStorage.getItem("onepos_token");
         expect(token, "restored onepos auth token").to.be.a("string").and.not.be.empty;
