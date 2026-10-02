@@ -267,6 +267,16 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-resource-choice:hover { background: #f3f9ff; }
   .workflow-resource-choice strong { font-size: 11px; }
   .workflow-resource-choice small { color: #706e6b; font-size: 9px; line-height: 1.3; }
+  .workflow-manager-item { border-bottom: 1px solid #f1f3f6; }
+  .workflow-manager-item-row { display: grid; grid-template-columns: minmax(0,1fr) 28px; align-items: center; }
+  .workflow-manager-item-row .workflow-palette-item { width: 100%; border-bottom: 0; }
+  .workflow-manager-chevron { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: #706e6b; cursor: pointer; }
+  .workflow-manager-chevron:hover { background: #f3f3f3; }
+  .workflow-manager-detail { margin: -2px 6px 7px 34px; border-left: 2px solid #d8dde6; padding: 5px 8px; }
+  .workflow-manager-detail > div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-size: 8px; }
+  .workflow-manager-detail span { color: #706e6b; }
+  .workflow-manager-detail strong { max-width: 125px; overflow: hidden; color: #181818; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-manager-detail p { margin: 4px 0 0; color: #706e6b; font-size: 8px; line-height: 1.35; }
   .workflow-palette-group-title {
     margin: 12px 4px 6px;
     color: #94a3b8;
@@ -2573,6 +2583,26 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   }));
   const visibleCanvasSteps = managerElementSteps.filter(({ step }) => !decisionBranchTargetIds.has(String(step.id)));
   const branchStepById = new Map(workflow.steps.map((step) => [String(step.id), step]));
+  const incomingPathCount = (stepId) => workflow.steps.reduce((count, owner) => {
+    const config = owner.config || {};
+    const references = [
+      ...(Array.isArray(config.outcomes) ? config.outcomes.flatMap((outcome) => outcome?.branch || []) : []),
+      ...(config.defaultBranch || []),
+      ...(config.ifBranch || []),
+      ...(config.elseBranch || []),
+      ...(config.bodyBranch || []),
+      ...(config.faultBranch || []),
+      ...(config.branch || []),
+    ];
+    return count + references.filter((id) => String(id) === String(stepId)).length;
+  }, 0);
+  const stepOutputCount = (stepId) => stepResources.filter((resource) => String(resource.value || "").startsWith(`steps.${stepId}.`)).length;
+  const resourceUsageCount = (step) => {
+    const resourceName = step.type === "ASSIGNMENT" ? step.config?.variableName : step.config?.resourceName;
+    if (!resourceName) return 0;
+    const needle = `variables.${resourceName}`;
+    return workflow.steps.filter((candidate) => candidate.id !== step.id && JSON.stringify(candidate.config || {}).includes(needle)).length;
+  };
   const addScheduledPath = () => {
     const path = makeStep("SCHEDULE_PATH");
     path.label = "Scheduled Path";
@@ -2663,22 +2693,49 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <div className="workflow-palette-scroll">
               {managerElementSteps.length ? <div className="workflow-palette-group-title">Elements</div> : null}
               {managerElementSteps.map(({ step, index }) => (
-                <button key={step.id} type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
-                  <span className="workflow-palette-item-copy">
-                    <strong>{step.label || getActionLabel(step.type)}</strong>
-                    <small>{getActionLabel(step.type)} · Step {index + 1}</small>
-                  </span>
-                </button>
+                <div key={step.id} className="workflow-manager-item">
+                  <div className="workflow-manager-item-row">
+                    <button type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
+                      <span className="workflow-palette-icon" style={{ background: flowElementVisual(step.type).color }}>{flowElementVisual(step.type).icon}</span>
+                      <span className="workflow-palette-item-copy">
+                        <strong>{step.label || getActionLabel(step.type)}</strong>
+                        <small>{SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action"} · Step {index + 1}</small>
+                      </span>
+                    </button>
+                    <button type="button" className="workflow-manager-chevron" aria-label={`Show details for ${step.label || getActionLabel(step.type)}`} onClick={() => setManagerDetailId((current) => current === step.id ? null : step.id)}>{managerDetailId === step.id ? "⌄" : "›"}</button>
+                  </div>
+                  {managerDetailId === step.id ? (
+                    <div className="workflow-manager-detail">
+                      <div><span>Type</span><strong>{SALESFORCE_CORE_ELEMENT_TYPES.has(step.type) ? getActionLabel(step.type) : "Action"}</strong></div>
+                      <div><span>API Name</span><strong>{step.config?.apiName || flowApiName(step.label || getActionLabel(step.type))}</strong></div>
+                      <div><span>Outputs</span><strong>{stepOutputCount(step.id)}</strong></div>
+                      <div><span>Incoming paths</span><strong>{incomingPathCount(step.id)}</strong></div>
+                      {step.config?.description ? <p>{step.config.description}</p> : null}
+                    </div>
+                  ) : null}
+                </div>
               ))}
               {resourceSteps.length ? <div className="workflow-palette-group-title">Resources</div> : null}
-              {resourceSteps.map(({ step, index }) => (
-                <button key={step.id} type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
-                  <span className="workflow-palette-item-copy">
-                    <strong>{step.type === "ASSIGNMENT" ? (step.config?.variableName || "New Variable") : (step.config?.resourceName || (step.type === "CONSTANT" ? "New Constant" : "New Formula"))}</strong>
-                    <small>{step.type === "ASSIGNMENT" ? `Variable · ${step.config?.variableType || "text"}` : step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}` : `Formula · ${step.config?.resultType || "number"}`}</small>
-                  </span>
-                </button>
-              ))}
+              {resourceSteps.map(({ step }) => {
+                const resourceLabel = step.type === "ASSIGNMENT" ? (step.config?.variableName || "New Variable") : (step.config?.resourceName || (step.type === "CONSTANT" ? "New Constant" : "New Formula"));
+                const resourceType = step.type === "ASSIGNMENT" ? `Variable · ${step.config?.variableType || "text"}` : step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}` : `Formula · ${step.config?.resultType || "number"}`;
+                return <div key={step.id} className="workflow-manager-item">
+                  <div className="workflow-manager-item-row">
+                    <button type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
+                      <span className="workflow-palette-item-copy"><strong>{resourceLabel}</strong><small>{resourceType}</small></span>
+                    </button>
+                    <button type="button" className="workflow-manager-chevron" aria-label={`Show details for ${resourceLabel}`} onClick={() => setManagerDetailId((current) => current === step.id ? null : step.id)}>{managerDetailId === step.id ? "⌄" : "›"}</button>
+                  </div>
+                  {managerDetailId === step.id ? (
+                    <div className="workflow-manager-detail">
+                      <div><span>Resource Type</span><strong>{step.type === "ASSIGNMENT" ? "Variable" : getActionLabel(step.type)}</strong></div>
+                      <div><span>Data Type</span><strong>{step.type === "ASSIGNMENT" ? (step.config?.variableType || "text") : step.type === "CONSTANT" ? (step.config?.resourceType || "text") : (step.config?.resultType || "number")}</strong></div>
+                      <div><span>Used by</span><strong>{resourceUsageCount(step)} element{resourceUsageCount(step) === 1 ? "" : "s"}</strong></div>
+                      {step.config?.description ? <p>{step.config.description}</p> : null}
+                    </div>
+                  ) : null}
+                </div>;
+              })}
               <div className="workflow-palette-group-title">Flow context</div>
               {visibleGlobalResources.map((resource) => (
                 <div key={resource.label} className="workflow-palette-item">
