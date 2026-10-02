@@ -6742,6 +6742,11 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
     const hydrated = await hydrateExtensions(db, child, fields, result.rows, req);
     const calculated = await populateRollups(db, child, childMetadata.fields, hydrated.map((record) => calculate(record)), req);
     const records = calculated.map((record) => publicFormulaRecord(fields, record));
+    const [canCreateRelated, canEditRelated, canDeleteRelated] = await Promise.all([
+      hasPlatformObjectPermission(db, req, child.id, "create"),
+      hasPlatformObjectPermission(db, req, child.id, "edit"),
+      hasPlatformObjectPermission(db, req, child.id, "delete"),
+    ]);
     res.json({
       success: true,
       data: records,
@@ -6749,6 +6754,7 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       relationship,
       object: { id: child.id, object_key: child.object_key, label: child.label },
       fields,
+      permissions: { can_create: canCreateRelated, can_edit: canEditRelated, can_delete: canDeleteRelated },
       page,
       pageSize,
       pages,
