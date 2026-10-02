@@ -6919,6 +6919,32 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   }
 
+  async function generateAutoNumberValues(req, fields) {
+    const generated = [];
+    for (const field of fields || []) {
+      if (field.active !== true || field.field_type !== "auto_number" || !field.source_column) continue;
+      const start = Math.max(1, Number.parseInt(field.config?.start ?? field.config?.startNumber ?? 1, 10) || 1);
+      const padding = Math.max(0, Math.min(20, Number.parseInt(field.config?.padding ?? 0, 10) || 0));
+      const prefix = String(field.config?.prefix || "").slice(0, 50);
+      const suffix = String(field.config?.suffix || "").slice(0, 50);
+      const counter = await db(
+        `INSERT INTO platform_auto_number_counters (field_id,company_id,next_value,updated_at)
+         VALUES ($1,$2,$3,NOW())
+         ON CONFLICT (field_id)
+         DO UPDATE SET next_value=platform_auto_number_counters.next_value+1,updated_at=NOW()
+         RETURNING next_value`,
+        [field.id, req.user.companyId, start + 1]
+      );
+      const sequence = Math.max(start, Number(counter.rows[0]?.next_value || (start + 1)) - 1);
+      generated.push({
+        field,
+        column: metadataColumn(field),
+        value: `${prefix}${String(sequence).padStart(padding, "0")}${suffix}`,
+      });
+    }
+    return generated;
+  }
+
   async function validateRecordInput(req, object, fields, input, { requireRequired = false } = {}) {
     if (!input || typeof input !== "object" || Array.isArray(input)) return { error: "Record data must be an object" };
     const activeFields = fields.filter((field) => field.active === true);
@@ -6931,7 +6957,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (allByName.has(apiName)) return { error: `Field "${apiName}" is inactive` };
         return { error: `Unknown field "${apiName}"` };
       }
-      if (field.field_type === "formula" || field.field_type === "rollup") return { error: `Calculated field "${apiName}" is read-only` };
+      if (["formula", "rollup", "auto_number"].includes(field.field_type)) return { error: `Calculated field "${apiName}" is read-only` };
       if (field.writable === false || field.writeable === false || field.protected === true || field.system === true || field.is_protected === true || field.read_only === true || field.readOnly === true) {
         return { error: `Field "${apiName}" is protected or read-only` };
       }
@@ -6950,7 +6976,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       values.push({ field, column, value: normalizeFieldValue(field, lookup.value) });
     }
     if (requireRequired) {
-      for (const field of activeFields.filter((candidate) => candidate.required && candidate.field_type !== "formula" && candidate.field_type !== "rollup")) {
+      for (const field of activeFields.filter((candidate) => candidate.required && !["formula", "rollup", "auto_number"].includes(candidate.field_type))) {
         if (!Object.prototype.hasOwnProperty.call(input, field.api_name) || input[field.api_name] === null || input[field.api_name] === "") {
           return { error: `${field.label} is required` };
         }
@@ -7330,6 +7356,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
     const validation = await validateRecordInput(req, object, fields, input, { requireRequired: action === "create" });
     if (validation.error) return { status: 400, code: "FIELD_VALIDATION_FAILED", message: validation.error };
+    if (action === "create") {
+      const generated = await generateAutoNumberValues(req, fields);
+      validation.values.push(...generated.filter(({ column }) => column));
+    }
     const trigger = action === "update" ? "before_update" : "before_create";
     const ruleCheck = await recordRuleCheck(req, object, fields, validation.values, trigger, action === "update" ? recordId : null);
     if (ruleCheck.status) return { status: ruleCheck.status, code: ruleCheck.code, message: ruleCheck.message, errors: ruleCheck.errors };
