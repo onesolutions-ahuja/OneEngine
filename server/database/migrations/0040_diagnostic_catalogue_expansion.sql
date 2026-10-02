@@ -68,3 +68,13 @@ ON CONFLICT (code) DO UPDATE SET
  internal_description=EXCLUDED.internal_description,severity=EXCLUDED.severity,retryable=EXCLUDED.retryable,
  active=TRUE,built_in=TRUE,match_pattern=EXCLUDED.match_pattern,sort_order=EXCLUDED.sort_order,
  subsystem_key=EXCLUDED.subsystem_key,cause_key=EXCLUDED.cause_key,updated_at=NOW();
+
+
+ALTER TABLE platform_action_jobs ADD COLUMN IF NOT EXISTS last_error_code VARCHAR(6);
+ALTER TABLE platform_workflow_runs ADD COLUMN IF NOT EXISTS error_code VARCHAR(6);
+ALTER TABLE platform_workflow_step_runs ADD COLUMN IF NOT EXISTS error_code VARCHAR(6);
+ALTER TABLE platform_workflow_compensation_runs ADD COLUMN IF NOT EXISTS error_code VARCHAR(6);
+
+CREATE INDEX IF NOT EXISTS idx_platform_action_jobs_error_code ON platform_action_jobs(last_error_code);
+CREATE INDEX IF NOT EXISTS idx_platform_workflow_runs_error_code ON platform_workflow_runs(error_code);
+CREATE INDEX IF NOT EXISTS idx_platform_workflow_step_runs_error_code ON platform_workflow_step_runs(error_code);
