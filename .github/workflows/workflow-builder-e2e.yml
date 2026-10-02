@@ -1,6 +1,7 @@
 name: Workflow Builder E2E Gate
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
