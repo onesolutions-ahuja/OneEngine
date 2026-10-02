@@ -221,6 +221,12 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(challenge.challenge_type==="STEP_UP"){
       const sid=challenge.context?.sessionId;
       if(!sid)return res.status(400).json({success:false,message:"Step-up session is missing"});
+      const resourceKey=String(challenge.context?.resourceKey||"").toUpperCase();
+      const configured=resourceKey?await effectiveStepUpPolicy(db,{companyId:user.company_id,resourceKey}):null;
+      const stepPolicy=configured||(resourceKey==="TEMPORARY_MFA_CODE"?{required_assurance:"HIGH"}:null);
+      if(stepPolicy&&!assuranceSatisfies(assurance,stepPolicy.required_assurance||"HIGH")){
+        return res.status(403).json({success:false,code:"MFA_ASSURANCE_INSUFFICIENT",message:"This verification method does not meet the required step-up assurance level"});
+      }
       await consumeChallenge(db,challenge.id);
       await db("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW(),mfa_method=$3 WHERE id=$1 AND user_id=$4",[sid,assurance,methodType,user.id]);
       return res.json({success:true,assuranceLevel:assurance});
@@ -235,6 +241,14 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const kind=String(req.body?.authenticatorKind||"PLATFORM").toUpperCase()==="SECURITY_KEY"?"SECURITY_KEY":"PLATFORM";
     if(kind==="PLATFORM"&&!policy.effective.allowPlatformPasskeys)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Built-in passkeys are disabled by security policy"});
     if(kind==="SECURITY_KEY"&&!policy.effective.allowSecurityKeys)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Physical security keys are disabled by security policy"});
+    if(challenge.challenge_type==="STEP_UP"){
+      const resourceKey=String(challenge.context?.resourceKey||"").toUpperCase();
+      const configured=resourceKey?await effectiveStepUpPolicy(db,{companyId:user.company_id,resourceKey}):null;
+      const stepPolicy=configured||(resourceKey==="TEMPORARY_MFA_CODE"?{required_assurance:"HIGH"}:null);
+      if(stepPolicy&&!assuranceSatisfies(policy.effective.passkeyAssurance,stepPolicy.required_assurance||"HIGH")){
+        return res.status(403).json({success:false,code:"PASSKEY_ASSURANCE_INSUFFICIENT",message:"Passkeys are not mapped to the assurance level required for this operation"});
+      }
+    }
     const {generateRegistrationOptions}=await import("@simplewebauthn/server");
     const existing=(await listMfaMethods(db,{companyId:user.company_id,userId:user.id,includeUnverified:true})).filter(x=>x.method_type==="PASSKEY"&&x.credential_id);
     const rpID=String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0].split(",")[0].trim();
@@ -300,6 +314,20 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const credId=String(req.body?.credential?.id||"");
     const r=await db("SELECT * FROM identity_mfa_methods WHERE company_id=$1 AND user_id=$2 AND method_type='PASSKEY' AND credential_id=$3 AND active=TRUE AND verified=TRUE LIMIT 1",[user.company_id,user.id,credId]);
     const method=r.rows[0];if(!method)return res.status(401).json({success:false,message:"Passkey is not registered"});
+    const assurancePolicy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    if(!mfaMethodAllowed(method,assurancePolicy.effective))return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"This passkey type is disabled by security policy"});
+    const methodLevel=assurancePolicy.effective.passkeyAssurance;
+    if(challenge.challenge_type==="LOGIN"&&!assuranceSatisfies(methodLevel,assurancePolicy.effective.requiredLoginAssurance)){
+      return res.status(403).json({success:false,code:"MFA_ASSURANCE_INSUFFICIENT",message:"This passkey does not meet the required login assurance level"});
+    }
+    if(challenge.challenge_type==="STEP_UP"){
+      const resourceKey=String(challenge.context?.resourceKey||"").toUpperCase();
+      const configured=resourceKey?await effectiveStepUpPolicy(db,{companyId:user.company_id,resourceKey}):null;
+      const stepPolicy=configured||(resourceKey==="TEMPORARY_MFA_CODE"?{required_assurance:"HIGH"}:null);
+      if(stepPolicy&&!assuranceSatisfies(methodLevel,stepPolicy.required_assurance||"HIGH")){
+        return res.status(403).json({success:false,code:"MFA_ASSURANCE_INSUFFICIENT",message:"This passkey does not meet the required step-up assurance level"});
+      }
+    }
     const {verifyAuthenticationResponse}=await import("@simplewebauthn/server");
     const rpID=challenge.context?.rpID||String(req.headers?.["x-forwarded-host"]||req.headers?.host||"").split(":")[0];
     const origin=String(req.headers?.origin||`https://${rpID}`);
@@ -312,10 +340,10 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     await db("UPDATE identity_mfa_methods SET sign_count=$2,last_used_at=NOW() WHERE id=$1",[method.id,verification.authenticationInfo?.newCounter||method.sign_count]);
     if(challenge.challenge_type==="STEP_UP"){
       await consumeChallenge(db,challenge.id);
-      await db("UPDATE identity_sessions SET assurance_level='HIGH',assurance_verified_at=NOW(),mfa_method='PASSKEY' WHERE id=$1 AND user_id=$2",[challenge.context?.sessionId,user.id]);
-      return res.json({success:true,assuranceLevel:"HIGH"});
+      await db("UPDATE identity_sessions SET assurance_level=$3,assurance_verified_at=NOW(),mfa_method='PASSKEY' WHERE id=$1 AND user_id=$2",[challenge.context?.sessionId,user.id,methodLevel]);
+      return res.json({success:true,assuranceLevel:methodLevel});
     }
-    return finishChallenge(req,res,{challenge,user,assuranceLevel:"HIGH",mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+    return finishChallenge(req,res,{challenge,user,assuranceLevel:methodLevel,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
   });
 
   router.get("/security/mfa/users",...manage,async(req,res)=>{
