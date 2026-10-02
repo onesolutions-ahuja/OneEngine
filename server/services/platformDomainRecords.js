@@ -55,6 +55,41 @@ function exposedExtensions(fields, values) {
     .map(field => [field.api_name, values[field.api_name] ?? null]));
 }
 
+function lookupFilterMatches(field, targetRecord, sourceRecord, req) {
+  const filter = field?.config?.lookupFilter || field?.config?.lookup_filter;
+  if (!filter || filter.active === false || filter.required === false || !Array.isArray(filter.conditions) || !filter.conditions.length) return true;
+  const conditionMatches = (condition) => {
+    const left = targetRecord?.[condition.targetField || condition.target_field];
+    const operator = condition.operator || "equals";
+    if (operator === "is_empty") return left === null || left === undefined || left === "";
+    if (operator === "is_not_empty") return left !== null && left !== undefined && left !== "";
+    const source = condition.valueSource || condition.value_source || "literal";
+    let right = condition.value;
+    if (source === "source_field") right = sourceRecord?.[condition.sourceField || condition.source_field];
+    if (source === "user") {
+      const userField = condition.userField || condition.user_field || "id";
+      right = userField === "id" ? req.user?.id
+        : userField === "roleId" ? req.user?.roleId
+          : userField === "companyId" ? req.user?.companyId
+            : userField === "storeId" ? req.user?.storeId : null;
+    }
+    if (operator === "equals") return String(left ?? "") === String(right ?? "");
+    if (operator === "not_equals") return String(left ?? "") !== String(right ?? "");
+    if (operator === "contains") return String(left ?? "").toLowerCase().includes(String(right ?? "").toLowerCase());
+    if (left === null || left === undefined || right === null || right === undefined) return false;
+    const leftNumber = Number(left), rightNumber = Number(right);
+    const numeric = Number.isFinite(leftNumber) && Number.isFinite(rightNumber);
+    const a = numeric ? leftNumber : String(left), b = numeric ? rightNumber : String(right);
+    if (operator === "greater_than") return a > b;
+    if (operator === "greater_than_or_equal") return a >= b;
+    if (operator === "less_than") return a < b;
+    if (operator === "less_than_or_equal") return a <= b;
+    return false;
+  };
+  const matches = filter.conditions.map(conditionMatches);
+  return filter.match === "any" ? matches.some(Boolean) : matches.every(Boolean);
+}
+
 export async function readDomainConfiguration(db, key, req, recordId = null) {
   const metadata = await domainMetadata(db, key, req);
   const { object, access } = metadata;
@@ -148,7 +183,16 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
       if (!target || !/^[a-z_][a-z0-9_]*$/.test(target.source_table || "") || !/^[0-9a-f-]{36}$/i.test(String(value))) throw new PlatformRecordError(`${field.label} must reference an available record`);
       const clauses = ["id=$1", "company_id=$2"], params = [value, req.user.companyId];
       appendSystemReadScope(target, req, clauses, params);
-      if (!(await db(`SELECT id FROM "${target.source_table}" WHERE ${clauses.join(" AND ")}`, params)).rows.length) throw new PlatformRecordError(`${field.label} must reference an available record`);
+      const targetResult = await db(`SELECT * FROM "${target.source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`, params);
+      if (!targetResult.rows.length) throw new PlatformRecordError(`${field.label} must reference an available record`);
+      const filter = field?.config?.lookupFilter || field?.config?.lookup_filter;
+      if (filter?.active !== false && Array.isArray(filter?.conditions) && filter.conditions.length && filter.required !== false) {
+        const targetFieldsResult = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [target.id, req.user.companyId]);
+        const targetFields = tenantFields(targetFieldsResult.rows, req.user.companyId);
+        const targetAssociation = await db("SELECT custom_values FROM platform_record_associations WHERE object_id=$1 AND record_id=$2 AND company_id=$3", [target.id, value, req.user.companyId]);
+        const targetValues = { ...apiValues(targetFields, targetResult.rows[0]), ...(targetAssociation.rows[0]?.custom_values || {}) };
+        if (!lookupFilterMatches(field, targetValues, values, req)) throw new PlatformRecordError(`${field.label} does not match the configured lookup filter`);
+      }
     }
   }
   }
