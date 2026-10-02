@@ -22,13 +22,6 @@ jobs:
           cache: npm
       - name: Refresh lockfile
         run: npm install --package-lock-only --ignore-scripts
-      - name: Install exact dependencies
-        run: npm ci
-      - name: Build frontend
-        env:
-          VITE_BASE_PATH: /OneEngine/
-          VITE_API_BASE: https://oneengine.onrender.com
-        run: npm run build
       - name: Commit refreshed lockfile
         run: |
           if git diff --quiet -- package-lock.json; then
@@ -40,3 +33,9 @@ jobs:
           git add package-lock.json
           git commit -m "Refresh lockfile for React Flow"
           git push
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Check workflow canvas modules
+        run: |
+          npx esbuild src/pages/settings/Platform/WorkflowReactFlowCanvas.jsx --bundle --format=esm --outfile=/tmp/workflow-canvas.js --loader:.jsx=jsx
+          npx esbuild src/pages/settings/Platform/WorkflowAdmin.jsx --bundle --format=esm --outfile=/tmp/workflow-admin.js --loader:.jsx=jsx
