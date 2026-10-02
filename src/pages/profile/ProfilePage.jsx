@@ -19,14 +19,22 @@ export default function ProfilePage({ onBack }) {
   const [runtime, setRuntime] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [mfaMethods,setMfaMethods]=useState([])
+  const [trustedDevices,setTrustedDevices]=useState([])
 
   useEffect(() => {
     let live = true
     setLoading(true)
-    apiRequest('/api/platform/runtime/my-record')
-      .then((response) => {
+    Promise.all([
+      apiRequest('/api/platform/runtime/my-record'),
+      apiRequest('/api/security/mfa/methods').catch(()=>({data:[]})),
+      apiRequest('/api/security/trusted-devices').catch(()=>({data:[]})),
+    ])
+      .then(([response,methods,devices]) => {
         if (!live) return
         setRuntime(response?.data || null)
+        setMfaMethods(methods?.data||[])
+        setTrustedDevices(devices?.data||[])
         setError('')
       })
       .catch((err) => {
@@ -63,6 +71,12 @@ export default function ProfilePage({ onBack }) {
               <strong>{valueLabel(record?.[field.api_name])}</strong>
             </div>
           ))}
+        </div>
+        <div className="profile-fields">
+          <div className="profile-field-row"><span>Identity verification methods</span><strong>{mfaMethods.length}</strong></div>
+          {mfaMethods.map((method)=><div className="profile-field-row" key={method.id}><span>{method.label||method.type||method.method_type}</span><button type="button" onClick={async()=>{try{await apiRequest(`/api/security/mfa/methods/${method.id}/disconnect`,{method:'POST',body:'{}'});const r=await apiRequest('/api/security/mfa/methods');setMfaMethods(r.data||[])}catch(e){setError(e.message||'Unable to disconnect method')}}}>Disconnect</button></div>)}
+          <div className="profile-field-row"><span>Trusted devices</span><strong>{trustedDevices.filter(d=>!d.revoked_at).length}</strong></div>
+          {trustedDevices.filter(d=>!d.revoked_at).map((device)=><div className="profile-field-row" key={device.id}><span>{device.device_name||device.browser||'Device'}</span><button type="button" onClick={async()=>{try{await apiRequest(`/api/security/trusted-devices/${device.id}/revoke`,{method:'POST',body:'{}'});const r=await apiRequest('/api/security/trusted-devices');setTrustedDevices(r.data||[])}catch(e){setError(e.message||'Unable to revoke trusted device')}}}>Revoke</button></div>)}
         </div>
       </div>
     ) : <div className="profile-state">Your user record is not available.</div>}
