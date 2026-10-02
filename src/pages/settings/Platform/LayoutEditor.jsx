@@ -812,7 +812,7 @@ export default function LayoutEditor({
                       const nextSource = event.target.value;
                       replaceCondition(conditionIndex, {
                         source: nextSource,
-                        field: ["field", "object_state"].includes(nextSource) ? (condition.field || (firstField ? getFieldKey(firstField) : "")) : "",
+                        field: nextSource === "field" ? (condition.field || (firstField ? getFieldKey(firstField) : "")) : "",
                         operator: "equals",
                         value: "",
                       });
@@ -827,13 +827,21 @@ export default function LayoutEditor({
                     <option value="object_state">Object state</option>
                     <option value="company">Company</option>
                   </select>
-                  {["field", "object_state"].includes(source) ? (
+                  {source === "field" ? (
                     <select className="onepos-input" value={condition.field || ""} onChange={(event) => replaceCondition(conditionIndex, { field: event.target.value })}>
                       <option value="">Select field</option>
                       {fields.filter((candidate) => getFieldKey(candidate) !== excludeFieldKey).map((candidate) => (
                         <option key={getFieldKey(candidate)} value={getFieldKey(candidate)}>{getFieldName(candidate)}</option>
                       ))}
                     </select>
+                  ) : source === "object_state" ? (
+                    <input
+                      type="text"
+                      className="onepos-input"
+                      value={condition.field || ""}
+                      placeholder="Object state path, e.g. config.status"
+                      onChange={(event) => replaceCondition(conditionIndex, { field: event.target.value })}
+                    />
                   ) : null}
                   <select className="onepos-input" value={condition.operator || "equals"} onChange={(event) => replaceCondition(conditionIndex, { operator: event.target.value })}>
                     {operators.map((operator) => <option key={operator} value={operator}>{operator.replaceAll("_", " ")}</option>)}
