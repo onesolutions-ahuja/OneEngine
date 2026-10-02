@@ -47,9 +47,39 @@ function layoutFieldKeys(layout) {
     .filter(Boolean)
 }
 
-function fieldsForLayout(fields, layout) {
+function fieldsForLayout(fields, layout, context = {}) {
   const readable = (fields || []).filter((field) => field.active !== false && field.readable !== false)
-  const keys = layoutFieldKeys(layout)
+  const definition = layout?.definition || {}
+  const components = Array.isArray(definition.components) ? definition.components : []
+  const sections = Array.isArray(definition.sections) ? definition.sections : []
+  const visibleKeys = []
+
+  if (sections.length) {
+    for (const section of [...sections].sort((a, b) => Number(a.order || 0) - Number(b.order || 0))) {
+      if (section?.visible === false) continue
+      if (!evaluatePlatformCondition(section?.visibilityCondition, readable, context)) continue
+      const items = Array.isArray(section.items)
+        ? section.items
+        : Array.isArray(section.components)
+          ? section.components
+          : components.filter((component) => component?.section_id === section.id)
+      for (const component of items) {
+        if (component?.visible === false) continue
+        if (!evaluatePlatformCondition(component?.visibilityCondition, readable, context)) continue
+        const key = component.field_key || component.fieldKey || component.api_name || component.props?.fieldKey || component.props?.field_key
+        if (key) visibleKeys.push(key)
+      }
+    }
+  } else {
+    for (const component of components) {
+      if (component?.visible === false) continue
+      if (!evaluatePlatformCondition(component?.visibilityCondition, readable, context)) continue
+      const key = component.field_key || component.fieldKey || component.api_name || component.props?.fieldKey || component.props?.field_key
+      if (key) visibleKeys.push(key)
+    }
+  }
+
+  const keys = visibleKeys.length ? visibleKeys : layoutFieldKeys(layout)
   if (!keys.length) return readable
   const byKey = new Map(readable.map((field) => [field.api_name, field]))
   return keys.map((key) => byKey.get(key)).filter(Boolean)
@@ -306,17 +336,6 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
   const defaultRecordTypeId = runtimeMeta.recordTypes.find((item) => item.is_default === true)?.id || ''
 
-  const visibilityContext = {
-    ...uiContext,
-    device: formFactor,
-    formFactor,
-    companyId: uiContext.companyId || null,
-    recordTypeId: detailRecord?.recordTypeId || detailRecord?.record_type_id || '',
-    record: detailRecord || {},
-    object: selectedObject || {},
-    objectState: selectedObject || {},
-  }
-
   const fetchEffectiveLayout = async (pageType, recordTypeId = '', targetObject = selectedObject) => {
     if (!targetObject?.id) return null
     const query = new URLSearchParams({
@@ -437,7 +456,17 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const rawDetailFields = detail?.fields || fields
   const detailRecordTypeId = detailRecord?.recordTypeId || detailRecord?.record_type_id || null
   const detailLayout = detail?.layout || resolveRecordLayout(runtimeMeta.layouts, 'detail', detailRecordTypeId, runtimeMeta.defaultDetailLayout)
-  const detailFields = fieldsForLayout(rawDetailFields, detailLayout)
+  const visibilityContext = {
+    ...uiContext,
+    device: formFactor,
+    formFactor,
+    companyId: uiContext.companyId || null,
+    recordTypeId: detailRecordTypeId || '',
+    record: detailRecord || {},
+    object: selectedObject || {},
+    objectState: selectedObject || {},
+  }
+  const detailFields = fieldsForLayout(rawDetailFields, detailLayout, visibilityContext)
   const outboundRelationships = runtimeMeta.relationships.filter((relationship) => String(relationship.parent_object_id) === String(selectedObject?.id))
   const selectedRecordType = runtimeMeta.recordTypes.find((item) => String(item.id) === String(detailRecord?.recordTypeId || detailRecord?.record_type_id || '')) || null
 
@@ -462,6 +491,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const layoutActionComponents = (detailLayout?.definition?.components || [])
     .map((component, index) => ({ component, index }))
     .filter(({ component }) => component?.type === 'action' && component?.visible !== false)
+    .filter(({ component }) => evaluatePlatformCondition(component?.visibilityCondition, rawDetailFields, visibilityContext))
 
   const runConfiguredAction = async (component, index) => {
     if (!selectedObject || !selectedId) return
@@ -691,6 +721,16 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
                 editor.resolvedLayout || (
                   editor.mode === 'quick_create' ? quickCreateLayout : editor.mode === 'edit' ? detailLayout : createLayout
                 ),
+                {
+                  ...uiContext,
+                  device: formFactor,
+                  formFactor,
+                  companyId: uiContext.companyId || null,
+                  recordTypeId: editor.recordTypeId || '',
+                  record: editor.values || {},
+                  object: editor.targetObject || selectedObject || {},
+                  objectState: editor.targetObject || selectedObject || {},
+                },
               )
                 .filter((field) => evaluatePlatformCondition(field?.config?.visibilityCondition, editor.targetFields || fields, {
                   ...uiContext,
