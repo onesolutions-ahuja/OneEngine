@@ -1,0 +1,17 @@
+name: Export Final Main Snapshot
+on:
+  push:
+    branches: ["tmp-final-main-export"]
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: tar --exclude=.git -czf /tmp/oneengine-final-main.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oneengine-final-main-snapshot
+          path: /tmp/oneengine-final-main.tar.gz
+          retention-days: 1
