@@ -16,6 +16,7 @@ import PermissionSetsAdmin from './Platform/PermissionSetsAdmin.jsx'
 import AccessControlAdmin from './Platform/AccessControlAdmin.jsx'
 import AssignmentRuleEditor from './Platform/AssignmentRuleEditor.jsx'
 import SharingRuleEditor from './Platform/SharingRuleEditor.jsx'
+import DuplicateRulesAdmin from './Platform/DuplicateRulesAdmin.jsx'
 
 const TABS = [
   ['details', 'Details'],
@@ -26,6 +27,7 @@ const TABS = [
   ['layouts', 'Forms / Layouts'],
   ['list-views', 'List Views'],
   ['validation', 'Validation Rules'],
+  ['duplicates', 'Duplicate Management'],
   ['actions', 'Actions & Bindings'],
   ['automation', 'Automation / Flows'],
   ['approvals', 'Approval Processes'],
@@ -187,7 +189,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
   useEffect(() => {
     if (!selectedId) return undefined
 
-    const wantsFields = activeTab === 'details' || activeTab === 'fields' || activeTab === 'formula' || activeTab === 'assignment' || activeTab === 'sharing'
+    const wantsFields = activeTab === 'details' || activeTab === 'fields' || activeTab === 'formula' || activeTab === 'assignment' || activeTab === 'sharing' || activeTab === 'duplicates'
     const wantsRelationships = activeTab === 'details' || activeTab === 'relationships'
     const wantsRules = activeTab === 'details' || activeTab === 'validation' || activeTab === 'actions' || activeTab === 'automation'
     const wantsPermissions = activeTab === 'permissions'
@@ -805,7 +807,15 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     onRowClick={(row) => setEditor({ kind: 'rule', item: row })} />
                 ) : null}
 
-                {activeTab === 'actions' ? (
+                {activeTab === 'duplicates' ? (
+          objectLoading && !loadedSections.fields ? (
+            <div className="objects-detail-placeholder">Loading fields…</div>
+          ) : (
+            <DuplicateRulesAdmin object={{ ...selected, id: selectedId }} fields={fields} />
+          )
+        ) : null}
+
+        {activeTab === 'actions' ? (
                   <div className="objects-config-list objects-config-list--stacked">
                     <ObjectDataList title="Object Actions" rows={objectData.registeredActions}
                       primary={(row) => row.label || row.action_key || 'Action'}
