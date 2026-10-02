@@ -185,6 +185,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const rowRequestRef = useRef(0)
   const searchTimerRef = useRef(null)
   const relatedSearchTimerRef = useRef(null)
+  const pendingRecordIdRef = useRef('')
 
   useEffect(() => {
     let live = true
@@ -283,6 +284,11 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         pages: Number(response?.pages || 0),
       })
       setSelectedId((current) => {
+        const pending = pendingRecordIdRef.current
+        if (pending) {
+          pendingRecordIdRef.current = ''
+          return pending
+        }
         if (current && nextRows.some((row) => String(row.id) === String(current))) return current
         if (initialRecordId && current && String(current) === String(initialRecordId)) return current
         return nextRows[0]?.id || ''
@@ -317,6 +323,10 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       const nextSort = savedViewSortToUi(selectedView?.sort)
 
       setFields(nextFields)
+      setKanbanField((current) => {
+        const candidates = nextFields.filter((field) => field.readable !== false && field.writable !== false && ['picklist','select','boolean'].includes(String(field.field_type || '').toLowerCase()))
+        return candidates.some((field) => field.api_name === current) ? current : (candidates[0]?.api_name || '')
+      })
       setRuntimeMeta({
         listViews: nextViews,
         defaultListView: meta.defaultListView || null,
@@ -506,7 +516,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       search: listSearch,
       filters: listFilters,
       sort: listSort,
-      pageSizeOverride: mode === 'kanban' ? 200 : null,
+      pageSizeOverride: mode === 'kanban' ? 200 : Number(activeListView?.page_size || 50),
     })
   }
 
@@ -856,13 +866,13 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const openRelatedRecord = (row) => {
     const childKey = relatedState.relationship?.child_object_key
     if (!childKey || !row?.id) return
+    pendingRecordIdRef.current = String(row.id)
     if (objects.some((item) => objectKey(item) === childKey)) {
-      setSelectedKey(childKey)
       setSelectedId(row.id)
+      setSelectedKey(childKey)
       setDetailTab('details')
-    } else {
-      onRouteChange?.(childKey, row.id)
     }
+    onRouteChange?.(childKey, row.id)
   }
 
   return (
