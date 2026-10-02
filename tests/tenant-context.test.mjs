@@ -24,6 +24,7 @@ let stores = []
 globalThis.fetch = async (url, options) => {
   requests.push({ url, options })
   const body = url.endsWith('/login') ? { success: true, token: 'token', user: { id: 'u', company_id: 'home' }, actingCompanyId: 'other' }
+    : url.endsWith('/bootstrap') ? { user: { id: 'u', company_id: 'home' }, stores }
     : url.endsWith('/me') ? { user: { id: 'u', company_id: 'home' } } : { data: stores }
   return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
 }
