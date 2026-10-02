@@ -196,6 +196,7 @@ function containsContextValue(values, expected) {
 function evaluateUiConditionNode(config, fields, context) {
   if (!config) return true;
   if (!config || typeof config !== "object" || Array.isArray(config)) fail("UI condition must be an object");
+  if (Object.keys(config).length === 0) return true;
   const groups = Array.isArray(config.groups) ? config.groups : null;
   if (groups) {
     if (!groups.length || groups.length > 20) fail("UI condition groups must contain between 1 and 20 groups");
