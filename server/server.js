@@ -786,11 +786,16 @@ app.get("/api/health", async (req, res) => {
     packageRegistry.healthy === true &&
     !healthError;
 
+  const classifiedHealthCode = healthError
+    ? classifyDebugCode({ message: healthError }, 503)
+    : null;
   const oeCode = healthy
     ? null
-    : healthError
-      ? classifyDebugCode({ message: healthError }, 503)
-      : (runtimeReadiness.oeCode || "OES01");
+    : classifiedHealthCode && classifiedHealthCode !== "OEA01" && classifiedHealthCode !== "OEA02"
+      ? classifiedHealthCode
+      : runtimeReadiness.oeCode && runtimeReadiness.oeCode !== "OEA01" && runtimeReadiness.oeCode !== "OEA02"
+        ? runtimeReadiness.oeCode
+        : "OEN01";
   const definition = oeCode ? (builtinDebugCode(oeCode) || builtinDebugCode("OEA01")) : null;
 
   res.status(healthy ? 200 : 503).json({
