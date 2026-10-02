@@ -966,6 +966,7 @@ const WORKFLOW_VISUAL_CSS = `
 const actionOptions = [
   { value: "CONSTANT", label: "Constant" },
   { value: "FORMULA", label: "Formula" },
+  { value: "TEXT_TEMPLATE", label: "Text Template" },
   { value: "ASSIGNMENT", label: "Assignment" },
   { value: "LOOP", label: "Loop" },
   { value: "SCHEDULE_PATH", label: "Scheduled Path" },
@@ -1016,7 +1017,7 @@ function flowElementVisual(type = "") {
 }
 
 function flowElementSupportsFaultPath(type = "") {
-  return !["CONDITION","LOOP","WAIT","ASSIGNMENT","STOP","CONSTANT","FORMULA","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
+  return !["CONDITION","LOOP","WAIT","ASSIGNMENT","STOP","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
 }
 
 function flowApiName(label = "") {
@@ -1053,6 +1054,7 @@ function makeStep(type = "CREATE_RECORD") {
       resultType: "number",
       expression: "",
       formulaInputs: {},
+      templateText: "",
       collection: "",
       itemVariable: type === "LOOP" ? "currentItem_Loop" : "currentItem",
       bodyBranch: [],
@@ -1104,7 +1106,7 @@ function getActionLabel(type) {
 
 function workflowActionCategory(type = "") {
   const key = String(type || "").toUpperCase();
-  if (["CONSTANT","FORMULA"].includes(key)) return "Resources";
+  if (["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(key)) return "Resources";
   if (["CONDITION","WAIT","STOP","ASSIGNMENT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (key === "RUN_SUBFLOW") return "Interaction";
   if (["GET_RECORDS","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
@@ -1169,6 +1171,10 @@ function workflowActionIssue(step, definition = null) {
     if (!config.formulaInputs || !Object.keys(config.formulaInputs).length) return "Add at least one formula input.";
     if (Object.keys(config.formulaInputs).some((name) => !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(name)))) return "Formula input names can only use letters, numbers and underscores.";
   }
+  if (step.type === "TEXT_TEMPLATE") {
+    if (!config.resourceName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.resourceName))) return "Enter a valid text template name.";
+    if (!String(config.templateText || "").trim()) return "Enter text for the Text Template.";
+  }
   if (step.type === "LOOP") {
     if (!config.collection) return "Choose the collection to loop through.";
     if (!config.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.itemVariable))) return "The Loop Current Item resource could not be generated.";
@@ -1180,7 +1186,7 @@ function workflowActionIssue(step, definition = null) {
     if (!config.fieldMappings || !Object.keys(config.fieldMappings).length) return "Map at least one field to update.";
   }
   if (step.type === "__ACTION__") return "Choose an action.";
-  if (!["CONSTANT","FORMULA"].includes(step.type) && config.resourceOnly !== true) {
+  if (!["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type) && config.resourceOnly !== true) {
     if (!config.apiName || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(String(config.apiName))) return "Enter a valid API Name.";
   }
   if (step.type === "ASSIGNMENT") {
@@ -1400,6 +1406,16 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         seenVariables.add(step.config.resourceName);
       }
       resources.push({ value: `${prefix}.value`, label: `${label} → Result`, type: step.config.resultType || "element output" });
+    } else if (step.type === "TEXT_TEMPLATE" && step.config?.resourceName) {
+      if (!seenVariables.has(step.config.resourceName)) {
+        resources.push({
+          value: `variables.${step.config.resourceName}`,
+          label: `${step.config.resourceName} · Text Template · Text`,
+          type: "text",
+        });
+        seenVariables.add(step.config.resourceName);
+      }
+      resources.push({ value: `${prefix}.value`, label: `${label} → Text`, type: "text" });
     } else if (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true && step.config?.variableName) {
       if (!seenVariables.has(step.config.variableName)) {
         resources.push({
@@ -1609,9 +1625,9 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
 function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const isVariableResource = step.type === "ASSIGNMENT" && step.config?.resourceOnly === true;
-  const isResource = ["CONSTANT","FORMULA"].includes(step.type) || isVariableResource;
+  const isResource = ["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type) || isVariableResource;
   const [actionSearch, setActionSearch] = useState("");
-  const actionPickerOptions = registryOptions.filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","SCHEDULE_PATH","WHEN","STOP"].includes(option.value));
+  const actionPickerOptions = registryOptions.filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH","WHEN","STOP"].includes(option.value));
   const visibleActionPickerOptions = actionPickerOptions.filter((option) => !actionSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || workflowActionCategory(option.value)}`.toLowerCase().includes(actionSearch.trim().toLowerCase()));
   const actionPickerGroups = visibleActionPickerOptions.reduce((groups, option) => {
     const category = option.category || workflowActionCategory(option.value) || "Actions";
@@ -1745,6 +1761,23 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Formula</label>
               <textarea className={inputClass} rows={4} value={step.config?.expression || ""} onChange={(event) => updateConfig({ expression: event.target.value })} placeholder="amount + tax" />
               <p className="mt-1 text-[11px] text-slate-500">Supported: + - * / %, comparisons, && / ||, IF, COALESCE, CONCAT, ROUND, ABS, MIN and MAX. JavaScript is never executed.</p>
+            </div>
+          </div>
+        );
+      case "TEXT_TEMPLATE":
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">API Name</label>
+              <input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="e.g. welcomeMessage" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Body</label>
+              <textarea className={inputClass} rows={8} value={step.config?.templateText || ""} onChange={(event) => updateConfig({ templateText: event.target.value })} placeholder={"Hello {!$Record.name},\n\nYour order is ready."} />
+              <p className="mt-1 text-[11px] text-slate-500">Insert resources with Salesforce-style merge syntax, for example {!$Record.name}, {!$User.email} or {!variables.customerName}.</p>
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+              Text Templates are Resources. They do not appear as canvas elements and can be selected anywhere a Text Resource is accepted.
             </div>
           </div>
         );
@@ -2815,10 +2848,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setPaletteOpen(true);
   };
   const registeredActionOptions = registryOptions
-    .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","SCHEDULE_PATH","STOP"].includes(option.value));
+    .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH","STOP"].includes(option.value));
   const palette = [
     ...registryOptions
-      .filter((option) => SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(option.value))
+      .filter((option) => SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(option.value))
       .map((option) => ({ ...option, category: option.value === "RUN_SUBFLOW" ? "Interaction" : workflowActionCategory(option.value) })),
     ...(registeredActionOptions.length ? [{ value: "__ACTION__", label: "Action", description: "Run a registered OneEngine action", category: "Interaction" }] : []),
   ].filter((option) => !paletteSearch.trim() || `${option.label || option.value} ${option.description || ""} ${option.category || ""}`.toLowerCase().includes(paletteSearch.trim().toLowerCase()));
@@ -2836,8 +2869,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     { label: "$Flow.CurrentDateTime", detail: "The date and time when this flow runs", type: "Global Variable" },
   ];
   const stepResources = workflowStepResources(workflow.steps, workflow.steps.length, objectFieldCatalog);
-  const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA"].includes(step.type) || (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true));
-  const managerElementSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true);
+  const resourceSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => ["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type) || (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true));
+  const managerElementSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(step.type) && step.config?.resourceOnly !== true);
   const scheduledPathSteps = workflow.steps.map((step, index) => ({ step, index })).filter(({ step }) => step.type === "SCHEDULE_PATH");
   const faultTargetIds = new Set(workflow.steps.flatMap((step) => {
     const mode = String(step.config?.faultMode || "FAIL").toUpperCase();
@@ -2881,7 +2914,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const addScheduledPath = () => {
     const path = makeStep("SCHEDULE_PATH");
     path.label = "Scheduled Path";
-    const insertAt = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA","SCHEDULE_PATH"].includes(step.type));
+    const insertAt = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE","SCHEDULE_PATH"].includes(step.type));
     const target = insertAt < 0 ? workflow.steps.length : insertAt;
     setWorkflow((current) => ({ ...current, steps: [...current.steps.slice(0, target), path, ...current.steps.slice(target)] }));
     setSelectedId("__start__");
@@ -2897,10 +2930,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       resource.label = "Variable";
       resource.config = { ...resource.config, resourceOnly: true, variableName: "", variableType: "text", operator: "set", value: "", availableForInput: false, availableForOutput: false };
     } else {
-      resource.label = type === "CONSTANT" ? "Constant" : "Formula";
+      resource.label = type === "CONSTANT" ? "Constant" : type === "FORMULA" ? "Formula" : "Text Template";
       resource.config = { ...resource.config, resourceOnly: true };
     }
-    const firstActionIndex = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA"].includes(step.type) && step.config?.resourceOnly !== true);
+    const firstActionIndex = workflow.steps.findIndex((step) => !["CONSTANT","FORMULA","TEXT_TEMPLATE"].includes(step.type) && step.config?.resourceOnly !== true);
     const insertAt = firstActionIndex < 0 ? workflow.steps.length : firstActionIndex;
     setWorkflow((current) => ({ ...current, steps: [...current.steps.slice(0, insertAt), resource, ...current.steps.slice(insertAt)] }));
     setSelectedId(resource.id);
@@ -3043,6 +3076,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   <button type="button" className="workflow-resource-choice" onClick={() => addResource("VARIABLE")}><strong>Variable</strong><small>Store a value that can change while the flow runs.</small></button>
                   <button type="button" className="workflow-resource-choice" onClick={() => addResource("CONSTANT")}><strong>Constant</strong><small>Store a fixed value for this flow.</small></button>
                   <button type="button" className="workflow-resource-choice" onClick={() => addResource("FORMULA")}><strong>Formula</strong><small>Calculate a value when the resource is used.</small></button>
+                  <button type="button" className="workflow-resource-choice" onClick={() => addResource("TEXT_TEMPLATE")}><strong>Text Template</strong><small>Build reusable text with Flow merge resources.</small></button>
                 </div>
               ) : null}
             </div>
@@ -3073,8 +3107,8 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               ))}
               {resourceSteps.length ? <div className="workflow-palette-group-title">Resources</div> : null}
               {resourceSteps.map(({ step }) => {
-                const resourceLabel = step.type === "ASSIGNMENT" ? (step.config?.variableName || "New Variable") : (step.config?.resourceName || (step.type === "CONSTANT" ? "New Constant" : "New Formula"));
-                const resourceType = step.type === "ASSIGNMENT" ? `Variable · ${step.config?.variableType || "text"}` : step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}` : `Formula · ${step.config?.resultType || "number"}`;
+                const resourceLabel = step.type === "ASSIGNMENT" ? (step.config?.variableName || "New Variable") : (step.config?.resourceName || (step.type === "CONSTANT" ? "New Constant" : step.type === "FORMULA" ? "New Formula" : "New Text Template"));
+                const resourceType = step.type === "ASSIGNMENT" ? `Variable · ${step.config?.variableType || "text"}` : step.type === "CONSTANT" ? `Constant · ${step.config?.resourceType || "text"}` : step.type === "FORMULA" ? `Formula · ${step.config?.resultType || "number"}` : "Text Template · Text";
                 return <div key={step.id} className="workflow-manager-item">
                   <div className="workflow-manager-item-row">
                     <button type="button" className="workflow-palette-item" onClick={() => inspectStep(step.id)}>
@@ -3085,7 +3119,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   {managerDetailId === step.id ? (
                     <div className="workflow-manager-detail">
                       <div><span>Resource Type</span><strong>{step.type === "ASSIGNMENT" ? "Variable" : getActionLabel(step.type)}</strong></div>
-                      <div><span>Data Type</span><strong>{step.type === "ASSIGNMENT" ? (step.config?.variableType || "text") : step.type === "CONSTANT" ? (step.config?.resourceType || "text") : (step.config?.resultType || "number")}</strong></div>
+                      <div><span>Data Type</span><strong>{step.type === "ASSIGNMENT" ? (step.config?.variableType || "text") : step.type === "CONSTANT" ? (step.config?.resourceType || "text") : step.type === "FORMULA" ? (step.config?.resultType || "number") : "text"}</strong></div>
                       <div><span>Used by</span><strong>{resourceUsageCount(step)} element{resourceUsageCount(step) === 1 ? "" : "s"}</strong></div>
                       {step.config?.description ? <p>{step.config.description}</p> : null}
                     </div>
