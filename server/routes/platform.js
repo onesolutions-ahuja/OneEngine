@@ -1273,18 +1273,43 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     }
   });
 
+  async function recordTypeDeactivationBlockers(recordType, req) {
+    const blockers = [];
+    if (recordType.is_default === true) blockers.push("default record type");
+    const [records, layouts, assignments] = await Promise.all([
+      db("SELECT COUNT(*)::int AS count FROM platform_record_associations WHERE record_type_id=$1 AND company_id=$2", [recordType.id, req.user.companyId]),
+      db("SELECT COUNT(*)::int AS count FROM platform_layouts WHERE record_type_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [recordType.id, req.user.companyId]),
+      db("SELECT COUNT(*)::int AS count FROM platform_layout_assignments WHERE record_type_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [recordType.id, req.user.companyId]),
+    ]);
+    const recordCount = Number(records.rows[0]?.count || 0);
+    const layoutCount = Number(layouts.rows[0]?.count || 0);
+    const assignmentCount = Number(assignments.rows[0]?.count || 0);
+    if (recordCount) blockers.push(`${recordCount} record${recordCount === 1 ? "" : "s"}`);
+    if (layoutCount) blockers.push(`${layoutCount} legacy layout assignment${layoutCount === 1 ? "" : "s"}`);
+    if (assignmentCount) blockers.push(`${assignmentCount} page-layout activation${assignmentCount === 1 ? "" : "s"}`);
+    return blockers;
+  }
+
   router.get("/platform/objects/:objectId/record-types", ...manage, async (req, res) => {
-    const object = await getObject(req.params.objectId, req);
+    const object = await getObject(req.params.objectId, req, { includeInactive: true });
     if (!object) return res.status(404).json({ success: false, message: "Object not found" });
-    const types = await db("SELECT * FROM platform_record_types WHERE object_id=$1 AND company_id=$2 AND active=true ORDER BY label", [object.id, req.user.companyId]);
-    const restrictions = await db("SELECT r.* FROM platform_record_type_picklist_values r JOIN platform_record_types t ON t.id=r.record_type_id WHERE t.object_id=$1 AND t.company_id=$2 AND t.active=true AND r.active=true", [object.id, req.user.companyId]);
+    const types = await db("SELECT * FROM platform_record_types WHERE object_id=$1 AND company_id=$2 ORDER BY active DESC,is_default DESC,label", [object.id, req.user.companyId]);
+    const restrictions = await db("SELECT r.* FROM platform_record_type_picklist_values r JOIN platform_record_types t ON t.id=r.record_type_id WHERE t.object_id=$1 AND t.company_id=$2 AND r.active=true", [object.id, req.user.companyId]);
     const byType = new Map();
     for (const row of restrictions.rows) {
       if (!byType.has(row.record_type_id)) byType.set(row.record_type_id, {});
       if (!byType.get(row.record_type_id)[row.field_id]) byType.get(row.record_type_id)[row.field_id] = [];
       byType.get(row.record_type_id)[row.field_id].push(row.value);
     }
-    res.json({ success: true, data: types.rows.map((type) => ({ ...type, picklistRestrictions: byType.get(type.id) || {} })) });
+    const data = [];
+    for (const type of types.rows) {
+      data.push({
+        ...type,
+        picklistRestrictions: byType.get(type.id) || {},
+        deactivationBlockers: type.active === false ? [] : await recordTypeDeactivationBlockers(type, req),
+      });
+    }
+    res.json({ success: true, data });
   });
 
   router.post("/platform/objects/:objectId/record-types", ...manage, async (req, res) => {
@@ -1298,7 +1323,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       if (req.body.isDefault === true) {
         await db("UPDATE platform_record_types SET is_default=false WHERE object_id=$1 AND company_id=$2 AND is_default=true", [object.id, req.user.companyId]);
       }
-      const result = await db("INSERT INTO platform_record_types (object_id,record_type_key,label,description,company_id,default_values,is_default) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7) RETURNING *", [object.id, key, req.body.label.trim(), req.body.description || null, req.user.companyId, JSON.stringify(req.body.defaultValues || {}), req.body.isDefault === true]);
+      const result = await db("INSERT INTO platform_record_types (object_id,record_type_key,label,description,company_id,default_values,is_default,active) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8) RETURNING *", [object.id, key, req.body.label.trim(), req.body.description || null, req.user.companyId, JSON.stringify(req.body.defaultValues || {}), req.body.isDefault === true, req.body.active !== false]);
       for (const [fieldId, values] of Object.entries(restrictions)) for (const value of values) {
         await db("INSERT INTO platform_record_type_picklist_values (record_type_id,field_id,value) VALUES ($1,$2,$3)", [result.rows[0].id, fieldId, String(value)]);
       }
@@ -1317,21 +1342,34 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const current = existing.rows[0];
     const restrictions = req.body.picklistRestrictions;
     try {
-      if (restrictions) {
-        const object = await getObject(current.object_id, req);
-        if (!object) return res.status(404).json({ success: false, message: "Record type object not found" });
-        await validateRecordTypeRestrictions(object, restrictions, req);
+      const object = await getObject(current.object_id, req, { includeInactive: true });
+      if (!object) return res.status(404).json({ success: false, message: "Record type object not found" });
+      if (restrictions !== undefined) await validateRecordTypeRestrictions(object, restrictions, req);
+      if (req.body.defaultValues !== undefined) await validateRecordTypeDefaults(object, req.body.defaultValues, req);
+      if (current.active !== false && req.body.active === false) {
+        const blockers = await recordTypeDeactivationBlockers(current, req);
+        if (blockers.length) {
+          return res.status(409).json({
+            success: false,
+            code: "RECORD_TYPE_IN_USE",
+            message: `Record type cannot be deactivated while it is used by ${blockers.join(", ")}.`,
+            blockers,
+          });
+        }
       }
-      await validateRecordTypeDefaults(object, req.body.defaultValues, req);
       if (req.body.isDefault === true) {
+        if (req.body.active === false) return res.status(400).json({ success: false, message: "An inactive record type cannot be the default" });
         await db("UPDATE platform_record_types SET is_default=false WHERE object_id=$1 AND company_id=$2 AND id<>$3 AND is_default=true", [current.object_id, req.user.companyId, current.id]);
       }
-      const result = await db("UPDATE platform_record_types SET record_type_key=COALESCE($1,record_type_key),label=COALESCE($2,label),description=COALESCE($3,description),default_values=COALESCE($4::jsonb,default_values),is_default=COALESCE($5,is_default),active=COALESCE($6,active),updated_at=NOW() WHERE id=$7 AND company_id=$8 RETURNING *", [req.body.recordTypeKey, req.body.label?.trim(), req.body.description, req.body.defaultValues === undefined ? null : JSON.stringify(req.body.defaultValues), req.body.isDefault, req.body.active, current.id, req.user.companyId]);
-      if (restrictions) {
-        await db("DELETE FROM platform_record_type_picklist_values WHERE record_type_id=$1", [current.id]);
-        for (const [fieldId, values] of Object.entries(restrictions)) for (const value of values) await db("INSERT INTO platform_record_type_picklist_values (record_type_id,field_id,value) VALUES ($1,$2,$3)", [current.id, fieldId, String(value)]);
+      if (current.is_default === true && req.body.active === false) {
+        return res.status(409).json({ success: false, code: "DEFAULT_RECORD_TYPE", message: "Choose another default record type before deactivating this one" });
       }
-      res.json({ success: true, data: result.rows[0] });
+      const result = await db("UPDATE platform_record_types SET record_type_key=COALESCE($1,record_type_key),label=COALESCE($2,label),description=COALESCE($3,description),default_values=COALESCE($4::jsonb,default_values),is_default=COALESCE($5,is_default),active=COALESCE($6,active),updated_at=NOW() WHERE id=$7 AND company_id=$8 RETURNING *", [req.body.recordTypeKey, req.body.label?.trim(), req.body.description, req.body.defaultValues === undefined ? null : JSON.stringify(req.body.defaultValues), req.body.isDefault, req.body.active, current.id, req.user.companyId]);
+      if (restrictions !== undefined) {
+        await db("DELETE FROM platform_record_type_picklist_values WHERE record_type_id=$1", [current.id]);
+        for (const [fieldId, values] of Object.entries(restrictions || {})) for (const value of values) await db("INSERT INTO platform_record_type_picklist_values (record_type_id,field_id,value) VALUES ($1,$2,$3)", [current.id, fieldId, String(value)]);
+      }
+      res.json({ success: true, data: { ...result.rows[0], picklistRestrictions: restrictions ?? undefined } });
     } catch (error) {
       if (error instanceof ConditionError) return res.status(400).json({ success: false, code: error.code, message: error.message });
       if (error.code === "23505") return res.status(409).json({ success: false, message: "A record type with this key already exists" });
@@ -1341,8 +1379,20 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   });
 
   router.delete("/platform/record-types/:recordTypeId", ...manage, async (req, res) => {
-    const result = await db("UPDATE platform_record_types SET active=false WHERE id=$1 AND company_id=$2 RETURNING *", [req.params.recordTypeId, req.user.companyId]);
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "Record type not found" });
+    const existing = await db("SELECT * FROM platform_record_types WHERE id=$1 AND company_id=$2", [req.params.recordTypeId, req.user.companyId]);
+    const recordType = existing.rows[0];
+    if (!recordType) return res.status(404).json({ success: false, message: "Record type not found" });
+    if (recordType.active === false) return res.json({ success: true, data: recordType });
+    const blockers = await recordTypeDeactivationBlockers(recordType, req);
+    if (blockers.length) {
+      return res.status(409).json({
+        success: false,
+        code: "RECORD_TYPE_IN_USE",
+        message: `Record type cannot be deactivated while it is used by ${blockers.join(", ")}.`,
+        blockers,
+      });
+    }
+    const result = await db("UPDATE platform_record_types SET active=false,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *", [recordType.id, req.user.companyId]);
     res.json({ success: true, data: result.rows[0] });
   });
 
