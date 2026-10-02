@@ -301,6 +301,16 @@ export async function login(username, password) {
    * A fresh password login must not inherit an old bearer token from a
    * previous mobile/browser session.
    */
+  if (mfaChallenge) {
+    return {
+      handled: true,
+      mfaRequired: true,
+      challengeId: mfaChallenge,
+      enrollmentRequired: mfaEnroll === '1',
+      phishingResistantRequired: mfaPhishingResistant === '1',
+    }
+  }
+
   clearCompanyContext()
   sessionStorage.removeItem('onepos_token')
   sessionStorage.removeItem('onepos_user')
@@ -344,7 +354,9 @@ export async function login(username, password) {
     }
   }
 
-  if (!data?.success || !data?.token) throw new Error(data?.message || 'Login failed')
+  if (!data?.success) throw new Error(data?.message || 'Login failed')
+  if (data?.mfaRequired) return data
+  if (!data?.token) throw new Error(data?.message || 'Login failed')
   sessionStorage.setItem('onepos_token', data.token)
 
   let resolvedUser = { ...(data.user || {}), storeId: null }
@@ -396,8 +408,11 @@ export function consumeGoogleOAuthCallback() {
   const params = new URLSearchParams(raw)
   const error = params.get('google_error')
   const token = params.get('google_token')
+  const mfaChallenge = params.get('google_mfa_challenge')
+  const mfaEnroll = params.get('google_mfa_enroll')
+  const mfaPhishingResistant = params.get('google_mfa_phishing_resistant')
 
-  if (!error && !token) return { handled: false }
+  if (!error && !token && !mfaChallenge) return { handled: false }
 
   window.history.replaceState({}, '', window.location.pathname + window.location.search)
 
@@ -430,6 +445,57 @@ export function consumeGoogleOAuthCallback() {
   sessionStorage.setItem('onepos_token', token)
 
   return { handled: true, token }
+}
+
+
+function storeCompletedLogin(data) {
+  if (!data?.success || !data?.token) throw new Error(data?.message || 'Verification failed')
+  clearCompanyContext()
+  sessionStorage.setItem('onepos_token', data.token)
+  if (data.user) sessionStorage.setItem('onepos_user', JSON.stringify(data.user))
+  return data
+}
+
+export async function startTotpEnrollment(challengeId, label = 'Authenticator') {
+  return apiRequest('/api/auth/mfa/totp/start', { method: 'POST', body: JSON.stringify({ challengeId, label }) })
+}
+
+export async function completeTotpEnrollment({ challengeId, methodId, code, trustDevice = false, deviceName = '' }) {
+  const data = await apiRequest('/api/auth/mfa/totp/complete', { method: 'POST', body: JSON.stringify({ challengeId, methodId, code, trustDevice, deviceName }) })
+  if (data?.deviceToken) localStorage.setItem('onepos_trusted_device_token', data.deviceToken)
+  return storeCompletedLogin(data)
+}
+
+export async function verifyMfa({ challengeId, methodId, methodType = 'TOTP', code, trustDevice = false, deviceName = '' }) {
+  const data = await apiRequest('/api/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ challengeId, methodId, methodType, code, trustDevice, deviceName }) })
+  if (data?.token) {
+    if (data?.deviceToken) localStorage.setItem('onepos_trusted_device_token', data.deviceToken)
+    return storeCompletedLogin(data)
+  }
+  return data
+}
+
+export async function startPasskeyRegistration(challengeId) {
+  return apiRequest('/api/auth/mfa/passkey/registration-options', { method: 'POST', body: JSON.stringify({ challengeId }) })
+}
+
+export async function completePasskeyRegistration({ challengeId, credential, label = 'Passkey', trustDevice = false, deviceName = '' }) {
+  const data = await apiRequest('/api/auth/mfa/passkey/registration-verify', { method: 'POST', body: JSON.stringify({ challengeId, credential, label, trustDevice, deviceName }) })
+  if (data?.deviceToken) localStorage.setItem('onepos_trusted_device_token', data.deviceToken)
+  return storeCompletedLogin(data)
+}
+
+export async function getPasskeyOptions(challengeId) {
+  return apiRequest('/api/auth/mfa/passkey/options', { method: 'POST', body: JSON.stringify({ challengeId }) })
+}
+
+export async function verifyPasskey({ challengeId, credential, trustDevice = false, deviceName = '' }) {
+  const data = await apiRequest('/api/auth/mfa/passkey/verify', { method: 'POST', body: JSON.stringify({ challengeId, credential, trustDevice, deviceName }) })
+  if (data?.token) {
+    if (data?.deviceToken) localStorage.setItem('onepos_trusted_device_token', data.deviceToken)
+    return storeCompletedLogin(data)
+  }
+  return data
 }
 
 export async function verifyPin(pin) {
