@@ -3,6 +3,15 @@ import { Eye, EyeOff } from 'lucide-react'
 import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeAuthenticationProviderCallback, consumeGoogleOAuthCallback, getPasskeyOptions, getStoredUser, hasSession, loadAuthenticationProviders, login, startAuthenticationProvider, startGoogleLogin, startPasskeyLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPasskeyLogin, verifyPin } from '../../services/api'
 import { useClock } from './DesktopDock'
 
+function isMobilePasskeyDevice() {
+  if (typeof navigator === 'undefined') return false
+  const ua = String(navigator.userAgent || '')
+  const platform = String(navigator.platform || '')
+  const maxTouchPoints = Number(navigator.maxTouchPoints || 0)
+  return /Android|iPhone|iPad|iPod/i.test(ua)
+    || (platform === 'MacIntel' && maxTouchPoints > 1)
+}
+
 export function CompanyContextLoading() {
   return (
     <main className="screen company-context-loading" role="status" aria-live="polite" aria-label="Setting up your workspace">
@@ -33,6 +42,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const [trustDevice, setTrustDevice] = useState(false)
   const [providers, setProviders] = useState([])
   const [recoveryCodes, setRecoveryCodes] = useState([])
+  const mobilePasskeyDevice = useMemo(() => isMobilePasskeyDevice(), [])
 
   useEffect(() => {
     const providerResult = consumeAuthenticationProviderCallback()
@@ -472,15 +482,19 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
                 </div>
               ) : null}
 
-              <button
-                className="google-signin-button"
-                type="button"
-                onClick={submitPasskeyLogin}
-                disabled={submitting || !username.trim()}
-              >
-                Sign in with passkey
-              </button>
-              <div className="login-passkey-hint">First time? Sign in with your password, then add a passkey from My Profile.</div>
+              {mobilePasskeyDevice ? (
+                <>
+                  <button
+                    className="google-signin-button"
+                    type="button"
+                    onClick={submitPasskeyLogin}
+                    disabled={submitting || !username.trim()}
+                  >
+                    Sign in with passkey
+                  </button>
+                  <div className="login-passkey-hint">Use Face ID, Touch ID or your Android/iPhone passkey.</div>
+                </>
+              ) : null}
 
               <div className="login-divider" aria-hidden="true"><span>or</span></div>
 
