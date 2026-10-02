@@ -455,12 +455,27 @@ export async function ensureActingCompanyContext() {
   localStorage.removeItem('onepos_user')
   sessionStorage.removeItem('onepos.settings.context.v2')
   setStoredSessionPermissions(null)
-  // Refresh canonical identity to discard company values written by older clients.
-  const me = await apiRequest('/api/auth/me')
-  const user = me?.user || {}
+
+  // Restore the authenticated identity and allowed stores in one request.
+  // This keeps refresh/bootstrap fast and avoids serial /auth/me then /stores calls.
+  const bootstrap = await apiRequest('/api/auth/bootstrap', { timeoutMs: 5000, retryGet: false })
+  const user = bootstrap?.user || {}
   const companyId = user.companyId || user.company_id || ''
+  const stores = companyId && Array.isArray(bootstrap?.stores)
+    ? bootstrap.stores.filter((store) => !(store.companyId || store.company_id) || String(store.companyId || store.company_id) === String(companyId))
+    : []
+
   sessionStorage.setItem('onepos_user', JSON.stringify({ ...user, companyId, storeId: null }))
-  await ensureActiveStoreContext().catch(() => { setActiveStoreId('') })
+  sessionStorage.setItem(AVAILABLE_STORES_STORAGE_KEY, JSON.stringify(stores))
+
+  const remembered = localStorage.getItem(ACTIVE_STORE_STORAGE_KEY) || ''
+  const rememberedAllowed = stores.some((store) => String(store.id) === String(remembered))
+  const primary = stores.find((store) => store.is_primary === true)
+  const selected = rememberedAllowed
+    ? remembered
+    : primary?.id || stores[0]?.id || ''
+  setActiveStoreId(selected || '')
+
   return companyId
 }
 
