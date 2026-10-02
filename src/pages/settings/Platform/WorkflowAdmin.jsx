@@ -3513,7 +3513,7 @@ function StepConditionEditor({ value, onChange, objectKey, extraResources = [] }
       </div>
       {(config.rules || []).map((rule, index) => (
         <div className="grid gap-2 md:grid-cols-[1.2fr_0.9fr_1fr_auto]" key={rule.id || index}>
-          <PlatformFieldPicker selectedObjectKey={objectKey} value={rule.field || ""} label="Field" onChange={(field) => {
+          <PlatformFieldPicker objectKey={objectKey} value={rule.field || ""} label="Field" onChange={(field) => {
             const next = [...(config.rules || [])];
             next[index] = { ...rule, field };
             update({ rules: next });
@@ -4118,10 +4118,10 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
         return (
           <div className="space-y-3">
             <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label>
-            <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, choiceLabelField: "", choiceValueField: "id", filters: [], sortField: "" })} />
+            <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly objectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, choiceLabelField: "", choiceValueField: "id", filters: [], sortField: "" })} />
             <div className="grid gap-2 md:grid-cols-2">
-              <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.choiceLabelField || ""} label="Choice Label Field" onChange={(choiceLabelField) => updateConfig({ choiceLabelField })} />
-              <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.choiceValueField || "id"} label="Choice Value Field" onChange={(choiceValueField) => updateConfig({ choiceValueField })} />
+              <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value={step.config?.choiceLabelField || ""} label="Choice Label Field" onChange={(choiceLabelField) => updateConfig({ choiceLabelField })} />
+              <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value={step.config?.choiceValueField || "id"} label="Choice Value Field" onChange={(choiceValueField) => updateConfig({ choiceValueField })} />
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -4134,7 +4134,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <div className="space-y-2">
                 {filters.map((filter, index) => (
                   <div key={filter.id || index} className="grid gap-2 md:grid-cols-[1.1fr_.8fr_1fr_auto]">
-                    <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={filter.field || ""} label={index === 0 ? "Field" : ""} onChange={(field) => {
+                    <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value={filter.field || ""} label={index === 0 ? "Field" : ""} onChange={(field) => {
                       const next = [...filters]; next[index] = { ...filter, field }; updateConfig({ filters: next });
                     }} />
                     <label className="block text-xs font-medium text-slate-600">{index === 0 ? "Operator" : ""}
@@ -4162,7 +4162,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               </div>
             </div>
             <div className="grid gap-2 md:grid-cols-3">
-              <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.sortField || ""} label="Sort Field (optional)" onChange={(sortField) => updateConfig({ sortField })} />
+              <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value={step.config?.sortField || ""} label="Sort Field (optional)" onChange={(sortField) => updateConfig({ sortField })} />
               <label className="block text-xs font-medium text-slate-600">Sort Direction
                 <select className={inputClass} value={step.config?.sortDirection || "asc"} onChange={(event) => updateConfig({ sortDirection: event.target.value })}><option value="asc">Ascending</option><option value="desc">Descending</option></select>
               </label>
@@ -4175,8 +4175,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
         return (
           <div className="space-y-3">
             <label className="block text-xs font-medium text-slate-600">API Name<input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} /></label>
-            <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, fieldApiName: "" })} />
-            <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.fieldApiName || ""} label="Picklist Field" allowedFieldTypes={["picklist","select","multiselect"]} onChange={(fieldApiName) => updateConfig({ fieldApiName })} />
+            <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly objectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, fieldApiName: "" })} />
+            <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value={step.config?.fieldApiName || ""} label="Picklist Field" allowedFieldTypes={["picklist","select","multiselect"]} onChange={(fieldApiName) => updateConfig({ fieldApiName })} />
             <p className="text-[11px] text-slate-500">Only picklist-compatible fields are shown so the runtime and builder cannot disagree.</p>
           </div>
         );
@@ -4478,7 +4478,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                       ) : null}
                       {component.type === "RECORD_PICKER" ? (
                         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                          <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={component.objectKey || ""} onObjectChange={(objectKey) => updateComponent(componentIndex, { objectKey })} />
+                          <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly objectKey={component.objectKey || ""} onObjectChange={(objectKey) => updateComponent(componentIndex, { objectKey })} />
                           <div className="grid gap-2 md:grid-cols-2">
                             <label className="block text-xs font-medium text-slate-600">Minimum characters before search
                               <input className={inputClass} type="number" min="1" max="5" value={Number(component.searchMinChars ?? 2)} onChange={(event) => updateComponent(componentIndex, { searchMinChars: Math.max(1, Math.min(5, Number(event.target.value || 2))) })} />
@@ -4508,7 +4508,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                       ) : null}
                       {component.type === "FILE_UPLOAD" ? (
                         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                          <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={component.fileObjectKey || rootObjectKey || ""} onObjectChange={(fileObjectKey) => updateComponent(componentIndex, { fileObjectKey })} />
+                          <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly objectKey={component.fileObjectKey || rootObjectKey || ""} onObjectChange={(fileObjectKey) => updateComponent(componentIndex, { fileObjectKey })} />
                           <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Target Record Resource (optional)" value={component.fileRecordResource || ""} onChange={(fileRecordResource) => updateComponent(componentIndex, { fileRecordResource })} />
                           <div className="grid gap-2 md:grid-cols-2">
                             <label className="block text-xs font-medium text-slate-600">Accepted file types<input className={inputClass} value={(component.acceptedTypes || []).join(", ")} onChange={(event) => updateComponent(componentIndex, { acceptedTypes: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="image/*, application/pdf" /></label>
@@ -4855,7 +4855,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Object</label>
-              <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, fieldMappings: {} })} />
+              <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly objectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, fieldMappings: {} })} />
             </div>
             <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources} label="Record collection" value={step.config?.recordIds || ""} onChange={(recordIds) => updateConfig({ recordIds })} />
             <div>
@@ -4863,7 +4863,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 {Object.entries(step.config?.fieldMappings || {}).map(([key, value], mappingIndex) => (
                   <div className="grid gap-2 md:grid-cols-2" key={`${key}-${mappingIndex}`}>
-                    <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={key} label="Target field" onChange={(field) => {
+                    <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value={key} label="Target field" onChange={(field) => {
                       const next = { ...(step.config?.fieldMappings || {}) };
                       const currentValue = next[key];
                       delete next[key];
@@ -4960,7 +4960,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Object</label>
-              <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, filters: [], sortField: "" })} />
+              <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectOnly objectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, filters: [], sortField: "" })} />
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -4973,7 +4973,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               <div className="space-y-2">
                 {filters.map((filter, filterIndex) => (
                   <div key={filter.id || filterIndex} className="grid gap-2 md:grid-cols-[1.1fr_.8fr_1fr_auto]">
-                    <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={filter.field || ""} label="Field" onChange={(field) => updateFilter(filterIndex, { field })} />
+                    <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value={filter.field || ""} label="Field" onChange={(field) => updateFilter(filterIndex, { field })} />
                     <select className={inputClass} value={filter.operator || "equals"} onChange={(event) => updateFilter(filterIndex, { operator: event.target.value })}>
                       <option value="equals">Equals</option>
                       <option value="not_equals">Not equal</option>
@@ -5003,7 +5003,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Sort by</label>
-                <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={step.config?.sortField || ""} label="Optional sort field" onChange={(sortField) => updateConfig({ sortField })} />
+                <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value={step.config?.sortField || ""} label="Optional sort field" onChange={(sortField) => updateConfig({ sortField })} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Direction</label>
@@ -5042,7 +5042,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <div className={`grid gap-3 ${needsRecord ? "md:grid-cols-2" : ""}`}>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Object</label>
-                <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector selectedObjectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, fieldMappings: object === step.config?.object ? step.config?.fieldMappings : {} })} />
+                <PlatformFieldPicker scopeKey={scopeKey} includeObjectSelector objectKey={step.config?.object || ""} onObjectChange={(object) => updateConfig({ object, fieldMappings: object === step.config?.object ? step.config?.fieldMappings : {} })} />
               </div>
               {needsRecord ? (
                 <div>
@@ -5057,7 +5057,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                   {Object.entries(step.config?.fieldMappings || {}).map(([key, value], mappingIndex) => (
                     <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]" key={`${key}-${mappingIndex}`}>
-                      <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value={key.startsWith("field_") ? "" : key} label="Target field" onChange={(field) => {
+                      <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value={key.startsWith("field_") ? "" : key} label="Target field" onChange={(field) => {
                         if (!field) return;
                         const next = { ...(step.config?.fieldMappings || {}) };
                         const currentValue = next[key];
@@ -5122,7 +5122,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                   {Object.entries(step.config?.fieldMappings || {}).map(([key, value], mappingIndex) => (
                     <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]" key={`${key}-${mappingIndex}`}>
-                      <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={selectedRelationship?.child_object_key || step.config?.object || ""} value={key.startsWith("field_") ? "" : key} label="Target field" onChange={(field) => {
+                      <PlatformFieldPicker scopeKey={scopeKey} objectKey={selectedRelationship?.child_object_key || step.config?.object || ""} value={key.startsWith("field_") ? "" : key} label="Target field" onChange={(field) => {
                         if (!field) return;
                         const next = { ...(step.config?.fieldMappings || {}) };
                         const currentValue = next[key];
@@ -5270,7 +5270,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Message</label>
               <textarea className={inputClass} value={step.config?.message || ""} onChange={(event) => updateConfig({ message: event.target.value })} rows={3} placeholder="Message text or template" />
-              <PlatformFieldPicker scopeKey={scopeKey} selectedObjectKey={step.config?.object || ""} value="" label="Insert message field" onInsert={(token) => updateConfig({ message: `${step.config?.message || ""}${token}` })} />
+              <PlatformFieldPicker scopeKey={scopeKey} objectKey={step.config?.object || ""} value="" label="Insert message field" onInsert={(token) => updateConfig({ message: `${step.config?.message || ""}${token}` })} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Recipient mapping</label>
@@ -7598,7 +7598,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 scopeKey={scopeKey}
                 includeObjectSelector
                 objectOnly
-                selectedObjectKey={workflow.object || ""}
+                objectKey={workflow.object || ""}
                 onObjectChange={(object) => setWorkflow((current) => ({ ...current, object, conditions: [], match: "all", entryTransition: "EVERY_TIME" }))}
               />
             </div> : null}
