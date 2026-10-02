@@ -99,6 +99,8 @@ export default function ObjectRecordDetail({
   onEdit,
   onBack,
   contextValues = {},
+  canEditProcessPath = false,
+  onProcessStageChange,
 }) {
   const activeFields = useMemo(
     () =>
@@ -165,6 +167,8 @@ export default function ObjectRecordDetail({
             initialValues={record}
             mode="view"
             contextValues={contextValues}
+            canEditProcessPath={canEditProcessPath}
+            onProcessStageChange={onProcessStageChange}
           />
         ) : activeFields.length === 0 ? (
           <div className="platform-record-detail-empty compact">
