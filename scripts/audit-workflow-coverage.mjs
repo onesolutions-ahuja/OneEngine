@@ -104,6 +104,7 @@ const IDENTITY_PROTOCOL_MUTATION_ROUTES = new Set([
   "/auth/mfa/passkey/registration-verify",
   "/auth/mfa/passkey/options",
   "/auth/mfa/passkey/verify",
+  "/auth/provider/:key/callback",
   "/auth/provider/:key/saml/acs",
 ]);
 
