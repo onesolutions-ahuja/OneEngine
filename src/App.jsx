@@ -1714,9 +1714,10 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
 }
 
 function ConnectionMenu({ health, onRefresh }) {
-  const networkOnline = health?.status === 'Connected'
-  const apiOnline = health?.api === 'Connected' || networkOnline
-  const databaseOnline = health?.database === 'Connected'
+  const isConnected = (value) => String(value || '').trim().toLowerCase() === 'connected'
+  const networkOnline = isConnected(health?.status)
+  const apiOnline = isConnected(health?.api) || networkOnline
+  const databaseOnline = isConnected(health?.database)
   const rows = [
     ['Network', networkOnline ? 'Connected' : (health?.status || 'Offline'), networkOnline],
     ['Server / API', apiOnline ? 'Connected' : (health?.api || 'Unavailable'), apiOnline],

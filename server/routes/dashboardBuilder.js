@@ -25,6 +25,8 @@ function customDateRange(filters = []) {
 
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
+  if (operator === "all_time") return { from: null, to: null };
+
   if (operator === "custom") return { from: dateFilter.from || dateFilter.dateFrom || null, to: dateFilter.to || dateFilter.dateTo || null };
 
   if (operator === "today") return { from: iso(start), to: iso(start) };

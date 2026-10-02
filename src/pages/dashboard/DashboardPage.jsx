@@ -222,8 +222,22 @@ export default function DashboardPage({ onOpenBuilder }) {
       if (stores.length === 1) setDashboardStoreId(String(stores[0].id))
       else if (dashboardStoreId && !stores.some((store) => String(store.id) === String(dashboardStoreId))) setDashboardStoreId('')
     }
+    const handleDashboardStoreScopeChange = (event) => {
+      const stores = getAvailableStores()
+      setDashboardStores(stores)
+      const requested = String(event?.detail?.storeId || '')
+      if (stores.length <= 1) {
+        setDashboardStoreId(stores[0]?.id ? String(stores[0].id) : '')
+        return
+      }
+      setDashboardStoreId(requested && stores.some((store) => String(store.id) === requested) ? requested : '')
+    }
     window.addEventListener('onepos:store-context-changed', handleStoreChange)
-    return () => window.removeEventListener('onepos:store-context-changed', handleStoreChange)
+    window.addEventListener('onepos:dashboard-store-scope-changed', handleDashboardStoreScopeChange)
+    return () => {
+      window.removeEventListener('onepos:store-context-changed', handleStoreChange)
+      window.removeEventListener('onepos:dashboard-store-scope-changed', handleDashboardStoreScopeChange)
+    }
   }, [dashboardStoreId])
 
   useEffect(() => {
