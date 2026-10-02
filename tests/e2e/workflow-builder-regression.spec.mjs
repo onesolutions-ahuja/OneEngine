@@ -15,7 +15,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await newWorkflow.click();
 
   await expect(page.getByText("Elements", { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("Resources", { exact: true })).toBeVisible();
+  await expect(page.getByText("Manager", { exact: true })).toBeVisible();
 
   // Unsaved workflows can be Debugged safely, but persisted-test/version controls
   // correctly remain unavailable until the first save.
