@@ -3824,6 +3824,23 @@ ON secure_invoice_links(company_id, created_at DESC);
         ON platform_workflow_screen_sessions(run_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_platform_workflow_screen_sessions_company_status
         ON platform_workflow_screen_sessions(company_id, status, created_at DESC);
+      CREATE TABLE IF NOT EXISTS platform_recommendation_reactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        recommendation_key VARCHAR(255) NOT NULL,
+        reaction VARCHAR(20) NOT NULL CHECK (reaction IN ('ACCEPTED','REJECTED')),
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
+        record_id UUID,
+        workflow_id UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        reacted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_recommendation_reactions_lookup
+        ON platform_recommendation_reactions(company_id,recommendation_key,reaction,reacted_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_platform_recommendation_reactions_user_record
+        ON platform_recommendation_reactions(company_id,user_id,record_id,reacted_at DESC);
       CREATE TABLE IF NOT EXISTS platform_workflow_compensation_runs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         run_id UUID NOT NULL REFERENCES platform_workflow_runs(id) ON DELETE CASCADE,
