@@ -2015,80 +2015,116 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "ASSIGNMENT",
     displayName: "Assignment",
-    description: "Create or update a typed workflow variable without writing to the database.",
+    description: "Set one or more existing flow variables without writing to the database.",
     schema: {
       type: "object",
       properties: {
         variableName: { type: "string" },
         variableType: { type: "string", enum: ["text","number","boolean","date","datetime","record","collection","object"] },
         operator: { type: "string", enum: ["set","add","subtract","append"] },
-        value: { type: "string" },
+        value: {},
+        resourceOnly: { type: "boolean" },
+        assignments: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              variable: { type: "string" },
+              variableType: { type: "string", enum: ["text","number","boolean","date","datetime","record","collection","object"] },
+              operator: { type: "string", enum: ["set","add","subtract","append"] },
+              value: {},
+            },
+          },
+        },
       },
-      required: ["variableName","variableType","operator"],
+      required: [],
     },
     validation: (action) => {
-      if (!action?.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.variableName))) {
-        throw new Error("Assignment requires a valid variable name");
+      const supportedTypes = ["text","number","boolean","date","datetime","record","collection","object"];
+      const supportedOperators = ["set","add","subtract","append"];
+      const rows = Array.isArray(action?.assignments) && action.assignments.length ? action.assignments : null;
+      const validateAssignment = ({ name, type, operator, value }) => {
+        if (!name || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(name))) throw new Error("Assignment requires a valid Variable");
+        if (!supportedTypes.includes(String(type || ""))) throw new Error(`Assignment for "${name}" requires a supported data type`);
+        if (!supportedOperators.includes(String(operator || "set"))) throw new Error(`Assignment for "${name}" requires a supported operator`);
+        if (["add","subtract"].includes(String(operator)) && String(type) !== "number") throw new Error("Add and subtract are only supported for number variables");
+        if (String(operator) === "append" && String(type) !== "collection") throw new Error("Add is only supported for collection variables");
+        if (String(operator || "set") !== "set" && value === undefined) throw new Error(`Assignment for "${name}" requires a value`);
+      };
+      if (rows) {
+        for (const row of rows) {
+          const variable = String(row?.variable || "");
+          const name = variable.startsWith("variables.") ? variable.slice("variables.".length) : "";
+          validateAssignment({ name, type: row?.variableType || "text", operator: row?.operator || "set", value: row?.value });
+        }
+        return;
       }
-      if (!["text","number","boolean","date","datetime","record","collection","object"].includes(String(action.variableType || ""))) {
-        throw new Error("Assignment requires a supported variable type");
-      }
-      if (!["set","add","subtract","append"].includes(String(action.operator || "set"))) {
-        throw new Error("Assignment requires a supported operator");
-      }
-      const assignmentType = String(action.variableType || "");
-      const assignmentOperator = String(action.operator || "set");
-      if (["add","subtract"].includes(assignmentOperator) && assignmentType !== "number") {
-        throw new Error("Add and subtract are only supported for number variables");
-      }
-      if (assignmentOperator === "append" && assignmentType !== "collection") {
-        throw new Error("Append is only supported for collection variables");
-      }
-      if (assignmentOperator !== "set" && action.value === undefined) {
-        throw new Error("Assignment requires a value");
-      }
+      validateAssignment({
+        name: action?.variableName,
+        type: action?.variableType,
+        operator: action?.operator || "set",
+        value: action?.value,
+      });
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
       if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
-      const name = String(action.variableName);
-      const type = String(action.variableType || "text");
-      const operator = String(action.operator || "set");
-      const raw = resolveConfiguredResource(action.value, { record, previousRecord, req, object, workflowVariables });
+      const rows = Array.isArray(action?.assignments) && action.assignments.length
+        ? action.assignments.map((row) => ({
+            name: String(row?.variable || "").replace(/^variables\./, ""),
+            type: String(row?.variableType || "text"),
+            operator: String(row?.operator || "set"),
+            value: row?.value,
+          }))
+        : [{
+            name: String(action.variableName || ""),
+            type: String(action.variableType || "text"),
+            operator: String(action.operator || "set"),
+            value: action.value,
+          }];
 
-      const coerce = (value) => {
-        if (value == null) return value;
-        if (type === "number") {
-          const numeric = Number(value);
-          if (!Number.isFinite(numeric)) throw new Error(`Assignment variable "${name}" requires a numeric value`);
-          return numeric;
-        }
-        if (type === "boolean") {
-          if (typeof value === "boolean") return value;
-          if (["true","1",1].includes(value)) return true;
-          if (["false","0",0].includes(value)) return false;
-          throw new Error(`Assignment variable "${name}" requires a boolean value`);
-        }
-        if (type === "collection") return Array.isArray(value) ? value : (value == null ? [] : [value]);
-        if (type === "object" || type === "record") {
-          if (typeof value === "object") return value;
+      const assignOne = (row) => {
+        const { name, type, operator } = row;
+        const raw = resolveConfiguredResource(row.value, { record, previousRecord, req, object, workflowVariables });
+        const coerce = (value) => {
+          if (value == null) return value;
+          if (type === "number") {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) throw new Error(`Assignment variable "${name}" requires a numeric value`);
+            return numeric;
+          }
+          if (type === "boolean") {
+            if (typeof value === "boolean") return value;
+            if (["true","1",1].includes(value)) return true;
+            if (["false","0",0].includes(value)) return false;
+            throw new Error(`Assignment variable "${name}" requires a boolean value`);
+          }
+          if (type === "collection") return Array.isArray(value) ? value : (value == null ? [] : [value]);
           return value;
+        };
+        const incoming = coerce(raw);
+        const current = workflowVariables.variables[name];
+        let next = incoming;
+        if (operator === "add") next = Number(current || 0) + Number(incoming || 0);
+        else if (operator === "subtract") next = Number(current || 0) - Number(incoming || 0);
+        else if (operator === "append") {
+          const base = Array.isArray(current) ? current : (current == null ? [] : [current]);
+          next = [...base, ...(Array.isArray(incoming) ? incoming : [incoming])];
         }
-        return value;
+        workflowVariables.variables[name] = next;
+        return { variableName: name, variableType: type, operator, value: next };
       };
 
-      const incoming = coerce(raw);
-      const current = workflowVariables.variables[name];
-      let next = incoming;
-      if (operator === "add") next = Number(current || 0) + Number(incoming || 0);
-      else if (operator === "subtract") next = Number(current || 0) - Number(incoming || 0);
-      else if (operator === "append") {
-        const base = Array.isArray(current) ? current : (current == null ? [] : [current]);
-        next = [...base, ...(Array.isArray(incoming) ? incoming : [incoming])];
-      }
-      workflowVariables.variables[name] = next;
-      return { status: "completed", variableName: name, variableType: type, value: next };
+      const results = rows.map(assignOne);
+      const last = results[results.length - 1] || null;
+      return {
+        status: "completed",
+        assignments: results,
+        variableName: results.length === 1 ? last?.variableName : null,
+        variableType: results.length === 1 ? last?.variableType : null,
+        value: last?.value,
+      };
     },
   },
   {
