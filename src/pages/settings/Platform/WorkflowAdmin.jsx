@@ -2153,6 +2153,180 @@ const WORKFLOW_VISUAL_CSS = `
     z-index: 2 !important;
   }
 
+
+  /* FlowPattern canvas pass — presentation only. Keep palette, properties and workflow semantics unchanged. */
+  .workflow-builder-page {
+    --wf-flow-canvas: #344054;
+    --wf-flow-dot: rgba(255,255,255,.16);
+    --wf-flow-edge: rgba(226,232,240,.82);
+    --wf-flow-card: #ffffff;
+    --wf-flow-card-border: #dbe3ed;
+  }
+  .workflow-canvas-surface {
+    background-color: var(--wf-flow-canvas) !important;
+    background-image: radial-gradient(circle, var(--wf-flow-dot) 1px, transparent 1.2px) !important;
+    background-size: 18px 18px !important;
+  }
+  .workflow-canvas-toolbar button,
+  .workflow-layout-toggle,
+  .workflow-canvas-zoom,
+  .workflow-canvas-more > summary {
+    backdrop-filter: blur(10px);
+  }
+  .workflow-canvas-lane {
+    margin-top: 42px !important;
+  }
+  .workflow-start-node,
+  .workflow-node-card,
+  .workflow-decision-map .workflow-branch-node-card,
+  .workflow-branch-node-card.workflow-canvas-component-card {
+    border: 1px solid var(--wf-flow-card-border) !important;
+    border-radius: 12px !important;
+    background: var(--wf-flow-card) !important;
+    box-shadow: 0 3px 12px rgba(15,23,42,.20) !important;
+  }
+  .workflow-start-node:hover,
+  .workflow-node-card:hover,
+  .workflow-decision-map .workflow-branch-node-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 20px rgba(15,23,42,.24) !important;
+  }
+  .workflow-start-node,
+  .workflow-node-card {
+    width: 240px !important;
+    min-width: 240px !important;
+    max-width: 240px !important;
+    min-height: 68px !important;
+  }
+  .workflow-stage,
+  .workflow-node-wrap {
+    width: 240px !important;
+    max-width: 240px !important;
+  }
+  .workflow-node-card {
+    padding: 11px 34px 11px 54px !important;
+  }
+  .workflow-node-icon,
+  .workflow-start-icon {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+  }
+  .workflow-node-title,
+  .workflow-start-title {
+    font-size: 13px !important;
+    font-weight: 700 !important;
+  }
+  .workflow-node-kind {
+    font-size: 8px !important;
+  }
+  .workflow-node-note,
+  .workflow-start-note {
+    font-size: 9px !important;
+  }
+
+  @keyframes workflow-flow-march {
+    from { background-position: 0 0; }
+    to { background-position: 0 18px; }
+  }
+  @keyframes workflow-flow-stroke {
+    to { stroke-dashoffset: -26; }
+  }
+
+  .workflow-node-connector {
+    position: relative !important;
+    width: 2px !important;
+    height: 62px !important;
+    background: repeating-linear-gradient(
+      to bottom,
+      var(--wf-flow-edge) 0 7px,
+      transparent 7px 13px
+    ) !important;
+    background-size: 2px 18px !important;
+    animation: workflow-flow-march .7s linear infinite !important;
+  }
+  .workflow-node-connector::before,
+  .workflow-node-connector::after {
+    display: none !important;
+  }
+  .workflow-insert-button {
+    left: 50% !important;
+    top: 0 !important;
+    width: 24px !important;
+    height: 24px !important;
+    transform: translate(-50%, -50%) !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 999px !important;
+    background: #fff !important;
+    color: #334155 !important;
+    box-shadow: 0 2px 7px rgba(15,23,42,.18) !important;
+    font-size: 16px !important;
+    z-index: 8 !important;
+  }
+  .workflow-insert-button:hover {
+    border-color: #94a3b8 !important;
+    background: #f8fafc !important;
+  }
+  .workflow-connector-label {
+    color: rgba(248,250,252,.88) !important;
+    background: rgba(30,41,59,.88) !important;
+    border-color: rgba(255,255,255,.16) !important;
+  }
+
+  .workflow-decision-connectors {
+    overflow: visible !important;
+  }
+  .workflow-decision-connector-path {
+    fill: none !important;
+    stroke: var(--wf-flow-edge) !important;
+    stroke-width: 1.8 !important;
+    stroke-dasharray: 7 6 !important;
+    animation: workflow-flow-stroke .7s linear infinite !important;
+  }
+  .workflow-decision-stem,
+  .workflow-decision-rail,
+  .workflow-decision-map .workflow-branch-line,
+  .workflow-decision-map .workflow-branch-merge-line {
+    background: repeating-linear-gradient(
+      to bottom,
+      var(--wf-flow-edge) 0 7px,
+      transparent 7px 13px
+    ) !important;
+    background-size: 2px 18px !important;
+    animation: workflow-flow-march .7s linear infinite !important;
+  }
+  .workflow-decision-rail {
+    background: repeating-linear-gradient(
+      to right,
+      var(--wf-flow-edge) 0 7px,
+      transparent 7px 13px
+    ) !important;
+    background-size: 18px 2px !important;
+  }
+  .workflow-branch-label,
+  .workflow-branch-label-input {
+    color: #f8fafc !important;
+  }
+  .workflow-decision-map .workflow-branch-path:first-child .workflow-branch-label,
+  .workflow-decision-map .workflow-branch-path:first-child .workflow-branch-label-input {
+    color: #dcfce7 !important;
+  }
+  .workflow-end-node {
+    border-color: rgba(255,255,255,.30) !important;
+    background: rgba(255,255,255,.96) !important;
+    box-shadow: 0 3px 12px rgba(15,23,42,.20) !important;
+  }
+
+  @media (max-width: 1180px) {
+    .workflow-start-node,
+    .workflow-node-card,
+    .workflow-stage,
+    .workflow-node-wrap {
+      width: 220px !important;
+      min-width: 220px !important;
+      max-width: 220px !important;
+    }
+  }
 `;
 
 const SCREEN_COMPONENT_TYPES = [
