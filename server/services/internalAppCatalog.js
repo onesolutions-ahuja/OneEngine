@@ -686,9 +686,9 @@ const CATALOG = [
         { key: "connector.test", requiredPermissions: ["integration.manage"] }
       ],
       configurationSchema: [
-        { key: "fromEmail", type: "string", required: true, label: "Verified sender email", description: "Sender address verified in Brevo." },
+        { key: "fromEmail", type: "string", required: true, label: "Verified sender email", description: "Use a sender address already verified in Brevo.", helpUrl: "https://app.brevo.com/senders/list", helpLabel: "Open Brevo sender settings" },
         { key: "fromName", type: "string", label: "Sender name" },
-        { key: "apiKey", type: "secret", required: true, label: "Brevo API key" }
+        { key: "apiKey", type: "secret", required: true, label: "Brevo API key", description: "Get this from Brevo > Settings > SMTP & API > API Keys.", helpUrl: "https://app.brevo.com/settings/keys/api", helpLabel: "Open Brevo API keys" }
       ],
     },
   },
@@ -732,10 +732,10 @@ const CATALOG = [
         { key: "connector.test", requiredPermissions: ["integration.manage"] }
       ],
       configurationSchema: [
-        { key: "fromEmail", type: "string", required: true, label: "Verified sender email", description: "Sender address validated in Mailjet." },
+        { key: "fromEmail", type: "string", required: true, label: "Verified sender email", description: "Use a sender address already validated in Mailjet.", helpUrl: "https://app.mailjet.com/account/sender", helpLabel: "Open Mailjet sender settings" },
         { key: "fromName", type: "string", label: "Sender name" },
-        { key: "apiKey", type: "secret", required: true, label: "Mailjet API key" },
-        { key: "secretKey", type: "secret", required: true, label: "Mailjet secret key" }
+        { key: "apiKey", type: "secret", required: true, label: "Mailjet API key", description: "Get this from Mailjet Account Settings > API Key Management.", helpUrl: "https://app.mailjet.com/account/apikeys", helpLabel: "Open Mailjet API keys" },
+        { key: "secretKey", type: "secret", required: true, label: "Mailjet secret key", description: "Use the secret key paired with the selected Mailjet API key.", helpUrl: "https://app.mailjet.com/account/apikeys", helpLabel: "Open Mailjet API keys" }
       ],
     },
   },
