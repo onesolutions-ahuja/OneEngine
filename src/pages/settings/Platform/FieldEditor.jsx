@@ -5,6 +5,14 @@ import { toSafeApiName, withGeneratedApiName } from "./safeApiName.js";
 
 const FIELD_TYPES = [
   { value: "text", label: "Text" },
+  { value: "long_text", label: "Long Text" },
+  { value: "rich_text", label: "Rich Text" },
+  { value: "url", label: "URL" },
+  { value: "time", label: "Time" },
+  { value: "percent", label: "Percent" },
+  { value: "auto_number", label: "Auto Number" },
+  { value: "address", label: "Address" },
+  { value: "location", label: "Location" },
   { value: "number", label: "Number" },
   { value: "decimal", label: "Decimal" },
   { value: "currency", label: "Currency" },
@@ -71,6 +79,10 @@ export default function FieldEditor({
       ruleKey: field?.config?.duplicateMatching?.ruleKey || "",
       matchMode: field?.config?.duplicateMatching?.matchMode || "ANY",
     },
+    autoNumberPrefix: field?.config?.prefix || "",
+    autoNumberSuffix: field?.config?.suffix || "",
+    autoNumberStart: Number(field?.config?.start ?? field?.config?.startNumber ?? 1),
+    autoNumberPadding: Number(field?.config?.padding ?? 0),
     options: Array.isArray(field?.options) ? field.options : [],
   });
 
@@ -296,9 +308,9 @@ export default function FieldEditor({
         apiName: form.apiName,
         fieldType: form.field_type,
         sourceColumn: ["formula", "rollup"].includes(form.field_type) ? null : form.sourceColumn || null,
-        required: ["formula", "rollup"].includes(form.field_type) ? false : Boolean(form.required),
+        required: ["formula", "rollup", "auto_number"].includes(form.field_type) ? false : Boolean(form.required),
         readable: form.readable !== false,
-        writable: ["formula", "rollup"].includes(form.field_type) ? false : form.writable !== false,
+        writable: ["formula", "rollup", "auto_number"].includes(form.field_type) ? false : form.writable !== false,
         ...(form.field_type === "formula" ? { writable: false, config: { ...(field?.config || {}), expression: form.expression, resultType: form.resultType } } : {}),
         active: form.active !== false,
         description: form.description || "",
@@ -315,6 +327,12 @@ export default function FieldEditor({
           ...(form.field_type === "lookup" ? {
             relationshipKey: form.lookupRelationshipKey || null,
             relatedObjectKey: form.lookupRelatedObjectKey || null,
+          } : {}),
+          ...(form.field_type === "auto_number" ? {
+            prefix: form.autoNumberPrefix || "",
+            suffix: form.autoNumberSuffix || "",
+            start: Math.max(1, Number(form.autoNumberStart || 1)),
+            padding: Math.max(0, Math.min(20, Number(form.autoNumberPadding || 0))),
           } : {}),
           ...(!["formula", "rollup"].includes(form.field_type) ? { duplicateMatching: form.duplicateMatching } : {}),
           ...(form.visibilityCondition ? { visibilityCondition: form.visibilityCondition } : {}),
@@ -449,7 +467,7 @@ export default function FieldEditor({
             </select>
           </label>
 
-          {form.field_type !== "formula" && <label>
+          {!["formula", "rollup"].includes(form.field_type) && <label>
             <span>Existing Database Column</span>
             <input
               type="text"
@@ -599,6 +617,17 @@ export default function FieldEditor({
             </fieldset>
           ) : null}
 
+          {form.field_type === "auto_number" ? (
+            <fieldset className="platform-field-editor-wide">
+              <legend>Auto Number</legend>
+              <label><span>Prefix</span><input value={form.autoNumberPrefix || ""} onChange={(event) => update("autoNumberPrefix", event.target.value)} placeholder="ORD-" /></label>
+              <label><span>Start at</span><input type="number" min="1" value={form.autoNumberStart || 1} onChange={(event) => update("autoNumberStart", Number(event.target.value || 1))} /></label>
+              <label><span>Minimum digits</span><input type="number" min="0" max="20" value={form.autoNumberPadding || 0} onChange={(event) => update("autoNumberPadding", Number(event.target.value || 0))} /></label>
+              <label><span>Suffix</span><input value={form.autoNumberSuffix || ""} onChange={(event) => update("autoNumberSuffix", event.target.value)} placeholder="" /></label>
+              <small>Generated atomically when a record is created. Users and imports cannot override this field.</small>
+            </fieldset>
+          ) : null}
+
           {form.field_type === "lookup" ? (
             <fieldset className="platform-field-editor-wide">
               <legend>Relationship target</legend>
@@ -719,8 +748,8 @@ export default function FieldEditor({
             <label className="platform-checkbox">
               <input
                 type="checkbox"
-                checked={!["formula", "rollup"].includes(form.field_type) && Boolean(form.required)}
-                disabled={["formula", "rollup"].includes(form.field_type)}
+                checked={!["formula", "rollup", "auto_number"].includes(form.field_type) && Boolean(form.required)}
+                disabled={["formula", "rollup", "auto_number"].includes(form.field_type)}
                 onChange={(event) =>
                   update(
                     "required",
@@ -751,8 +780,8 @@ export default function FieldEditor({
             <label className="platform-checkbox">
               <input
                 type="checkbox"
-                checked={!["formula", "rollup"].includes(form.field_type) && form.writable !== false}
-                disabled={["formula", "rollup"].includes(form.field_type)}
+                checked={!["formula", "rollup", "auto_number"].includes(form.field_type) && form.writable !== false}
+                disabled={["formula", "rollup", "auto_number"].includes(form.field_type)}
                 onChange={(event) => update("writable", event.target.checked)}
               />
               <span>
