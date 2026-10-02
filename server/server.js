@@ -81,7 +81,7 @@ import createIdentitySecurityRouter from "./routes/identitySecurity.js";
 import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
-import { assuranceSatisfies, createPendingChallenge, listMfaMethods, loadEffectiveAssurance } from "./services/identityAssurance.js";
+import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, listMfaMethods, loadEffectiveAssurance, stepUpRequired } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
 import createOwnDeliveryRouter from "./routes/ownDelivery.js";
@@ -459,6 +459,17 @@ const createToken = createSessionToken;
 const baseAuthenticate = createAuthenticate({
   onAuthenticated: createAuthenticatedDatabaseMiddleware({ router: tenantDatabaseRouter, pool }),
 });
+function sensitiveResourceKey(req) {
+  const method = String(req.method || "GET").toUpperCase();
+  const path = String(req.originalUrl || req.path || "");
+  if (method === "GET") return null;
+  if (/\/api\/security\/(settings|assurance|policies|auth-providers|step-up)/.test(path)) return "SECURITY_CONFIGURATION";
+  if (/\/api\/platform\/deployments|\/api\/app-releases/.test(path)) return "DEPLOYMENT_ADMIN";
+  if (/\/api\/platform\/security/.test(path)) return "ACCESS_CONTROL_ADMIN";
+  if (/\/api\/admin\/users/.test(path)) return "USER_ADMIN";
+  return null;
+}
+
 const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error) => {
   if (error) return next(error);
   try {
@@ -470,6 +481,17 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
         code: securityDecision.code || "SECURITY_POLICY_BLOCKED",
         message: securityDecision.reason || "Access denied by security policy",
       });
+    }
+    req.authSession = securityDecision.session || null;
+    const resourceKey = sensitiveResourceKey(req);
+    if (resourceKey && req.user?.companyId && req.user?.sid) {
+      const policy = await effectiveStepUpPolicy(db, { companyId: req.user.companyId, resourceKey });
+      if (policy?.action === "BLOCK") {
+        return res.status(403).json({ success: false, code: "RESOURCE_BLOCKED", resourceKey, message: "This operation is blocked by security policy" });
+      }
+      if (policy && stepUpRequired({ session: req.authSession, policy, defaultMinutes: 15 })) {
+        return res.status(428).json({ success: false, code: "STEP_UP_REQUIRED", resourceKey, message: "Additional identity verification is required for this operation" });
+      }
     }
     const requestedStoreId = String(req.headers?.["x-store-id"] || "").trim();
     if (requestedStoreId) {
