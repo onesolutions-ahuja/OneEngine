@@ -5001,6 +5001,16 @@ export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definit
 // temporal dead zone during startup.
 export { PLATFORM_FUNCTIONS as REGISTERED_FUNCTIONS, PLATFORM_FUNCTION_MAP as REGISTERED_FUNCTIONS_MAP } from "./platformFunctionRegistry.js";
 
+export async function executeMediatedRegisteredAction({ db, companyId, userId = null, req = null, action }) {
+  return executeRegisteredAction({
+    db,
+    companyId,
+    userId,
+    req: req || { user: { id: userId, companyId } },
+    action,
+  });
+}
+
 export function getWorkflowActionRegistry() {
   return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
 }
