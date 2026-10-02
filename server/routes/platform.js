@@ -270,29 +270,6 @@ async function canManageGlobal(db, req) {
     || permissionSetAllowsSystemPermission(permissionSets, "oneengine.manage");
 }
 
-async function hasPlatformObjectPermission(db, req, objectId, action) {
-  if (!objectId) return false;
-  if (!req.user?.companyId) return false;
-  if (!req.user?.roleId) return false;
-  const [result, permissionSets] = await Promise.all([
-    db("SELECT can_view, can_create, can_edit, can_delete, can_import, can_export FROM platform_object_permissions WHERE object_id=$1 AND role_id=$2 AND company_id=$3", [objectId, req.user.roleId, req.user.companyId]),
-    loadEffectivePermissionSets(db, req.user, req),
-  ]);
-  if (result.rows[0]?.[`can_${action}`] === true) return true;
-  const objectResult = await db("SELECT object_key,source_table FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [objectId, req.user.companyId]);
-  const object = objectResult.rows[0];
-  if (permissionSetAllowsObject(permissionSets, object?.object_key, action)) return true;
-  const permission = systemObjectRbacPermission(object, action);
-  if (!permission) return false;
-  if (permissionSetAllowsSystemPermission(permissionSets, permission)) return true;
-  const rolePermission = await db(
-    `SELECT 1 FROM roles r JOIN role_permissions rp ON rp.role_id=r.id JOIN permissions p ON p.id=rp.permission_id
-      WHERE r.id=$1 AND (r.company_id IS NULL OR r.company_id=$2) AND p.code=$3 LIMIT 1`,
-    [req.user.roleId, req.user.companyId, permission]
-  );
-  return rolePermission.rows.length > 0;
-}
-
 async function activeFieldReferences(db, field, companyId) {
   const references = new Set();
   const needles = [...new Set([field.api_name, field.source_column, String(field.id)].filter(Boolean))];
