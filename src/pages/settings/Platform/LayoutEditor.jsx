@@ -668,6 +668,170 @@ export default function LayoutEditor({
     setAssignmentsTouched(true);
   }
 
+  function renderVisibilityEditor({ value, onChange, editorKey, excludeFieldKey = "" }) {
+    const configured = value?.conditions?.length ? value : null;
+    const firstField = fields.find((candidate) => getFieldKey(candidate) !== excludeFieldKey);
+    const fallback = {
+      source: "field",
+      field: firstField ? getFieldKey(firstField) : "",
+      operator: "equals",
+      value: "",
+    };
+    const working = configured?.conditions?.length ? configured.conditions : [fallback];
+    const open = conditionFor === editorKey;
+
+    const replaceCondition = (conditionIndex, patch) => {
+      const next = working.map((item, itemIndex) => itemIndex === conditionIndex ? { ...item, ...patch } : item);
+      onChange({ match: value?.match || "all", conditions: next });
+    };
+
+    const valueControl = (condition, conditionIndex) => {
+      if (["is_empty", "is_not_empty"].includes(condition.operator)) return null;
+      const source = String(condition.source || "field");
+      if (source === "permission") {
+        return (
+          <select className="onepos-input" value={condition.value ?? ""} onChange={(event) => replaceCondition(conditionIndex, { value: event.target.value })}>
+            <option value="">Select permission</option>
+            {permissionCatalog.map((permission) => <option key={permission} value={permission}>{permission}</option>)}
+          </select>
+        );
+      }
+      if (source === "role") {
+        return (
+          <select className="onepos-input" value={condition.value ?? ""} onChange={(event) => replaceCondition(conditionIndex, { value: event.target.value })}>
+            <option value="">Select role</option>
+            {availableRoles.map((role) => {
+              const id = getId(role);
+              return <option key={id} value={id}>{role?.name || role?.label || `Role ${id}`}</option>;
+            })}
+          </select>
+        );
+      }
+      if (source === "device") {
+        return (
+          <select className="onepos-input" value={condition.value ?? ""} onChange={(event) => replaceCondition(conditionIndex, { value: event.target.value })}>
+            <option value="">Select device</option>
+            <option value="desktop">Desktop</option>
+            <option value="tablet">Tablet</option>
+            <option value="mobile">Mobile</option>
+          </select>
+        );
+      }
+      if (source === "record_type") {
+        return (
+          <select className="onepos-input" value={condition.value ?? ""} onChange={(event) => replaceCondition(conditionIndex, { value: event.target.value })}>
+            <option value="">Select record type</option>
+            {recordTypes.map((recordType) => <option key={recordType.id} value={recordType.id}>{recordType.label}</option>)}
+          </select>
+        );
+      }
+      if (source === "company") {
+        return (
+          <select className="onepos-input" value={condition.value ?? ""} onChange={(event) => replaceCondition(conditionIndex, { value: event.target.value })}>
+            <option value="">Select company</option>
+            {availableCompanies.map((company) => {
+              const id = getId(company);
+              return <option key={id} value={id}>{company?.name || company?.label || `Company ${id}`}</option>;
+            })}
+          </select>
+        );
+      }
+      return (
+        <input
+          type="text"
+          className="onepos-input"
+          value={condition.value ?? ""}
+          placeholder={source === "entitlement" ? "Entitlement key" : "Value"}
+          onChange={(event) => replaceCondition(conditionIndex, { value: event.target.value })}
+        />
+      );
+    };
+
+    return (
+      <>
+        <div className="pfb-readonly">
+          <span>Visibility Condition</span>
+          <button type="button" className="pfb-link" onClick={() => setConditionFor(open ? "" : editorKey)}>
+            {open ? "Close" : configured ? "Edit" : "Configure"}
+          </button>
+        </div>
+        {open ? (
+          <div className="pfb-cond">
+            <label className="pfb-field">
+              <span className="pfb-field-label">Match</span>
+              <select className="onepos-input" value={value?.match || "all"} onChange={(event) => onChange({ match: event.target.value, conditions: working })}>
+                <option value="all">All conditions</option>
+                <option value="any">Any condition</option>
+              </select>
+            </label>
+            {working.map((condition, conditionIndex) => {
+              const source = String(condition.source || "field");
+              const contextSource = source !== "field";
+              const operators = contextSource
+                ? ["equals", "not_equals", "is_empty", "is_not_empty"]
+                : CONDITION_OPERATORS;
+              return (
+                <div className="pfb-cond-row" key={`${editorKey}-condition-${conditionIndex}`}>
+                  <select
+                    className="onepos-input"
+                    value={source}
+                    onChange={(event) => {
+                      const nextSource = event.target.value;
+                      replaceCondition(conditionIndex, {
+                        source: nextSource,
+                        field: ["field", "object_state"].includes(nextSource) ? (condition.field || (firstField ? getFieldKey(firstField) : "")) : "",
+                        operator: "equals",
+                        value: "",
+                      });
+                    }}
+                  >
+                    <option value="field">Record field</option>
+                    <option value="permission">Permission</option>
+                    <option value="role">Role</option>
+                    <option value="device">Device</option>
+                    <option value="entitlement">Entitlement</option>
+                    <option value="record_type">Record type</option>
+                    <option value="object_state">Object state</option>
+                    <option value="company">Company</option>
+                  </select>
+                  {["field", "object_state"].includes(source) ? (
+                    <select className="onepos-input" value={condition.field || ""} onChange={(event) => replaceCondition(conditionIndex, { field: event.target.value })}>
+                      <option value="">Select field</option>
+                      {fields.filter((candidate) => getFieldKey(candidate) !== excludeFieldKey).map((candidate) => (
+                        <option key={getFieldKey(candidate)} value={getFieldKey(candidate)}>{getFieldName(candidate)}</option>
+                      ))}
+                    </select>
+                  ) : null}
+                  <select className="onepos-input" value={condition.operator || "equals"} onChange={(event) => replaceCondition(conditionIndex, { operator: event.target.value })}>
+                    {operators.map((operator) => <option key={operator} value={operator}>{operator.replaceAll("_", " ")}</option>)}
+                  </select>
+                  {valueControl(condition, conditionIndex)}
+                  <button
+                    type="button"
+                    className="pfb-link"
+                    onClick={() => {
+                      const next = working.filter((_, itemIndex) => itemIndex !== conditionIndex);
+                      onChange(next.length ? { match: value?.match || "all", conditions: next } : null);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              className="onepos-btn onepos-btn-sm onepos-btn-secondary"
+              onClick={() => onChange({ match: value?.match || "all", conditions: [...working, fallback] })}
+            >
+              <Plus size={12} aria-hidden="true" /> Condition
+            </button>
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
   async function saveLayout(event) {
     event.preventDefault();
 
@@ -1289,6 +1453,11 @@ export default function LayoutEditor({
           />
           <span>Visible</span>
         </label>
+        {renderVisibilityEditor({
+          value: section.visibilityCondition || null,
+          onChange: (next) => updateSection(index, "visibilityCondition", next),
+          editorKey: `section:${section.id}`,
+        })}
         <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={() => setPickerSectionId(section.id)}>
           <Plus size={12} aria-hidden="true" /> Add to section
         </button>
@@ -1354,88 +1523,12 @@ export default function LayoutEditor({
             <span>Visible</span>
           </label>
         </div>
-        <div className="pfb-readonly">
-          <span>Visibility Condition</span>
-          <button
-            type="button"
-            className="pfb-link"
-            onClick={() => setConditionFor(editorOpen ? "" : componentKey(component, index))}
-          >
-            {editorOpen ? "Close" : conditions ? "Edit" : "Configure"}
-          </button>
-        </div>
-        {editorOpen ? (
-          <div className="pfb-cond">
-            <label className="pfb-field">
-              <span className="pfb-field-label">Match</span>
-              <select
-                className="onepos-input"
-                value={component.visibilityCondition?.match || "all"}
-                onChange={(event) => updateCondition(index, { match: event.target.value, conditions: working })}
-              >
-                <option value="all">All conditions</option>
-                <option value="any">Any condition</option>
-              </select>
-            </label>
-            {working.map((condition, conditionIndex) => (
-              <div className="pfb-cond-row" key={`condition-${conditionIndex}`}>
-                <select
-                  className="onepos-input"
-                  value={condition.field || ""}
-                  onChange={(event) => updateCondition(index, {
-                    match: component.visibilityCondition?.match || "all",
-                    conditions: working.map((item, itemIndex) => itemIndex === conditionIndex ? { ...item, field: event.target.value } : item),
-                  })}
-                >
-                  <option value="">Select field</option>
-                  {fields.filter((candidate) => getFieldKey(candidate) !== component.field_key).map((candidate) => (
-                    <option key={getFieldKey(candidate)} value={getFieldKey(candidate)}>{getFieldName(candidate)}</option>
-                  ))}
-                </select>
-                <select
-                  className="onepos-input"
-                  value={condition.operator || "equals"}
-                  onChange={(event) => updateCondition(index, {
-                    match: component.visibilityCondition?.match || "all",
-                    conditions: working.map((item, itemIndex) => itemIndex === conditionIndex ? { ...item, operator: event.target.value } : item),
-                  })}
-                >
-                  {CONDITION_OPERATORS.map((operator) => (
-                    <option key={operator} value={operator}>{operator.replaceAll("_", " ")}</option>
-                  ))}
-                </select>
-                {!["is_empty", "is_not_empty"].includes(condition.operator) ? (
-                  <input
-                    type="text"
-                    className="onepos-input"
-                    value={condition.value ?? ""}
-                    onChange={(event) => updateCondition(index, {
-                      match: component.visibilityCondition?.match || "all",
-                      conditions: working.map((item, itemIndex) => itemIndex === conditionIndex ? { ...item, value: event.target.value } : item),
-                    })}
-                  />
-                ) : null}
-                <button
-                  type="button"
-                  className="pfb-link"
-                  onClick={() => updateCondition(index, {
-                    match: component.visibilityCondition?.match || "all",
-                    conditions: working.filter((_, itemIndex) => itemIndex !== conditionIndex),
-                  })}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="onepos-btn onepos-btn-sm onepos-btn-secondary"
-              onClick={() => updateCondition(index, { match: component.visibilityCondition?.match || "all", conditions: [...working, fallback] })}
-            >
-              <Plus size={12} aria-hidden="true" /> Condition
-            </button>
-          </div>
-        ) : null}
+        {renderVisibilityEditor({
+          value: component.visibilityCondition || null,
+          onChange: (next) => updateCondition(index, next),
+          editorKey: componentKey(component, index),
+          excludeFieldKey: component.field_key || "",
+        })}
         <div className="pfb-readonly">
           <span>Field Security</span>
           <button
@@ -1685,6 +1778,11 @@ export default function LayoutEditor({
           {component.type === "action" ? renderActionProperties(component, index) : null}
           {component.type === "button" ? renderButtonProperties(component, index) : null}
           {["header", "text", "divider", "spacer"].includes(component.type) ? renderContentProperties(component, index) : null}
+          {component.type !== "field" ? renderVisibilityEditor({
+            value: component.visibilityCondition || null,
+            onChange: (next) => updateCondition(index, next),
+            editorKey: componentKey(component, index),
+          }) : null}
         </div>
       </div>
     );
