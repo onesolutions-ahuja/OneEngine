@@ -273,6 +273,20 @@ export default function LayoutEditor({
       setAssignmentsTouched(false);
       return;
     }
+    const draftAssignments = Array.isArray(savedLayout?.draft_assignments) ? savedLayout.draft_assignments : null;
+    if (draftAssignments) {
+      setLayoutAssignments(draftAssignments.map((row) => ({
+        id: row.id,
+        appId: row.appId || row.app_id || "",
+        recordTypeId: row.recordTypeId || row.record_type_id || "",
+        roleId: row.roleId || row.role_id || "",
+        deviceProfile: row.deviceProfile || row.device_profile || "any",
+        requiredPermissions: row.requiredPermissions || row.required_permissions || [],
+        priority: Number(row.priority || 0),
+      })));
+      setAssignmentsTouched(false);
+      return;
+    }
     let cancelled = false;
     apiRequest(`/api/platform/layouts/${encodeURIComponent(layoutId)}/assignments`)
       .then((result) => {
@@ -293,7 +307,7 @@ export default function LayoutEditor({
         if (!cancelled) setError(err?.message || "Unable to load layout activation assignments.");
       });
     return () => { cancelled = true; };
-  }, [layoutId]);
+  }, [layoutId, savedLayout?.draft_version]);
 
   useEffect(() => {
     if (!layoutId) {
