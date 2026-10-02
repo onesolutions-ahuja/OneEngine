@@ -537,8 +537,9 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   }, [objects, query])
 
   const activeListView = runtimeMeta.listViews.find((item) => String(item.id) === String(activeListViewId)) || runtimeMeta.defaultListView || null
+  const allColumns = useMemo(() => makeColumns(fields), [fields])
   const columns = useMemo(() => makeColumns(fields, activeListView), [fields, activeListView])
-  const searchKeys = useMemo(() => columns.map((column) => column.key), [columns])
+  const searchKeys = useMemo(() => allColumns.map((column) => column.key), [allColumns])
   const kanbanFields = useMemo(() => fields
     .filter((field) => field.readable !== false && field.writable !== false && ['picklist','select','boolean'].includes(String(field.field_type || '').toLowerCase()))
     .map((field) => ({ key: field.api_name, label: field.label || field.api_name })), [fields])
@@ -907,6 +908,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             subtitle={`${pageInfo.total} records`}
             rows={rows}
             columns={columns}
+            availableColumns={allColumns}
             searchKeys={searchKeys}
             canCreate={canCreate}
             canEdit={canEdit}
@@ -993,6 +995,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
                       subtitle={`${relatedState.pageInfo.total || 0} related records`}
                       rows={relatedState.rows}
                       columns={makeColumns(relatedState.fields)}
+                      availableColumns={makeColumns(relatedState.fields)}
                       searchKeys={relatedState.fields.filter((field) => field.readable !== false).map((field) => field.api_name)}
                       createLabel="New"
                       canCreate={relatedState.permissions?.can_create === true}
