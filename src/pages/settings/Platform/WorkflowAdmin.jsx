@@ -831,7 +831,7 @@ const WORKFLOW_VISUAL_CSS = `
     .workflow-visual-shell.palette-collapsed { grid-template-columns: minmax(360px, 1fr) 300px; }
     .workflow-visual-shell.properties-collapsed { grid-template-columns: 210px minmax(360px, 1fr); }
     .workflow-builder-header {
-      grid-template-columns: auto minmax(170px, .9fr) minmax(160px, .75fr) minmax(145px, .7fr) auto;
+      grid-template-columns: auto minmax(190px, .8fr) minmax(0, 1.2fr);
     }
   }
   @media (max-width: 1050px) {
@@ -899,7 +899,7 @@ const actionOptions = [
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
   "ASSIGNMENT","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
-  "CONDITION","WAIT","RUN_SUBFLOW","STOP",
+  "CONDITION","WAIT","RUN_SUBFLOW",
 ]);
 
 const FLOW_ELEMENT_VISUALS = {
@@ -980,6 +980,7 @@ function makeStep(type = "CREATE_RECORD") {
       workflowInputs: {},
       condition: { type: "all", rules: [blankCondition()] },
       outcomes: [],
+      defaultLabel: "Default Outcome",
       defaultBranch: [],
       ifBranch: [],
       elseBranch: [],
@@ -1092,8 +1093,9 @@ function workflowActionIssue(step, definition = null) {
     if (outcomes.length) {
       if (outcomes.some((outcome) => !String(outcome?.label || "").trim())) return "Name every Decision outcome.";
       if (outcomes.some((outcome) => !conditionIsValid(outcome?.condition))) return "Complete every Decision outcome condition.";
-      const ids = outcomes.map((outcome) => String(outcome?.id || ""));
-      if (new Set(ids).size !== ids.length) return "Decision outcome identifiers must be unique.";
+      const apiNames = outcomes.map((outcome) => String(outcome?.apiName || flowApiName(outcome?.label || "")));
+      if (apiNames.some((apiName) => !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(apiName))) return "Enter a valid API Name for every Decision outcome.";
+      if (new Set(apiNames).size !== apiNames.length) return "Decision outcome API Names must be unique.";
       const seenTargets = new Set();
       for (const outcome of outcomes) {
         for (const targetId of outcome?.branch || []) {
@@ -2040,45 +2042,63 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           : [{
               id: "outcome-1",
               label: "Outcome 1",
+              apiName: "Outcome_1",
               condition: step.config?.condition || { type: "all", rules: [blankCondition()] },
               branch: step.config?.ifBranch || [],
             }];
         const defaultBranch = configuredOutcomes.length ? (step.config?.defaultBranch || []) : (step.config?.elseBranch || []);
-        const setOutcomes = (nextOutcomes) => updateConfig({ outcomes: nextOutcomes, defaultBranch, condition: null, ifBranch: [], elseBranch: [] });
+        const defaultLabel = step.config?.defaultLabel || "Default Outcome";
+        const setOutcomes = (nextOutcomes) => updateConfig({ outcomes: nextOutcomes, defaultBranch, defaultLabel, condition: null, ifBranch: [], elseBranch: [] });
         return (
           <div className="space-y-4">
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-              Outcomes are checked from top to bottom. The first matching outcome runs; if none match, the Default path runs.
+              Outcomes are evaluated in the order shown. The first matching outcome runs. If none match, the Default Outcome runs.
             </div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Outcome Order</div>
             {outcomes.map((outcome, outcomeIndex) => (
               <div key={outcome.id || outcomeIndex} className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    className={inputClass}
-                    value={outcome.label || ""}
-                    onChange={(event) => {
+                <div className="flex items-start gap-2">
+                  <div className="grid flex-1 gap-2 md:grid-cols-2">
+                    <label className="block text-xs font-medium text-slate-600">Label
+                      <input
+                        className={inputClass}
+                        value={outcome.label || ""}
+                        onChange={(event) => {
+                          const nextLabel = event.target.value;
+                          const previousGenerated = flowApiName(outcome.label || "");
+                          const next = [...outcomes];
+                          next[outcomeIndex] = { ...outcome, label: nextLabel, apiName: !outcome.apiName || outcome.apiName === previousGenerated ? flowApiName(nextLabel) : outcome.apiName };
+                          setOutcomes(next);
+                        }}
+                        placeholder={`Outcome ${outcomeIndex + 1}`}
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-slate-600">API Name
+                      <input className={inputClass} value={outcome.apiName || flowApiName(outcome.label || `Outcome ${outcomeIndex + 1}`)} onChange={(event) => {
+                        const next = [...outcomes];
+                        next[outcomeIndex] = { ...outcome, apiName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") };
+                        setOutcomes(next);
+                      }} />
+                    </label>
+                  </div>
+                  <div className="flex gap-1 pt-4">
+                    <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === 0} title="Move outcome up" onClick={() => {
+                      if (outcomeIndex === 0) return;
                       const next = [...outcomes];
-                      next[outcomeIndex] = { ...outcome, label: event.target.value };
+                      [next[outcomeIndex - 1], next[outcomeIndex]] = [next[outcomeIndex], next[outcomeIndex - 1]];
                       setOutcomes(next);
-                    }}
-                    placeholder={`Outcome ${outcomeIndex + 1}`}
-                  />
-                  <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === 0} onClick={() => {
-                    if (outcomeIndex === 0) return;
-                    const next = [...outcomes];
-                    [next[outcomeIndex - 1], next[outcomeIndex]] = [next[outcomeIndex], next[outcomeIndex - 1]];
-                    setOutcomes(next);
-                  }}>↑</button>
-                  <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === outcomes.length - 1} onClick={() => {
-                    if (outcomeIndex >= outcomes.length - 1) return;
-                    const next = [...outcomes];
-                    [next[outcomeIndex], next[outcomeIndex + 1]] = [next[outcomeIndex + 1], next[outcomeIndex]];
-                    setOutcomes(next);
-                  }}>↓</button>
-                  <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-red-600" disabled={outcomes.length <= 1} onClick={() => {
-                    if (outcomes.length <= 1) return;
-                    setOutcomes(outcomes.filter((_, itemIndex) => itemIndex !== outcomeIndex));
-                  }}>Remove</button>
+                    }}>↑</button>
+                    <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-slate-600" disabled={outcomeIndex === outcomes.length - 1} title="Move outcome down" onClick={() => {
+                      if (outcomeIndex >= outcomes.length - 1) return;
+                      const next = [...outcomes];
+                      [next[outcomeIndex], next[outcomeIndex + 1]] = [next[outcomeIndex + 1], next[outcomeIndex]];
+                      setOutcomes(next);
+                    }}>↓</button>
+                    <button type="button" className="rounded border border-slate-200 px-2 py-2 text-xs text-red-600" disabled={outcomes.length <= 1} onClick={() => {
+                      if (outcomes.length <= 1) return;
+                      setOutcomes(outcomes.filter((_, itemIndex) => itemIndex !== outcomeIndex));
+                    }}>Remove</button>
+                  </div>
                 </div>
                 <StepConditionEditor
                   objectKey={rootObjectKey}
@@ -2090,41 +2110,26 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                     setOutcomes(next);
                   }}
                 />
-                <BranchStepPicker
-                  label={`${outcome.label || `Outcome ${outcomeIndex + 1}`} path`}
-                  value={outcome.branch || []}
-                  onChange={(branch) => {
-                    const next = [...outcomes];
-                    next[outcomeIndex] = { ...outcome, branch };
-                    setOutcomes(next);
-                  }}
-                  steps={allSteps}
-                  currentIndex={index}
-                />
+                <p className="text-[11px] text-slate-500">Add elements to this outcome from the + insertion points on the canvas.</p>
               </div>
             ))}
             <button type="button" className="text-sm text-blue-700" disabled={outcomes.length >= 20} onClick={() => {
               const nextIndex = outcomes.length + 1;
+              const label = `Outcome ${nextIndex}`;
               setOutcomes([...outcomes, {
                 id: `outcome-${Date.now()}-${nextIndex}`,
-                label: `Outcome ${nextIndex}`,
+                label,
+                apiName: flowApiName(label),
                 condition: { type: "all", rules: [blankCondition()] },
                 branch: [],
               }]);
-            }}>+ Add outcome</button>
-            <BranchStepPicker
-              label="Default · No outcome matched"
-              value={defaultBranch}
-              onChange={(nextDefault) => updateConfig({
-                outcomes,
-                defaultBranch: nextDefault,
-                condition: null,
-                ifBranch: [],
-                elseBranch: [],
-              })}
-              steps={allSteps}
-              currentIndex={index}
-            />
+            }}>+ New Outcome</button>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <label className="block text-xs font-medium text-slate-600">Default Outcome Label
+                <input className={inputClass} value={defaultLabel} onChange={(event) => updateConfig({ outcomes, defaultBranch, defaultLabel: event.target.value, condition: null, ifBranch: [], elseBranch: [] })} />
+              </label>
+              <p className="mt-2 text-[11px] text-slate-500">This path runs only when no configured outcome matches. Add its elements from the canvas.</p>
+            </div>
           </div>
         );
       }
@@ -2763,7 +2768,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   : [{ id: "outcome-1", label: "Outcome 1", branch: step.config?.ifBranch || [] }])
               : [];
             const decisionPaths = step.type === "CONDITION"
-              ? [...decisionOutcomes, { id: "__default__", label: "Default Outcome", branch: step.config?.defaultBranch || step.config?.elseBranch || [] }]
+              ? [...decisionOutcomes, { id: "__default__", label: step.config?.defaultLabel || "Default Outcome", branch: step.config?.defaultBranch || step.config?.elseBranch || [] }]
               : [];
             const branchesCollapsed = collapsedBranches[step.id] === true;
             return <div key={step.id} className={`workflow-node-wrap ${step.type === "CONDITION" ? "has-decision" : ""}`} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.stopPropagation(); dropAt(e, index); }}>
