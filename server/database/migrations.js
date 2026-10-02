@@ -14,9 +14,18 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0020_tenant_engine_manager_identity",
   "0022_identity_access_security",
   "0023_identity_security_alignment",
+  "0024_identity_security_phase1_final",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
+  {
+    key: "0024_identity_security_phase1_final",
+    version: "24",
+    name: "Complete phase-one identity session and login history controls",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0024_identity_security_phase1_final.sql", import.meta.url), "utf8")
+    ),
+  },
   {
     key: "0023_identity_security_alignment",
     version: "23",
