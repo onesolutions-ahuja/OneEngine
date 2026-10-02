@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { evaluateFieldCondition } from "../../../utils/platformConditions.js";
 import { isUuid, parseBooleanValue } from "../../../utils/recordDisplay.js";
+import { apiRequest } from "../../../services/api.js";
 import BooleanField from "../../../components/records/BooleanField.jsx";
 
 function getFieldKey(field) {
@@ -125,6 +126,109 @@ function buildInitialValues(fields, initialValues) {
   }
 
   return result;
+}
+
+function lookupObjectKey(field) {
+  return field?.config?.relatedObjectKey || field?.config?.related_object_key || "";
+}
+
+function lookupRecordLabel(record) {
+  if (!record || typeof record !== "object") return "";
+  return String(record.label || record.name || record.display_name || record.title || record.full_name || record.username || record.email || record.id || "");
+}
+
+function MetadataLookupInput({ field, value, disabled, onChange, placeholder }) {
+  const objectKey = lookupObjectKey(field);
+  const [query, setQuery] = useState("");
+  const [options, setOptions] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!objectKey || !open) return undefined;
+    let alive = true;
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const suffix = query.trim() ? `&search=${encodeURIComponent(query.trim())}` : "";
+        const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey)}/records?pageSize=20${suffix}`);
+        const rows = response?.records || response?.data || [];
+        if (alive) setOptions(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (alive) setOptions([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }, 180);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [objectKey, query, open]);
+
+  if (!objectKey) {
+    return (
+      <input
+        type="text"
+        value={typeof value === "object" && value !== null ? lookupRecordLabel(value) : (isUuid(String(value ?? "")) ? "" : value ?? "")}
+        disabled={disabled}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  }
+
+  const selectedId = typeof value === "object" && value !== null ? (value.id || value.record_id || "") : value;
+  const selected = options.find((record) => String(record?.id || record?.record_id || "") === String(selectedId || ""));
+  const currentLabel = typeof value === "object" && value !== null ? lookupRecordLabel(value) : (selected ? lookupRecordLabel(selected) : "");
+
+  return (
+    <div className="platform-lookup">
+      <input
+        type="search"
+        value={open ? query : currentLabel}
+        disabled={disabled}
+        placeholder={placeholder}
+        autoComplete="off"
+        onFocus={() => { setOpen(true); setQuery(""); }}
+        onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+        }}
+      />
+      {open && !disabled ? (
+        <div className="platform-lookup-results" role="listbox">
+          {selectedId ? (
+            <button type="button" className="platform-lookup-option platform-lookup-clear" onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(""); setQuery(""); setOpen(false); }}>
+              Clear selection
+            </button>
+          ) : null}
+          {loading ? <div className="platform-lookup-state">Searching…</div> : null}
+          {!loading && options.map((record) => {
+            const id = record?.id || record?.record_id;
+            if (!id) return null;
+            return (
+              <button
+                type="button"
+                className="platform-lookup-option"
+                role="option"
+                aria-selected={String(id) === String(selectedId || "")}
+                key={String(id)}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onChange(id);
+                  setQuery("");
+                  setOpen(false);
+                }}
+              >
+                <strong>{lookupRecordLabel(record)}</strong>
+                <span>{String(id)}</span>
+              </button>
+            );
+          })}
+          {!loading && !options.length ? <div className="platform-lookup-state">No matching records.</div> : null}
+        </div>
+      ) : null}
+      {selectedId && !currentLabel && !open ? <small className="platform-lookup-selected">Selected record</small> : null}
+    </div>
+  );
 }
 
 function getInputType(field) {
@@ -439,29 +543,12 @@ export default function ObjectForm({
 
       case "lookup":
         control = (
-          <input
-            {...commonProps}
-            type="text"
-            value={
-              typeof value === "object" &&
-              value !== null
-                ? value?.label ??
-                  value?.name ??
-                  value?.display_name ??
-                  value?.value ??
-                  ""
-                : isUuid(String(value ?? "")) ? "" : value
-            }
-            placeholder={
-              field?.placeholder ||
-              `Select ${label}`
-            }
-            onChange={(event) =>
-              updateValue(
-                field,
-                event.target.value
-              )
-            }
+          <MetadataLookupInput
+            field={field}
+            value={value}
+            disabled={commonProps.disabled}
+            placeholder={field?.placeholder || `Search ${label}…`}
+            onChange={(nextValue) => updateValue(field, nextValue)}
           />
         );
 
@@ -743,6 +830,68 @@ export default function ObjectForm({
           min-height: 90px;
           resize: vertical;
           line-height: 1.45;
+        }
+
+        .platform-lookup {
+          position: relative;
+        }
+
+        .platform-lookup-results {
+          position: absolute;
+          z-index: 40;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          max-height: 260px;
+          overflow: auto;
+          border: 1px solid var(--border-color, #d1d5db);
+          border-radius: 8px;
+          background: var(--card-background, #fff);
+          box-shadow: 0 12px 28px rgba(15, 23, 42, .14);
+        }
+
+        .platform-lookup-option {
+          display: flex;
+          width: 100%;
+          flex-direction: column;
+          gap: 2px;
+          border: 0;
+          border-bottom: 1px solid var(--border-color, #eef2f7);
+          background: transparent;
+          padding: 9px 10px;
+          color: var(--text-primary, #1f2937);
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .platform-lookup-option:hover,
+        .platform-lookup-option[aria-selected="true"] {
+          background: var(--muted-background, #f8fafc);
+        }
+
+        .platform-lookup-option strong {
+          font-size: 11px;
+          font-weight: 650;
+        }
+
+        .platform-lookup-option span,
+        .platform-lookup-state,
+        .platform-lookup-selected {
+          color: var(--text-secondary, #64748b);
+          font-size: 9px;
+        }
+
+        .platform-lookup-clear {
+          color: var(--text-secondary, #64748b);
+        }
+
+        .platform-lookup-state {
+          padding: 10px;
+        }
+
+        .platform-lookup-selected {
+          display: block;
+          margin-top: 4px;
         }
 
         .platform-form-field input:focus,
