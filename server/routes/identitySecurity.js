@@ -104,13 +104,17 @@ export default function createIdentitySecurityRouter({ authenticate, authorize, 
     const loginHours = validateLoginHours(b.loginHours || {});
     const result = await db(
       `INSERT INTO identity_access_policies(company_id,name,description,scope_type,scope_id,priority,timezone,login_hours,enforce_login_ip,active,
-        mfa_required,phishing_resistant_mfa_required,required_login_assurance,trusted_device_days,trust_sso_mfa,created_by,updated_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$16) RETURNING *`,
+        mfa_required,phishing_resistant_mfa_required,required_login_assurance,trusted_device_days,trust_sso_mfa,
+        device_activation_required,skip_device_activation_on_trusted_network,created_by,updated_by)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$18) RETURNING *`,
       [req.user.companyId,name,String(b.description||"").trim()||null,scopeType,scopeId,int(b.priority,100,0,10000),
        String(b.timezone||"").trim()||null,JSON.stringify(loginHours),b.enforceLoginIp===true,b.active!==false,
        b.mfaRequired==null?null:b.mfaRequired===true,b.phishingResistantMfaRequired==null?null:b.phishingResistantMfaRequired===true,
        b.requiredLoginAssurance==null?null:(String(b.requiredLoginAssurance).toUpperCase()==="HIGH"?"HIGH":"STANDARD"),
-       b.trustedDeviceDays==null?null:int(b.trustedDeviceDays,30,0,3650),b.trustSsoMfa==null?null:b.trustSsoMfa===true,req.user.id]
+       b.trustedDeviceDays==null?null:int(b.trustedDeviceDays,30,0,3650),b.trustSsoMfa==null?null:b.trustSsoMfa===true,
+       b.deviceActivationRequired==null?null:b.deviceActivationRequired===true,
+       b.skipDeviceActivationOnTrustedNetwork==null?null:b.skipDeviceActivationOnTrustedNetwork!==false,
+       req.user.id]
     );
     await writeAudit?.(req.user.companyId, req.user.id, "security.policy_created", "identity_access_policy", result.rows[0].id, { name, scopeType, scopeId });
     res.status(201).json({ success:true, data:result.rows[0] });
@@ -131,7 +135,8 @@ export default function createIdentitySecurityRouter({ authenticate, authorize, 
     const result=await db(
       `UPDATE identity_access_policies SET name=$1,description=$2,priority=$3,timezone=$4,login_hours=$5::jsonb,enforce_login_ip=$6,active=$7,
        mfa_required=$8,phishing_resistant_mfa_required=$9,required_login_assurance=$10,trusted_device_days=$11,trust_sso_mfa=$12,
-       updated_by=$13,updated_at=NOW() WHERE id=$14 AND company_id=$15 RETURNING *`,
+       device_activation_required=$13,skip_device_activation_on_trusted_network=$14,
+       updated_by=$15,updated_at=NOW() WHERE id=$16 AND company_id=$17 RETURNING *`,
       [name,b.description===undefined?row.description:String(b.description||"").trim()||null,int(b.priority,row.priority,0,10000),
        b.timezone===undefined?row.timezone:String(b.timezone||"").trim()||null,JSON.stringify(loginHours),enforceLoginIp,
        b.active===undefined?row.active:b.active===true,
@@ -140,6 +145,8 @@ export default function createIdentitySecurityRouter({ authenticate, authorize, 
        b.requiredLoginAssurance===undefined?row.required_login_assurance:(b.requiredLoginAssurance==null?null:(String(b.requiredLoginAssurance).toUpperCase()==="HIGH"?"HIGH":"STANDARD")),
        b.trustedDeviceDays===undefined?row.trusted_device_days:(b.trustedDeviceDays==null?null:int(b.trustedDeviceDays,30,0,3650)),
        b.trustSsoMfa===undefined?row.trust_sso_mfa:(b.trustSsoMfa==null?null:b.trustSsoMfa===true),
+       b.deviceActivationRequired===undefined?row.device_activation_required:(b.deviceActivationRequired==null?null:b.deviceActivationRequired===true),
+       b.skipDeviceActivationOnTrustedNetwork===undefined?row.skip_device_activation_on_trusted_network:(b.skipDeviceActivationOnTrustedNetwork==null?null:b.skipDeviceActivationOnTrustedNetwork!==false),
        req.user.id,row.id,req.user.companyId]
     );
     await writeAudit?.(req.user.companyId, req.user.id, "security.policy_updated", "identity_access_policy", row.id, { name, enforceLoginIp });
