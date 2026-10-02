@@ -8,7 +8,7 @@ async function openDemoFlow(page, flowKey) {
   await expect(start).toBeVisible();
   await start.click();
   await expect(page.getByText("Demo catalogue · no live sale or payment is created")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Classic Beef Burger", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: /Classic Beef Burger/i }).first()).toBeVisible({ timeout: 15_000 });
   await assertNoHorizontalOverflow(page);
 }
 
