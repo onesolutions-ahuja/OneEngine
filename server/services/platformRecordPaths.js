@@ -23,7 +23,7 @@ export function buildRecordPathCatalog({ objects = [], fields = [], relationship
   const results = [];
   const walk = (object, prefix, depth, visitedEdges) => {
     for (const field of fieldsByObject.get(object.id) || []) {
-      results.push({ path: `${prefix}.${field.api_name}`, kind: "field", objectKey: object.object_key, fieldId: field.id, fieldType: field.field_type, label: field.label });
+      results.push({ path: `${prefix}.${field.api_name}`, kind: "field", objectKey: object.object_key, fieldId: field.id, fieldType: ["formula","rollup"].includes(field.field_type) ? (field.config?.resultType || field.config?.result_type || "number") : field.field_type, label: field.label });
     }
     if (depth >= maxDepth) return;
     for (const relationship of activeRelationships) {
