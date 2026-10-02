@@ -3685,3 +3685,43 @@
 .onebuilder-workflow-group-head > span:nth-child(2) {
   flex: 1 1 auto;
 }
+
+
+/* Smart Theme dashboard clock — dark original-style utility tile. */
+.dashboard-card--smart-clock {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: var(--onepos-card-radius, 16px);
+  padding: 0;
+  background:
+    radial-gradient(circle at 24% 12%, rgba(255,255,255,.08), transparent 30%),
+    linear-gradient(145deg, #121418 0%, #050608 72%, #000 100%);
+  box-shadow:
+    0 12px 28px rgba(0,0,0,.20),
+    inset 0 1px 0 rgba(255,255,255,.07);
+}
+.dashboard-smart-clock {
+  height: 100%;
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  text-align: center;
+}
+.dashboard-smart-clock-time {
+  font-size: clamp(30px, 3vw, 46px);
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-smart-clock-date {
+  margin-top: 9px;
+  color: rgba(255,255,255,.68);
+  font-size: 12px;
+  font-weight: 500;
+}
