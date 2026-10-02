@@ -23,6 +23,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0030_identity_verification_methods",
   "0031_identity_passkey_kinds",
   "0032_identity_multiple_passkeys",
+  "0033_identity_verification_history",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -120,6 +121,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Support multiple passkeys per user",
     up: client => client.query(
       readFileSync(new URL("./migrations/0032_identity_multiple_passkeys.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0033_identity_verification_history",
+    version: "33",
+    name: "Identity verification history and delegated MFA permissions",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0033_identity_verification_history.sql", import.meta.url), "utf8")
     ),
   },
 ]);
