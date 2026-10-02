@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
+import WhereUsedPanel from "./WhereUsedPanel.jsx";
 
 const RELATIONSHIP_TYPES = [
   {
@@ -706,6 +707,12 @@ export default function RelationshipEditor({
             </label>
           </div>
         </section>
+
+        {!isNew && relationshipId ? (
+          <section className="platform-relationship-card">
+            <WhereUsedPanel relationshipId={relationshipId} title="Relationship Where Used" />
+          </section>
+        ) : null}
 
         <div className="platform-relationship-footer">
           <button
