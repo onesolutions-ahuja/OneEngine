@@ -32,6 +32,8 @@ const EMPTY_RULE = {
   action: "validation",
   message: "",
   match: "all",
+  errorLocation: "top",
+  errorField: "",
   conditions: [],
   active: true,
   description: "",
@@ -55,6 +57,8 @@ export default function RuleEditor({
     action: rule?.action?.type || (typeof rule?.action === "string" ? rule.action : "validation"),
     message: rule?.action?.message || "",
     match: rule?.action?.match || "all",
+    errorLocation: rule?.action?.errorLocation || rule?.action?.error_location || "top",
+    errorField: rule?.action?.errorField || rule?.action?.error_field || "",
   });
 
   const [availableObjects, setAvailableObjects] =
@@ -194,7 +198,7 @@ export default function RuleEditor({
         name: form.name,
         objectId: form.object_id,
         triggerKey: form.trigger,
-        action: { ...(typeof rule?.action === "object" ? rule.action : {}), type: form.action, ...(form.action === "validation" ? { message: form.message, match: form.match } : {}) },
+        action: { ...(typeof rule?.action === "object" ? rule.action : {}), type: form.action, ...(form.action === "validation" ? { message: form.message, match: form.match, errorLocation: form.errorLocation || "top", errorField: form.errorLocation === "field" ? (form.errorField || null) : null } : {}) },
         conditions: Array.isArray(form.conditions)
           ? form.conditions
           : [],
@@ -445,6 +449,29 @@ export default function RuleEditor({
               <select value={form.match} onChange={event => update("match", event.target.value)}>
                 <option value="all">All conditions match</option>
                 <option value="any">Any condition matches</option>
+              </select>
+            </label>}
+            {form.action === "validation" && <label>
+              <span>Error location</span>
+              <select
+                value={form.errorLocation || "top"}
+                onChange={(event) => setForm((current) => ({
+                  ...current,
+                  errorLocation: event.target.value,
+                  errorField: event.target.value === "field" ? current.errorField : "",
+                }))}
+              >
+                <option value="top">Top of form</option>
+                <option value="field">Next to a field</option>
+              </select>
+            </label>}
+            {form.action === "validation" && form.errorLocation === "field" && <label>
+              <span>Error field</span>
+              <select value={form.errorField || ""} required onChange={(event) => update("errorField", event.target.value)}>
+                <option value="">Select field</option>
+                {fields.filter((field) => field.active !== false && field.readable !== false).map((field) => (
+                  <option key={fieldKey(field)} value={fieldKey(field)}>{fieldLabel(field)}</option>
+                ))}
               </select>
             </label>}
           </div>
