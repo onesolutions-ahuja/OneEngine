@@ -1276,6 +1276,7 @@ const TRIGGER_LABELS = {
   after_update: "When a record is updated",
   after_save: "When a record is created or updated",
   manual: "Manual trigger",
+  scheduled: "Scheduled trigger",
   system_function: "System function",
   system_action: "System action",
   system_job: "System job trigger",
@@ -3231,6 +3232,14 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
   const layoutMode = String(workflow.actionMetadata?.builderLayout?.mode || "AUTO").toUpperCase();
+  const flowType = String(workflow.actionMetadata?.flowType || "AUTOLAUNCHED").toUpperCase();
+  const startTriggerOptions = flowType === "RECORD_TRIGGERED"
+    ? triggerOptions.filter((option) => option.kind === "record" && option.key !== "manual")
+    : flowType === "PLATFORM_EVENT_TRIGGERED"
+      ? triggerOptions.filter((option) => option.kind === "event")
+      : flowType === "SCHEDULE_TRIGGERED"
+        ? [{ key: "scheduled", label: "On schedule", kind: "schedule" }]
+        : [{ key: "manual", label: "Manual trigger", kind: "manual" }];
   const freeformPositions = workflow.actionMetadata?.builderLayout?.positions || {};
   const setLayoutMode = (mode) => setWorkflow((current) => ({
     ...current,
@@ -4755,12 +4764,12 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Trigger</label>
               <select aria-label="Flow trigger" className={inputClass} value={workflow.trigger || "manual"} onChange={(event) => setWorkflow((current) => ({ ...current, trigger: event.target.value }))}>
-                {!triggerOptions.some((option) => option.key === workflow.trigger) && workflow.trigger ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
-                {triggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+                {!startTriggerOptions.some((option) => option.key === workflow.trigger) && workflow.trigger ? <option value={workflow.trigger}>{getTriggerLabel(workflow.trigger)}</option> : null}
+                {startTriggerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
               </select>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Object</label>
+            {["RECORD_TRIGGERED","SCHEDULE_TRIGGERED"].includes(flowType) ? <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Object {flowType === "SCHEDULE_TRIGGERED" ? "(optional batch source)" : ""}</label>
               <PlatformFieldPicker
                 scopeKey={scopeKey}
                 includeObjectSelector
@@ -4768,8 +4777,43 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 selectedObjectKey={workflow.object || ""}
                 onObjectChange={(object) => setWorkflow((current) => ({ ...current, object }))}
               />
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            </div> : null}
+            {flowType === "SCHEDULE_TRIGGERED" ? (() => {
+              const schedule = workflow.actionMetadata?.schedule || { scheduleType: "DAILY", timezone: "Europe/London", definition: { time: "09:00" } };
+              const definition = schedule.definition || {};
+              const updateSchedule = (patch) => setWorkflow((current) => ({
+                ...current,
+                actionMetadata: { ...(current.actionMetadata || {}), schedule: { ...(current.actionMetadata?.schedule || schedule), ...patch } },
+              }));
+              const updateDefinition = (patch) => updateSchedule({ definition: { ...(definition || {}), ...patch } });
+              return <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-semibold text-slate-700">Schedule</div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <label className="block text-xs font-medium text-slate-600">Frequency
+                    <select className={inputClass} value={schedule.scheduleType || "DAILY"} onChange={(event) => updateSchedule({ scheduleType: event.target.value })}>
+                      <option value="ONCE">Once</option><option value="HOURLY">Hourly</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option>
+                    </select>
+                  </label>
+                  <label className="block text-xs font-medium text-slate-600">Timezone
+                    <input className={inputClass} value={schedule.timezone || "Europe/London"} onChange={(event) => updateSchedule({ timezone: event.target.value })} placeholder="Europe/London" />
+                  </label>
+                </div>
+                {schedule.scheduleType === "ONCE" ? <div className="grid gap-2 md:grid-cols-2">
+                  <label className="block text-xs font-medium text-slate-600">Date<input type="date" className={inputClass} value={definition.date || ""} onChange={(event) => updateDefinition({ date: event.target.value })} /></label>
+                  <label className="block text-xs font-medium text-slate-600">Time<input type="time" className={inputClass} value={definition.time || "09:00"} onChange={(event) => updateDefinition({ time: event.target.value })} /></label>
+                </div> : null}
+                {schedule.scheduleType === "HOURLY" ? <label className="block text-xs font-medium text-slate-600">Minute past the hour<input type="number" min="0" max="59" className={inputClass} value={Number(definition.minute || 0)} onChange={(event) => updateDefinition({ minute: Math.max(0, Math.min(59, Number(event.target.value || 0))) })} /></label> : null}
+                {["DAILY","WEEKLY","MONTHLY"].includes(schedule.scheduleType) ? <label className="block text-xs font-medium text-slate-600">Time<input type="time" className={inputClass} value={definition.time || "09:00"} onChange={(event) => updateDefinition({ time: event.target.value })} /></label> : null}
+                {schedule.scheduleType === "WEEKLY" ? <label className="block text-xs font-medium text-slate-600">Day
+                  <select className={inputClass} value={Number((definition.daysOfWeek || [1])[0])} onChange={(event) => updateDefinition({ daysOfWeek: [Number(event.target.value)] })}>
+                    <option value={0}>Sunday</option><option value={1}>Monday</option><option value={2}>Tuesday</option><option value={3}>Wednesday</option><option value={4}>Thursday</option><option value={5}>Friday</option><option value={6}>Saturday</option>
+                  </select>
+                </label> : null}
+                {schedule.scheduleType === "MONTHLY" ? <label className="block text-xs font-medium text-slate-600">Day of month<input type="number" min="1" max="31" className={inputClass} value={Number(definition.dayOfMonth || 1)} onChange={(event) => updateDefinition({ dayOfMonth: Math.max(1, Math.min(31, Number(event.target.value || 1))) })} /></label> : null}
+                <p className="text-[11px] text-slate-500">When activated, this Flow runs only from its schedule. If an Object is selected, the scheduler can process matching records as separate interviews.</p>
+              </div>;
+            })() : null}
+            {flowType === "RECORD_TRIGGERED" ? <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
                   <div className="text-xs font-semibold text-slate-700">Scheduled Paths</div>
@@ -4805,7 +4849,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                 ))}
                 {!scheduledPathSteps.length ? <div className="text-[11px] text-slate-500">No scheduled paths. The Run Immediately path runs normally.</div> : null}
               </div>
-            </div>
+            </div> : null}
 
             <div className="space-y-3">
               {["after_update","after_save","before_update","before_save","field_changed"].includes(workflow.trigger) ? (
@@ -4818,7 +4862,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                   <p className="mt-1 text-[11px] text-slate-500">“Only when updated to meet” runs when the full entry criteria changes from false to true. Later edits are ignored while the record remains matched.</p>
                 </div>
               ) : null}
-              {workflow.object ? (
+              {workflow.object && ["RECORD_TRIGGERED","SCHEDULE_TRIGGERED"].includes(flowType) ? (
                 <div>
                   <div className="mb-2 text-xs font-semibold text-slate-700">Entry conditions</div>
                   <StepConditionEditor
@@ -4874,6 +4918,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       ui: initialWorkflow.action?.ui || null,
       builderLayout: initialWorkflow.action?.builderLayout || initialWorkflow.actionMetadata?.builderLayout || { mode: "AUTO", positions: {} },
       builderGroups: initialWorkflow.action?.builderGroups || initialWorkflow.actionMetadata?.builderGroups || [],
+      schedule: initialWorkflow.action?.schedule || initialWorkflow.actionMetadata?.schedule || { scheduleType: "DAILY", timezone: "Europe/London", definition: { time: "09:00" } },
     },
     steps: (initialWorkflow.steps || initialWorkflow.action?.actions || []).map((step) => ({
       ...makeStep(step.type || step.key || "CREATE_RECORD"),
@@ -4907,6 +4952,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         apiName: scopeKey === "whatsapp_assistant" ? "WhatsApp_Assistant_Flow" : "",
         description: "",
         flowType: null,
+        schedule: { scheduleType: "DAILY", timezone: "Europe/London", definition: { time: "09:00" } },
       },
       steps: scopeKey === "whatsapp_assistant"
         ? [
@@ -5432,6 +5478,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         ...(workflow.actionMetadata?.ui ? { ui: workflow.actionMetadata.ui } : {}),
         builderLayout: workflow.actionMetadata?.builderLayout || { mode: "AUTO", positions: {} },
         builderGroups: workflow.actionMetadata?.builderGroups || [],
+        ...(workflow.actionMetadata?.schedule ? { schedule: workflow.actionMetadata.schedule } : {}),
         match: workflow.match || "all",
         entryTransition: workflow.entryTransition || "EVERY_TIME",
         actions: workflow.steps.filter((step) => step.enabled !== false).map((step) => {
@@ -5476,6 +5523,27 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       };
       setWorkflow(savedWorkflow);
       setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => item.id !== nextId)]);
+      try {
+        const schedulesResponse = await apiRequest("/api/platform/schedules");
+        const schedules = Array.isArray(schedulesResponse?.data) ? schedulesResponse.data : [];
+        const existingSchedule = schedules.find((item) => String(item.workflow_id || item.workflowId) === String(nextId));
+        if (String(workflow.actionMetadata?.flowType || "").toUpperCase() === "SCHEDULE_TRIGGERED") {
+          const schedule = workflow.actionMetadata?.schedule || {};
+          const schedulePayload = {
+            workflowId: nextId,
+            scheduleType: schedule.scheduleType || "DAILY",
+            definition: schedule.definition || { time: "09:00" },
+            timezone: schedule.timezone || "Europe/London",
+            active: nextLifecycle === "ACTIVE",
+          };
+          if (existingSchedule) await apiRequest(`/api/platform/schedules/${existingSchedule.id}`, { method: "PUT", body: JSON.stringify(schedulePayload) });
+          else await apiRequest("/api/platform/schedules", { method: "POST", body: JSON.stringify(schedulePayload) });
+        } else if (existingSchedule?.active) {
+          await apiRequest(`/api/platform/schedules/${existingSchedule.id}`, { method: "DELETE" });
+        }
+      } catch (scheduleError) {
+        if (String(workflow.actionMetadata?.flowType || "").toUpperCase() === "SCHEDULE_TRIGGERED") throw scheduleError;
+      }
       if (embedded) onSaved?.({ ...workflow, ...saved, id: nextId });
       else if (!keepOpen) setShowBuilder(false);
       if (!silent) onMessage?.(forceNewVersion ? `Flow saved as version ${saved.version || savedWorkflow.version}.` : nextLifecycle === "ACTIVE" ? "Flow activated." : "Flow draft saved.");
@@ -5929,13 +5997,23 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             <label>Flow Type
               <select className={inputClass} value={String(workflow.actionMetadata?.flowType || "AUTOLAUNCHED").toUpperCase()} onChange={(event) => {
                 const flowType = event.target.value;
-                setWorkflow((current) => ({
-                  ...current,
-                  trigger: flowType === "SCREEN_FLOW" ? "manual" : current.trigger,
-                  actionMetadata: { ...(current.actionMetadata || {}), flowType },
-                }));
+                setWorkflow((current) => {
+                  const nextTrigger = flowType === "SCREEN_FLOW" || flowType === "AUTOLAUNCHED" || flowType === "RECOMMENDATION_STRATEGY"
+                    ? "manual"
+                    : flowType === "SCHEDULE_TRIGGERED"
+                      ? "scheduled"
+                      : flowType === "RECORD_TRIGGERED"
+                        ? (["before_create","after_create","before_update","after_update","before_save","after_save","field_changed","before_delete","after_delete"].includes(current.trigger) ? current.trigger : "after_save")
+                        : flowType === "PLATFORM_EVENT_TRIGGERED"
+                          ? (triggerOptions.find((option) => option.kind === "event")?.key || current.trigger)
+                          : current.trigger;
+                  return { ...current, trigger: nextTrigger, actionMetadata: { ...(current.actionMetadata || {}), flowType } };
+                });
               }}>
                 <option value="AUTOLAUNCHED">Autolaunched Flow</option>
+                <option value="RECORD_TRIGGERED">Record-Triggered Flow</option>
+                <option value="SCHEDULE_TRIGGERED">Schedule-Triggered Flow</option>
+                <option value="PLATFORM_EVENT_TRIGGERED">Event-Triggered Flow</option>
                 <option value="SCREEN_FLOW">Screen Flow</option>
                 <option value="RECOMMENDATION_STRATEGY">Recommendation Strategy Flow</option>
                 <option value="KIOSK_EXPERIENCE">Kiosk Experience</option>
