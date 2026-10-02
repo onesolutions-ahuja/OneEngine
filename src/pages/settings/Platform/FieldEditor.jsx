@@ -53,6 +53,10 @@ export default function FieldEditor({
     requiredCondition: field?.config?.requiredCondition || null,
     valueSource: field?.config?.valueSetId ? "reusable" : "local",
     valueSetId: field?.config?.valueSetId || "",
+    dependentPicklist: {
+      controllingField: field?.config?.dependentPicklist?.controllingField || field?.config?.dependent_picklist?.controlling_field || "",
+      mappings: field?.config?.dependentPicklist?.mappings || field?.config?.dependent_picklist?.mappings || {},
+    },
     rollupOperation: field?.config?.operation || "COUNT",
     rollupRelationshipKey: field?.config?.relationshipKey || "",
     rollupSourceField: field?.config?.field || "",
@@ -157,6 +161,47 @@ export default function FieldEditor({
 
   function removeOption(index) {
     setForm((current) => ({ ...current, options: current.options.filter((_, optionIndex) => optionIndex !== index) }));
+  }
+
+  function picklistOptions(candidate) {
+    const options = Array.isArray(candidate?.options)
+      ? candidate.options
+      : Array.isArray(candidate?.values)
+        ? candidate.values
+        : [];
+    return options
+      .filter((option) => option?.active !== false)
+      .map((option) => ({
+        value: String(typeof option === "object" ? option.value ?? option.key ?? option.label ?? "" : option),
+        label: String(typeof option === "object" ? option.label ?? option.name ?? option.value ?? "" : option),
+      }))
+      .filter((option) => option.value);
+  }
+
+  function updateDependentPicklist(name, value) {
+    setForm((current) => ({
+      ...current,
+      dependentPicklist: {
+        ...(current.dependentPicklist || { controllingField: "", mappings: {} }),
+        [name]: value,
+      },
+    }));
+  }
+
+  function toggleDependentMapping(dependentValue, controllingValue, checked) {
+    setForm((current) => {
+      const existing = current.dependentPicklist?.mappings || {};
+      const values = new Set(Array.isArray(existing[dependentValue]) ? existing[dependentValue].map(String) : []);
+      if (checked) values.add(String(controllingValue));
+      else values.delete(String(controllingValue));
+      return {
+        ...current,
+        dependentPicklist: {
+          ...(current.dependentPicklist || {}),
+          mappings: { ...existing, [dependentValue]: [...values] },
+        },
+      };
+    });
   }
 
   function conditionEditor(name, title) {
@@ -275,9 +320,15 @@ export default function FieldEditor({
           ...(form.visibilityCondition ? { visibilityCondition: form.visibilityCondition } : {}),
           ...(form.requiredCondition ? { requiredCondition: form.requiredCondition } : {}),
           ...(form.field_type === "picklist" || form.field_type === "select"
-            ? form.valueSource === "reusable"
-              ? { valueSetId: form.valueSetId }
-              : {}
+            ? {
+                ...(form.valueSource === "reusable" ? { valueSetId: form.valueSetId } : {}),
+                ...(form.dependentPicklist?.controllingField ? {
+                  dependentPicklist: {
+                    controllingField: form.dependentPicklist.controllingField,
+                    mappings: form.dependentPicklist.mappings || {},
+                  },
+                } : { dependentPicklist: null }),
+              }
             : {}),
         },
         options: (form.field_type === "picklist" || form.field_type === "select") && form.valueSource === "local" ? form.options : [],
@@ -489,6 +540,62 @@ export default function FieldEditor({
                   <button type="button" onClick={addOption}>Add value</button>
                 </>
               )}
+              <div className="platform-dependent-picklist">
+                <label>
+                  <span>Controlling field</span>
+                  <select
+                    value={form.dependentPicklist?.controllingField || ""}
+                    onChange={(event) => updateDependentPicklist("controllingField", event.target.value)}
+                  >
+                    <option value="">None — independent picklist</option>
+                    {fields
+                      .filter((candidate) => candidate.api_name !== (field?.api_name || form.apiName))
+                      .filter((candidate) => ["picklist", "select", "boolean"].includes(candidate.field_type))
+                      .map((candidate) => (
+                        <option key={candidate.id || candidate.api_name} value={candidate.api_name}>
+                          {candidate.label} ({candidate.api_name})
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                {form.dependentPicklist?.controllingField ? (() => {
+                  const controller = fields.find((candidate) => candidate.api_name === form.dependentPicklist.controllingField);
+                  const controllerOptions = controller?.field_type === "boolean"
+                    ? [{ value: "true", label: "True" }, { value: "false", label: "False" }]
+                    : picklistOptions(controller);
+                  const selectedValueSet = valueSets.find((valueSet) => String(valueSet.id) === String(form.valueSetId || ""));
+                  const dependentOptions = form.valueSource === "local"
+                    ? picklistOptions({ options: form.options })
+                    : picklistOptions(selectedValueSet || field);
+                  return controllerOptions.length && dependentOptions.length ? (
+                    <div className="platform-dependent-matrix">
+                      <div className="platform-dependent-matrix-head">
+                        <strong>Dependent value</strong>
+                        {controllerOptions.map((option) => <strong key={option.value}>{option.label}</strong>)}
+                      </div>
+                      {dependentOptions.map((dependent) => (
+                        <div className="platform-dependent-matrix-row" key={dependent.value}>
+                          <span>{dependent.label}</span>
+                          {controllerOptions.map((controllerOption) => {
+                            const checked = Array.isArray(form.dependentPicklist?.mappings?.[dependent.value])
+                              && form.dependentPicklist.mappings[dependent.value].map(String).includes(String(controllerOption.value));
+                            return (
+                              <label key={controllerOption.value} title={dependent.label + " when " + controllerOption.label}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(event) => toggleDependentMapping(dependent.value, controllerOption.value, event.target.checked)}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <small>Configure active values on both picklists before building the dependency matrix.</small>;
+                })() : null}
+                <small>When a controlling value changes, users only see the dependent values enabled in this matrix. The server enforces the same mapping.</small>
+              </div>
             </fieldset>
           ) : null}
 
