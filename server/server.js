@@ -461,12 +461,28 @@ const baseAuthenticate = createAuthenticate({
 });
 function sensitiveResourceKey(req) {
   const method = String(req.method || "GET").toUpperCase();
-  const path = String(req.originalUrl || req.path || "");
-  if (method === "GET") return null;
-  if (/\/api\/security\/(settings|assurance|policies|auth-providers|step-up)/.test(path)) return "SECURITY_CONFIGURATION";
+  const path = String(req.originalUrl || req.path || "").split("?")[0];
+
+  // Salesforce-style high-assurance controls are intentionally granular.
+  // Reads are included where the protected resource itself can expose sensitive
+  // information (for example reports, auth providers and health/security views).
+  if (/\/api\/security\/auth-providers(?:\/|$)/.test(path)) return "MANAGE_AUTH_PROVIDERS";
+  if (/\/api\/security\/(trusted-ranges|ip-ranges)(?:\/|$)/.test(path)
+      || /\/api\/security\/policies\/[^/]+\/ip-ranges(?:\/|$)/.test(path)) return "MANAGE_IP_ADDRESSES";
+  if (/\/api\/security\/users\/[^/]+\/unlock(?:\/|$)/.test(path)
+      || /\/api\/auth\/password-reset/.test(path)) return "UNLOCK_RESET_PASSWORDS";
+  if (/\/api\/(admin\/users|settings\/users|platform\/objects\/employee)(?:\/|$)/.test(path)) return "MANAGE_USERS";
+  if (/\/api\/(reports|custom-reports|dashboard|dashboard-builder)(?:\/|$)/.test(path)) return "REPORTS_DASHBOARDS";
+  if (/\/api\/.*(?:export|data-export)(?:\/|$)/.test(path)) return "MANAGE_DATA_EXPORT";
+  if (/\/api\/(connectors|integrations|packages)(?:\/|$)/.test(path) && method !== "GET") return "MANAGE_CONNECTED_APPS";
+  if (/\/api\/security\/(certificates|keys)(?:\/|$)/.test(path)) return "MANAGE_CERTIFICATES";
+  if (/\/api\/security\/(encryption|credential-vault)(?:\/|$)/.test(path)) return "MANAGE_ENCRYPTION_KEYS";
+  if (/\/api\/security\/health(?:\/|$)/.test(path)) return "VIEW_HEALTH_CHECK";
+
+  // OneEngine-specific administrative equivalents.
   if (/\/api\/platform\/deployments|\/api\/app-releases/.test(path)) return "DEPLOYMENT_ADMIN";
   if (/\/api\/platform\/security/.test(path)) return "ACCESS_CONTROL_ADMIN";
-  if (/\/api\/admin\/users/.test(path)) return "USER_ADMIN";
+  if (method !== "GET" && /\/api\/security\/(settings|assurance|policies|step-up)/.test(path)) return "SECURITY_CONFIGURATION";
   return null;
 }
 
