@@ -118,6 +118,7 @@ export default function createDebugCodesRouter({ authenticate, authorize, db }) 
       `SELECT e.reference,e.code,e.company_id AS "companyId",e.user_id AS "userId",
               e.endpoint,e.http_method AS "httpMethod",e.http_status AS "httpStatus",
               e.technical_code AS "technicalCode",e.technical_message AS "technicalMessage",
+              e.root_cause_key AS "rootCauseKey",e.diagnostic_details AS "diagnosticDetails",
               e.environment,e.created_at AS "createdAt",
               c.title,c.category,c.severity
          FROM oneengine_debug_events e
