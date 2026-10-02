@@ -3048,8 +3048,34 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         )
       : { rows: [] };
 
+    let previewAssignments = assignmentResult.rows || [];
+    const candidateLayoutId = req.body?.candidateLayoutId || null;
+    const candidateAssignment = req.body?.candidateAssignment;
+    if (candidateLayoutId && candidateAssignment && typeof candidateAssignment === "object" && !Array.isArray(candidateAssignment)) {
+      const candidateLayout = layoutResult.rows.find((layout) => String(layout.id) === String(candidateLayoutId));
+      if (!candidateLayout) return res.status(400).json({ success: false, message: "Preview layout is not available for this object and page type" });
+      const candidateDevice = String(candidateAssignment.deviceProfile || candidateAssignment.device_profile || "any").toLowerCase();
+      if (!["any","desktop","tablet","mobile"].includes(candidateDevice)) {
+        return res.status(400).json({ success: false, message: "Candidate assignment device is invalid" });
+      }
+      previewAssignments = previewAssignments.filter((assignment) => String(assignment.layout_id) !== String(candidateLayoutId));
+      previewAssignments.push({
+        layout_id: candidateLayoutId,
+        company_id: req.user.companyId,
+        app_id: candidateAssignment.appId || candidateAssignment.app_id || null,
+        record_type_id: candidateAssignment.recordTypeId || candidateAssignment.record_type_id || null,
+        role_id: candidateAssignment.roleId || candidateAssignment.role_id || null,
+        device_profile: candidateDevice,
+        required_permissions: Array.isArray(candidateAssignment.requiredPermissions || candidateAssignment.required_permissions)
+          ? (candidateAssignment.requiredPermissions || candidateAssignment.required_permissions).map(String)
+          : [],
+        priority: Number(candidateAssignment.priority || 0),
+        active: true,
+      });
+    }
+
     const permissionSet = new Set(permissionKeys);
-    const allowedAssignments = (assignmentResult.rows || []).filter((assignment) => {
+    const allowedAssignments = previewAssignments.filter((assignment) => {
       const required = Array.isArray(assignment.required_permissions) ? assignment.required_permissions : [];
       return required.every((permission) => permissionSet.has(String(permission)));
     });
