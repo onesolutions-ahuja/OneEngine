@@ -66,6 +66,24 @@ jobs:
           set -euo pipefail
           git config user.name "OneEngine Builder Audit"
           git config user.email "actions@users.noreply.github.com"
-          git add -A
+          git add \
+            scripts/audit-workflow-coverage.mjs \
+            server/database/schema.sql \
+            server/routes/platform.js \
+            server/services/platformDomainRecords.js \
+            server/services/platformJobs.js \
+            server/services/platformValidation.js \
+            server/services/platformWorkflow.js \
+            server/services/reportHistoricalTrend.js \
+            server/services/systemWorkflowCatalog.js \
+            server/services/trustedJobKinds.js \
+            server/services/trustedRuntime.js \
+            src/pages/flow/ScreenFlowRuntimePage.jsx \
+            src/pages/settings/Platform/PlatformFieldPicker.jsx \
+            src/pages/settings/Platform/RelationshipEditor.jsx \
+            src/pages/settings/Platform/RuleEditor.jsx \
+            src/pages/settings/Platform/WorkflowAdmin.jsx \
+            tests/workflow-runtime-e2e.test.mjs
+          git diff --cached --check
           git commit -m "Complete Workflow Builder E2E UX and runtime fixes"
           git push --force origin HEAD:builder-final-ready
