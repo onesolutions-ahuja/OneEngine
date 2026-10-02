@@ -421,8 +421,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
             </>
           ) : (
             <>
-              <div className="login-title">One Solutions</div>
-              <div className="login-subtitle">Sign in with your account</div>
+              <div className="login-subtitle login-subtitle--brand">Sign in with your account</div>
 
               <input
                 className="login-field"
