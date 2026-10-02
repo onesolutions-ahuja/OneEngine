@@ -1595,8 +1595,22 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   });
 
   router.delete("/platform/objects/:objectId/buttons/:buttonId", ...manage, async (req, res) => {
-    const result = await db("UPDATE platform_buttons SET active=false,user_modified=true,updated_at=NOW() WHERE id=$1 AND object_id=$2 AND company_id=$3 RETURNING *", [req.params.buttonId, req.params.objectId, req.user.companyId]);
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "Button not found" });
+    const existing = await db("SELECT * FROM platform_buttons WHERE id=$1 AND object_id=$2 AND company_id=$3", [req.params.buttonId, req.params.objectId, req.user.companyId]);
+    const button = existing.rows[0];
+    if (!button) return res.status(404).json({ success: false, message: "Button not found" });
+    const layouts = await db(
+      "SELECT name FROM platform_layouts WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) AND definition::text ILIKE $3",
+      [req.params.objectId, req.user.companyId, `%${String(button.button_key).replace(/[%_]/g, "")}%`]
+    );
+    if (layouts.rows.length) {
+      return res.status(409).json({
+        success: false,
+        code: "BUTTON_IN_USE",
+        message: `Button cannot be deactivated while it is placed on: ${layouts.rows.map((row) => row.name).join(", ")}`,
+        blockers: layouts.rows.map((row) => `layout: ${row.name}`),
+      });
+    }
+    const result = await db("UPDATE platform_buttons SET active=false,user_modified=true,updated_at=NOW() WHERE id=$1 RETURNING *", [button.id]);
     res.json({ success: true, data: result.rows[0] });
   });
 
@@ -2473,6 +2487,38 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     return expression.includes(field.api_name) || expression.includes(String(field.id));
   }
 
+  async function relationshipDeactivationBlockers(relationship, req) {
+    const key = String(relationship.relationship_key || "");
+    const pattern = `%${key.replace(/[\\%_]/g, (value) => `\\${value}`)}%`;
+    const [rollups, metadata] = await Promise.all([
+      db(
+        `SELECT label FROM platform_fields
+          WHERE object_id=$1 AND active=true AND field_type='rollup'
+            AND (company_id IS NULL OR company_id=$2)
+            AND (config->>'relationshipKey'=$3 OR config->>'relationship_key'=$3)`,
+        [relationship.parent_object_id, req.user.companyId, key]
+      ),
+      db(
+        `SELECT kind,label FROM (
+           SELECT 'layout' AS kind,name AS label,definition::text AS payload
+             FROM platform_layouts WHERE object_id IN ($1,$2) AND active=true AND (company_id IS NULL OR company_id=$3)
+           UNION ALL
+           SELECT 'report',label,config::text
+             FROM platform_reports WHERE object_id IN ($1,$2) AND active=true AND (company_id IS NULL OR company_id=$3)
+           UNION ALL
+           SELECT 'rule',name,(conditions::text || ' ' || action::text)
+             FROM platform_rules WHERE object_id IN ($1,$2) AND active=true AND (company_id IS NULL OR company_id=$3)
+         ) refs
+         WHERE payload ILIKE $4 ESCAPE '\\'`,
+        [relationship.parent_object_id, relationship.child_object_id, req.user.companyId, pattern]
+      ),
+    ]);
+    return [
+      ...rollups.rows.map((row) => `rollup: ${row.label}`),
+      ...metadata.rows.map((row) => `${row.kind}: ${row.label}`),
+    ].slice(0, 20);
+  }
+
   router.get("/platform/relationships", ...manage, async (req, res) => {
     const includeInactive = ["1","true"].includes(String(req.query?.includeInactive || "").toLowerCase());
     const result = await db(
@@ -2522,13 +2568,49 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const onDelete = req.body.onDelete || relationship.on_delete;
     const onUpdate = req.body.onUpdate || relationship.on_update;
     if (!RELATIONSHIP_TYPES.has(relationshipType) || !RELATIONSHIP_POLICIES.has(onDelete) || !RELATIONSHIP_POLICIES.has(onUpdate)) return res.status(400).json({ success: false, message: "Invalid relationship type or policy" });
+    if (relationship.active !== false && req.body.active === false) {
+      const blockers = await relationshipDeactivationBlockers(relationship, req);
+      if (blockers.length) return res.status(409).json({
+        success: false,
+        code: "RELATIONSHIP_IN_USE",
+        message: `Relationship cannot be deactivated while active metadata depends on it: ${blockers.join(", ")}`,
+        blockers,
+      });
+    }
     const updated = await db("UPDATE platform_relationships SET parent_object_id=$1,child_object_id=$2,relationship_key=COALESCE($3,relationship_key),label=COALESCE($4,label),description=COALESCE($5,description),relationship_type=$6,child_field_id=$7,on_delete=$8,on_update=$9,active=COALESCE($10,active),user_modified=true WHERE id=$11 RETURNING *", [parentId, childId, req.body.relationshipKey, req.body.label, req.body.description, relationshipType, childFieldId, onDelete, onUpdate, req.body.active, relationship.id]);
     res.json({ success: true, data: updated.rows[0] });
   });
 
+  router.get("/platform/relationships/:relationshipId/dependencies", ...manage, async (req, res) => {
+    const result = await db(
+      `SELECT r.* FROM platform_relationships r
+        JOIN platform_objects o ON o.id=r.parent_object_id
+       WHERE r.id=$1 AND (o.company_id IS NULL OR o.company_id=$2)`,
+      [req.params.relationshipId, req.user.companyId]
+    );
+    const relationship = result.rows[0];
+    if (!relationship) return res.status(404).json({ success: false, message: "Relationship not found" });
+    const blockers = await relationshipDeactivationBlockers(relationship, req);
+    res.json({ success: true, data: { relationshipId: relationship.id, relationshipKey: relationship.relationship_key, activeReferences: blockers, canDeactivate: blockers.length === 0 } });
+  });
+
   router.delete("/platform/relationships/:relationshipId", ...manage, async (req, res) => {
-    const result = await db("UPDATE platform_relationships r SET active=false,user_modified=true WHERE r.id=$1 AND EXISTS (SELECT 1 FROM platform_objects o WHERE o.id=r.parent_object_id AND (o.company_id=$2 OR (o.company_id IS NULL AND $3=true))) RETURNING r.*", [req.params.relationshipId, req.user.companyId, await canManageGlobal(db, req)]);
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "Relationship not found or not editable" });
+    const existing = await db(
+      `SELECT r.*,o.company_id FROM platform_relationships r
+        JOIN platform_objects o ON o.id=r.parent_object_id
+       WHERE r.id=$1 AND (o.company_id=$2 OR (o.company_id IS NULL AND $3=true))`,
+      [req.params.relationshipId, req.user.companyId, await canManageGlobal(db, req)]
+    );
+    const relationship = existing.rows[0];
+    if (!relationship) return res.status(404).json({ success: false, message: "Relationship not found or not editable" });
+    const blockers = await relationshipDeactivationBlockers(relationship, req);
+    if (blockers.length) return res.status(409).json({
+      success: false,
+      code: "RELATIONSHIP_IN_USE",
+      message: `Relationship cannot be deactivated while active metadata depends on it: ${blockers.join(", ")}`,
+      blockers,
+    });
+    const result = await db("UPDATE platform_relationships SET active=false,user_modified=true WHERE id=$1 RETURNING *", [relationship.id]);
     res.json({ success: true, data: result.rows[0] });
   });
 
