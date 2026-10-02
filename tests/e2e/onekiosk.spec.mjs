@@ -4,9 +4,10 @@ import { assertNoHorizontalOverflow, loginIfConfigured, watchRuntimeFailures } f
 async function openDemoFlow(page, flowKey) {
   await loginIfConfigured(page);
   await page.goto(`kiosk-runtime?demo=1&flow=${encodeURIComponent(flowKey)}`);
-  await expect(page.getByText("Demo catalogue · no live sale or payment is created")).toBeVisible({ timeout: 20_000 });
   const start = page.getByRole("button", { name: /start order/i });
-  if (await start.isVisible().catch(() => false)) await start.click();
+  await expect(start).toBeVisible();
+  await start.click();
+  await expect(page.getByText("Demo catalogue · no live sale or payment is created")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Classic Beef Burger", { exact: true })).toBeVisible({ timeout: 15_000 });
   await assertNoHorizontalOverflow(page);
 }

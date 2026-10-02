@@ -322,7 +322,9 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     setError('')
     try {
       if (tab === 'workflow') {
-        throw new Error('Workflow definitions must be saved through WorkflowAdmin.')
+        if (!saved.workflow.some((item) => String(item.id) === String(id))) {
+          throw new Error('Workflow definition is no longer available. Refresh the list and try again.')
+        }
       } else if (tab === 'approval') {
         const response = await apiRequest(`/api/platform/approval-processes/${encodeURIComponent(id)}`)
         const row = response?.data || {}

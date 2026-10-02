@@ -48,7 +48,8 @@ test("workflow builder can add/select/delete a step without stale selection", as
   await page.goto("developer/workflow-builder");
 
   const newWorkflow = page.getByRole("button", { name: /new workflow/i });
-  if (await newWorkflow.isVisible().catch(() => false)) await newWorkflow.click();
+  await expect(newWorkflow).toBeVisible({ timeout: 30_000 });
+  await newWorkflow.click();
 
   await expect(page.getByText("Elements", { exact: true })).toBeVisible();
   const createRecord = page.getByRole("button", { name: "Create Record", exact: true }).first();
@@ -63,7 +64,7 @@ test("workflow builder can add/select/delete a step without stale selection", as
   await remove.click();
 
   await expect(page.locator(".workflow-node-card")).toHaveCount(0);
-  await expect(page.getByText("Select a flow element to configure it.")).toBeVisible();
+  await expect(page.getByText("Select Start or a flow element to configure it.")).toBeVisible();
   expect(failures, failures.join("\n")).toEqual([]);
 });
 
@@ -72,10 +73,11 @@ test("approval builder exposes enterprise assignment, deadlines and safe debug",
   const failures=watchRuntimeFailures(page);
   await page.goto("developer/approval-builder");
   const newApproval=page.getByRole("button",{name:/new approval/i});
-  if(await newApproval.isVisible().catch(()=>false)) await newApproval.click();
+  await expect(newApproval).toBeVisible({ timeout: 30_000 });
+  await newApproval.click();
   await expect(page.getByRole("option",{name:"Submitter’s manager"})).toHaveCount(1);
-  await expect(page.getByRole("option",{name:"First response decides"})).toHaveCount(1);
-  await expect(page.getByRole("option",{name:"All approvers must approve"})).toHaveCount(1);
+  await expect(page.getByRole("option",{name:"Any one approver can decide"})).toHaveCount(1);
+  await expect(page.getByRole("option",{name:"Everyone must approve"})).toHaveCount(1);
   await expect(page.getByPlaceholder("Due in hours")).toBeVisible();
   await expect(page.getByText("Test Approval",{exact:true})).toBeVisible();
   await expect(page.getByText(/No records are changed/i)).toBeVisible();
@@ -97,7 +99,8 @@ test("approval record submission separates manual and automatic paths", async ({
   const failures=watchRuntimeFailures(page);
   await page.goto("developer/approval-builder");
   const newApproval=page.getByRole("button",{name:/new approval/i});
-  if(await newApproval.isVisible().catch(()=>false)) await newApproval.click();
+  await expect(newApproval).toBeVisible({ timeout: 30_000 });
+  await newApproval.click();
   await expect(page.getByRole("option",{name:"User submits from record"})).toHaveCount(1);
   await expect(page.getByRole("option",{name:"Automatically when criteria match"})).toHaveCount(1);
   expect(failures,failures.join("\n")).toEqual([]);
@@ -117,7 +120,9 @@ test("approval work items show deadline reminder and escalation audit fields", a
 test("approval UX is record first and uses human language", async ({ page }) => {
   const failures=watchRuntimeFailures(page);
   await page.goto("developer/approval-builder");
-  const create=page.getByRole("button",{name:/new process/i}); if(await create.isVisible().catch(()=>false)) await create.click();
+  const create=page.getByRole("button",{name:"New Approval Flow",exact:true});
+  await expect(create).toBeVisible({ timeout: 30_000 });
+  await create.click();
   await expect(page.getByText("Why is approval required?",{exact:true})).toBeVisible();
   await expect(page.getByText("Review before activation",{exact:true})).toBeVisible();
   await expect(page.getByRole("option",{name:"Any one approver can decide"})).toHaveCount(1);
