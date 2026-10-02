@@ -3071,6 +3071,47 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       normalized.push({ appId, recordTypeId, roleId, deviceProfile, requiredPermissions, priority });
     }
 
+    for (const row of normalized) {
+      const conflict = await db(
+        `SELECT a.id,l.id AS layout_id,l.name AS layout_name
+           FROM platform_layout_assignments a
+           JOIN platform_layouts l ON l.id=a.layout_id
+          WHERE l.object_id=$1
+            AND l.page_type=$2
+            AND l.id<>$3
+            AND l.active=true
+            AND a.active=true
+            AND a.company_id=$4
+            AND a.app_id IS NOT DISTINCT FROM $5::uuid
+            AND a.record_type_id IS NOT DISTINCT FROM $6::uuid
+            AND a.role_id IS NOT DISTINCT FROM $7::uuid
+            AND a.device_profile=$8
+            AND a.priority=$9
+            AND a.required_permissions=$10::jsonb
+          LIMIT 1`,
+        [
+          layout.object_id,
+          layout.page_type,
+          layout.id,
+          req.user.companyId,
+          row.appId,
+          row.recordTypeId,
+          row.roleId,
+          row.deviceProfile,
+          row.priority,
+          JSON.stringify([...row.requiredPermissions].sort()),
+        ]
+      );
+      if (conflict.rows.length) {
+        return res.status(409).json({
+          success: false,
+          code: "LAYOUT_ASSIGNMENT_CONFLICT",
+          message: `This activation scope is already assigned to "${conflict.rows[0].layout_name}". Change the scope or priority before saving.`,
+          conflict: conflict.rows[0],
+        });
+      }
+    }
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
