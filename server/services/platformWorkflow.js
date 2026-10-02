@@ -3459,6 +3459,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const choices = (Array.isArray(source) ? source : []).map((item) => ({
         label: String(getPath(item, action.choiceLabelPath) ?? ""),
         value: getPath(item, action.choiceValuePath),
+        controllingValues: Array.isArray(item?.controllingValues) ? item.controllingValues : undefined,
       })).filter((choice) => choice.label);
       workflowVariables.variables[String(action.resourceName)] = choices;
       return { status: "completed", resourceName: String(action.resourceName), resourceType: "choice_collection", value: choices, count: choices.length };
@@ -3488,7 +3489,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const config = field.config && typeof field.config === "object" ? field.config : {};
       const raw = Array.isArray(config.options) ? config.options : Array.isArray(config.values) ? config.values : Array.isArray(config.choices) ? config.choices : [];
       const choices = raw.map((item) => typeof item === "object"
-        ? { label: String(item.label ?? item.value ?? ""), value: item.value ?? item.key ?? item.label }
+        ? {
+            label: String(item.label ?? item.value ?? ""),
+            value: item.value ?? item.key ?? item.label,
+            controllingValues: Array.isArray(item.controllingValues) ? item.controllingValues : Array.isArray(item.validFor) ? item.validFor : undefined,
+          }
         : { label: String(item), value: item }).filter((choice) => choice.label);
       workflowVariables.variables[String(action.resourceName)] = choices;
       return { status: "completed", resourceName: String(action.resourceName), resourceType: "choice_collection", value: choices, count: choices.length };
@@ -3598,7 +3603,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         if (component?.choiceResource) {
           const resolved = resolveScreenResource(component.choiceResource);
           const choices = Array.isArray(resolved) ? resolved : resolved && typeof resolved === "object" && Object.prototype.hasOwnProperty.call(resolved, "label") ? [resolved] : [];
-          next.options = choices.map((choice) => ({ label: String(choice?.label ?? choice?.value ?? ""), value: choice?.value ?? choice?.label })).filter((choice) => choice.label);
+          next.options = choices.map((choice) => ({
+            label: String(choice?.label ?? choice?.value ?? ""),
+            value: choice?.value ?? choice?.label,
+            controllingValues: Array.isArray(choice?.controllingValues) ? choice.controllingValues : undefined,
+          })).filter((choice) => choice.label);
         }
         if (typeof component?.defaultValue === "string" && /^(?:\$|steps\.|variables\.)/.test(component.defaultValue)) {
           next.defaultValue = resolveScreenResource(component.defaultValue);
