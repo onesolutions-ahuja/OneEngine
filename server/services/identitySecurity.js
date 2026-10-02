@@ -206,7 +206,7 @@ export async function recordPasswordChange(db, { companyId, userId, previousHash
     `INSERT INTO identity_user_security_state(user_id,company_id,password_changed_at,failed_login_attempts,locked_until,sessions_revoked_at,updated_at)
      VALUES($1,$2,NOW(),0,NULL,CASE WHEN $3 THEN NOW() ELSE NULL END,NOW())
      ON CONFLICT(user_id) DO UPDATE SET company_id=EXCLUDED.company_id,password_changed_at=NOW(),
-       failed_login_attempts=0,locked_until=NULL,
+       failed_login_attempts=0,locked_until=NULL,locked_indefinitely=FALSE,
        sessions_revoked_at=CASE WHEN $3 THEN NOW() ELSE identity_user_security_state.sessions_revoked_at END,
        updated_at=NOW()`,
     [userId, companyId, revokeSessions]
