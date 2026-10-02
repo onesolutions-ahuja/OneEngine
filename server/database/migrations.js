@@ -28,6 +28,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0035_security_governance",
   "0036_connected_app_user_assignments",
   "0037_data_email_delegated_admin",
+  "0038_passkey_passwordless_login",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -165,6 +166,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Data protection, email security and delegated administration",
     up: client => client.query(
       readFileSync(new URL("./migrations/0037_data_email_delegated_admin.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0038_passkey_passwordless_login",
+    version: "38",
+    name: "Tenant-controlled passwordless passkey sign-in",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0038_passkey_passwordless_login.sql", import.meta.url), "utf8")
     ),
   },
 ]);
