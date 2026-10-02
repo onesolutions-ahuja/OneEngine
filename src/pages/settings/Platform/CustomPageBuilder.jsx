@@ -73,6 +73,25 @@ const BUILDER_CSS = `
 
 function uid(prefix) { return makeNodeId(prefix); }
 
+function collectPageNodes(sections, excludeId = "") {
+  const rows = [];
+  const visit = (nodes = []) => {
+    for (const node of nodes) {
+      if (!node?.id) continue;
+      if (String(node.id) !== String(excludeId || "")) {
+        rows.push({
+          id: node.id,
+          componentKey: node.componentKey,
+          label: `${node.label || node.text || nodeLabel(node)} · ${node.componentKey}`,
+        });
+      }
+      if (Array.isArray(node.children)) visit(node.children);
+    }
+  };
+  for (const section of sections || []) visit(section.children || []);
+  return rows;
+}
+
 function newPageDraft() {
   return {
     pageKey: "",
@@ -261,6 +280,23 @@ export default function CustomPageBuilder({ onMessage, onError }) {
           showCounts: true,
           allowCollapse: true,
           defaultExpandedDepth: 1,
+        },
+        interaction: { type: "none" },
+      };
+    }
+    if (componentKey === "process_path") {
+      return {
+        id: uid("process_path"),
+        componentKey,
+        label: meta.label,
+        collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 1, pagination: false, fields: [] },
+        config: {
+          statusField: "status",
+          titleField: "name",
+          stages: [],
+          allowStageChange: false,
+          keyFields: [],
+          guidance: {},
         },
         interaction: { type: "none" },
       };
@@ -490,6 +526,10 @@ const updateNode = (nodeId, changes) => {
   const selected = selectedNodeId ? findNode(draft.sections, selectedNodeId) : null;
   const selectedNode = selected?.node || null;
   const selectedParentKey = selected?.parentComponentKey ?? null;
+  const interactionTargets = useMemo(
+    () => collectPageNodes(draft.sections, selectedNodeId),
+    [draft.sections, selectedNodeId],
+  );
 
   /* Drag state via HTML5 DnD; payload through dataTransfer. */
   const onDragOver = (event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; };
@@ -661,12 +701,75 @@ const updateNode = (nodeId, changes) => {
           </span>
         </div>
 
-        {node.componentKey === "multi_container" ? <MultiContainerProperties node={node} objects={objects} registry={registry} onChange={(changes) => updateNode(node.id, changes)} /> : null}
-        {node.componentKey === "table" ? <TableProperties node={node} objects={objects} onChange={(changes) => updateNode(node.id, changes)} /> : null}
-        {node.componentKey === "tree_view" ? <TreeViewProperties node={node} objects={objects} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        {node.componentKey === "multi_container" ? <MultiContainerProperties node={node} objects={objects} registry={registry} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        {node.componentKey === "table" ? <TableProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        {node.componentKey === "tree_view" ? <TreeViewProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
         {[
           "timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature",
-        ].includes(node.componentKey) ? <AdvancedComponentProperties node={node} objects={objects} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        ].includes(node.componentKey) ? <AdvancedComponentProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        {node.componentKey === "process_path" ? (
+          <RecordCollectionDataGroup node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)}>
+            {({ fields: availableFields }) => {
+              const config = node.config || {};
+              const picklists = availableFields.filter((field) => ["picklist", "select"].includes(field.field_type));
+              const setConfig = (patch) => updateNode(node.id, { config: { ...config, ...patch } });
+              const selectedStatus = availableFields.find((field) => field.api_name === config.statusField);
+              const options = Array.isArray(selectedStatus?.options) ? selectedStatus.options : [];
+              const normalizedOptions = options.map((option) => ({
+                value: String(typeof option === "object" ? option.value ?? option.key ?? option.label ?? "" : option),
+                label: String(typeof option === "object" ? option.label ?? option.name ?? option.value ?? "" : option),
+              })).filter((option) => option.value);
+              return (
+                <div className="space-y-3">
+                  <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+                    <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Path</legend>
+                    <div className="space-y-1">
+                      <label className={labelClass}>Stage / Status field</label>
+                      <select className={inputClass} value={config.statusField || ""} onChange={(event) => setConfig({ statusField: event.target.value, stages: [] })}>
+                        <option value="">Select picklist…</option>
+                        {picklists.map((field) => <option key={field.id || field.api_name} value={field.api_name}>{field.label || field.api_name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className={labelClass}>Title field</label>
+                      <select className={inputClass} value={config.titleField || ""} onChange={(event) => setConfig({ titleField: event.target.value })}>
+                        <option value="">None</option>
+                        {availableFields.map((field) => <option key={field.id || field.api_name} value={field.api_name}>{field.label || field.api_name}</option>)}
+                      </select>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-slate-600">
+                      <input type="checkbox" checked={config.allowStageChange === true} onChange={(event) => setConfig({ allowStageChange: event.target.checked })}/>
+                      Allow users to change stage from the Path
+                    </label>
+                    <div className="space-y-1">
+                      <label className={labelClass}>Stages</label>
+                      <div className="max-h-44 space-y-1 overflow-auto rounded-lg border border-slate-200 p-1.5">
+                        {normalizedOptions.length ? normalizedOptions.map((option) => {
+                          const stages = Array.isArray(config.stages) && config.stages.length ? config.stages : normalizedOptions.map((item) => item.value);
+                          const checked = stages.includes(option.value);
+                          return (
+                            <label key={option.value} className="flex items-center gap-2 rounded px-1 py-0.5 text-xs text-slate-600">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => setConfig({
+                                  stages: event.target.checked
+                                    ? [...new Set([...stages, option.value])]
+                                    : stages.filter((value) => value !== option.value),
+                                })}
+                              />
+                              {option.label}
+                            </label>
+                          );
+                        }) : <span className="text-[11px] text-slate-400">Choose a picklist field to load its stages.</span>}
+                      </div>
+                    </div>
+                  </fieldset>
+                </div>
+              );
+            }}
+          </RecordCollectionDataGroup>
+        ) : null}
         {node.componentKey === "container" ? (
           <div className="space-y-3">
             <div className="space-y-1">
@@ -704,6 +807,7 @@ const updateNode = (nodeId, changes) => {
             <div className="border-t border-slate-100 pt-3">
 <InteractionProperties
   node={node}
+  targetComponents={interactionTargets}
   onChange={(changes) => updateNode(node.id, changes)}
 />
             </div>
@@ -896,7 +1000,7 @@ function useCollectionFields(collection, objects) {
   return fields;
 }
 
-function RecordCollectionDataGroup({ node, objects, onChange, children }) {
+function RecordCollectionDataGroup({ node, objects, onChange, children, targetComponents = [] }) {
   const collection = node.collection || {};
   const fields = useCollectionFields(collection, objects);
   const patchCollection = (changes) => onChange({ collection: { ...collection, ...changes } });
@@ -925,18 +1029,18 @@ function RecordCollectionDataGroup({ node, objects, onChange, children }) {
           <input type="checkbox" checked={node.clickable !== false} onChange={(event) => onChange({ clickable: event.target.checked })} />
           Clickable records
         </label>
-        <InteractionProperties node={node} onChange={onChange} />
+        <InteractionProperties node={node} targetComponents={targetComponents} onChange={onChange} />
       </fieldset>
     </>
   );
 }
 
 /** DATA / LAYOUT / CONTENT / INTERACTION groups for MultiContainer. */
-function MultiContainerProperties({ node, objects, registry, onChange }) {
+function MultiContainerProperties({ node, objects, registry, onChange, targetComponents = [] }) {
   const collection = node.collection || {};
   const columns = multiContainerColumns({ sectionWidth: "full", containerSize: node.containerSize || "medium", device: "desktop" });
   return (
-    <RecordCollectionDataGroup node={node} objects={objects} onChange={onChange}>
+    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} onChange={onChange}>
       {({ fields, patchCollection }) => (
         <>
           <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
@@ -981,9 +1085,9 @@ function MultiContainerProperties({ node, objects, registry, onChange }) {
 }
 
 /** DATA / COLUMNS / INTERACTION groups for Table / List. */
-function TableProperties({ node, objects, onChange }) {
+function TableProperties({ node, objects, onChange, targetComponents = [] }) {
   return (
-    <RecordCollectionDataGroup node={node} objects={objects} onChange={onChange}>
+    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} onChange={onChange}>
       {({ fields, patchCollection }) => (
         <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
           <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Columns</legend>
@@ -1007,12 +1111,12 @@ function TableProperties({ node, objects, onChange }) {
   );
 }
 
-function TreeViewProperties({ node, objects, onChange }) {
+function TreeViewProperties({ node, objects, onChange, targetComponents = [] }) {
   const collection = node.collection || {};
   const config = node.config || {};
   const { fields, patchCollection } = { fields: [], patchCollection: () => {} };
   return (
-    <RecordCollectionDataGroup node={node} objects={objects} onChange={onChange}>
+    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} onChange={onChange}>
       {({ fields: availableFields, patchCollection: patchRecordCollection }) => (
         <div className="space-y-3">
           <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
@@ -1069,11 +1173,11 @@ function TreeViewProperties({ node, objects, onChange }) {
   );
 }
 
-function AdvancedComponentProperties({ node, objects, onChange }) {
+function AdvancedComponentProperties({ node, objects, onChange, targetComponents = [] }) {
   const collection = node.collection || {};
   const config = node.config || {};
   return (
-    <RecordCollectionDataGroup node={node} objects={objects} onChange={onChange}>
+    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} onChange={onChange}>
       {({ fields: availableFields, patchCollection }) => {
         const setConfig = (patch) => onChange({ config: { ...config, ...patch } });
         const common = (
@@ -1218,14 +1322,14 @@ function SortEditor({ collection, fields, onChange }) {
 }
 
 /** INTERACTION group — delegates to the generic picker. */
-function InteractionProperties({ node,onChange }) {
+function InteractionProperties({ node, onChange, targetComponents = [] }) {
   return (
     <div className="space-y-2">
       <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">On Click</p>
       <ActionWorkflowPicker
         interaction={node.interaction || { type: "none" }}
         objectKey={node.collection?.objectKey || ""}
-      
+        targetComponents={targetComponents}
         onChange={(interaction) => onChange({ interaction })}
       />
     </div>
