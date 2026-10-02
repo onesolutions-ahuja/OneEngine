@@ -2153,6 +2153,15 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                           <label className="block text-xs font-medium text-slate-600">Placeholder<input className={inputClass} value={component.placeholder || ""} onChange={(event) => updateComponent(componentIndex, { placeholder: event.target.value })} /></label>
                         </div>
                         <label className="block text-xs font-medium text-slate-600">Help Text<input className={inputClass} value={component.helpText || ""} onChange={(event) => updateComponent(componentIndex, { helpText: event.target.value })} /></label>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <label className="block text-xs font-medium text-slate-600">Validate Input Formula
+                            <input className={inputClass} value={component.validationFormula || ""} onChange={(event) => updateComponent(componentIndex, { validationFormula: event.target.value })} placeholder="age >= 18" />
+                          </label>
+                          <label className="block text-xs font-medium text-slate-600">Validation Error Message
+                            <input className={inputClass} value={component.validationMessage || ""} onChange={(event) => updateComponent(componentIndex, { validationMessage: event.target.value })} placeholder="Enter a valid value." />
+                          </label>
+                        </div>
+                        <p className="text-[11px] text-slate-500">Validation formulas can reference other input component API Names on this screen and must evaluate to true.</p>
                         <div className="flex flex-wrap gap-4">
                           <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={component.required === true} onChange={(event) => updateComponent(componentIndex, { required: event.target.checked })} /> Required</label>
                           <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={component.visible !== false} onChange={(event) => updateComponent(componentIndex, { visible: event.target.checked })} /> Visible</label>
