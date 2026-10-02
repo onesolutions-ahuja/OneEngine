@@ -3602,10 +3602,14 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const stages = Object.values(workflowVariables.variables || {})
         .filter((value) => value && typeof value === "object" && !Array.isArray(value) && Number.isFinite(Number(value.order)) && value.label)
         .sort((a, b) => Number(a.order) - Number(b.order));
+      const currentStage = rawScreen.currentStageResource
+        ? resolveScreenResource(rawScreen.currentStageResource)
+        : null;
       const screen = {
         ...rawScreen,
         components,
         stages,
+        currentStage,
         allowBack: action.allowBack !== false,
         allowFinish: action.allowFinish !== false,
         showFooter: action.showFooter !== false,
