@@ -24,7 +24,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   const router=express.Router();
   const manage=[authenticate,authorize("settings.manage")];
 
-  async function finishChallenge(req,res,{challenge,user,assuranceLevel="HIGH",mfaMethod="MFA",trust=false,deviceName=null}){
+  async function finishChallenge(req,res,{challenge,user,assuranceLevel="HIGH",mfaMethod="MFA",trust=false,deviceName=null,extra={}}){
     const consumed=await consumeChallenge(db,challenge.id);
     if(!consumed)return res.status(400).json({success:false,code:"MFA_CHALLENGE_EXPIRED",message:"Verification challenge has expired"});
     const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
@@ -41,7 +41,7 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     user.session_id=sessionId;
     const token=createToken(user);
     await writeLoginHistory(db,{user,identifier:user.email||user.username,status:"SUCCESS",reason:"MFA_VERIFIED",ip:clientIp(req),userAgent:req.get("user-agent")||null,authMethod:challenge.context?.authMethod||"PASSWORD",sessionId,req});
-    res.json({success:true,token,deviceToken,user:{
+    res.json({success:true,token,deviceToken,...extra,user:{
       id:user.id,username:user.username,name:user.full_name,role:user.role_name,defaultLandingPage:user.default_landing_page||"dashboard",
       companyId:user.company_id,storeId:user.store_id,mustChangePassword:user.must_change_password===true,
     }});
@@ -138,9 +138,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
     const ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code,markVerified:true});
     if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
-    await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
+    const recoveryCodes=await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
     const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.totpAssurance;
-    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"TOTP",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"TOTP",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
   });
 
   router.post("/auth/mfa/verify",async(req,res)=>{
@@ -201,9 +201,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       ON CONFLICT(user_id,method_type,label) DO UPDATE SET credential_id=EXCLUDED.credential_id,public_key=EXCLUDED.public_key,
        sign_count=EXCLUDED.sign_count,transports=EXCLUDED.transports,aaguid=EXCLUDED.aaguid,discoverable=EXCLUDED.discoverable,verified=TRUE,active=TRUE`,
       [user.company_id,user.id,String(req.body?.label||"Passkey"),id,publicKey,Number(cred.counter||0),JSON.stringify(cred.transports||[]),info.aaguid||null,info.credentialDeviceType==="multiDevice"]);
-    await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
+    const recoveryCodes=await replaceRecoveryCodes(db,{companyId:user.company_id,userId:user.id});
     const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.passkeyAssurance;
-    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+    return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
   });
 
   router.post("/auth/mfa/passkey/options",async(req,res)=>{
@@ -240,6 +240,44 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       return res.json({success:true,assuranceLevel:"HIGH"});
     }
     return finishChallenge(req,res,{challenge,user,assuranceLevel:"HIGH",mfaMethod:"PASSKEY",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName});
+  });
+
+  router.get("/security/mfa/users",...manage,async(req,res)=>{
+    const r=await db(`SELECT u.id,u.username,u.full_name,u.email,
+      COUNT(m.id) FILTER (WHERE m.active=TRUE AND m.verified=TRUE)::int AS method_count,
+      COALESCE(jsonb_agg(DISTINCT m.method_type) FILTER (WHERE m.active=TRUE AND m.verified=TRUE),'[]'::jsonb) AS method_types
+      FROM users u LEFT JOIN identity_mfa_methods m ON m.user_id=u.id AND m.company_id=u.company_id
+      WHERE u.company_id=$1 GROUP BY u.id ORDER BY u.full_name,u.username`,[req.user.companyId]);
+    res.json({success:true,data:r.rows});
+  });
+
+  router.get("/security/mfa/users/:userId/methods",...manage,async(req,res)=>{
+    const r=await db(`SELECT id,method_type,label,phishing_resistant,verified,active,created_at,last_used_at
+      FROM identity_mfa_methods WHERE company_id=$1 AND user_id=$2 ORDER BY created_at`,[req.user.companyId,req.params.userId]);
+    res.json({success:true,data:r.rows});
+  });
+
+  router.post("/security/mfa/users/:userId/methods/:methodId/disconnect",...manage,async(req,res)=>{
+    const r=await db(`UPDATE identity_mfa_methods SET active=FALSE
+      WHERE id=$1 AND user_id=$2 AND company_id=$3 RETURNING id`,[req.params.methodId,req.params.userId,req.user.companyId]);
+    if(!r.rows.length)return res.status(404).json({success:false,message:"MFA method not found"});
+    await writeAudit?.(req.user.companyId,req.user.id,"security.mfa_method_disconnected","identity_mfa_method",req.params.methodId,{userId:req.params.userId});
+    res.json({success:true});
+  });
+
+  router.get("/security/trusted-devices/all",...manage,async(req,res)=>{
+    const r=await db(`SELECT d.id,d.user_id,u.username,u.full_name,d.device_name,d.platform,d.browser,d.first_ip::text,d.last_ip::text,
+      d.trusted_until,d.created_at,d.last_seen_at,d.revoked_at
+      FROM identity_trusted_devices d JOIN users u ON u.id=d.user_id
+      WHERE d.company_id=$1 ORDER BY d.last_seen_at DESC`,[req.user.companyId]);
+    res.json({success:true,data:r.rows});
+  });
+
+  router.post("/security/trusted-devices/:id/admin-revoke",...manage,async(req,res)=>{
+    const r=await db("UPDATE identity_trusted_devices SET revoked_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id",[req.params.id,req.user.companyId]);
+    if(!r.rows.length)return res.status(404).json({success:false,message:"Trusted device not found"});
+    await writeAudit?.(req.user.companyId,req.user.id,"security.trusted_device_revoked","identity_trusted_device",req.params.id,{});
+    res.json({success:true});
   });
 
   router.get("/security/trusted-devices",authenticate,async(req,res)=>{
