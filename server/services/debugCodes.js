@@ -44,6 +44,7 @@ export const BUILTIN_DEBUG_CODES = Object.freeze([
 
   { code:"OEIA01", legacyCode:"OEI01", subsystem:"I", cause:"A", category:"Integration", title:"Integration authentication failed", userMessage:"The connected service needs attention.", internalDescription:"Connector/provider authentication or credential validation failed.", severity:"ERROR", retryable:false, matchPattern:"oauth|authentication.*provider|invalid credential|token exchange|unauthorized provider" },
   { code:"OEIC01", subsystem:"I", cause:"C", category:"Integration", title:"Integration connection failed", userMessage:"The connected service could not be reached.", internalDescription:"Connector/provider network or connection operation failed.", severity:"ERROR", retryable:true, matchPattern:"connector.*failed|provider.*unavailable|integration.*connection" },
+  { code:"OEIC02", subsystem:"I", cause:"C", category:"Integration", title:"Integration provider timeout", userMessage:"The connected service did not respond in time.", internalDescription:"External integration/provider request timed out before the OneEngine client timeout.", severity:"ERROR", retryable:true, matchPattern:"PROVIDER_TIMEOUT|provider request timed out" },
   { code:"OEIR01", subsystem:"I", cause:"R", category:"Integration", title:"Integration rate limited", userMessage:"The connected service is temporarily busy.", internalDescription:"External provider rate limit/throttle response.", severity:"WARNING", retryable:true, matchPattern:"provider.*rate limit|429.*provider|throttl" },
   { code:"OEIW01", subsystem:"I", cause:"W", category:"Integration", title:"Integration webhook failed", userMessage:"A connected-service event could not be processed.", internalDescription:"Inbound/outbound webhook validation or processing failed.", severity:"ERROR", retryable:true, matchPattern:"webhook.*failed|signature.*invalid" },
 
@@ -168,6 +169,7 @@ export function classifyDebugCode(error, status = 500) {
     IDENTITY_DATABASE_UNAVAILABLE:"OEDC01",
     STEP_UP_REQUIRED:"OERS01", RESOURCE_BLOCKED:"OERS01",
     NOT_LICENSED:"OEPE01", NOT_ENTITLED:"OEPE01", NOT_INSTALLED:"OEPD01",
+    PROVIDER_TIMEOUT:"OEIC02", AUTH_FAILED:"OEIA01", PROVIDER_NOT_CONFIGURED:"OEIA01",
     UNREGISTERED_CAPABILITY:"OEXR01", CAPABILITY_MISMATCH:"OEXC01",
     RELEASE_UPGRADE_FAILED:"OEPU01", WORKFLOW_EXECUTION_FAILED:"OEWE01",
   };
