@@ -15,9 +15,18 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0022_identity_access_security",
   "0023_identity_security_alignment",
   "0024_identity_security_phase1_final",
+  "0025_identity_lockout_forever",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
+  {
+    key: "0025_identity_lockout_forever",
+    version: "25",
+    name: "Support indefinite account lockout",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0025_identity_lockout_forever.sql", import.meta.url), "utf8")
+    ),
+  },
   {
     key: "0024_identity_security_phase1_final",
     version: "24",
