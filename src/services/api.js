@@ -195,9 +195,16 @@ const OE_CODE_RE = /^OE[A-Z]{2}[0-9]{2}$/
 function clientDebugCode(error, status = 0, payload = null) {
   const explicit = String(payload?.oeCode || payload?.code || error?.oeCode || '').toUpperCase()
   if (OE_CODE_RE.test(explicit)) return explicit
+  const technicalCode = String(error?.code || '').toUpperCase()
+  const message = String(error?.message || '')
+  if (technicalCode === 'UNREGISTERED_CAPABILITY') return 'OEXR01'
+  if (technicalCode === 'CAPABILITY_MISMATCH') return 'OEXC01'
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'OEND01'
   if (error?.code === 'API_TIMEOUT' || error?.name === 'TimeoutError') return 'OENT01'
-  if (error?.name === 'TypeError' || error?.name === 'NetworkError' || /failed to fetch|networkerror|network request failed/i.test(String(error?.message || ''))) return 'OENR01'
+  if (/indexeddb|local storage|cache/i.test(message) && /fail|unavailable|abort|quota/i.test(message)) return 'OECI01'
+  if (/offline.*sync|sync.*offline|offline queue/i.test(message)) return 'OECS01'
+  if (/failed to fetch dynamically imported module|loading chunk|module script/i.test(message)) return 'OEFL01'
+  if (error?.name === 'TypeError' || error?.name === 'NetworkError' || /failed to fetch|networkerror|network request failed/i.test(message)) return 'OENR01'
   if (status === 401) return 'OEUA01'
   if (status === 403) return 'OERP01'
   if (status === 404) return 'OEAF01'
@@ -220,6 +227,10 @@ function defaultDebugMessage(code) {
     OEUA01: 'Please sign in again to continue.',
     OEFR01: 'This screen could not be displayed.',
     OEFL01: 'This page could not be loaded.',
+    OECI01: 'Local data could not be loaded. Please refresh and try again.',
+    OECS01: 'Offline changes could not be synchronised.',
+    OEXR01: 'This operation is not registered in OneEngine.',
+    OEXC01: 'This operation failed a trusted-runtime check.',
   }
   return messages[code] || 'OneEngine could not complete this request.'
 }
