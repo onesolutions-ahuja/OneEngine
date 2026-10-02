@@ -66,8 +66,22 @@ export function fieldValueError(field, value) {
   }
   if (type === "select" || type === "picklist") {
     const options = localPicklistOptions(field);
-    const allowed = options.filter((option) => option.active !== false).map((option) => option.value);
-    if (allowed.length && !allowed.includes(value)) return `${field.label} must be one of the configured options`;
+    const allowed = options.filter((option) => option.active !== false).map((option) => String(option.value));
+    if (allowed.length && !allowed.includes(String(value))) return `${field.label} must be one of the configured options`;
+  }
+  if (type === "multiselect") {
+    const options = localPicklistOptions(field);
+    const allowed = new Set(options.filter((option) => option.active !== false).map((option) => String(option.value)));
+    let selected = Array.isArray(value) ? value : [];
+    if (!selected.length && typeof value === "string" && value.trim()) {
+      try {
+        const parsed = JSON.parse(value);
+        selected = Array.isArray(parsed) ? parsed : value.split(/[;,]/);
+      } catch {
+        selected = value.split(/[;,]/);
+      }
+    }
+    if (allowed.size && selected.some((item) => !allowed.has(String(item).trim()))) return `${field.label} contains an unavailable option`;
   }
   if (type === "lookup" && typeof value !== "string" && typeof value !== "number") return `${field.label} must reference a record`;
   return null;
@@ -99,7 +113,7 @@ export async function valueSetOptions(db, field, req) {
 export async function enrichFields(db, fields, req) {
   fields = tenantFields(fields, req.user.companyId);
   return Promise.all(fields.map(async (field) => {
-    if (!["select", "picklist"].includes(field.field_type)) return field;
+    if (!["select", "picklist", "multiselect"].includes(field.field_type)) return field;
     return { ...field, options: await valueSetOptions(db, field, req) };
   }));
 }
