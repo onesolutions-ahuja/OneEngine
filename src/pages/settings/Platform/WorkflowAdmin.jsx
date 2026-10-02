@@ -17,7 +17,7 @@ const WORKFLOW_VISUAL_CSS = `
   }
   .workflow-builder-header {
     display: grid;
-    grid-template-columns: auto minmax(210px, .8fr) minmax(0, 1.2fr);
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 12px;
     align-items: center;
     padding: 10px 12px;
@@ -792,6 +792,29 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 10px;
   }
   .workflow-end-node span { font-size: 7px; color: #706e6b; }
+  .workflow-flow-properties-panel,
+  .workflow-path-action-panel {
+    position: fixed;
+    z-index: 80;
+    top: 50%;
+    left: 50%;
+    width: min(430px, calc(100vw - 32px));
+    transform: translate(-50%, -50%);
+    overflow: hidden;
+    border: 1px solid #c9c7c5;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 18px 50px rgba(0,0,0,.24);
+  }
+  .workflow-path-action-body { padding: 14px; }
+  .workflow-path-action-body p { margin: 0 0 12px; color: #3e3e3c; font-size: 11px; line-height: 1.45; }
+  .workflow-path-action-body label { display: grid; gap: 5px; color: #3e3e3c; font-size: 10px; font-weight: 700; }
+  .workflow-path-action-body select { width: 100%; min-height: 36px; border: 1px solid #c9c7c5; border-radius: 4px; background: #fff; padding: 6px 8px; color: #181818; font-size: 11px; }
+  .workflow-path-action-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .workflow-flow-property-readonly { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #eef1f6; padding-top: 10px; font-size: 10px; }
+  .workflow-flow-property-readonly span { color: #706e6b; }
+  .workflow-flow-property-readonly strong { color: #181818; }
+  .workflow-danger-button { min-height: 38px; border: 1px solid #ba0517; border-radius: 8px; background: #ba0517; padding: 0 15px; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
   .workflow-action-picker { overflow: hidden; border: 1px solid #d8dde6; border-radius: 6px; background: #fff; }
   .workflow-action-picker-search { position: relative; padding: 8px; border-bottom: 1px solid #eef1f6; }
   .workflow-action-picker-search span { position: absolute; left: 17px; top: 17px; color: #706e6b; font-size: 11px; }
@@ -955,7 +978,7 @@ const actionOptions = [
   { value: "RUN_SUBFLOW", label: "Subflow" },
   { value: "WEBHOOK", label: "Webhook" },
   { value: "CONDITION", label: "Decision" },
-  { value: "WAIT", label: "Pause" },
+  { value: "WAIT", label: "Wait for Amount of Time" },
   { value: "STOP", label: "End" },
 ];
 
@@ -1021,7 +1044,7 @@ function makeStep(type = "CREATE_RECORD") {
       expression: "",
       formulaInputs: {},
       collection: "",
-      itemVariable: "currentItem",
+      itemVariable: type === "LOOP" ? "currentItem_Loop" : "currentItem",
       bodyBranch: [],
       recordIds: "",
       pathLabel: "Scheduled Path",
@@ -1138,7 +1161,7 @@ function workflowActionIssue(step, definition = null) {
   }
   if (step.type === "LOOP") {
     if (!config.collection) return "Choose the collection to loop through.";
-    if (!config.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.itemVariable))) return "Enter a valid Current Item variable name.";
+    if (!config.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.itemVariable))) return "The Loop Current Item resource could not be generated.";
     if (!Array.isArray(config.bodyBranch) || !config.bodyBranch.length) return "Choose at least one step for the Loop body.";
   }
   if (step.type === "BULK_UPDATE_RECORDS") {
@@ -1386,12 +1409,12 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
       resources.push(
         {
           value: `variables.${step.config.itemVariable}`,
-          label: `${step.config.itemVariable} · Current Loop Item`,
+          label: `Current Item from ${label}`,
           type: "record",
         },
         {
           value: `variables.${step.config.itemVariable}.id`,
-          label: `${step.config.itemVariable} → Record ID`,
+          label: `Current Item from ${label} → Record ID`,
           type: "record id",
         },
         { value: `${prefix}.count`, label: `${label} → Iteration Count`, type: "number" },
@@ -1667,11 +1690,11 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
         return (
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Constant name</label>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">API Name</label>
               <input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="e.g. vatRate" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Type</label>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Data Type</label>
               <select className={inputClass} value={step.config?.resourceType || "text"} onChange={(event) => updateConfig({ resourceType: event.target.value, value: "" })}>
                 <option value="text">Text</option>
                 <option value="number">Number</option>
@@ -1680,7 +1703,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
                 <option value="datetime">Date / Time</option>
               </select>
             </div>
-            <ResourceOrLiteralInput label="Fixed value" value={step.config?.value ?? ""} onChange={(value) => updateConfig({ value })} rootObjectKey={rootObjectKey} extraResources={[]} type={step.config?.resourceType || "text"} required allowResource={false} />
+            <ResourceOrLiteralInput label="Value" value={step.config?.value ?? ""} onChange={(value) => updateConfig({ value })} rootObjectKey={rootObjectKey} extraResources={[]} type={step.config?.resourceType || "text"} required allowResource={false} />
             <p className="text-[11px] text-slate-500">Constants keep the same value for the flow run and are available as Resources.</p>
           </div>
         );
@@ -1689,11 +1712,11 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           <div className="space-y-3">
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Formula name</label>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">API Name</label>
                 <input className={inputClass} value={step.config?.resourceName || ""} onChange={(event) => updateConfig({ resourceName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="e.g. totalWithTax" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Result type</label>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Data Type</label>
                 <select className={inputClass} value={step.config?.resultType || "number"} onChange={(event) => updateConfig({ resultType: event.target.value })}>
                   <option value="number">Number</option>
                   <option value="text">Text</option>
@@ -1704,8 +1727,8 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Named inputs</label>
-              <MappingEditor value={step.config?.formulaInputs || {}} onChange={(formulaInputs) => updateConfig({ formulaInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Formula name" valueLabel="Map from resource" />
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Formula Resources</label>
+              <MappingEditor value={step.config?.formulaInputs || {}} onChange={(formulaInputs) => updateConfig({ formulaInputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Reference Name" valueLabel="Resource" />
               <p className="mt-1 text-[11px] text-slate-500">Use simple names such as amount, tax or customerCount. Those names are what you use in the formula below.</p>
             </div>
             <div>
@@ -1725,10 +1748,9 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               value={step.config?.collection || ""}
               onChange={(collection) => updateConfig({ collection })}
             />
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Current Item variable</label>
-              <input className={inputClass} value={step.config?.itemVariable || "currentItem"} onChange={(event) => updateConfig({ itemVariable: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} />
-              <p className="mt-1 text-[11px] text-slate-500">Steps inside the Loop can use this Resource to access the item being processed.</p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-medium text-slate-700">Current Item from {step.label || "Loop"}</div>
+              <p className="mt-1 text-[11px] text-slate-500">This resource is created automatically and is available to elements on the For Each Item path.</p>
             </div>
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
               Add elements to the <strong>For Each Item</strong> path using the + insertion points on the canvas. The flow continues on <strong>After Last</strong> when the collection is finished.
@@ -2296,12 +2318,17 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               const nextLabel = event.target.value;
               const previousGenerated = flowApiName(step.label || "");
               const nextApiName = !step.config?.apiName || step.config.apiName === previousGenerated ? flowApiName(nextLabel) : step.config.apiName;
-              updateStep(index, { label: nextLabel, config: { ...(step.config || {}), apiName: nextApiName } });
+              const nextConfig = { ...(step.config || {}), apiName: nextApiName };
+              if (step.type === "LOOP" && (!step.config?.itemVariable || step.config.itemVariable === "currentItem" || String(step.config.itemVariable).startsWith("currentItem_"))) nextConfig.itemVariable = `currentItem_${nextApiName || "Loop"}`;
+              updateStep(index, { label: nextLabel, config: nextConfig });
             }} placeholder="Element label" />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">API Name</label>
-            <input className={inputClass} value={step.config?.apiName || ""} onChange={(event) => updateConfig({ apiName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })} placeholder="Element_API_Name" />
+            <input className={inputClass} value={step.config?.apiName || ""} onChange={(event) => {
+              const apiName = event.target.value.replace(/[^A-Za-z0-9_]/g, "");
+              updateConfig({ apiName, ...(step.type === "LOOP" ? { itemVariable: `currentItem_${apiName || "Loop"}` } : {}) });
+            }} placeholder="Element_API_Name" />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Description</label>
@@ -2389,6 +2416,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const [collapsedBranches, setCollapsedBranches] = useState({});
   const [managerDetailId, setManagerDetailId] = useState(null);
   const [startSnapshot, setStartSnapshot] = useState(null);
+  const [pathActionDialog, setPathActionDialog] = useState(null);
   const selectedIndex = workflow.steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? workflow.steps[selectedIndex] : null;
 
@@ -2470,6 +2498,40 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         .map((step) => ({ ...step, config: stripStepReferences(step.config || {}, stepId) })),
     }));
   };
+  const ownedPathsForStep = (step) => {
+    const paths = [];
+    if (step?.type === "CONDITION") {
+      const outcomes = Array.isArray(step.config?.outcomes) && step.config.outcomes.length
+        ? step.config.outcomes
+        : [{ id: "outcome-1", label: "Outcome 1", branch: step.config?.ifBranch || [] }];
+      outcomes.forEach((outcome, index) => paths.push({ key: `decision:${outcome.id || index}`, kind: "decision", outcomeId: outcome.id || `outcome-${index + 1}`, label: outcome.label || `Outcome ${index + 1}`, ids: outcome.branch || [] }));
+      paths.push({ key: "decision:__default__", kind: "decision", outcomeId: "__default__", label: step.config?.defaultLabel || "Default Outcome", ids: step.config?.defaultBranch || step.config?.elseBranch || [] });
+    }
+    if (step?.type === "LOOP") paths.push({ key: "loop:body", kind: "loop", label: "For Each Item", ids: step.config?.bodyBranch || [] });
+    if (["ROUTE","RETRY"].includes(String(step?.config?.faultMode || "FAIL").toUpperCase())) paths.push({ key: "fault", kind: "fault", label: "Fault", ids: step.config?.faultBranch || [] });
+    return paths;
+  };
+  const collectOwnedIds = (seedIds = [], seen = new Set()) => {
+    for (const id of seedIds || []) {
+      const key = String(id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const child = workflow.steps.find((item) => String(item.id) === key);
+      if (child) ownedPathsForStep(child).forEach((path) => collectOwnedIds(path.ids, seen));
+    }
+    return seen;
+  };
+  const clearOwnedPath = (step, path) => {
+    const next = JSON.parse(JSON.stringify(step));
+    if (!path) return next;
+    if (path.kind === "decision") {
+      if (path.outcomeId === "__default__") next.config.defaultBranch = [];
+      else if (Array.isArray(next.config?.outcomes)) next.config.outcomes = next.config.outcomes.map((outcome) => String(outcome.id) === String(path.outcomeId) ? { ...outcome, branch: [] } : outcome);
+      else next.config.ifBranch = [];
+    } else if (path.kind === "loop") next.config.bodyBranch = [];
+    else if (path.kind === "fault") next.config.faultBranch = [];
+    return next;
+  };
   const removeStep = (index) => {
     const stepId = workflow.steps[index]?.id;
     if (!stepId) return;
@@ -2518,14 +2580,14 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     }
     return step;
   };
-  const insertPreparedStep = (step, index = workflow.steps.length) => {
+  const insertPreparedStep = (step, index = workflow.steps.length, extraSteps = []) => {
     setWorkflow((current) => {
       if (!branchTarget) {
-        return { ...current, steps: [...current.steps.slice(0, index), step, ...current.steps.slice(index)] };
+        return { ...current, steps: [...current.steps.slice(0, index), step, ...extraSteps, ...current.steps.slice(index)] };
       }
       if (branchTarget.kind && branchTarget.ownerId) {
         const ownerIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(branchTarget.ownerId));
-        if (ownerIndex < 0) return { ...current, steps: [...current.steps, step] };
+        if (ownerIndex < 0) return { ...current, steps: [...current.steps, step, ...extraSteps] };
         const owner = current.steps[ownerIndex];
         const key = branchTarget.kind === "loop" ? "bodyBranch" : branchTarget.kind === "scheduled" ? "branch" : "faultBranch";
         const targetIds = [...(owner.config?.[key] || [])];
@@ -2549,11 +2611,11 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
             ...(branchTarget.kind === "fault" ? { faultMode: ["ROUTE","RETRY"].includes(String(owner.config?.faultMode || "").toUpperCase()) ? owner.config.faultMode : "ROUTE" } : {}),
           },
         };
-        nextSteps.splice(branchInsertAt, 0, step);
+        nextSteps.splice(branchInsertAt, 0, step, ...extraSteps);
         return { ...current, steps: nextSteps };
       }
       const decisionIndex = current.steps.findIndex((candidate) => candidate.id === branchTarget.decisionId);
-      if (decisionIndex < 0) return { ...current, steps: [...current.steps, step] };
+      if (decisionIndex < 0) return { ...current, steps: [...current.steps, step, ...extraSteps] };
       const decision = current.steps[decisionIndex];
       const outcomes = Array.isArray(decision.config?.outcomes) && decision.config.outcomes.length
         ? decision.config.outcomes.map((outcome) => ({ ...outcome, branch: [...(outcome.branch || [])] }))
@@ -2590,7 +2652,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         ...decision,
         config: { ...(decision.config || {}), outcomes, defaultBranch, condition: null, ifBranch: [], elseBranch: [] },
       };
-      nextSteps.splice(branchInsertAt, 0, step);
+      nextSteps.splice(branchInsertAt, 0, step, ...extraSteps);
       return { ...current, steps: nextSteps };
     });
     setSelectedId(step.id);
@@ -2609,19 +2671,61 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     }
     insertPreparedStep(step, index);
   };
-  const copyStep = (step) => setClipboard({ mode: "copy", step: JSON.parse(JSON.stringify(step)) });
-  const cutStep = (step) => {
-    setClipboard({ mode: "cut", step: JSON.parse(JSON.stringify(step)) });
-    removeStepById(step.id);
-    if (selectedId === step.id) {
-      setSelectedId("__start__");
-      setPropertiesOpen(false);
-    }
+  const copyStep = (step) => setClipboard({ mode: "copy", step: JSON.parse(JSON.stringify(step)), bundle: [] });
+  const removeStepSet = (ids) => {
+    const remove = new Set([...ids].map(String));
+    setWorkflow((current) => ({
+      ...current,
+      steps: current.steps
+        .filter((item) => !remove.has(String(item.id)))
+        .map((item) => {
+          let config = item.config || {};
+          remove.forEach((id) => { config = stripStepReferences(config, id); });
+          return { ...item, config };
+        }),
+    }));
+  };
+  const deleteStepWithPathChoice = (step, keepKey = "__none__") => {
+    const paths = ownedPathsForStep(step);
+    const keepPath = paths.find((path) => path.key === keepKey) || null;
+    const keepIds = keepPath ? collectOwnedIds(keepPath.ids) : new Set();
+    const removeIds = new Set([String(step.id)]);
+    paths.filter((path) => path.key !== keepKey).forEach((path) => collectOwnedIds(path.ids, removeIds));
+    keepIds.forEach((id) => removeIds.delete(String(id)));
+    removeStepSet(removeIds);
+    setSelectedId("__start__");
+    setPropertiesOpen(false);
+    setPathActionDialog(null);
+  };
+  const cutStepWithPathChoice = (step, keepKey = "__none__") => {
+    const paths = ownedPathsForStep(step);
+    const keepPath = paths.find((path) => path.key === keepKey) || null;
+    const keepIds = keepPath ? collectOwnedIds(keepPath.ids) : new Set();
+    const cutIds = new Set();
+    paths.filter((path) => path.key !== keepKey).forEach((path) => collectOwnedIds(path.ids, cutIds));
+    keepIds.forEach((id) => cutIds.delete(String(id)));
+    let clipboardStep = keepPath ? clearOwnedPath(step, keepPath) : JSON.parse(JSON.stringify(step));
+    const bundle = workflow.steps.filter((item) => cutIds.has(String(item.id))).map((item) => JSON.parse(JSON.stringify(item)));
+    setClipboard({ mode: "cut", step: clipboardStep, bundle });
+    removeStepSet(new Set([String(step.id), ...cutIds]));
+    setSelectedId("__start__");
+    setPropertiesOpen(false);
+    setPathActionDialog(null);
+  };
+  const requestDeleteStep = (step) => {
+    const paths = ownedPathsForStep(step).filter((path) => path.ids?.length);
+    if (!paths.length) return deleteStepWithPathChoice(step);
+    setPathActionDialog({ mode: "delete", stepId: step.id, keepKey: "__none__", paths });
+  };
+  const requestCutStep = (step) => {
+    const paths = ownedPathsForStep(step).filter((path) => path.ids?.length);
+    if (!paths.length) return cutStepWithPathChoice(step);
+    setPathActionDialog({ mode: "cut", stepId: step.id, keepKey: "__none__", paths });
   };
   const pasteClipboard = (index = workflow.steps.length) => {
     if (!clipboard?.step) return;
     const step = prepareCopiedStep(clipboard.step, clipboard.mode === "cut");
-    insertPreparedStep(step, index);
+    insertPreparedStep(step, index, clipboard.mode === "cut" ? (clipboard.bundle || []) : []);
     if (clipboard.mode === "cut") setClipboard(null);
   };
   const addFaultPath = (step) => {
@@ -2632,21 +2736,6 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setInsertAt(null);
     setPaletteTab("elements");
     setPaletteOpen(true);
-  };
-  const dropAt = (event, index) => {
-    event.preventDefault();
-    const paletteType = event.dataTransfer.getData("application/x-onepos-flow-element");
-    if (paletteType) return addFromPalette(paletteType, index);
-    const sourceId = event.dataTransfer.getData("application/x-onepos-flow-node");
-    const from = workflow.steps.findIndex((step) => step.id === sourceId);
-    if (from < 0 || from === index) return;
-    setWorkflow((current) => {
-      const next = [...current.steps];
-      const [moved] = next.splice(from, 1);
-      const target = Math.max(0, index > from ? index - 1 : index);
-      next.splice(target, 0, moved);
-      return { ...current, steps: next };
-    });
   };
   const registeredActionOptions = registryOptions
     .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","SCHEDULE_PATH","STOP"].includes(option.value));
@@ -2720,7 +2809,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setSelectedId("__start__");
   };
   const updateScheduledPath = (index, patch) => updateStep(index, { config: { ...(workflow.steps[index]?.config || {}), ...patch } });
-  const removeScheduledPath = (index) => deleteStep(index);
+  const removeScheduledPath = (index) => {
+    const scheduledPath = workflow.steps[index];
+    if (scheduledPath) deleteStepWithPathChoice(scheduledPath, "__none__");
+  };
   const addResource = (type) => {
     const resource = type === "VARIABLE" ? makeStep("ASSIGNMENT") : makeStep(type);
     if (type === "VARIABLE") {
@@ -2739,6 +2831,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setPropertiesOpen(true);
     setResourceMenuOpen(false);
   };
+  const pathActionStep = pathActionDialog ? workflow.steps.find((item) => String(item.id) === String(pathActionDialog.stepId)) : null;
   const resourceQuery = paletteSearch.trim().toLowerCase();
   const visibleGlobalResources = globalResources.filter((item) => !resourceQuery || `${item.label} ${item.detail} ${item.type}`.toLowerCase().includes(resourceQuery));
   const visibleStepResources = stepResources.filter((item) => !resourceQuery || `${item.label} ${item.type}`.toLowerCase().includes(resourceQuery));
@@ -2782,9 +2875,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <div className="workflow-node-menu-popover">
                       <button type="button" onClick={() => inspectStep(child.id)}>Edit Element</button>
                       <button type="button" onClick={() => copyStep(child)}>Copy Element</button>
-                      <button type="button" onClick={() => cutStep(child)}>Cut Element</button>
+                      <button type="button" onClick={() => requestCutStep(child)}>Cut Element</button>
                       {flowElementSupportsFaultPath(child.type) ? <button type="button" onClick={() => addFaultPath(child)}>Add Fault Path</button> : null}
-                      <button type="button" className="is-danger" onClick={() => removeStep(childIndexInFlow)}>Delete Element</button>
+                      <button type="button" className="is-danger" onClick={() => requestDeleteStep(child)}>Delete Element</button>
                     </div>
                   </details>
                 </div>
@@ -2951,6 +3044,34 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" title="Toggle Toolbox" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide Toolbox" : "Show Toolbox"}</button>
           <button type="button" title="Toggle Properties" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide Properties" : "Show Properties"}</button>
         </div>
+        {pathActionDialog && pathActionStep ? (
+          <div className="workflow-path-action-panel" role="dialog" aria-label={pathActionDialog.mode === "cut" ? "Cut Element" : "Delete Element"}>
+            <div className="workflow-add-element-head">
+              <div>
+                <strong>{pathActionDialog.mode === "cut" ? "Cut Element" : "Delete Element"}</strong>
+                <small>{pathActionStep.label || getActionLabel(pathActionStep.type)}</small>
+              </div>
+              <button type="button" aria-label="Close" onClick={() => setPathActionDialog(null)}>×</button>
+            </div>
+            <div className="workflow-path-action-body">
+              <p>Choose the path whose elements you want to keep on the canvas.</p>
+              <label>
+                Keep Path
+                <select value={pathActionDialog.keepKey || "__none__"} onChange={(event) => setPathActionDialog((current) => ({ ...current, keepKey: event.target.value }))}>
+                  <option value="__none__">None, {pathActionDialog.mode === "cut" ? "cut" : "delete"} all paths</option>
+                  {(pathActionDialog.paths || []).map((path) => <option key={path.key} value={path.key}>{path.label}</option>)}
+                </select>
+              </label>
+              <div className="workflow-path-action-buttons">
+                <button type="button" className="workflow-cancel-button" onClick={() => setPathActionDialog(null)}>Cancel</button>
+                <button type="button" className={pathActionDialog.mode === "delete" ? "workflow-danger-button" : "workflow-save-button"} onClick={() => {
+                  if (pathActionDialog.mode === "cut") cutStepWithPathChoice(pathActionStep, pathActionDialog.keepKey || "__none__");
+                  else deleteStepWithPathChoice(pathActionStep, pathActionDialog.keepKey || "__none__");
+                }}>{pathActionDialog.mode === "cut" ? "Cut" : "Delete"}</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {(insertAt != null || branchTarget) ? (
           <div className="workflow-add-element-popover" role="dialog" aria-label="Add Element">
             <div className="workflow-add-element-head">
@@ -3046,9 +3167,9 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <div className="workflow-node-menu-popover">
                       <button type="button" onClick={() => inspectStep(step.id)}>Edit Element</button>
                       <button type="button" onClick={() => copyStep(step)}>Copy Element</button>
-                      <button type="button" onClick={() => cutStep(step)}>Cut Element</button>
+                      <button type="button" onClick={() => requestCutStep(step)}>Cut Element</button>
                       {flowElementSupportsFaultPath(step.type) ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
-                      <button type="button" className="is-danger" onClick={() => removeStep(index)}>Delete Element</button>
+                      <button type="button" className="is-danger" onClick={() => requestDeleteStep(step)}>Delete Element</button>
                     </div>
                   </details>
                 </div>
@@ -3207,6 +3328,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       flowType: initialWorkflow.action?.flowType || null,
       templateKey: initialWorkflow.action?.templateKey || null,
       defaultForNewDevices: initialWorkflow.action?.defaultForNewDevices === true,
+      apiName: initialWorkflow.action?.apiName || initialWorkflow.apiName || flowApiName(initialWorkflow.name || "Flow"),
+      description: initialWorkflow.action?.description || initialWorkflow.description || "",
       ui: initialWorkflow.action?.ui || null,
     },
     steps: (initialWorkflow.steps || initialWorkflow.action?.actions || []).map((step) => ({
@@ -3237,6 +3360,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       entryTransition: "EVERY_TIME",
       inputContract: [],
       outputContract: [],
+      actionMetadata: {
+        apiName: scopeKey === "whatsapp_assistant" ? "WhatsApp_Assistant_Flow" : "",
+        description: "",
+        flowType: null,
+      },
       steps: scopeKey === "whatsapp_assistant"
         ? [
             { ...makeStep("WHEN"), type: "CONDITION", label: "Decision" },
@@ -3270,6 +3398,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [debugResult, setDebugResult] = useState(null);
   const [testsOpen, setTestsOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [flowPropertiesOpen, setFlowPropertiesOpen] = useState(false);
+  const [flowPropertiesSnapshot, setFlowPropertiesSnapshot] = useState(null);
   const [savedTests, setSavedTests] = useState([]);
   const [workflowVersions, setWorkflowVersions] = useState([]);
   const [compareVersionId, setCompareVersionId] = useState(null);
@@ -3298,6 +3428,22 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   useEffect(() => {
     setFlowHistory({ past: [], future: [], last: JSON.stringify(workflow), applying: false });
   }, [workflowId]);
+
+  const openFlowProperties = () => {
+    setFlowPropertiesSnapshot({ name: workflow.name || "", actionMetadata: JSON.parse(JSON.stringify(workflow.actionMetadata || {})) });
+    setFlowPropertiesOpen(true);
+  };
+  const cancelFlowProperties = () => {
+    if (flowPropertiesSnapshot) {
+      setWorkflow((current) => ({ ...current, name: flowPropertiesSnapshot.name, actionMetadata: flowPropertiesSnapshot.actionMetadata }));
+    }
+    setFlowPropertiesSnapshot(null);
+    setFlowPropertiesOpen(false);
+  };
+  const finishFlowProperties = () => {
+    setFlowPropertiesSnapshot(null);
+    setFlowPropertiesOpen(false);
+  };
 
   const undoFlowChange = () => {
     if (!flowHistory.past.length) return;
@@ -3730,6 +3876,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           scope: workflow.scope || "system",
         } : {}),
         ...(workflow.actionMetadata?.flowType ? { flowType: workflow.actionMetadata.flowType } : {}),
+        apiName: workflow.actionMetadata?.apiName || flowApiName(workflow.name || "Flow"),
+        ...(workflow.actionMetadata?.description ? { description: workflow.actionMetadata.description } : {}),
         ...(workflow.actionMetadata?.templateKey ? { templateKey: workflow.actionMetadata.templateKey } : {}),
         ...(workflow.actionMetadata?.defaultForNewDevices ? { defaultForNewDevices: true } : {}),
         ...(workflow.actionMetadata?.ui ? { ui: workflow.actionMetadata.ui } : {}),
@@ -4182,18 +4330,16 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <span className={`workflow-ready-dot ${reviewIssue ? "has-issue" : ""}`} title={reviewIssue || "Flow ready"} />
           <div className="workflow-builder-title-copy">
             <h2>Flow Builder</h2>
-            <small>{workflow.name || "New Flow"} <span className="workflow-builder-status">{workflow.lifecycleStatus || "DRAFT"} · Version {workflow.version || 1}</span></small>
+            <small>{workflow.name || "New Flow"} <span className="workflow-builder-status">{String(workflow.lifecycleStatus || "").toUpperCase() === "ACTIVE" ? "Active" : "Inactive"} · Version {workflow.version || 1}</span></small>
           </div>
-        </div>
-        <div className="workflow-builder-field">
-          <label>Flow Label</label>
-          <input className={inputClass} value={workflow.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, name: event.target.value }))} placeholder="Flow label" />
         </div>
         <div className="workflow-builder-actions">
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.past.length} onClick={undoFlowChange} title="Undo" aria-label="Undo">↶</button>
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.future.length} onClick={redoFlowChange} title="Redo" aria-label="Redo">↷</button>
+          <button type="button" className="workflow-cancel-button" onClick={openFlowProperties}>View Properties</button>
+          {reviewIssue ? <button type="button" className="workflow-cancel-button workflow-icon-button" title={reviewIssue} aria-label="Show Errors" onClick={() => document.getElementById("workflow-review-section")?.scrollIntoView({ behavior: "smooth", block: "center" })}>!</button> : null}
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Version History</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Edit History</button>
           <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} title={workflowId ? "Save this flow as a new version" : "Save this flow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>Save As</button>
           <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save</button>
@@ -4201,6 +4347,42 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       </div>
 
+      {flowPropertiesOpen ? (
+        <div className="workflow-flow-properties-panel" role="dialog" aria-label="Flow Properties">
+          <div className="workflow-add-element-head">
+            <div><strong>Flow Properties</strong><small>Version {workflow.version || 1}</small></div>
+            <button type="button" aria-label="Close Flow Properties" onClick={cancelFlowProperties}>×</button>
+          </div>
+          <div className="workflow-path-action-body space-y-3">
+            <label>Flow Label
+              <input className={inputClass} value={workflow.name || ""} onChange={(event) => {
+                const label = event.target.value;
+                const previousApi = workflow.actionMetadata?.apiName || "";
+                const generatedPrevious = flowApiName(workflow.name || "");
+                setWorkflow((current) => ({
+                  ...current,
+                  name: label,
+                  actionMetadata: {
+                    ...(current.actionMetadata || {}),
+                    apiName: !workflowId && (!previousApi || previousApi === generatedPrevious) ? flowApiName(label) : previousApi,
+                  },
+                }));
+              }} placeholder="Flow Label" />
+            </label>
+            <label>Flow API Name
+              <input className={inputClass} disabled={Boolean(workflowId)} value={workflow.actionMetadata?.apiName || flowApiName(workflow.name || "Flow")} onChange={(event) => setWorkflow((current) => ({ ...current, actionMetadata: { ...(current.actionMetadata || {}), apiName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") } }))} />
+            </label>
+            <label>Description
+              <textarea className={inputClass} rows={4} value={workflow.actionMetadata?.description || ""} onChange={(event) => setWorkflow((current) => ({ ...current, actionMetadata: { ...(current.actionMetadata || {}), description: event.target.value } }))} placeholder="Describe what this flow does." />
+            </label>
+            <div className="workflow-flow-property-readonly"><span>Type</span><strong>{workflow.actionMetadata?.flowType || "Autolaunched Flow"}</strong></div>
+            <div className="workflow-path-action-buttons">
+              <button type="button" className="workflow-cancel-button" onClick={cancelFlowProperties}>Cancel</button>
+              <button type="button" className="workflow-save-button" onClick={finishFlowProperties}>Done</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {testsOpen ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
