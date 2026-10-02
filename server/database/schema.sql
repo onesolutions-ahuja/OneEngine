@@ -3014,6 +3014,8 @@ CREATE TABLE IF NOT EXISTS platform_relationships (
     parent_object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
     child_object_id UUID NOT NULL REFERENCES platform_objects(id) ON DELETE CASCADE,
     relationship_key VARCHAR(100) NOT NULL,
+    label VARCHAR(200),
+    description TEXT,
     relationship_type VARCHAR(30) NOT NULL DEFAULT 'lookup',
     child_field_id UUID REFERENCES platform_fields(id) ON DELETE RESTRICT,
     on_delete VARCHAR(20) NOT NULL DEFAULT 'restrict',
@@ -3021,6 +3023,9 @@ CREATE TABLE IF NOT EXISTS platform_relationships (
     active BOOLEAN NOT NULL DEFAULT TRUE,
     UNIQUE (parent_object_id, relationship_key)
 );
+
+ALTER TABLE platform_relationships ADD COLUMN IF NOT EXISTS label VARCHAR(200);
+ALTER TABLE platform_relationships ADD COLUMN IF NOT EXISTS description TEXT;
 
 /* Self-referencing relationships (for example sale -> original_transactions)
    are valid Platform metadata. Databases created by an older schema carried a
