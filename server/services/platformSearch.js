@@ -22,6 +22,7 @@ async function searchableObjects(db, req) {
      FROM platform_objects o
      LEFT JOIN platform_modules m ON m.id=o.module_id
      WHERE o.active=true AND (o.company_id IS NULL OR o.company_id=$1)
+       AND COALESCE(o.config->>'allowSearch','true') <> 'false'
        AND (m.id IS NULL OR m.installed=true)
      ORDER BY o.label, o.object_key`,
     [req.user.companyId]
