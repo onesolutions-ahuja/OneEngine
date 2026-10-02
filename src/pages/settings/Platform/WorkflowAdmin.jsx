@@ -939,6 +939,10 @@ function flowElementVisual(type = "") {
   return FLOW_ELEMENT_VISUALS[String(type || "").toUpperCase()] || { icon: "⚡", color: "#0b5cab", family: "Action" };
 }
 
+function flowElementSupportsFaultPath(type = "") {
+  return !["CONDITION","LOOP","WAIT","ASSIGNMENT","STOP","CONSTANT","FORMULA","SCHEDULE_PATH"].includes(String(type || "").toUpperCase());
+}
+
 function flowApiName(label = "") {
   const cleaned = String(label || "").trim().replace(/[^A-Za-z0-9_ ]+/g, "").replace(/\s+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
   const prefixed = /^[A-Za-z]/.test(cleaned) ? cleaned : cleaned ? `Flow_${cleaned}` : "Element";
@@ -2511,6 +2515,35 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
       if (!branchTarget) {
         return { ...current, steps: [...current.steps.slice(0, index), step, ...current.steps.slice(index)] };
       }
+      if (branchTarget.kind && branchTarget.ownerId) {
+        const ownerIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(branchTarget.ownerId));
+        if (ownerIndex < 0) return { ...current, steps: [...current.steps, step] };
+        const owner = current.steps[ownerIndex];
+        const key = branchTarget.kind === "loop" ? "bodyBranch" : branchTarget.kind === "scheduled" ? "branch" : "faultBranch";
+        const targetIds = [...(owner.config?.[key] || [])];
+        const requestedPosition = Number.isInteger(branchTarget.position) ? branchTarget.position : targetIds.length;
+        const branchPosition = Math.max(0, Math.min(requestedPosition, targetIds.length));
+        let branchInsertAt = ownerIndex + 1;
+        if (branchPosition > 0) {
+          const previousIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[branchPosition - 1]));
+          if (previousIndex >= 0) branchInsertAt = previousIndex + 1;
+        } else if (targetIds.length) {
+          const firstIndex = current.steps.findIndex((candidate) => String(candidate.id) === String(targetIds[0]));
+          if (firstIndex >= 0) branchInsertAt = firstIndex;
+        }
+        const nextBranch = [...targetIds.slice(0, branchPosition), step.id, ...targetIds.slice(branchPosition)];
+        const nextSteps = [...current.steps];
+        nextSteps[ownerIndex] = {
+          ...owner,
+          config: {
+            ...(owner.config || {}),
+            [key]: nextBranch,
+            ...(branchTarget.kind === "fault" ? { faultMode: ["ROUTE","RETRY"].includes(String(owner.config?.faultMode || "").toUpperCase()) ? owner.config.faultMode : "ROUTE" } : {}),
+          },
+        };
+        nextSteps.splice(branchInsertAt, 0, step);
+        return { ...current, steps: nextSteps };
+      }
       const decisionIndex = current.steps.findIndex((candidate) => candidate.id === branchTarget.decisionId);
       if (decisionIndex < 0) return { ...current, steps: [...current.steps, step] };
       const decision = current.steps[decisionIndex];
@@ -2585,9 +2618,12 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   };
   const addFaultPath = (step) => {
     const index = workflow.steps.findIndex((item) => item.id === step.id);
-    if (index < 0) return;
+    if (index < 0 || !flowElementSupportsFaultPath(step.type)) return;
     updateStep(index, { config: { ...(step.config || {}), faultMode: "ROUTE", faultBranch: step.config?.faultBranch || [] } });
-    inspectStep(step.id);
+    setBranchTarget({ kind: "fault", ownerId: step.id, position: (step.config?.faultBranch || []).length });
+    setInsertAt(null);
+    setPaletteTab("elements");
+    setPaletteOpen(true);
   };
   const dropAt = (event, index) => {
     event.preventDefault();
@@ -2632,14 +2668,20 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     const mode = String(step.config?.faultMode || "FAIL").toUpperCase();
     return ["ROUTE","RETRY"].includes(mode) ? (step.config?.faultBranch || []).map(String) : [];
   }));
-  const decisionBranchTargetIds = new Set(workflow.steps.flatMap((step) => {
-    if (step.type !== "CONDITION") return [];
-    const outcomes = Array.isArray(step.config?.outcomes) && step.config.outcomes.length
-      ? step.config.outcomes
-      : [{ branch: step.config?.ifBranch || [] }];
-    return [...outcomes.flatMap((outcome) => outcome.branch || []), ...(step.config?.defaultBranch || step.config?.elseBranch || [])].map(String);
+  const ownedCanvasTargetIds = new Set(workflow.steps.flatMap((step) => {
+    const owned = [];
+    if (step.type === "CONDITION") {
+      const outcomes = Array.isArray(step.config?.outcomes) && step.config.outcomes.length
+        ? step.config.outcomes
+        : [{ branch: step.config?.ifBranch || [] }];
+      owned.push(...outcomes.flatMap((outcome) => outcome.branch || []), ...(step.config?.defaultBranch || step.config?.elseBranch || []));
+    }
+    if (step.type === "LOOP") owned.push(...(step.config?.bodyBranch || []));
+    if (step.type === "SCHEDULE_PATH") owned.push(...(step.config?.branch || []));
+    if (["ROUTE","RETRY"].includes(String(step.config?.faultMode || "FAIL").toUpperCase())) owned.push(...(step.config?.faultBranch || []));
+    return owned.map(String);
   }));
-  const visibleCanvasSteps = managerElementSteps.filter(({ step }) => !decisionBranchTargetIds.has(String(step.id)));
+  const visibleCanvasSteps = managerElementSteps.filter(({ step }) => !ownedCanvasTargetIds.has(String(step.id)));
   const branchStepById = new Map(workflow.steps.map((step) => [String(step.id), step]));
   const incomingPathCount = (stepId) => workflow.steps.reduce((count, owner) => {
     const config = owner.config || {};
@@ -2901,7 +2943,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <button type="button" onClick={() => inspectStep(step.id)}>Edit Element</button>
                     <button type="button" onClick={() => copyStep(step)}>Copy Element</button>
                     <button type="button" onClick={() => cutStep(step)}>Cut Element</button>
-                    {step.type !== "STOP" ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
+                    {flowElementSupportsFaultPath(step.type) ? <button type="button" onClick={() => addFaultPath(step)}>Add Fault Path</button> : null}
                     <button type="button" className="is-danger" onClick={() => removeStep(index)}>Delete Element</button>
                   </div>
                 </details>
@@ -2932,7 +2974,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                                   <button type="button" onClick={() => inspectStep(branchStep.id)}>Edit Element</button>
                                   <button type="button" onClick={() => copyStep(branchStep)}>Copy Element</button>
                                   <button type="button" onClick={() => cutStep(branchStep)}>Cut Element</button>
-                                  <button type="button" onClick={() => addFaultPath(branchStep)}>Add Fault Path</button>
+                                  {flowElementSupportsFaultPath(branchStep.type) ? <button type="button" onClick={() => addFaultPath(branchStep)}>Add Fault Path</button> : null}
                                   <button type="button" className="is-danger" onClick={() => removeStep(branchIndex)}>Delete Element</button>
                                 </div>
                               </details>
