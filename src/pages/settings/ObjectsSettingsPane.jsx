@@ -15,6 +15,7 @@ import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import ObjectReportsAdmin from './Platform/ObjectReportsAdmin.jsx'
 import PermissionSetsAdmin from './Platform/PermissionSetsAdmin.jsx'
 import AccessControlAdmin from './Platform/AccessControlAdmin.jsx'
+import ObjectAccessAdmin from './Platform/ObjectAccessAdmin.jsx'
 import AssignmentRuleEditor from './Platform/AssignmentRuleEditor.jsx'
 import SharingRuleEditor from './Platform/SharingRuleEditor.jsx'
 import DuplicateRulesAdmin from './Platform/DuplicateRulesAdmin.jsx'
@@ -961,7 +962,8 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
         {activeTab === 'permissions' ? (
                   <div className="objects-permissions-card">
                     <div className="objects-permission-tabs">
-                      <button type="button" className={permissionView === 'effective' ? 'is-active' : ''} onClick={() => setPermissionView('effective')}>Effective Access</button>
+                      <button type="button" className={permissionView === 'effective' ? 'is-active' : ''} onClick={() => setPermissionView('effective')}>My Effective Access</button>
+                      <button type="button" className={permissionView === 'summary' ? 'is-active' : ''} onClick={() => setPermissionView('summary')}>Object & Field Access</button>
                       <button type="button" className={permissionView === 'sets' ? 'is-active' : ''} onClick={() => setPermissionView('sets')}>Permission Sets</button>
                       <button type="button" className={permissionView === 'access' ? 'is-active' : ''} onClick={() => setPermissionView('access')}>Public Groups & Queues</button>
                     </div>
@@ -996,6 +998,11 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                           </div>
                         </>
                       ) : <div className="objects-detail-placeholder">No permission data.</div>
+                    ) : permissionView === 'summary' ? (
+                      <ObjectAccessAdmin
+                        object={{ ...selected, id: selectedId }}
+                        onError={(value) => setError(value || '')}
+                      />
                     ) : permissionView === 'sets' ? (
                       <PermissionSetsAdmin
                         onMessage={() => { void apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/effective-permissions`).then((response) => setObjectData((current) => ({ ...current, permissions: response?.data || null }))).catch(() => {}) }}
