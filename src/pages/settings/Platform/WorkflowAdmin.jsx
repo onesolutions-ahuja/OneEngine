@@ -10408,9 +10408,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           ) : debugPanelTab === "setup" ? (
             <div className="mt-4 flex items-center justify-between gap-3">
               <div className="text-xs text-slate-600">This flow has no trigger object, so Debug will run with user/company/store context only.</div>
-              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue) || Boolean(debugMissingInput) || (workflow.object && debugRecordMode === "specific" && !debugRecordId.trim())} onClick={runDebug}>{debugRunning ? "Running…" : debugMode === "test" ? "Run Test" : "Run Debug"}</button>
+              <button type="button" className="workflow-save-button" disabled={debugRunning || Boolean(reviewIssue) || Boolean(debugMissingInput) || (workflow.object && debugRecordMode === "specific" && !debugRecordId.trim())} onClick={runDebug}>{debugRunning ? "Running…" : "Run"}</button>
             </div>
-          )}
+          ) : null}
           {debugMissingInput ? (
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Enter the required Debug input <strong>{debugMissingInput.label || debugMissingInput.name}</strong> before running this flow.
