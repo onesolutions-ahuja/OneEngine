@@ -12,6 +12,7 @@ const routes = [
   "customers",
   "reports",
   "settings/security-identity",
+  "settings/mfa-administration",
   "developer/objects",
   "developer/workflow-builder",
   "developer/approval-builder",
@@ -177,5 +178,20 @@ test("security settings expose phase-one Salesforce parity controls", async ({ p
   await expect(page.getByText("Sensitive Operation Policies",{exact:true})).toBeVisible();
   await page.getByRole("tab",{name:"Authentication Providers"}).click();
   await expect(page.getByText("Authentication Providers",{exact:true})).toBeVisible();
+  expect(failures,failures.join("\n")).toEqual([]);
+});
+
+
+test("phase-two identity assurance controls are available", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("settings/security-identity");
+  await expect(page.getByRole("tab",{name:"MFA & Assurance"})).toBeVisible({timeout:30_000});
+  await expect(page.getByRole("tab",{name:"Authentication Providers"})).toBeVisible();
+  await expect(page.getByRole("tab",{name:"Verification History"})).toBeVisible();
+  await page.getByRole("tab",{name:"MFA & Assurance"}).click();
+  await expect(page.getByText("Require phishing-resistant MFA",{exact:true})).toBeVisible();
+  await expect(page.getByText("Reports and dashboards",{exact:true})).toBeVisible();
+  await expect(page.getByText("Manage authentication providers",{exact:true})).toBeVisible();
+  await expect(page.getByText("Unlock users and reset passwords",{exact:true})).toBeVisible();
   expect(failures,failures.join("\n")).toEqual([]);
 });
