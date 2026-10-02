@@ -278,7 +278,7 @@ export function compileFormulas(fields) {
   for (const field of byName.values()) if (field.field_type === "formula") visit(field);
   return record => {
     const result = { ...record };
-    for (const [name, { ast }] of compiled) {
+    for (const [name, { field, ast }] of compiled) {
       const value = evaluate(ast, key => {
         if (key.includes(".")) {
           const pathType = field.config?.recordPathTypes?.[key] || field.config?.record_path_types?.[key];
