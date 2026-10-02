@@ -146,16 +146,23 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(!challenge||!user)return res.status(404).json({success:false,message:"Verification challenge is invalid or expired"});
     const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
     const methods=await listMfaMethods(db,{companyId:user.company_id,userId:user.id});
+    const requiredAssurance=challenge.challenge_type==="STEP_UP"
+      ? ((await effectiveStepUpPolicy(db,{companyId:user.company_id,resourceKey:String(challenge.context?.resourceKey||"").toUpperCase()}))?.required_assurance||"HIGH")
+      : policy.effective.requiredLoginAssurance;
     const usable=methods.filter((method)=>mfaMethodAllowed(method,policy.effective))
       .filter((method)=>!policy.effective.phishingResistantRequired||method.phishing_resistant===true)
-      .filter((method)=>assuranceSatisfies(methodAssurance(method,policy.effective),policy.effective.requiredLoginAssurance));
-    const temporaryCode=!challenge.context?.activationOnly&&!policy.effective.phishingResistantRequired
-      && assuranceSatisfies("STANDARD",policy.effective.requiredLoginAssurance)
+      .filter((method)=>assuranceSatisfies(methodAssurance(method,policy.effective),requiredAssurance));
+    const temporaryCode=challenge.challenge_type==="LOGIN"&&!challenge.context?.activationOnly&&!policy.effective.phishingResistantRequired
+      &&assuranceSatisfies("STANDARD",requiredAssurance)
       ? await activeTemporaryVerificationCode(db,{companyId:user.company_id,userId:user.id}) : null;
     const availableMethods=[
       ...usable.map(publicMethod),
       ...(temporaryCode?[{id:temporaryCode.id,type:"TEMPORARY_CODE",label:"Temporary Verification Code",phishingResistant:false,expiresAt:temporaryCode.expires_at}]:[]),
     ];
+    const passkeyCanSatisfy=assuranceSatisfies(policy.effective.passkeyAssurance,requiredAssurance);
+    const totpCanSatisfy=!policy.effective.phishingResistantRequired
+      &&policy.effective.allowTotp
+      &&assuranceSatisfies(policy.effective.totpAssurance,requiredAssurance);
     res.json({success:true,data:{
       challengeId:challenge.id,
       challengeType:challenge.challenge_type,
@@ -163,9 +170,9 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       phishingResistantRequired:policy.effective.phishingResistantRequired===true,
       availableMethods,
       allowedEnrollmentMethods:[
-        ...(!policy.effective.phishingResistantRequired&&policy.effective.allowTotp?["TOTP"]:[]),
-        ...(policy.effective.allowPlatformPasskeys?["PLATFORM_PASSKEY"]:[]),
-        ...(policy.effective.allowSecurityKeys?["SECURITY_KEY"]:[]),
+        ...(totpCanSatisfy?["TOTP"]:[]),
+        ...(passkeyCanSatisfy&&policy.effective.allowPlatformPasskeys?["PLATFORM_PASSKEY"]:[]),
+        ...(passkeyCanSatisfy&&policy.effective.allowSecurityKeys?["SECURITY_KEY"]:[]),
       ],
       user:{id:user.id,name:user.full_name,username:user.username},
     }});
@@ -175,7 +182,11 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
     const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    if(policy.effective.phishingResistantRequired)return res.status(403).json({success:false,code:"PHISHING_RESISTANT_MFA_REQUIRED",message:"A phishing-resistant passkey or security key is required"});
     if(!policy.effective.allowTotp)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Authenticator apps are disabled by security policy"});
+    if(!assuranceSatisfies(policy.effective.totpAssurance,policy.effective.requiredLoginAssurance)){
+      return res.status(403).json({success:false,code:"MFA_ASSURANCE_INSUFFICIENT",message:"Authenticator apps do not meet the required login assurance level"});
+    }
     const enrolled=await listMfaMethods(db,{companyId:user.company_id,userId:user.id});
     if(enrolled.some((method)=>method.method_type==="TOTP"))return res.status(409).json({success:false,message:"An authenticator app is already enrolled."});
     const method=await startTotpEnrollment(db,{companyId:user.company_id,userId:user.id,email:user.email||user.username,label:req.body?.label||"Authenticator"});
@@ -185,16 +196,16 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
   router.post("/auth/mfa/totp/complete",async(req,res)=>{
     const {challenge,user}=await pendingUser(req.body?.challengeId,["LOGIN"]);
     if(!challenge||!user)return res.status(400).json({success:false,message:"Login verification challenge is invalid or expired"});
+    const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
+    if(policy.effective.phishingResistantRequired)return res.status(403).json({success:false,code:"PHISHING_RESISTANT_MFA_REQUIRED",message:"A phishing-resistant passkey or security key is required"});
+    if(!policy.effective.allowTotp)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Authenticator apps are disabled by security policy"});
+    const assurance=policy.effective.totpAssurance;
+    if(!assuranceSatisfies(assurance,policy.effective.requiredLoginAssurance)){
+      return res.status(403).json({success:false,code:"MFA_ASSURANCE_INSUFFICIENT",message:"Authenticator apps do not meet the required login assurance level"});
+    }
     const ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code,markVerified:true});
     if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
-    if(assurancePolicy.effective.phishingResistantRequired && methodType!=="PASSKEY"){
-      return res.status(403).json({success:false,code:"PHISHING_RESISTANT_MFA_REQUIRED",message:"A phishing-resistant passkey or security key is required"});
-    }
-    if(challenge.challenge_type==="LOGIN"&&!assuranceSatisfies(assurance,assurancePolicy.effective.requiredLoginAssurance)){
-      return res.status(403).json({success:false,code:"MFA_ASSURANCE_INSUFFICIENT",message:"This verification method does not meet the required login assurance level"});
-    }
-    const recoveryCodes=await ensureRecoveryCodes(user.company_id,user.id);
-    const assurance=(await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id})).effective.totpAssurance;
+    const recoveryCodes=policy.effective.allowRecoveryCodes ? await ensureRecoveryCodes(user.company_id,user.id) : [];
     return finishChallenge(req,res,{challenge,user,assuranceLevel:assurance,mfaMethod:"TOTP",trust:req.body?.trustDevice===true,deviceName:req.body?.deviceName,extra:{recoveryCodes}});
   });
 
@@ -203,14 +214,13 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
     if(!challenge||!user)return res.status(400).json({success:false,message:"Verification challenge is invalid or expired"});
     const methodType=String(req.body?.methodType||"TOTP").toUpperCase();
     const assurancePolicy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
-    let ok=false,assurance="HIGH";
+    let ok=false,assurance="STANDARD";
     if(methodType==="TOTP"){
       if(!assurancePolicy.effective.allowTotp)return res.status(403).json({success:false,code:"MFA_METHOD_DISABLED",message:"Authenticator apps are disabled by security policy"});
       ok=await verifyTotpMethod(db,{companyId:user.company_id,userId:user.id,methodId:req.body?.methodId,code:req.body?.code});
       assurance=assurancePolicy.effective.totpAssurance;
     }else if(methodType==="RECOVERY_CODE"){
-      const policy=await loadEffectiveAssurance(db,{companyId:user.company_id,userId:user.id,roleId:user.role_id});
-      if(policy.effective.allowRecoveryCodes)ok=await consumeRecoveryCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
+      if(assurancePolicy.effective.allowRecoveryCodes)ok=await consumeRecoveryCode(db,{companyId:user.company_id,userId:user.id,code:req.body?.code});
       assurance="STANDARD";
     }else if(methodType==="TEMPORARY_CODE"){
       if(challenge.context?.activationOnly)return res.status(403).json({success:false,code:"TEMP_CODE_NOT_VALID_FOR_DEVICE_ACTIVATION",message:"Temporary verification codes can satisfy MFA but cannot activate a new device"});
@@ -218,6 +228,12 @@ export default function createIdentityAssuranceRouter({authenticate,authorize,db
       assurance="STANDARD";
     }
     if(!ok)return res.status(401).json({success:false,code:"MFA_INVALID",message:"Verification code is incorrect"});
+    if(assurancePolicy.effective.phishingResistantRequired){
+      return res.status(403).json({success:false,code:"PHISHING_RESISTANT_MFA_REQUIRED",message:"A phishing-resistant passkey or security key is required"});
+    }
+    if(challenge.challenge_type==="LOGIN"&&!assuranceSatisfies(assurance,assurancePolicy.effective.requiredLoginAssurance)){
+      return res.status(403).json({success:false,code:"MFA_ASSURANCE_INSUFFICIENT",message:"This verification method does not meet the required login assurance level"});
+    }
     if(challenge.challenge_type==="STEP_UP"){
       const sid=challenge.context?.sessionId;
       if(!sid)return res.status(400).json({success:false,message:"Step-up session is missing"});
