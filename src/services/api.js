@@ -190,47 +190,47 @@ export async function apiFetch(path, options = {}) {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 12000
 const SAFE_GET_RETRY_STATUSES = new Set([429, 502, 503, 504])
-const OE_CODE_RE = /^OE[A-Z][0-9]{2,3}$/
+const OE_CODE_RE = /^OE[A-Z]{2}[0-9]{2}$/
 
 function clientDebugCode(error, status = 0, payload = null) {
   const explicit = String(payload?.oeCode || payload?.code || error?.oeCode || '').toUpperCase()
   if (OE_CODE_RE.test(explicit)) return explicit
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'OEN03'
-  if (error?.code === 'API_TIMEOUT' || error?.name === 'TimeoutError') return 'OEN04'
-  if (error?.name === 'TypeError' || error?.name === 'NetworkError' || /failed to fetch|networkerror|network request failed/i.test(String(error?.message || ''))) return 'OEN02'
-  if (status === 401) return 'OEU01'
-  if (status === 403) return 'OER01'
-  if (status === 404) return 'OEA04'
-  if (status === 429) return 'OEA03'
-  if ([502, 503, 504].includes(status)) return 'OEA01'
-  return status >= 500 ? 'OEA02' : ''
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'OEND01'
+  if (error?.code === 'API_TIMEOUT' || error?.name === 'TimeoutError') return 'OENT01'
+  if (error?.name === 'TypeError' || error?.name === 'NetworkError' || /failed to fetch|networkerror|network request failed/i.test(String(error?.message || ''))) return 'OENR01'
+  if (status === 401) return 'OEUA01'
+  if (status === 403) return 'OERP01'
+  if (status === 404) return 'OEAF01'
+  if (status === 429) return 'OEAR01'
+  if ([502, 503, 504].includes(status)) return 'OEAA01'
+  return status >= 500 ? 'OEAE01' : ''
 }
 
 function defaultDebugMessage(code) {
   const messages = {
-    OEN01: 'OneEngine is temporarily unavailable.',
-    OEN02: 'OneEngine service could not be reached.',
-    OEN03: 'This device appears to be offline.',
-    OEN04: 'OneEngine did not respond in time.',
-    OEA01: 'The requested OneEngine service is unavailable.',
-    OEA02: 'OneEngine could not complete this request.',
-    OEA03: 'Too many requests. Please try again shortly.',
-    OEA04: 'The requested service could not be found.',
-    OER01: 'You do not have permission to perform this action.',
-    OEU01: 'Please sign in again to continue.',
-    OEF01: 'This screen could not be displayed.',
-    OEF02: 'This page could not be loaded.',
+    OENH01: 'OneEngine is temporarily unavailable.',
+    OENR01: 'OneEngine service could not be reached.',
+    OEND01: 'This device appears to be offline.',
+    OENT01: 'OneEngine did not respond in time.',
+    OEAA01: 'The requested OneEngine service is unavailable.',
+    OEAE01: 'OneEngine could not complete this request.',
+    OEAR01: 'Too many requests. Please try again shortly.',
+    OEAF01: 'The requested service could not be found.',
+    OERP01: 'You do not have permission to perform this action.',
+    OEUA01: 'Please sign in again to continue.',
+    OEFR01: 'This screen could not be displayed.',
+    OEFL01: 'This page could not be loaded.',
   }
   return messages[code] || 'OneEngine could not complete this request.'
 }
 
 export function oneEngineErrorText(error) {
-  if (!error) return 'OneEngine could not complete this request. Error OEA02'
+  if (!error) return 'OneEngine could not complete this request. Error OEAE01'
   const code = clientDebugCode(error, error?.status || 0, error?.payload)
   const raw = String(error?.userMessage || error?.payload?.message || error?.message || '').trim()
   const message = raw && !/failed to fetch|networkerror|network request failed|server is starting/i.test(raw)
-    ? raw.replace(/\s*\(?Error\s+OE[A-Z][0-9]{2,3}\)?\s*$/i, '').trim()
-    : defaultDebugMessage(code || 'OEA02')
+    ? raw.replace(/\s*\(?Error\s+OE[A-Z]{2}[0-9]{2}\)?\s*$/i, '').trim()
+    : defaultDebugMessage(code || 'OEAE01')
   return code ? `${message} Error ${code}${error?.reference ? ` · Ref ${error.reference}` : ''}` : message
 }
 
@@ -348,7 +348,7 @@ export async function apiRequest(path, options = {}) {
       const externalAbort = fetchOptions.signal?.aborted === true
       const retryableNetworkFailure =
         !externalAbort &&
-        (normalizedError?.code === 'API_TIMEOUT' || ['OEN01','OEN02','OEN03','OEN04'].includes(normalizedError?.oeCode) || normalizedError?.name === 'TypeError' || normalizedError?.name === 'NetworkError')
+        (normalizedError?.code === 'API_TIMEOUT' || ['OENH01','OENR01','OEND01','OENT01'].includes(normalizedError?.oeCode) || normalizedError?.name === 'TypeError' || normalizedError?.name === 'NetworkError')
 
       if (attempt + 1 >= maxAttempts || !retryableNetworkFailure) throw normalizedError
       await delay(700)
