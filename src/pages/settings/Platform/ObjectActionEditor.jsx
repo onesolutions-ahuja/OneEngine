@@ -80,7 +80,7 @@ export default function ObjectActionEditor({ object, action = null, onSaved, onC
 
       <div className="objects-rule-grid">
         <label>Label<input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })}/></label>
-        <label>API key<input value={form.actionKey} onChange={(e) => setForm({ ...form, actionKey: e.target.value })} placeholder="Auto from label"/></label>
+        <label>API key<input value={form.actionKey} readOnly={Boolean(action?.id)} onChange={(e) => setForm({ ...form, actionKey: e.target.value })} placeholder="Auto from label"/><small>{action?.id ? "Stable after creation." : "Leave blank to generate from the label."}</small></label>
         <label>Handler<select value={form.handlerKey} onChange={(e) => setForm({ ...form, handlerKey: e.target.value })}>
           <option value="">Select handler</option>
           {handlerOptions.map((item) => <option key={item.key} value={item.key}>{item.displayName || item.label || item.key}</option>)}
