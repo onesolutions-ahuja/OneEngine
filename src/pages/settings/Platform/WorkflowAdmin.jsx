@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
 import PlatformFieldPicker from "./PlatformFieldPicker.jsx";
-import MetadataResourcePicker from "./MetadataResourcePicker.jsx";\nimport WorkflowReactFlowCanvas from "./WorkflowReactFlowCanvas.jsx";
+import MetadataResourcePicker from "./MetadataResourcePicker.jsx";
+import WorkflowReactFlowCanvas from "./WorkflowReactFlowCanvas.jsx";
 
 const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 shadow-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100";
 
