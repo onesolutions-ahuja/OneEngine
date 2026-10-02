@@ -792,6 +792,25 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 10px;
   }
   .workflow-end-node span { font-size: 7px; color: #706e6b; }
+  .workflow-path-action-panel {
+    position: fixed;
+    z-index: 80;
+    top: 50%;
+    left: 50%;
+    width: min(430px, calc(100vw - 32px));
+    transform: translate(-50%, -50%);
+    overflow: hidden;
+    border: 1px solid #c9c7c5;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 18px 50px rgba(0,0,0,.24);
+  }
+  .workflow-path-action-body { padding: 14px; }
+  .workflow-path-action-body p { margin: 0 0 12px; color: #3e3e3c; font-size: 11px; line-height: 1.45; }
+  .workflow-path-action-body label { display: grid; gap: 5px; color: #3e3e3c; font-size: 10px; font-weight: 700; }
+  .workflow-path-action-body select { width: 100%; min-height: 36px; border: 1px solid #c9c7c5; border-radius: 4px; background: #fff; padding: 6px 8px; color: #181818; font-size: 11px; }
+  .workflow-path-action-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .workflow-danger-button { min-height: 38px; border: 1px solid #ba0517; border-radius: 8px; background: #ba0517; padding: 0 15px; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
   .workflow-action-picker { overflow: hidden; border: 1px solid #d8dde6; border-radius: 6px; background: #fff; }
   .workflow-action-picker-search { position: relative; padding: 8px; border-bottom: 1px solid #eef1f6; }
   .workflow-action-picker-search span { position: absolute; left: 17px; top: 17px; color: #706e6b; font-size: 11px; }
@@ -2710,21 +2729,6 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setPaletteTab("elements");
     setPaletteOpen(true);
   };
-  const dropAt = (event, index) => {
-    event.preventDefault();
-    const paletteType = event.dataTransfer.getData("application/x-onepos-flow-element");
-    if (paletteType) return addFromPalette(paletteType, index);
-    const sourceId = event.dataTransfer.getData("application/x-onepos-flow-node");
-    const from = workflow.steps.findIndex((step) => step.id === sourceId);
-    if (from < 0 || from === index) return;
-    setWorkflow((current) => {
-      const next = [...current.steps];
-      const [moved] = next.splice(from, 1);
-      const target = Math.max(0, index > from ? index - 1 : index);
-      next.splice(target, 0, moved);
-      return { ...current, steps: next };
-    });
-  };
   const registeredActionOptions = registryOptions
     .filter((option) => !SALESFORCE_CORE_ELEMENT_TYPES.has(option.value) && !["WHEN","CONSTANT","FORMULA","SCHEDULE_PATH","STOP"].includes(option.value));
   const palette = [
@@ -2797,7 +2801,10 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setSelectedId("__start__");
   };
   const updateScheduledPath = (index, patch) => updateStep(index, { config: { ...(workflow.steps[index]?.config || {}), ...patch } });
-  const removeScheduledPath = (index) => deleteStep(index);
+  const removeScheduledPath = (index) => {
+    const scheduledPath = workflow.steps[index];
+    if (scheduledPath) deleteStepWithPathChoice(scheduledPath, "__none__");
+  };
   const addResource = (type) => {
     const resource = type === "VARIABLE" ? makeStep("ASSIGNMENT") : makeStep(type);
     if (type === "VARIABLE") {
@@ -2816,6 +2823,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
     setPropertiesOpen(true);
     setResourceMenuOpen(false);
   };
+  const pathActionStep = pathActionDialog ? workflow.steps.find((item) => String(item.id) === String(pathActionDialog.stepId)) : null;
   const resourceQuery = paletteSearch.trim().toLowerCase();
   const visibleGlobalResources = globalResources.filter((item) => !resourceQuery || `${item.label} ${item.detail} ${item.type}`.toLowerCase().includes(resourceQuery));
   const visibleStepResources = stepResources.filter((item) => !resourceQuery || `${item.label} ${item.type}`.toLowerCase().includes(resourceQuery));
@@ -3028,6 +3036,34 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
           <button type="button" title="Toggle Toolbox" onClick={() => setPaletteOpen((value) => !value)}>{paletteOpen ? "Hide Toolbox" : "Show Toolbox"}</button>
           <button type="button" title="Toggle Properties" onClick={() => setPropertiesOpen((value) => !value)}>{propertiesOpen ? "Hide Properties" : "Show Properties"}</button>
         </div>
+        {pathActionDialog && pathActionStep ? (
+          <div className="workflow-path-action-panel" role="dialog" aria-label={pathActionDialog.mode === "cut" ? "Cut Element" : "Delete Element"}>
+            <div className="workflow-add-element-head">
+              <div>
+                <strong>{pathActionDialog.mode === "cut" ? "Cut Element" : "Delete Element"}</strong>
+                <small>{pathActionStep.label || getActionLabel(pathActionStep.type)}</small>
+              </div>
+              <button type="button" aria-label="Close" onClick={() => setPathActionDialog(null)}>×</button>
+            </div>
+            <div className="workflow-path-action-body">
+              <p>Choose the path whose elements you want to keep on the canvas.</p>
+              <label>
+                Keep Path
+                <select value={pathActionDialog.keepKey || "__none__"} onChange={(event) => setPathActionDialog((current) => ({ ...current, keepKey: event.target.value }))}>
+                  <option value="__none__">None, {pathActionDialog.mode === "cut" ? "cut" : "delete"} all paths</option>
+                  {(pathActionDialog.paths || []).map((path) => <option key={path.key} value={path.key}>{path.label}</option>)}
+                </select>
+              </label>
+              <div className="workflow-path-action-buttons">
+                <button type="button" className="workflow-cancel-button" onClick={() => setPathActionDialog(null)}>Cancel</button>
+                <button type="button" className={pathActionDialog.mode === "delete" ? "workflow-danger-button" : "workflow-save-button"} onClick={() => {
+                  if (pathActionDialog.mode === "cut") cutStepWithPathChoice(pathActionStep, pathActionDialog.keepKey || "__none__");
+                  else deleteStepWithPathChoice(pathActionStep, pathActionDialog.keepKey || "__none__");
+                }}>{pathActionDialog.mode === "cut" ? "Cut" : "Delete"}</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {(insertAt != null || branchTarget) ? (
           <div className="workflow-add-element-popover" role="dialog" aria-label="Add Element">
             <div className="workflow-add-element-head">
