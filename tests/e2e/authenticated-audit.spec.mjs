@@ -15,6 +15,7 @@ const routes = [
   "settings/mfa-administration",
   "settings/identity-verification-history",
   "settings/security-governance",
+  "settings/data-protection",
   "developer/objects",
   "developer/workflow-builder",
   "developer/approval-builder",
@@ -219,5 +220,21 @@ test("phase-three security governance controls are available", async ({ page }) 
   await expect(page.getByText("Connected-app enforcement",{exact:true})).toBeVisible()
   await page.getByRole("button",{name:"Connected Apps"}).click()
   await expect(page.getByText("Connected Apps",{exact:true})).toBeVisible()
+  expect(failures,failures.join("\n")).toEqual([])
+})
+
+
+test("phase-four data protection controls are available", async ({ page }) => {
+  const failures = watchRuntimeFailures(page)
+  await page.goto("settings/data-protection")
+  await expect(page.getByRole("button",{name:"Data Export"})).toBeVisible({timeout:30_000})
+  await expect(page.getByRole("button",{name:"Data Retention"})).toBeVisible()
+  await expect(page.getByRole("button",{name:"Email Security"})).toBeVisible()
+  await expect(page.getByRole("button",{name:"Delegated Administration"})).toBeVisible()
+  await page.getByRole("button",{name:"Email Security"}).click()
+  await expect(page.getByText("Email Deliverability",{exact:true})).toBeVisible()
+  await expect(page.getByText("Sending Domains / DKIM",{exact:true})).toBeVisible()
+  await page.getByRole("button",{name:"Delegated Administration"}).click()
+  await expect(page.getByText("Delegated Administration Groups",{exact:true})).toBeVisible()
   expect(failures,failures.join("\n")).toEqual([])
 })
