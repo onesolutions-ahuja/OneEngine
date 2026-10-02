@@ -54,6 +54,7 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [recordSearch, setRecordSearch] = useState({})
+  const [uploading, setUploading] = useState({})
 
   const screen = session?.screen || {}
   const components = useMemo(() => Array.isArray(screen.components) ? screen.components : [], [screen.components])
@@ -80,7 +81,55 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
 
   const setValue = (name, value) => setValues((current) => ({ ...current, [name]: value }))
 
-  const searchRecords = async (component, query) => {
+  const fileToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = String(reader.result || '')
+      resolve(result.includes(',') ? result.slice(result.indexOf(',') + 1) : result)
+    }
+    reader.onerror = () => reject(reader.error || new Error('Unable to read file'))
+    reader.readAsDataURL(file)
+  })
+
+  const uploadFiles = async (component, files) => {
+    const name = component?.name
+    const target = component?.fileTarget || {}
+    if (!name || !target.objectKey || !target.recordId) {
+      setErrors((current) => ({ ...current, [name]: 'A valid file target record is required.' }))
+      return
+    }
+    const maxFiles = Math.max(1, Math.min(10, Number(component.maxFiles || 1)))
+    const selectedFiles = Array.from(files || []).slice(0, maxFiles)
+    if (!selectedFiles.length) return
+    setUploading((current) => ({ ...current, [name]: true }))
+    setErrors((current) => ({ ...current, [name]: '' }))
+    try {
+      const uploaded = []
+      for (const file of selectedFiles) {
+        const base64 = await fileToBase64(file)
+        const response = await apiRequest('/api/platform/files', {
+          method: 'POST',
+          body: JSON.stringify({
+            objectKey: target.objectKey,
+            recordId: target.recordId,
+            filename: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            base64,
+            category: target.category || null,
+            metadata: { source: 'screen_flow', screenSessionId: session?.id || null, component: name },
+          }),
+        })
+        if (response?.data?.id) uploaded.push(response.data.id)
+      }
+      setValue(name, uploaded)
+    } catch (error) {
+      setErrors((current) => ({ ...current, [name]: error.message || 'Unable to upload file.' }))
+    } finally {
+      setUploading((current) => ({ ...current, [name]: false }))
+    }
+  }
+
+    const searchRecords = async (component, query) => {
     const name = component?.name
     if (!name) return
     const q = String(query || '').trim()
@@ -207,7 +256,19 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       </div>
     }
     if (component.type === 'FILE_UPLOAD') {
-      return <input {...common} type="file" multiple={component.multiple !== false} onChange={(event) => setValue(component.name, Array.from(event.target.files || []).map((file) => ({ name: file.name, size: file.size, type: file.type })))} />
+      const uploaded = Array.isArray(value) ? value : []
+      return <div className="space-y-2">
+        <input
+          {...common}
+          type="file"
+          accept={(component.acceptedTypes || []).join(',') || undefined}
+          multiple={Number(component.maxFiles || 1) > 1}
+          disabled={busy || uploading[component.name] === true}
+          onChange={(event) => uploadFiles(component, event.target.files)}
+        />
+        {uploading[component.name] ? <div className="text-xs text-slate-500">Uploading…</div> : null}
+        {uploaded.length ? <div className="text-xs text-slate-500">{uploaded.length} file{uploaded.length === 1 ? '' : 's'} uploaded</div> : null}
+      </div>
     }
     if (component.type === 'RECORD_PICKER') {
       const state = recordSearch[component.name] || { query: '', loading: false, results: [] }
