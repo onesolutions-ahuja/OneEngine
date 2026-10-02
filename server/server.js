@@ -1324,6 +1324,73 @@ app.get("/api/auth/me", authenticate, async (req, res) => {
   }
 });
 
+app.get("/api/auth/bootstrap", authenticate, async (req, res) => {
+  try {
+    const result = await db(
+      `
+      SELECT
+        u.id,
+        u.username,
+        u.full_name,
+        u.company_id,
+        u.store_id,
+        u.must_change_password,
+        r.name AS role_name,
+        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page,
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id', s.id,
+                'code', s.code,
+                'name', s.name,
+                'active', s.active,
+                'is_primary', (u.store_id=s.id)
+              )
+              ORDER BY s.name
+            )
+            FROM user_stores us
+            JOIN stores s ON s.id=us.store_id
+            WHERE us.user_id=u.id
+              AND us.active=true
+              AND s.company_id=u.company_id
+              AND s.active=true
+          ),
+          '[]'::jsonb
+        ) AS stores
+      FROM users u
+      LEFT JOIN roles r ON r.id=u.role_id
+      WHERE u.id=$1
+      LIMIT 1
+      `,
+      [req.user.id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const user = result.rows[0];
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        name: user.full_name,
+        role: user.role_name,
+        defaultLandingPage: user.default_landing_page || "dashboard",
+        companyId: user.company_id,
+        storeId: user.store_id,
+        mustChangePassword: user.must_change_password === true,
+      },
+      stores: Array.isArray(user.stores) ? user.stores : [],
+    });
+  } catch (error) {
+    console.error("Session bootstrap error:", error);
+    res.status(500).json({ success: false, message: "Unable to prepare session context" });
+  }
+});
+
 /*
 |--------------------------------------------------------------------------
 | CURRENT SESSION PERMISSIONS (sidebar/UI gating)
