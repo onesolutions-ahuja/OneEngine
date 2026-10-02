@@ -746,9 +746,24 @@ const CATALOG = [
         { key: "email.send", requiredPermissions: ["communications.send"] },
         { key: "connector.test", requiredPermissions: ["integration.manage"] }
       ],
+      testActions: [
+        {
+          key: "email.send",
+          label: "Send test email",
+          description: "Verify the full OneEngine to Mailjet email delivery path.",
+          endpoint: "/api/connector-instances/{instanceId}/send-test-email",
+          permission: "communications.send",
+          requiresEnabled: false,
+          fields: [
+            { key: "recipient", type: "email", required: true, maxLength: 320, label: "To email", placeholder: "name@example.com" },
+            { key: "subject", type: "string", required: true, maxLength: 200, default: "Mailjet Test", label: "Subject" },
+            { key: "message", type: "string", required: true, maxLength: 2000, default: "It works I love chatGPT", label: "Message" }
+          ]
+        }
+      ],
       configurationSchema: [
-        { key: "fromEmail", type: "string", required: true, label: "Verified sender email", description: "Use a sender address already validated in Mailjet.", helpUrl: "https://app.mailjet.com/account/sender", helpLabel: "Open Mailjet sender settings" },
-        { key: "fromName", type: "string", label: "Sender name" },
+        { key: "fromEmail", type: "string", required: true, label: "Verified sender email", description: "Use a sender address already validated in Mailjet. For a branded From address and better deliverability, validate a domain you own and use an address on that domain.", helpUrl: "https://app.mailjet.com/account/sender", helpLabel: "Open Mailjet sender settings" },
+        { key: "fromName", type: "string", label: "Sender name", description: "This is the display name recipients see. Use a verified sender on your authenticated domain for branded sending.", helpUrl: "https://app.mailjet.com/account/sender", helpLabel: "Manage sender domain" },
         { key: "apiKey", type: "secret", required: true, label: "Mailjet API key", description: "Get this from Mailjet Account Settings > API Key Management.", helpUrl: "https://app.mailjet.com/account/apikeys", helpLabel: "Open Mailjet API keys" },
         { key: "secretKey", type: "secret", required: true, label: "Mailjet secret key", description: "Use the secret key paired with the selected Mailjet API key.", helpUrl: "https://app.mailjet.com/account/apikeys", helpLabel: "Open Mailjet API keys" }
       ],
