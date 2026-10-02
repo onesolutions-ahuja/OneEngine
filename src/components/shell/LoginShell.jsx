@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeAuthenticationProviderCallback, consumeGoogleOAuthCallback, getPasskeyOptions, getStoredUser, hasSession, loadAuthenticationProviders, login, startAuthenticationProvider, startGoogleLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPin } from '../../services/api'
+import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeAuthenticationProviderCallback, consumeGoogleOAuthCallback, getPasskeyOptions, getStoredUser, hasSession, loadAuthenticationProviders, login, startAuthenticationProvider, startGoogleLogin, startPasskeyLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPasskeyLogin, verifyPin } from '../../services/api'
 import { useClock } from './DesktopDock'
 
 export function CompanyContextLoading() {
@@ -244,6 +244,29 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
     }
   }
 
+  const submitPasskeyLogin = async () => {
+    try {
+      setSubmitting(true)
+      setError('')
+      const identifier = username.trim()
+      if (!identifier) { setError('Enter your email or username first.'); return }
+      if (!window.PublicKeyCredential || !navigator.credentials) throw new Error('Passkeys are not supported on this browser/device.')
+      const response = await startPasskeyLogin(identifier)
+      const credential = await navigator.credentials.get({ publicKey: decodeRequestOptions(response.data) })
+      const result = await verifyPasskeyLogin({
+        challengeId: response.challengeId,
+        credential: credentialToJson(credential),
+        trustDevice: true,
+        deviceName: browserDeviceName(),
+      })
+      if (result?.token) onUnlock()
+    } catch (err) {
+      setError(err?.message || 'Passkey sign-in failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const submitGoogle = async () => {
     try {
       setSubmitting(true)
@@ -441,6 +464,15 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
                   <span>Starting onePOS…</span>
                 </div>
               ) : null}
+
+              <button
+                className="google-signin-button"
+                type="button"
+                onClick={submitPasskeyLogin}
+                disabled={submitting || !username.trim()}
+              >
+                Sign in with passkey
+              </button>
 
               <div className="login-divider" aria-hidden="true"><span>or</span></div>
 
