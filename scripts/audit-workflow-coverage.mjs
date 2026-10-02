@@ -77,6 +77,45 @@ const trustedRuntime = read("server/services/trustedRuntime.js");
 const actionRegistry = read("server/services/platformActionRegistry.js");
 const systemWorkflowCatalog = read("server/services/systemWorkflowCatalog.js");
 
+const workflowBuilderSource = read("src/pages/settings/Platform/WorkflowAdmin.jsx");
+const forbiddenExecutableDefaults = [
+  {
+    key: "HARDCODED_EMAIL_RECIPIENT_DEFAULT",
+    pattern: /recipient:\s*["'](?:record\.)?customer\.email["']/,
+    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+  },
+  {
+    key: "HARDCODED_PHONE_RECIPIENT_DEFAULT",
+    pattern: /recipient:\s*["'](?:record\.)?customer\.phone["']/,
+    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+  },
+  {
+    key: "HARDCODED_SAMPLE_FUNCTION_INPUT",
+    pattern: /inputs:\s*\{\s*value:\s*["']hello["']\s*\}/,
+    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+  },
+  {
+    key: "HARDCODED_SCHEDULE_TIMEZONE_DEFAULT",
+    pattern: /schedule:\s*\{[^}]*timezone:\s*["']Europe\/London["']/,
+    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+  },
+  {
+    key: "HARDCODED_SCHEDULE_TIME_DEFAULT",
+    pattern: /schedule:\s*\{[^}]*definition:\s*\{\s*time:\s*["']09:00["']/,
+    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+  },
+];
+
+const executableDefaultFindings = forbiddenExecutableDefaults
+  .filter((check) => check.pattern.test(workflowBuilderSource))
+  .map((check) => ({
+    severity: "GAP",
+    type: "FLOW_EXECUTABLE_LITERAL_DEFAULT",
+    key: check.key,
+    file: check.file,
+  }));
+
+
 const functions = extractKeys(functionRegistry, /\bkey:\s*"([^"]+)"/g);
 const workflowActions = extractKeys(workflowRuntime, /\bkey:\s*"([A-Z0-9_]+)"/g);
 const coreActions = extractKeys(actionRegistry, /\bkey:\s*"([A-Z0-9_]+)"/g);
@@ -159,6 +198,7 @@ const catalogueCoverage = {
 };
 
 const findings = [
+  ...executableDefaultFindings,
   ...(!catalogueCoverage.functions ? functions.map((key) => ({ severity: "GAP", type: "FUNCTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
   ...(!catalogueCoverage.actions ? actions.map((key) => ({ severity: "GAP", type: "ACTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
   ...(!catalogueCoverage.jobs ? jobs.map((key) => ({ severity: "GAP", type: "JOB_TRIGGER_REQUIRES_WORKFLOW", key })) : []),
@@ -183,6 +223,7 @@ const report = {
     catalogueActionsCovered: catalogueCoverage.actions,
     catalogueJobsCovered: catalogueCoverage.jobs,
     globalBusinessCommandGateway: globalGatewayEnabled,
+    executableLiteralDefaults: executableDefaultFindings.length,
     totalGaps: findings.length,
   },
   catalogueCoverage,
@@ -215,6 +256,7 @@ const md = [
   `- Catalogue functions covered: ${report.summary.catalogueFunctionsCovered}`,
   `- Catalogue actions covered: ${report.summary.catalogueActionsCovered}`,
   `- Catalogue jobs covered: ${report.summary.catalogueJobsCovered}`,
+  `- Executable literal defaults: ${report.summary.executableLiteralDefaults}`,
   `- Total gaps: ${report.summary.totalGaps}`,
   "",
 ].join("\n");
