@@ -1413,6 +1413,25 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     res.json({ success: true, data: result.rows });
   });
 
+  async function registeredActionDeactivationBlockers(action, req) {
+    const [buttons, bindings] = await Promise.all([
+      db(
+        "SELECT COUNT(*)::int AS count FROM platform_buttons WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true AND target_type='action' AND COALESCE(target_key,action_key)=$3",
+        [action.object_id, req.user.companyId, action.action_key]
+      ),
+      db(
+        "SELECT COUNT(*)::int AS count FROM platform_action_bindings WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true AND action_key=$3",
+        [action.object_id, req.user.companyId, action.action_key]
+      ),
+    ]);
+    const blockers = [];
+    const buttonCount = Number(buttons.rows[0]?.count || 0);
+    const bindingCount = Number(bindings.rows[0]?.count || 0);
+    if (buttonCount) blockers.push(`${buttonCount} button${buttonCount === 1 ? "" : "s"}`);
+    if (bindingCount) blockers.push(`${bindingCount} action binding${bindingCount === 1 ? "" : "s"}`);
+    return blockers;
+  }
+
   router.post("/platform/objects/:objectId/registered-actions", ...manage, async (req, res) => {
     const actionKey = String(req.body?.actionKey || req.body?.action_key || "").trim();
     const handlerKey = String(req.body?.handlerKey || req.body?.handler_key || "").trim();
@@ -1458,15 +1477,29 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   });
 
   router.delete("/platform/objects/:objectId/registered-actions/:actionId", ...manage, async (req, res) => {
+    const existing = await db(
+      "SELECT * FROM platform_registered_actions WHERE id=$1 AND object_id=$2 AND company_id=$3",
+      [req.params.actionId, req.params.objectId, req.user.companyId]
+    );
+    const action = existing.rows[0];
+    if (!action) return res.status(404).json({ success: false, message: "Registered action not found" });
+    const blockers = await registeredActionDeactivationBlockers(action, req);
+    if (blockers.length) {
+      return res.status(409).json({
+        success: false,
+        code: "ACTION_IN_USE",
+        message: `Action cannot be deactivated while it is used by ${blockers.join(", ")}.`,
+        blockers,
+      });
+    }
     const result = await db(
       `UPDATE platform_registered_actions
           SET active=false,user_modified=true,updated_at=NOW()
         WHERE id=$1 AND object_id=$2 AND company_id=$3
         RETURNING id`,
-      [req.params.actionId, req.params.objectId, req.user.companyId]
+      [action.id, req.params.objectId, req.user.companyId]
     );
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "Registered action not found" });
-    res.json({ success: true });
+    res.json({ success: true, data: result.rows[0] });
   });
 
   router.get("/platform/button-variants", ...manage, (req, res) => {
