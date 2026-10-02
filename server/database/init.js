@@ -3802,6 +3802,28 @@ ON secure_invoice_links(company_id, created_at DESC);
       );
       CREATE INDEX IF NOT EXISTS idx_platform_workflow_step_runs_run_order
         ON platform_workflow_step_runs(run_id, step_order);
+      CREATE TABLE IF NOT EXISTS platform_workflow_screen_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        workflow_id UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
+        run_id UUID NOT NULL REFERENCES platform_workflow_runs(id) ON DELETE CASCADE,
+        step_run_id UUID REFERENCES platform_workflow_step_runs(id) ON DELETE CASCADE,
+        step_identifier VARCHAR(200) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+        screen JSONB NOT NULL DEFAULT '{}'::jsonb,
+        values JSONB NOT NULL DEFAULT '{}'::jsonb,
+        workflow_variables JSONB NOT NULL DEFAULT '{}'::jsonb,
+        history JSONB NOT NULL DEFAULT '[]'::jsonb,
+        actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        expires_at TIMESTAMPTZ,
+        submitted_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_screen_sessions_run
+        ON platform_workflow_screen_sessions(run_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_screen_sessions_company_status
+        ON platform_workflow_screen_sessions(company_id, status, created_at DESC);
       CREATE TABLE IF NOT EXISTS platform_workflow_compensation_runs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         run_id UUID NOT NULL REFERENCES platform_workflow_runs(id) ON DELETE CASCADE,
