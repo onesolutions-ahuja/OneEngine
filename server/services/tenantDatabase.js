@@ -171,6 +171,12 @@ export function createTenantDatabaseRouter({ controlPool, sharedPool, PoolFactor
 
 export function createAuthenticatedDatabaseMiddleware({ router, pool }) {
   return async (req, res, next) => {
+    // Keep the login identity immutable. Acting-company context is a data/metadata
+    // target and must never change which tracked session is being authenticated.
+    if (req.user && !Object.prototype.hasOwnProperty.call(req.user, "authenticatedCompanyId")) {
+      req.user = { ...req.user, authenticatedCompanyId: req.user.companyId ?? null };
+    }
+
     /*
      * OneEngine Managers use an explicit RBAC-authorised acting-company header.
      * Resolve it ONCE here, before tenant DB routing, so every downstream
