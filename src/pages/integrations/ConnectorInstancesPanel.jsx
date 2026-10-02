@@ -150,7 +150,10 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   };
 
   const runPackageTestAction = async (instance, action) => {
-    const values = testActionValues[action.key] || {};
+    const defaults = Object.fromEntries(
+      (action.fields || []).filter((field) => field.default !== undefined).map((field) => [field.key, field.default])
+    );
+    const values = { ...defaults, ...(testActionValues[action.key] || {}) };
     setRunningTestAction(action.key);
     setError("");
     setMessage("");
@@ -338,7 +341,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                         <label key={field.key} className="text-xs font-medium text-slate-600">
                           {field.label || field.key}
                           <input
-                            type={field.type === "tel" ? "tel" : "text"}
+                            type={field.type === "tel" ? "tel" : field.type === "email" ? "email" : "text"}
                             maxLength={field.maxLength}
                             placeholder={field.placeholder || ""}
                             value={values[field.key] ?? ""}
@@ -446,7 +449,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                           <label key={field.key} className="text-xs font-medium text-slate-600">
                             {field.label || field.key}
                             <input
-                              type={field.type === "tel" ? "tel" : "text"}
+                              type={field.type === "tel" ? "tel" : field.type === "email" ? "email" : "text"}
                               maxLength={field.maxLength}
                               placeholder={field.placeholder || ""}
                               value={values[field.key] ?? ""}
