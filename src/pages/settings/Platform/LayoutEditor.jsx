@@ -982,6 +982,108 @@ export default function LayoutEditor({
     }
   }
 
+  async function refreshVersions(targetId = layoutId) {
+    if (!targetId) {
+      setVersions([]);
+      return [];
+    }
+    try {
+      const response = await apiRequest(`/api/platform/layouts/${encodeURIComponent(targetId)}/versions`);
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      setVersions(rows);
+      return rows;
+    } catch {
+      setVersions([]);
+      return [];
+    }
+  }
+
+  async function activateLayout() {
+    setLifecycleBusy(true);
+    setError("");
+    try {
+      const saved = await saveLayout({ preventDefault() {} });
+      const targetId = saved?.id || saved?.layout_id || layoutId;
+      if (!targetId) return;
+      const response = await apiRequest(`/api/platform/layouts/${encodeURIComponent(targetId)}/activate`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const activated = response?.data || response;
+      setSavedLayout(activated);
+      setForm((current) => ({ ...current, active: true, is_default: activated?.is_default === true }));
+      await refreshVersions(targetId);
+      onSave?.(activated);
+    } catch (err) {
+      setError(err?.message || "Unable to activate layout.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
+  async function deactivateLayout() {
+    if (!layoutId) return;
+    setLifecycleBusy(true);
+    setError("");
+    try {
+      const response = await apiRequest(`/api/platform/layouts/${encodeURIComponent(layoutId)}/deactivate`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const inactive = response?.data || response;
+      setSavedLayout(inactive);
+      setForm((current) => ({ ...current, active: false, is_default: false }));
+      await refreshVersions(layoutId);
+      onSave?.(inactive);
+    } catch (err) {
+      setError(err?.message || "Unable to deactivate layout.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
+  async function restoreLayoutVersion(version) {
+    if (!layoutId) return;
+    setLifecycleBusy(true);
+    setError("");
+    try {
+      const response = await apiRequest(`/api/platform/layouts/${encodeURIComponent(layoutId)}/versions/${encodeURIComponent(version)}/restore`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const restored = response?.data || response;
+      setSavedLayout(restored);
+      const definition = restored?.draft_definition || restored?.definition || {};
+      const metadata = restored?.draft_metadata || {};
+      const assignments = Array.isArray(restored?.draft_assignments) ? restored.draft_assignments : [];
+      setForm((current) => ({
+        ...current,
+        name: metadata.name || restored?.name || current.name,
+        page_type: metadata.pageType || restored?.page_type || current.page_type,
+        role_id: metadata.roleId ?? restored?.role_id ?? "",
+        record_type_id: metadata.recordTypeId ?? restored?.record_type_id ?? "",
+        is_default: metadata.isDefault === true,
+        presentation_mode: definition.presentation_mode || "inline",
+        sections: Array.isArray(definition.sections) ? definition.sections : current.sections,
+        components: Array.isArray(definition.components) ? definition.components : current.components,
+      }));
+      setLayoutAssignments(assignments.map((assignment) => ({
+        appId: assignment.appId || assignment.app_id || "",
+        recordTypeId: assignment.recordTypeId || assignment.record_type_id || "",
+        roleId: assignment.roleId || assignment.role_id || "",
+        deviceProfile: assignment.deviceProfile || assignment.device_profile || "any",
+        requiredPermissions: assignment.requiredPermissions || assignment.required_permissions || [],
+        priority: Number(assignment.priority || 0),
+      })));
+      setAssignmentsTouched(false);
+      await refreshVersions(layoutId);
+    } catch (err) {
+      setError(err?.message || "Unable to restore layout version.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
   /* ------------------------------ palette ---------------------------------- */
 
   function renderFieldList(targetSectionId) {
