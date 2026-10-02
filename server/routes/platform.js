@@ -4198,6 +4198,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         await db("UPDATE platform_workflow_screen_sessions SET status='EXPIRED',updated_at=NOW() WHERE id=$1", [session.id]);
         session.status = "EXPIRED";
       }
+      const previousResult = session.status === "ACTIVE"
+        ? await db(
+            `SELECT id FROM platform_workflow_screen_sessions
+              WHERE run_id=$1 AND company_id=$2 AND status='COMPLETED' AND created_at < $3
+              ORDER BY created_at DESC LIMIT 1`,
+            [session.run_id, req.user.companyId, session.created_at]
+          )
+        : { rows: [] };
+      session.screen = {
+        ...(session.screen || {}),
+        allowBack: session.screen?.allowBack !== false && Boolean(previousResult.rows?.[0]),
+      };
       return res.json({ success: true, data: session });
     } catch (error) {
       console.error("Screen Flow session load error:", error);
@@ -4223,14 +4235,57 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (!["NEXT","FINISH","BACK"].includes(navigation)) return res.status(400).json({ success: false, message: "Invalid Screen Flow navigation action" });
 
       if (navigation === "BACK") {
-        const history = Array.isArray(session.history) ? session.history : [];
-        if (!session.screen?.allowBack || !history.length) return res.status(409).json({ success: false, message: "Back navigation is not available" });
-        const previous = history[history.length - 1];
-        await db(
-          "UPDATE platform_workflow_screen_sessions SET screen=$1::jsonb,values=$2::jsonb,history=$3::jsonb,updated_at=NOW() WHERE id=$4 AND company_id=$5",
-          [JSON.stringify(previous.screen || {}), JSON.stringify(previous.values || {}), JSON.stringify(history.slice(0, -1)), session.id, req.user.companyId]
+        if (session.screen?.allowBack === false) return res.status(409).json({ success: false, message: "Back navigation is not available" });
+        const previousResult = await db(
+          `SELECT * FROM platform_workflow_screen_sessions
+            WHERE run_id=$1 AND company_id=$2 AND status='COMPLETED' AND created_at < $3
+            ORDER BY created_at DESC LIMIT 1`,
+          [session.run_id, req.user.companyId, session.created_at]
         );
-        return res.json({ success: true, data: { status: "ACTIVE", screenSessionId: session.id, screen: previous.screen || {}, values: previous.values || {}, navigation: "BACK" } });
+        const previous = previousResult.rows?.[0] || null;
+        if (!previous) return res.status(409).json({ success: false, message: "Back navigation is not available" });
+
+        await db("BEGIN");
+        try {
+          await db(
+            "UPDATE platform_workflow_screen_sessions SET status='CANCELLED_BACK',updated_at=NOW() WHERE id=$1 AND company_id=$2",
+            [session.id, req.user.companyId]
+          );
+          if (session.step_run_id) {
+            await db(
+              "UPDATE platform_workflow_step_runs SET status='PENDING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND run_id=$2",
+              [session.step_run_id, session.run_id]
+            );
+          }
+          await db(
+            "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',submitted_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+            [previous.id, req.user.companyId]
+          );
+          if (previous.step_run_id) {
+            await db(
+              "UPDATE platform_workflow_step_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND run_id=$2",
+              [previous.step_run_id, previous.run_id]
+            );
+          }
+          await db(
+            "UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+            [session.run_id, req.user.companyId]
+          );
+          await db("COMMIT");
+        } catch (error) {
+          await db("ROLLBACK").catch(() => {});
+          throw error;
+        }
+        return res.json({
+          success: true,
+          data: {
+            status: "WAITING",
+            screenSessionId: previous.id,
+            screen: { ...(previous.screen || {}), allowBack: true },
+            values: previous.values || {},
+            navigation: "BACK",
+          },
+        });
       }
 
       const values = req.body?.values && typeof req.body.values === "object" && !Array.isArray(req.body.values) ? req.body.values : {};
@@ -4272,6 +4327,28 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         "UPDATE platform_workflow_runs SET status='RUNNING',completed_at=NULL,error_text=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2",
         [session.run_id, req.user.companyId]
       );
+
+      if (navigation === "FINISH") {
+        await db(
+          `UPDATE platform_workflow_runs
+              SET status='COMPLETED',completed_at=NOW(),
+                  metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW()
+            WHERE id=$2 AND company_id=$3`,
+          [JSON.stringify({ finalVariables: workflowVariables, screenNavigation: "FINISH" }), session.run_id, req.user.companyId]
+        );
+        return res.json({
+          success: true,
+          data: {
+            status: "COMPLETED",
+            runId: session.run_id,
+            screenSessionId: null,
+            screen: null,
+            values: {},
+            navigation: "FINISH",
+            variables: workflowVariables,
+          },
+        });
+      }
 
       const results = await executeWorkflowActions({
         actions: runtime.actions,
