@@ -84,6 +84,7 @@ export default function RecordListView({
   subtitle,
   rows = [],
   columns = [],
+  availableColumns = [],
   searchKeys = [],
   createLabel = 'Create New',
   canCreate = false,
@@ -147,9 +148,11 @@ export default function RecordListView({
     setLocalFilters(next)
   }
   const [filterOpen, setFilterOpen] = useState(null)
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false)
   const [draggingKey, setDraggingKey] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
   const [editingCell, setEditingCell] = useState(null)
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key))
   const [dataLoaderMode, setDataLoaderMode] = useState(null)
   const [columnOrder, setColumnOrder] = useState(() => {
     try {
@@ -175,13 +178,21 @@ export default function RecordListView({
   }, [])
 
   useEffect(() => {
-    const validKeys = columns.map((column) => column.key)
+    const all = (availableColumns.length ? availableColumns : columns)
+    const validKeys = all.map((column) => column.key)
+    const configuredKeys = columns.map((column) => column.key).filter((key) => validKeys.includes(key))
     setColumnOrder((current) => {
+      if (activeListViewId) return configuredKeys
       const kept = current.filter((key) => validKeys.includes(key))
-      const missing = validKeys.filter((key) => !kept.includes(key))
+      const missing = configuredKeys.filter((key) => !kept.includes(key))
       return [...kept, ...missing]
     })
-  }, [columns])
+    setVisibleColumnKeys((current) => {
+      if (activeListViewId) return configuredKeys
+      const kept = current.filter((key) => validKeys.includes(key))
+      return kept.length ? kept : configuredKeys
+    })
+  }, [columns, availableColumns, activeListViewId])
 
   useEffect(() => {
     if (!columnOrder.length) return
@@ -191,10 +202,14 @@ export default function RecordListView({
   }, [columnOrder, title])
 
   const orderedColumns = useMemo(() => {
-    const byKey = new Map(columns.map((column) => [column.key, column]))
+    const all = availableColumns.length ? availableColumns : columns
+    const byKey = new Map(all.map((column) => [column.key, column]))
+    const visible = new Set(visibleColumnKeys.length ? visibleColumnKeys : columns.map((column) => column.key))
     const order = columnOrder.length ? columnOrder : columns.map((column) => column.key)
-    return order.map((key) => byKey.get(key)).filter(Boolean)
-  }, [columns, columnOrder])
+    const ordered = order.filter((key) => visible.has(key)).map((key) => byKey.get(key)).filter(Boolean)
+    const missing = [...visible].filter((key) => !order.includes(key)).map((key) => byKey.get(key)).filter(Boolean)
+    return [...ordered, ...missing]
+  }, [columns, availableColumns, columnOrder, visibleColumnKeys])
 
   const filterOptions = useMemo(() => {
     const result = {}
@@ -293,6 +308,16 @@ export default function RecordListView({
       const next = { ...current }
       delete next[columnKey]
       return next
+    })
+  }
+
+  const toggleColumnVisibility = (key) => {
+    setVisibleColumnKeys((current) => {
+      const present = current.includes(key)
+      if (present && current.length <= 1) return current
+      if (present) return current.filter((item) => item !== key)
+      setColumnOrder((order) => order.includes(key) ? order : [...order, key])
+      return [...current, key]
     })
   }
 
@@ -468,6 +493,30 @@ export default function RecordListView({
                     <Trash2 size={15} />
                   </button>
                 </>
+              ) : null}
+            </div>
+          ) : null}
+          {(availableColumns.length || columns.length) ? (
+            <div className="record-column-picker-wrap">
+              <button type="button" className="record-data-icon" title="Select fields to display" aria-label="Select fields to display" aria-expanded={columnPickerOpen} onClick={() => setColumnPickerOpen((value) => !value)}>
+                <Columns3 size={15} />
+              </button>
+              {columnPickerOpen ? (
+                <div className="record-column-picker" role="dialog" aria-label="Select fields to display">
+                  <strong>Fields to display</strong>
+                  <div>
+                    {(availableColumns.length ? availableColumns : columns).map((column) => {
+                      const checked = visibleColumnKeys.includes(column.key)
+                      return (
+                        <label key={column.key}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleColumnVisibility(column.key)} />
+                          <span>{column.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <button type="button" onClick={() => setColumnPickerOpen(false)}>Done</button>
+                </div>
               ) : null}
             </div>
           ) : null}
