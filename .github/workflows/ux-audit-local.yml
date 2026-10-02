@@ -70,17 +70,7 @@ jobs:
           set -euo pipefail
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f server/database/schema.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f server/database/baseFoundation.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          DO $ BEGIN
-            IF NOT EXISTS (
-              SELECT 1 FROM pg_constraint WHERE conname='ux_audit_platform_layouts_scope_unique'
-            ) THEN
-              ALTER TABLE platform_layouts
-                ADD CONSTRAINT ux_audit_platform_layouts_scope_unique
-                UNIQUE NULLS NOT DISTINCT (object_id,page_type,role_id,company_id);
-            END IF;
-          END $;
-          SQL
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE UNIQUE INDEX IF NOT EXISTS ux_audit_platform_layouts_scope_unique ON platform_layouts (object_id,page_type,role_id,company_id) NULLS NOT DISTINCT;"
           (
             cd server
             node --input-type=module <<'NODE'
