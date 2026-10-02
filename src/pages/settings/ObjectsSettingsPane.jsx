@@ -215,7 +215,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
       requests.push(['fields', apiRequest(`/api/platform/objects/${encodeURIComponent(selectedId)}/fields`)])
     }
     if (wantsRelationships && !loadedSections.relationships) {
-      requests.push(['relationships', apiRequest('/api/platform/relationships')])
+      requests.push(['relationships', apiRequest('/api/platform/relationships?includeInactive=1')])
     }
     if (wantsRules && !loadedSections.rules) {
       requests.push(['rules', apiRequest('/api/platform/rules')])
@@ -328,7 +328,7 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
 
   const refreshRelationships = async () => {
     if (!selectedId) return
-    const response = await apiRequest('/api/platform/relationships')
+    const response = await apiRequest('/api/platform/relationships?includeInactive=1')
     const relationships = Array.isArray(response?.data) ? response.data : []
     setObjectData((current) => ({
       ...current,
