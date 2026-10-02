@@ -1843,6 +1843,8 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     const result = await db("SELECT f.*, o.company_id AS object_company_id, o.company_scoped AS object_company_scoped, o.source_table, o.object_key FROM platform_fields f JOIN platform_objects o ON o.id=f.object_id WHERE f.id=$1 AND (f.company_id IS NULL OR f.company_id=$2) AND (o.company_id IS NULL OR o.company_id=$2)", [req.params.fieldId, req.user.companyId]);
     const field = result.rows[0];
     if (!field || (field.company_id === null && !await canManageGlobal(db, req))) return res.status(404).json({ success: false, message: "Field not found or not editable" });
+    const object = await getObject(field.object_id, req, { includeInactive: true });
+    if (!object) return res.status(404).json({ success: false, message: "Object not found" });
     if (systemObject(field) && !field.company_id) return res.status(409).json({ success: false, message: "System field definitions are protected; use field security and layouts" });
     if (isExtensionField(field) && (req.body.sourceColumn || (req.body.apiName && req.body.apiName !== field.api_name) || (req.body.fieldType && req.body.fieldType !== field.field_type))) return res.status(400).json({ success: false, message: "Stored extension field identity, type and storage are protected" });
     if (field.source_column && field.field_type !== "formula" && field.field_type !== "rollup") {
