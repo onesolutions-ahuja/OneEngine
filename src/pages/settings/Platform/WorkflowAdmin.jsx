@@ -960,6 +960,7 @@ function makeStep(type = "CREATE_RECORD") {
       variableType: "text",
       operator: "set",
       value: "",
+      assignments: [],
       resourceName: "",
       resourceType: "text",
       resultType: "number",
@@ -1096,9 +1097,17 @@ function workflowActionIssue(step, definition = null) {
     if (!config.apiName || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(String(config.apiName))) return "Enter a valid API Name.";
   }
   if (step.type === "ASSIGNMENT") {
-    if (!config.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.variableName))) return "Enter a valid variable name.";
-    if (!config.variableType) return "Choose a variable type.";
-    if (!config.operator) return "Choose an assignment operation.";
+    if (config.resourceOnly === true) {
+      if (!config.variableName || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(config.variableName))) return "Enter a valid variable API Name.";
+      if (!config.variableType) return "Choose a variable data type.";
+    } else {
+      const assignments = Array.isArray(config.assignments) && config.assignments.length
+        ? config.assignments
+        : (config.variableName ? [{ variable: `variables.${config.variableName}`, variableType: config.variableType, operator: config.operator, value: config.value }] : []);
+      if (!assignments.length) return "Add at least one assignment.";
+      if (assignments.some((assignment) => !String(assignment?.variable || "").startsWith("variables."))) return "Choose a Variable for every assignment.";
+      if (assignments.some((assignment) => !assignment?.operator)) return "Choose an operator for every assignment.";
+    }
   }
   if (step.type === "CONDITION") {
     const outcomes = Array.isArray(config.outcomes) ? config.outcomes : [];
@@ -1304,19 +1313,20 @@ function workflowStepResources(steps = [], currentIndex = 0, objectFieldCatalog 
         seenVariables.add(step.config.resourceName);
       }
       resources.push({ value: `${prefix}.value`, label: `${label} → Result`, type: step.config.resultType || "step output" });
-    } else if (step.type === "ASSIGNMENT" && step.config?.variableName) {
+    } else if (step.type === "ASSIGNMENT" && step.config?.resourceOnly === true && step.config?.variableName) {
       if (!seenVariables.has(step.config.variableName)) {
         resources.push({
           value: `variables.${step.config.variableName}`,
-          label: `${step.config.variableName} · ${step.config.variableType || "text"}`,
+          label: `${step.config.variableName} · Variable · ${step.config.variableType || "text"}`,
           type: step.config.variableType || "variable",
         });
         seenVariables.add(step.config.variableName);
       }
+    } else if (step.type === "ASSIGNMENT") {
       resources.push({
         value: `${prefix}.value`,
         label: `${label} → Assigned Value`,
-        type: step.config.variableType || "step output",
+        type: "step output",
       });
     } else if (step.type === "LOOP" && step.config?.itemVariable) {
       resources.push(
@@ -1552,6 +1562,13 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
     return groups;
   }, {});
   const extraResources = workflowStepResources(allSteps, index, objectFieldCatalog);
+  const variableResourceOptions = allSteps.slice(0, index)
+    .filter((candidate) => candidate.type === "ASSIGNMENT" && candidate.config?.resourceOnly === true && candidate.config?.variableName)
+    .map((candidate) => ({
+      value: `variables.${candidate.config.variableName}`,
+      label: candidate.config.variableName,
+      type: candidate.config.variableType || "text",
+    }));
   const registryDefinition = registryOptions.find((option) => option.value === step.type) || null;
   const updateFieldMapping = (key, value) => {
     const fieldMappings = { ...(step.config?.fieldMappings || {}) };
@@ -1729,57 +1746,70 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <p className="text-[11px] text-slate-500">All selected records are updated in one scoped database operation rather than one update per Loop iteration.</p>
           </div>
         );
-      case "ASSIGNMENT":
+      case "ASSIGNMENT": {
+        const rows = Array.isArray(step.config?.assignments) && step.config.assignments.length
+          ? step.config.assignments
+          : (step.config?.variableName
+              ? [{ id: "legacy-assignment", variable: `variables.${step.config.variableName}`, variableType: step.config.variableType || "text", operator: step.config.operator || "set", value: step.config.value ?? "" }]
+              : [{ id: `assignment-${step.id}`, variable: "", variableType: "text", operator: "set", value: "" }]);
+        const setRows = (assignments) => updateConfig({ assignments, variableName: "", value: "" });
         return (
           <div className="space-y-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Variable name</label>
-              <input
-                className={inputClass}
-                value={step.config?.variableName || ""}
-                onChange={(event) => updateConfig({ variableName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") })}
-                placeholder="e.g. followUpDate"
-              />
-              <p className="mt-1 text-[11px] text-slate-500">This becomes available to later steps as a Resource.</p>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Type</label>
-                <select className={inputClass} value={step.config?.variableType || "text"} onChange={(event) => updateConfig({ variableType: event.target.value, operator: "set", value: "" })}>
-                  <option value="text">Text</option>
-                  <option value="number">Number</option>
-                  <option value="boolean">Boolean</option>
-                  <option value="date">Date</option>
-                  <option value="datetime">Date / Time</option>
-                  <option value="record">Record</option>
-                  <option value="collection">Collection</option>
-                  <option value="object">Object</option>
-                </select>
+            {!variableResourceOptions.length ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                Create a Variable from Manager → New Resource before configuring an Assignment.
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Operation</label>
-                <select className={inputClass} value={step.config?.operator || "set"} onChange={(event) => updateConfig({ operator: event.target.value })}>
-                  <option value="set">Set value</option>
-                  {step.config?.variableType === "number" ? <option value="add">Add</option> : null}
-                  {step.config?.variableType === "number" ? <option value="subtract">Subtract</option> : null}
-                  {step.config?.variableType === "collection" ? <option value="append">Append to collection</option> : null}
-                </select>
-              </div>
-            </div>
-            <ResourceOrLiteralInput
-              label="Value"
-              value={step.config?.value ?? ""}
-              onChange={(value) => updateConfig({ value })}
-              rootObjectKey={rootObjectKey}
-              extraResources={extraResources}
-              type={step.config?.variableType || "string"}
-              required
-            />
-            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-              Later steps will find this under Resources as <strong>{step.config?.variableName ? `variables.${step.config.variableName}` : "your variable"}</strong>.
-            </div>
+            ) : null}
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Set Variable Values</div>
+            {rows.map((assignment, assignmentIndex) => {
+              const selectedVariable = variableResourceOptions.find((option) => option.value === assignment.variable);
+              const variableType = assignment.variableType || selectedVariable?.type || "text";
+              return <div key={assignment.id || assignmentIndex} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="grid gap-2 md:grid-cols-[1.1fr_.8fr_auto]">
+                  <label className="block text-xs font-medium text-slate-600">Variable
+                    <select className={inputClass} value={assignment.variable || ""} onChange={(event) => {
+                      const option = variableResourceOptions.find((item) => item.value === event.target.value);
+                      const next = [...rows];
+                      next[assignmentIndex] = { ...assignment, variable: event.target.value, variableType: option?.type || "text", operator: "set", value: "" };
+                      setRows(next);
+                    }}>
+                      <option value="">Select a Variable</option>
+                      {variableResourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label} · {option.type}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-medium text-slate-600">Operator
+                    <select className={inputClass} value={assignment.operator || "set"} onChange={(event) => {
+                      const next = [...rows];
+                      next[assignmentIndex] = { ...assignment, operator: event.target.value };
+                      setRows(next);
+                    }}>
+                      <option value="set">Equals</option>
+                      {variableType === "number" ? <option value="add">Add</option> : null}
+                      {variableType === "number" ? <option value="subtract">Subtract</option> : null}
+                      {variableType === "collection" ? <option value="append">Add</option> : null}
+                    </select>
+                  </label>
+                  <button type="button" className="self-end rounded border border-slate-200 px-2 py-2 text-xs text-red-600" disabled={rows.length <= 1} onClick={() => setRows(rows.filter((_, rowIndex) => rowIndex !== assignmentIndex))}>Remove</button>
+                </div>
+                <ResourceOrLiteralInput
+                  label="Value"
+                  value={assignment.value ?? ""}
+                  onChange={(value) => {
+                    const next = [...rows];
+                    next[assignmentIndex] = { ...assignment, value, variableType };
+                    setRows(next);
+                  }}
+                  rootObjectKey={rootObjectKey}
+                  extraResources={extraResources}
+                  type={variableType || "string"}
+                  required
+                />
+              </div>;
+            })}
+            <button type="button" className="text-sm text-blue-700" onClick={() => setRows([...rows, { id: `assignment-${Date.now()}`, variable: "", variableType: "text", operator: "set", value: "" }])}>+ Add Assignment</button>
           </div>
         );
+      }
       case "GET_RECORDS": {
         const filters = Array.isArray(step.config?.filters) ? step.config.filters : [];
         const updateFilter = (filterIndex, patch) => {
