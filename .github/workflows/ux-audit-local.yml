@@ -1,0 +1,175 @@
+name: OneEngine Local UX Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["ux-audit"]
+    paths:
+      - ".github/workflows/ux-audit-local.yml"
+      - "tests/e2e/ux-audit-local.spec.mjs"
+      - "src/**"
+      - "server/**"
+      - "package.json"
+      - "package-lock.json"
+      - "playwright.config.mjs"
+
+concurrency:
+  group: oneengine-local-ux-audit
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ux-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: oneengine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d oneengine"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/oneengine
+      PORT: 10000
+      JWT_SECRET: local-ux-audit-jwt-secret-not-for-production
+      ONEPOS_DB_ENCRYPTION_KEY: local-ux-audit-db-key-not-for-production
+      ONEPOS_E2E_BASE_URL: http://127.0.0.1:5173/
+      ONEPOS_API_URL: http://127.0.0.1:10000
+      VITE_API_BASE: http://127.0.0.1:10000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend and server dependencies
+        run: |
+          npm ci
+          npm install --prefix server --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare local database
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f server/database/schema.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f server/database/baseFoundation.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE UNIQUE INDEX IF NOT EXISTS ux_audit_platform_layouts_scope_unique ON platform_layouts (object_id,page_type,role_id,company_id) NULLS NOT DISTINCT;"
+          (
+            cd server
+            node --input-type=module <<'NODE'
+          import pg from "pg";
+          import { createHash } from "node:crypto";
+          import { readFileSync } from "node:fs";
+          import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformMetadata.js";
+          const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+          await initializePlatformMetadata(pool, { includeOperationalObjects: true });
+          await initializeStandardObjectEcosystem(pool);
+          const hash = createHash("sha256");
+          for (const relativePath of ["./services/platformMetadata.js","./services/internalAppCatalog.js","./services/packageRegistry.js"]) {
+            hash.update(relativePath);
+            hash.update(readFileSync(new URL(relativePath, import.meta.url)));
+          }
+          await pool.query(`INSERT INTO onepos_runtime_state (state_key,state_value,updated_at)
+            VALUES ('platform_bootstrap_fingerprint',$1,NOW())
+            ON CONFLICT (state_key) DO UPDATE SET state_value=EXCLUDED.state_value,updated_at=NOW()`, [hash.digest("hex")]);
+          await pool.end();
+          NODE
+          )
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies (name, legal_name, email, currency, timezone, active)
+          SELECT 'onePOS Demo', 'onePOS Demo Ltd', 'demo@onepos.com', 'GBP', 'Europe/London', TRUE
+          WHERE NOT EXISTS (SELECT 1 FROM companies WHERE lower(name)=lower('onePOS Demo'));
+
+          INSERT INTO company_settings (company_id)
+          SELECT id FROM companies c
+          WHERE lower(c.name)=lower('onePOS Demo')
+            AND NOT EXISTS (SELECT 1 FROM company_settings cs WHERE cs.company_id=c.id);
+
+          INSERT INTO stores (company_id, name, code, active)
+          SELECT c.id, 'Main Store', 'MAIN', TRUE
+          FROM companies c
+          WHERE lower(c.name)=lower('onePOS Demo')
+            AND NOT EXISTS (SELECT 1 FROM stores s WHERE s.company_id=c.id);
+          SQL
+
+      - name: Start local API
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BOOTSTRAP_SUPERADMIN_EMAIL="superadmin@onepos.com"
+          export BOOTSTRAP_SUPERADMIN_PASSWORD="local-ux-audit-password"
+          nohup node server/server.js > /tmp/oneengine-api.log 2>&1 &
+          echo $! > /tmp/oneengine-api.pid
+          for i in {1..120}; do
+            if curl -fsS http://127.0.0.1:10000/api/health >/tmp/health.json 2>/dev/null; then
+              cat /tmp/health.json
+              break
+            fi
+            if ! kill -0 "$(cat /tmp/oneengine-api.pid)" 2>/dev/null; then
+              echo "::error::Local API exited during startup"
+              cat /tmp/oneengine-api.log
+              exit 1
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:10000/api/health >/dev/null || { cat /tmp/oneengine-api.log; exit 1; }
+
+      - name: Normalize local QA user
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ONEPOS_E2E_USERNAME="superadmin@onepos.com"
+          export ONEPOS_E2E_PASSWORD="local-ux-audit-password"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "UPDATE users SET must_change_password=FALSE, active=TRUE WHERE lower(username)=lower('superadmin@onepos.com') OR lower(email)=lower('superadmin@onepos.com');"
+          STATUS=$(curl -sS -o /tmp/local-login.json -w "%{http_code}" -H "Content-Type: application/json" --data-binary '{"username":"superadmin@onepos.com","password":"local-ux-audit-password"}' http://127.0.0.1:10000/api/auth/login)
+          cat /tmp/local-login.json
+          test "$STATUS" = "200"
+
+      - name: Start local frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm run dev -- --host 127.0.0.1 > /tmp/oneengine-vite.log 2>&1 &
+          echo $! > /tmp/oneengine-vite.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:5173/ >/dev/null 2>&1; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/oneengine-vite.log
+          exit 1
+
+      - name: Run local UX audit
+        env:
+          ONEPOS_E2E_USERNAME: superadmin@onepos.com
+          ONEPOS_E2E_PASSWORD: local-ux-audit-password
+        run: npx playwright test tests/e2e/ux-audit-local.spec.mjs --project=desktop-chromium
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oneengine-local-ux-audit
+          path: |
+            playwright-report/
+            test-results/
+            /tmp/oneengine-api.log
+            /tmp/oneengine-vite.log
+          if-no-files-found: ignore
+          retention-days: 14
