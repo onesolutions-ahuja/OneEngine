@@ -308,19 +308,19 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
     try {
       const resolved = await resolveDefaultDashboard(db, req.user);
       if (resolved) {
-        return res.json({ success: true, data: validateDashboardDefinition({
+        const definition = validateDashboardDefinition({
           name: resolved.dashboard.name, description: resolved.dashboard.description,
           components: resolved.dashboard.components, filters: resolved.dashboard.filters,
           global_filters: resolved.dashboard.global_filters || [],
           responsive_layouts: resolved.dashboard.responsive_layouts || {},
           run_as_mode: resolved.dashboard.run_as_mode,
           run_as_user_id: resolved.dashboard.run_as_user_id || null,
-        }) });
+        });
+        return res.json({ success: true, data: { id: resolved.dashboard.id, ...definition } });
       }
       res.json({ success: true, data: validateDashboardDefinition(structuredClone(DEFAULT_DASHBOARD_DEFINITION)) });
     } catch (error) { res.status(500).json({ success: false, message: "Unable to resolve the default dashboard" }); }
   });
-
   /* Run a definition that is not (yet) saved — the Dashboard page uses this to
 
      render the default definition through the identical engine the saved

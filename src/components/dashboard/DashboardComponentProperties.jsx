@@ -7,6 +7,20 @@ const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
 const STYLE = { borderColor: "var(--onepos-border)", background: "var(--onepos-surface-raised)", color: "var(--onepos-text-primary)" };
 const LABEL = "block text-xs font-semibold mb-1";
 
+function useReports() {
+  const [state, setState] = useState({ reports: [], loading: true });
+  useEffect(() => {
+    let live = true;
+    apiRequest("/api/reports/custom")
+      .then((response) => {
+        if (!live) return;
+        setState({ reports: response?.success ? response.data || [] : [], loading: false });
+      })
+      .catch(() => { if (live) setState({ reports: [], loading: false }); });
+    return () => { live = false; };
+  }, []);
+  return state;
+}
 function useObjects() {
   const [state, setState] = useState({ objects: [], error: "" });
   useEffect(() => {
@@ -67,6 +81,7 @@ function ConditionEditor({ component, onChange, fields }) {
 }
 
 export default function DashboardComponentProperties({ component, onChange }) {
+  const { reports: drillReports } = useReports();
   const config = component.config || {};
   const report = config.report || {};
   const isPlatform = report.dataSource === "platform_object";
@@ -150,7 +165,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
         <DrillActionEditor
           action={config.drillAction}
           onChange={(drillAction) => setConfig({ drillAction })}
-          reports={[]}
+          reports={drillReports}
           fields={isPlatform ? choices.all : DASHBOARD_SALES_FIELDS}
         />
       </div>

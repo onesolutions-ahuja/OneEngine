@@ -34,6 +34,18 @@ export async function resolveDashboardExecutionUser(db, dashboard, requestUser) 
   );
   const row = result.rows?.[0];
   if (!row) throw new Error("Dashboard run-as user is unavailable");
+  const stores = await db(
+    `SELECT us.store_id
+       FROM user_stores us
+       JOIN stores s ON s.id=us.store_id
+      WHERE us.user_id=$1
+        AND us.active=TRUE
+        AND s.company_id=$2
+        AND s.active=TRUE
+      ORDER BY CASE WHEN us.store_id=$3 THEN 0 ELSE 1 END, s.name, us.store_id`,
+    [row.id, row.company_id, requestUser.storeId || null],
+  );
+  const storeId = stores.rows?.[0]?.store_id || null;
   return {
     ...requestUser,
     id: row.id,
@@ -41,6 +53,6 @@ export async function resolveDashboardExecutionUser(db, dashboard, requestUser) 
     roleId: row.role_id,
     username: row.username,
     full_name: row.full_name,
-    storeId: requestUser.storeId,
+    storeId,
   };
 }

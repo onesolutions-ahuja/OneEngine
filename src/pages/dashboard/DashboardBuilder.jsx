@@ -6,7 +6,7 @@ import DashboardComponentProperties from "../../components/dashboard/DashboardCo
 // exposes Data source, Metric field, Category / group field, Date range,
 // Format, Size, Maximum categories, Width and Height controls.
 import { DASHBOARD_SALES_FIELDS, applyLayout } from "../../components/dashboard/platformDashboard.js";
-import { componentIcon, registryForBuilder, useComponentRegistry } from "../settings/Platform/componentRegistry.js";
+import { componentIcon, createRegisteredComponent, registryForBuilder, useComponentRegistry } from "../settings/Platform/componentRegistry.js";
 import { DashboardFilterEditor, DashboardRunAsEditor, ResponsiveLayoutMode, responsiveComponents } from "../../components/dashboard/DashboardManagementControls.jsx";
 
 /*
@@ -177,14 +177,17 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
      page uses, so the builder previews exactly what will render. */
   const runPreview = async (dashboardValue = current || empty) => {
     setError("");
-    const response = await apiRequest("/api/dashboards/run", {
+    const value = dashboardValue || empty;
+    const savedId = value?.id || null;
+    const response = await apiRequest(savedId ? `/api/dashboards/${encodeURIComponent(savedId)}/run` : "/api/dashboards/run", {
       method: "POST",
-      body: JSON.stringify({ ...(dashboardValue || empty), name: (dashboardValue?.name || current?.name || "Preview").trim() || "Preview" }),
+      body: JSON.stringify(savedId
+        ? { filters: value.filters || [], globalFilterValues: {} }
+        : { ...value, name: (value?.name || current?.name || "Preview").trim() || "Preview" }),
     });
     if (response.success) { setRuntime(response.data?.components || []); setPreview(true); }
     else setError(response.message || "Unable to preview this dashboard");
   };
-
   const loadDefault = async () => {
     const response = await apiRequest("/api/dashboards/default");
     if (response.success) setCurrent({ ...response.data, id: null });
@@ -195,10 +198,11 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   const addComponent = (registryKey) => {
     const spec = dashboardPalette.find((item) => item.key === registryKey);
     const type = spec?.rendererKey || registryKey;
-    const component = { ...blankComponent(type), registryKey };
+    const component = spec?.runtimeKind === "analytics"
+      ? createRegisteredComponent(spec, "DASHBOARD")
+      : { ...blankComponent(type), registryKey };
     setCurrent((value) => ({ ...(value || empty), components: [...(value?.components || []), component] }));
-  };
-  const updateComponent = (index, next) => setCurrent((value) => {
+  };  const updateComponent = (index, next) => setCurrent((value) => {
     const components = [...(value?.components || [])];
     components[index] = next;
     return { ...value, components };
