@@ -3653,6 +3653,86 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "LIMIT_REPETITIONS",
+    displayName: "Limit Repetitions",
+    description: "Filter recommendations based on recent accepted/rejected reaction history.",
+    schema: {
+      type: "object",
+      properties: {
+        collection: { type: "string" },
+        repetitionReactions: { type: "array" },
+        repetitionCount: { type: "number" },
+        repetitionDays: { type: "number" },
+        repetitionScope: { type: "string", enum: ["USER","RECORD","USER_OR_RECORD"] },
+      },
+      required: ["collection","repetitionReactions","repetitionCount","repetitionDays"],
+    },
+    validation: (action) => {
+      if (!action?.collection) throw new Error("Limit Repetitions requires a recommendation collection");
+      const reactions = Array.isArray(action.repetitionReactions) ? action.repetitionReactions.map((value) => String(value).toUpperCase()) : [];
+      if (!reactions.length || reactions.some((value) => !["ACCEPTED","REJECTED"].includes(value))) throw new Error("Limit Repetitions requires accepted and/or rejected responses");
+      if (!Number.isInteger(Number(action.repetitionCount)) || Number(action.repetitionCount) < 1) throw new Error("Limit Repetitions response count must be at least 1");
+      if (!Number.isInteger(Number(action.repetitionDays)) || Number(action.repetitionDays) < 1) throw new Error("Limit Repetitions day window must be at least 1");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, db, companyId, req, record, previousRecord, object, workflowVariables = {} }) => {
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
+      const recommendations = Array.isArray(source) ? source : [];
+      if (!recommendations.length) return { status: "completed", recommendations: [], count: 0, suppressed: 0 };
+      const tenantId = companyId || req?.user?.companyId;
+      const userId = req?.user?.id || null;
+      const recordId = record?.id || null;
+      const scope = String(action.repetitionScope || "USER_OR_RECORD").toUpperCase();
+      const reactions = [...new Set((action.repetitionReactions || []).map((value) => String(value).toUpperCase()).filter((value) => ["ACCEPTED","REJECTED"].includes(value)))];
+      const limit = Math.max(1, Number(action.repetitionCount || 1));
+      const days = Math.max(1, Number(action.repetitionDays || 1));
+      const keyFor = (item) => String(item?.recommendationKey ?? item?.RecommendationKey ?? item?.recommendation_key ?? item?.id ?? item?.key ?? "").trim();
+      const keys = [...new Set(recommendations.map(keyFor).filter(Boolean))];
+      if (!keys.length) return { status: "completed", recommendations, count: recommendations.length, suppressed: 0 };
+
+      const params = [tenantId, keys, reactions, days];
+      const scopeClauses = [];
+      if (scope === "USER" || scope === "USER_OR_RECORD") {
+        params.push(userId);
+        scopeClauses.push(`user_id=${params.length}`);
+      }
+      if (scope === "RECORD" || scope === "USER_OR_RECORD") {
+        params.push(recordId);
+        scopeClauses.push(`record_id=${params.length}`);
+      }
+      const scopeSql = scopeClauses.length
+        ? ` AND (${scopeClauses.map((clause) => `(${clause})`).join(" OR ")})`
+        : "";
+      const result = await db(
+        `SELECT recommendation_key,COUNT(*)::int AS reaction_count
+           FROM platform_recommendation_reactions
+          WHERE company_id=$1
+            AND recommendation_key=ANY($2::text[])
+            AND reaction=ANY($3::text[])
+            AND reacted_at >= date_trunc('day',NOW()) - ($4::int * INTERVAL '1 day')
+            ${scopeSql}
+          GROUP BY recommendation_key`,
+        params
+      );
+      const counts = new Map((result.rows || []).map((row) => [String(row.recommendation_key), Number(row.reaction_count || 0)]));
+      const output = recommendations.filter((item) => {
+        const key = keyFor(item);
+        if (!key) return true;
+        return Number(counts.get(key) || 0) < limit;
+      });
+      return {
+        status: "completed",
+        recommendations: output,
+        collection: output,
+        count: output.length,
+        suppressed: recommendations.length - output.length,
+        reactionCounts: Object.fromEntries(counts),
+      };
+    },
+  },
+  {
     key: "RUN_AGENT",
     displayName: "Run Agent",
     description: "Run the configured OneEngine AI service with Flow inputs and capture its answer.",
