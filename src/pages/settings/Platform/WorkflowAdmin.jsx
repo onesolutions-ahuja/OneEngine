@@ -1573,35 +1573,6 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
   );
 }
 
-function BranchStepPicker({ label, value = [], onChange, steps = [], currentIndex, candidateFilter = null }) {
-  const candidates = steps
-    .map((candidate, index) => ({ candidate, index }))
-    .filter(({ candidate, index }) => index > currentIndex && (!candidateFilter || candidateFilter(candidate, index)));
-  const selected = new Set(value || []);
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <div className="mb-2 text-xs font-semibold text-slate-700">{label}</div>
-      {!candidates.length ? <p className="text-xs text-slate-500">Add a later action, then assign it to this path.</p> : null}
-      <div className="space-y-1">
-        {candidates.map(({ candidate, index }) => (
-          <label key={candidate.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-700 hover:bg-white">
-            <input
-              type="checkbox"
-              checked={selected.has(candidate.id)}
-              onChange={(event) => {
-                const next = new Set(selected);
-                if (event.target.checked) next.add(candidate.id); else next.delete(candidate.id);
-                onChange([...next]);
-              }}
-            />
-            <span>{index + 1}. {candidate.label || getActionLabel(candidate.type)}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const isVariableResource = step.type === "ASSIGNMENT" && step.config?.resourceOnly === true;
@@ -1710,7 +1681,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
               </select>
             </div>
             <ResourceOrLiteralInput label="Fixed value" value={step.config?.value ?? ""} onChange={(value) => updateConfig({ value })} rootObjectKey={rootObjectKey} extraResources={[]} type={step.config?.resourceType || "text"} required allowResource={false} />
-            <p className="text-[11px] text-slate-500">Constants are fixed for this workflow run and are exposed to later steps as Resources.</p>
+            <p className="text-[11px] text-slate-500">Constants keep the same value for the flow run and are available as Resources.</p>
           </div>
         );
       case "FORMULA":
@@ -2860,7 +2831,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
         </div>
         <div className="workflow-palette-search">
           <span>⌕</span>
-          <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder={paletteTab === "elements" ? "Search elements..." : "Search manager..."} aria-label={paletteTab === "elements" ? "Search workflow elements" : "Search workflow manager"} />
+          <input value={paletteSearch} onChange={(event) => setPaletteSearch(event.target.value)} placeholder={paletteTab === "elements" ? "Search elements..." : "Search manager..."} aria-label={paletteTab === "elements" ? "Search flow elements" : "Search flow manager"} />
         </div>
         {paletteTab === "elements" ? (
           <>
@@ -3170,7 +3141,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
                     <p className="text-[11px] text-slate-500">Add elements to this path from the Scheduled Path branch on the canvas.</p>
                   </div>
                 ))}
-                {!scheduledPathSteps.length ? <div className="text-[11px] text-slate-500">No scheduled paths. Immediate workflow steps run normally.</div> : null}
+                {!scheduledPathSteps.length ? <div className="text-[11px] text-slate-500">No scheduled paths. The Run Immediately path runs normally.</div> : null}
               </div>
             </div>
 
@@ -3302,7 +3273,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [savedTests, setSavedTests] = useState([]);
   const [workflowVersions, setWorkflowVersions] = useState([]);
   const [compareVersionId, setCompareVersionId] = useState(null);
-  const [testDraft, setTestDraft] = useState({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
+  const [testDraft, setTestDraft] = useState({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Flow completes" }] });
   const [testBusyId, setTestBusyId] = useState(null);
   const [editingTestId, setEditingTestId] = useState(null);
   const [versionsBusy, setVersionsBusy] = useState(false);
@@ -3362,7 +3333,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         const options = Array.isArray(response?.data) ? response.data : [];
         if (options.length) setTriggerOptions(options);
       })
-      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load workflow triggers."])]));
+      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load flow triggers."])]));
   }, [scopeKey]);
 
   useEffect(() => {
@@ -3407,7 +3378,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         }));
         if (registry.length) setRegistryOptions(registry);
       })
-      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load workflow actions."])]));
+      .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load flow actions."])]));
   }, [scopeKey]);
 
   useEffect(() => {
@@ -3480,7 +3451,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         }));
         setSavedWorkflows(workflows);
       })
-      .catch((error) => onError?.(error.message || "Unable to load workflows"));
+      .catch((error) => onError?.(error.message || "Unable to load flows"));
   }, [onError]);
 
   useEffect(() => {
@@ -3783,7 +3754,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const saveWorkflow = async (lifecycleOverride = null, { keepOpen = false, silent = false, forceNewVersion = false } = {}) => {
     const nextLifecycle = String(lifecycleOverride || workflow.lifecycleStatus || (workflow.active === true ? "ACTIVE" : "DRAFT")).toUpperCase();
     if (nextLifecycle === "ACTIVE" && reviewIssue) {
-      onError?.(`Cannot activate workflow: ${reviewIssue}`);
+      onError?.(`Cannot activate flow: ${reviewIssue}`);
       return null;
     }
     const payload = { ...buildWorkflowPayload(nextLifecycle), ...(forceNewVersion ? { forceNewVersion: true } : {}) };
@@ -3808,7 +3779,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => item.id !== nextId)]);
       if (embedded) onSaved?.({ ...workflow, ...saved, id: nextId });
       else if (!keepOpen) setShowBuilder(false);
-      if (!silent) onMessage?.(forceNewVersion ? `Workflow saved as version ${saved.version || savedWorkflow.version}.` : nextLifecycle === "ACTIVE" ? "Workflow activated." : "Workflow draft saved.");
+      if (!silent) onMessage?.(forceNewVersion ? `Flow saved as version ${saved.version || savedWorkflow.version}.` : nextLifecycle === "ACTIVE" ? "Flow activated." : "Flow draft saved.");
       return { id: nextId, workflow: savedWorkflow };
     } catch (error) {
       onError?.(error.message || "Unable to save workflow.");
@@ -3843,7 +3814,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       const response = await apiRequest(`/api/platform/rules/${id}/tests`);
       setSavedTests(Array.isArray(response?.data) ? response.data : []);
     } catch (error) {
-      onError?.(error.message || "Unable to load workflow tests.");
+      onError?.(error.message || "Unable to load flow tests.");
     }
   };
 
@@ -3855,14 +3826,14 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       const response = await apiRequest(`/api/platform/rules/${id}/versions`);
       setWorkflowVersions(Array.isArray(response?.data) ? response.data : []);
     } catch (error) {
-      onError?.(error.message || "Unable to load workflow versions.");
+      onError?.(error.message || "Unable to load flow versions.");
     } finally {
       setVersionsBusy(false);
     }
   };
 
   const assertionLabel = (assertion) => {
-    if (assertion.type === "RUN_STATUS") return `Workflow status is ${assertion.expected || "COMPLETED"}`;
+    if (assertion.type === "RUN_STATUS") return `Flow status is ${assertion.expected || "COMPLETED"}`;
     const step = workflow.steps.find((item) => String(item.id) === String(assertion.stepId || ""));
     if (assertion.type === "STEP_STATUS") return `${step?.label || "Step"} status is ${assertion.expected || "COMPLETED"}`;
     if (assertion.type === "DECISION_OUTCOME") return `${step?.label || "Decision"} outcome is ${assertion.expected || "selected outcome"}`;
@@ -3897,11 +3868,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         });
       }
       setEditingTestId(null);
-      setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
+      setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Flow completes" }] });
       await loadSavedTests(id);
-      onMessage?.(editingTestId ? "Workflow test updated." : "Workflow test saved.");
+      onMessage?.(editingTestId ? "Flow test updated." : "Flow test saved.");
     } catch (error) {
-      onError?.(error.message || "Unable to save workflow test.");
+      onError?.(error.message || "Unable to save flow test.");
     } finally {
       setTestBusyId(null);
     }
@@ -3916,13 +3887,13 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       recordId: config.recordId || "",
       assertions: Array.isArray(config.assertions) && config.assertions.length
         ? config.assertions.map((assertion) => ({ ...assertion }))
-        : [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }],
+        : [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Flow completes" }],
     });
   };
 
   const cancelTestEdit = () => {
     setEditingTestId(null);
-    setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Workflow completes" }] });
+    setTestDraft({ name: "", recordMode: "latest", recordId: "", assertions: [{ type: "RUN_STATUS", expected: "COMPLETED", label: "Flow completes" }] });
   };
 
   const runSavedTest = async (test) => {
@@ -3940,7 +3911,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       setDebugResult(result);
       await loadSavedTests();
     } catch (error) {
-      onError?.(error.message || "Unable to run saved workflow test.");
+      onError?.(error.message || "Unable to run saved flow test.");
     } finally {
       setTestBusyId(null);
     }
@@ -3953,7 +3924,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       if (String(editingTestId || "") === String(testId)) cancelTestEdit();
       await loadSavedTests();
     } catch (error) {
-      onError?.(error.message || "Unable to remove workflow test.");
+      onError?.(error.message || "Unable to remove flow test.");
     }
   };
 
@@ -3968,7 +3939,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     const removed = [...oldById.keys()].filter((id) => !currentById.has(id)).length;
     const changed = [...currentById.keys()].filter((id) => oldById.has(id) && JSON.stringify(currentById.get(id)) !== JSON.stringify(oldById.get(id))).length;
     const changes = [];
-    if (String(oldDefinition.name || "") !== String(currentDefinition.name || "")) changes.push("Workflow name changed");
+    if (String(oldDefinition.name || "") !== String(currentDefinition.name || "")) changes.push("Flow name changed");
     if (String(oldDefinition.trigger_key || "") !== String(currentDefinition.triggerKey || "")) changes.push("Trigger changed");
     if (String(oldDefinition.object_id || "") !== String(currentDefinition.objectId || "")) changes.push("Trigger object changed");
     if (JSON.stringify(oldDefinition.conditions || []) !== JSON.stringify(currentDefinition.conditions || [])) changes.push("Start conditions changed");
@@ -3987,7 +3958,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       await apiRequest(`/api/platform/rules/${workflowId}/versions/${version}/restore`, { method: "POST" });
       const response = await apiRequest("/api/platform/rules");
       const rule = (Array.isArray(response?.data) ? response.data : []).find((item) => String(item.id) === String(workflowId));
-      if (!rule) throw new Error("Restored workflow could not be reloaded");
+      if (!rule) throw new Error("Restored flow could not be reloaded");
       const restored = {
         ...rule,
         id: rule.id,
@@ -4035,7 +4006,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       await loadWorkflowVersions();
       onMessage?.(`Version ${version} restored as new draft version ${restored.version}.`);
     } catch (error) {
-      onError?.(error.message || "Unable to restore workflow version.");
+      onError?.(error.message || "Unable to restore flow version.");
     } finally {
       setVersionsBusy(false);
     }
@@ -4043,7 +4014,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
 
   const runDebug = async () => {
     if (reviewIssue) {
-      onError?.(`Fix the workflow before Debug: ${reviewIssue}`);
+      onError?.(`Fix the flow before Debug: ${reviewIssue}`);
       return;
     }
     setDebugRunning(true);
@@ -4446,7 +4417,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               ) : debugResult.status === "FAILED" ? (
                 <div className="mt-3 space-y-2 text-sm text-red-800">
                   <div><strong>{debugResult.friendlyError?.title || "A step failed"}</strong></div>
-                  <div>{debugResult.friendlyError?.whatHappened || debugResult.run?.error_text || "The workflow could not complete."}</div>
+                  <div>{debugResult.friendlyError?.whatHappened || debugResult.run?.error_text || "The flow could not complete."}</div>
                   <div className="rounded-lg bg-white/70 p-3"><strong>How to fix it:</strong> {debugResult.friendlyError?.howToFix || "Click the red step on the canvas and check its Properties."}</div>
                 </div>
               ) : debugResult.completedWithHandledError ? (
