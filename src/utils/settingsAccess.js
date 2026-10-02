@@ -7,6 +7,7 @@ export function settingSectionAccess({
   const mfaManage = settingsManage || codes.has('security.mfa.manage')
   const verificationHistoryView = mfaManage || codes.has('security.identity_verification_history.view')
   const securityGovernance = settingsManage || codes.has('security.governance.manage')
+  const dataProtection = settingsManage || codes.has('data.export.manage') || codes.has('data.retention.manage') || codes.has('email.security.manage') || codes.has('delegated_admin.manage')
 
   return {
     'Client Web Shop': settingsManage,
@@ -19,6 +20,7 @@ export function settingSectionAccess({
     'MFA Administration': mfaManage,
     'Identity Verification History': verificationHistoryView,
     'Security Governance': securityGovernance,
+    'Data Protection & Email Security': dataProtection,
   }
 }
 
