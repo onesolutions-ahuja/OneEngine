@@ -495,6 +495,133 @@ async function populateRollups(db, object, fields, records, req) {
 
 
 
+function metadataRecordValue(record, field) {
+  if (!record || !field) return undefined;
+  if (Object.prototype.hasOwnProperty.call(record, field.api_name)) return record[field.api_name];
+  if (field.source_column && Object.prototype.hasOwnProperty.call(record, field.source_column)) return record[field.source_column];
+  return undefined;
+}
+
+async function hydrateFormulaRecordPaths(db, object, fields, records, req) {
+  const formulaPaths = [...new Set(
+    (fields || [])
+      .filter((field) => field.active !== false && field.field_type === "formula")
+      .flatMap((field) => Object.keys(field.config?.recordPathTypes || field.config?.record_path_types || {}))
+  )];
+  if (!formulaPaths.length || !Array.isArray(records) || !records.length) return records;
+
+  const [objectsResult, fieldsResult, relationshipsResult] = await Promise.all([
+    db("SELECT * FROM platform_objects WHERE active=true AND (company_id IS NULL OR company_id=$1)", [req.user.companyId]),
+    db("SELECT * FROM platform_fields WHERE active=true AND (company_id IS NULL OR company_id=$1)", [req.user.companyId]),
+    db(`SELECT r.*,p.object_key AS parent_object_key,c.object_key AS child_object_key
+          FROM platform_relationships r
+          JOIN platform_objects p ON p.id=r.parent_object_id
+          JOIN platform_objects c ON c.id=r.child_object_id
+         WHERE r.active=true
+           AND (p.company_id IS NULL OR p.company_id=$1)
+           AND (c.company_id IS NULL OR c.company_id=$1)`, [req.user.companyId]),
+  ]);
+  const objectsById = new Map(objectsResult.rows.map((item) => [String(item.id), item]));
+  const fieldsById = new Map(fieldsResult.rows.map((item) => [String(item.id), item]));
+  const fieldsByObject = new Map();
+  for (const field of fieldsResult.rows) {
+    const key = String(field.object_id);
+    if (!fieldsByObject.has(key)) fieldsByObject.set(key, []);
+    fieldsByObject.get(key).push(field);
+  }
+  const relationships = relationshipsResult.rows;
+  const recordCache = new Map();
+
+  const inverseRelationship = (currentObject, key) => relationships.find((relationship) => {
+    if (String(relationship.child_object_id) !== String(currentObject.id)) return false;
+    const linkField = fieldsById.get(String(relationship.child_field_id || ""));
+    const inverse = linkField?.api_name
+      ? String(linkField.api_name).replace(/_id$/i, "")
+      : relationship.parent_object_key;
+    return inverse === key;
+  });
+
+  const loadParentRecord = async (parent, parentFields, id) => {
+    const cacheKey = `${parent.id}:${id}`;
+    if (recordCache.has(cacheKey)) return recordCache.get(cacheKey);
+    if (!parent?.source_table || !isSafeIdentifier(parent.source_table) || !recordIdIsValid(String(id))) {
+      recordCache.set(cacheKey, null);
+      return null;
+    }
+    const clauses = ["id=$1"];
+    const params = [id];
+    if (parent.company_scoped || systemObject(parent)) {
+      params.push(req.user.companyId);
+      clauses.push(`company_id=${params.length}`);
+    }
+    if (parent.store_scoped) {
+      if (!req.user.storeId) {
+        recordCache.set(cacheKey, null);
+        return null;
+      }
+      params.push(req.user.storeId);
+      clauses.push(`store_id=${params.length}`);
+    }
+    appendSystemReadScope(parent, req, clauses, params);
+    const sharing = await buildPlatformSharingScope({ db, object: parent, fields: parentFields, req, access: "read", paramsOffset: params.length });
+    if (sharing.sql) {
+      clauses.push(sharing.sql);
+      params.push(...sharing.params);
+    }
+    const result = await db(`SELECT * FROM "${parent.source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`, params);
+    if (!result.rows.length) {
+      recordCache.set(cacheKey, null);
+      return null;
+    }
+    const hydrated = await hydrateExtensions(db, parent, parentFields, result.rows, req);
+    const row = hydrated[0] || null;
+    recordCache.set(cacheKey, row);
+    return row;
+  };
+
+  const resolvePath = async (rootRecord, path) => {
+    let parts = String(path).split(".").filter(Boolean);
+    if (parts[0] === object.object_key) parts = parts.slice(1);
+    if (parts.length < 2) return undefined;
+    let currentObject = object;
+    let currentRecord = rootRecord;
+
+    for (const segment of parts.slice(0, -1)) {
+      const relationship = inverseRelationship(currentObject, segment);
+      if (!relationship) return undefined;
+      const linkField = fieldsById.get(String(relationship.child_field_id || ""));
+      const parent = objectsById.get(String(relationship.parent_object_id));
+      if (!linkField || !parent) return undefined;
+      const linkValue = metadataRecordValue(currentRecord, linkField);
+      if (linkValue === null || linkValue === undefined || linkValue === "") return undefined;
+      const parentFields = fieldsByObject.get(String(parent.id)) || [];
+      currentRecord = await loadParentRecord(parent, parentFields, linkValue);
+      if (!currentRecord) return undefined;
+      currentObject = parent;
+    }
+
+    const fieldApi = parts[parts.length - 1];
+    const targetField = (fieldsByObject.get(String(currentObject.id)) || []).find((field) => field.api_name === fieldApi);
+    if (!targetField || ["formula", "rollup"].includes(targetField.field_type)) return undefined;
+    return metadataRecordValue(currentRecord, targetField);
+  };
+
+  const output = [];
+  for (const rawRecord of records) {
+    const rootHydrated = (await hydrateExtensions(db, object, fields, [rawRecord], req))[0] || rawRecord;
+    const pathValues = {};
+    for (const path of formulaPaths) pathValues[path] = await resolvePath(rootHydrated, path);
+    output.push({ ...rootHydrated, __formulaPathValues: pathValues });
+  }
+  return output;
+}
+
+async function calculateFormulaRecords(db, object, fields, records, req) {
+  const withPaths = await hydrateFormulaRecordPaths(db, object, fields, records, req);
+  const calculate = compileFormulas(fields);
+  return withPaths.map((record) => calculate(record));
+}
+
 async function validatePicklistDefinition(db, field, req) {
   if (!["select", "picklist"].includes(field.field_type)) return;
   const valueSetId = field.config?.valueSetId || field.config?.value_set_id;
