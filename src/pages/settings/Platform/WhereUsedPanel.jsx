@@ -35,17 +35,19 @@ function splitReference(reference) {
   }
 }
 
-export default function WhereUsedPanel({ objectId = '', fieldId = '', title = 'Where Used', onNavigate }) {
+export default function WhereUsedPanel({ objectId = '', fieldId = '', relationshipId = '', title = 'Where Used', onNavigate }) {
   const [state, setState] = useState({ loading: false, error: '', data: null })
 
   const load = async () => {
-    if (!objectId && !fieldId) return
+    if (!objectId && !fieldId && !relationshipId) return
     setState((current) => ({ ...current, loading: true, error: '' }))
     try {
       const response = await apiRequest(
         fieldId
           ? `/api/platform/fields/${encodeURIComponent(fieldId)}/dependencies`
-          : `/api/platform/objects/${encodeURIComponent(objectId)}/dependencies`,
+          : relationshipId
+            ? `/api/platform/relationships/${encodeURIComponent(relationshipId)}/dependencies`
+            : `/api/platform/objects/${encodeURIComponent(objectId)}/dependencies`,
       )
       setState({ loading: false, error: '', data: response?.data || null })
     } catch (error) {
@@ -55,7 +57,7 @@ export default function WhereUsedPanel({ objectId = '', fieldId = '', title = 'W
 
   useEffect(() => {
     void load()
-  }, [objectId, fieldId])
+  }, [objectId, fieldId, relationshipId])
 
   const rows = useMemo(
     () => (Array.isArray(state.data?.activeReferences) ? state.data.activeReferences : []).map((reference) => ({
@@ -93,7 +95,7 @@ export default function WhereUsedPanel({ objectId = '', fieldId = '', title = 'W
             )
           })}
         </div>
-      ) : <div className="where-used-empty">Nothing active currently depends on this {fieldId ? 'field' : 'object'}.</div>}
+      ) : <div className="where-used-empty">Nothing active currently depends on this {fieldId ? 'field' : relationshipId ? 'relationship' : 'object'}.</div>}
       <footer>
         <span>{state.data?.canDeactivate === false ? 'Deactivation is blocked while these references remain active.' : 'No active dependency blocks deactivation.'}</span>
       </footer>
