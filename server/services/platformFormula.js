@@ -1,13 +1,14 @@
 // Small, bounded expression language. Never evaluate JavaScript or generate SQL.
-const TYPES = new Set(["number", "decimal", "currency", "text", "boolean", "date", "datetime", "email", "phone", "select", "picklist"]);
-const STRING_TYPES = new Set(["text", "date", "datetime", "email", "phone", "select", "picklist"]);
+const TYPES = new Set(["number", "decimal", "currency", "percent", "text", "long_text", "rich_text", "url", "time", "auto_number", "boolean", "date", "datetime", "email", "phone", "select", "picklist"]);
+const STRING_TYPES = new Set(["text", "long_text", "rich_text", "url", "time", "auto_number", "date", "datetime", "email", "phone", "select", "picklist"]);
 const SAFE = /^[a-z_][a-z0-9_]*$/;
+const SAFE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*$/;
 const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED = new Set(["id", "company_id", "store_id", "__proto__", "constructor", "prototype"]);
 const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
 const ARITY = { IF: [3, 3], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20] };
 export const ROLLUP_OPERATIONS = new Set(["COUNT", "SUM", "MIN", "MAX", "AVG"]);
-const baseType = type => ["number", "decimal", "currency"].includes(type) ? "number" : type;
+const baseType = type => ["number", "decimal", "currency", "percent"].includes(type) ? "number" : type;
 const formulaType = type => STRING_TYPES.has(type) ? "string" : baseType(type);
 export const isCalculatedField = field => Boolean(field && ["formula", "rollup"].includes(field.field_type));
 export const effectiveFieldType = field => {
@@ -39,7 +40,7 @@ function fail(message) { throw new FormulaError(message); }
 export function parseFormula(expression, { identifierPattern = SAFE, caseInsensitiveReserved = false } = {}) {
   if (typeof expression !== "string" || !expression.trim() || expression.length > 2000) fail("Formula must contain 1–2000 characters");
   const tokens = [];
-  const pattern = /\s*(?:(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|("(?:[^"\\]|\\["\\nrt])*")|([A-Za-z_][A-Za-z_0-9]*)|(\|\||&&|==|!=|>=|<=|[+*/%(),!<>-]))/y;
+  const pattern = /\s*(?:(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|("(?:[^"\\]|\\["\\nrt])*")|([A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*)|(\|\||&&|==|!=|>=|<=|[+*/%(),!<>-]))/y;
   let offset = 0;
   while (offset < expression.trimEnd().length) {
     pattern.lastIndex = offset;
@@ -126,6 +127,20 @@ export function formulaPreviewDependencies(fields, expression) {
   };
   visit(expression);
   return fields.filter(field => inputs.has(field.api_name));
+}
+
+export function formulaReferences(expression) {
+  const ast = parseFormula(expression, { identifierPattern: SAFE_PATH });
+  const refs = new Set();
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (node.kind === "field") refs.add(node.name);
+    else if (node.kind === "unary") walk(node.value);
+    else if (node.kind === "binary") { walk(node.left); walk(node.right); }
+    else if (node.kind === "call") node.args.forEach(walk);
+  };
+  walk(ast);
+  return [...refs];
 }
 
 function infer(node, resolve, depth = 0) {
@@ -232,8 +247,13 @@ export function compileFormulas(fields) {
     if (!TYPES.has(field.config?.resultType)) fail("Select a supported formula result type");
     visiting.add(field.api_name);
     let dependencyDepth = 0;
-    const ast = parseFormula(field.config?.expression);
+    const ast = parseFormula(field.config?.expression, { identifierPattern: SAFE_PATH });
     const resultType = infer(ast, name => {
+      if (name.includes(".")) {
+        const type = field.config?.recordPathTypes?.[name] || field.config?.record_path_types?.[name];
+        if (!type || !TYPES.has(type)) fail(`Formula references an unavailable record path: ${name}`);
+        return formulaType(type);
+      }
       const dependency = byName.get(name);
       if (!dependency || dependency.readable === false) fail(`Formula references an unavailable field: ${name}`);
       if (dependency.field_type === "formula") {
@@ -259,7 +279,13 @@ export function compileFormulas(fields) {
   return record => {
     const result = { ...record };
     for (const [name, { ast }] of compiled) {
-      const value = evaluate(ast, key => valueFor(result[key], effectiveFieldType(byName.get(key))));
+      const value = evaluate(ast, key => {
+        if (key.includes(".")) {
+          const pathType = field.config?.recordPathTypes?.[key] || field.config?.record_path_types?.[key];
+          return valueFor(result.__formulaPathValues?.[key], pathType);
+        }
+        return valueFor(result[key], effectiveFieldType(byName.get(key)));
+      });
       result[name] = typeof value === "number" && !Number.isFinite(value) ? null : value;
     }
     // Callers project readable fields before sending calculated records to clients.
