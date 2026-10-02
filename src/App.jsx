@@ -120,6 +120,7 @@ const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/Go
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
+const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
 const OneAssistantPage = lazyWithRecovery(() => import('./pages/assistant/OneAssistantPage'))
 const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
@@ -188,6 +189,7 @@ const SETTINGS_VISUALS = {
   hardware: { icon: HardDrive, tone: 'gray' },
   users: { icon: Users, tone: 'blue', searchTerms: ['user', 'username', 'email', 'role', 'store', 'active', 'inactive'] },
   'roles-permissions': { icon: ShieldCheck, tone: 'blue', searchTerms: ['role', 'permission', 'permissions', 'parent role', 'system role', 'custom role'] },
+  'security-identity': { icon: Shield, tone: 'blue', searchTerms: ['security', 'identity', 'ip range', 'trusted network', 'login hours', 'password policy', 'session', 'login history'] },
   'ai-assistant': { icon: Sparkles, tone: 'purple' },
   connections: { icon: Cable, tone: 'purple' },
   'uber-eats': { icon: Cable, tone: 'purple' },
@@ -1327,6 +1329,8 @@ function SettingsPage({ onOpenProfile }) {
                 <WhatsAppAssistantSettings />
               ) : current?.key === 'ai-assistant' ? (
                 <AiAssistantSettings />
+              ) : current?.key === 'security-identity' ? (
+                <SecurityIdentitySettings />
               ) : current?.key === 'users' ? (
                 <RecordListView
                   title="Users"
