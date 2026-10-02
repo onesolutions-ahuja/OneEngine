@@ -4979,6 +4979,10 @@ export async function executeWorkflowActions({ actions, ...context }) {
       }
 
       if (result?.status === "stopped" || result?.status === "waiting" || branchPaused) break;
+      if (context.branchExecution !== true && item.nextStepId) {
+        const targetIndex = actions.findIndex((candidate) => String(candidate?.id || "") === String(item.nextStepId));
+        if (targetIndex > actionIndex) actionIndex = targetIndex - 1;
+      }
     } catch (error) {
       const details = errorDetails(error);
       const friendlyError = friendlyWorkflowError(error, resolveWorkflowActionType(item));
