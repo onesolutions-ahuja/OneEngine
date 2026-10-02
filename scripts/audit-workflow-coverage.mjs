@@ -92,6 +92,21 @@ const NON_MUTATING_POST_ROUTES = new Set([
   "/client-web-shop/public/:slug/quote",
 ]);
 
+// Authentication protocol endpoints intentionally mutate only identity/session
+// state before a normal authenticated business command exists. They cannot be
+// routed through the business workflow gateway because their purpose is to
+// establish or elevate that authenticated session in the first place.
+const IDENTITY_PROTOCOL_MUTATION_ROUTES = new Set([
+  "/auth/mfa/totp/start",
+  "/auth/mfa/totp/complete",
+  "/auth/mfa/verify",
+  "/auth/mfa/passkey/registration-options",
+  "/auth/mfa/passkey/registration-verify",
+  "/auth/mfa/passkey/options",
+  "/auth/mfa/passkey/verify",
+  "/auth/provider/:key/saml/acs",
+]);
+
 const allMutationVerbRoutes = [];
 for (const file of [path.join(SERVER, "server.js"), ...walk(path.join(SERVER, "routes"))]) {
   allMutationVerbRoutes.push(...routeBlocks(file, fs.readFileSync(file, "utf8"), globalGatewayEnabled));
@@ -99,8 +114,12 @@ for (const file of [path.join(SERVER, "server.js"), ...walk(path.join(SERVER, "r
 const ignoredNonMutatingPostRoutes = allMutationVerbRoutes.filter(
   (route) => route.method === "POST" && NON_MUTATING_POST_ROUTES.has(route.route)
 );
+const identityProtocolMutationRoutes = allMutationVerbRoutes.filter(
+  (route) => IDENTITY_PROTOCOL_MUTATION_ROUTES.has(route.route)
+);
 const mutationRoutes = allMutationVerbRoutes.filter(
   (route) => !(route.method === "POST" && NON_MUTATING_POST_ROUTES.has(route.route))
+    && !IDENTITY_PROTOCOL_MUTATION_ROUTES.has(route.route)
 );
 const bypassRoutes = mutationRoutes.filter((route) => !route.workflowMediated);
 const mediatedRoutes = mutationRoutes.filter((route) => route.workflowMediated);
