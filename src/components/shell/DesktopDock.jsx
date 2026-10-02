@@ -22,7 +22,6 @@ const mobileDockItems = [
   { id: 'dashboard', label: 'Dashboard', src: dockAsset('dashboard') },
   { id: 'till', label: 'OneTill', src: dockAsset('till') },
   { id: 'workspace', label: 'Workspace', src: dockAsset('contacts') },
-  { id: 'settings', label: 'Settings', src: dockAsset('settings') },
 ]
 
 export function useClock() {
@@ -48,9 +47,11 @@ function DockItem({ item, mouseX, onActivate }) {
     const bounds = ref.current?.getBoundingClientRect() ?? { x: 0, width: 0 }
     return value - bounds.x - bounds.width / 2
   })
-  const widthTarget = useTransform(distance, [-150, 0, 150], [40, 76, 40])
-  const width = useSpring(widthTarget, { mass: 0.1, stiffness: 150, damping: 12 })
-  return <motion.button ref={ref} type="button" className="dock-item" style={{ width }} onClick={onActivate} aria-label={item.label} title={item.label}>
+  // Magnify visually without changing layout width. This keeps the divider/Jarvis
+  // reservation fixed so app icons can never push underneath the assistant area.
+  const scaleTarget = useTransform(distance, [-150, 0, 150], [1, 1.7, 1])
+  const scale = useSpring(scaleTarget, { mass: 0.1, stiffness: 150, damping: 12 })
+  return <motion.button ref={ref} type="button" className="dock-item" style={{ scale }} onClick={onActivate} aria-label={item.label} title={item.label}>
     <span className="dock-tooltip" role="tooltip">{item.label}</span>
     <span className="dock-icon-wrap">
       <img className="dock-image dock-image--app" src={item.src} alt="" draggable="false" />
@@ -94,7 +95,7 @@ export function Dock({ onItemOpen, collapsible = false }) {
     <div className={`dock-zone ${collapsible ? 'dock-zone--till' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
       <motion.div className="dock" onMouseMove={(event) => mouseX.set(event.clientX)} onMouseLeave={resetMagnification} aria-label="OneEngine dock">
         <div className="dock-magnify-zone dock-desktop-items" onTouchStart={trackTouch} onTouchMove={trackTouch} onTouchEnd={resetMagnification} onTouchCancel={resetMagnification}>
-          {dockItems.map((item) => <DockItem key={item.id} item={item} mouseX={mouseX} onActivate={() => onItemOpen?.(item.id)} />)}
+          {dockItems.slice(0, 10).map((item) => <DockItem key={item.id} item={item} mouseX={mouseX} onActivate={() => onItemOpen?.(item.id)} />)}
         </div>
         <div className="dock-fixed-zone">
           <div className="dock-separator" aria-hidden="true" />
