@@ -17,7 +17,7 @@ const WORKFLOW_VISUAL_CSS = `
   }
   .workflow-builder-header {
     display: grid;
-    grid-template-columns: auto minmax(210px, .8fr) minmax(0, 1.2fr);
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 12px;
     align-items: center;
     padding: 10px 12px;
@@ -792,6 +792,8 @@ const WORKFLOW_VISUAL_CSS = `
     font-size: 10px;
   }
   .workflow-end-node span { font-size: 7px; color: #706e6b; }
+  .workflow-flow-properties-panel,
+  .workflow-flow-properties-panel,
   .workflow-path-action-panel {
     position: fixed;
     z-index: 80;
@@ -810,6 +812,9 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-path-action-body label { display: grid; gap: 5px; color: #3e3e3c; font-size: 10px; font-weight: 700; }
   .workflow-path-action-body select { width: 100%; min-height: 36px; border: 1px solid #c9c7c5; border-radius: 4px; background: #fff; padding: 6px 8px; color: #181818; font-size: 11px; }
   .workflow-path-action-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .workflow-flow-property-readonly { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #eef1f6; padding-top: 10px; font-size: 10px; }
+  .workflow-flow-property-readonly span { color: #706e6b; }
+  .workflow-flow-property-readonly strong { color: #181818; }
   .workflow-danger-button { min-height: 38px; border: 1px solid #ba0517; border-radius: 8px; background: #ba0517; padding: 0 15px; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
   .workflow-action-picker { overflow: hidden; border: 1px solid #d8dde6; border-radius: 6px; background: #fff; }
   .workflow-action-picker-search { position: relative; padding: 8px; border-bottom: 1px solid #eef1f6; }
@@ -3320,6 +3325,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       flowType: initialWorkflow.action?.flowType || null,
       templateKey: initialWorkflow.action?.templateKey || null,
       defaultForNewDevices: initialWorkflow.action?.defaultForNewDevices === true,
+      apiName: initialWorkflow.action?.apiName || initialWorkflow.apiName || flowApiName(initialWorkflow.name || "Flow"),
+      description: initialWorkflow.action?.description || initialWorkflow.description || "",
       ui: initialWorkflow.action?.ui || null,
     },
     steps: (initialWorkflow.steps || initialWorkflow.action?.actions || []).map((step) => ({
@@ -3350,6 +3357,11 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       entryTransition: "EVERY_TIME",
       inputContract: [],
       outputContract: [],
+      actionMetadata: {
+        apiName: scopeKey === "whatsapp_assistant" ? "WhatsApp_Assistant_Flow" : "",
+        description: "",
+        flowType: null,
+      },
       steps: scopeKey === "whatsapp_assistant"
         ? [
             { ...makeStep("WHEN"), type: "CONDITION", label: "Decision" },
@@ -3383,6 +3395,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [debugResult, setDebugResult] = useState(null);
   const [testsOpen, setTestsOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [flowPropertiesOpen, setFlowPropertiesOpen] = useState(false);
   const [savedTests, setSavedTests] = useState([]);
   const [workflowVersions, setWorkflowVersions] = useState([]);
   const [compareVersionId, setCompareVersionId] = useState(null);
@@ -3843,6 +3856,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           scope: workflow.scope || "system",
         } : {}),
         ...(workflow.actionMetadata?.flowType ? { flowType: workflow.actionMetadata.flowType } : {}),
+        ...(workflow.actionMetadata?.apiName ? { apiName: workflow.actionMetadata.apiName } : {}),
+        ...(workflow.actionMetadata?.description ? { description: workflow.actionMetadata.description } : {}),
         ...(workflow.actionMetadata?.templateKey ? { templateKey: workflow.actionMetadata.templateKey } : {}),
         ...(workflow.actionMetadata?.defaultForNewDevices ? { defaultForNewDevices: true } : {}),
         ...(workflow.actionMetadata?.ui ? { ui: workflow.actionMetadata.ui } : {}),
@@ -4295,18 +4310,16 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <span className={`workflow-ready-dot ${reviewIssue ? "has-issue" : ""}`} title={reviewIssue || "Flow ready"} />
           <div className="workflow-builder-title-copy">
             <h2>Flow Builder</h2>
-            <small>{workflow.name || "New Flow"} <span className="workflow-builder-status">{workflow.lifecycleStatus || "DRAFT"} · Version {workflow.version || 1}</span></small>
+            <small>{workflow.name || "New Flow"} <span className="workflow-builder-status">{String(workflow.lifecycleStatus || "").toUpperCase() === "ACTIVE" ? "Active" : "Inactive"} · Version {workflow.version || 1}</span></small>
           </div>
-        </div>
-        <div className="workflow-builder-field">
-          <label>Flow Label</label>
-          <input className={inputClass} value={workflow.name || ""} onChange={(event) => setWorkflow((current) => ({ ...current, name: event.target.value }))} placeholder="Flow label" />
         </div>
         <div className="workflow-builder-actions">
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.past.length} onClick={undoFlowChange} title="Undo" aria-label="Undo">↶</button>
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.future.length} onClick={redoFlowChange} title="Redo" aria-label="Redo">↷</button>
+          <button type="button" className="workflow-cancel-button" onClick={() => setFlowPropertiesOpen(true)}>View Properties</button>
+          {reviewIssue ? <button type="button" className="workflow-cancel-button workflow-icon-button" title={reviewIssue} aria-label="Show Errors" onClick={() => document.getElementById("workflow-review-section")?.scrollIntoView({ behavior: "smooth", block: "center" })}>!</button> : null}
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
-          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Version History</button>
+          <button type="button" className="workflow-cancel-button" disabled={!workflowId} onClick={() => { setVersionsOpen((value) => !value); if (!versionsOpen) loadWorkflowVersions(); }}>Edit History</button>
           <button type="button" className="workflow-cancel-button" onClick={() => setDebugOpen(true)}>Debug</button>
           <button type="button" className="workflow-cancel-button" disabled={!workflowId} title={workflowId ? "Save this flow as a new version" : "Save this flow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>Save As</button>
           <button type="button" className="workflow-cancel-button" onClick={() => saveWorkflow("DRAFT")}>Save</button>
@@ -4314,6 +4327,41 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       </div>
 
+      {flowPropertiesOpen ? (
+        <div className="workflow-flow-properties-panel" role="dialog" aria-label="Flow Properties">
+          <div className="workflow-add-element-head">
+            <div><strong>Flow Properties</strong><small>Version {workflow.version || 1}</small></div>
+            <button type="button" aria-label="Close Flow Properties" onClick={() => setFlowPropertiesOpen(false)}>×</button>
+          </div>
+          <div className="workflow-path-action-body space-y-3">
+            <label>Flow Label
+              <input className={inputClass} value={workflow.name || ""} onChange={(event) => {
+                const label = event.target.value;
+                const previousApi = workflow.actionMetadata?.apiName || "";
+                const generatedPrevious = flowApiName(workflow.name || "");
+                setWorkflow((current) => ({
+                  ...current,
+                  name: label,
+                  actionMetadata: {
+                    ...(current.actionMetadata || {}),
+                    apiName: !workflowId && (!previousApi || previousApi === generatedPrevious) ? flowApiName(label) : previousApi,
+                  },
+                }));
+              }} placeholder="Flow Label" />
+            </label>
+            <label>Flow API Name
+              <input className={inputClass} disabled={Boolean(workflowId)} value={workflow.actionMetadata?.apiName || flowApiName(workflow.name || "Flow")} onChange={(event) => setWorkflow((current) => ({ ...current, actionMetadata: { ...(current.actionMetadata || {}), apiName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") } }))} />
+            </label>
+            <label>Description
+              <textarea className={inputClass} rows={4} value={workflow.actionMetadata?.description || ""} onChange={(event) => setWorkflow((current) => ({ ...current, actionMetadata: { ...(current.actionMetadata || {}), description: event.target.value } }))} placeholder="Describe what this flow does." />
+            </label>
+            <div className="workflow-flow-property-readonly"><span>Type</span><strong>{workflow.actionMetadata?.flowType || "Autolaunched Flow"}</strong></div>
+            <div className="workflow-path-action-buttons">
+              <button type="button" className="workflow-save-button" onClick={() => setFlowPropertiesOpen(false)}>Done</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {testsOpen ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
