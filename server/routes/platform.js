@@ -2011,10 +2011,12 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
           if (!targetType) throw new FormulaError(`Formula record path type is unavailable: ${reference}`);
           pathTypes[reference] = targetType;
         }
-        candidate.config = { ...(candidate.config || {}), recordPathTypes: pathTypes };
+        if (!candidate.config || typeof candidate.config !== "object" || Array.isArray(candidate.config)) candidate.config = {};
+        candidate.config.recordPathTypes = pathTypes;
+        delete candidate.config.record_path_types;
       } else if (candidate.config?.recordPathTypes || candidate.config?.record_path_types) {
-        const { recordPathTypes: _oldCamel, record_path_types: _oldSnake, ...rest } = candidate.config;
-        candidate.config = rest;
+        delete candidate.config.recordPathTypes;
+        delete candidate.config.record_path_types;
       }
       compileFormulas([{ ...candidate, active: true }, ...fields.filter(field => field !== candidate)]);
     }
