@@ -239,51 +239,63 @@ export async function loginState(db, userId) {
 export async function registerFailedLogin(db, { user, settings }) {
   const max = Number(settings?.maximum_invalid_login_attempts || 0);
   const lockoutMinutes = Number(settings?.lockout_minutes || 0);
+  const forever = settings?.lockout_forever === true;
   const result = await db(
-    `INSERT INTO identity_user_security_state(user_id,company_id,failed_login_attempts,last_failed_login_at,locked_until,updated_at)
-     VALUES($1,$2,1,NOW(),CASE WHEN $3>0 AND 1 >= $3 THEN NOW()+($4::text||' minutes')::interval ELSE NULL END,NOW())
+    `INSERT INTO identity_user_security_state(user_id,company_id,failed_login_attempts,last_failed_login_at,locked_until,locked_indefinitely,updated_at)
+     VALUES($1,$2,1,NOW(),
+       CASE WHEN $3>0 AND 1 >= $3 AND NOT $5 THEN NOW()+($4::text||' minutes')::interval ELSE NULL END,
+       CASE WHEN $3>0 AND 1 >= $3 AND $5 THEN TRUE ELSE FALSE END,NOW())
      ON CONFLICT(user_id) DO UPDATE SET
        company_id=EXCLUDED.company_id,
        failed_login_attempts=identity_user_security_state.failed_login_attempts+1,
        last_failed_login_at=NOW(),
-       locked_until=CASE WHEN $3>0 AND identity_user_security_state.failed_login_attempts+1 >= $3
+       locked_until=CASE WHEN $3>0 AND identity_user_security_state.failed_login_attempts+1 >= $3 AND NOT $5
                          THEN NOW()+($4::text||' minutes')::interval ELSE identity_user_security_state.locked_until END,
+       locked_indefinitely=CASE WHEN $3>0 AND identity_user_security_state.failed_login_attempts+1 >= $3 AND $5
+                                THEN TRUE ELSE identity_user_security_state.locked_indefinitely END,
        updated_at=NOW()
      RETURNING *`,
-    [user.id, user.company_id || null, max, lockoutMinutes]
+    [user.id, user.company_id || null, max, lockoutMinutes, forever]
   );
   return result.rows[0];
 }
 
 export async function clearFailedLogin(db, user) {
   await db(
-    `INSERT INTO identity_user_security_state(user_id,company_id,failed_login_attempts,locked_until,updated_at)
-     VALUES($1,$2,0,NULL,NOW())
-     ON CONFLICT(user_id) DO UPDATE SET failed_login_attempts=0,locked_until=NULL,updated_at=NOW()`,
+    `INSERT INTO identity_user_security_state(user_id,company_id,failed_login_attempts,locked_until,locked_indefinitely,updated_at)
+     VALUES($1,$2,0,NULL,FALSE,NOW())
+     ON CONFLICT(user_id) DO UPDATE SET failed_login_attempts=0,locked_until=NULL,locked_indefinitely=FALSE,updated_at=NOW()`,
     [user.id, user.company_id || null]
   );
 }
 
-export async function writeLoginHistory(db, { user = null, identifier = null, status, reason = null, ip = null, userAgent = null, authMethod = "PASSWORD", sessionId = null }) {
+export async function writeLoginHistory(db, { user = null, identifier = null, status, reason = null, ip = null, userAgent = null, authMethod = "PASSWORD", sessionId = null, req = null, application = "OneEngine" }) {
   try {
+    const forwardedFor = req ? String(req.headers?.["x-forwarded-for"] || "").trim() || null : null;
+    const loginUrl = req ? String(req.originalUrl || req.url || "").slice(0, 500) || null : null;
+    const protocol = req ? String(req.headers?.["x-forwarded-proto"] || req.protocol || "").slice(0, 40) || null : null;
+    const platform = userAgent ? (/Windows/i.test(userAgent) ? "Windows" : /Android/i.test(userAgent) ? "Android" : /iPhone|iPad|iOS/i.test(userAgent) ? "iOS" : /Mac OS|Macintosh/i.test(userAgent) ? "macOS" : /Linux/i.test(userAgent) ? "Linux" : "Unknown") : null;
+    const browser = userAgent ? (/Edg\//i.test(userAgent) ? "Edge" : /Chrome\//i.test(userAgent) ? "Chrome" : /Firefox\//i.test(userAgent) ? "Firefox" : /Safari\//i.test(userAgent) ? "Safari" : "Other") : null;
     await db(
-      `INSERT INTO identity_login_history(company_id,user_id,login_identifier,status,reason,ip_address,user_agent,auth_method,session_id)
-       VALUES($1,$2,$3,$4,$5,$6::inet,$7,$8,$9)`,
-      [user?.company_id || null, user?.id || null, identifier || user?.username || null, status, reason, ip, userAgent, authMethod, sessionId]
+      `INSERT INTO identity_login_history(company_id,user_id,login_identifier,status,reason,ip_address,user_agent,auth_method,session_id,
+        forwarded_for,login_type,application,login_url,tls_protocol,platform,browser)
+       VALUES($1,$2,$3,$4,$5,$6::inet,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [user?.company_id || null, user?.id || null, identifier || user?.username || null, status, reason, ip, userAgent, authMethod, sessionId,
+       forwardedFor, authMethod, application, loginUrl, protocol, platform, browser]
     );
   } catch (error) {
     console.error("identity login history write failed", error?.message || error);
   }
 }
 
-export async function createTrackedSession(db, { user, ip, userAgent, authMethod = "PASSWORD", settings = null }) {
+export async function createTrackedSession(db, { user, ip, userAgent, authMethod = "PASSWORD", settings = null, originHost = null }) {
   const config = settings || (user.company_id ? await loadSecuritySettings(db, user.company_id) : null);
   const hours = Math.max(1, Number(config?.maximum_session_hours || 12));
   const id = randomUUID();
   await db(
-    `INSERT INTO identity_sessions(id,company_id,user_id,expires_at,ip_address,user_agent,auth_method)
-     VALUES($1,$2,$3,NOW()+($4::text||' hours')::interval,$5::inet,$6,$7)`,
-    [id, user.company_id || null, user.id, hours, ip, userAgent, authMethod]
+    `INSERT INTO identity_sessions(id,company_id,user_id,expires_at,ip_address,user_agent,auth_method,origin_host)
+     VALUES($1,$2,$3,NOW()+($4::text||' hours')::interval,$5::inet,$6,$7,$8)`,
+    [id, user.company_id || null, user.id, hours, ip, userAgent, authMethod, originHost]
   );
   return id;
 }
@@ -324,6 +336,14 @@ export async function enforceTrackedSession(db, req) {
   if (decision.settings?.lock_session_to_ip === true && session.ip_address && ip && String(session.ip_address) !== String(ip)) {
     await db("UPDATE identity_sessions SET revoked_at=NOW(),revoke_reason='IP_CHANGED' WHERE id=$1", [session.id]);
     return { allowed: false, code: "SESSION_IP_CHANGED", reason: "Session is locked to its original IP address" };
+  }
+
+  if (decision.settings?.lock_session_to_domain === true && session.origin_host) {
+    const currentHost = String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase();
+    if (currentHost && currentHost !== String(session.origin_host).toLowerCase()) {
+      await db("UPDATE identity_sessions SET revoked_at=NOW(),revoke_reason='DOMAIN_CHANGED' WHERE id=$1", [session.id]);
+      return { allowed: false, code: "SESSION_DOMAIN_CHANGED", reason: "Session is locked to its original domain" };
+    }
   }
 
   if (Date.now() - new Date(session.last_seen_at).getTime() > 60000) {
