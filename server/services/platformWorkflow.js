@@ -2049,6 +2049,152 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "COLLECTION_FILTER",
+    displayName: "Collection Filter",
+    description: "Filter a collection into a new collection using Flow conditions.",
+    schema: {
+      type: "object",
+      properties: {
+        collection: { type: "string" },
+        filters: { type: "array" },
+        match: { type: "string", enum: ["all","any"] },
+      },
+      required: ["collection","filters"],
+    },
+    validation: (action) => {
+      if (!action?.collection) throw new Error("Collection Filter requires a collection");
+      if (!Array.isArray(action.filters) || !action.filters.length) throw new Error("Collection Filter requires at least one condition");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
+      const collection = Array.isArray(source) ? source : [];
+      const getPath = (value, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], value);
+      const compare = (left, operator, right) => {
+        switch (String(operator || "equals")) {
+          case "equals": return left === right || String(left ?? "") === String(right ?? "");
+          case "not_equals": return !(left === right || String(left ?? "") === String(right ?? ""));
+          case "greater_than": return Number(left) > Number(right);
+          case "greater_than_or_equal": return Number(left) >= Number(right);
+          case "less_than": return Number(left) < Number(right);
+          case "less_than_or_equal": return Number(left) <= Number(right);
+          case "contains": return String(left ?? "").toLowerCase().includes(String(right ?? "").toLowerCase());
+          case "is_empty": return left == null || left === "" || (Array.isArray(left) && left.length === 0);
+          case "is_not_empty": return !(left == null || left === "" || (Array.isArray(left) && left.length === 0));
+          default: return false;
+        }
+      };
+      const filters = Array.isArray(action.filters) ? action.filters : [];
+      const matchAny = String(action.match || "all").toLowerCase() === "any";
+      const output = collection.filter((item) => {
+        const results = filters.map((filter) => {
+          const left = getPath(item, filter?.field);
+          const right = ["is_empty","is_not_empty"].includes(filter?.operator)
+            ? undefined
+            : resolveConfiguredResource(filter?.value, { ...context, record: item }, { preserveMissing: false });
+          return compare(left, filter?.operator, right);
+        });
+        return matchAny ? results.some(Boolean) : results.every(Boolean);
+      });
+      return { status: "completed", collection: output, count: output.length };
+    },
+  },
+  {
+    key: "COLLECTION_SORT",
+    displayName: "Collection Sort",
+    description: "Sort a collection and optionally limit the resulting items.",
+    schema: {
+      type: "object",
+      properties: {
+        collection: { type: "string" },
+        sortField: { type: "string" },
+        sortDirection: { type: "string", enum: ["asc","desc"] },
+        limit: { type: "number" },
+      },
+      required: ["collection","sortField"],
+    },
+    validation: (action) => {
+      if (!action?.collection) throw new Error("Collection Sort requires a collection");
+      if (!String(action.sortField || "").trim()) throw new Error("Collection Sort requires a sort field");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
+      const getPath = (value, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], value);
+      const direction = String(action.sortDirection || "asc").toLowerCase() === "desc" ? -1 : 1;
+      let output = [...(Array.isArray(source) ? source : [])].sort((a, b) => {
+        const left = getPath(a, action.sortField);
+        const right = getPath(b, action.sortField);
+        if (left == null && right == null) return 0;
+        if (left == null) return 1 * direction;
+        if (right == null) return -1 * direction;
+        if (typeof left === "number" && typeof right === "number") return (left - right) * direction;
+        return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" }) * direction;
+      });
+      const limit = Math.max(0, Number(action.limit || 0));
+      if (limit) output = output.slice(0, limit);
+      return { status: "completed", collection: output, count: output.length };
+    },
+  },
+  {
+    key: "TRANSFORM",
+    displayName: "Transform",
+    description: "Map source data to a new target shape without writing records.",
+    schema: {
+      type: "object",
+      properties: {
+        collection: { type: "string" },
+        transformMappings: { type: "object" },
+      },
+      required: ["collection","transformMappings"],
+    },
+    validation: (action) => {
+      if (!action?.collection) throw new Error("Transform requires a source Resource");
+      if (!action.transformMappings || typeof action.transformMappings !== "object" || !Object.keys(action.transformMappings).length) throw new Error("Transform requires at least one mapping");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
+      const mappings = action.transformMappings || {};
+      const assignPath = (target, path, value) => {
+        const parts = String(path || "").split(".").filter(Boolean);
+        if (!parts.length) return;
+        let cursor = target;
+        parts.forEach((part, index) => {
+          if (index === parts.length - 1) cursor[part] = value;
+          else cursor = cursor[part] ||= {};
+        });
+      };
+      const transformOne = (item) => {
+        const output = {};
+        for (const [targetPath, sourceValue] of Object.entries(mappings)) {
+          let value;
+          if (typeof sourceValue === "string" && sourceValue.startsWith("item.")) {
+            value = String(sourceValue).slice(5).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);
+          } else if (sourceValue === "item") {
+            value = item;
+          } else {
+            value = resolveConfiguredResource(sourceValue, { ...context, record: item }, { preserveMissing: false });
+          }
+          assignPath(output, targetPath, value);
+        }
+        return output;
+      };
+      if (Array.isArray(source)) {
+        const collection = source.map(transformOne);
+        return { status: "completed", collection, count: collection.length, value: collection };
+      }
+      const value = transformOne(source && typeof source === "object" ? source : {});
+      return { status: "completed", value, collection: null };
+    },
+  },
+  {
     key: "ASSIGNMENT",
     displayName: "Assignment",
     description: "Set one or more existing flow variables without writing to the database.",
@@ -4262,7 +4408,7 @@ async function assertWorkflowObjectPermission(context, actionType) {
 }
 
 const DEBUG_EXECUTABLE_ACTIONS = new Set([
-  "CONSTANT","FORMULA","TEXT_TEMPLATE","ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
+  "CONSTANT","FORMULA","TEXT_TEMPLATE","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","CONDITION","LOOP","GET_RECORDS",
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
   "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","WAIT","STOP",
