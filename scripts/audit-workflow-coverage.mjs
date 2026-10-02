@@ -100,6 +100,8 @@ const IDENTITY_PROTOCOL_MUTATION_ROUTES = new Set([
   "/auth/mfa/totp/start",
   "/auth/mfa/totp/complete",
   "/auth/mfa/verify",
+  "/auth/passkey/login/options",
+  "/auth/passkey/login/verify",
   "/auth/mfa/passkey/registration-options",
   "/auth/mfa/passkey/registration-verify",
   "/auth/mfa/passkey/options",
