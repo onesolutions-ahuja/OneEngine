@@ -3013,16 +3013,25 @@ button.git-control-tile { cursor: pointer; }
   min-height: 0;
   padding: 10px;
   box-sizing: border-box;
-  display: grid;
-  grid-template-rows: auto minmax(0,1fr);
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   overflow: hidden;
 }
 
+/* Workflow Builder has dynamic top-level panels (Tests, Versions, Debug and
+   the Subflow contract). A fixed two-row CSS grid caused those panels to share
+   the canvas row and physically overlap controls. Keep every utility panel in
+   normal document flow and let only the canvas consume remaining workspace. */
+.onebuilder-workflow-window .workflow-builder-page > :not(#workflow-canvas-section) {
+  flex: 0 0 auto;
+}
+
 .onebuilder-workflow-window #workflow-canvas-section {
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
   overflow: hidden;
 }
 
