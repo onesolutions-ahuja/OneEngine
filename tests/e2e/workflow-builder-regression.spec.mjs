@@ -52,7 +52,7 @@ test("workflow builder exposes complete no-code authoring and safe test surfaces
   await expect(page.getByRole("button", { name: "Save As", exact: true })).toBeDisabled();
 
   await workflowWorkspace.getByRole("button", { name: "Debug", exact: true }).click();
-  await expect(page.getByText("Debug / Test workflow", { exact: true })).toBeVisible();
+  await expect(page.getByText("Debug / Test Flow", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Debug", exact: true }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
   await expect(page.getByText(/database changes are rolled back/i)).toBeVisible();
