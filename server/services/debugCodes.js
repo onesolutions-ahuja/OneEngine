@@ -3,8 +3,10 @@ import { randomBytes } from "node:crypto";
 export const BUILTIN_DEBUG_CODES = Object.freeze([
   { code: "OES01", category: "Server", title: "Service starting", userMessage: "OneEngine is starting. Please try again shortly.", internalDescription: "API process is alive but core startup is not complete.", severity: "WARNING", retryable: true, matchPattern: "" },
   { code: "OES02", category: "Server", title: "Service unavailable", userMessage: "OneEngine is temporarily unavailable.", internalDescription: "Server-side service failure outside a more specific category.", severity: "CRITICAL", retryable: true, matchPattern: "" },
-  { code: "OEN01", category: "Network", title: "Server not reachable", userMessage: "OneEngine could not be reached. Check your connection and try again.", internalDescription: "Browser/device could not reach the API.", severity: "ERROR", retryable: true, matchPattern: "" },
-  { code: "OEN02", category: "Network", title: "Request timeout", userMessage: "The request took too long. Please try again.", internalDescription: "Request exceeded the configured client/server timeout.", severity: "ERROR", retryable: true, matchPattern: "timeout|timed out" },
+  { code: "OEN01", category: "Network", title: "API health failed", userMessage: "OneEngine is temporarily unavailable.", internalDescription: "The API responded but /api/health reported an unhealthy platform state that did not map to a more specific OE code.", severity: "ERROR", retryable: true, matchPattern: "" },
+  { code: "OEN02", category: "Network", title: "API host unreachable", userMessage: "OneEngine service could not be reached.", internalDescription: "Browser could not establish a connection to the OneEngine API/Render host.", severity: "CRITICAL", retryable: true, matchPattern: "" },
+  { code: "OEN03", category: "Network", title: "Device offline", userMessage: "This device appears to be offline.", internalDescription: "Browser reports no network connectivity before the API can be contacted.", severity: "WARNING", retryable: true, matchPattern: "" },
+  { code: "OEN04", category: "Network", title: "Request timeout", userMessage: "OneEngine did not respond in time.", internalDescription: "The API/Render request exceeded the configured timeout.", severity: "ERROR", retryable: true, matchPattern: "timeout|timed out" },
   { code: "OED01", category: "Database", title: "Database unavailable", userMessage: "OneEngine data services are temporarily unavailable.", internalDescription: "Database connection/query infrastructure is unavailable.", severity: "CRITICAL", retryable: true, matchPattern: "ECONNREFUSED|connection terminated|connection refused|database.*unavailable|failed to connect|connect ETIMEDOUT" },
   { code: "OED02", category: "Database", title: "Database resource limit", userMessage: "OneEngine data services are temporarily unavailable.", internalDescription: "Database provider quota, allowance, compute or resource limit was reached.", severity: "CRITICAL", retryable: false, matchPattern: "quota|allowance|resource limit|usage limit|exhaust|compute.*suspend|project.*suspend|billing.*limit" },
   { code: "OEA01", category: "API", title: "API unavailable", userMessage: "The requested OneEngine service is unavailable.", internalDescription: "API dependency or route is unavailable.", severity: "ERROR", retryable: true, matchPattern: "" },
@@ -43,7 +45,7 @@ export function classifyDebugCode(error, status = 500) {
 
   if (/quota|allowance|resource limit|usage limit|exhaust|compute.*suspend|project.*suspend|billing.*limit/i.test(haystack)) return "OED02";
   if (/ECONNREFUSED|connection terminated|connection refused|database.*unavailable|failed to connect|connect ETIMEDOUT|too many clients|remaining connection slots/i.test(haystack)) return "OED01";
-  if (/timeout|timed out|ETIMEDOUT/i.test(haystack)) return "OEN02";
+  if (/timeout|timed out|ETIMEDOUT/i.test(haystack)) return "OEN04";
   if (/company context|tenant context|acting company/i.test(haystack)) return "OET01";
   if (/workflow.*failed|automation.*failed/i.test(haystack)) return "OEW01";
   if (/licen[cs]e|entitlement/i.test(haystack)) return "OEL01";
