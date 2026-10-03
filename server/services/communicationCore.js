@@ -34,6 +34,7 @@ export async function recordCommunicationEvent({
   objectId = null,
   recordId = null,
   communicationId = null,
+  body = null,
   metadata = {},
 }) {
   if (!db || !companyId) return null;
@@ -84,6 +85,11 @@ export async function recordCommunicationEvent({
         objectId,
         recordId,
         communicationId,
+        // Workflow records are built from this event payload. Keep message text
+        // at the top level as well as in metadata so bindings such as
+        // { path: "body" } work for inbound communication workflows.
+        body: body ?? metadata?.body ?? metadata?.text ?? null,
+        text: body ?? metadata?.text ?? metadata?.body ?? null,
         metadata: metadata || {},
       },
       idempotencyKey: `communication:${event.id}`,
