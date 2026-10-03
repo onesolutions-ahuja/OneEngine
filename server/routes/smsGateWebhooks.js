@@ -97,6 +97,13 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
         return res.status(202).json({ success: true, ignored: true });
       }
 
+      console.info("SMSGate webhook accepted", {
+        connectionId: connection.id,
+        companyId: connection.company_id,
+        deviceId: body?.deviceId || null,
+        eventId: body?.id || null,
+      });
+
       const payload = body?.payload || {};
       const configuredDevice = String(configuration.deviceId || "").trim();
       if (configuredDevice && String(body?.deviceId || "") !== configuredDevice) {
@@ -135,7 +142,17 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
           simNumber: payload.simNumber ?? null,
           receivedAt: payload.receivedAt || null,
           webhookEventId: body?.id || null,
+          body: message,
+          text: message,
         },
+      });
+
+      console.info("SMSGate inbound message recorded", {
+        connectionId: connection.id,
+        companyId: connection.company_id,
+        providerMessageId,
+        senderLast4: sender.slice(-4),
+        messageLength: message.length,
       });
 
       const bookingCase = await createAppointmentBookingCase(pool.query.bind(pool), {
