@@ -180,7 +180,7 @@ test("Debug validates bad date input and exercises date-to-slot-to-confirmation 
           id: "date",
           key: "PROCESS_APPOINTMENT_DATE_RESPONSE",
           bookingCaseId: { path: "steps.start.bookingCaseId" },
-          body: "1",
+          body: "2",
         },
         {
           id: "slot",
