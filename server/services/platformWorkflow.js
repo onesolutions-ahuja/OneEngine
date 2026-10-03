@@ -2091,81 +2091,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       return {...result,resolvedWorkflowId:resolved.id,resolvedWorkflowName:resolved.name};
     },
   },
-  {
-    key: "FIND_APPOINTMENT_SLOTS",
-    displayName: "Appointments - Find Available Slots",
-    description: "Find available OneAssistant appointment slots for a service and optional resource.",
-    validation: (action) => { if (!action?.serviceId) throw new Error("Find Appointment Slots requires serviceId"); },
-    async: false,
-    requiredPermissions: ["appointments.view"],
-    executor: async ({ action, db, companyId, req }) => ({
-      status: "completed",
-      slots: await findAvailableAppointmentSlots(db, {
-        companyId: companyId || req?.user?.companyId,
-        serviceId: action.serviceId,
-        resourceId: action.resourceId || null,
-        from: action.from || new Date().toISOString(),
-        to: action.to || new Date(Date.now() + 14 * 86400000).toISOString(),
-        limit: action.limit || 4,
-      }),
-    }),
-  },
-  {
-    key: "HOLD_APPOINTMENT_SLOT",
-    displayName: "Appointments - Hold Slot",
-    description: "Temporarily reserve an available appointment slot while the booking flow completes.",
-    validation: (action) => {
-      for (const field of ["serviceId","resourceId","startsAt","endsAt"]) if (!action?.[field]) throw new Error(`Hold Appointment Slot requires ${field}`);
-    },
-    async: false,
-    requiredPermissions: ["appointments.manage"],
-    executor: async ({ action, client, db, companyId, req }) => {
-      const queryClient = client || { query: db };
-      const hold = await holdAppointmentSlot(queryClient, {
-        companyId: companyId || req?.user?.companyId,
-        storeId: action.storeId || req?.user?.storeId || null,
-        serviceId: action.serviceId,
-        resourceId: action.resourceId,
-        customerId: action.customerId || null,
-        conversationId: action.conversationId || null,
-        startsAt: action.startsAt,
-        endsAt: action.endsAt,
-        holdMinutes: action.holdMinutes || 10,
-        idempotencyKey: action.idempotencyKey || null,
-        metadata: action.metadata || {},
-      });
-      return { status: "completed", hold };
-    },
-  },
-  {
-    key: "RELEASE_APPOINTMENT_SLOT",
-    displayName: "Appointments - Release Slot",
-    description: "Release a temporary appointment hold after cancellation, timeout, or payment failure.",
-    validation: (action) => { if (!action?.holdId) throw new Error("Release Appointment Slot requires holdId"); },
-    async: false,
-    requiredPermissions: ["appointments.manage"],
-    executor: async ({ action, db, companyId, req }) => ({
-      status: "completed",
-      hold: await releaseAppointmentHold(db, {
-        companyId: companyId || req?.user?.companyId,
-        holdId: action.holdId,
-        reason: action.reason || null,
-      }),
-    }),
-  },
-  {
-    key: "LIST_APPOINTMENT_PAYMENT_PROVIDERS",
-    displayName: "Appointments - List Payment Providers",
-    description: "Return installed payment connector packages that explicitly support payment.request.",
-    validation: () => undefined,
-    async: false,
-    requiredPermissions: ["appointments.payment"],
-    executor: async ({ db, companyId, req }) => ({
-      status: "completed",
-      providers: await listPaymentRequestProviders(db, companyId || req?.user?.companyId),
-    }),
-  },
-  {
+          {
     key: "CREATE_APPOINTMENT_PAYMENT_REQUEST",
     displayName: "Appointments - Create Payment Request",
     description: "Create a provider-neutral payment request for a held or confirmed appointment.",
@@ -2210,49 +2136,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       return {status:"completed",...result};
     },
   },
-  {
-    key: "CALCULATE_APPOINTMENT_PAYMENT",
-    displayName: "Appointments - Calculate Advance",
-    description: "Calculate the configured deposit or full-payment amount for an appointment service.",
-    validation: (action) => { if (!action?.serviceId) throw new Error("Calculate Appointment Payment requires serviceId"); },
-    async: false,
-    requiredPermissions: ["appointments.payment"],
-    executor: async ({ action, db, companyId, req }) => {
-      const tenantId = companyId || req?.user?.companyId;
-      const result = await db("SELECT id,price,currency,payment_policy,deposit_value FROM appointment_services WHERE id=$1 AND company_id=$2 LIMIT 1",[action.serviceId,tenantId]);
-      const service = result.rows[0];
-      if (!service) throw new Error("Appointment service not found");
-      return { status: "completed", amount: calculateAppointmentPayment(service), currency: service.currency, paymentPolicy: service.payment_policy };
-    },
-  },
-  {
-    key: "CONFIRM_APPOINTMENT",
-    displayName: "Appointments - Confirm Booking",
-    description: "Convert an active slot hold into a confirmed appointment after any required payment gate succeeds.",
-    validation: (action) => { if (!action?.holdId) throw new Error("Confirm Appointment requires holdId"); },
-    async: false,
-    requiredPermissions: ["appointments.manage"],
-    executor: async ({ action, client, db, companyId, req, userId }) => {
-      const queryClient = client || { query: db };
-      const appointment = await confirmAppointmentFromHold(queryClient, {
-        companyId: companyId || req?.user?.companyId,
-        holdId: action.holdId,
-        customerId: action.customerId || null,
-        customerName: action.customerName || null,
-        customerPhone: action.customerPhone || null,
-        customerEmail: action.customerEmail || null,
-        sourceChannel: action.sourceChannel || "WORKFLOW",
-        notes: action.notes || null,
-        paymentStatus: action.paymentStatus || "NOT_REQUIRED",
-        amountDue: action.amountDue || 0,
-        amountPaid: action.amountPaid || 0,
-        createdBy: userId || req?.user?.id || null,
-        metadata: action.metadata || {},
-      });
-      return { status: "completed", appointment };
-    },
-  },
-  {
+      {
     key: "LICENCE_REQUEST_PACKAGE",
     displayName: "Licence - Request Package",
     description: "Create a pending package licence request and run its configured workflow.",
