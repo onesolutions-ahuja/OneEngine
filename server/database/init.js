@@ -1062,6 +1062,53 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       },
     },
     {
+      key: "0038_backfill_whatsapp_communication_events",
+      version: "38",
+      name: "Backfill WhatsApp messages into Communication Events",
+      up: async client => {
+        await client.query(`
+          INSERT INTO platform_communication_events
+            (company_id,channel,event_type,direction,provider,provider_message_id,sender,communication_id,metadata,created_at)
+          SELECT
+            wm.company_id,
+            'WHATSAPP',
+            'communication.message_received',
+            'INBOUND',
+            'whatsapp',
+            wm.provider_message_id,
+            wc.customer_phone,
+            wm.id,
+            jsonb_build_object(
+              'conversationId', wm.conversation_id,
+              'customerId', wc.customer_id,
+              'messageType', wm.message_type,
+              'backfilled', true
+            ),
+            COALESCE(wm.occurred_at, wm.created_at, NOW())
+          FROM whatsapp_messages wm
+          LEFT JOIN whatsapp_conversations wc
+            ON wc.id=wm.conversation_id AND wc.company_id=wm.company_id
+          WHERE UPPER(COALESCE(wm.direction,''))='INBOUND'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM platform_communication_events ce
+              WHERE ce.company_id=wm.company_id
+                AND ce.channel='WHATSAPP'
+                AND ce.event_type='communication.message_received'
+                AND (
+                  ce.communication_id=wm.id
+                  OR (
+                    wm.provider_message_id IS NOT NULL
+                    AND ce.provider_message_id=wm.provider_message_id
+                  )
+                )
+            )
+        `);
+        console.log("onePOS: existing WhatsApp inbound messages backfilled into Communication Events");
+      },
+    },
+
+    {
       key: "0038_report_analytics_foundation",
       version: "38",
       name: "Advanced report and dashboard analytics foundation",
