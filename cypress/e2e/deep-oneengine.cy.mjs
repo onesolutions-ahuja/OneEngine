@@ -319,4 +319,70 @@ describe("OneEngine deep deployed E2E", () => {
 
     cy.get(".dock-jarves-slot .jarvis-orb-container:visible").should("exist");
   });
+
+  it("Builder2 deep gate: loads without fatal/runtime errors and exposes core Salesforce-style workspace", () => {
+    const errors = [];
+    cy.on("uncaught:exception", (error) => { errors.push(String(error?.message || error)); return false; });
+    visitAuthenticated("developer/builder2");
+    cy.get(".b2-shell", { timeout: 30000 }).should("be.visible");
+    cy.get(".b2-top").should("be.visible").and("contain.text", "Builder2");
+    cy.get(".b2-toolbox").should("be.visible").and("contain.text", "Elements").and("contain.text", "Manager");
+    cy.get(".b2-layout-select").should("contain.text", "Auto-Layout").and("contain.text", "Free-Form");
+    cy.contains("button", "Errors & Warnings").should("be.visible");
+    cy.contains("button", "Run").should("be.visible");
+    cy.contains("button", "Debug").should("be.visible");
+    cy.contains("button", "Tests").should("be.visible");
+    cy.contains("button", "Save").should("be.visible");
+    cy.contains("button", /Activate|Deactivate/).should("be.visible");
+    cy.then(() => expect(errors, "Builder2 uncaught exceptions").to.deep.equal([]));
+    assertNoHorizontalOverflow();
+  });
+
+  it("Builder2 deep gate: Start supports record triggers, conditions, and optimization", () => {
+    visitAuthenticated("developer/builder2");
+    cy.contains("button", "Start", { timeout: 30000 }).click({ force: true });
+    cy.contains(".b2-start-panel", "Configure Start").should("be.visible");
+    cy.get(".b2-start-panel").should("contain.text", "Object").and("contain.text", "Trigger the Flow When");
+    for (const text of ["A record is created","A record is updated","A record is created or updated","A record is deleted"]) {
+      cy.contains(".b2-start-panel", text).should("be.visible");
+    }
+    cy.get(".b2-start-panel select").filter(":visible").should("have.length.greaterThan", 1);
+    cy.contains(".b2-start-panel", "Condition Requirements").should("be.visible");
+    cy.contains(".b2-start-panel", "Optimize the Flow For").should("be.visible");
+  });
+
+  it("Builder2 deep gate: every core element is addable and opens real properties", () => {
+    visitAuthenticated("developer/builder2");
+    const elements = ["Get Records","Create Records","Update Records","Delete Records","Assignment","Decision","Loop","Collection Filter","Collection Sort","Wait","Transform","Custom Error","Subflow","Screen"];
+    elements.forEach((label) => {
+      cy.contains(".b2-toolbox button", label, { timeout: 10000 }).click();
+      cy.get(".b2-properties", { timeout: 10000 }).should("be.visible").and("contain.text", label);
+      cy.get(".b2-properties").find("input,select,textarea,button").should("have.length.greaterThan", 1);
+    });
+  });
+
+  it("Builder2 deep gate: Manager can create every supported resource type", () => {
+    visitAuthenticated("developer/builder2");
+    cy.contains(".b2-tabs button", "Manager").click();
+    cy.contains("button", /New Resource/i).click();
+    cy.get(".b2-modal", { timeout: 10000 }).should("be.visible");
+    cy.get(".b2-modal select").first().then(($select) => {
+      const labels = [...$select[0].options].map((o) => o.textContent.trim());
+      ["Variable","Constant","Formula","Text Template","Choice","Record Choice Set","Collection Choice Set","Picklist Choice Set","Stage"].forEach((label) => expect(labels).to.include(label));
+    });
+  });
+
+  it("Builder2 deep gate: Save menu, tests, properties, and layout controls are functional", () => {
+    visitAuthenticated("developer/builder2");
+    cy.get('button[title="Flow Properties"]').click();
+    cy.get(".b2-modal", { timeout: 10000 }).should("be.visible").and("contain.text", "Flow Properties");
+    cy.contains(".b2-modal button", /Cancel|Close/).click({ force: true });
+    cy.get(".b2-layout-select").select("free").should("have.value", "free");
+    cy.get(".b2-layout-select").select("auto").should("have.value", "auto");
+    cy.contains("button", "Tests").click();
+    cy.get(".b2-drawer", { timeout: 10000 }).should("contain.text", "Tests").and("contain.text", "Create Test");
+    cy.get(".b2-save-chevron").click();
+    cy.get(".b2-save-menu").should("contain.text", "Save As New Version").and("contain.text", "Save As New Flow");
+  });
+
 });
