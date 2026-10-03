@@ -2823,6 +2823,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         sortDirection: { type: "string" },
         limit: { type: "number" },
         store: { type: "string" },
+        selectedFields: { type: "array" },
+        fieldAssignments: { type: "array" },
       },
       required: ["objectKey"],
     },
@@ -2918,15 +2920,35 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 50 : 1)), 200));
       params.push(requestedLimit);
       const where = clauses.length ? " WHERE " + clauses.join(" AND ") : "";
-      const selectColumns = ["id", ...fields.map((field) => '"' + field.source_column + '" AS "' + field.api_name + '"')];
+      const requestedKeys = new Set([
+        ...(Array.isArray(action.selectedFields) ? action.selectedFields : []),
+        ...(Array.isArray(action.fieldAssignments) ? action.fieldAssignments.map((item) => item?.field).filter(Boolean) : []),
+      ].map(String));
+      const selectedMetadata = requestedKeys.size
+        ? fields.filter((field) => requestedKeys.has(String(field.api_name)) || requestedKeys.has(String(field.source_column || "")))
+        : fields;
+      if (requestedKeys.size && selectedMetadata.length !== requestedKeys.size) {
+        const resolved = new Set(selectedMetadata.flatMap((field) => [String(field.api_name), String(field.source_column || "")]));
+        const missing = [...requestedKeys].filter((key) => !resolved.has(key));
+        if (missing.length) throw new Error("Get Records selected field is unavailable: " + missing.join(", "));
+      }
+      const selectColumns = ["id", ...selectedMetadata.map((field) => '"' + field.source_column + '" AS "' + field.api_name + '"')];
       const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + table + '"' + where + orderBy + " LIMIT " + parameter(params.length);
       const result = await db(query, params);
       const rows = result.rows || [];
+      const first = rows[0] || null;
+      for (const assignment of Array.isArray(action.fieldAssignments) ? action.fieldAssignments : []) {
+        const target = String(assignment?.target || "");
+        const field = fieldByKey.get(String(assignment?.field || ""));
+        if (!target.startsWith("variables.") || !field) continue;
+        if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+        workflowVariables.variables[target.slice("variables.".length)] = first ? first[field.api_name] : null;
+      }
       return {
         status: "completed",
         objectKey: targetObject.object_key,
-        record: rows[0] || null,
-        records: String(action.store || "first").toLowerCase() === "all" ? rows : (rows[0] ? [rows[0]] : []),
+        record: first,
+        records: String(action.store || "first").toLowerCase() === "all" ? rows : (first ? [first] : []),
         count: rows.length,
       };
     },
