@@ -1270,7 +1270,7 @@ const CATALOG = [
     permissions: ["appointments.view", "appointments.manage", "appointments.configure", "appointments.payment"],
     storeScoped: false,
     category: "Business",
-    version: "1.1.0",
+    version: "1.2.0",
     packageType: "APPLICATION",
     billable: true,
     licenceRequired: true,
