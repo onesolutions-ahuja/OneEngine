@@ -79,6 +79,9 @@ jobs:
           done
           echo "Frontend/API did not become ready" >&2
           exit 1
+      - name: Capture persisted appointment OEFR101 directly
+        if: always()
+        run: npx playwright test tests/e2e/workflow-builder-regression.spec.mjs --project=desktop-chromium --grep "persisted appointment workflow renders without OEFR101"
       - name: Verify E2E credentials
         shell: bash
         run: |
