@@ -2091,7 +2091,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       return {...result,resolvedWorkflowId:resolved.id,resolvedWorkflowName:resolved.name};
     },
   },
-          {
+  {
     key: "CREATE_APPOINTMENT_PAYMENT_REQUEST",
     displayName: "Appointments - Create Payment Request",
     description: "Create a provider-neutral payment request for a held or confirmed appointment.",
@@ -2136,7 +2136,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       return {status:"completed",...result};
     },
   },
-      {
+  {
     key: "LICENCE_REQUEST_PACKAGE",
     displayName: "Licence - Request Package",
     description: "Create a pending package licence request and run its configured workflow.",
