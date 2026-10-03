@@ -3806,3 +3806,35 @@
   .efb-dock-fixed-item { width: 40px; height: 40px; }
   .efb-dock-separator { align-self: center; }
 }
+
+/* 2026-10-03 requested active dock sizing: +30% icons, mathematically centred. */
+@media (min-width: 681px) {
+  .efb-dock {
+    --efb-icon-size: 52px;
+    height: 72px;
+    min-height: 72px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    align-items: center;
+  }
+  .efb-dock-magnify-zone {
+    height: var(--efb-icon-size);
+    align-items: center;
+  }
+  .efb-dock-item {
+    height: var(--efb-icon-size);
+    min-width: var(--efb-icon-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .efb-dock-icon-wrap,
+  .efb-dock-image {
+    width: var(--efb-icon-size);
+    height: var(--efb-icon-size);
+  }
+  .efb-dock-icon-wrap { align-items: center; justify-content: center; }
+  .efb-dock-fixed-zone { height: var(--efb-icon-size); align-items: center; }
+  .efb-dock-fixed-item { width: var(--efb-icon-size); height: var(--efb-icon-size); }
+  .efb-dock-separator { align-self: center; }
+}
