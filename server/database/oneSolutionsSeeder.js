@@ -235,17 +235,26 @@ export async function seedOneSolutionsDemo(pool) {
       priceListIds[division.division_key]=row.id;
     }
 
-    const ensureProductAvailability=async(productId,divisionKey,price)=>{
+    const ensureProductAvailability=async(productId,divisionKey,price,{overwritePrice=true}={})=>{
       const scopeRecordId=divisionIds[divisionKey];
       const priceListId=priceListIds[divisionKey];
       if(!scopeRecordId || !priceListId) return;
 
-      await client.query(
-        `INSERT INTO price_list_prices(price_list_id,product_id,price)
-         VALUES($1,$2,$3)
-         ON CONFLICT(price_list_id,product_id) DO UPDATE SET price=EXCLUDED.price`,
-        [priceListId,productId,price]
-      );
+      if(overwritePrice){
+        await client.query(
+          `INSERT INTO price_list_prices(price_list_id,product_id,price)
+           VALUES($1,$2,$3)
+           ON CONFLICT(price_list_id,product_id) DO UPDATE SET price=EXCLUDED.price`,
+          [priceListId,productId,price]
+        );
+      }else{
+        await client.query(
+          `INSERT INTO price_list_prices(price_list_id,product_id,price)
+           VALUES($1,$2,$3)
+           ON CONFLICT(price_list_id,product_id) DO NOTHING`,
+          [priceListId,productId,price]
+        );
+      }
 
       const existing=(await client.query(
         `SELECT id FROM product_availability
@@ -296,7 +305,8 @@ export async function seedOneSolutionsDemo(pool) {
         await ensureProductAvailability(
           legacy.product_id,
           legacy.division_key,
-          Number(legacy.price || 0)
+          Number(legacy.price || 0),
+          {overwritePrice:false}
         );
       }
 
@@ -391,7 +401,7 @@ export async function seedOneSolutionsDemo(pool) {
         const scopedPrice=reusedExisting
           ? Number(row.price ?? p.p)
           : (p.prices?.[divisionKey] ?? p.p);
-        await ensureProductAvailability(row.id,divisionKey,scopedPrice);
+        await ensureProductAvailability(row.id,divisionKey,scopedPrice,{overwritePrice:!reusedExisting});
       }
     }
 
@@ -419,8 +429,8 @@ export async function seedOneSolutionsDemo(pool) {
         );
       }
       const basePrice=Number(shared.price || 0);
-      await ensureProductAvailability(shared.id,'retail',basePrice);
-      await ensureProductAvailability(shared.id,'restaurant_qsr',basePrice);
+      await ensureProductAvailability(shared.id,'retail',basePrice,{overwritePrice:false});
+      await ensureProductAvailability(shared.id,'restaurant_qsr',basePrice,{overwritePrice:false});
     }
 
     const customers=[
