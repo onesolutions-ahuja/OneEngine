@@ -119,10 +119,6 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
       }
 
       const providerMessageId = String(payload.messageId || body?.id || "").trim() || null;
-      const sourceMessageId = [
-        String(body?.deviceId || "device"),
-        String(body?.id || providerMessageId || crypto.createHash("sha256").update(rawBody).digest("hex"))
-      ].join(":").slice(0, 255);
 
       const communicationEvent = await recordCommunicationEvent({
         db: pool.query.bind(pool),
@@ -167,8 +163,8 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
         },
       });
     } catch (error) {
-      console.error("SMSGate inbound booking webhook error:", error);
-      return res.status(500).json({ success: false, message: "Unable to process inbound SMS booking request" });
+      console.error("SMSGate inbound webhook error:", error);
+      return res.status(500).json({ success: false, message: "Unable to process inbound SMS message" });
     }
   });
 
