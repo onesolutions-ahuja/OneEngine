@@ -272,6 +272,46 @@ export async function seedOneSolutionsDemo(pool) {
       }
     };
 
+    // Convert every legacy Product -> Business Division lookup into a
+    // Product Availability related record before retiring the old value. This
+    // prevents previously scoped products from becoming globally visible.
+    if(productObject){
+      const legacyMappings=(await client.query(
+        `SELECT association.record_id AS product_id,
+                division.division_key,
+                product.price
+           FROM platform_record_associations association
+           JOIN products product
+             ON product.id=association.record_id
+            AND product.company_id=$2
+           JOIN onesolutions_business_divisions division
+             ON division.id::text=association.custom_values->>'business_division_id'
+            AND division.company_id=$2
+          WHERE association.object_id=$1
+            AND association.company_id=$2
+            AND association.custom_values ? 'business_division_id'`,
+        [productObject.id,company.id]
+      )).rows;
+
+      for(const legacy of legacyMappings){
+        await ensureProductAvailability(
+          legacy.product_id,
+          legacy.division_key,
+          Number(legacy.price || 0)
+        );
+      }
+
+      await client.query(
+        `UPDATE platform_record_associations
+            SET custom_values=custom_values - 'business_division_id',
+                updated_at=NOW()
+          WHERE object_id=$1
+            AND company_id=$2
+            AND custom_values ? 'business_division_id'`,
+        [productObject.id,company.id]
+      );
+    }
+
     const products=[
       {d:'retail',c:'Retail Essentials',n:'Sparkling Water 500ml',sku:'DEMO-RET-001',barcode:'5010000000001',p:1.49,cost:.45,stock:80,img:'https://images.unsplash.com/photo-1523362628745-0c100150b504?auto=format&fit=crop&w=800&q=80'},
       {d:'retail',c:'Retail Essentials',n:'Fresh Sandwich',sku:'DEMO-RET-002',barcode:'5010000000002',p:4.25,cost:1.55,stock:24,img:'https://images.unsplash.com/photo-1553909489-cd47e0907980?auto=format&fit=crop&w=800&q=80'},
