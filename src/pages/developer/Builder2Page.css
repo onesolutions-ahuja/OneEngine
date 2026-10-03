@@ -86,3 +86,11 @@
 .b2-node-icon--custom_error{background:#c23934}
 .b2-end-icon{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#706e6b;color:#fff;font-size:8px}
 @media(max-width:1000px){.b2-workspace{grid-template-columns:235px minmax(360px,1fr)}.b2-properties{width:340px}.b2-branch-map{width:min(700px,calc(100vw - 280px))}}
+
+.b2-palette-group>button[draggable="true"]{cursor:grab}
+.b2-palette-group>button[draggable="true"]:active{cursor:grabbing}
+.b2-rf-node.is-start{min-width:150px;border:2px solid #2e844a;border-radius:18px;text-align:center}
+.b2-rf-node.is-start .b2-rf-title b{color:#1f6f3b}
+.b2-rf-node.is-end{min-width:72px;border-color:#706e6b;border-radius:999px;background:#706e6b;text-align:center}
+.b2-rf-node.is-end .b2-rf-title b{color:#fff}
+.b2-rf-node.is-start .react-flow__handle,.b2-rf-node.is-end .react-flow__handle{width:8px;height:8px}
