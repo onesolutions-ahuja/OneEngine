@@ -909,13 +909,27 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
              FROM integrations
             WHERE provider='whatsapp' AND active=true`
         );
+        const maskRoutingId = (value) => {
+          const normalized = String(value || "").trim();
+          if (!normalized) return null;
+          if (normalized.length <= 6) return "*".repeat(normalized.length);
+          return `${normalized.slice(0, 3)}…${normalized.slice(-4)}`;
+        };
+        const configuredRouting = await db(
+          `SELECT configuration->>'phone_number_id' AS phone_number_id,
+                  configuration->>'business_account_id' AS business_account_id
+             FROM integrations
+            WHERE provider='whatsapp' AND active=true`
+        );
         console.info("WhatsApp webhook ignored", {
           reason: "integration_not_found",
-          hasPhoneNumberId: Boolean(payloadPhoneNumberId),
-          hasBusinessAccountId: Boolean(payloadBusinessAccountId),
+          incomingPhoneNumberId: maskRoutingId(payloadPhoneNumberId),
+          incomingBusinessAccountId: maskRoutingId(payloadBusinessAccountId),
           activeIntegrationCount: activeWhatsApp.rows.length,
-          activeIntegrationsHavePhoneNumberId: activeWhatsApp.rows.some((row) => row.has_configured_phone_number_id === true),
-          activeIntegrationsHaveBusinessAccountId: activeWhatsApp.rows.some((row) => row.has_configured_business_account_id === true),
+          configuredRouting: configuredRouting.rows.map((row) => ({
+            phoneNumberId: maskRoutingId(row.phone_number_id),
+            businessAccountId: maskRoutingId(row.business_account_id),
+          })),
         });
         return res.status(200).json({ success: true, ignored: true });
       }
