@@ -3726,22 +3726,16 @@
   font-weight: 500;
 }
 
-/* Original Smart Theme macOS-style comparison dock. */
-.rdvn-reference-zone{position:fixed;left:50%;bottom:104px;z-index:86;transform:translateX(-50%);pointer-events:none}
-.rdvn-reference-dock{--rdvn-gap:5px;pointer-events:auto;display:flex;align-items:flex-end;gap:var(--rdvn-gap);min-height:68px;padding:8px 10px 7px;border:1px solid rgba(255,255,255,.42);border-radius:18px;background:rgba(231,236,230,.56);box-shadow:0 12px 32px rgba(4,8,21,.18),inset 0 1px rgba(255,255,255,.48);backdrop-filter:blur(24px) saturate(1.35);-webkit-backdrop-filter:blur(24px) saturate(1.35)}
-.rdvn-reference-item{--rdvn-scale:1;--rdvn-lift:0px;--rdvn-push:0px;position:relative;width:52px;height:52px;flex:0 0 52px;padding:0;border:0;background:transparent;cursor:pointer;overflow:visible;transform:translate3d(var(--rdvn-push),calc(var(--rdvn-lift) * -1),0) scale(var(--rdvn-scale));transform-origin:center bottom;transition:transform 58ms cubic-bezier(.2,.9,.2,1);will-change:transform}
-.rdvn-reference-icon{width:52px;height:52px;display:grid;place-items:center;border-radius:14px;border:1px solid rgba(255,255,255,.32);color:rgba(255,255,255,.98);box-shadow:0 8px 18px rgba(0,0,0,.2),inset 0 1px rgba(255,255,255,.34);overflow:hidden}
-.rdvn-reference-icon--blue{background:linear-gradient(145deg,#65c6ff,#3476ff 66%,#1d4fcc)}
-.rdvn-reference-icon--cyan{background:linear-gradient(145deg,#72e6ff,#2a91d3 68%,#176aa8)}
-.rdvn-reference-icon--green{background:linear-gradient(145deg,#7be984,#2fbd5a 67%,#158642)}
-.rdvn-reference-icon--sky{background:linear-gradient(145deg,#6dd5ff,#2e98e8 70%,#2163b8)}
-.rdvn-reference-icon--red{background:linear-gradient(145deg,#ff8a8a,#ef4e5b 68%,#b52536)}
-.rdvn-reference-icon--pink{background:linear-gradient(145deg,#ff9ad5,#e74996 68%,#ad2168)}
-.rdvn-reference-icon--silver{background:linear-gradient(145deg,#d9e0ea,#7e8ca4 70%,#505d71)}
-.rdvn-reference-tooltip{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translate(-50%,6px);opacity:0;pointer-events:none;white-space:nowrap;padding:5px 8px;border-radius:7px;background:rgba(36,39,49,.7);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:11px;backdrop-filter:blur(14px);transition:opacity 110ms ease,transform 110ms ease}
-.rdvn-reference-item:hover .rdvn-reference-tooltip,.rdvn-reference-item:focus-visible .rdvn-reference-tooltip{opacity:1;transform:translate(-50%,0)}
-.rdvn-reference-dot{position:absolute;left:50%;bottom:-5px;width:4px;height:4px;border-radius:50%;transform:translateX(-50%);background:rgba(255,255,255,.76);opacity:.5}
-.rdvn-reference-item.is-bouncing{animation:rdvn-reference-bounce 360ms cubic-bezier(.2,.9,.2,1)}
-@keyframes rdvn-reference-bounce{0%,100%{transform:translate3d(var(--rdvn-push),calc(var(--rdvn-lift) * -1),0) scale(var(--rdvn-scale))}34%{transform:translate3d(var(--rdvn-push),calc(var(--rdvn-lift) * -1 - 18px),0) scale(var(--rdvn-scale))}62%{transform:translate3d(var(--rdvn-push),calc(var(--rdvn-lift) * -1 - 4px),0) scale(var(--rdvn-scale))}82%{transform:translate3d(var(--rdvn-push),calc(var(--rdvn-lift) * -1 - 8px),0) scale(var(--rdvn-scale))}}
-@media(max-width:680px){.rdvn-reference-zone{display:none}}
-@media(prefers-reduced-motion:reduce){.rdvn-reference-item{transition:none}.rdvn-reference-item.is-bouncing{animation:none}}
+/* Exact dock geometry from the OneDeveloper-logo design period. */
+.period-dock-zone{position:fixed;left:0;right:0;bottom:92px;z-index:86;display:flex;justify-content:center;pointer-events:none}
+.period-dock{pointer-events:auto;display:flex;align-items:flex-end;gap:12px;height:60px;min-height:60px;padding:0 8px 12px;margin-bottom:8px;border-radius:16px;background:hsl(34.3 3.4% 94.8% / .5);box-shadow:inset 0 0 0 1px hsl(34.3 3.4% 94.8% / .2),0 0 0 1px hsl(34.3 8.8% 2% / .075),0 10px 30px 0 hsl(34.3 8.8% 2% / .2);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px)}
+.period-dock-slot{position:relative;display:flex;align-items:flex-end}
+.period-dock-item{position:relative;flex:0 0 auto;aspect-ratio:1/1;padding:0;border:0;background:transparent;display:block;cursor:pointer;overflow:visible}
+.period-dock-icon-wrap{position:relative;display:flex;justify-content:center;width:100%}
+.period-dock-image{display:block;width:100%;height:auto;max-width:100%;user-select:none;pointer-events:none}
+.period-dock-image--scaled{transform:scale(1.25)}
+.period-dock-lucide-icon{width:100%;height:100%;padding:7px;border-radius:10px;color:#fff;background:linear-gradient(145deg,#6f8ff7,#4d67c7);box-shadow:0 5px 12px rgba(0,0,0,.16),inset 0 1px rgba(255,255,255,.28)}
+.period-dock-slot.is-bouncing{animation:period-dock-bounce 360ms cubic-bezier(.2,.9,.2,1)}
+@keyframes period-dock-bounce{0%,100%{transform:translateY(0)}34%{transform:translateY(-18px)}62%{transform:translateY(-4px)}82%{transform:translateY(-8px)}}
+@media(max-width:680px){.period-dock-zone{display:none}}
+@media(prefers-reduced-motion:reduce){.period-dock-slot.is-bouncing{animation:none}}
