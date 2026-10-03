@@ -506,7 +506,7 @@ button:focus-visible {
   gap: 12px;
   height: 60px;
   min-height: 60px;
-  padding: 0 8px 12px;
+  padding: 10px 16px;
   margin-bottom: 8px;
   border-radius: 16px;
   background: hsl(34.3 3.4% 94.8% / 0.5);
@@ -528,7 +528,9 @@ button:focus-visible {
   padding: 0;
   border: 0;
   background: transparent;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   overflow: visible;
   transform:
@@ -542,15 +544,18 @@ button:focus-visible {
 .dock-icon-wrap {
   position: relative;
   display: flex;
+  align-items: center;
   justify-content: center;
   width: 100%;
+  height: 100%;
 }
 
 .dock-image {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   max-width: 100%;
+  object-fit: contain;
   user-select: none;
   pointer-events: none;
 }

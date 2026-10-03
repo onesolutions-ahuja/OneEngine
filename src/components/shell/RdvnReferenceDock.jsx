@@ -3,13 +3,14 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import JarvisOrb from '../jarvis/JarvisOrb'
 
 const settingsSrc = 'https://rdvnui.com/assets/Settings-BIHCu_gi.png'
+const localDockAsset = (name) => `${import.meta.env.BASE_URL || '/'}icons/dock/${name}.svg?v=20261003-dock2`
 const dockItems = [
   { id: 'launchpad', label: 'Launcher', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
   { id: 'dashboard', label: 'Dashboard', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
   { id: 'settings', label: 'Settings', src: settingsSrc, scaled: true },
   { id: 'maps', label: 'Maps', src: 'https://rdvnui.com/assets/Maps-C7aNhhUR.png', scaled: true },
-  { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: false },
-  { id: 'store', label: 'OneStore', src: settingsSrc, scaled: true },
+  { id: 'developer', label: 'OneDeveloper', src: localDockAsset('developer'), scaled: false },
+  { id: 'store', label: 'OneStore', src: localDockAsset('store'), scaled: false },
   { id: 'till', label: 'OneTill', src: settingsSrc, scaled: true },
   { id: 'workspace', label: 'Workspace', src: settingsSrc, scaled: true },
 ]
