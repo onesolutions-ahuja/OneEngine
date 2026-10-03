@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { ReactFlow, Background, Controls, Handle, Position, addEdge, useEdgesState, useNodesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -25,12 +25,13 @@ export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,o
   })),[nodes,onOpen])
   const [rfNodes,setRfNodes,onNodesChange]=useNodesState(initialNodes)
   const [rfEdges,setRfEdges,onEdgesChange]=useEdgesState(edges.map(e=>({...e,type:'smoothstep',label:e.label||'',animated:e.kind==='fault'})))
+  useEffect(()=>{setRfNodes(initialNodes)},[initialNodes,setRfNodes])
+  useEffect(()=>{setRfEdges(edges.map(e=>({...e,type:'smoothstep',label:e.label||'',animated:e.kind==='fault'})))},[edges,setRfEdges])
   const connect=useCallback(params=>{
     const kind=params.sourceHandle==='fault'?'fault':params.sourceHandle==='outcome'?'outcome':'normal'
     const edge={...params,id:`${params.source}:${params.sourceHandle||'default'}:${params.target}:${Date.now()}`,kind,label:kind==='fault'?'Fault':kind==='outcome'?'Outcome':''}
-    setRfEdges(es=>addEdge({...edge,type:'smoothstep'},es))
-    onEdgesChangeExternal?.([...rfEdges,edge])
-  },[rfEdges,setRfEdges,onEdgesChangeExternal])
+    setRfEdges(es=>{const next=addEdge({...edge,type:'smoothstep'},es);onEdgesChangeExternal?.(next.map(({id,source,target,sourceHandle,targetHandle,kind,label})=>({id,source,target,sourceHandle,targetHandle,kind,label})));return next})
+  },[setRfEdges,onEdgesChangeExternal])
   const nodeChange=useCallback(changes=>{
     onNodesChange(changes)
     queueMicrotask(()=>{
@@ -39,7 +40,7 @@ export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,o
     })
   },[onNodesChange,rfNodes,onNodesChangeExternal])
   return <div className="b2-rf-canvas">
-    <ReactFlow nodes={rfNodes} edges={rfEdges} nodeTypes={nodeTypes} onNodesChange={nodeChange} onEdgesChange={changes=>{onEdgesChange(changes);queueMicrotask(()=>onEdgesChangeExternal?.(rfEdges))}} onConnect={connect} onNodeClick={(_,n)=>onSelect?.(n.id)} fitView deleteKeyCode={['Backspace','Delete']} multiSelectionKeyCode="Shift">
+    <ReactFlow nodes={rfNodes} edges={rfEdges} nodeTypes={nodeTypes} onNodesChange={nodeChange} onEdgesChange={changes=>{onEdgesChange(changes);queueMicrotask(()=>setRfEdges(current=>{onEdgesChangeExternal?.(current.map(({id,source,target,sourceHandle,targetHandle,data})=>({id,source,target,sourceHandle,targetHandle,...(data?.kind?{kind:data.kind}:{})})));return current}))}} onConnect={connect} onNodeClick={(_,n)=>onSelect?.(n.id)} fitView deleteKeyCode={['Backspace','Delete']} multiSelectionKeyCode="Shift">
       <Background/>
       <Controls showInteractive/>
     </ReactFlow>
