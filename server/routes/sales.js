@@ -888,10 +888,11 @@ export default function createSalesRouter({
              WHERE pa.company_id=p.company_id
                AND pa.product_id=p.id
                AND pa.active=TRUE
-               AND $5::uuid IS NOT NULL
                AND (pa.store_id IS NULL OR pa.store_id=$3)
-               AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$4)
-               AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$5)
+               AND (
+                 pa.scope_object_id IS NULL
+                 OR (pa.scope_object_id=$4 AND pa.scope_record_id=$5)
+               )
                AND pa.channel IN ($6,'all')
              ORDER BY (pa.store_id IS NOT NULL) DESC, pa.priority DESC, pa.updated_at DESC
              LIMIT 1
@@ -900,8 +901,7 @@ export default function createSalesRouter({
             AND p.id = ANY($2::uuid[])
             AND p.active = true
             AND (
-              $5::uuid IS NULL
-              OR NOT EXISTS (
+              NOT EXISTS (
                 SELECT 1
                   FROM product_availability pa_any
                  WHERE pa_any.company_id=p.company_id
@@ -914,8 +914,10 @@ export default function createSalesRouter({
                    AND pa.product_id=p.id
                    AND pa.active=TRUE
                    AND (pa.store_id IS NULL OR pa.store_id=$3)
-                   AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$4)
-                   AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$5)
+                   AND (
+                     pa.scope_object_id IS NULL
+                     OR (pa.scope_object_id=$4 AND pa.scope_record_id=$5)
+                   )
                    AND pa.channel IN ($6,'all')
               )
             )
