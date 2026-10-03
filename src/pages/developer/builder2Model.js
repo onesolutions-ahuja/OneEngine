@@ -102,6 +102,8 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='GET_RECORDS' && n.config?.conditionLogic==='formula' && !String(n.config?.formula||'').trim()) add('error','FORMULA_REQUIRED',`${n.label}: Enter a filter formula.`,n.id)
     if (n.type==='GET_RECORDS' && n.config?.sortOrder && n.config.sortOrder!=='none' && !n.config?.sortBy) add('error','SORT_FIELD_REQUIRED',`${n.label}: Select a field to sort by.`,n.id)
     if (n.type==='GET_RECORDS' && n.config?.limit==='limited' && !(Number(n.config?.maxRecords)>=2)) add('error','RECORD_LIMIT_REQUIRED',`${n.label}: Enter a maximum number of records.`,n.id)
+    if (n.type==='GET_RECORDS' && n.config?.store==='choose' && !(n.config?.selectedFields||[]).some(Boolean)) add('error','GET_FIELDS_REQUIRED',`${n.label}: Select at least one field to store.`,n.id)
+    if (n.type==='GET_RECORDS' && n.config?.store==='advanced' && !(n.config?.fieldAssignments||[]).some(x=>x?.field&&x?.resource)) add('error','GET_FIELD_ASSIGNMENT_REQUIRED',`${n.label}: Map at least one field to a variable.`,n.id)
     if (n.type==='CREATE_RECORDS' && (n.config?.valueMode||'manual')==='manual' && !(n.config?.fieldValues||[]).some(x=>x?.field)) add('error','CREATE_FIELD_REQUIRED',`${n.label}: Add at least one field value.`,n.id)
     if (n.type==='UPDATE_RECORDS' && (n.config?.updateMode||'conditions')==='conditions' && !(n.config?.fieldValues||[]).some(x=>x?.field)) add('error','UPDATE_FIELD_REQUIRED',`${n.label}: Add at least one field value to update.`,n.id)
     if (n.type==='UPDATE_RECORDS' && n.config?.updateMode==='record' && !n.config?.sourceRecord) add('error','UPDATE_RECORD_REQUIRED',`${n.label}: Select a record or record collection.`,n.id)
