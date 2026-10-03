@@ -44,7 +44,7 @@ import {
 } from "./oneAssistant.js";
 
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "SEND_APPOINTMENT_MESSAGE", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
 
@@ -1387,6 +1387,305 @@ async function executeProviderSpecificEmail({
   };
 }
 
+
+function appointmentConversationContext(action,{record,object,workflowVariables}={}) {
+  const rootObjectKey=object?.object_key||object?.objectKey||null;
+  return resolveBindingTree(action||{},{record:record||{},rootObjectKey,variables:workflowVariables||{}});
+}
+
+function appointmentPhoneDigits(value){
+  return String(value||"").replace(/[^0-9]/g,"");
+}
+
+function appointmentFormatDate(value){
+  const d=new Date(value);
+  if(Number.isNaN(d.getTime())) return "";
+  return \`${String(d.getUTCDate()).padStart(2,"0")}/${String(d.getUTCMonth()+1).padStart(2,"0")}/${d.getUTCFullYear()}\`;
+}
+
+function appointmentFormatTime(value){
+  const d=new Date(value);
+  if(Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"});
+}
+
+function appointmentDateOptions(now=new Date()){
+  const today=new Date(now); today.setUTCHours(0,0,0,0);
+  const tomorrow=new Date(today.getTime()+86400000);
+  const nextDay=new Date(today.getTime()+2*86400000);
+  return [tomorrow,nextDay];
+}
+
+function appointmentParseDateInput(value,dateOptions=[]){
+  const input=String(value||"").trim();
+  if(input==="1"||input==="2"){
+    const selected=new Date(dateOptions[Number(input)-1]);
+    return Number.isNaN(selected.getTime())?null:selected;
+  }
+  const match=input.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(!match) return null;
+  const selected=new Date(Date.UTC(Number(match[3]),Number(match[2])-1,Number(match[1])));
+  return selected.getUTCFullYear()===Number(match[3])
+    && selected.getUTCMonth()===Number(match[2])-1
+    && selected.getUTCDate()===Number(match[1]) ? selected : null;
+}
+
+async function appointmentOpenCase(db,{companyId,channel,sender}){
+  const digits=appointmentPhoneDigits(sender);
+  if(!companyId||!channel||!digits) return null;
+  const result=await db(
+    \`SELECT * FROM appointment_booking_cases
+       WHERE company_id=$1
+         AND channel=$2
+         AND regexp_replace(COALESCE(sender,''),'[^0-9]','','g')=$3
+         AND status IN ('NEW','SLOT_SELECTED','AWAITING_PAYMENT')
+       ORDER BY created_at DESC,id DESC
+       LIMIT 1\`,
+    [companyId,String(channel).toUpperCase(),digits]
+  );
+  return result.rows[0]||null;
+}
+
+async function prepareAppointmentSession({action,db,pool,companyId,req,record,object,workflowVariables}){
+  const tenantId=companyId||req?.user?.companyId;
+  const bound=appointmentConversationContext(action,{record,object,workflowVariables});
+  const channel=String(bound.channel||record?.channel||"").toUpperCase();
+  const sender=String(bound.sender||record?.sender||record?.from||"").trim();
+  const recipient=String(bound.recipient||record?.recipient||record?.to||"").trim()||null;
+  const body=String(bound.body||record?.body||record?.message||record?.text||"").trim();
+  const sourceMessageId=bound.sourceMessageId||record?.providerMessageId||record?.provider_message_id||record?.communicationEventId||record?.id||null;
+  const conversationId=String(bound.conversationId||record?.metadata?.conversationId||record?.conversationId||"");
+  const customerId=bound.customerId||record?.metadata?.customerId||record?.customerId||record?.customer_id||null;
+  if(!tenantId||!sender||!["SMS","WHATSAPP"].includes(channel)){
+    return {status:"skipped",route:"IGNORED",handled:false,channel:channel||null,sender:sender||null};
+  }
+
+  const isStart=body.toUpperCase()==="APPOINTMENT";
+  if(!isStart){
+    const existing=await appointmentOpenCase(db,{companyId:tenantId,channel,sender});
+    if(!existing) return {status:"skipped",route:"IGNORED",handled:false,channel,sender};
+    const step=String(existing.state?.step||"").toUpperCase();
+    const route=["AWAITING_DATE","AWAITING_SLOT","AWAITING_PAYMENT"].includes(step)?step:"IGNORED";
+    return {status:route==="IGNORED"?"skipped":"completed",route,handled:route!=="IGNORED",channel,sender,bookingCaseId:existing.id,bookingCase:existing};
+  }
+
+  if(!pool?.connect) throw new Error("Appointment session restart requires a database transaction");
+  const client=await pool.connect();
+  try{
+    await client.query("BEGIN");
+    const digits=appointmentPhoneDigits(sender);
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",[\`${tenantId}:${digits}:appointment-session\`]);
+
+    if(sourceMessageId){
+      const replay=await client.query(
+        \`SELECT * FROM appointment_booking_cases
+           WHERE company_id=$1 AND channel=$2 AND source_message_id=$3
+           LIMIT 1\`,
+        [tenantId,channel,sourceMessageId]
+      );
+      if(replay.rows[0]){
+        const existing=replay.rows[0];
+        const dates=Array.isArray(existing.state?.dateOptions)&&existing.state.dateOptions.length>=2
+          ? existing.state.dateOptions.map((value)=>new Date(value))
+          : appointmentDateOptions();
+        await client.query("COMMIT");
+        return {
+          status:"completed",route:"STARTED",handled:true,channel,sender,
+          bookingCaseId:existing.id,bookingCase:existing,replayed:true,
+          date1:appointmentFormatDate(dates[0]),date2:appointmentFormatDate(dates[1]),
+        };
+      }
+    }
+
+    const openCases=await client.query(
+      \`SELECT * FROM appointment_booking_cases
+         WHERE company_id=$1
+           AND regexp_replace(COALESCE(sender,''),'[^0-9]','','g')=$2
+           AND status IN ('NEW','LINK_SENT','SLOT_SELECTED','AWAITING_PAYMENT')
+         ORDER BY created_at,id
+         FOR UPDATE\`,
+      [tenantId,digits]
+    );
+    for(const existing of openCases.rows||[]){
+      if(existing.hold_id){
+        await releaseAppointmentHold(client.query.bind(client),{
+          companyId:tenantId,holdId:existing.hold_id,reason:"Appointment session restarted by customer",
+        });
+      }
+    }
+    if(openCases.rows?.length){
+      await client.query(
+        \`UPDATE appointment_booking_cases
+            SET status='CANCELLED',
+                state=COALESCE(state,'{}'::jsonb)||$3::jsonb,
+                updated_at=NOW()
+          WHERE company_id=$1 AND id=ANY($2::uuid[])\`,
+        [tenantId,openCases.rows.map((row)=>row.id),JSON.stringify({closedReason:"RESTARTED",closedAt:new Date().toISOString()})]
+      );
+    }
+
+    const dates=appointmentDateOptions();
+    const bookingCase=await createAppointmentBookingCase(client.query.bind(client),{
+      companyId:tenantId,channel,sourceMessageId,sender,recipient,body,customerId,
+      state:{
+        conversationId,
+        step:"AWAITING_DATE",
+        dateOptions:dates.map((date)=>date.toISOString()),
+        startedByKeyword:"APPOINTMENT",
+      },
+    });
+    await client.query("COMMIT");
+    return {
+      status:"completed",route:"STARTED",handled:true,channel,sender,
+      bookingCaseId:bookingCase.id,bookingCase,restartedCount:openCases.rows?.length||0,
+      date1:appointmentFormatDate(dates[0]),date2:appointmentFormatDate(dates[1]),
+    };
+  }catch(error){
+    try{await client.query("ROLLBACK");}catch{}
+    throw error;
+  }finally{
+    client.release();
+  }
+}
+
+async function processAppointmentDateResponse({action,db,companyId,req,record,object,workflowVariables}){
+  const tenantId=companyId||req?.user?.companyId;
+  const bound=appointmentConversationContext(action,{record,object,workflowVariables});
+  const bookingCaseId=bound.bookingCaseId;
+  const body=String(bound.body||record?.body||record?.message||record?.text||"").trim();
+  if(!tenantId||!bookingCaseId) return {status:"skipped",result:"IGNORED"};
+  const caseResult=await db(
+    "SELECT * FROM appointment_booking_cases WHERE id=$1 AND company_id=$2 LIMIT 1",
+    [bookingCaseId,tenantId]
+  );
+  const bookingCase=caseResult.rows[0];
+  if(!bookingCase||String(bookingCase.state?.step||"").toUpperCase()!=="AWAITING_DATE"){
+    return {status:"skipped",result:"IGNORED",bookingCaseId};
+  }
+  const selectedDate=appointmentParseDateInput(body,bookingCase.state?.dateOptions||[]);
+  const today=new Date(); today.setUTCHours(0,0,0,0);
+  if(!selectedDate||selectedDate<today){
+    return {status:"completed",result:"INVALID_DATE",bookingCaseId,channel:bookingCase.channel,sender:bookingCase.sender};
+  }
+  const serviceResult=await db(
+    "SELECT id FROM appointment_services WHERE company_id=$1 AND active=true ORDER BY created_at,id LIMIT 1",
+    [tenantId]
+  );
+  const serviceId=serviceResult.rows[0]?.id;
+  if(!serviceId){
+    return {status:"completed",result:"NO_SERVICE",bookingCaseId,channel:bookingCase.channel,sender:bookingCase.sender};
+  }
+  const from=new Date(selectedDate); from.setUTCHours(0,0,0,0);
+  const to=new Date(from.getTime()+86400000);
+  const slots=await findAvailableAppointmentSlots(db,{
+    companyId:tenantId,serviceId,from:from.toISOString(),to:to.toISOString(),limit:5,
+  });
+  const selectedDateLabel=appointmentFormatDate(selectedDate);
+  if(!slots.length){
+    return {status:"completed",result:"NO_SLOTS",bookingCaseId,channel:bookingCase.channel,sender:bookingCase.sender,selectedDate:selectedDateLabel};
+  }
+  await db(
+    "UPDATE appointment_booking_cases SET service_id=$3,state=COALESCE(state,'{}'::jsonb)||$4::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+    [bookingCase.id,tenantId,serviceId,JSON.stringify({step:"AWAITING_SLOT",selectedDate:from.toISOString(),slots})]
+  );
+  return {
+    status:"completed",result:"SLOTS_READY",bookingCaseId,channel:bookingCase.channel,sender:bookingCase.sender,
+    selectedDate:selectedDateLabel,slotChoices:slots.map((slot,index)=>\`${index+1}. ${appointmentFormatTime(slot.startsAt)}\`).join("\n"),
+    slotCount:slots.length,
+  };
+}
+
+async function processAppointmentSlotResponse({action,db,pool,companyId,req,record,object,workflowVariables}){
+  const tenantId=companyId||req?.user?.companyId;
+  const bound=appointmentConversationContext(action,{record,object,workflowVariables});
+  const bookingCaseId=bound.bookingCaseId;
+  const body=String(bound.body||record?.body||record?.message||record?.text||"").trim();
+  if(!tenantId||!bookingCaseId) return {status:"skipped",result:"IGNORED"};
+  const caseResult=await db(
+    "SELECT * FROM appointment_booking_cases WHERE id=$1 AND company_id=$2 LIMIT 1",
+    [bookingCaseId,tenantId]
+  );
+  const bookingCase=caseResult.rows[0];
+  if(!bookingCase||String(bookingCase.state?.step||"").toUpperCase()!=="AWAITING_SLOT"){
+    return {status:"skipped",result:"IGNORED",bookingCaseId};
+  }
+  const slots=Array.isArray(bookingCase.state?.slots)?bookingCase.state.slots:[];
+  const choice=Number(body);
+  if(!Number.isInteger(choice)||choice<1||choice>slots.length){
+    return {status:"completed",result:"INVALID_SLOT",bookingCaseId,channel:bookingCase.channel,sender:bookingCase.sender,slotCount:slots.length};
+  }
+  if(!pool?.connect) throw new Error("Appointment slot confirmation requires a database transaction");
+  const slot=slots[choice-1];
+  const client=await pool.connect();
+  try{
+    await client.query("BEGIN");
+    const hold=await holdAppointmentSlot(client,{
+      companyId:tenantId,storeId:slot.storeId||null,serviceId:slot.serviceId,resourceId:slot.resourceId,
+      customerId:bookingCase.customer_id||null,conversationId:bookingCase.state?.conversationId||null,
+      startsAt:slot.startsAt,endsAt:slot.endsAt,
+      idempotencyKey:\`${String(bookingCase.channel||"").toLowerCase()}-booking:${bookingCase.id}:${slot.startsAt}\`,
+      metadata:{bookingCaseId:bookingCase.id},
+    });
+    const appointment=await confirmAppointmentFromHold(client,{
+      companyId:tenantId,holdId:hold.id,customerId:bookingCase.customer_id||null,
+      customerPhone:bookingCase.sender||null,sourceChannel:bookingCase.channel||"WORKFLOW",
+      metadata:{bookingCaseId:bookingCase.id},
+    });
+    await client.query(
+      "UPDATE appointment_booking_cases SET hold_id=$3,appointment_id=$4,status='CONFIRMED',state=COALESCE(state,'{}'::jsonb)||$5::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+      [bookingCase.id,tenantId,hold.id,appointment.id,JSON.stringify({step:"CONFIRMED",selectedSlot:slot})]
+    );
+    await client.query("COMMIT");
+    return {
+      status:"completed",result:"CONFIRMED",bookingCaseId,appointmentId:appointment.id,
+      channel:bookingCase.channel,sender:bookingCase.sender,
+      appointmentDate:appointmentFormatDate(slot.startsAt),appointmentTime:appointmentFormatTime(slot.startsAt),
+    };
+  }catch(error){
+    try{await client.query("ROLLBACK");}catch{}
+    if(["SLOT_UNAVAILABLE","HOLD_EXPIRED"].includes(error?.code)){
+      const dates=appointmentDateOptions();
+      await db(
+        "UPDATE appointment_booking_cases SET state=COALESCE(state,'{}'::jsonb)||$3::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+        [bookingCase.id,tenantId,JSON.stringify({step:"AWAITING_DATE",dateOptions:dates.map((date)=>date.toISOString()),slots:[]})]
+      );
+      return {
+        status:"completed",result:"SLOT_UNAVAILABLE",bookingCaseId,channel:bookingCase.channel,sender:bookingCase.sender,
+        date1:appointmentFormatDate(dates[0]),date2:appointmentFormatDate(dates[1]),
+      };
+    }
+    throw error;
+  }finally{
+    client.release();
+  }
+}
+
+async function sendAppointmentWorkflowMessage({action,db,companyId,req,record,object,workflowVariables}){
+  const tenantId=companyId||req?.user?.companyId;
+  const bound=appointmentConversationContext(action,{record,object,workflowVariables});
+  const channel=String(bound.channel||record?.channel||"").toUpperCase();
+  if(!["SMS","WHATSAPP"].includes(channel)) return {status:"skipped",reason:"Unsupported appointment messaging channel"};
+  const recipient=String(bound.recipient||record?.sender||record?.from||"").trim();
+  if(!recipient) return {status:"failed",error:"Appointment response recipient is missing"};
+  const template=String(action?.message||action?.body||action?.text||"").trim();
+  if(!template) return {status:"failed",error:"Appointment response message is not configured"};
+  const templateContext=appointmentConversationContext(action?.templateContext||{},{record,object,workflowVariables});
+  let message;
+  try{
+    message=renderMessageTemplate(template,templateContext);
+  }catch(error){
+    return {status:"failed",error:error?.message||"Appointment response template is invalid"};
+  }
+  const type=channel==="SMS"?"SEND_SMS":"SEND_WHATSAPP";
+  const result=await executeRegisteredAction({
+    db,companyId:tenantId,userId:req?.user?.id||null,req,
+    action:{type,recipient,message,conversationId:bound.conversationId||record?.metadata?.conversationId||null,recordId:bound.recordId||record?.id||null},
+  });
+  if(result?.status==="SUCCESS") return {status:"completed",channel,recipient,reference:result.reference||null,message};
+  if(result?.status==="UNAVAILABLE") return {status:"failed",channel,recipient,error:result.code||"PROVIDER_UNAVAILABLE"};
+  return {status:"failed",channel,recipient,error:result?.code||result?.error?.message||"Appointment response delivery failed"};
+}
+
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,
   {
@@ -1472,6 +1771,83 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if(result?.status==="UNAVAILABLE") return {status:"failed",channel,recipient,error:result.code||"PROVIDER_UNAVAILABLE"};
       return {status:"failed",channel,recipient,error:result?.code||result?.error?.message||"Confirmation delivery failed"};
     },
+  },
+  {
+    key: "APPOINTMENT_SESSION_CONTEXT",
+    displayName: "Appointments - Session Context",
+    description: "Start or resume the appointment conversation. Sending APPOINTMENT closes any previous open session for the same phone number and creates a fresh booking case.",
+    schema: {
+      type: "object",
+      properties: {
+        channel: { type: "string" },
+        sender: { type: "string" },
+        recipient: { type: "string" },
+        body: { type: "string" },
+        sourceMessageId: { type: "string" },
+        conversationId: { type: "string" },
+        customerId: { type: "string" },
+      },
+    },
+    validation: () => undefined,
+    async: false,
+    requiredPermissions: ["appointments.manage"],
+    executor: prepareAppointmentSession,
+  },
+  {
+    key: "PROCESS_APPOINTMENT_DATE_RESPONSE",
+    displayName: "Appointments - Process Date Response",
+    description: "Validate 1, 2, or DD/MM/YYYY and load up to five live available appointment slots.",
+    schema: {
+      type: "object",
+      properties: {
+        bookingCaseId: { type: "string" },
+        body: { type: "string" },
+      },
+    },
+    validation: (action) => { if (!action?.bookingCaseId) throw new Error("Process Appointment Date Response requires bookingCaseId"); },
+    async: false,
+    requiredPermissions: ["appointments.manage","appointments.view"],
+    executor: processAppointmentDateResponse,
+  },
+  {
+    key: "PROCESS_APPOINTMENT_SLOT_RESPONSE",
+    displayName: "Appointments - Process Slot Response",
+    description: "Validate a numbered slot choice, re-check availability, hold it atomically and confirm the appointment.",
+    schema: {
+      type: "object",
+      properties: {
+        bookingCaseId: { type: "string" },
+        body: { type: "string" },
+      },
+    },
+    validation: (action) => { if (!action?.bookingCaseId) throw new Error("Process Appointment Slot Response requires bookingCaseId"); },
+    async: false,
+    requiredPermissions: ["appointments.manage"],
+    executor: processAppointmentSlotResponse,
+  },
+  {
+    key: "SEND_APPOINTMENT_MESSAGE",
+    displayName: "Appointments - Send Response",
+    description: "Send an editable appointment workflow response through SMS or WhatsApp.",
+    schema: {
+      type: "object",
+      properties: {
+        channel: { type: "string", enum: ["SMS","WHATSAPP"] },
+        recipient: { type: "string" },
+        message: { type: "string" },
+        templateContext: { type: "object" },
+        conversationId: { type: "string" },
+      },
+      required: ["channel","recipient","message"],
+    },
+    validation: (action) => {
+      if (!action?.channel) throw new Error("Send Appointment Response requires channel");
+      if (!action?.recipient) throw new Error("Send Appointment Response requires recipient");
+      if (!String(action?.message||"").trim()) throw new Error("Send Appointment Response requires message");
+    },
+    async: false,
+    requiredPermissions: ["communications.send"],
+    executor: sendAppointmentWorkflowMessage,
   },
   {
     key: "PROCESS_APPOINTMENT_CONVERSATION",
@@ -3813,11 +4189,25 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, fields, record, previousRecord, req, object, workflowVariables = {} }) => {
       const conditionContext = { record, previousRecord, req, object, workflowVariables };
+      // Decisions may branch on previous workflow step outputs as well as the
+      // trigger record. Exposing steps/variables in this evaluation snapshot
+      // keeps routing metadata-driven instead of forcing business state into
+      // hard-coded actions.
+      const evaluationRecord = {
+        ...(record || {}),
+        steps: workflowVariables?.steps || {},
+        variables: workflowVariables?.variables || {},
+      };
+      const evaluationPreviousRecord = {
+        ...(previousRecord || {}),
+        steps: workflowVariables?.steps || {},
+        variables: workflowVariables?.variables || {},
+      };
       const outcomes = Array.isArray(action?.outcomes) ? action.outcomes : [];
       if (outcomes.length) {
         for (let index = 0; index < outcomes.length; index += 1) {
           const outcome = outcomes[index];
-          const matched = evaluateCondition(resolveWorkflowConditionConfig(outcome.condition, conditionContext), fields || [], record || {}, previousRecord || null);
+          const matched = evaluateCondition(resolveWorkflowConditionConfig(outcome.condition, conditionContext), fields || [], evaluationRecord, evaluationPreviousRecord);
           if (matched) {
             return {
               status: "completed",
@@ -3830,7 +4220,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         return { status: "completed", matched: false, outcomeId: null, outcomeLabel: String(action.defaultLabel || "Default Outcome"), outcomeIndex: -1 };
       }
-      const result = evaluateCondition(resolveWorkflowConditionConfig(action.condition, conditionContext), fields || [], record || {}, previousRecord || null);
+      const result = evaluateCondition(resolveWorkflowConditionConfig(action.condition, conditionContext), fields || [], evaluationRecord, evaluationPreviousRecord);
       return { status: result ? "completed" : "skipped", matched: Boolean(result), legacyBinary: true };
     },
   },
