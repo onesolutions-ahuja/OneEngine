@@ -120,3 +120,5 @@ if '0045_remove_unused_appointment_action_wrappers' not in init:
     init=init[:at]+migration+init[at:]
     init_path.write_text(init)
 print("cleanup applied")
+
+# rerun after gate trigger update
