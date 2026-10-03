@@ -290,6 +290,71 @@ export async function seedOneSolutionsDemo(pool) {
       }
     }
 
+    // Communication Core demo coverage: every transport uses the single
+    // platform_communication_events object/table. Channel-specific objects are
+    // deliberately not seeded; workflows branch on channel/direction/provider.
+    const communicationSeeds = [
+      {
+        channel: 'WHATSAPP',
+        eventType: 'communication.message_received',
+        direction: 'INBOUND',
+        provider: 'whatsapp',
+        sender: '07700900002',
+        recipient: 'OneSolutions Demo',
+        seedKey: 'demo-communication-whatsapp-inbound',
+        division: 'beauty_barber',
+      },
+      {
+        channel: 'SMS',
+        eventType: 'communication.message_received',
+        direction: 'INBOUND',
+        provider: 'smsgate',
+        sender: '07700900002',
+        recipient: 'OneSolutions Demo',
+        seedKey: 'demo-communication-sms-inbound',
+        division: 'beauty_barber',
+      },
+      {
+        channel: 'EMAIL',
+        eventType: 'communication.message_received',
+        direction: 'INBOUND',
+        provider: 'email',
+        sender: 'jamie.demo@example.com',
+        recipient: 'bookings@onesolutions.demo',
+        seedKey: 'demo-communication-email-inbound',
+        division: 'beauty_barber',
+      },
+    ];
+    for (const event of communicationSeeds) {
+      await client.query(
+        `INSERT INTO platform_communication_events
+           (company_id,channel,event_type,direction,provider,sender,recipient,metadata,created_at)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8::jsonb,NOW()
+         WHERE NOT EXISTS (
+           SELECT 1
+             FROM platform_communication_events
+            WHERE company_id=$1
+              AND metadata->>'seedKey'=$9
+         )`,
+        [
+          company.id,
+          event.channel,
+          event.eventType,
+          event.direction,
+          event.provider,
+          event.sender,
+          event.recipient,
+          JSON.stringify({
+            demo: true,
+            seedKey: event.seedKey,
+            division: event.division,
+            communicationCore: true,
+          }),
+          event.seedKey,
+        ]
+      );
+    }
+
     await client.query("COMMIT");
     console.log("onePOS: canonical OneSolutions demo seed ready", { companyId: company.id, storeId: store.id });
     return { companyId: company.id, storeId: store.id, terminalId: terminal.id };
