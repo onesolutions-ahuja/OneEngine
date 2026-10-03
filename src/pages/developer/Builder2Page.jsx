@@ -26,14 +26,24 @@ const SCREEN_COMPONENTS = [
   ['DISPLAY_TEXT','Display Text','Display','Show formatted text on the screen.'],
   ['TEXT','Text','Input','Collect a single line of text.'],
   ['TEXTAREA','Long Text Area','Input','Collect multiple lines of text.'],
+  ['EMAIL','Email','Input','Collect and validate an email address.'],
+  ['PHONE','Phone','Input','Collect a phone number.'],
   ['NUMBER','Number','Input','Collect a numeric value.'],
   ['CURRENCY','Currency','Input','Collect a currency value.'],
   ['DATE','Date','Input','Collect a date.'],
+  ['TIME','Time','Input','Collect a time.'],
   ['DATETIME','Date & Time','Input','Collect a date and time.'],
   ['CHECKBOX','Checkbox','Input','Collect a true or false value.'],
+  ['TOGGLE','Toggle','Input','Collect a true or false value with a toggle.'],
+  ['SLIDER','Slider','Input','Collect a value within a numeric range.'],
+  ['ADDRESS','Address','Input','Collect a structured postal address.'],
   ['RADIO','Radio Buttons','Choice','Select one choice.'],
   ['SELECT','Picklist','Choice','Select one choice from a list.'],
   ['MULTISELECT','Multi-Select Picklist','Choice','Select multiple choices.'],
+  ['RECORD_PICKER','Record Picker','Data','Search for and select a record.'],
+  ['DATA_TABLE','Data Table','Data','Display and select rows from a record collection.'],
+  ['FILE_UPLOAD','File Upload','Data','Upload one or more files.'],
+  ['ACTION_BUTTON','Action Button','Action','Run a configured flow action from the screen.'],
   ['SECTION','Section','Layout','Arrange components into columns.'],
 ]
 const TYPES = RESOURCE_TYPES
@@ -227,7 +237,7 @@ function ScreenEditor({node,onPatch,onClose}) {
   return <div className="b2-screen-editor">
     <header className="b2-screen-top"><div><button onClick={onClose}><ChevronLeft size={16}/></button><span><b>{node.label}</b><small>Screen</small></span></div><div><button className={side==='properties'?'is-active':''} onClick={()=>setSide('properties')}>Properties</button><button className={side==='style'?'is-active':''} onClick={()=>setSide('style')}>Style</button><button className="is-primary" onClick={onClose}>Done</button></div></header>
     <div className="b2-screen-grid">
-      <aside className="b2-screen-palette"><label className="b2-search"><Search size={14}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search components…"/></label>{['Input','Choice','Display','Layout'].map(group=><section key={group}><h4>{group}</h4>{palette.filter(x=>x[2]===group).map(x=><button key={x[0]} onClick={()=>add(x)}><span>{x[2]==='Layout'?<LayoutGrid size={14}/>:x[2]==='Display'?<Type size={14}/>:<Monitor size={14}/>}</span><span><b>{x[1]}</b><small>{x[3]}</small></span></button>)}</section>)}</aside>
+      <aside className="b2-screen-palette"><label className="b2-search"><Search size={14}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search components…"/></label>{['Input','Choice','Display','Data','Action','Layout'].map(group=><section key={group}><h4>{group}</h4>{palette.filter(x=>x[2]===group).map(x=><button key={x[0]} onClick={()=>add(x)}><span>{x[2]==='Layout'?<LayoutGrid size={14}/>:x[2]==='Display'?<Type size={14}/>:<Monitor size={14}/>}</span><span><b>{x[1]}</b><small>{x[3]}</small></span></button>)}</section>)}</aside>
       <main className="b2-screen-preview"><div className="b2-screen-device">
         {config.showHeader===false?<button className={selected===''?'b2-screen-header is-selected':'b2-screen-header'} onClick={()=>setSelected('')}><span>Header hidden</span></button>:<button className={selected===''?'b2-screen-header is-selected':'b2-screen-header'} onClick={()=>setSelected('')}><b>{config.screenTitle||node.label}</b><span>Screen header</span></button>}
         <div className="b2-screen-canvas">{!components.length?<div className="b2-screen-empty"><Monitor size={32}/><b>Build the screen</b><span>Add components from the palette.</span></div>:components.map(item=><button key={item.id} className={`b2-screen-component ${selected===item.id?'is-selected':''}`} style={{width:`${Math.max(1,Math.min(12,item.width||12))/12*100}%`}} onClick={()=>setSelected(item.id)}>
