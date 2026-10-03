@@ -3276,7 +3276,7 @@
     display: flex;
     align-items: flex-end;
     gap: var(--dock-icon-gap);
-    padding-left: 16px;
+    padding-left: 8px;
     padding-right: 8px;
     box-sizing: border-box;
     overflow: visible;
@@ -3597,8 +3597,7 @@
     padding-bottom: 4px !important;
   }
   .dock-desktop-items .dock-icon-wrap {
-    transform: none;
-    align-items: center;
+    transform: translateY(-1px);
   }
   .dock-fixed-zone .dock-separator {
     height: 46px !important;
@@ -3607,8 +3606,7 @@
 }
 @media (max-width: 900px) {
   .dock-mobile-item .dock-icon-wrap {
-    transform: none;
-    align-items: center;
+    transform: translateY(-1px);
   }
   .dock-fixed-zone .dock-separator {
     height: calc(100% - 4px) !important;
@@ -3741,100 +3739,7 @@
 .efb-dock-fixed-zone,.efb-dock-fixed-zone *{transition-property:none!important}
 .efb-dock-fixed-item{width:40px;height:40px;flex:0 0 40px;padding:0;border:0;background:transparent;display:block;cursor:pointer;transform:none!important}
 .efb-dock-jarvis{position:relative;width:70px;height:40px;flex:0 0 70px;display:flex;align-items:flex-end;justify-content:center;overflow:visible;transform:none!important}
-.efb-dock-jarvis .jarvis-orb-host{position:absolute;left:calc(50% + 20px)!important;bottom:-10px;transform:translateX(-50%) scale(.864)!important;transform-origin:bottom center}
+.efb-dock-jarvis .jarvis-orb-host{position:absolute;left:calc(50% + 8px)!important;bottom:-10px;transform:translateX(-50%) scale(.864)!important;transform-origin:bottom center}
 .efb-dock-jarvis .jarvis-orb-container{pointer-events:auto}
 .efb-dock-jarvis .jarvis-orb-container::before{background:rgba(54,58,66,.62)!important;border-color:rgba(255,255,255,.26)!important;box-shadow:0 8px 20px rgba(18,24,36,.22),inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(0,0,0,.10)!important;border-radius:50%!important}
 @media(max-width:680px){.efb-dock-zone{display:none}}
-
-
-/* 2026-10-03 live reference dock corrections. */
-@media (min-width: 681px) {
-  .efb-dock { padding-left: 16px; padding-right: 16px; }
-  .efb-dock-magnify-zone { align-items: center; }
-  .efb-dock-item { display:flex; align-items:center; justify-content:center; }
-  .efb-dock-icon-wrap { height:40px; align-items:center; }
-  .efb-dock-image { width:40px; height:40px; object-fit:contain; }
-}
-
-/* 2026-10-03 dock correction: true optical centring and equal app-tile geometry. */
-@media (min-width: 901px) {
-  .dock-desktop-items { align-items: center; }
-  .dock-desktop-items .dock-item { height: var(--dock-icon-size); }
-  .dock-desktop-items .dock-icon-wrap { height: var(--dock-icon-size); justify-content: center; }
-  .dock-desktop-items .dock-image--app { width: var(--dock-icon-size); height: var(--dock-icon-size); object-fit: contain; }
-}
-
-@media (max-width: 900px) {
-  .dock-mobile-items { justify-content: space-around; overflow-x: hidden; }
-  .dock-mobile-item { flex: 1 1 0; width: auto; min-width: 0; }
-}
-
-/* 2026-10-03 active efb dock corrections (this is the dock rendered by App.jsx). */
-@media (min-width: 681px) {
-  .efb-dock {
-    height: 60px;
-    min-height: 60px;
-    padding: 10px 16px;
-    margin-bottom: 8px;
-    box-sizing: border-box;
-    align-items: center;
-  }
-  .efb-dock-magnify-zone {
-    height: 40px;
-    align-items: center;
-  }
-  .efb-dock-item {
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .efb-dock-icon-wrap {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .efb-dock-image {
-    width: 40px;
-    height: 40px;
-    object-fit: contain;
-  }
-  .efb-dock-image--scaled { transform: none; }
-  .efb-dock-fixed-zone { height: 40px; align-items: center; }
-  .efb-dock-fixed-item { width: 40px; height: 40px; }
-  .efb-dock-separator { align-self: center; }
-}
-
-/* 2026-10-03 requested active dock sizing: +30% icons, mathematically centred. */
-@media (min-width: 681px) {
-  .efb-dock {
-    --efb-icon-size: 52px;
-    height: 72px;
-    min-height: 72px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    align-items: center;
-  }
-  .efb-dock-magnify-zone {
-    height: var(--efb-icon-size);
-    align-items: center;
-  }
-  .efb-dock-item {
-    height: var(--efb-icon-size);
-    min-width: var(--efb-icon-size);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .efb-dock-icon-wrap,
-  .efb-dock-image {
-    width: var(--efb-icon-size);
-    height: var(--efb-icon-size);
-  }
-  .efb-dock-icon-wrap { align-items: center; justify-content: center; }
-  .efb-dock-fixed-zone { height: var(--efb-icon-size); align-items: center; }
-  .efb-dock-fixed-item { width: var(--efb-icon-size); height: var(--efb-icon-size); }
-  .efb-dock-separator { align-self: center; }
-}
