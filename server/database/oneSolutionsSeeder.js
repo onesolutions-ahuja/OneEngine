@@ -283,8 +283,8 @@ export async function seedOneSolutionsDemo(pool) {
       {d:'cleaning_services',c:'Cleaning Services',n:'Deep Clean Service',sku:'DEMO-CLN-002',barcode:'5010000000302',p:140,cost:0,stock:0,track:false,img:'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?auto=format&fit=crop&w=800&q=80'},
       {d:'electronics',c:'Electronics',n:'Wireless Headphones',sku:'DEMO-ELC-001',barcode:'5010000000401',p:59.99,cost:28,stock:18,img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80'},
       {d:'electronics',c:'Electronics',n:'USB-C Charger',sku:'DEMO-ELC-002',barcode:'5010000000402',p:24.99,cost:8.50,stock:35,img:'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&w=800&q=80'},
-      {d:'retail',divisions:['retail','restaurant_qsr'],prices:{retail:1.49,restaurant_qsr:2.95},c:'Drinks',n:'Coca-Cola 330ml',sku:'DEMO-SHARED-001',barcode:'5010000000501',p:1.49,cost:.55,stock:48,img:null,matchLike:'%coca%cola%'},
-      {d:'retail',divisions:['retail','restaurant_qsr'],prices:{retail:2.49,restaurant_qsr:4.95},c:'Drinks',n:'Hoegaarden 330ml',sku:'DEMO-SHARED-002',barcode:'5010000000502',p:2.49,cost:1.10,stock:24,age:true,img:null,matchLike:'%hoeg%'},
+      {d:'retail',divisions:['retail','restaurant_qsr'],prices:{retail:1.49,restaurant_qsr:2.95},c:'Drinks',n:'Cola 330ml',sku:'DEMO-SHARED-001',barcode:'5010000000501',p:1.49,cost:.55,stock:48,img:null,matchLike:'%coca%cola%'},
+      {d:'retail',divisions:['retail','restaurant_qsr'],prices:{retail:2.49,restaurant_qsr:4.95},c:'Drinks',n:'Wheat Beer 330ml',sku:'DEMO-SHARED-002',barcode:'5010000000502',p:2.49,cost:1.10,stock:24,age:true,img:null,matchLike:'%hoeg%'},
     ];
     for(const p of products){
       let row=null;
