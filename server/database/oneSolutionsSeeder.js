@@ -301,6 +301,7 @@ export async function seedOneSolutionsDemo(pool) {
         provider: 'whatsapp',
         sender: '07700900002',
         recipient: 'OneSolutions Demo',
+        body: 'Appointment',
         seedKey: 'demo-communication-whatsapp-inbound',
         division: 'beauty_barber',
       },
@@ -311,6 +312,7 @@ export async function seedOneSolutionsDemo(pool) {
         provider: 'smsgate',
         sender: '07700900002',
         recipient: 'OneSolutions Demo',
+        body: 'Need help booking an appointment',
         seedKey: 'demo-communication-sms-inbound',
         division: 'beauty_barber',
       },
@@ -321,6 +323,7 @@ export async function seedOneSolutionsDemo(pool) {
         provider: 'email',
         sender: 'jamie.demo@example.com',
         recipient: 'bookings@onesolutions.demo',
+        body: 'Please book an appointment for me',
         seedKey: 'demo-communication-email-inbound',
         division: 'beauty_barber',
       },
@@ -328,13 +331,13 @@ export async function seedOneSolutionsDemo(pool) {
     for (const event of communicationSeeds) {
       await client.query(
         `INSERT INTO platform_communication_events
-           (company_id,channel,event_type,direction,provider,sender,recipient,metadata,created_at)
-         SELECT $1,$2,$3,$4,$5,$6,$7,$8::jsonb,NOW()
+           (company_id,channel,event_type,direction,provider,sender,recipient,body,metadata,created_at)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,NOW()
          WHERE NOT EXISTS (
            SELECT 1
              FROM platform_communication_events
             WHERE company_id=$1
-              AND metadata->>'seedKey'=$9
+              AND metadata->>'seedKey'=$10
          )`,
         [
           company.id,
@@ -344,6 +347,7 @@ export async function seedOneSolutionsDemo(pool) {
           event.provider,
           event.sender,
           event.recipient,
+          event.body,
           JSON.stringify({
             demo: true,
             seedKey: event.seedKey,
