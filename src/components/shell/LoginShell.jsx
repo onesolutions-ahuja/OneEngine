@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeAuthenticationProviderCallback, consumeGoogleOAuthCallback, getPasskeyOptions, getStoredUser, hasSession, loadAuthenticationProviders, login, startAuthenticationProvider, startGoogleLogin, startPasskeyLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPasskeyLogin, verifyPin } from '../../services/api'
-import { useClock } from './DesktopDock'
+import { useClock } from './ShellClock'
 
 function normalizeResetEmail(value) {
   const email = String(value || '').trim().toLowerCase()
