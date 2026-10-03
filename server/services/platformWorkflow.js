@@ -30,7 +30,6 @@ import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAl
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { createGlobalProductLookupService, testGlobalProductProvider } from "./globalProductLookup.js";
 import {
-  findAvailableAppointmentSlots,
   holdAppointmentSlot,
   releaseAppointmentHold,
   confirmAppointmentFromHold,
@@ -1613,25 +1612,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       return {...result,resolvedWorkflowId:resolved.id,resolvedWorkflowName:resolved.name};
     },
   },
-  {
-    key: "FIND_APPOINTMENT_SLOTS",
-    displayName: "Appointments - Find Available Slots",
-    description: "Find available OneAssistant appointment slots for a service and optional resource.",
-    validation: (action) => { if (!action?.serviceId) throw new Error("Find Appointment Slots requires serviceId"); },
-    async: false,
-    requiredPermissions: ["appointments.view"],
-    executor: async ({ action, db, companyId, req }) => ({
-      status: "completed",
-      slots: await findAvailableAppointmentSlots(db, {
-        companyId: companyId || req?.user?.companyId,
-        serviceId: action.serviceId,
-        resourceId: action.resourceId || null,
-        from: action.from || new Date().toISOString(),
-        to: action.to || new Date(Date.now() + 14 * 86400000).toISOString(),
-        limit: action.limit || 4,
-      }),
-    }),
-  },  {
+ {
     key: "COMPLETE_APPOINTMENT_PAYMENT",
     displayName: "Appointments - Complete Payment",
     description: "Standard payment-subflow callback: mark the payment request successful, confirm the held appointment, and emit appointment.confirmed.",
@@ -2323,6 +2304,103 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "TIME_WINDOW_EXPAND",
+    displayName: "Time Window Expand",
+    description: "Expand generic daily time windows into fixed-duration datetime intervals.",
+    validation: (action) => {
+      if (!action?.collection) throw new Error("Time Window Expand requires a collection");
+      if (action?.date == null) throw new Error("Time Window Expand requires a date");
+      if (action?.durationMinutes == null) throw new Error("Time Window Expand requires duration minutes");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const windows = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
+      if (!Array.isArray(windows)) throw new Error("Time Window Expand collection must resolve to a collection");
+      const rawDate = resolveConfiguredResource(action.date, context, { preserveMissing: false });
+      const text = String(rawDate || "").trim();
+      const gb = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+      const normalized = gb ? (gb[3] + "-" + gb[2] + "-" + gb[1]) : text;
+      const day = new Date(normalized.includes("T") ? normalized : normalized + "T00:00:00.000Z");
+      if (Number.isNaN(day.getTime())) throw new Error("Time Window Expand date is invalid");
+      const duration = Number(resolveConfiguredResource(action.durationMinutes, context, { preserveMissing: false }));
+      if (!Number.isFinite(duration) || duration <= 0) throw new Error("Time Window Expand duration must be greater than zero");
+      const get = (value, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], value);
+      const output = [];
+      const max = Math.max(1, Math.min(Number(action.limit || 500), 500));
+      for (const window of windows) {
+        const weekday = get(window, action.weekdayField || "weekday");
+        if (weekday != null && Number(weekday) !== day.getUTCDay()) continue;
+        const startParts = String(get(window, action.startField || "start_time") || "").split(":").map(Number);
+        const endParts = String(get(window, action.endField || "end_time") || "").split(":").map(Number);
+        if (startParts.length < 2 || endParts.length < 2 || !startParts.slice(0,2).every(Number.isFinite) || !endParts.slice(0,2).every(Number.isFinite)) continue;
+        const start = new Date(Date.UTC(day.getUTCFullYear(),day.getUTCMonth(),day.getUTCDate(),startParts[0],startParts[1]||0));
+        const end = new Date(Date.UTC(day.getUTCFullYear(),day.getUTCMonth(),day.getUTCDate(),endParts[0],endParts[1]||0));
+        const interval = Math.max(1, Number(get(window, action.intervalField || "slot_interval_minutes") || 15));
+        for (let cursor=start; cursor.getTime()+duration*60000<=end.getTime() && output.length<max; cursor=new Date(cursor.getTime()+interval*60000)) {
+          const slotEnd = new Date(cursor.getTime()+duration*60000);
+          output.push({startsAt:cursor.toISOString(),endsAt:slotEnd.toISOString(),date:cursor.toISOString().slice(0,10),time:cursor.toISOString().slice(11,16)});
+        }
+        if (output.length>=max) break;
+      }
+      return {status:"completed",collection:output,count:output.length};
+    },
+  },
+  {
+    key: "COLLECTION_EXCLUDE_OVERLAPS",
+    displayName: "Collection Exclude Overlaps",
+    description: "Remove candidate time intervals that overlap intervals in another collection.",
+    validation: (action) => {
+      if (!action?.collection) throw new Error("Collection Exclude Overlaps requires a candidate collection");
+      if (!action?.busyCollection) throw new Error("Collection Exclude Overlaps requires a busy collection");
+    },
+    async:false,
+    requiredPermissions:["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      const context={record,previousRecord,req,object,workflowVariables};
+      const candidates=resolveConfiguredResource(action.collection,context,{preserveMissing:false});
+      const busy=resolveConfiguredResource(action.busyCollection,context,{preserveMissing:false});
+      if(!Array.isArray(candidates)||!Array.isArray(busy)) throw new Error("Collection Exclude Overlaps inputs must be collections");
+      const get=(value,path)=>String(path||"").split(".").filter(Boolean).reduce((current,part)=>current==null?undefined:current?.[part],value);
+      const collection=candidates.filter((candidate)=>{
+        const start=new Date(get(candidate,action.candidateStartField||"startsAt"));
+        const end=new Date(get(candidate,action.candidateEndField||"endsAt"));
+        if(Number.isNaN(start.getTime())||Number.isNaN(end.getTime())) return false;
+        return !busy.some((row)=>{
+          const busyStart=new Date(get(row,action.busyStartField||"starts_at"));
+          const busyEnd=new Date(get(row,action.busyEndField||"ends_at"));
+          if(Number.isNaN(busyStart.getTime())||Number.isNaN(busyEnd.getTime())) return false;
+          return start < busyEnd && end > busyStart;
+        });
+      });
+      return {status:"completed",collection,count:collection.length};
+    },
+  },
+  {
+    key: "COLLECTION_FORMAT_TEXT",
+    displayName: "Collection Format Text",
+    description: "Render collection rows into reusable numbered text using a generic line template.",
+    validation:(action)=>{
+      if(!action?.collection) throw new Error("Collection Format Text requires a collection");
+      if(!String(action?.lineTemplate||"").trim()) throw new Error("Collection Format Text requires a line template");
+    },
+    async:false,
+    requiredPermissions:["workflow.execute"],
+    executor:async ({action,record,previousRecord,req,object,workflowVariables={}})=>{
+      const context={record,previousRecord,req,object,workflowVariables};
+      const source=resolveConfiguredResource(action.collection,context,{preserveMissing:false});
+      if(!Array.isArray(source)) throw new Error("Collection Format Text input must be a collection");
+      const get=(value,path)=>String(path||"").split(".").filter(Boolean).reduce((current,part)=>current==null?undefined:current?.[part],value);
+      const startIndex=Number(action.startIndex||1);
+      const limit=Math.max(0,Math.min(Number(action.limit||0),500));
+      const rows=(limit?source.slice(0,limit):source).map((item,index)=>String(action.lineTemplate)
+        .replace(/\{\{\s*index\s*\}\}/g,String(startIndex+index))
+        .replace(/\{\{\s*item\.([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}/g,(_,path)=>String(get(item,path)??"")));
+      return {status:"completed",text:rows.join(action.separator==null?"\n":String(action.separator)),count:rows.length};
+    },
+  },
+  {
     key: "TRANSFORM",
     displayName: "Transform",
     description: "Map source data to a new target shape without writing records.",
@@ -2629,6 +2707,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         : (fieldResult.rows || []);
       const fields = securedFields.filter((field) => field.readable !== false && isSafeIdentifier(field.source_column || ""));
       const fieldByKey = new Map();
+      fieldByKey.set("id", { api_name: "id", source_column: "id" });
       for (const field of fields) {
         fieldByKey.set(String(field.api_name), field);
         if (field.source_column) fieldByKey.set(String(field.source_column), field);
