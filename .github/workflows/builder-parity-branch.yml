@@ -1,0 +1,34 @@
+name: Builder Parity Branch Check
+
+on:
+  push:
+    branches: [builder-sfdc-parity]
+    paths:
+      - ".github/workflows/builder-parity-branch.yml"
+      - "src/pages/developer/Builder2Page.jsx"
+      - "src/pages/developer/Builder2Page.css"
+      - "src/pages/developer/Builder2GraphCanvas.jsx"
+      - "src/pages/developer/builder2Model.js"
+      - "server/services/platformWorkflow.js"
+      - "tests/e2e/workflow-builder-regression.spec.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Builder audits and build
+        run: |
+          npm run audit:trusted
+          npm run audit:apps
+          npm run audit:workflow-coverage
+          npm run build
