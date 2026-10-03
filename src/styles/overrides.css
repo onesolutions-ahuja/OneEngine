@@ -3725,3 +3725,106 @@
   font-size: 12px;
   font-weight: 500;
 }
+
+/* Classic Smart Theme / rdvnui-style comparison dock.
+   Intentionally independent from the production dock below it. */
+.rdvn-reference-zone {
+  position: fixed;
+  left: 50%;
+  bottom: 104px;
+  z-index: 86;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.rdvn-reference-dock {
+  --rdvn-gap: 5px;
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--rdvn-gap);
+  min-height: 68px;
+  padding: 8px 10px 7px;
+  border: 1px solid rgba(255,255,255,.42);
+  border-radius: 18px;
+  background: rgba(231,236,230,.56);
+  box-shadow: 0 12px 32px rgba(4,8,21,.18), inset 0 1px rgba(255,255,255,.48);
+  backdrop-filter: blur(24px) saturate(1.35);
+  -webkit-backdrop-filter: blur(24px) saturate(1.35);
+}
+
+.rdvn-reference-item {
+  --rdvn-scale: 1;
+  --rdvn-lift: 0px;
+  --rdvn-push: 0px;
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  overflow: visible;
+  transform: translate3d(var(--rdvn-push), calc(var(--rdvn-lift) * -1), 0) scale(var(--rdvn-scale));
+  transform-origin: center bottom;
+  transition: transform 58ms cubic-bezier(.2,.9,.2,1);
+  will-change: transform;
+}
+
+.rdvn-reference-item img {
+  display: block;
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+  filter: drop-shadow(0 5px 9px rgba(16,35,76,.18));
+}
+
+.rdvn-reference-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translate(-50%,5px) scale(.97);
+  padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,.46);
+  border-radius: 7px;
+  color: #fff;
+  background: rgba(31,35,43,.88);
+  box-shadow: 0 7px 20px rgba(0,0,0,.20);
+  backdrop-filter: blur(14px) saturate(1.15);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 110ms ease, transform 140ms ease;
+}
+
+.rdvn-reference-item:hover .rdvn-reference-tooltip,
+.rdvn-reference-item:focus-visible .rdvn-reference-tooltip {
+  opacity: 1;
+  transform: translate(-50%,0) scale(1);
+}
+
+.rdvn-reference-item.is-bouncing {
+  animation: rdvn-reference-bounce 360ms cubic-bezier(.2,.9,.2,1);
+}
+
+@keyframes rdvn-reference-bounce {
+  0%,100% { transform: translate3d(var(--rdvn-push), calc(var(--rdvn-lift) * -1), 0) scale(var(--rdvn-scale)); }
+  34% { transform: translate3d(var(--rdvn-push), calc(var(--rdvn-lift) * -1 - 18px), 0) scale(var(--rdvn-scale)); }
+  62% { transform: translate3d(var(--rdvn-push), calc(var(--rdvn-lift) * -1 - 4px), 0) scale(var(--rdvn-scale)); }
+  82% { transform: translate3d(var(--rdvn-push), calc(var(--rdvn-lift) * -1 - 8px), 0) scale(var(--rdvn-scale)); }
+}
+
+@media (max-width: 680px) {
+  .rdvn-reference-zone { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rdvn-reference-item { transition: none; }
+  .rdvn-reference-item.is-bouncing { animation: none; }
+}
