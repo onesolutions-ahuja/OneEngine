@@ -39,19 +39,10 @@ async function jsonFetch(path, { method = "GET", token = "", body = undefined, r
   throw lastError;
 }
 
-for (let i = 0; i < 60; i += 1) {
-  try {
-    const response = await fetch(`${API}/api/health`, { headers: { Origin: ORIGIN } });
-    if (response.ok) break;
-  } catch {}
-  if (i === 59) throw new Error("OneEngine API did not become ready");
-  await sleep(2000);
-}
-
 const login = await jsonFetch("/api/auth/login", {
   method: "POST",
   body: { username, password },
-  retries: 5,
+  retries: 20,
 });
 if (!login?.token) throw new Error("Login succeeded without a bearer token");
 const token = login.token;
