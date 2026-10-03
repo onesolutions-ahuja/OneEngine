@@ -986,8 +986,12 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
       const response = await withTransaction(async (txDb) => {
 
-        await reconcileCompanyPackageEntitlements(txDb, req.user.companyId);
-
+        // Installing one package must only provision that package and its
+        // resolved dependency plan. A global entitlement reconcile here used
+        // to provision every licensed package, so an unrelated legacy metadata
+        // conflict (for example Customer Core) could roll back a Product lookup
+        // connector install. Licence reconciliation belongs to licence/bundle/
+        // tier changes; this explicit install flow owns its own package plan.
         const rootPackageResult = await txDb(
 
           "SELECT id,version FROM package_registry WHERE package_key=$1 AND active=true",
@@ -1192,8 +1196,6 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
           }
 
         }
-
-        await reconcileCompanyPackageEntitlements(txDb, req.user.companyId);
 
         return { success: true, data: { packageKey, storeId, installed: plan.map((item) => item.packageKey), features: selectedFeatures.map((feature) => feature.key) } };
 
