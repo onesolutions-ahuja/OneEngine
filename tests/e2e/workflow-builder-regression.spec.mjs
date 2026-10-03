@@ -102,3 +102,12 @@ test("merged Builder2 keeps core element and resource authoring surfaces functio
 
   expect(failures, failures.join("\n")).toEqual([]);
 });
+
+
+test("persisted appointment workflow renders without OEFR101", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("developer/workflow-builder/1d5e7954-ce74-4637-a2b8-04780fab168c");
+  await expect(page.locator(".b2-shell")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/OEFR101/)).toHaveCount(0);
+  expect(failures, failures.join("\n")).toEqual([]);
+});
