@@ -167,3 +167,22 @@
   gap:9px;
 }
 .b2-assignment-list legend{padding:0 4px}
+
+.b2-group-header{width:280px;margin:2px 0 4px}
+.b2-group-header>button{
+  width:100%;
+  min-height:48px;
+  display:grid;
+  grid-template-columns:22px 1fr auto;
+  align-items:center;
+  gap:7px;
+  border:1px solid #9050e9;
+  border-radius:7px;
+  background:#fff;
+  padding:7px 10px;
+  text-align:left;
+}
+.b2-group-header>button>span:nth-child(2){display:grid;gap:1px}
+.b2-group-header b{font-size:12px}
+.b2-group-header small{font-size:9px;color:#706e6b}
+.b2-group-header>button:hover{background:#faf7ff}
