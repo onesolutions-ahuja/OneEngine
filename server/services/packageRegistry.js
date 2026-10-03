@@ -614,6 +614,7 @@ export function packageDefinition(entry) {
               { apiName: "direction", label: "Direction", fieldType: "text", sourceColumn: "direction", writable: false },
               { apiName: "provider", label: "Provider", fieldType: "text", sourceColumn: "provider", writable: false },
               { apiName: "provider_message_id", label: "Provider Message ID", fieldType: "text", sourceColumn: "provider_message_id", writable: false },
+              { apiName: "body", label: "Message", fieldType: "text", sourceColumn: "body", writable: false, displayOrder: 45 },
               { apiName: "recipient", label: "Recipient", fieldType: "text", sourceColumn: "recipient", writable: false },
               { apiName: "sender", label: "Sender", fieldType: "text", sourceColumn: "sender", writable: false },
               { apiName: "record_id", label: "Related Record", fieldType: "text", sourceColumn: "record_id", writable: false },
@@ -623,7 +624,7 @@ export function packageDefinition(entry) {
           },
         ],
         listViews: [
-          { objectKey: "communication_event", viewKey: "recent_communication_events", label: "Recent Communication Events", columns: ["channel","event_type","direction","provider","recipient","created_at"], sort: { field: "created_at", direction: "desc" }, pageSize: 50, isDefault: true }
+          { objectKey: "communication_event", viewKey: "recent_communication_events", label: "Recent Communication Events", columns: ["channel","event_type","direction","provider","body","recipient","created_at"], sort: { field: "created_at", direction: "desc" }, pageSize: 50, isDefault: true }
         ],
       } : {}),
       ...(entry.key === "one_assistant" ? {
