@@ -732,7 +732,8 @@ export function packageDefinition(entry) {
                 },
                 {
                   id: "send_reply",
-                  key: "SEND_WHATSAPP",
+                  key: "SEND_APPOINTMENT_CONVERSATION_REPLY",
+                  channel: "WHATSAPP",
                   recipient: { path: "sender" },
                   message: { path: "steps.appointment_conversation.reply" },
                   conversationId: { path: "metadata.conversationId" }
