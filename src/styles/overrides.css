@@ -3726,12 +3726,19 @@
   font-weight: 500;
 }
 
-/* Exact efb2f731 rdvnui dock styling; only vertical placement differs to avoid overlap. */
+/* efb2f731 dock: original magnification, widened animated section, fixed Recycle/Jarvis section. */
 .efb-dock-zone{position:fixed;left:0;right:0;bottom:92px;z-index:86;display:flex;justify-content:center;pointer-events:none}
-.efb-dock{pointer-events:auto;display:flex;align-items:flex-end;gap:12px;height:60px;min-height:60px;padding:0 8px 12px;margin-bottom:8px;border-radius:16px;background:hsl(34.3 3.4% 94.8% / .5);box-shadow:inset 0 0 0 1px hsl(34.3 3.4% 94.8% / .2),0 0 0 1px hsl(34.3 8.8% 2% / .075),0 10px 30px 0 hsl(34.3 8.8% 2% / .2);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px)}
+.efb-dock{pointer-events:auto;display:flex;align-items:flex-end;gap:12px;height:60px;min-height:60px;padding:0 8px 12px;margin-bottom:8px;border-radius:16px;background:rgba(132,136,142,.62);box-shadow:inset 0 0 0 1px rgba(255,255,255,.24),0 0 0 1px rgba(0,0,0,.10),0 10px 30px rgba(0,0,0,.20);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);overflow:visible}
+.efb-dock-magnify-zone{display:flex;align-items:flex-end;gap:12px;height:60px;overflow:visible}
 .efb-dock-item{position:relative;flex:0 0 auto;width:40px;aspect-ratio:1/1;padding:0;border:0;background:transparent;display:block;cursor:pointer;overflow:visible}
 .efb-dock-icon-wrap{position:relative;display:flex;justify-content:center;width:100%}
 .efb-dock-image{display:block;width:100%;height:auto;max-width:100%;user-select:none;pointer-events:none}
 .efb-dock-image--scaled{transform:scale(1.25)}
-.efb-dock-separator{width:1px;height:36px;margin-inline:4px;background:hsl(0 0% 0% / .2);flex:0 0 auto}
+.efb-dock-separator{width:1px;height:36px;margin-inline:4px;background:rgba(0,0,0,.28);flex:0 0 auto}
+.efb-dock-fixed-zone{display:flex;align-items:flex-end;gap:10px;height:60px;flex:0 0 auto;transform:none!important}
+.efb-dock-fixed-zone,.efb-dock-fixed-zone *{transition-property:none!important}
+.efb-dock-fixed-item{width:40px;height:40px;flex:0 0 40px;padding:0;border:0;background:transparent;display:block;cursor:pointer;transform:none!important}
+.efb-dock-jarvis{width:44px;height:44px;flex:0 0 44px;display:flex;align-items:center;justify-content:center;transform:none!important}
+.efb-dock-jarvis .jarvis-orb-host,.efb-dock-jarvis .jarvis-orb-container{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
+.efb-dock-jarvis .jarvis-orb{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;transform:none!important}
 @media(max-width:680px){.efb-dock-zone{display:none}}
