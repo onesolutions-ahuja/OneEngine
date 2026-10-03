@@ -719,9 +719,24 @@ export function packageDefinition(entry) {
               requiredPackageKey: "whatsapp_connector",
               priority: 10,
               actions: [
-                { id: "create_case", key: "CREATE_APPOINTMENT_BOOKING_CASE", channel: "WHATSAPP" },
-                { id: "issue_link", key: "ISSUE_APPOINTMENT_BOOKING_LINK", bookingCaseId: { path: "steps.create_case.bookingCase.id" }, ttlMinutes: 30 },
-                { id: "send_link", key: "SEND_WHATSAPP", recipient: { path: "sender" }, templateKey: "assistant_whatsapp_booking_link", templateContext: { bookingUrl: { path: "steps.issue_link.link.url" } } }
+                {
+                  id: "appointment_conversation",
+                  key: "PROCESS_APPOINTMENT_CONVERSATION",
+                  channel: "WHATSAPP",
+                  sender: { path: "sender" },
+                  recipient: { path: "recipient" },
+                  body: { path: "body" },
+                  sourceMessageId: { path: "providerMessageId" },
+                  conversationId: { path: "metadata.conversationId" },
+                  customerId: { path: "metadata.customerId" }
+                },
+                {
+                  id: "send_reply",
+                  key: "SEND_WHATSAPP",
+                  recipient: { path: "sender" },
+                  message: { path: "steps.appointment_conversation.reply" },
+                  conversationId: { path: "metadata.conversationId" }
+                }
               ]
             },
             active: false,
