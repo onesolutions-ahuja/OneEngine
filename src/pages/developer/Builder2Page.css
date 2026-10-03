@@ -122,3 +122,48 @@
   .b2-workspace.toolbox-closed{grid-template-columns:minmax(420px,1fr) 320px}
   .b2-start-panel{right:320px;width:390px}
 }
+
+.b2-action-picker{position:relative}
+.b2-action-menu{
+  position:absolute;
+  z-index:85;
+  top:38px;
+  left:0;
+  width:min(420px,70vw);
+  max-height:390px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border:1px solid #c9c9c9;
+  border-radius:6px;
+  background:#fff;
+  box-shadow:0 6px 18px rgba(0,0,0,.18);
+}
+.b2-action-menu .b2-resource-search{margin:10px}
+.b2-action-results{overflow:auto}
+.b2-action-results>button{
+  width:100%;
+  min-height:50px;
+  display:grid;
+  grid-template-columns:30px 1fr;
+  gap:8px;
+  align-items:center;
+  border:0;
+  border-top:1px solid #eee;
+  background:#fff;
+  padding:8px 10px;
+  text-align:left;
+}
+.b2-action-results>button:hover{background:#f3f3f3}
+.b2-action-results>button>span:last-child{display:grid;gap:2px}
+.b2-action-results b{font-size:12px}
+.b2-action-results small{font-size:10px;line-height:1.3;color:#706e6b}
+.b2-assignment-list{display:grid;gap:10px}
+.b2-assignment-list fieldset{
+  border:1px solid #e5e5e5;
+  border-radius:6px;
+  padding:10px;
+  display:grid;
+  gap:9px;
+}
+.b2-assignment-list legend{padding:0 4px}
