@@ -30,6 +30,7 @@ jobs:
       - name: Verify syntax and focused tests
         run: |
           node --check server/services/platformWorkflow.js
+          node --check server/services/packageRegistry.js
           node --check scripts/run-appointment-debug.mjs
           node --check tests/e2e/appointment-workflow-debug.spec.mjs
           node --test tests/appointmentWorkflow.test.mjs
@@ -43,6 +44,6 @@ jobs:
           fi
           git config user.name "oneengine-cleanup-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add server/services/platformWorkflow.js server/database/init.js scripts/run-appointment-debug.mjs tests/e2e/appointment-workflow-debug.spec.mjs tests/appointmentWorkflow.test.mjs
+          git add server/services/platformWorkflow.js server/services/packageRegistry.js server/database/init.js scripts/run-appointment-debug.mjs tests/e2e/appointment-workflow-debug.spec.mjs tests/appointmentWorkflow.test.mjs
           git commit -m "Remove obsolete appointment business wrappers"
           git push origin HEAD:audit/metadata-flow-purity-cleanup
