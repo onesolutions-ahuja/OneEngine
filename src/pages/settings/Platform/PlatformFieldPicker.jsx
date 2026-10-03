@@ -27,6 +27,7 @@ export default function PlatformFieldPicker({
   allowedFieldTypes = null,
   className = "",
   scopeKey = null,
+  flowBuilderParity = false,
 }) {
   const selectedObjectKey = objectKey || legacySelectedObjectKey;
   const [objects, setObjects] = useState([]);
@@ -36,6 +37,7 @@ export default function PlatformFieldPicker({
   const [objectsLoading, setObjectsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [objectOpen, setObjectOpen] = useState(false);
   const unknown = value && !fields.some((field) => fieldKey(field) === value);
 
   useEffect(() => {
@@ -144,14 +146,29 @@ export default function PlatformFieldPicker({
   return (
     <div className={`space-y-2 ${className}`}>
       {includeObjectSelector ? (
-        <div className="space-y-2">
-          <input className="w-full rounded border px-2 py-2 text-sm" value={objectSearch} onChange={(event) => setObjectSearch(event.target.value)} placeholder="Search objects..." aria-label="Search objects" disabled={objectsLoading}/>
-          <select className="w-full rounded border px-2 py-2 text-sm" value={selectedObjectKey || ""} onChange={(event) => selectObject(event.target.value)} disabled={objectsLoading}>
-            <option value="">{objectsLoading ? "Loading objects..." : "Select object"}</option>
-            {selectedObjectKey && !objects.some((item) => metadataObjectKey(item) === String(selectedObjectKey)) ? <option value={selectedObjectKey}>Unknown object: {selectedObjectKey}</option> : null}
-            {filteredObjects.map((object) => <option key={object.id || metadataObjectKey(object)} value={metadataObjectKey(object)}>{object.label || metadataObjectKey(object)}</option>)}
-          </select>
-        </div>
+        flowBuilderParity ? (
+          <div className="relative">
+            <button type="button" className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" onClick={() => setObjectOpen((open) => !open)} disabled={objectsLoading} aria-haspopup="listbox" aria-expanded={objectOpen}>
+              {objectsLoading ? "Loading objects..." : (objects.find((item) => metadataObjectKey(item) === String(selectedObjectKey))?.label || selectedObjectKey || "Select an Object")}
+            </button>
+            {objectOpen ? <div className="absolute z-[80] mt-1 w-full rounded border border-slate-300 bg-white shadow-lg">
+              <div className="border-b border-slate-200 p-2"><input autoFocus className="w-full rounded border border-slate-300 px-2.5 py-2 text-sm focus:border-blue-500 focus:outline-none" value={objectSearch} onChange={(event) => setObjectSearch(event.target.value)} placeholder="Search objects..." aria-label="Search objects"/></div>
+              <div className="max-h-64 overflow-y-auto py-1" role="listbox">
+                {filteredObjects.map((object) => { const key=metadataObjectKey(object); const selected=key===String(selectedObjectKey); return <button type="button" role="option" aria-selected={selected} key={object.id || key} className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-blue-50 ${selected ? "bg-blue-50 text-blue-700" : "text-slate-700"}`} onClick={() => { selectObject(key); setObjectOpen(false); setObjectSearch(""); }}><span>{object.label || key}</span>{selected ? <span aria-hidden="true">✓</span> : null}</button>; })}
+                {!filteredObjects.length ? <div className="px-3 py-3 text-sm text-slate-500">No objects found.</div> : null}
+              </div>
+            </div> : null}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <input className="w-full rounded border px-2 py-2 text-sm" value={objectSearch} onChange={(event) => setObjectSearch(event.target.value)} placeholder="Search objects..." aria-label="Search objects" disabled={objectsLoading}/>
+            <select className="w-full rounded border px-2 py-2 text-sm" value={selectedObjectKey || ""} onChange={(event) => selectObject(event.target.value)} disabled={objectsLoading}>
+              <option value="">{objectsLoading ? "Loading objects..." : "Select object"}</option>
+              {selectedObjectKey && !objects.some((item) => metadataObjectKey(item) === String(selectedObjectKey)) ? <option value={selectedObjectKey}>Unknown object: {selectedObjectKey}</option> : null}
+              {filteredObjects.map((object) => <option key={object.id || metadataObjectKey(object)} value={metadataObjectKey(object)}>{object.label || metadataObjectKey(object)}</option>)}
+            </select>
+          </div>
+        )
       ) : null}
       {objectOnly ? null : (
       <div className="flex gap-2">
