@@ -2872,6 +2872,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           filterClauses.push("(" + column + " IS NOT NULL AND " + column + "::text<>'')");
           continue;
         }
+        if (operator === "in" || operator === "not_in") {
+          const values = Array.isArray(value) ? value : String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+          params.push(values);
+          const placeholder = parameter(params.length);
+          filterClauses.push(operator === "in"
+            ? column + "::text = ANY(" + placeholder + "::text[])"
+            : "NOT (" + column + "::text = ANY(" + placeholder + "::text[]))");
+          continue;
+        }
         params.push(value);
         const placeholder = parameter(params.length);
         if (operator === "equals") filterClauses.push(column + "=" + placeholder);
@@ -2881,6 +2890,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         else if (operator === "less_than") filterClauses.push(column + "<" + placeholder);
         else if (operator === "less_than_or_equal") filterClauses.push(column + "<=" + placeholder);
         else if (operator === "contains") filterClauses.push(column + "::text ILIKE '%' || " + placeholder + "::text || '%'");
+        else if (operator === "starts_with") filterClauses.push(column + "::text ILIKE " + placeholder + "::text || '%'");
+        else if (operator === "ends_with") filterClauses.push(column + "::text ILIKE '%' || " + placeholder + "::text");
         else throw new Error(`Get Records uses unsupported operator "${operator}"`);
       }
       if (filterClauses.length) {
