@@ -3726,16 +3726,12 @@
   font-weight: 500;
 }
 
-/* Exact dock geometry from the OneDeveloper-logo design period. */
-.period-dock-zone{position:fixed;left:0;right:0;bottom:92px;z-index:86;display:flex;justify-content:center;pointer-events:none}
-.period-dock{pointer-events:auto;display:flex;align-items:flex-end;gap:12px;height:60px;min-height:60px;padding:0 8px 12px;margin-bottom:8px;border-radius:16px;background:hsl(34.3 3.4% 94.8% / .5);box-shadow:inset 0 0 0 1px hsl(34.3 3.4% 94.8% / .2),0 0 0 1px hsl(34.3 8.8% 2% / .075),0 10px 30px 0 hsl(34.3 8.8% 2% / .2);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px)}
-.period-dock-slot{position:relative;display:flex;align-items:flex-end}
-.period-dock-item{position:relative;flex:0 0 auto;aspect-ratio:1/1;padding:0;border:0;background:transparent;display:block;cursor:pointer;overflow:visible}
-.period-dock-icon-wrap{position:relative;display:flex;justify-content:center;width:100%}
-.period-dock-image{display:block;width:100%;height:auto;max-width:100%;user-select:none;pointer-events:none}
-.period-dock-image--scaled{transform:scale(1.25)}
-.period-dock-lucide-icon{width:100%;height:100%;padding:7px;border-radius:10px;color:#fff;background:linear-gradient(145deg,#6f8ff7,#4d67c7);box-shadow:0 5px 12px rgba(0,0,0,.16),inset 0 1px rgba(255,255,255,.28)}
-.period-dock-slot.is-bouncing{animation:period-dock-bounce 360ms cubic-bezier(.2,.9,.2,1)}
-@keyframes period-dock-bounce{0%,100%{transform:translateY(0)}34%{transform:translateY(-18px)}62%{transform:translateY(-4px)}82%{transform:translateY(-8px)}}
-@media(max-width:680px){.period-dock-zone{display:none}}
-@media(prefers-reduced-motion:reduce){.period-dock-slot.is-bouncing{animation:none}}
+/* Exact efb2f731 rdvnui dock styling; only vertical placement differs to avoid overlap. */
+.efb-dock-zone{position:fixed;left:0;right:0;bottom:92px;z-index:86;display:flex;justify-content:center;pointer-events:none}
+.efb-dock{pointer-events:auto;display:flex;align-items:flex-end;gap:12px;height:60px;min-height:60px;padding:0 8px 12px;margin-bottom:8px;border-radius:16px;background:hsl(34.3 3.4% 94.8% / .5);box-shadow:inset 0 0 0 1px hsl(34.3 3.4% 94.8% / .2),0 0 0 1px hsl(34.3 8.8% 2% / .075),0 10px 30px 0 hsl(34.3 8.8% 2% / .2);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px)}
+.efb-dock-item{position:relative;flex:0 0 auto;width:40px;aspect-ratio:1/1;padding:0;border:0;background:transparent;display:block;cursor:pointer;overflow:visible}
+.efb-dock-icon-wrap{position:relative;display:flex;justify-content:center;width:100%}
+.efb-dock-image{display:block;width:100%;height:auto;max-width:100%;user-select:none;pointer-events:none}
+.efb-dock-image--scaled{transform:scale(1.25)}
+.efb-dock-separator{width:1px;height:36px;margin-inline:4px;background:hsl(0 0% 0% / .2);flex:0 0 auto}
+@media(max-width:680px){.efb-dock-zone{display:none}}
