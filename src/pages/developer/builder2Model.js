@@ -137,10 +137,42 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
   }
   const names=new Set()
   for (const r of resources) {
-    const name=String(r.label||r.apiName||'').trim().toLowerCase()
+    const name=String(r.apiName||r.label||'').trim()
+    const normalized=name.toLowerCase()
     if (!name) add('error','RESOURCE_NAME','Resource API name is required.')
-    else if (names.has(name)) add('error','RESOURCE_DUPLICATE',`Duplicate resource API name: ${r.label||r.apiName}.`)
-    else names.add(name)
+    else if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(name)) add('error','RESOURCE_API_NAME',`${r.label||name}: API Name must begin with a letter or underscore and contain only letters, numbers, and underscores.`)
+    else if (names.has(normalized)) add('error','RESOURCE_DUPLICATE',`Duplicate resource API name: ${r.label||r.apiName}.`)
+    else names.add(normalized)
+    if (r.type==='Variable'&&String(r.dataType||'').toLowerCase()==='record'&&!r.objectKey) add('error','RESOURCE_RECORD_OBJECT',`${r.label||name}: Select an object for the Record variable.`)
+    if (r.type==='Formula') {
+      if (!String(r.defaultValue||'').trim()) add('error','RESOURCE_FORMULA',`${r.label||name}: Enter a formula.`)
+      if (!r.inputs || typeof r.inputs!=='object' || Array.isArray(r.inputs)) add('error','RESOURCE_FORMULA_INPUTS',`${r.label||name}: Formula inputs must be a named mapping.`)
+    }
+    if (r.type==='Text Template'&&!String(r.defaultValue||'').trim()) add('error','RESOURCE_TEMPLATE',`${r.label||name}: Enter template body text.`)
+    if (r.type==='Record Choice Set'&&(!r.objectKey||!r.labelPath||!r.valuePath)) add('error','RESOURCE_RECORD_CHOICE',`${r.label||name}: Select an object and label/value fields.`)
+    if (r.type==='Collection Choice Set'&&(!r.defaultValue||!r.labelPath||!r.valuePath)) add('error','RESOURCE_COLLECTION_CHOICE',`${r.label||name}: Select a collection and label/value paths.`)
+    if (r.type==='Picklist Choice Set'&&(!r.objectKey||!r.defaultValue)) add('error','RESOURCE_PICKLIST_CHOICE',`${r.label||name}: Select an object and picklist field.`)
+    if (r.type==='Stage'&&(!(Number(r.defaultValue)>=1)||!String(r.stageLabel||r.label||'').trim())) add('error','RESOURCE_STAGE',`${r.label||name}: Stage label and order are required.`)
+  }
+  const indexById=new Map(nodes.map((node,index)=>[String(node.id),index]))
+  const claimedTargets=new Map()
+  const claim=(owner,target,label)=>{
+    if(!target)return
+    const targetIndex=indexById.get(String(target)), ownerIndex=indexById.get(String(owner))
+    if(targetIndex===undefined){add('error','PATH_TARGET_MISSING',`${label} references an element that no longer exists.`,owner);return}
+    if(ownerIndex!==undefined&&targetIndex<=ownerIndex){add('error','PATH_TARGET_ORDER',`${label} can only route to a later element.`,owner);return}
+    const prior=claimedTargets.get(String(target))
+    if(prior&&prior!==String(owner)) add('error','PATH_TARGET_CONFLICT',`${label} uses an element already controlled by another path.`,owner)
+    else claimedTargets.set(String(target),String(owner))
+  }
+  for(const node of nodes){
+    const p=node.config||{}
+    if(node.type==='DECISION'){
+      for(const outcome of p.outcomes||[]) for(const target of outcome.branchTargets||[]) claim(node.id,target,`${node.label}: ${outcome.label||'Outcome'}`)
+      for(const target of p.defaultBranchTargets||[]) claim(node.id,target,`${node.label}: ${p.defaultOutcomeLabel||'Default Outcome'}`)
+    }
+    if(node.type==='LOOP') for(const target of p.bodyBranchTargets||[]) claim(node.id,target,`${node.label}: Loop Body`)
+    if(['ROUTE','RETRY'].includes(String(p.faultMode||'').toUpperCase())) for(const target of p.faultBranchTargets||[]) claim(node.id,target,`${node.label}: Error Path`)
   }
   const graph=normalizeGraph(nodes,edges)
   for (const e of graph.edges) {
