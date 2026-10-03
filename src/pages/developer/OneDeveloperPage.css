@@ -157,3 +157,26 @@
   appearance: auto;
   cursor: pointer;
 }
+
+
+/* 2026-10-03: maximise OneDeveloper object workspace above the fixed dock. */
+.onedeveloper-page > .settings-sidebar {
+  padding-bottom: 2px;
+}
+.onedeveloper-page > .settings-content,
+.onedeveloper-page .settings-content-body {
+  min-height: 0;
+  height: 100%;
+}
+.onedeveloper-page .objects-settings-shell {
+  height: calc(100vh - 156px);
+  min-height: 620px;
+}
+.onedeveloper-page .objects-list-pane,
+.onedeveloper-page .objects-detail-pane {
+  min-height: 0;
+}
+.onedeveloper-page .objects-pane-list {
+  min-height: 0;
+  flex: 1 1 auto;
+}
