@@ -304,7 +304,6 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
 
   const newDefinition = () => {
     if (tab === 'workflow') {
-      onWorkflowClose?.()
       setWorkflowNewStep('source')
       setWorkflowNewType('')
       setWorkflowNewDialogOpen(true)
@@ -514,15 +513,20 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
               onWorkflowClose?.()
               void loadSavedDefinitions('workflow')
             }}
-            onSaved={() => {
+            onSaved={(savedWorkflow, options = {}) => {
               setMessage('Saved.')
+              if (savedWorkflow?.id) {
+                setSelectedSavedId(String(savedWorkflow.id))
+                setWorkflowDraft(savedWorkflow)
+              }
+              void loadSavedDefinitions('workflow')
+              if (options.keepOpen) return
               setMode('list')
               setWorkflowDraft(null)
               setSelectedSavedId('')
               setSelectedNodeId('')
               setSideTab('components')
               onWorkflowClose?.()
-              void loadSavedDefinitions('workflow')
             }}
           />
         </div>
@@ -744,13 +748,17 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
             setError('')
             void loadSavedDefinitions('workflow')
           }}
-          onSaved={() => {
+          onSaved={(savedWorkflow, options = {}) => {
             setMessage('Saved.')
+            void loadSavedDefinitions('workflow')
+            if (options.keepOpen) {
+              if (savedWorkflow?.id) setSelectedSavedId(String(savedWorkflow.id))
+              return
+            }
             setMode('list')
             setSelectedSavedId('')
             setSelectedNodeId('')
             setSideTab('components')
-            void loadSavedDefinitions('workflow')
           }}
         />
       ) : tab === 'dashboard' ? (

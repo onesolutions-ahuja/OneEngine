@@ -6645,7 +6645,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 }
 
 
-function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [], flowIssues = [], onOpenFlowProperties }) {
+function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [], flowIssues = [], onOpenFlowProperties, canvasCommand = null }) {
   const [selectedId, setSelectedId] = useState("__start__");
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
@@ -6882,6 +6882,30 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
   const inspectStep = (stepId) => requestInspectorTarget({ kind: "step", stepId });
   const requestCloseInspector = () => requestInspectorTarget({ kind: "close" });
   const requestSelectionMode = () => requestInspectorTarget({ kind: "selection" });
+
+  useEffect(() => {
+    if (!canvasCommand?.id) return;
+    if (canvasCommand.type === "SELECT_ELEMENTS") {
+      requestSelectionMode();
+      return;
+    }
+    if (canvasCommand.type === "SET_LAYOUT_AUTO") {
+      setLayoutMode("AUTO");
+      return;
+    }
+    if (canvasCommand.type === "SET_LAYOUT_FREEFORM") {
+      setLayoutMode("FREEFORM");
+      setPaletteOpen(true);
+      setPaletteTab("elements");
+      return;
+    }
+    if (canvasCommand.type === "FOCUS_STEP") {
+      const targetId = String(canvasCommand.stepId || "__start__");
+      if (targetId === "__start__") inspectStart();
+      else inspectStep(targetId);
+    }
+  }, [canvasCommand?.id]);
+
   const resolveInspectorTransition = (mode) => {
     const target = inspectorTransition;
     if (!target) return;
@@ -8785,6 +8809,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [debugRunning, setDebugRunning] = useState(false);
   const [debugRecordMode, setDebugRecordMode] = useState("latest");
   const [debugRecordId, setDebugRecordId] = useState("");
+  const [debugRecordEvent, setDebugRecordEvent] = useState("updated");
   const [debugPanelTab, setDebugPanelTab] = useState("setup");
   const [debugPathId, setDebugPathId] = useState("immediate");
   const [debugSkipStartConditions, setDebugSkipStartConditions] = useState(false);
@@ -8814,6 +8839,12 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [newFlowChooserOpen, setNewFlowChooserOpen] = useState(false);
   const [newFlowChooserStep, setNewFlowChooserStep] = useState("source");
   const [newFlowTypeDraft, setNewFlowTypeDraft] = useState("");
+  const [canvasCommand, setCanvasCommand] = useState(null);
+
+  const flowType = String(workflow.actionMetadata?.flowType || "AUTOLAUNCHED").toUpperCase();
+  const layoutMode = String(workflow.actionMetadata?.builderLayout?.mode || "AUTO").toUpperCase();
+  const scheduledPathSteps = (workflow.steps || []).map((step, index) => ({ step, index })).filter(({ step }) => step.type === "SCHEDULE_PATH");
+  const sendCanvasCommand = (type, payload = {}) => setCanvasCommand({ id: String(Date.now()) + "-" + Math.random().toString(16).slice(2), type, ...payload });
 
   const currentDefinitionSignature = persistedWorkflowSignature(workflow);
   const hasUnsavedChanges = currentDefinitionSignature !== savedDefinitionSignature;
@@ -8830,6 +8861,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     setDebugResult(null);
     setActiveSavedTest(null);
     setDebugInputs({});
+    setDebugRecordEvent(recordTriggerWhen(next.trigger) === "created" ? "created" : "updated");
     setVersionsOpen(false);
     setTestsOpen(false);
     setDebugOpen(false);
@@ -8859,6 +8891,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     setDebugResult(null);
     setActiveSavedTest(null);
     setDebugInputs({});
+    setDebugRecordEvent(recordTriggerWhen(next.trigger) === "created" ? "created" : "updated");
     setVersionsOpen(false);
     setTestsOpen(false);
     setDebugOpen(false);
@@ -8959,6 +8992,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     if (normalizedInitialWorkflow) {
       setWorkflowId(normalizedInitialWorkflow.id || null);
       setWorkflow(normalizedInitialWorkflow);
+      setDebugRecordEvent(recordTriggerWhen(normalizedInitialWorkflow.trigger) === "created" ? "created" : "updated");
     } else {
       setWorkflowId(null);
       setWorkflow({
@@ -9494,7 +9528,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       } catch (scheduleError) {
         if (String(workflow.actionMetadata?.flowType || "").toUpperCase() === "SCHEDULE_TRIGGERED") throw scheduleError;
       }
-      if (embedded) onSaved?.({ ...workflow, ...saved, id: nextId });
+      if (embedded) onSaved?.({ ...workflow, ...saved, id: nextId }, { keepOpen });
       else if (!keepOpen) setShowBuilder(false);
       if (!silent) onMessage?.(forceNewVersion ? `Flow saved as version ${saved.version || savedWorkflow.version}.` : nextLifecycle === "ACTIVE" ? "Flow activated." : "Flow draft saved.");
       return { id: nextId, workflow: savedWorkflow };
@@ -9792,9 +9826,16 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         version: Number(rule.version || 1),
         actionMetadata: {
           flowType: rule.action?.flowType || null,
+          optimizeFor: rule.action?.optimizeFor || "ACTIONS_AND_RELATED_RECORDS",
+          includeAsyncPath: rule.action?.includeAsyncPath === true,
           templateKey: rule.action?.templateKey || null,
           defaultForNewDevices: rule.action?.defaultForNewDevices === true,
+          apiName: rule.action?.apiName || flowApiName(rule.name || "Flow"),
+          description: rule.action?.description || "",
           ui: rule.action?.ui || null,
+          builderLayout: rule.action?.builderLayout || { mode: "AUTO", positions: {} },
+          builderGroups: rule.action?.builderGroups || [],
+          schedule: rule.action?.schedule || { scheduleType: "DAILY", timezone: "Europe/London", definition: { time: "09:00" } },
         },
         conditions: rule.conditions || [],
         steps: (rule.action?.actions || []).map((action) => {
@@ -9836,9 +9877,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   }) || null;
 
   const focusStepById = (stepId) => {
-    const targetId = workflow.steps.some((step) => String(step.id) === String(stepId || "")) ? stepId : "__start__";
-    setSelectedId(targetId);
-    setPropertiesOpen(true);
+    const targetId = workflow.steps.some((step) => String(step.id) === String(stepId || "")) ? String(stepId) : "__start__";
+    sendCanvasCommand("FOCUS_STEP", { stepId: targetId });
     window.requestAnimationFrame(() => document.getElementById("workflow-canvas-section")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
@@ -9875,7 +9915,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             pathId: debugPathId,
             skipStartConditionRequirements: debugSkipStartConditions,
             rollbackMode: debugRollbackMode,
-            recordEvent: flowType === "RECORD_TRIGGERED" ? recordTriggerWhen(workflow.trigger) : null,
+            recordEvent: flowType === "RECORD_TRIGGERED" ? debugRecordEvent : null,
           },
           ...(debugRecordMode === "specific" ? { recordId: debugRecordId.trim() } : {}),
         }),
@@ -10095,19 +10135,19 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.past.length} onClick={undoFlowChange} title="Undo" aria-label="Undo">↶</button>
           <button type="button" className="workflow-cancel-button workflow-icon-button" disabled={!flowHistory.future.length} onClick={redoFlowChange} title="Redo" aria-label="Redo">↷</button>
           <span className="workflow-header-separator" aria-hidden="true" />
-          <button type="button" className="workflow-cancel-button" onClick={requestSelectionMode}>Select Elements</button>
+          <button type="button" className="workflow-cancel-button" onClick={() => sendCanvasCommand("SELECT_ELEMENTS")}>Select Elements</button>
           <span className="workflow-layout-toggle workflow-layout-toggle--header" aria-label="Canvas layout">
-            <button type="button" className={layoutMode === "AUTO" ? "is-active" : ""} onClick={() => setLayoutMode("AUTO")}>Auto-Layout</button>
-            <button type="button" className={layoutMode === "FREEFORM" ? "is-active" : ""} onClick={() => { setLayoutMode("FREEFORM"); setPaletteOpen(true); setPaletteTab("elements"); }}>Free-Form</button>
+            <button type="button" className={layoutMode === "AUTO" ? "is-active" : ""} onClick={() => sendCanvasCommand("SET_LAYOUT_AUTO")}>Auto-Layout</button>
+            <button type="button" className={layoutMode === "FREEFORM" ? "is-active" : ""} onClick={() => sendCanvasCommand("SET_LAYOUT_FREEFORM")}>Free-Form</button>
           </span>
           <button type="button" className="workflow-cancel-button" aria-label="View Properties" onClick={openFlowProperties}>Properties</button>
           {reviewIssue ? <button type="button" className="workflow-cancel-button workflow-icon-button" title={reviewIssue} aria-label="Show Errors" onClick={() => document.getElementById("workflow-review-section")?.scrollIntoView({ behavior: "smooth", block: "center" })}>!</button> : null}
           <button type="button" className="workflow-cancel-button" aria-label="View Tests" disabled={!workflowId} onClick={() => { setTestsOpen((value) => !value); if (!testsOpen) loadSavedTests(); }}>View Tests</button>
           <button type="button" className="workflow-cancel-button" onClick={() => { setDebugPanelTab("setup"); setDebugOpen(true); }}>Debug</button>
           <button type="button" className="workflow-cancel-button" disabled={!workflowId || saveBusy} title={workflowId ? "Create a new immutable version from the current Builder state" : "Save this flow first"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true, forceNewVersion: true })}>{saveBusy ? "Saving…" : "Save As"}</button>
-          <button type="button" className="workflow-cancel-button" disabled={saveBusy || (Boolean(workflowId) && !hasUnsavedChanges)} title={!hasUnsavedChanges && workflowId ? "No unsaved changes" : "Save draft"} onClick={() => saveWorkflow("DRAFT")}>{saveBusy ? "Saving…" : "Save"}</button>
+          <button type="button" className="workflow-cancel-button" disabled={saveBusy || (Boolean(workflowId) && !hasUnsavedChanges)} title={!hasUnsavedChanges && workflowId ? "No unsaved changes" : "Save draft"} onClick={() => saveWorkflow("DRAFT", { keepOpen: true })}>{saveBusy ? "Saving…" : "Save"}</button>
           {workflow.runtimeActive ? <button type="button" className="workflow-cancel-button" disabled={saveBusy} title="Stop new runs from the currently live version" onClick={() => setDeactivateConfirmOpen(true)}>Deactivate</button> : null}
-          <button type="button" className="workflow-save-button" disabled={saveBusy || Boolean(reviewIssue) || (workflow.runtimeActive && !hasUnsavedChanges && !workflow.draftVersion)} title={reviewIssue || (workflow.runtimeActive ? (hasUnsavedChanges || workflow.draftVersion ? "Activate the current draft as the new live version" : "This version is already live") : "Activate flow")} onClick={() => saveWorkflow("ACTIVE")}>{saveBusy ? "Saving…" : workflow.runtimeActive ? (hasUnsavedChanges || workflow.draftVersion ? "Activate Draft" : "Active") : "Activate"}</button>
+          <button type="button" className="workflow-save-button" disabled={saveBusy || Boolean(reviewIssue) || (workflow.runtimeActive && !hasUnsavedChanges && !workflow.draftVersion)} title={reviewIssue || (workflow.runtimeActive ? (hasUnsavedChanges || workflow.draftVersion ? "Activate the current draft as the new live version" : "This version is already live") : "Activate flow")} onClick={() => saveWorkflow("ACTIVE", { keepOpen: true })}>{saveBusy ? "Saving…" : workflow.runtimeActive ? (hasUnsavedChanges || workflow.draftVersion ? "Activate Draft" : "Active") : "Activate"}</button>
           <details className="workflow-header-more">
             <summary aria-label="More Flow actions" title="More">⋮</summary>
             <div className="workflow-header-more-menu">
@@ -10348,10 +10388,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
                     </select>
                   </label>
                   <label className="text-[11px] font-medium text-slate-600">Run the Flow As If the Record Is
-                    <select className={inputClass} value={recordTriggerWhen(workflow.trigger) === "created" ? "created" : "updated"} onChange={(event) => {
-                      const when = event.target.value === "created" ? "created" : "updated";
-                      setWorkflow((current) => ({ ...current, trigger: recordTriggerKey(when, current.actionMetadata?.optimizeFor) }));
-                    }}>
+                    <select className={inputClass} value={debugRecordEvent} onChange={(event) => setDebugRecordEvent(event.target.value === "created" ? "created" : "updated")}>
                       <option value="created">Created</option>
                       <option value="updated">Updated</option>
                     </select>
@@ -10802,7 +10839,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : (
         <div id="workflow-canvas-section">
-          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} flowIssues={flowValidationIssues} onOpenFlowProperties={openFlowProperties} />
+          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} flowIssues={flowValidationIssues} onOpenFlowProperties={openFlowProperties} canvasCommand={canvasCommand} />
         </div>
       )}
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
