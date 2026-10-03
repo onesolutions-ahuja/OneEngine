@@ -1133,6 +1133,30 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
 
           if (["HUMAN", "OPTED_OUT", "CLOSED"].includes(String(conversation.status || "").toUpperCase())) continue;
 
+          // Appointment conversations are owned by the shared
+          // communication_message_received workflow. Keep the optional legacy
+          // WhatsApp AI/rules assistant out of that conversation so customers
+          // never receive a second competing reply.
+          const appointmentKeyword = body.trim().toUpperCase() === "APPOINTMENT";
+          const openAppointmentSession = appointmentKeyword ? true : Boolean((await db(
+            `SELECT 1
+               FROM appointment_booking_cases
+              WHERE company_id=$1
+                AND channel='WHATSAPP'
+                AND regexp_replace(COALESCE(sender,''),'[^0-9]','','g')=$2
+                AND status IN ('NEW','SLOT_SELECTED','AWAITING_PAYMENT')
+              LIMIT 1`,
+            [companyId, sender]
+          )).rows[0]);
+          if (openAppointmentSession) {
+            console.info("WhatsApp appointment message delegated to workflow", {
+              companyId,
+              phoneNumberId,
+              messageId: storedMessage.id,
+            });
+            continue;
+          }
+
           let aiResult = null;
           const assistantMode = String(configuration.assistant_mode || "RULES").toUpperCase();
           if (assistantMode === "AI") {
