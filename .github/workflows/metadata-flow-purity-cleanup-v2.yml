@@ -5,7 +5,7 @@ on:
     branches:
       - audit/metadata-flow-purity-cleanup-v2
     paths:
-      - "scripts/apply-metadata-flow-purity-cleanup-v2.py"
+      - "scripts/apply-metadata-flow-purity-cleanup-v2.py"\n      - ".github/workflows/metadata-flow-purity-cleanup-v2.yml"\n      - "tests/appointmentWorkflow.test.mjs"
 
 permissions:
   contents: write
@@ -43,3 +43,5 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Remove unused appointment workflow wrappers"
           git push origin HEAD:audit/metadata-flow-purity-cleanup-v2
+
+# gate revision 2
