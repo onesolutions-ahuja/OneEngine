@@ -221,10 +221,11 @@ export async function seedOneSolutionsDemo(pool) {
     // remains metadata/record driven even when a tenant adds its own divisions.
     const priceListIds={};
     const activeDivisions=(await client.query(
-      "SELECT division_key,name FROM onesolutions_business_divisions WHERE company_id=$1 AND active=TRUE ORDER BY name",
+      "SELECT id,division_key,name FROM onesolutions_business_divisions WHERE company_id=$1 AND active=TRUE ORDER BY name",
       [company.id]
     )).rows;
     for(const division of activeDivisions){
+      divisionIds[division.division_key]=division.id;
       const row=(await client.query(
         `INSERT INTO price_lists(company_id,name,channel,active)
          VALUES($1,$2,'till',TRUE)
