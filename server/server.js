@@ -3875,7 +3875,7 @@ async function startServer() {
               record: eventPayload.record || eventPayload || null,
               actorUserId: item.actor_user_id || null,
             },
-            idempotencyKey: `event-workflow-recovery:${item.workflow_id}:${item.event_id}`,
+            idempotencyKey: `event-workflow-recovery-v2:${item.workflow_id}:${item.event_id}`,
           });
         }
         if (recoverable.rowCount) {
