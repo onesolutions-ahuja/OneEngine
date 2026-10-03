@@ -196,7 +196,7 @@ async function debugFullBooking() {
           type: "workflow",
           actions: [
             { id: "start", key: "APPOINTMENT_SESSION_CONTEXT", channel: "SMS", sender: "+447700900705", recipient: "+447700900700", body: "APPOINTMENT", sourceMessageId: `full-booking-${suffix}` },
-            { id: "date", key: "PROCESS_APPOINTMENT_DATE_RESPONSE", bookingCaseId: { path: "steps.start.bookingCaseId" }, body: "1" },
+            { id: "date", key: "PROCESS_APPOINTMENT_DATE_RESPONSE", bookingCaseId: { path: "steps.start.bookingCaseId" }, body: "2" },
             { id: "slot", key: "PROCESS_APPOINTMENT_SLOT_RESPONSE", bookingCaseId: { path: "steps.start.bookingCaseId" }, body: "1" },
           ],
         },
