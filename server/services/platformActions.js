@@ -120,11 +120,10 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
     ? (hasEntitlement(entitlements, definition.entitlement) || hasEntitlement(entitlements, "whatsapp_assistant"))
     : hasEntitlement(entitlements, definition.entitlement);
 
-  // An enabled tenant-scoped SMSGate connector is itself an installed,
-  // administrator-enabled SMS capability. Treat that configured connector as
-  // sufficient authority for registered SEND_SMS workflow actions so inbound
-  // booking replies and appointment confirmations use the same capability
-  // path instead of disagreeing on licensing state.
+  // A tenant-scoped, administrator-enabled communication connector is itself
+  // the channel capability for registered workflow actions. Keep commercial
+  // app licensing separate from provider configuration: OneAssistant can be
+  // licensed/trialled independently while WhatsApp/SMSGate supply transport.
   if (!entitled && type === "SEND_SMS") {
     const configuredSmsGate = await db(
       `SELECT 1
@@ -136,6 +135,27 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
       [companyId]
     );
     entitled = configuredSmsGate.rows.length > 0;
+  }
+
+  if (!entitled && type === "SEND_WHATSAPP") {
+    const connectorLicensed = hasEntitlement(entitlements, "package:whatsapp_connector");
+    const configuredWhatsApp = await db(
+      `SELECT 1
+         FROM integrations
+        WHERE company_id=$1
+          AND lower(provider) IN ('whatsapp','whatsapp_business')
+          AND active=TRUE
+          AND NULLIF(configuration->>'phone_number_id','') IS NOT NULL
+          AND NULLIF(configuration->>'access_token','') IS NOT NULL
+        LIMIT 1`,
+      [companyId]
+    );
+    // Existing tenants may have the canonical WhatsApp integration configured
+    // before the connector package catalogue existed. The active provider row
+    // is the same tenant-scoped runtime used by sendWhatsAppTextMessage, so it
+    // is a valid transport capability. New installs also expose
+    // package:whatsapp_connector through normal package entitlements.
+    entitled = connectorLicensed || configuredWhatsApp.rows.length > 0;
   }
 
   if (!entitled) {
