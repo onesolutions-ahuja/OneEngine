@@ -5688,7 +5688,8 @@ async function resolveWorkflowWritableFields({ db, object, entries, req = null }
     const field = metadata.find((candidate) =>
       String(candidate.api_name || "") === name || String(candidate.source_column || "") === name
     );
-    if (!field || field.active === false || field.writable === false || !isSafeIdentifier(field.source_column || field.api_name)) {
+    const flowWritable = field?.config?.flowWritable === true || field?.config?.flow_writable === true;
+    if (!field || field.active === false || (field.writable === false && !flowWritable) || !isSafeIdentifier(field.source_column || field.api_name)) {
       throw new Error(`Workflow field "${name}" is not writable for the target object`);
     }
     resolved.push({ source_column: field.source_column || field.api_name });
