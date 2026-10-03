@@ -6,6 +6,8 @@ on:
       - audit/remove-orphaned-credit-purchase-helpers
     paths:
       - ".github/workflows/credit-purchase-orphan-cleanup-gate.yml"
+      - "server/services/customerCredit.js"
+      - "server/services/purchasing.js"
 
 permissions:
   contents: read
