@@ -1578,7 +1578,29 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         }
         console.log("onePOS: OneAssistant hidden booking processors replaced with visible flow nodes");
       },
-    }  ]);
+    }
+    {
+      key: "0043_remove_obsolete_appointment_system_actions",
+      version: "43",
+      name: "Remove obsolete appointment action wrappers from persisted workflow metadata",
+      up: async client => {
+        const obsolete = ["APPOINTMENT_SESSION_CONTEXT", "PROCESS_APPOINTMENT_DATE_RESPONSE", "PROCESS_APPOINTMENT_SLOT_RESPONSE", "PROCESS_APPOINTMENT_CONVERSATION", "SEND_APPOINTMENT_CONVERSATION_REPLY", "FIND_APPOINTMENT_SLOTS", "HOLD_APPOINTMENT_SLOT", "RELEASE_APPOINTMENT_SLOT", "LIST_APPOINTMENT_PAYMENT_PROVIDERS", "CREATE_APPOINTMENT_PAYMENT_REQUEST", "CALCULATE_APPOINTMENT_PAYMENT", "CONFIRM_APPOINTMENT"];
+        const systemKeys = obsolete.map((key) => "action:" + key);
+        await client.query(
+          "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'=ANY($1::text[])",
+          [systemKeys]
+        );
+        await client.query(
+          "UPDATE platform_rules SET active=FALSE,lifecycle_status='INACTIVE',updated_at=NOW() " +
+          "WHERE active=TRUE AND action->>'type'='workflow' AND EXISTS (" +
+          "SELECT 1 FROM jsonb_array_elements(COALESCE(action->'actions','[]'::jsonb)) step " +
+          "WHERE step->>'key'=ANY($1::text[]))",
+          [obsolete]
+        );
+        console.log("onePOS: obsolete appointment action wrappers removed from persisted workflow metadata");
+      },
+    },
+  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
   console.log("onePOS: database ready");

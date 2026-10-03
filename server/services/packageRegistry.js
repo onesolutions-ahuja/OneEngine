@@ -172,9 +172,9 @@ function oneAssistantAppointmentRouterWorkflow() {
         {id:"one",label:"Choice 1",condition:condition("body","1"),branch:["set_date_1","get_service"]},
         {id:"two",label:"Choice 2",condition:condition("body","2"),branch:["set_date_2","get_service"]}
       ],defaultLabel:"DD/MM/YYYY",defaultBranch:["set_custom_date","get_service"] },
-    { id:"set_date_1", label:"Use Date Choice 1", apiName:"set_date_1", key:"SET_VARIABLE", variable:"selectedDate", value:{path:"variables.date1"} },
-    { id:"set_date_2", label:"Use Date Choice 2", apiName:"set_date_2", key:"SET_VARIABLE", variable:"selectedDate", value:{path:"variables.date2"} },
-    { id:"set_custom_date", label:"Use Entered Date", apiName:"set_custom_date", key:"SET_VARIABLE", variable:"selectedDate", value:{path:"body"} },
+    { id:"set_date_1", label:"Use Date Choice 1", apiName:"set_date_1", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"variables.date1"} },
+    { id:"set_date_2", label:"Use Date Choice 2", apiName:"set_date_2", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"variables.date2"} },
+    { id:"set_custom_date", label:"Use Entered Date", apiName:"set_custom_date", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"body"} },
     { id:"get_service", label:"Get Active Appointment Service", apiName:"get_service", key:"GET_RECORDS", objectKey:"appointment_service",
       filters:[{field:"active",operator:"equals",value:true}],sortField:"name",sortDirection:"asc",limit:1,store:"first" },
     { id:"service_found", label:"Service Available?", apiName:"service_found", key:"CONDITION",
@@ -206,7 +206,7 @@ function oneAssistantAppointmentRouterWorkflow() {
         {id:"four",label:"Slot 4",condition:condition("body","4"),branch:["select_slot_4","create_appointment"]},
         {id:"five",label:"Slot 5",condition:condition("body","5"),branch:["select_slot_5","create_appointment"]}
       ],defaultLabel:"Invalid Slot",defaultBranch:["send_invalid_slot"] },
-    ...[1,2,3,4,5].map((number)=>({id:`select_slot_${number}`,label:`Select Slot ${number}`,apiName:`select_slot_${number}`,key:"SET_VARIABLE",variable:"selectedSlot",value:{path:`steps.get_case.record.state.slots.${number-1}`}})),
+    ...[1,2,3,4,5].map((number)=>({id:`select_slot_${number}`,label:`Select Slot ${number}`,apiName:`select_slot_${number}`,key:"ASSIGNMENT",variableName:"selectedSlot",variableType:"record",operator:"set",value:{path:`steps.get_case.record.state.slots.${number-1}`}})),
     send("send_invalid_slot","Send Invalid Slot Reply",{path:"channel"},invalidSlotMessage),
     { id:"create_appointment", label:"Create Appointment", apiName:"create_appointment", key:"CREATE_RECORD", objectKey:"appointment",
       fieldValues:{
