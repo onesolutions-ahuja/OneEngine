@@ -615,6 +615,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
             record_id UUID,
             communication_id UUID,
+            body TEXT,
             metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
           );
@@ -1105,6 +1106,77 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             )
         `);
         console.log("onePOS: existing WhatsApp inbound messages backfilled into Communication Events");
+      },
+    },
+
+    {
+      key: "0102_add_communication_event_body",
+      version: "102",
+      name: "Add first-class Communication Event message body",
+      up: async client => {
+        await client.query(`
+          ALTER TABLE platform_communication_events
+            ADD COLUMN IF NOT EXISTS body TEXT;
+
+          UPDATE platform_communication_events ce
+             SET body=COALESCE(
+               NULLIF(ce.body,''),
+               NULLIF(ce.metadata->>'body',''),
+               NULLIF(ce.metadata->>'text','')
+             )
+           WHERE ce.body IS NULL OR ce.body='';
+
+          UPDATE platform_communication_events ce
+             SET body=wm.body
+            FROM whatsapp_messages wm
+           WHERE (ce.body IS NULL OR ce.body='')
+             AND ce.company_id=wm.company_id
+             AND ce.channel='WHATSAPP'
+             AND (
+               ce.communication_id=wm.id
+               OR (
+                 ce.provider_message_id IS NOT NULL
+                 AND ce.provider_message_id=wm.provider_message_id
+               )
+             )
+             AND wm.body IS NOT NULL;
+
+          INSERT INTO platform_fields
+            (object_id,company_id,api_name,label,field_type,source_column,required,readable,writable,
+             options,config,display_order,active,source_package_id,source_package_version,managed,package_required)
+          SELECT
+            o.id,NULL,'body','Message','text','body',FALSE,TRUE,FALSE,
+            '[]'::jsonb,
+            jsonb_build_object('packageContract','default','packageOwned',TRUE,'packageId',p.id),
+            45,TRUE,p.id,p.version,TRUE,FALSE
+          FROM platform_objects o
+          JOIN package_registry p ON p.package_key='communication_core'
+          WHERE o.object_key='communication_event'
+            AND o.company_id IS NULL
+          ON CONFLICT (object_id,api_name) WHERE company_id IS NULL
+          DO UPDATE SET
+            label='Message',
+            field_type='text',
+            source_column='body',
+            readable=TRUE,
+            writable=FALSE,
+            display_order=45,
+            active=TRUE,
+            source_package_id=EXCLUDED.source_package_id,
+            source_package_version=EXCLUDED.source_package_version,
+            managed=TRUE,
+            updated_at=NOW();
+
+          UPDATE platform_list_views v
+             SET columns='["channel","event_type","direction","provider","body","recipient","created_at"]'::jsonb,
+                 updated_at=NOW()
+            FROM platform_objects o
+           WHERE v.object_id=o.id
+             AND o.object_key='communication_event'
+             AND v.view_key='recent_communication_events'
+             AND COALESCE(v.user_modified,FALSE)=FALSE;
+        `);
+        console.log("onePOS: Communication Event message body field ready");
       },
     },
 
