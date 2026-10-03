@@ -1,41 +1,34 @@
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { LayoutDashboard, LayoutGrid, Settings as GearIcon, Users } from 'lucide-react'
-import { localAppIcon } from '../../utils/appMarketplace'
 
-const periodItems = [
-  { id: 'launchpad', label: 'Launcher', icon: LayoutGrid },
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'store', label: 'oneStore', src: localAppIcon('onestore'), scaled: true },
-  { id: 'builder', label: 'OneDeveloper', icon: LayoutGrid },
-  { id: 'contacts', label: 'Contacts', icon: Users },
-  { id: 'till', label: 'OneTill', src: localAppIcon('onetill-new'), scaled: true },
-  { id: 'settings', label: 'Settings', icon: GearIcon },
+const dockItems = [
+  { id: 'finder', label: 'Finder', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
+  { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
+  { id: 'launchpad', label: 'Launchpad', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
+  { id: 'maps', label: 'Maps', src: 'https://rdvnui.com/assets/Maps-C7aNhhUR.png', scaled: true },
+  { id: 'notes', label: 'Notes', src: 'https://rdvnui.com/assets/Notes-fm-2Meh1.png', scaled: true },
 ]
 
-function PeriodDockItem({ item, mouseX, onActivate }) {
+const trashItem = {
+  id: 'trash',
+  label: 'Trash',
+  src: 'https://rdvnui.com/assets/Trash%20Full-BoE_wJYh.png',
+  scaled: false,
+}
+
+function DockItem({ item, mouseX, onActivate }) {
   const ref = useRef(null)
   const distance = useTransform(mouseX, (value) => {
     const bounds = ref.current?.getBoundingClientRect() ?? { x: 0, width: 0 }
     return value - bounds.x - bounds.width / 2
   })
-  const widthTarget = useTransform(distance, [-150, 0, 150], [40, 76, 40])
+  const widthTarget = useTransform(distance, [-150, 0, 150], [40, 100, 40])
   const width = useSpring(widthTarget, { mass: 0.1, stiffness: 150, damping: 12 })
 
   return (
-    <motion.button
-      ref={ref}
-      type="button"
-      className="period-dock-item"
-      style={{ width }}
-      onClick={onActivate}
-      aria-label={item.label}
-      title={item.label}
-    >
-      <span className="period-dock-icon-wrap">
-        {item.icon
-          ? <item.icon className="period-dock-lucide-icon" size={27} strokeWidth={1.8} />
-          : <img className={item.scaled ? 'period-dock-image period-dock-image--scaled' : 'period-dock-image'} src={item.src} alt="" draggable="false" />}
+    <motion.button ref={ref} type="button" className="efb-dock-item" style={{ width }} onClick={onActivate} aria-label={item.label}>
+      <span className="efb-dock-icon-wrap">
+        <img className={item.scaled ? 'efb-dock-image efb-dock-image--scaled' : 'efb-dock-image'} src={item.src} alt="" draggable="false" />
       </span>
     </motion.button>
   )
@@ -43,26 +36,20 @@ function PeriodDockItem({ item, mouseX, onActivate }) {
 
 export default function RdvnReferenceDock({ onItemOpen }) {
   const mouseX = useMotionValue(Number.POSITIVE_INFINITY)
-  const [bouncing, setBouncing] = useState(null)
-
-  const activate = (id) => {
-    setBouncing(id)
-    window.setTimeout(() => setBouncing(null), 360)
-    onItemOpen?.(id)
-  }
 
   return (
-    <div className="period-dock-zone" aria-label="Developer-logo-period dock">
+    <div className="efb-dock-zone">
       <motion.div
-        className="period-dock"
-        onMouseMove={(event) => mouseX.set(event.clientX)}
+        className="efb-dock"
+        onMouseMove={(event) => mouseX.set(event.pageX)}
         onMouseLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
+        aria-label="Smart Theme dock efb2f731 reference"
       >
-        {periodItems.map((item) => (
-          <div key={item.id} className={bouncing === item.id ? 'period-dock-slot is-bouncing' : 'period-dock-slot'}>
-            <PeriodDockItem item={item} mouseX={mouseX} onActivate={() => activate(item.id)} />
-          </div>
+        {dockItems.map((item) => (
+          <DockItem key={item.id} item={item} mouseX={mouseX} onActivate={() => onItemOpen?.(item.id)} />
         ))}
+        <div className="efb-dock-separator" aria-hidden="true" />
+        <DockItem item={trashItem} mouseX={mouseX} onActivate={() => onItemOpen?.(trashItem.id)} />
       </motion.div>
     </div>
   )
