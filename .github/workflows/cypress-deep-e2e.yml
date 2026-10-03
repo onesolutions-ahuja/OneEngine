@@ -36,23 +36,35 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
-      - name: Wait for deployed frontend and API
+      - name: Wait for deployed frontend, entry asset, and API
         shell: bash
         run: |
           set -euo pipefail
           EXPECTED_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          ORIGIN="https://onesolutions-ahuja.github.io"
           for i in {1..36}; do
-            FRONT=0
             API=0
-            curl -fsSL "$ONEPOS_E2E_BASE_URL" >/dev/null && FRONT=1 || true
+            ENTRY=0
+            HTML="$(curl -fsSL -H 'Cache-Control: no-cache' "${ONEPOS_E2E_BASE_URL}?e2e=${EXPECTED_SHA}-${i}" || true)"
+            ASSET="$(printf '%s' "$HTML" | grep -oE 'src="[^"]+\.js"' | head -n1 | sed -E 's/^src="(.*)"$/\1/' || true)"
+            if [ -n "$ASSET" ]; then
+              if [[ "$ASSET" == http* ]]; then
+                ASSET_URL="$ASSET"
+              elif [[ "$ASSET" == /* ]]; then
+                ASSET_URL="${ORIGIN}${ASSET}"
+              else
+                ASSET_URL="${ONEPOS_E2E_BASE_URL}${ASSET}"
+              fi
+              curl -fsSL -H 'Cache-Control: no-cache' "$ASSET_URL" >/dev/null && ENTRY=1 || true
+            fi
             curl -fsSL "$ONEPOS_E2E_API_BASE_URL/api/health" >/dev/null && API=1 || true
-            if [ "$FRONT" = "1" ] && [ "$API" = "1" ]; then
-              echo "Testing deployed Pages after successful deployment for commit $EXPECTED_SHA"
+            if [ "$ENTRY" = "1" ] && [ "$API" = "1" ]; then
+              echo "Testing deployed Pages for commit $EXPECTED_SHA with entry asset $ASSET_URL"
               exit 0
             fi
             sleep 10
           done
-          echo "::error::Frontend or API did not become ready in time."
+          echo "::error::Frontend entry asset or API did not become ready in time."
           exit 1
 
       - name: Verify credentials are configured

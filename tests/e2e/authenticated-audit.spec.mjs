@@ -58,7 +58,7 @@ test("workflow builder can add/select/delete a step without stale selection", as
   const newFlowDialog = page.getByRole("dialog", { name: "New Flow" });
   await expect(newFlowDialog).toBeVisible();
   await newFlowDialog.getByRole("button", { name: "Next", exact: true }).click();
-  await newFlowDialog.getByRole("button", { name: /^Autolaunched Flow \(No Trigger\)/ }).click();
+  await newFlowDialog.getByRole("button", { name: "Autolaunched Flow (No Trigger)", exact: false }).click();
   await newFlowDialog.getByRole("button", { name: "Create", exact: true }).click();
 
   await expect(page.getByText("Elements", { exact: true })).toBeVisible();

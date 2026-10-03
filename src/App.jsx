@@ -23,7 +23,13 @@ function lazyWithRecovery(loader) {
       const isChunkLoadFailure = /failed to fetch dynamically imported module|importing a module script failed|loading chunk .* failed|error loading dynamically imported module/i.test(message)
       if (isChunkLoadFailure && window.sessionStorage.getItem(CHUNK_RELOAD_KEY) !== '1') {
         window.sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
-        window.location.reload()
+        try {
+          const url = new URL(window.location.href)
+          url.searchParams.set('_refresh', Date.now().toString())
+          window.location.replace(url.toString())
+        } catch {
+          window.location.reload()
+        }
         return new Promise(() => {})
       }
       window.sessionStorage.removeItem(CHUNK_RELOAD_KEY)

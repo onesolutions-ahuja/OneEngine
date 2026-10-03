@@ -27,12 +27,10 @@ export function readRoute() {
   const hashPath = String(window.location.hash || '').replace(/^#\/?/, '')
   let routePath = path.replace(/^\/+/, '')
   if (!routePath && hashPath) routePath = hashPath
-  if (!routePath) {
-    try {
-      const remembered = sessionStorage.getItem('onepos.lastRoute') || ''
-      routePath = remembered.startsWith(base) ? remembered.slice(base.length).replace(/^\/+/, '') : remembered.replace(/^\/+/, '')
-    } catch {}
-  }
+  // An explicit visit to the application root is the landing route. Do not
+  // resurrect a previously opened privileged route (for example OneDeveloper)
+  // from session state, because that can strand a normal tenant user on an
+  // authorization error even though the URL is the root.
   const parts = routePath.split('/').filter(Boolean)
   if (parts[0] === 'settings') {
     const section = !parts[1] || parts[1] === 'general' ? 'company' : parts[1]

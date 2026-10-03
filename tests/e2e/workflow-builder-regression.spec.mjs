@@ -8,7 +8,7 @@ async function createFlowOfType(page, typeLabel) {
   const dialog = page.getByRole("dialog", { name: "New Flow" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Next", exact: true }).click();
-  await dialog.getByRole("button", { name: new RegExp(`^${typeLabel}`) }).click();
+  await dialog.getByRole("button", { name: typeLabel, exact: false }).click();
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByLabel("Workflow Builder workspace")).toBeVisible({ timeout: 15_000 });
 }
