@@ -60,8 +60,10 @@ export function Dock({ onItemOpen, collapsible = false }) {
   const applyMagnification = (clientX) => {
     dockItemsRef.current.forEach((node) => {
       if (!node) return
-      const rect = node.getBoundingClientRect()
-      const signedDistance = rect.left + rect.width / 2 - clientX
+      const zoneRect = node.parentElement?.getBoundingClientRect()
+      if (!zoneRect) return
+      const center = zoneRect.left + node.offsetLeft + node.offsetWidth / 2
+      const signedDistance = center - clientX
       const distance = Math.abs(signedDistance)
       const radius = 128
       const normalized = Math.max(0, 1 - distance / radius)
