@@ -371,9 +371,6 @@ const pool = primaryDatabaseUrl
        *     rather than waiting forever
        */
       connectionTimeoutMillis: 15000,
-      idle_in_transaction_session_timeout: 30000,
-      lock_timeout: 15000,
-      statement_timeout: 120000,
     })
   : null;
 
@@ -382,9 +379,6 @@ const tenantPoolManager = createTenantPoolManager({
   PoolFactory: Pool,
   poolOptions: {
     connectionTimeoutMillis: 15000,
-    idle_in_transaction_session_timeout: 30000,
-    lock_timeout: 15000,
-    statement_timeout: 120000,
   },
 });
 
