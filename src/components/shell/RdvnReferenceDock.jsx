@@ -19,6 +19,12 @@ const trashItem = {
   src: 'https://rdvnui.com/assets/Trash%20Full-BoE_wJYh.png',
 }
 
+const mobileDockItems = [
+  { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png` },
+  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/contacts.svg` },
+  { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png` },
+]
+
 function DockItem({ item, mouseX, onActivate }) {
   const ref = useRef(null)
   const distance = useTransform(mouseX, (value) => {
@@ -60,6 +66,19 @@ export default function RdvnReferenceDock({ onItemOpen }) {
           <div className="efb-dock-jarvis">
             <JarvisOrb onClick={() => onItemOpen?.('jarvis')} />
           </div>
+        </div>
+      </div>
+
+      <div className="efb-mobile-dock" aria-label="OneEngine mobile dock">
+        {mobileDockItems.map((item) => (
+          <button key={item.id} type="button" className="efb-mobile-dock-item" onClick={() => onItemOpen?.(item.id)} aria-label={item.label} title={item.label}>
+            <span className="efb-mobile-dock-icon-wrap">
+              <img className="efb-mobile-dock-image" src={item.src} alt="" draggable="false" />
+            </span>
+          </button>
+        ))}
+        <div className="efb-mobile-dock-jarvis" aria-label="Jarvis">
+          <JarvisOrb onClick={() => onItemOpen?.('jarvis')} />
         </div>
       </div>
     </div>
