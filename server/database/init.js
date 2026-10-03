@@ -1550,6 +1550,34 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         }
         console.log("onePOS: OneAssistant visible booking flow upgraded");
       },
+    },
+    {
+      key: "0042_oneassistant_no_hidden_booking_actions",
+      version: "42",
+      name: "Replace OneAssistant hidden booking processors with Builder-visible primitives",
+      up: async client => {
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        const forbidden = new Set(["APPOINTMENT_SESSION_CONTEXT","PROCESS_APPOINTMENT_CONVERSATION","PROCESS_APPOINTMENT_DATE_RESPONSE","PROCESS_APPOINTMENT_SLOT_RESPONSE"]);
+        const hidden = router.action.actions.filter((action) => forbidden.has(action.key));
+        if (hidden.length) throw new Error("OneAssistant booking router still contains hidden appointment processors");
+
+        const rows = await client.query(
+          `SELECT id,company_id FROM platform_rules
+            WHERE company_id IS NOT NULL AND name='OneAssistant - Booking Channel Router'`
+        );
+        for (const row of rows.rows) {
+          await client.query(
+            `UPDATE platform_rules
+                SET trigger_key=$2,conditions=$3::jsonb,action=$4::jsonb,
+                    active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW()
+              WHERE id=$1 AND company_id=$5`,
+            [row.id,router.triggerKey,JSON.stringify(router.conditions || []),JSON.stringify(router.action),row.company_id]
+          );
+        }
+        console.log("onePOS: OneAssistant hidden booking processors replaced with visible flow nodes");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
