@@ -2,15 +2,14 @@ import { useRef } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import JarvisOrb from '../jarvis/JarvisOrb'
 
-const settingsSrc = 'https://rdvnui.com/assets/Settings-BIHCu_gi.png'
 export const dockItems = [
   { id: 'launchpad', label: 'Launcher', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Launchpad.png`, scaled: true },
   { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png`, scaled: true },
   { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: true },
-  { id: 'store', label: 'OneStore', src: settingsSrc, scaled: true },
-  { id: 'till', label: 'OneTill', src: settingsSrc, scaled: true },
+  { id: 'store', label: 'OneStore', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onestore-dock.png`, scaled: true },
+  { id: 'till', label: 'OneTill', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onetill-dock.png`, scaled: true },
   { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png`, scaled: true },
-  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg`, scaled: true },
+  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace-dock.png`, scaled: true },
 ]
 
 const trashItem = {
@@ -21,7 +20,7 @@ const trashItem = {
 
 const mobileDockItems = [
   { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png` },
-  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg` },
+  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace-dock.png` },
   { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png` },
 ]
 
