@@ -375,7 +375,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
       }
       if((p.deleteMode||'conditions')==='conditions'){
         const lookupId=n.id+'__lookup'
-        const lookup={id:lookupId,label:n.label+' · Find Records',type:'GET_RECORDS',objectKey:p.objectKey||'',filters:(p.conditions||[]).filter(row=>row.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value})),match:p.conditionLogic==='any'?'any':'all',store:'all',limit:200}
+        const lookup={id:lookupId,label:n.label+' · Find Records',type:'GET_RECORDS',_builderInternal:true,_builderOwnerId:n.id,objectKey:p.objectKey||'',filters:(p.conditions||[]).filter(row=>row.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value})),match:p.conditionLogic==='any'?'any':'all',store:'all',limit:200}
         return deleteLoop('steps.'+lookupId+'.records',lookup)
       }
       const resource=resources.find(r=>r.value===p.sourceRecord)
