@@ -1,0 +1,47 @@
+name: Generic Appointment Slot Flow Migration
+
+on:
+  push:
+    branches:
+      - audit/appointment-slot-flow-generic-20261003
+    paths:
+      - "scripts/apply-generic-slot-flow.py"
+      - ".github/workflows/generic-slot-flow.yml"
+      - "tests/appointmentWorkflow.test.mjs"
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/appointment-slot-flow-generic-20261003
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply generic slot-flow migration
+        run: python3 scripts/apply-generic-slot-flow.py
+      - name: Validate
+        run: |
+          node --check server/services/platformWorkflow.js
+          node --check server/services/packageRegistry.js
+          node --check server/database/init.js
+          node --test tests/appointmentWorkflow.test.mjs
+          npm test -- --runInBand
+      - name: Commit product changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "oneengine-cleanup-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add server/services/platformWorkflow.js server/services/packageRegistry.js server/database/init.js
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Replace hidden appointment slot search with generic Flow primitives"
+          git push origin HEAD:audit/appointment-slot-flow-generic-20261003
