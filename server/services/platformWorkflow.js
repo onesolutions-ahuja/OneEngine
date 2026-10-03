@@ -1474,6 +1474,121 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "PROCESS_APPOINTMENT_CONVERSATION",
+    displayName: "Appointments - Process Conversation",
+    description: "Advance a channel-neutral appointment conversation through date selection, live slot selection and confirmation.",
+    validation: (action) => {
+      if (!action?.channel) throw new Error("Process Appointment Conversation requires channel");
+    },
+    async: false,
+    requiredPermissions: ["appointments.manage"],
+    executor: async ({ action, db, pool, companyId, req, record, object, workflowVariables }) => {
+      const tenantId=companyId||req?.user?.companyId;
+      const rootObjectKey=object?.object_key||object?.objectKey||null;
+      const bound=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
+      const channel=String(bound.channel||record?.channel||"").toUpperCase();
+      const sender=String(bound.sender||record?.sender||record?.from||"").trim();
+      const recipient=String(bound.recipient||record?.recipient||record?.to||"").trim()||null;
+      const body=String(bound.body||record?.body||record?.message||record?.text||"").trim();
+      const conversationId=String(bound.conversationId||record?.metadata?.conversationId||record?.conversationId||"");
+      const sourceMessageId=bound.sourceMessageId||record?.providerMessageId||record?.provider_message_id||record?.communicationId||record?.id||null;
+      const customerId=bound.customerId||record?.metadata?.customerId||record?.customerId||record?.customer_id||null;
+      if(!tenantId||!sender||!channel) throw new Error("Appointment conversation requires company, channel and sender");
+
+      const normalizedBody=body.toLowerCase();
+      const appointmentIntent=/\b(appointment|book|booking|book appointment|make appointment)\b/i.test(body);
+      const activeResult=await db(
+        `SELECT * FROM appointment_booking_cases
+           WHERE company_id=$1 AND channel=$2 AND sender=$3
+             AND status IN ('NEW','SLOT_SELECTED')
+             AND ($4::text='' OR COALESCE(state->>'conversationId','') IN ('',$4))
+           ORDER BY created_at DESC LIMIT 1`,
+        [tenantId,channel,sender,conversationId]
+      );
+      let bookingCase=activeResult.rows[0]||null;
+      const formatDate=(value)=>{
+        const d=new Date(value);
+        return `${String(d.getUTCDate()).padStart(2,"0")}/${String(d.getUTCMonth()+1).padStart(2,"0")}/${d.getUTCFullYear()}`;
+      };
+      const formatTime=(value)=>new Date(value).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"});
+      const parseDate=(value)=>{
+        const match=String(value||"").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if(!match) return null;
+        const d=new Date(Date.UTC(Number(match[3]),Number(match[2])-1,Number(match[1])));
+        return d.getUTCFullYear()===Number(match[3])&&d.getUTCMonth()===Number(match[2])-1&&d.getUTCDate()===Number(match[1])?d:null;
+      };
+
+      if(!bookingCase){
+        if(!appointmentIntent) return {status:"skipped",handled:false,reply:null};
+        const today=new Date(); today.setUTCHours(0,0,0,0);
+        const tomorrow=new Date(today.getTime()+86400000);
+        const nextDay=new Date(today.getTime()+2*86400000);
+        bookingCase=await createAppointmentBookingCase(db,{
+          companyId:tenantId,channel,sourceMessageId,sender,recipient,body,customerId,
+          state:{conversationId,step:"AWAITING_DATE",dateOptions:[tomorrow.toISOString(),nextDay.toISOString()]}
+        });
+        return {status:"completed",handled:true,bookingCaseId:bookingCase.id,
+          reply:`Welcome. Please choose an appointment date:\n1. ${formatDate(tomorrow)}\n2. ${formatDate(nextDay)}\n3. Enter another date as DD/MM/YYYY\n\nReply 1, 2, or a date in DD/MM/YYYY format.`};
+      }
+
+      const state=bookingCase.state||{};
+      if(state.step==="AWAITING_DATE"){
+        let selectedDate=null;
+        if(normalizedBody==="1"||normalizedBody==="2") selectedDate=new Date(state.dateOptions?.[Number(normalizedBody)-1]);
+        else selectedDate=parseDate(body);
+        const today=new Date(); today.setUTCHours(0,0,0,0);
+        if(!selectedDate||selectedDate<today) return {status:"completed",handled:true,bookingCaseId:bookingCase.id,
+          reply:"Please share a correct input: reply 1, 2, or enter a future date in DD/MM/YYYY format."};
+        const serviceResult=await db("SELECT id FROM appointment_services WHERE company_id=$1 AND active=true ORDER BY created_at,id LIMIT 1",[tenantId]);
+        const serviceId=serviceResult.rows[0]?.id;
+        if(!serviceId) return {status:"completed",handled:true,bookingCaseId:bookingCase.id,reply:"No appointment service is currently available."};
+        const from=new Date(selectedDate); from.setUTCHours(0,0,0,0);
+        const to=new Date(from.getTime()+86400000);
+        const slots=await findAvailableAppointmentSlots(db,{companyId:tenantId,serviceId,from:from.toISOString(),to:to.toISOString(),limit:5});
+        if(!slots.length) return {status:"completed",handled:true,bookingCaseId:bookingCase.id,
+          reply:`There are no available appointments on ${formatDate(selectedDate)}. Please reply with another date in DD/MM/YYYY format.`};
+        await db("UPDATE appointment_booking_cases SET service_id=$3,state=state||$4::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+          [bookingCase.id,tenantId,serviceId,JSON.stringify({step:"AWAITING_SLOT",selectedDate:from.toISOString(),slots})]);
+        const choices=slots.map((slot,index)=>`${index+1}. ${formatTime(slot.startsAt)}`).join("\n");
+        return {status:"completed",handled:true,bookingCaseId:bookingCase.id,slots,
+          reply:`Available times for ${formatDate(selectedDate)}:\n${choices}\n\nReply with 1-${slots.length}.`};
+      }
+
+      if(state.step==="AWAITING_SLOT"){
+        const slots=Array.isArray(state.slots)?state.slots:[];
+        const choice=Number(normalizedBody);
+        if(!Number.isInteger(choice)||choice<1||choice>slots.length) return {status:"completed",handled:true,bookingCaseId:bookingCase.id,
+          reply:`Please share a correct input: reply with a number from 1 to ${slots.length}.`};
+        const slot=slots[choice-1];
+        const client=await pool.connect();
+        try{
+          await client.query("BEGIN");
+          const hold=await holdAppointmentSlot(client,{companyId:tenantId,storeId:slot.storeId||null,serviceId:slot.serviceId,resourceId:slot.resourceId,
+            customerId,conversationId,startsAt:slot.startsAt,endsAt:slot.endsAt,idempotencyKey:`${channel.toLowerCase()}-booking:${bookingCase.id}:${slot.startsAt}`,
+            metadata:{bookingCaseId:bookingCase.id}});
+          const appointment=await confirmAppointmentFromHold(client,{companyId:tenantId,holdId:hold.id,customerId,
+            customerName:bound.customerName||record?.customer?.name||null,customerPhone:bound.customerPhone||sender,sourceChannel:channel,
+            metadata:{bookingCaseId:bookingCase.id}});
+          await client.query("UPDATE appointment_booking_cases SET hold_id=$3,appointment_id=$4,status='CONFIRMED',state=state||$5::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+            [bookingCase.id,tenantId,hold.id,appointment.id,JSON.stringify({step:"CONFIRMED",selectedSlot:slot})]);
+          await client.query("COMMIT");
+          return {status:"completed",handled:true,bookingCaseId:bookingCase.id,appointmentId:appointment.id,
+            reply:`Appointment confirmed for ${formatDate(slot.startsAt)} at ${formatTime(slot.startsAt)}.`};
+        }catch(error){
+          await client.query("ROLLBACK");
+          if(["SLOT_UNAVAILABLE","HOLD_EXPIRED"].includes(error?.code)){
+            await db("UPDATE appointment_booking_cases SET state=state||$3::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2",
+              [bookingCase.id,tenantId,JSON.stringify({step:"AWAITING_DATE"})]);
+            return {status:"completed",handled:true,bookingCaseId:bookingCase.id,
+              reply:"That time is no longer available. Please reply with 1, 2, or another date in DD/MM/YYYY format."};
+          }
+          throw error;
+        }finally{client.release();}
+      }
+      return {status:"completed",handled:true,bookingCaseId:bookingCase.id,reply:"Please start again by sending APPOINTMENT."};
+    },
+  },
+  {
     key: "CREATE_APPOINTMENT_BOOKING_CASE",
     displayName: "Appointments - Create Booking Case",
     description: "Create an appointment booking case from an inbound Email, SMS or WhatsApp workflow.",
