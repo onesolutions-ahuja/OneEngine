@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Box, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react'
+import { Box, ChevronLeft, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
 import RecordListView from '../../components/RecordListView'
@@ -147,6 +147,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     if (window.innerWidth <= 1024) return 'tablet'
     return 'desktop'
   })
+  const [mobileStage, setMobileStage] = useState(() => initialRecordId ? 'detail' : initialObjectKey ? 'records' : 'objects')
 
   useEffect(() => {
     let live = true
@@ -207,6 +208,13 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
   }, [])
+
+  useEffect(() => {
+    if (formFactor !== 'mobile') return
+    if (initialRecordId) setMobileStage('detail')
+    else if (initialObjectKey) setMobileStage('records')
+    else setMobileStage('objects')
+  }, [formFactor, initialObjectKey, initialRecordId])
 
   useEffect(() => {
     if (!initialObjectKey || loadingObjects) return
@@ -270,8 +278,10 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       setPermissions(permissionRes?.data || null)
       const first = nextRows[0]?.id || ''
       setSelectedId((current) => {
+        if (forceRefresh && current && nextRows.some((row) => String(row.id) === String(current))) return current
+        if (initialRecordId && key === initialObjectKey && nextRows.some((row) => String(row.id) === String(initialRecordId))) return initialRecordId
+        if (formFactor === 'mobile') return ''
         if (current && nextRows.some((row) => String(row.id) === String(current))) return current
-        if (initialRecordId && nextRows.some((row) => String(row.id) === String(initialRecordId))) return initialRecordId
         return first
       })
     } catch (err) {
@@ -583,7 +593,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   }
 
   return (
-    <section className="workspace-page">
+    <section className={`workspace-page workspace-mobile-stage-${mobileStage}`}>
       <aside className="workspace-object-pane">
         <div className="workspace-pane-title">
           <div><strong>Workspace</strong><span>{objects.length} objects</span></div>
@@ -594,15 +604,20 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             const key = objectKey(object)
             return (
               <button key={object.id || key} type="button" title={objectLabel(object)} className={key === selectedKey ? 'is-active' : ''} onClick={() => {
-                if (key === selectedKey) return
-                setSelectedKey(key)
+                const changingObject = key !== selectedKey
+                if (changingObject) {
+                  setSelectedKey(key)
+                  setRows([])
+                  setFields([])
+                } else if (formFactor !== 'mobile') {
+                  return
+                }
                 setSelectedId('')
                 setDetail(null)
-                setRows([])
-                setFields([])
                 setDetailTab('details')
                 setRelatedState({ key: '', loading: false, rows: [], error: '' })
                 setHistoryState({ loading: false, rows: [], error: '' })
+                if (formFactor === 'mobile') setMobileStage('records')
                 onRouteChange?.(key, '', appKey || '')
               }}>
                 <span className="workspace-object-icon"><Box size={14}/></span>
@@ -615,6 +630,22 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       </aside>
 
       <main className="workspace-record-pane">
+        <div className="workspace-mobile-nav">
+          <button type="button" onClick={() => {
+            setMobileStage('objects')
+            setSelectedKey('')
+            setSelectedId('')
+            setDetail(null)
+            setRows([])
+            setFields([])
+            setDetailTab('details')
+            setRelatedState({ key: '', loading: false, rows: [], error: '' })
+            setHistoryState({ loading: false, rows: [], error: '' })
+            onRouteChange?.('', '', appKey || '')
+          }}><ChevronLeft size={18}/> Workspace</button>
+          <strong>{selectedObject ? objectLabel(selectedObject) : 'Records'}</strong>
+          <span aria-hidden="true" />
+        </div>
         {selectedObject ? (
           <RecordListView
             title={objectLabel(selectedObject)}
@@ -632,12 +663,23 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             objectLabel={objectLabel(selectedObject)}
             onDataChanged={() => loadObject(selectedObject, true)}
             selectedRowId={selectedId}
-            onRowSelect={(row) => { setSelectedId(row.id); setDetailTab('details') }}
+            onRowSelect={(row) => { setSelectedId(row.id); setDetailTab('details'); if (formFactor === 'mobile') setMobileStage('detail') }}
           />
         ) : <div className="workspace-state">Select an object.</div>}
       </main>
 
       <aside className="workspace-detail-pane">
+        <div className="workspace-mobile-nav">
+          <button type="button" onClick={() => {
+            setMobileStage('records')
+            setSelectedId('')
+            setDetail(null)
+            setDetailTab('details')
+            onRouteChange?.(selectedKey, '', appKey || '')
+          }}><ChevronLeft size={18}/> {selectedObject ? objectLabel(selectedObject) : 'Records'}</button>
+          <strong>{detailRecord ? recordTitle(detailRecord, detailFields) : 'Record'}</strong>
+          <span aria-hidden="true" />
+        </div>
         {!selectedObject ? null : loadingDetail ? (
           <div className="workspace-state">Loading record…</div>
         ) : detailRecord ? (

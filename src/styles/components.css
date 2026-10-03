@@ -1421,6 +1421,196 @@
   .workspace-detail-pane { display:none; }
 }
 
+.workspace-mobile-nav { display:none; }
+
+@media (max-width: 650px) {
+  .workspace-page {
+    display:block;
+    grid-template-columns:none;
+    overflow:hidden;
+  }
+
+  .workspace-object-pane,
+  .workspace-record-pane,
+  .workspace-detail-pane {
+    width:100%;
+    height:100%;
+    min-width:0;
+    min-height:0;
+    border:0;
+  }
+
+  .workspace-page.workspace-mobile-stage-objects .workspace-object-pane {
+    display:flex;
+  }
+
+  .workspace-page.workspace-mobile-stage-objects .workspace-record-pane,
+  .workspace-page.workspace-mobile-stage-objects .workspace-detail-pane,
+  .workspace-page.workspace-mobile-stage-records .workspace-object-pane,
+  .workspace-page.workspace-mobile-stage-records .workspace-detail-pane,
+  .workspace-page.workspace-mobile-stage-detail .workspace-object-pane,
+  .workspace-page.workspace-mobile-stage-detail .workspace-record-pane {
+    display:none;
+  }
+
+  .workspace-page.workspace-mobile-stage-records .workspace-record-pane,
+  .workspace-page.workspace-mobile-stage-detail .workspace-detail-pane {
+    display:flex;
+    flex-direction:column;
+  }
+
+  .workspace-object-pane {
+    background:#f2f2f7;
+  }
+
+  .workspace-pane-title {
+    min-height:52px;
+    padding:10px 14px 8px;
+    background:#f2f2f7;
+    border-bottom:0;
+  }
+
+  .workspace-pane-title strong {
+    font-size:20px;
+    letter-spacing:-.02em;
+  }
+
+  .workspace-pane-title span {
+    font-size:10px;
+  }
+
+  .workspace-object-search {
+    height:36px;
+    margin:0 12px 10px;
+    padding:0 10px;
+    border-radius:10px;
+    background:#fff;
+  }
+
+  .workspace-object-list {
+    padding:0 12px 14px;
+  }
+
+  .workspace-object-list button {
+    min-height:48px;
+    padding:7px 10px;
+    grid-template-columns:30px minmax(0,1fr) 16px;
+    gap:9px;
+    border-radius:0;
+    border-bottom:1px solid rgba(60,60,67,.14);
+    background:#fff;
+  }
+
+  .workspace-object-list button:first-of-type {
+    border-radius:12px 12px 0 0;
+  }
+
+  .workspace-object-list button:last-of-type {
+    border-bottom:0;
+    border-radius:0 0 12px 12px;
+  }
+
+  .workspace-object-list button:only-of-type {
+    border-radius:12px;
+  }
+
+  .workspace-object-list button:hover,
+  .workspace-object-list button.is-active {
+    color:#1d1d1f;
+    background:#fff;
+  }
+
+  .workspace-object-list button.is-active small {
+    color:rgba(0,0,0,.4);
+  }
+
+  .workspace-object-list button.is-active .workspace-object-icon {
+    color:#0a84ff;
+    background:rgba(10,132,255,.10);
+  }
+
+  .workspace-mobile-nav {
+    min-height:44px;
+    padding:0 10px;
+    flex:0 0 auto;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    align-items:center;
+    gap:6px;
+    border-bottom:1px solid rgba(60,60,67,.16);
+    background:rgba(248,248,250,.94);
+    backdrop-filter:blur(24px) saturate(1.25);
+    -webkit-backdrop-filter:blur(24px) saturate(1.25);
+  }
+
+  .workspace-mobile-nav button {
+    min-width:0;
+    padding:0;
+    display:inline-flex;
+    align-items:center;
+    gap:2px;
+    justify-self:start;
+    border:0;
+    color:#0a84ff;
+    background:transparent;
+    font:inherit;
+    font-size:12px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+
+  .workspace-mobile-nav strong {
+    max-width:46vw;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:12px;
+    font-weight:700;
+    text-align:center;
+  }
+
+  .workspace-record-pane {
+    padding:0;
+    background:#f2f2f7;
+  }
+
+  .workspace-record-pane .record-list-view {
+    min-height:0;
+    height:auto;
+    flex:1 1 auto;
+    border:0;
+    border-radius:0;
+  }
+
+  .workspace-record-pane .record-list-table-wrap {
+    max-height:none;
+  }
+
+  .workspace-detail-pane {
+    background:#f2f2f7;
+  }
+
+  .workspace-detail-header {
+    min-height:auto;
+    padding:10px 12px;
+    flex-wrap:wrap;
+  }
+
+  .workspace-detail-actions {
+    width:100%;
+    overflow-x:auto;
+    scrollbar-width:none;
+  }
+
+  .workspace-detail-actions::-webkit-scrollbar {
+    display:none;
+  }
+
+  .workspace-detail-scroll {
+    padding:10px 12px;
+  }
+}
+
 
 /* Top bar search + status popovers.
    Keep panels out of the 28px menubar flow and use the same compact pill treatment
