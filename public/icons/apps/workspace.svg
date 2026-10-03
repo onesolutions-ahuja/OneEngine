@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="workspace-title">
+  <title id="workspace-title">Workspace</title>
+  <defs>
+    <linearGradient id="workspace-bg" x1="6" y1="5" x2="58" y2="59" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B5CF6"/>
+      <stop offset=".55" stop-color="#6657E8"/>
+      <stop offset="1" stop-color="#4338CA"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#workspace-bg)"/>
+  <path d="M32 14 51 24 32 34 13 24 32 14Z" fill="#fff" opacity=".96"/>
+  <path d="m13 31 19 10 19-10v8L32 49 13 39v-8Z" fill="#fff" opacity=".82"/>
+  <path d="m13 42 19 10 19-10v5L32 57 13 47v-5Z" fill="#fff" opacity=".56"/>
+</svg>

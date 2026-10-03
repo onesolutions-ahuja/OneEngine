@@ -10,7 +10,7 @@ export const dockItems = [
   { id: 'store', label: 'OneStore', src: settingsSrc, scaled: true },
   { id: 'till', label: 'OneTill', src: settingsSrc, scaled: true },
   { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png`, scaled: true },
-  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/contacts.svg`, scaled: true },
+  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg`, scaled: true },
 ]
 
 const trashItem = {
@@ -21,7 +21,7 @@ const trashItem = {
 
 const mobileDockItems = [
   { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png` },
-  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/contacts.svg` },
+  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg` },
   { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png` },
 ]
 
