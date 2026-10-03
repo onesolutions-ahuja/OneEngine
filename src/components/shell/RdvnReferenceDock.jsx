@@ -3,7 +3,7 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import JarvisOrb from '../jarvis/JarvisOrb'
 
 const settingsSrc = 'https://rdvnui.com/assets/Settings-BIHCu_gi.png'
-const dockItems = [
+export const dockItems = [
   { id: 'launchpad', label: 'Launcher', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Launchpad.png`, scaled: true },
   { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png`, scaled: true },
   { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: true },
