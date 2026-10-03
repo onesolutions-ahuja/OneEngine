@@ -122,3 +122,5 @@ if '0045_remove_unused_appointment_action_wrappers' not in init:
 print("cleanup applied")
 
 # rerun after gate trigger update
+
+# rerun after yaml fix
