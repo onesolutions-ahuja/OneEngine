@@ -3738,7 +3738,8 @@
 .efb-dock-fixed-zone{display:flex;align-items:flex-end;gap:10px;height:60px;flex:0 0 auto;transform:none!important}
 .efb-dock-fixed-zone,.efb-dock-fixed-zone *{transition-property:none!important}
 .efb-dock-fixed-item{width:40px;height:40px;flex:0 0 40px;padding:0;border:0;background:transparent;display:block;cursor:pointer;transform:none!important}
-.efb-dock-jarvis{width:44px;height:44px;flex:0 0 44px;display:flex;align-items:center;justify-content:center;transform:none!important}
-.efb-dock-jarvis .jarvis-orb-host,.efb-dock-jarvis .jarvis-orb-container{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
-.efb-dock-jarvis .jarvis-orb{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;transform:none!important}
+.efb-dock-jarvis{position:relative;width:70px;height:40px;flex:0 0 70px;display:flex;align-items:flex-end;justify-content:center;overflow:visible;transform:none!important}
+.efb-dock-jarvis .jarvis-orb-host{position:absolute;left:50%!important;bottom:-10px;transform:translateX(-50%) scale(.864)!important;transform-origin:bottom center}
+.efb-dock-jarvis .jarvis-orb-container{pointer-events:auto}
+.efb-dock-jarvis .jarvis-orb-container::before{background:rgba(54,58,66,.62)!important;border-color:rgba(255,255,255,.26)!important;box-shadow:0 8px 20px rgba(18,24,36,.22),inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(0,0,0,.10)!important;border-radius:50%!important}
 @media(max-width:680px){.efb-dock-zone{display:none}}
