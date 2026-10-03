@@ -135,7 +135,6 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const [mode, setMode] = useState('list')
   const [workflowDraft, setWorkflowDraft] = useState(null)
   const [workflowNewDialogOpen, setWorkflowNewDialogOpen] = useState(false)
-  const [workflowNewStep, setWorkflowNewStep] = useState('source')
   const [workflowNewType, setWorkflowNewType] = useState('')
   const [sideTab, setSideTab] = useState('components')
   const [canvas, setCanvas] = useState({ workflow: [], approval: [], dashboard: [], report: [] })
@@ -304,7 +303,6 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
 
   const newDefinition = () => {
     if (tab === 'workflow') {
-      setWorkflowNewStep('source')
       setWorkflowNewType('')
       setWorkflowNewDialogOpen(true)
       return
@@ -570,44 +568,32 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
             <header>
               <div>
                 <strong>New Flow</strong>
-                <span>{workflowNewStep === 'source' ? 'Choose how you want to start.' : 'Choose the type of flow you want to build.'}</span>
+                <span>Choose the type of flow you want to build.</span>
               </div>
               <button type="button" aria-label="Close New Flow" onClick={() => setWorkflowNewDialogOpen(false)}>×</button>
             </header>
-            {workflowNewStep === 'source' ? (
-              <div className="onebuilder-new-flow-body">
-                <div className="onebuilder-new-flow-heading">How do you want to start?</div>
-                <button type="button" className="onebuilder-new-flow-source is-selected" aria-pressed="true">
-                  <span className="onebuilder-new-flow-icon">＋</span>
-                  <span><strong>Start From Scratch</strong><small>Choose a flow type and configure the automation yourself.</small></span>
-                </button>
+            <div className="onebuilder-new-flow-body">
+              <div className="onebuilder-new-flow-heading">Select a Flow Type</div>
+              <div className="onebuilder-new-flow-grid">
+                {FLOW_TYPE_OPTIONS.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className={`onebuilder-new-flow-type ${workflowNewType === option.key ? 'is-selected' : ''}`}
+                    aria-pressed={workflowNewType === option.key}
+                    onClick={() => setWorkflowNewType(option.key)}
+                  >
+                    <span className="onebuilder-new-flow-icon">{option.icon}</span>
+                    <span><strong>{option.label}</strong><small>{option.description}</small></span>
+                  </button>
+                ))}
               </div>
-            ) : (
-              <div className="onebuilder-new-flow-body">
-                <div className="onebuilder-new-flow-heading">Select a Flow Type</div>
-                <div className="onebuilder-new-flow-grid">
-                  {FLOW_TYPE_OPTIONS.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      className={`onebuilder-new-flow-type ${workflowNewType === option.key ? 'is-selected' : ''}`}
-                      aria-pressed={workflowNewType === option.key}
-                      onClick={() => setWorkflowNewType(option.key)}
-                    >
-                      <span className="onebuilder-new-flow-icon">{option.icon}</span>
-                      <span><strong>{option.label}</strong><small>{option.description}</small></span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            </div>
             <footer>
-              <span>{workflowNewStep === 'type' ? <button type="button" className="onebuilder-new-flow-secondary" onClick={() => setWorkflowNewStep('source')}>Back</button> : null}</span>
+              <span />
               <span className="onebuilder-new-flow-actions">
                 <button type="button" className="onebuilder-new-flow-secondary" onClick={() => setWorkflowNewDialogOpen(false)}>Cancel</button>
-                {workflowNewStep === 'source'
-                  ? <button type="button" className="onebuilder-new-flow-primary" onClick={() => setWorkflowNewStep('type')}>Next</button>
-                  : <button type="button" className="onebuilder-new-flow-primary" disabled={!workflowNewType} onClick={createWorkflowDraft}>Create</button>}
+                <button type="button" className="onebuilder-new-flow-primary" disabled={!workflowNewType} onClick={createWorkflowDraft}>Create</button>
               </span>
             </footer>
           </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
 
-function objectKey(object) {
+function metadataObjectKey(object) {
   return String(object?.object_key || object?.objectKey || object?.api_name || object?.apiName || object?.key || "");
 }
 
@@ -74,7 +74,7 @@ export default function PlatformFieldPicker({
       return undefined;
     }
     let active = true;
-    const object = objects.find((item) => objectKey(item) === selectedObjectKey);
+    const object = objects.find((item) => metadataObjectKey(item) === selectedObjectKey);
     setFields([]);
     setSearch("");
     if (!object) {
@@ -111,7 +111,7 @@ export default function PlatformFieldPicker({
     const query = objectSearch.trim().toLowerCase();
     if (!query) return objects;
     return objects.filter((object) => {
-      const key = objectKey(object);
+      const key = metadataObjectKey(object);
       const label = object?.label || object?.name || key;
       return `${label} ${key}`.toLowerCase().includes(query);
     });
@@ -135,8 +135,8 @@ export default function PlatformFieldPicker({
   };
 
   function selectObject(nextKey) {
-    const selected = objects.find((item) => objectKey(item) === String(nextKey));
-    const canonicalKey = selected ? objectKey(selected) : String(nextKey || "");
+    const selected = objects.find((item) => metadataObjectKey(item) === String(nextKey));
+    const canonicalKey = selected ? metadataObjectKey(selected) : String(nextKey || "");
     onObjectChange?.(canonicalKey, selected?.id || selected?.object_id || "");
     onChange?.("");
   }
@@ -148,8 +148,8 @@ export default function PlatformFieldPicker({
           <input className="w-full rounded border px-2 py-2 text-sm" value={objectSearch} onChange={(event) => setObjectSearch(event.target.value)} placeholder="Search objects..." aria-label="Search objects" disabled={objectsLoading}/>
           <select className="w-full rounded border px-2 py-2 text-sm" value={selectedObjectKey || ""} onChange={(event) => selectObject(event.target.value)} disabled={objectsLoading}>
             <option value="">{objectsLoading ? "Loading objects..." : "Select object"}</option>
-            {selectedObjectKey && !objects.some((item) => objectKey(item) === String(selectedObjectKey)) ? <option value={selectedObjectKey}>Unknown object: {selectedObjectKey}</option> : null}
-            {filteredObjects.map((object) => <option key={object.id || objectKey(object)} value={objectKey(object)}>{object.label || objectKey(object)}</option>)}
+            {selectedObjectKey && !objects.some((item) => metadataObjectKey(item) === String(selectedObjectKey)) ? <option value={selectedObjectKey}>Unknown object: {selectedObjectKey}</option> : null}
+            {filteredObjects.map((object) => <option key={object.id || metadataObjectKey(object)} value={metadataObjectKey(object)}>{object.label || metadataObjectKey(object)}</option>)}
           </select>
         </div>
       ) : null}
