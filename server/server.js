@@ -2810,41 +2810,55 @@ async function startServer() {
     // Serialise the metadata bootstrap across processes to avoid DDL/seed
     // deadlocks while both instances point at the same PostgreSQL database.
     const bootstrapLockClient = await pool.connect();
+    let ownsBootstrapLock = false;
     try {
-      await bootstrapLockClient.query("SELECT pg_advisory_lock(hashtext('onepos_platform_bootstrap'))");
-      // Re-check after acquiring the lock: another instance may have completed
-      // the same fingerprint while this one was waiting.
-      const bootstrapState = await platformBootstrapIsCurrent();
-      let bootstrapRan = false;
-      if (!bootstrapState.current) {
-        console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
-        await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-        await initializeStandardObjectEcosystem(pool);
-        bootstrapRan = true;
+      // Never block a request-serving instance behind another rolling deploy.
+      // The HTTP listener is already live at this point and the durable workflow
+      // worker is initialized later in this startup path; a blocking advisory
+      // lock here previously left inbound events queued indefinitely whenever
+      // another instance held the bootstrap lock.
+      const lockResult = await bootstrapLockClient.query(
+        "SELECT pg_try_advisory_lock(hashtext('onepos_platform_bootstrap')) AS acquired"
+      );
+      ownsBootstrapLock = lockResult.rows[0]?.acquired === true;
+
+      if (!ownsBootstrapLock) {
+        console.warn("onePOS: platform bootstrap lock busy; skipping duplicate bootstrap on this instance");
       } else {
-        const initialRegistryHealth = await verifyPublicPackageRegistry(pool);
-        if (!initialRegistryHealth.healthy) {
-          console.warn("onePOS: package registry drift detected; repairing from source catalogue");
+        const bootstrapState = await platformBootstrapIsCurrent();
+        let bootstrapRan = false;
+        if (!bootstrapState.current) {
+          console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
           await initializePlatformMetadata(pool, { includeOperationalObjects: true });
           await initializeStandardObjectEcosystem(pool);
           bootstrapRan = true;
         } else {
-          console.log("onePOS: platform bootstrap metadata unchanged; registry verified");
+          const initialRegistryHealth = await verifyPublicPackageRegistry(pool);
+          if (!initialRegistryHealth.healthy) {
+            console.warn("onePOS: package registry drift detected; repairing from source catalogue");
+            await initializePlatformMetadata(pool, { includeOperationalObjects: true });
+            await initializeStandardObjectEcosystem(pool);
+            bootstrapRan = true;
+          } else {
+            console.log("onePOS: platform bootstrap metadata unchanged; registry verified");
+          }
         }
-      }
 
-      const registryHealth = await verifyPublicPackageRegistry(pool);
-      if (!registryHealth.healthy) {
-        const details = [
-          registryHealth.missing.length ? `missing=${registryHealth.missing.join(",")}` : "",
-          registryHealth.stale.length ? `stale=${registryHealth.stale.map((item) => item.packageKey).join(",")}` : "",
-        ].filter(Boolean).join(" ");
-        throw new Error(`Public package registry is out of sync with source catalogue${details ? `: ${details}` : ""}`);
+        const registryHealth = await verifyPublicPackageRegistry(pool);
+        if (!registryHealth.healthy) {
+          const details = [
+            registryHealth.missing.length ? `missing=${registryHealth.missing.join(",")}` : "",
+            registryHealth.stale.length ? `stale=${registryHealth.stale.map((item) => item.packageKey).join(",")}` : "",
+          ].filter(Boolean).join(" ");
+          throw new Error(`Public package registry is out of sync with source catalogue${details ? `: ${details}` : ""}`);
+        }
+        if (bootstrapRan) await markPlatformBootstrapCurrent(bootstrapState.fingerprint);
       }
-      if (bootstrapRan) await markPlatformBootstrapCurrent(bootstrapState.fingerprint);
     } finally {
       try {
-        await bootstrapLockClient.query("SELECT pg_advisory_unlock(hashtext('onepos_platform_bootstrap'))");
+        if (ownsBootstrapLock) {
+          await bootstrapLockClient.query("SELECT pg_advisory_unlock(hashtext('onepos_platform_bootstrap'))");
+        }
       } finally {
         bootstrapLockClient.release();
       }
