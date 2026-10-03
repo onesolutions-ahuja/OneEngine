@@ -864,32 +864,83 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
       const { raw, json } = parseWhatsAppWebhookBody(req.body);
       if (json?.object !== "whatsapp_business_account") return res.status(200).json({ success: true, ignored: true });
 
-      const changes = (Array.isArray(json.entry) ? json.entry : [])
+      const entries = Array.isArray(json.entry) ? json.entry : [];
+      const changes = entries
         .flatMap((entry) => Array.isArray(entry?.changes) ? entry.changes : [])
         .map((change) => change?.value)
         .filter(Boolean);
-      const phoneNumberId = changes.map((value) => String(value?.metadata?.phone_number_id || "")).find(Boolean);
-      if (!phoneNumberId) return res.status(200).json({ success: true, ignored: true });
+      const payloadPhoneNumberId = changes
+        .map((value) => String(value?.metadata?.phone_number_id || "").trim())
+        .find(Boolean) || "";
+      const payloadBusinessAccountId = entries
+        .map((entry) => String(entry?.id || "").trim())
+        .find(Boolean) || "";
+
+      // Route by either identifier Meta supplies. Real Cloud API deliveries normally
+      // contain metadata.phone_number_id, while dashboard/sample deliveries may use
+      // a placeholder phone ID even though entry.id identifies the WABA. We already
+      // store both IDs, so requiring only phone_number_id caused valid test webhooks
+      // to be silently discarded before signature verification.
+      if (!payloadPhoneNumberId && !payloadBusinessAccountId) {
+        console.info("WhatsApp webhook ignored", { reason: "missing_routing_identifiers" });
+        return res.status(200).json({ success: true, ignored: true });
+      }
 
       const integrationResult = await db(
         `SELECT id,company_id,configuration FROM integrations
           WHERE provider='whatsapp' AND active=true
-            AND configuration->>'phone_number_id'=$1
+            AND (
+              ($1 <> '' AND configuration->>'phone_number_id'=$1)
+              OR
+              ($2 <> '' AND configuration->>'business_account_id'=$2)
+            )
+          ORDER BY
+            CASE WHEN configuration->>'phone_number_id'=$1 THEN 0 ELSE 1 END,
+            id
           LIMIT 1`,
-        [phoneNumberId]
+        [payloadPhoneNumberId, payloadBusinessAccountId]
       );
       const integration = integrationResult.rows[0];
-      if (!integration) return res.status(200).json({ success: true, ignored: true });
+      if (!integration) {
+        console.info("WhatsApp webhook ignored", {
+          reason: "integration_not_found",
+          hasPhoneNumberId: Boolean(payloadPhoneNumberId),
+          hasBusinessAccountId: Boolean(payloadBusinessAccountId),
+        });
+        return res.status(200).json({ success: true, ignored: true });
+      }
 
       const appSecret =
         decryptSecret(integration.configuration?.app_secret) ||
         String(process.env.WHATSAPP_APP_SECRET || "").trim();
+      if (!appSecret) {
+        console.warn("WhatsApp webhook rejected", {
+          reason: "app_secret_not_configured",
+          companyId: integration.company_id,
+        });
+        return res.status(503).json({ success: false, message: "WhatsApp webhook signing is not configured" });
+      }
       if (!verifyMetaWebhookSignature(raw, req.get("x-hub-signature-256"), appSecret)) {
-        console.warn("WhatsApp webhook signature rejected", { phoneNumberId });
+        console.warn("WhatsApp webhook signature rejected", {
+          companyId: integration.company_id,
+          matchedBy: String(integration.configuration?.phone_number_id || "") === payloadPhoneNumberId
+            ? "phone_number_id"
+            : "business_account_id",
+        });
         return res.status(401).json({ success: false, message: "Invalid webhook signature" });
       }
 
+      const phoneNumberId =
+        payloadPhoneNumberId ||
+        String(integration.configuration?.phone_number_id || "").trim();
       const companyId = integration.company_id;
+      console.info("WhatsApp webhook accepted", {
+        companyId,
+        matchedBy: String(integration.configuration?.phone_number_id || "") === payloadPhoneNumberId
+          ? "phone_number_id"
+          : "business_account_id",
+        changeCount: changes.length,
+      });
       const entitlements = await getCompanyEntitlements(db, companyId);
       const assistantLicensed = hasEntitlement(entitlements, "whatsapp_assistant");
 
