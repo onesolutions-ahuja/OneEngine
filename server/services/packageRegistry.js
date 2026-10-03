@@ -3098,7 +3098,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
        (object_id,page_type,company_id,name,layout_key,definition,active,is_default,
         source_package_id,source_package_version,managed,package_required)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb,true,$7,$8,$9,true,$10)
-       ON CONFLICT (object_id,page_type,role_id,company_id)
+       ON CONFLICT (object_id,page_type,layout_key) WHERE layout_key <> ''
        DO UPDATE SET name=CASE WHEN platform_layouts.user_modified THEN platform_layouts.name ELSE EXCLUDED.name END,
          layout_key=EXCLUDED.layout_key,
          definition=CASE WHEN platform_layouts.user_modified THEN platform_layouts.definition ELSE EXCLUDED.definition END,
