@@ -25,3 +25,12 @@
 .b2-zoom{top:8px;left:8px;height:30px}.b2-zoom button{width:28px;height:28px}.b2-zoom span{font-size:9px}
 .b2-runtime-message{position:absolute;z-index:70;top:58px;left:50%;transform:translateX(-50%);border:1px solid #91db8b;border-radius:4px;background:#f1fbea;padding:6px 12px;color:#2e844a;font-size:10px;box-shadow:0 2px 8px #0001}
 @media(max-width:1250px){.b2-top{grid-template-columns:150px minmax(150px,1fr) auto}.b2-top-actions>button{padding:0 7px;font-size:10px}.b2-workspace{grid-template-columns:210px minmax(380px,1fr) 280px}}
+
+/* Builder2 free-form graph canvas */
+.b2-rf-canvas{width:100%;height:100%;min-height:620px;background:var(--b2-canvas,#f6f7f9)}
+.b2-rf-node{min-width:170px;border:1px solid #c9cdd3;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12);padding:10px 12px}
+.b2-rf-node.is-selected{outline:2px solid #0176d3;outline-offset:2px}
+.b2-rf-title{display:flex;flex-direction:column;gap:2px}
+.b2-rf-title b{font-size:13px;color:#181818}
+.b2-rf-title small{font-size:10px;color:#706e6b;text-transform:capitalize}
+.b2-rf-node .react-flow__handle{width:8px;height:8px}
