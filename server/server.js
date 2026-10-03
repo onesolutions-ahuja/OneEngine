@@ -12,7 +12,7 @@ import { bootstrapInitialSuperadmin } from "./database/rbacBootstrap.js";
 import { seedOneSolutionsDemo } from "./database/oneSolutionsSeeder.js";
 import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
-import { drainDuePlatformJobs } from "./services/platformJobs.js";
+import { drainDuePlatformJobs, enqueuePlatformJob } from "./services/platformJobs.js";
 import { processApprovalDueJob } from "./services/platformApprovals.js";
 import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
 import { validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
@@ -2947,6 +2947,17 @@ async function startServer() {
           db,
           limit: 10,
           onFailed: async (job, failed) => {
+            if (job.kind === "PLATFORM_EVENT_WORKFLOW") {
+              console.error("Platform event workflow job failed", {
+                jobId: job.id,
+                companyId: job.company_id,
+                workflowId: job.payload?.workflowId || null,
+                eventId: job.payload?.eventId || null,
+                status: failed?.status || "FAILED",
+                attempts: failed?.attempts || 0,
+                error: failed?.last_error || null,
+              });
+            }
             if (job.kind === "PLATFORM_SCHEDULED_WORKFLOW" && failed?.status === "FAILED") {
               await failScheduledWorkflow({ db, payload: job.payload || {}, error: failed.last_error });
             }
@@ -3565,6 +3576,17 @@ async function startServer() {
                 // durable schedule even if the workflow itself is paused by WAIT,
                 // so recurring schedules are not blocked by a long-running run.
                 await completeScheduledWorkflow({ db, payload });
+                console.info("Platform event workflow job completed", {
+                  jobId: job.id,
+                  workflowId: workflow.id,
+                  eventId: payload.eventId || null,
+                  status: waiting ? "WAITING" : "COMPLETED",
+                  steps: results.map((entry) => ({
+                    stepId: entry?.stepId || null,
+                    action: entry?.action || null,
+                    status: entry?.result?.status || null,
+                  })),
+                });
                 return { status: waiting ? "WAITING" : "COMPLETED", results };
               } catch (error) {
                 if (run?.id) {
@@ -3577,6 +3599,13 @@ async function startServer() {
               }
             }
             if (job.kind === "PLATFORM_EVENT_WORKFLOW") {
+              console.info("Platform event workflow job started", {
+                jobId: job.id,
+                companyId: job.company_id,
+                workflowId: payload.workflowId || null,
+                eventId: payload.eventId || null,
+                eventType: payload.eventType || null,
+              });
               const workflowResult = await db(
                 `SELECT * FROM platform_rules
                   WHERE id=$1 AND company_id=$2 AND active=TRUE
@@ -3787,6 +3816,63 @@ async function startServer() {
         draining = false;
       }
     };
+    console.log("onePOS: platform job worker", { enabled: workerEnabled });
+
+    if (workerEnabled) {
+      // Recover recent event workflows that were persisted while the worker was
+      // unavailable/disabled or whose prior job failed before creating a
+      // completed workflow run. The durable event remains authoritative, and a
+      // separate idempotency key makes recovery safe without mutating history.
+      try {
+        const recoverable = await db(
+          `SELECT e.id AS event_id,e.company_id,e.event_type,e.payload,e.actor_user_id,
+                  r.id AS workflow_id,r.object_id
+             FROM platform_events e
+             JOIN platform_rules r
+               ON r.company_id=e.company_id
+              AND r.active=TRUE
+              AND COALESCE(r.lifecycle_status,'ACTIVE')='ACTIVE'
+              AND r.trigger_key=e.event_type
+              AND r.action->>'type'='workflow'
+            WHERE e.event_type='communication_message_received'
+              AND e.created_at >= NOW() - INTERVAL '1 hour'
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM platform_workflow_runs wr
+                 WHERE wr.company_id=e.company_id
+                   AND wr.workflow_id=r.id
+                   AND wr.metadata->>'eventId'=e.id::text
+                   AND wr.status='COMPLETED'
+              )
+            ORDER BY e.created_at,e.id`
+        );
+        for (const item of recoverable.rows || []) {
+          const eventPayload = item.payload && typeof item.payload === "object" ? item.payload : {};
+          await enqueuePlatformJob({
+            db,
+            companyId: item.company_id,
+            kind: "PLATFORM_EVENT_WORKFLOW",
+            payload: {
+              workflowId: item.workflow_id,
+              eventId: item.event_id,
+              eventType: item.event_type,
+              objectId: item.object_id || eventPayload.objectId || null,
+              recordId: eventPayload.recordId || eventPayload.id || null,
+              record: eventPayload.record || eventPayload || null,
+              actorUserId: item.actor_user_id || null,
+            },
+            idempotencyKey: `event-workflow-recovery:${item.workflow_id}:${item.event_id}`,
+          });
+        }
+        if (recoverable.rowCount) {
+          console.log("onePOS: recovered recent event workflow jobs", { count: recoverable.rowCount });
+        }
+      } catch (error) {
+        console.error("onePOS: event workflow recovery failed:", error?.message || error);
+      }
+      void drain();
+    }
+
     const workerTimer = workerEnabled ? setInterval(drain, 5000) : null;
     if (workerTimer?.unref) workerTimer.unref();
     const shutdown = () => {
