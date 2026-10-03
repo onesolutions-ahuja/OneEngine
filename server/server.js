@@ -3716,6 +3716,16 @@ async function startServer() {
                 }
                 return { status: waiting ? "WAITING" : "COMPLETED", results };
               } catch (error) {
+                console.error("Platform event workflow execution error", {
+                  jobId: job.id,
+                  workflowId: workflow.id,
+                  eventId: payload.eventId || null,
+                  message: error?.message || String(error),
+                  code: error?.code || null,
+                  detail: error?.detail || null,
+                  position: error?.position || null,
+                  stack: String(error?.stack || "").split("\n").slice(0, 10).join("\n"),
+                });
                 if (run?.id) {
                   await db(
                     "UPDATE platform_workflow_runs SET status='FAILED',error_text=$1,completed_at=NOW(),updated_at=NOW() WHERE id=$2 AND company_id=$3",
