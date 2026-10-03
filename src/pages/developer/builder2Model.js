@@ -107,7 +107,7 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     }
     if (n.type==='LOOP'&&!n.config?.collection) add('error','LOOP_COLLECTION_REQUIRED',`${n.label}: Select a collection variable.`,n.id)
     if (n.type==='LOOP'&&!String(n.config?.itemVariable||'').trim()) add('error','LOOP_ITEM_REQUIRED',`${n.label}: Enter the Current Item Variable.`,n.id)
-    if (n.type==='LOOP'&&!n.config?.bodyBranchTarget) add('error','LOOP_BODY_REQUIRED',`${n.label}: Select the first element in the loop body.`,n.id)
+    if (n.type==='LOOP'&&!(n.config?.bodyBranchTargets||[]).length&&!n.config?.bodyBranchTarget) add('error','LOOP_BODY_REQUIRED',`${n.label}: Select at least one element in the loop body.`,n.id)
     if (n.type==='COLLECTION_SORT'&&!n.config?.collection) add('error','SORT_COLLECTION_REQUIRED',`${n.label}: Select a collection.`,n.id)
     if (n.type==='COLLECTION_SORT'&&!String(n.config?.sortField||'').trim()) add('error','SORT_FIELD_REQUIRED',`${n.label}: Enter a sort field.`,n.id)
     if (n.type==='COLLECTION_FILTER'&&!n.config?.collection) add('error','FILTER_COLLECTION_REQUIRED',`${n.label}: Select a collection.`,n.id)
@@ -131,7 +131,7 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='WAIT' && (n.config?.waitType||'duration')==='duration' && !(Number(n.config?.amount)>0)) add('error','WAIT_DURATION_REQUIRED',`${n.label}: Enter a wait duration.`,n.id)
     if (n.type==='WAIT' && n.config?.waitType==='date' && !n.config?.dateResource) add('error','WAIT_DATE_REQUIRED',`${n.label}: Select a date/time resource.`,n.id)
     if (n.type==='WAIT' && n.config?.waitType==='conditions' && !(n.config?.conditions||[]).some(row=>row?.resource)) add('error','WAIT_CONDITION_REQUIRED',`${n.label}: Add at least one wait condition.`,n.id)
-    if (['ROUTE','RETRY'].includes(String(n.config?.faultMode||'').toUpperCase())&&!n.config?.faultBranchTarget) add('error','FAULT_PATH_REQUIRED',`${n.label}: Select the first element in the error path.`,n.id)
+    if (['ROUTE','RETRY'].includes(String(n.config?.faultMode||'').toUpperCase())&&!(n.config?.faultBranchTargets||[]).length&&!n.config?.faultBranchTarget) add('error','FAULT_PATH_REQUIRED',`${n.label}: Select at least one element in the error path.`,n.id)
     if (String(n.config?.faultMode||'').toUpperCase()==='RETRY' && (Number(n.config?.retryCount||0)<1||Number(n.config?.retryCount||0)>3)) add('error','FAULT_RETRY_INVALID',`${n.label}: Retry Count must be between 1 and 3.`,n.id)
     if (n.type==='SCREEN'&&!(n.config?.components||[]).length) add('warning','EMPTY_SCREEN',`${n.label}: Screen has no components.`,n.id)
   }
