@@ -8837,7 +8837,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [pendingRestoreVersion, setPendingRestoreVersion] = useState(null);
   const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
   const [newFlowChooserOpen, setNewFlowChooserOpen] = useState(false);
-  const [newFlowChooserStep, setNewFlowChooserStep] = useState("source");
+  const [newFlowChooserStep, setNewFlowChooserStep] = useState("type");
   const [newFlowTypeDraft, setNewFlowTypeDraft] = useState("");
   const [canvasCommand, setCanvasCommand] = useState(null);
 
@@ -9531,7 +9531,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       } catch (scheduleError) {
         if (String(workflow.actionMetadata?.flowType || "").toUpperCase() === "SCHEDULE_TRIGGERED") throw scheduleError;
       }
-      if (embedded) onSaved?.({ ...workflow, ...saved, id: nextId }, { keepOpen });
+      if (embedded) onSaved?.(savedWorkflow, { keepOpen });
       else if (!keepOpen) setShowBuilder(false);
       if (!silent) onMessage?.(forceNewVersion ? `Flow saved as version ${saved.version || savedWorkflow.version}.` : nextLifecycle === "ACTIVE" ? "Flow activated." : "Flow draft saved.");
       return { id: nextId, workflow: savedWorkflow };
@@ -9573,7 +9573,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         setWorkflow(next);
         setSavedDefinitionSignature(persistedWorkflowSignature(next));
       }
-      setSavedWorkflows((current) => current.map((entry) => entry.id === targetId ? { ...entry, ...next } : entry));
+      setSavedWorkflows((current) => current.map((entry) => String(entry.id) === String(targetId) ? { ...entry, ...next } : entry));
       setDeactivateConfirmOpen(false);
       onMessage?.("Flow deactivated. No new runs will start from the live version.");
       return next;
@@ -9952,58 +9952,38 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
               <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">New Flow</h3>
-                  <p className="mt-1 text-sm text-slate-500">{newFlowChooserStep === "source" ? "Choose how you want to start." : "Choose the type of flow you want to build."}</p>
+                  <p className="mt-1 text-sm text-slate-500">Choose the type of flow you want to build.</p>
                 </div>
                 <button type="button" className="workflow-cancel-button" onClick={() => setNewFlowChooserOpen(false)} aria-label="Close New Flow">×</button>
               </div>
-              {newFlowChooserStep === "source" ? (
-                <div className="px-6 py-6">
-                  <div className="mb-4 text-sm font-semibold text-slate-800">How do you want to start?</div>
-                  <button
-                    type="button"
-                    className="workflow-new-flow-source is-selected"
-                    aria-pressed="true"
-                    onClick={() => {}}
-                  >
-                    <span className="workflow-new-flow-source-icon">＋</span>
-                    <span>
-                      <strong>Start From Scratch</strong>
-                      <small>Choose a flow type and configure the automation yourself.</small>
-                    </span>
-                  </button>
+              <div className="px-6 py-5">
+                <div className="mb-4 text-sm font-semibold text-slate-800">Select a Flow Type</div>
+                <div className="workflow-new-flow-grid">
+                  {FLOW_TYPE_OPTIONS.map((option) => {
+                    const selected = newFlowTypeDraft === option.key;
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        aria-pressed={selected}
+                        className={`workflow-new-flow-type ${selected ? "is-selected" : ""}`}
+                        onClick={() => setNewFlowTypeDraft(option.key)}
+                      >
+                        <span className="workflow-new-flow-type-icon">{option.icon}</span>
+                        <span>
+                          <strong>{option.label}</strong>
+                          <small>{option.description}</small>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : (
-                <div className="px-6 py-5">
-                  <div className="mb-4 text-sm font-semibold text-slate-800">Select a Flow Type</div>
-                  <div className="workflow-new-flow-grid">
-                    {FLOW_TYPE_OPTIONS.map((option) => {
-                      const selected = newFlowTypeDraft === option.key;
-                      return (
-                        <button
-                          key={option.key}
-                          type="button"
-                          aria-pressed={selected}
-                          className={`workflow-new-flow-type ${selected ? "is-selected" : ""}`}
-                          onClick={() => setNewFlowTypeDraft(option.key)}
-                        >
-                          <span className="workflow-new-flow-type-icon">{option.icon}</span>
-                          <span>
-                            <strong>{option.label}</strong>
-                            <small>{option.description}</small>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              </div>
               <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3">
-                <div>{newFlowChooserStep === "type" ? <button type="button" className="workflow-cancel-button" onClick={() => setNewFlowChooserStep("source")}>Back</button> : null}</div>
+                <div />
                 <div className="flex gap-2">
                   <button type="button" className="workflow-cancel-button" onClick={() => setNewFlowChooserOpen(false)}>Cancel</button>
-                  {newFlowChooserStep === "source"
-                    ? <button type="button" className="workflow-save-button" onClick={() => setNewFlowChooserStep("type")}>Next</button>
-                    : <button type="button" className="workflow-save-button" disabled={!newFlowTypeDraft} onClick={() => startNewFlow(newFlowTypeDraft)}>Create</button>}
+                  <button type="button" className="workflow-save-button" disabled={!newFlowTypeDraft} onClick={() => startNewFlow(newFlowTypeDraft)}>Create</button>
                 </div>
               </div>
             </div>
@@ -10014,7 +9994,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             <h2 className="text-xl font-semibold">{title}</h2>
             <p className="text-sm text-slate-500">{description}</p>
           </div>
-          <button type="button" aria-label="New Flow" className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => { setNewFlowChooserStep("source"); setNewFlowTypeDraft(""); setNewFlowChooserOpen(true); }}>+ New Flow</button>
+          <button type="button" aria-label="New Flow" className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => { setNewFlowChooserStep("type"); setNewFlowTypeDraft(""); setNewFlowChooserOpen(true); }}>+ New Flow</button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
