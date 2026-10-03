@@ -362,12 +362,21 @@ export async function seedOneSolutionsDemo(pool) {
         );
       }
 
-      await client.query(
-        `INSERT INTO product_store_stock(company_id,store_id,product_id,quantity)
-         VALUES($1,$2,$3,$4)
-         ON CONFLICT(company_id,store_id,product_id) DO UPDATE SET quantity=EXCLUDED.quantity,updated_at=NOW()`,
-        [company.id,store.id,row.id,p.stock]
-      );
+      if(reusedExisting){
+        await client.query(
+          `INSERT INTO product_store_stock(company_id,store_id,product_id,quantity)
+           VALUES($1,$2,$3,$4)
+           ON CONFLICT(company_id,store_id,product_id) DO NOTHING`,
+          [company.id,store.id,row.id,p.stock]
+        );
+      }else{
+        await client.query(
+          `INSERT INTO product_store_stock(company_id,store_id,product_id,quantity)
+           VALUES($1,$2,$3,$4)
+           ON CONFLICT(company_id,store_id,product_id) DO UPDATE SET quantity=EXCLUDED.quantity,updated_at=NOW()`,
+          [company.id,store.id,row.id,p.stock]
+        );
+      }
 
       if(productObject){
         await client.query(
