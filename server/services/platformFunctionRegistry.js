@@ -1,6 +1,4 @@
-import { listPaymentMethods } from "./paymentMethods.js";
-import { classifyAdjustmentReason, resolveAdjustmentReason } from "./adjustmentReasons.js";
-import { checkCreditLimit, checkPayment, validateCreditLimit, generateStatement } from "./customerCredit.js";
+import { checkCreditLimit, checkPayment } from "./customerCredit.js";
 import { validateRedemption, validateIssueValue, validateTopUp, normaliseGiftCardCode } from "./giftCards.js";
 import { planReceipt } from "./purchasing.js";
 import { canTransition, resolveNextStatus } from "./onlineOrders/genericOrderTypes.js";
@@ -34,59 +32,11 @@ import { normalizeEmail, isValidEmail, findNormalizedEmailConflict } from "./use
 import { redactAuditDetails } from "./auditLog.js";
 import { clockInAttendance, clockOutAttendance } from "./attendanceActions.js";
 import { domainAllowed, issueAccountToken, pendingPolicies } from "./accountPolicy.js";
-import { buildKitchenPrintPayload, validateQrOrderItems } from "./hospitalityActions.js";
 
 // Canonical reusable functions. Pages, buttons and workflows reference these
 // keys; implementation lives here or delegates to the authoritative domain service.
 export const PLATFORM_FUNCTIONS = Object.freeze([
-  { key: "hospitality.kitchen.print_payload", category: "HOSPITALITY", description: "Build the canonical printable kitchen-ticket payload for configured printer/browser output.", inputs: { type: "object", required: ["ticket"] }, outputs: { type: "object" }, permissions: ["hospitality.kds.view"], handler: async ({ inputs = {} }) => buildKitchenPrintPayload(inputs.ticket || {}) },
-  { key: "hospitality.qr.items.validate", category: "HOSPITALITY", description: "Validate QR table-order item references before server-side product resolution.", inputs: { type: "object", required: ["items"] }, outputs: { type: "array" }, permissions: ["functions.execute"], handler: async ({ inputs = {} }) => validateQrOrderItems(inputs.items) },
-  {
-    key: "safe_echo",
-    category: "SYSTEM",
-    description: "Example safe function used by workflow tests.",
-    inputs: { type: "object", properties: { value: { type: "string" } } },
-    outputs: { type: "object" },
-    permissions: ["functions.execute"],
-    validation: (input) => {
-      if (!input || typeof input !== "object") throw new Error("safe_echo requires an object input");
-      if (typeof input.value !== "string") throw new Error("safe_echo requires a string value");
-    },
-    handler: async ({ inputs = {} }) => ({ ok: true, value: inputs.value || "" }),
-  },
-  {
-    key: "payment.methods.list",
-    category: "PAYMENTS",
-    description: "Return the company's canonical configured payment methods.",
-    inputs: { type: "object", properties: { activeOnly: { type: "boolean" } } },
-    outputs: { type: "array" },
-    permissions: ["functions.execute"],
-    handler: async ({ inputs = {}, db, companyId, req }) => listPaymentMethods(db, companyId || req?.user?.companyId, { activeOnly: inputs.activeOnly !== false }),
-  },
-  {
-    key: "payment.method.validate",
-    category: "PAYMENTS",
-    description: "Validate a payment method against company-configured Payment Method records.",
-    inputs: { type: "object", required: ["code"], properties: { code: { type: "string" } } },
-    outputs: { type: "object" },
-    permissions: ["functions.execute"],
-    validation: (input) => { if (!input?.code) throw new Error("payment.method.validate requires code"); },
-    handler: async ({ inputs = {}, db, companyId, req }) => {
-      const methods = await listPaymentMethods(db, companyId || req?.user?.companyId);
-      const method = methods.find((item) => item.code === String(inputs.code));
-      return { valid: Boolean(method), method: method || null };
-    },
-  },
-  {
-    key: "inventory.adjustment.reason.resolve",
-    category: "INVENTORY",
-    description: "Resolve the canonical stock-adjustment reason and movement classification.",
-    inputs: { type: "object", required: ["quantity"], properties: { quantity: { type: "number" }, reason: { type: "string" } } },
-    outputs: { type: "object" },
-    permissions: ["inventory.adjust"],
-    handler: async ({ inputs = {} }) => ({ classification: classifyAdjustmentReason(inputs.reason), reason: resolveAdjustmentReason(Number(inputs.quantity), inputs.reason) }),
-  },
-  {
+              {
     key: "customer.credit.limit.check",
     category: "CUSTOMER_CREDIT",
     description: "Run the canonical customer-credit limit check.",
@@ -104,21 +54,7 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
     permissions: ["customer_credit.use"],
     handler: async ({ inputs = {} }) => checkPayment(Number(inputs.currentBalanceCents), Number(inputs.paymentAmountCents)),
   },
-  {
-    key: "customer.credit.limit.validate",
-    category: "CUSTOMER_CREDIT",
-    description: "Validate a configured customer credit limit.",
-    inputs: { type: "object", required: ["limit"] }, outputs: { type: "object" }, permissions: ["customer_credit.manage"],
-    handler: async ({ inputs = {} }) => validateCreditLimit(inputs.limit),
-  },
-  {
-    key: "customer.credit.statement.generate",
-    category: "CUSTOMER_CREDIT",
-    description: "Generate a customer-credit statement from canonical ledger inputs.",
-    inputs: { type: "object" }, outputs: { type: "object" }, permissions: ["customer_credit.view"],
-    handler: async ({ inputs = {} }) => generateStatement(inputs),
-  },
-  {
+      {
     key: "gift_card.code.normalize",
     category: "GIFT_CARDS",
     description: "Normalize a gift-card code using the canonical gift-card rules.",
