@@ -2448,12 +2448,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         collection: { type: "string" },
         filters: { type: "array" },
         match: { type: "string", enum: ["all","any"] },
+        formulaExpression: { type: "string" },
       },
-      required: ["collection","filters"],
+      required: ["collection"],
     },
     validation: (action) => {
       if (!action?.collection) throw new Error("Collection Filter requires a collection");
-      if (!Array.isArray(action.filters) || !action.filters.length) throw new Error("Collection Filter requires at least one condition");
+      if (!String(action?.formulaExpression || "").trim() && (!Array.isArray(action.filters) || !action.filters.length)) throw new Error("Collection Filter requires at least one condition or formula");
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
@@ -2478,7 +2479,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       };
       const filters = Array.isArray(action.filters) ? action.filters : [];
       const matchAny = String(action.match || "all").toLowerCase() === "any";
+      const formulaExpression = String(action.formulaExpression || "").trim();
       const output = collection.filter((item) => {
+        if (formulaExpression) {
+          const inputs = {};
+          for (const [key, value] of Object.entries(item && typeof item === "object" ? item : {})) {
+            if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !["id","company_id","store_id","__proto__","constructor","prototype"].includes(key.toLowerCase())) inputs[key] = value;
+          }
+          return Boolean(evaluateWorkflowFormula(formulaExpression, inputs));
+        }
         const results = filters.map((filter) => {
           const left = getPath(item, filter?.field);
           const right = ["is_empty","is_not_empty"].includes(filter?.operator)
@@ -2814,6 +2823,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         sortDirection: { type: "string" },
         limit: { type: "number" },
         store: { type: "string" },
+        selectedFields: { type: "array" },
+        fieldAssignments: { type: "array" },
       },
       required: ["objectKey"],
     },
@@ -2872,6 +2883,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           filterClauses.push("(" + column + " IS NOT NULL AND " + column + "::text<>'')");
           continue;
         }
+        if (operator === "in" || operator === "not_in") {
+          const values = Array.isArray(value) ? value : String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+          params.push(values);
+          const placeholder = parameter(params.length);
+          filterClauses.push(operator === "in"
+            ? column + "::text = ANY(" + placeholder + "::text[])"
+            : "NOT (" + column + "::text = ANY(" + placeholder + "::text[]))");
+          continue;
+        }
         params.push(value);
         const placeholder = parameter(params.length);
         if (operator === "equals") filterClauses.push(column + "=" + placeholder);
@@ -2881,6 +2901,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         else if (operator === "less_than") filterClauses.push(column + "<" + placeholder);
         else if (operator === "less_than_or_equal") filterClauses.push(column + "<=" + placeholder);
         else if (operator === "contains") filterClauses.push(column + "::text ILIKE '%' || " + placeholder + "::text || '%'");
+        else if (operator === "starts_with") filterClauses.push(column + "::text ILIKE " + placeholder + "::text || '%'");
+        else if (operator === "ends_with") filterClauses.push(column + "::text ILIKE '%' || " + placeholder + "::text");
         else throw new Error(`Get Records uses unsupported operator "${operator}"`);
       }
       if (filterClauses.length) {
@@ -2898,15 +2920,35 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 50 : 1)), 200));
       params.push(requestedLimit);
       const where = clauses.length ? " WHERE " + clauses.join(" AND ") : "";
-      const selectColumns = ["id", ...fields.map((field) => '"' + field.source_column + '" AS "' + field.api_name + '"')];
+      const requestedKeys = new Set([
+        ...(Array.isArray(action.selectedFields) ? action.selectedFields : []),
+        ...(Array.isArray(action.fieldAssignments) ? action.fieldAssignments.map((item) => item?.field).filter(Boolean) : []),
+      ].map(String));
+      const selectedMetadata = requestedKeys.size
+        ? fields.filter((field) => requestedKeys.has(String(field.api_name)) || requestedKeys.has(String(field.source_column || "")))
+        : fields;
+      if (requestedKeys.size && selectedMetadata.length !== requestedKeys.size) {
+        const resolved = new Set(selectedMetadata.flatMap((field) => [String(field.api_name), String(field.source_column || "")]));
+        const missing = [...requestedKeys].filter((key) => !resolved.has(key));
+        if (missing.length) throw new Error("Get Records selected field is unavailable: " + missing.join(", "));
+      }
+      const selectColumns = ["id", ...selectedMetadata.map((field) => '"' + field.source_column + '" AS "' + field.api_name + '"')];
       const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + table + '"' + where + orderBy + " LIMIT " + parameter(params.length);
       const result = await db(query, params);
       const rows = result.rows || [];
+      const first = rows[0] || null;
+      for (const assignment of Array.isArray(action.fieldAssignments) ? action.fieldAssignments : []) {
+        const target = String(assignment?.target || "");
+        const field = fieldByKey.get(String(assignment?.field || ""));
+        if (!target.startsWith("variables.") || !field) continue;
+        if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+        workflowVariables.variables[target.slice("variables.".length)] = first ? first[field.api_name] : null;
+      }
       return {
         status: "completed",
         objectKey: targetObject.object_key,
-        record: rows[0] || null,
-        records: String(action.store || "first").toLowerCase() === "all" ? rows : (rows[0] ? [rows[0]] : []),
+        record: first,
+        records: String(action.store || "first").toLowerCase() === "all" ? rows : (first ? [first] : []),
         count: rows.length,
       };
     },
@@ -2921,21 +2963,31 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         objectKey: { type: "string" },
         objectId: { type: "string" },
         fieldValues: { type: "object" },
+        fieldValuesResource: { type: "string" },
       },
-      required: ["fieldValues"],
+      required: [],
     },
     validation: (action) => {
       if (!action || typeof action !== "object") throw new Error("Create Record requires an action object");
-      if (!action.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) {
-        throw new Error("Create Record requires fieldValues to be an object");
-      }
+      const hasMap = action.fieldValues && typeof action.fieldValues === "object" && !Array.isArray(action.fieldValues);
+      const hasResource = typeof action.fieldValuesResource === "string" && action.fieldValuesResource.trim();
+      if (!hasMap && !hasResource) throw new Error("Create Record requires field values or a record Resource");
     },
     async: false,
     requiredPermissions: ["records.create"],
     executor: async ({ db, action, req, object, companyId, fields, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const resourceValues = action.fieldValuesResource
+        ? resolveConfiguredResource(action.fieldValuesResource, context, { preserveMissing: false })
+        : null;
+      if (action.fieldValuesResource && (!resourceValues || typeof resourceValues !== "object" || Array.isArray(resourceValues))) {
+        throw new Error("Create Record field values Resource must resolve to one record");
+      }
+      const sourceValues = resourceValues || action.fieldValues || {};
+      const safeValues = Object.fromEntries(Object.entries(sourceValues).filter(([key]) => !["id","company_id","store_id","created_at","updated_at"].includes(String(key))));
+      const resolvedFieldValues = resolveFieldValueMap(safeValues, context);
       const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", created: null };
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
@@ -2971,23 +3023,33 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       properties: {
         recordId: { type: "string" },
         fieldValues: { type: "object" },
+        fieldValuesResource: { type: "string" },
       },
-      required: ["recordId", "fieldValues"],
+      required: ["recordId"],
     },
     validation: (action) => {
       if (!action || typeof action !== "object") throw new Error("Update Record requires an action object");
       if (!action.recordId) throw new Error("Update Record requires a recordId");
-      if (!action.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) {
-        throw new Error("Update Record requires fieldValues to be an object");
-      }
+      const hasMap = action.fieldValues && typeof action.fieldValues === "object" && !Array.isArray(action.fieldValues);
+      const hasResource = typeof action.fieldValuesResource === "string" && action.fieldValuesResource.trim();
+      if (!hasMap && !hasResource) throw new Error("Update Record requires field values or a record Resource");
     },
     async: false,
     requiredPermissions: ["records.update"],
     executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
-      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const resolvedRecordId = resolveConfiguredResource(action.recordId, context);
+      const resourceValues = action.fieldValuesResource
+        ? resolveConfiguredResource(action.fieldValuesResource, context, { preserveMissing: false })
+        : null;
+      if (action.fieldValuesResource && (!resourceValues || typeof resourceValues !== "object" || Array.isArray(resourceValues))) {
+        throw new Error("Update Record field values Resource must resolve to one record");
+      }
+      const sourceValues = resourceValues || action.fieldValues || {};
+      const safeValues = Object.fromEntries(Object.entries(sourceValues).filter(([key]) => !["id","company_id","store_id","created_at","updated_at"].includes(String(key))));
+      const resolvedFieldValues = resolveFieldValueMap(safeValues, context);
       const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", updated: null };
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
@@ -3817,7 +3879,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (outcomes.length) {
         for (let index = 0; index < outcomes.length; index += 1) {
           const outcome = outcomes[index];
-          const matched = evaluateCondition(resolveWorkflowConditionConfig(outcome.condition, conditionContext), fields || [], record || {}, previousRecord || null);
+          const matched = evaluateResolvedWorkflowCondition(outcome.condition, fields || [], conditionContext);
           if (matched) {
             return {
               status: "completed",
@@ -3830,7 +3892,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         return { status: "completed", matched: false, outcomeId: null, outcomeLabel: String(action.defaultLabel || "Default Outcome"), outcomeIndex: -1 };
       }
-      const result = evaluateCondition(resolveWorkflowConditionConfig(action.condition, conditionContext), fields || [], record || {}, previousRecord || null);
+      const result = evaluateResolvedWorkflowCondition(action.condition, fields || [], conditionContext);
       return { status: result ? "completed" : "skipped", matched: Boolean(result), legacyBinary: true };
     },
   },
@@ -4486,8 +4548,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, fields = [], object = null, workflowVariables = {} }) => {
       const tenantId = companyId || req?.user?.companyId;
-      const condition = resolveWorkflowConditionConfig(action.waitCondition, { record, previousRecord, req, object, workflowVariables });
-      if (evaluateCondition(condition, fields || [], record || {}, previousRecord || null)) {
+      const conditionContext = { record, previousRecord, req, object, workflowVariables };
+      if (evaluateResolvedWorkflowCondition(action.waitCondition, fields || [], conditionContext)) {
         return { status: "completed", conditionMet: true };
       }
       if (!runId) throw new Error("Wait for Conditions requires a persisted workflow run");
@@ -5325,6 +5387,57 @@ function resolveWorkflowConditionConfig(condition, context = {}) {
       return { ...rule, value: resolveConfiguredResource(rule.value, context) };
     }),
   };
+}
+
+function evaluateCustomConditionLogic(expression, results = []) {
+  const tokens = String(expression || "").toUpperCase().match(/\d+|AND|OR|NOT|\(|\)/g) || [];
+  let index = 0;
+  const parsePrimary = () => {
+    const token = tokens[index++];
+    if (token === "NOT") return !parsePrimary();
+    if (token === "(") {
+      const value = parseOr();
+      if (tokens[index++] !== ")") throw new Error("Custom condition logic has unmatched parentheses");
+      return value;
+    }
+    if (!/^\d+$/.test(String(token || ""))) throw new Error("Custom condition logic is invalid");
+    const position = Number(token) - 1;
+    if (position < 0 || position >= results.length) throw new Error("Custom condition logic references an unavailable condition");
+    return Boolean(results[position]);
+  };
+  const parseAnd = () => {
+    let value = parsePrimary();
+    while (tokens[index] === "AND") { index += 1; value = value && parsePrimary(); }
+    return value;
+  };
+  const parseOr = () => {
+    let value = parseAnd();
+    while (tokens[index] === "OR") { index += 1; value = value || parseAnd(); }
+    return value;
+  };
+  const value = parseOr();
+  if (index !== tokens.length) throw new Error("Custom condition logic is invalid");
+  return value;
+}
+
+export function evaluateResolvedWorkflowCondition(condition, fields = [], context = {}) {
+  const normalized = resolveWorkflowConditionConfig(condition, context);
+  if (!normalized) return true;
+  if (String(normalized.formulaExpression || "").trim()) {
+    const inputs = {};
+    for (const source of [context.record || {}, context.workflowVariables?.variables || {}]) {
+      for (const [key, value] of Object.entries(source)) {
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !["id","company_id","store_id","__proto__","constructor","prototype"].includes(key.toLowerCase())) inputs[key] = value;
+      }
+    }
+    return Boolean(evaluateWorkflowFormula(String(normalized.formulaExpression), inputs));
+  }
+  if (String(normalized.customLogic || "").trim()) {
+    const rows = Array.isArray(normalized.conditions) ? normalized.conditions : [];
+    const results = rows.map((row) => evaluateCondition({ match: "all", conditions: [row] }, fields || [], context.record || {}, context.previousRecord || null));
+    return evaluateCustomConditionLogic(normalized.customLogic, results);
+  }
+  return evaluateCondition(normalized, fields || [], context.record || {}, context.previousRecord || null);
 }
 
 function workflowBindingContext({ record, previousRecord, req, object, workflowVariables } = {}) {

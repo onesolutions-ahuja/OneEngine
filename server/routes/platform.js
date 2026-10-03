@@ -19,6 +19,7 @@ import {
   validateWorkflowAction,
   friendlyWorkflowError,
   workflowResultsContainStatus,
+  evaluateResolvedWorkflowCondition,
 } from "../services/platformWorkflow.js";
 import { decidePlatformApproval, submitPlatformApproval, reassignPlatformApproval, recallPlatformApproval, isPlatformRecordLocked } from "../services/platformApprovals.js";
 import { systemObject, systemObjectRbacPermission, tenantFields, isExtensionField, safeSystemFields, hydrateExtensions, appendSystemReadScope, platformFieldSql } from "../services/platformSystemObjects.js";
@@ -5601,13 +5602,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         },
       });
 
-      if (record && Array.isArray(workflow.conditions) && workflow.conditions.length) {
-        const startMatched = evaluateCondition(
-          { match: workflow.action?.match || "all", conditions: workflow.conditions },
-          fields,
-          record,
-          null
-        );
+      if (record && (workflow.action?.entryCondition || (Array.isArray(workflow.conditions) && workflow.conditions.length))) {
+        const startMatched = workflow.action?.entryCondition
+          ? evaluateResolvedWorkflowCondition(workflow.action.entryCondition, fields, { record, previousRecord: null, req, object, workflowVariables: { variables: {}, steps: {} } })
+          : evaluateCondition({ match: workflow.action?.match || "all", conditions: workflow.conditions }, fields, record, null);
         if (!startMatched) {
           const friendly = {
             title: "This record does not meet the Start conditions",

@@ -1,6 +1,6 @@
 import { evaluateCondition } from "./platformConditions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
-import { createWorkflowRun, executeWorkflowActions, workflowResultsContainStatus } from "./platformWorkflow.js";
+import { createWorkflowRun, executeWorkflowActions, workflowResultsContainStatus, evaluateResolvedWorkflowCondition } from "./platformWorkflow.js";
 import { systemObject, isExtensionField } from "./platformSystemObjects.js";
 
 function apiRecord(fields, record) {
@@ -14,6 +14,13 @@ function apiRecord(fields, record) {
 }
 
 function ruleMatches(rule, fields, record, previousRecord) {
+  if (rule.action?.entryCondition) {
+    return evaluateResolvedWorkflowCondition(rule.action.entryCondition, fields, {
+      record,
+      previousRecord,
+      workflowVariables: { variables: {}, steps: {} },
+    });
+  }
   const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
   if (!conditions.length) return true;
   return evaluateCondition({
