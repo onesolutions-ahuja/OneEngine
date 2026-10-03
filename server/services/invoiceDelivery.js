@@ -368,61 +368,7 @@ function makeRuntime(enabled, configuration) {
  * Fire-and-forget SMS invoice delivery after sale COMMIT. Never throws,
  * never blocks the POS sale. Skips entirely unless the SMS integration is
  * enabled AND auto_send_enabled is explicitly true (default OFF).
- */
-export async function dispatchSmsInvoiceDelivery({ db, saleId, companyId, storeId = null, userId = null }) {
-  const startedAt = Date.now();
-  try {
-    const config = await loadInvoiceChannelConfig(db, companyId, "sms_invoice");
-    const runtime = makeRuntime(config.enabled, config.configuration);
-    if (channelGate(runtime, { requireAutoSend: true })) {
-      return { ok: false, outcome: "skipped", reason: channelGate(runtime, { requireAutoSend: true }) };
-    }
-    const saleData = await loadSaleForDelivery(db, { saleId, companyId, storeId });
-    if (!saleData) return { ok: false, outcome: "skipped", reason: "sale_not_found" };
-
-    const phone = normalizeWhatsAppPhone(saleData.customer?.phone, config.configuration.default_country_code || null);
-    if (!phone) {
-      await logDeliveryOutcome(db, { companyId, userId, saleId, action: "sms_invoice_delivery", deliveryType: "sms", trigger: "auto", outcome: "skipped", reason: "no_customer_phone" });
-      return { ok: false, outcome: "skipped", reason: "no_customer_phone" };
-    }
-    return await deliverViaChannel(db, {
-      channel: "sms", saleData, runtime, recipient: phone,
-      saleId, companyId, storeId, userId, trigger: "auto", requireAutoSend: true,
-    });
-  } catch (error) {
-    await logDeliveryOutcome(db, { companyId, userId, saleId, action: "sms_invoice_delivery", deliveryType: "sms", trigger: "auto", outcome: "failed", reason: "unexpected", durationMs: Date.now() - startedAt }).catch(() => {});
-    return { ok: false, outcome: "failed", reason: "unexpected" };
-  }
-}
-
-/** Fire-and-forget Email invoice delivery after sale COMMIT (same contract as SMS). */
-export async function dispatchEmailInvoiceDelivery({ db, saleId, companyId, storeId = null, userId = null }) {
-  const startedAt = Date.now();
-  try {
-    const config = await loadInvoiceChannelConfig(db, companyId, "email_invoice");
-    const runtime = makeRuntime(config.enabled, config.configuration);
-    if (channelGate(runtime, { requireAutoSend: true })) {
-      return { ok: false, outcome: "skipped", reason: channelGate(runtime, { requireAutoSend: true }) };
-    }
-    const saleData = await loadSaleForDelivery(db, { saleId, companyId, storeId });
-    if (!saleData) return { ok: false, outcome: "skipped", reason: "sale_not_found" };
-
-    const email = isEmailUsable(saleData.customer?.email);
-    if (!email) {
-      await logDeliveryOutcome(db, { companyId, userId, saleId, action: "email_invoice_delivery", deliveryType: "email", trigger: "auto", outcome: "skipped", reason: "no_customer_email" });
-      return { ok: false, outcome: "skipped", reason: "no_customer_email" };
-    }
-    return await deliverViaChannel(db, {
-      channel: "email", saleData, runtime, recipient: email,
-      saleId, companyId, storeId, userId, trigger: "auto", requireAutoSend: true,
-    });
-  } catch (error) {
-    await logDeliveryOutcome(db, { companyId, userId, saleId, action: "email_invoice_delivery", deliveryType: "email", trigger: "auto", outcome: "failed", reason: "unexpected", durationMs: Date.now() - startedAt }).catch(() => {});
-    return { ok: false, outcome: "failed", reason: "unexpected" };
-  }
-}
-
-/**
+ *//** Fire-and-forget Email invoice delivery after sale COMMIT (same contract as SMS). *//**
  * Manual "Send by SMS/Email" for an existing sale (authorised staff action).
  * channel: "sms" | "email". Reuses the exact pipeline; the auto_send gate is
  * not applied (the staff action is the authorisation). Never throws.
