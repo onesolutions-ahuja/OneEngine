@@ -740,7 +740,7 @@ export function packageDefinition(entry) {
                 }
               ]
             },
-            active: false,
+            active: true,
           },
           {
             objectKey: "appointment_booking_case",
@@ -3035,9 +3035,11 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     if (!safeMetadataKey(rule.triggerKey || rule.trigger_key)) {
       throw new Error(`Package rule "${rule.name}" has an invalid trigger key`);
     }
-    const packageRuleActive =
-      (rule.action?.type === "validation" && rule.active === true) ||
-      (rule.action?.type === "workflow" && rule.active === true && String(rule.action?.flowType || "").toUpperCase() === "KIOSK_EXPERIENCE");
+    // Package manifests are the authority for whether their managed rules/workflows
+    // are active. Previously only validation rules and KIOSK_EXPERIENCE workflows
+    // could ever become active, which silently disabled communication/appointment
+    // workflows even when a package explicitly declared active: true.
+    const packageRuleActive = rule.active === true;
     const packageRuleLifecycle = packageRuleActive
       ? "ACTIVE"
       : String(rule.lifecycleStatus || rule.lifecycle_status || "INACTIVE").toUpperCase() === "ACTIVE" && rule.active === true
