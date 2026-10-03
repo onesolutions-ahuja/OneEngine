@@ -36,7 +36,7 @@ import { domainAllowed, issueAccountToken, pendingPolicies } from "./accountPoli
 // Canonical reusable functions. Pages, buttons and workflows reference these
 // keys; implementation lives here or delegates to the authoritative domain service.
 export const PLATFORM_FUNCTIONS = Object.freeze([
-              {
+  {
     key: "customer.credit.limit.check",
     category: "CUSTOMER_CREDIT",
     description: "Run the canonical customer-credit limit check.",
@@ -54,7 +54,7 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
     permissions: ["customer_credit.use"],
     handler: async ({ inputs = {} }) => checkPayment(Number(inputs.currentBalanceCents), Number(inputs.paymentAmountCents)),
   },
-      {
+  {
     key: "gift_card.code.normalize",
     category: "GIFT_CARDS",
     description: "Normalize a gift-card code using the canonical gift-card rules.",
