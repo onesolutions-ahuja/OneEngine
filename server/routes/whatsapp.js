@@ -902,10 +902,20 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
       );
       const integration = integrationResult.rows[0];
       if (!integration) {
+        const activeWhatsApp = await db(
+          `SELECT
+              NULLIF(configuration->>'phone_number_id','') IS NOT NULL AS has_configured_phone_number_id,
+              NULLIF(configuration->>'business_account_id','') IS NOT NULL AS has_configured_business_account_id
+             FROM integrations
+            WHERE provider='whatsapp' AND active=true`
+        );
         console.info("WhatsApp webhook ignored", {
           reason: "integration_not_found",
           hasPhoneNumberId: Boolean(payloadPhoneNumberId),
           hasBusinessAccountId: Boolean(payloadBusinessAccountId),
+          activeIntegrationCount: activeWhatsApp.rows.length,
+          activeIntegrationsHavePhoneNumberId: activeWhatsApp.rows.some((row) => row.has_configured_phone_number_id === true),
+          activeIntegrationsHaveBusinessAccountId: activeWhatsApp.rows.some((row) => row.has_configured_business_account_id === true),
         });
         return res.status(200).json({ success: true, ignored: true });
       }
