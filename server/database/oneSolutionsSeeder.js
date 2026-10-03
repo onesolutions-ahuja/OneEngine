@@ -134,6 +134,36 @@ export async function seedOneSolutionsDemo(pool) {
       divisionIds[key]=row.id;
     }
 
+    const storeObject=(await client.query(
+      "SELECT id FROM platform_objects WHERE object_key='store' AND active=TRUE ORDER BY company_id NULLS FIRST LIMIT 1"
+    )).rows[0];
+    if (storeObject) {
+      const storeDivisionLookup=(await client.query(
+        `INSERT INTO platform_fields(object_id,company_id,api_name,label,field_type,required,readable,writable,config,display_order,active)
+         VALUES($1,$2,'business_division_id','Business Division','lookup',FALSE,TRUE,TRUE,
+                '{"relatedObjectKey":"onesolutions_business_division"}'::jsonb,900,TRUE)
+         ON CONFLICT(object_id,company_id,api_name) WHERE company_id IS NOT NULL
+         DO UPDATE SET label=EXCLUDED.label,field_type='lookup',writable=TRUE,config=EXCLUDED.config,active=TRUE
+         RETURNING id`,[storeObject.id,company.id]
+      )).rows[0];
+      await client.query(
+        `INSERT INTO platform_relationships(parent_object_id,child_object_id,relationship_key,label,description,relationship_type,child_field_id,on_delete,on_update,active)
+         VALUES($1,$2,'stores','Stores','Stores mapped to this business division','one_to_many',$3,'restrict','restrict',TRUE)
+         ON CONFLICT(parent_object_id,relationship_key) DO UPDATE SET child_object_id=EXCLUDED.child_object_id,
+           child_field_id=EXCLUDED.child_field_id,label=EXCLUDED.label,description=EXCLUDED.description,active=TRUE`,
+        [divisionObject.id,storeObject.id,storeDivisionLookup.id]
+      );
+      await client.query(
+        `INSERT INTO platform_record_associations(object_id,record_id,company_id,custom_values)
+         VALUES($1,$2,$3,$4::jsonb)
+         ON CONFLICT(object_id,record_id)
+         DO UPDATE SET company_id=EXCLUDED.company_id,
+                       custom_values=platform_record_associations.custom_values || EXCLUDED.custom_values,
+                       updated_at=NOW()`,
+        [storeObject.id,store.id,company.id,JSON.stringify({business_division_id:divisionIds.retail})]
+      );
+    }
+
     const productObject=(await client.query(
       "SELECT id FROM platform_objects WHERE object_key='product' AND active=TRUE ORDER BY company_id NULLS FIRST LIMIT 1"
     )).rows[0];
