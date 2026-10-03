@@ -1400,7 +1400,7 @@ function appointmentPhoneDigits(value){
 function appointmentFormatDate(value){
   const d=new Date(value);
   if(Number.isNaN(d.getTime())) return "";
-  return \`${String(d.getUTCDate()).padStart(2,"0")}/${String(d.getUTCMonth()+1).padStart(2,"0")}/${d.getUTCFullYear()}\`;
+  return `${String(d.getUTCDate()).padStart(2,"0")}/${String(d.getUTCMonth()+1).padStart(2,"0")}/${d.getUTCFullYear()}`;
 }
 
 function appointmentFormatTime(value){
@@ -1434,13 +1434,13 @@ async function appointmentOpenCase(db,{companyId,channel,sender}){
   const digits=appointmentPhoneDigits(sender);
   if(!companyId||!channel||!digits) return null;
   const result=await db(
-    \`SELECT * FROM appointment_booking_cases
+    `SELECT * FROM appointment_booking_cases
        WHERE company_id=$1
          AND channel=$2
          AND regexp_replace(COALESCE(sender,''),'[^0-9]','','g')=$3
          AND status IN ('NEW','SLOT_SELECTED','AWAITING_PAYMENT')
        ORDER BY created_at DESC,id DESC
-       LIMIT 1\`,
+       LIMIT 1`,
     [companyId,String(channel).toUpperCase(),digits]
   );
   return result.rows[0]||null;
@@ -1474,13 +1474,13 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
   try{
     await client.query("BEGIN");
     const digits=appointmentPhoneDigits(sender);
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",[\`${tenantId}:${digits}:appointment-session\`]);
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",[`${tenantId}:${digits}:appointment-session`]);
 
     if(sourceMessageId){
       const replay=await client.query(
-        \`SELECT * FROM appointment_booking_cases
+        `SELECT * FROM appointment_booking_cases
            WHERE company_id=$1 AND channel=$2 AND source_message_id=$3
-           LIMIT 1\`,
+           LIMIT 1`,
         [tenantId,channel,sourceMessageId]
       );
       if(replay.rows[0]){
@@ -1498,12 +1498,12 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
     }
 
     const openCases=await client.query(
-      \`SELECT * FROM appointment_booking_cases
+      `SELECT * FROM appointment_booking_cases
          WHERE company_id=$1
            AND regexp_replace(COALESCE(sender,''),'[^0-9]','','g')=$2
            AND status IN ('NEW','LINK_SENT','SLOT_SELECTED','AWAITING_PAYMENT')
          ORDER BY created_at,id
-         FOR UPDATE\`,
+         FOR UPDATE`,
       [tenantId,digits]
     );
     for(const existing of openCases.rows||[]){
@@ -1515,11 +1515,11 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
     }
     if(openCases.rows?.length){
       await client.query(
-        \`UPDATE appointment_booking_cases
+        `UPDATE appointment_booking_cases
             SET status='CANCELLED',
                 state=COALESCE(state,'{}'::jsonb)||$3::jsonb,
                 updated_at=NOW()
-          WHERE company_id=$1 AND id=ANY($2::uuid[])\`,
+          WHERE company_id=$1 AND id=ANY($2::uuid[])`,
         [tenantId,openCases.rows.map((row)=>row.id),JSON.stringify({closedReason:"RESTARTED",closedAt:new Date().toISOString()})]
       );
     }
@@ -1590,7 +1590,7 @@ async function processAppointmentDateResponse({action,db,companyId,req,record,ob
   );
   return {
     status:"completed",result:"SLOTS_READY",bookingCaseId,channel:bookingCase.channel,sender:bookingCase.sender,
-    selectedDate:selectedDateLabel,slotChoices:slots.map((slot,index)=>\`${index+1}. ${appointmentFormatTime(slot.startsAt)}\`).join("\n"),
+    selectedDate:selectedDateLabel,slotChoices:slots.map((slot,index)=>`${index+1}. ${appointmentFormatTime(slot.startsAt)}`).join("\n"),
     slotCount:slots.length,
   };
 }
@@ -1623,7 +1623,7 @@ async function processAppointmentSlotResponse({action,db,pool,companyId,req,reco
       companyId:tenantId,storeId:slot.storeId||null,serviceId:slot.serviceId,resourceId:slot.resourceId,
       customerId:bookingCase.customer_id||null,conversationId:bookingCase.state?.conversationId||null,
       startsAt:slot.startsAt,endsAt:slot.endsAt,
-      idempotencyKey:\`${String(bookingCase.channel||"").toLowerCase()}-booking:${bookingCase.id}:${slot.startsAt}\`,
+      idempotencyKey:`${String(bookingCase.channel||"").toLowerCase()}-booking:${bookingCase.id}:${slot.startsAt}`,
       metadata:{bookingCaseId:bookingCase.id},
     });
     const appointment=await confirmAppointmentFromHold(client,{
