@@ -76,8 +76,8 @@ const operatorKey=value=>({
   'Ends With':'ends_with','Contains':'contains','In':'in','Not In':'not_in'
 }[value]||String(value||'equals').toLowerCase().replaceAll(' ','_'))
 const conditionPayload=(logic='all',rows=[],formula='',customLogic='')=>({
-  logic:logic==='any'?'OR':logic==='custom'?'CUSTOM':logic==='formula'?'FORMULA':'AND',
-  ...(logic==='formula'?{formula}:{}),
+  match:logic==='any'?'any':'all',
+  ...(logic==='formula'?{formulaExpression:formula}:{}),
   ...(logic==='custom'?{customLogic}:{}),
   conditions:(rows||[]).filter(row=>row?.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value}))
 })
@@ -321,34 +321,76 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
   const snapshot=()=>({nodes:JSON.parse(JSON.stringify(nodes)),edges:JSON.parse(JSON.stringify(edges)),resources:JSON.parse(JSON.stringify(resources)),groups:JSON.parse(JSON.stringify(groups)),startConfig:JSON.parse(JSON.stringify(startConfig)),flowProps:JSON.parse(JSON.stringify(flowProps)),layoutMode})
   const restoreSnapshot=s=>{if(Array.isArray(s)){setNodes(s);return}setNodes(Array.isArray(s?.nodes)?s.nodes:[]);setEdges(Array.isArray(s?.edges)?s.edges:[]);setResources(Array.isArray(s?.resources)?s.resources:[]);setGroups(Array.isArray(s?.groups)?s.groups:[]);if(s?.startConfig)setStartConfig(s.startConfig);if(s?.flowProps)setFlowProps(s.flowProps);if(s?.layoutMode)setLayoutMode(s.layoutMode)}
   const commitNodes=next=>{setHistory(h=>[...h,snapshot()]);setFuture([]);setNodes(next);setDirty(true)}
+  const runtimeIdsForNode=n=>{
+    const p=n.config||{}
+    if(n.type==='UPDATE_RECORDS'&&(p.updateMode||'conditions')==='conditions')return [n.id+'__lookup',n.id]
+    if(n.type==='DELETE_RECORDS'&&(p.deleteMode||'conditions')==='conditions')return [n.id+'__lookup',n.id]
+    return [n.id]
+  }
+  const branchIds=(ownerId,key)=>nodes.filter(x=>x.branchOwnerId===ownerId&&x.branchKey===key).flatMap(runtimeIdsForNode)
   const compileNode=n=>{
     const p=n.config||{}
     const base={id:n.id,label:n.label||n.type,apiName:n.apiName,description:n.description||''}
     if(n.type==='ACTION')return {...base,type:p.actionKey||'STOP',...(p.inputs||{})}
-    if(n.type==='SUBFLOW')return {...base,type:'RUN_SUBFLOW',workflowId:p.flowId||p.flow||'',workflowInputs:p.workflowInputs||{}}
-    if(n.type==='DECISION'){
-      const outcomes=(p.outcomes||[]).map((outcome,index)=>({...outcome,id:String(outcome.id||`outcome-${index+1}`),condition:conditionPayload(outcome.conditionLogic||'all',outcome.conditions||[],outcome.formula||'',outcome.customConditionLogic||''),branch:nodes.filter(x=>x.branchOwnerId===n.id&&x.branchKey===String(outcome.id||`outcome-${index+1}`)).map(x=>x.id)}))
-      return {...base,type:'CONDITION',outcomes,defaultLabel:p.defaultOutcomeLabel||'Default Outcome',defaultBranch:nodes.filter(x=>x.branchOwnerId===n.id&&x.branchKey==='__default__').map(x=>x.id)}
+    if(n.type==='SUBFLOW'){
+      let workflowInputs=p.workflowInputs||{}
+      if(p.inputsText){try{workflowInputs=JSON.parse(p.inputsText)}catch{}}
+      return {...base,type:'RUN_SUBFLOW',workflowId:p.flowId||p.flow||'',workflowInputs}
     }
-    if(n.type==='LOOP')return {...base,type:'LOOP',collection:p.collection||'',itemVariable:p.itemVariable||`${n.apiName||'Loop'}_CurrentItem`,iterationOrder:p.direction==='last'?'LAST_TO_FIRST':'FIRST_TO_LAST',bodyBranch:nodes.filter(x=>x.branchOwnerId===n.id&&x.branchKey==='body').map(x=>x.id)}
-    if(n.type==='ASSIGNMENT')return {...base,type:'ASSIGNMENT',assignments:(p.assignments||[]).filter(row=>row.variable).map(row=>({variable:String(row.variable).startsWith('variables.')?row.variable:`variables.${row.variable}`,variableType:resources.find(r=>r.value===row.variable)?.dataType?.toLowerCase()||'text',operator:row.operator||'set',value:row.value}))}
+    if(n.type==='DECISION'){
+      const outcomes=(p.outcomes||[]).map((outcome,index)=>{
+        const outcomeId=String(outcome.id||('outcome-'+(index+1)))
+        return {...outcome,id:outcomeId,condition:conditionPayload(outcome.conditionLogic||'all',outcome.conditions||[],outcome.formula||'',outcome.customConditionLogic||''),branch:branchIds(n.id,outcomeId)}
+      })
+      return {...base,type:'CONDITION',outcomes,defaultLabel:p.defaultOutcomeLabel||'Default Outcome',defaultBranch:branchIds(n.id,'__default__')}
+    }
+    if(n.type==='LOOP')return {...base,type:'LOOP',collection:p.collection||'',itemVariable:p.itemVariable||(n.apiName||'Loop')+'_CurrentItem',iterationOrder:p.direction==='last'?'LAST_TO_FIRST':'FIRST_TO_LAST',bodyBranch:branchIds(n.id,'body')}
+    if(n.type==='ASSIGNMENT')return {...base,type:'ASSIGNMENT',assignments:(p.assignments||[]).filter(row=>row.variable).map(row=>({variable:String(row.variable).startsWith('variables.')?row.variable:'variables.'+row.variable,variableType:resources.find(r=>r.value===row.variable)?.dataType?.toLowerCase()||'text',operator:row.operator||'set',value:row.value}))}
     if(n.type==='COLLECTION_SORT')return {...base,type:'COLLECTION_SORT',collection:p.collection||'',sortField:p.sortField||'',sortDirection:p.sortDirection||p.order||'asc',limit:Number(p.limit||p.max||0)||0}
     if(n.type==='TRANSFORM'){let mappings=p.transformMappings||{};if(p.mappingsText){try{mappings=JSON.parse(p.mappingsText)}catch{}}return {...base,type:'TRANSFORM',collection:p.source||p.collection||'',transformMappings:mappings}}
-    if(n.type==='GET_RECORDS')return {...base,type:'GET_RECORDS',objectKey:p.objectKey||'',filters:(p.conditions||[]).filter(row=>row.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value})),match:p.conditionLogic==='any'?'any':'all',sortField:p.sortBy||'',sortDirection:p.sortOrder||'asc',limit:p.limit==='first'?1:p.limit==='limited'?Number(p.maxRecords||0):0,store:p.store||'auto'}
-    if(n.type==='CREATE_RECORDS')return {...base,type:'CREATE_RECORD',objectKey:p.objectKey||'',fieldValues:Object.fromEntries((p.fieldValues||[]).filter(row=>row.field).map(row=>[row.field,row.value]))}
-    if(n.type==='UPDATE_RECORDS')return {...base,type:'UPDATE_RECORD',objectKey:p.objectKey||'',recordId:p.sourceRecord||'',fieldValues:Object.fromEntries((p.fieldValues||[]).filter(row=>row.field).map(row=>[row.field,row.value]))}
-    if(n.type==='DELETE_RECORDS')return {...base,type:'DELETE_RECORD',objectKey:p.objectKey||'',recordId:p.sourceRecord||''}
+    if(n.type==='GET_RECORDS')return {...base,type:'GET_RECORDS',objectKey:p.objectKey||'',filters:(p.conditions||[]).filter(row=>row.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value})),match:p.conditionLogic==='any'?'any':'all',sortField:p.sortBy||'',sortDirection:p.sortOrder||'asc',limit:p.limit==='first'?1:p.limit==='limited'?Math.max(2,Number(p.maxRecords||2)):200,store:p.limit==='first'?'first':'all'}
+    if(n.type==='CREATE_RECORDS'){
+      const fieldValues=Object.fromEntries((p.fieldValues||[]).filter(row=>row.field).map(row=>[row.field,row.value]))
+      if((p.valueMode||'manual')==='manual')return {...base,type:'CREATE_RECORD',objectKey:p.objectKey||'',fieldValues}
+      if(p.valueMode==='record')return {...base,type:'CREATE_RECORD',objectKey:p.objectKey||'',fieldValuesResource:p.sourceRecord||''}
+      if(p.valueMode==='collection'){
+        const itemVariable=(n.apiName||'Create')+'_CurrentItem',childId=n.id+'__create'
+        return [{...base,type:'LOOP',collection:p.sourceRecord||'',itemVariable,iterationOrder:'FIRST_TO_LAST',bodyBranch:[childId]},{id:childId,label:n.label+' · Create Item',type:'CREATE_RECORD',objectKey:p.objectKey||'',fieldValuesResource:'variables.'+itemVariable}]
+      }
+    }
+    if(n.type==='UPDATE_RECORDS'){
+      const fieldValues=Object.fromEntries((p.fieldValues||[]).filter(row=>row.field).map(row=>[row.field,row.value]))
+      if((p.updateMode||'conditions')==='conditions'){
+        const lookupId=n.id+'__lookup'
+        return [{id:lookupId,label:n.label+' · Find Records',type:'GET_RECORDS',objectKey:p.objectKey||'',filters:(p.conditions||[]).filter(row=>row.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value})),match:p.conditionLogic==='any'?'any':'all',store:'all',limit:200},{...base,type:'BULK_UPDATE_RECORDS',objectKey:p.objectKey||'',recordIds:'steps.'+lookupId+'.records',fieldValues}]
+      }
+      const resource=resources.find(r=>r.value===p.sourceRecord)
+      return resource?.isCollection?{...base,type:'BULK_UPDATE_RECORDS',objectKey:p.objectKey||'',recordIds:p.sourceRecord||'',fieldValues}:{...base,type:'UPDATE_RECORD',objectKey:p.objectKey||'',recordId:p.sourceRecord?(p.sourceRecord+'.id'):'',fieldValues}
+    }
+    if(n.type==='DELETE_RECORDS'){
+      const deleteLoop=(collection,lookup=null)=>{
+        const itemVariable=(n.apiName||'Delete')+'_CurrentItem',childId=n.id+'__delete'
+        return [...(lookup?[lookup]:[]),{...base,type:'LOOP',collection,itemVariable,iterationOrder:'FIRST_TO_LAST',bodyBranch:[childId]},{id:childId,label:n.label+' · Delete Item',type:'DELETE_RECORD',objectKey:p.objectKey||'',recordId:'variables.'+itemVariable+'.id'}]
+      }
+      if((p.deleteMode||'conditions')==='conditions'){
+        const lookupId=n.id+'__lookup'
+        const lookup={id:lookupId,label:n.label+' · Find Records',type:'GET_RECORDS',objectKey:p.objectKey||'',filters:(p.conditions||[]).filter(row=>row.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value})),match:p.conditionLogic==='any'?'any':'all',store:'all',limit:200}
+        return deleteLoop('steps.'+lookupId+'.records',lookup)
+      }
+      const resource=resources.find(r=>r.value===p.sourceRecord)
+      return resource?.isCollection?deleteLoop(p.sourceRecord||''):{...base,type:'DELETE_RECORD',objectKey:p.objectKey||'',recordId:p.sourceRecord?(p.sourceRecord+'.id'):''}
+    }
     if(n.type==='WAIT'){
       if(p.waitType==='date')return {...base,type:'WAIT_UNTIL_DATE',resumeAt:p.dateResource||''}
-      if(p.waitType==='conditions')return {...base,type:'WAIT_FOR_CONDITIONS',condition:conditionPayload(p.conditionLogic||'all',p.conditions||[],p.formula||'',p.customConditionLogic||'')}
+      if(p.waitType==='conditions')return {...base,type:'WAIT_FOR_CONDITIONS',waitCondition:conditionPayload(p.conditionLogic||'all',p.conditions||[],p.formula||'',p.customConditionLogic||''),pollSeconds:Math.max(30,Number(p.pollSeconds||60))}
       if(p.waitType==='event')return {...base,type:'WAIT',eventKey:p.eventKey||'',waitSeconds:0}
       const amount=Math.max(0,Number(p.amount||0)),unit=p.unit||'minutes',multiplier=unit==='days'?86400:unit==='hours'?3600:60
       return {...base,type:'WAIT',durationSeconds:amount*multiplier}
     }
-    if(n.type==='CUSTOM_ERROR')return {...base,type:'CUSTOM_ERROR',message:p.message||'',field:p.location==='field'?p.field||'':null}
+    if(n.type==='CUSTOM_ERROR')return {...base,type:'CUSTOM_ERROR',errorMessage:p.message||'',errorField:p.location==='field'?p.field||'':null}
     return {...base,type:runtimeTypeOf(n.type),...p}
   }
-  const buildPayload=(lifecycle='DRAFT')=>({name:flowProps.label||'New Flow',objectId:startConfig.objectKey||null,objectKey:startConfig.objectKey||null,triggerKey:flowType==='schedule'?'scheduled':flowType==='record'?(startConfig.trigger==='created'?(startConfig.optimize==='fast'?'before_create':'after_create'):startConfig.trigger==='updated'?(startConfig.optimize==='fast'?'before_update':'after_update'):startConfig.trigger==='deleted'?'after_delete':startConfig.optimize==='fast'?'before_save':'after_save'):'manual',active:lifecycle==='ACTIVE',lifecycleStatus:lifecycle,conditions:startConfig.conditions||[],action:{type:'workflow',builder2:true,apiName:flowProps.apiName,description:flowProps.description,apiVersion:flowProps.apiVersion,flowType,runContext:flowProps.runContext,start:startConfig,optimize:startConfig.optimize||'actions',builderLayout:{mode:layoutMode==='free'?'FREE_FORM':'AUTO',positions:Object.fromEntries(nodes.map((n,i)=>[n.id,n.position||{x:320,y:120+i*120}])),edges},builderGroups:groups,resources,tests:flowTests,actions:nodes.map(compileNode)}})
+  const buildPayload=(lifecycle='DRAFT')=>({name:flowProps.label||'New Flow',objectId:startConfig.objectKey||null,objectKey:startConfig.objectKey||null,triggerKey:flowType==='schedule'?'scheduled':flowType==='record'?(startConfig.trigger==='created'?(startConfig.optimize==='fast'?'before_create':'after_create'):startConfig.trigger==='updated'?(startConfig.optimize==='fast'?'before_update':'after_update'):startConfig.trigger==='deleted'?'after_delete':startConfig.optimize==='fast'?'before_save':'after_save'):'manual',active:lifecycle==='ACTIVE',lifecycleStatus:lifecycle,conditions:startConfig.conditions||[],action:{type:'workflow',builder2:true,apiName:flowProps.apiName,description:flowProps.description,apiVersion:flowProps.apiVersion,flowType,runContext:flowProps.runContext,start:startConfig,optimize:startConfig.optimize||'actions',builderLayout:{mode:layoutMode==='free'?'FREE_FORM':'AUTO',positions:Object.fromEntries(nodes.map((n,i)=>[n.id,n.position||{x:320,y:120+i*120}])),edges},builderGroups:groups,resources,tests:flowTests,actions:nodes.flatMap(n=>{const compiled=compileNode(n);return Array.isArray(compiled)?compiled:[compiled]})}})
   const persistWorkflow=async(lifecycle='DRAFT',forceNewVersion=false,forceNewFlow=false)=>{setBusy(true);setRuntimeMessage('');try{const payload={...buildPayload(lifecycle),...(forceNewVersion?{forceNewVersion:true}:{}),...(forceNewFlow?{name:`${flowProps.label||'New Flow'} Copy`,action:{...buildPayload(lifecycle).action,apiName:`${flowProps.apiName||'New_Flow'}_Copy_${Date.now()}`}}:{})};const response=workflowId&&!forceNewFlow?await apiRequest(`/api/platform/rules/${workflowId}`,{method:'PUT',body:JSON.stringify(payload)}):await apiRequest('/api/platform/rules',{method:'POST',body:JSON.stringify(payload)});const saved=response?.data||{};if(saved.id)setWorkflowId(saved.id);onSaved?.(saved,{keepOpen:true});setActive(lifecycle==='ACTIVE');setDirty(false);setEditHistory(h=>[{id:uid(),label:lifecycle==='ACTIVE'?'Activated':'Saved',at:new Date().toISOString(),nodes:nodes.length,snapshot:snapshot(),summary:{elements:nodes.length,resources:resources.length,groups:groups.length}},...h].slice(0,100));setRuntimeMessage(lifecycle==='ACTIVE'?'Flow activated.':'Flow saved.');setSaveMenu(false);return saved}catch(e){setError(e?.message||'Unable to save flow');return null}finally{setBusy(false)}}
   const saveDraft=label=>{const action=String(label||'').toLowerCase();return persistWorkflow('DRAFT',action.includes('version'),action.includes('new flow'))}
   const copySelected=()=>{const ids=selectedMany.length?selectedMany:selected?[selected]:[];setClipboard(nodes.filter(n=>ids.includes(n.id)))}
