@@ -1589,6 +1589,33 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "SEND_APPOINTMENT_CONVERSATION_REPLY",
+    displayName: "Appointments - Send Conversation Reply",
+    description: "Send a workflow-generated appointment reply through the selected communication connector, skipping non-booking messages.",
+    validation: (action) => {
+      if (!action?.channel) throw new Error("Send Appointment Conversation Reply requires channel");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, db, companyId, req, record, object, workflowVariables }) => {
+      const tenantId=companyId||req?.user?.companyId;
+      const rootObjectKey=object?.object_key||object?.objectKey||null;
+      const bound=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
+      const message=String(bound.message||"").trim();
+      if(!message) return {status:"skipped",reason:"Appointment conversation did not produce a reply"};
+      const channel=String(bound.channel||"").toUpperCase();
+      const type=channel==="WHATSAPP"?"SEND_WHATSAPP":channel==="SMS"?"SEND_SMS":channel==="EMAIL"?"SEND_EMAIL":null;
+      if(!type) return {status:"skipped",reason:`Unsupported appointment reply channel ${channel||"UNKNOWN"}`};
+      const result=await executeRegisteredAction({
+        db,companyId:tenantId,userId:req?.user?.id||null,req,
+        action:{type,recipient:bound.recipient,message,conversationId:bound.conversationId||null,recordId:bound.recordId||null}
+      });
+      if(result?.status==="SUCCESS") return {status:"completed",channel,reference:result.reference||null};
+      if(result?.status==="UNAVAILABLE") return {status:"failed",channel,error:result.code||"PROVIDER_UNAVAILABLE"};
+      return {status:"failed",channel,error:result?.code||result?.error?.message||"Appointment reply delivery failed"};
+    },
+  },
+  {
     key: "CREATE_APPOINTMENT_BOOKING_CASE",
     displayName: "Appointments - Create Booking Case",
     description: "Create an appointment booking case from an inbound Email, SMS or WhatsApp workflow.",
