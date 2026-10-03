@@ -77,9 +77,6 @@ function poolOptions(connection, config = {}) {
     min: 0,
     idleTimeoutMillis: Math.min(Math.max(Number(config.idle_timeout_ms || 30000), 1000), 300000),
     connectionTimeoutMillis: 15000,
-    idle_in_transaction_session_timeout: 30000,
-    lock_timeout: 15000,
-    statement_timeout: 120000,
     ssl: config.ssl_mode === "disable" ? false : { rejectUnauthorized: config.ssl_mode === "verify-full" },
   };
 }
