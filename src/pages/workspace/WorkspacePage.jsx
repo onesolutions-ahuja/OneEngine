@@ -99,10 +99,17 @@ function resolveRecordLayout(layouts, pageType, recordTypeId, fallback = null) {
     || candidates[0]
 }
 
+const INTERNAL_FIELD_KEYS = new Set(['id','company_id','store_id','record_type_id','recordtypeid','created_by','updated_by','deleted_by'])
+
+function isInternalField(field) {
+  const key = String(field?.api_name || '').trim().toLowerCase()
+  return !key || INTERNAL_FIELD_KEYS.has(key)
+}
+
 function makeColumns(fields, listView = null) {
   const readable = (fields || [])
     .filter((field) => field.readable !== false && field.active !== false)
-    .filter((field) => field.api_name && !['company_id','store_id'].includes(field.api_name))
+    .filter((field) => !isInternalField(field))
   const configured = Array.isArray(listView?.columns) ? listView.columns : []
   const safe = configured.length
     ? readable.filter((field) => configured.includes(field.api_name) || configured.includes(field.id))
@@ -584,7 +591,18 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
           {loadingObjects ? <div className="workspace-state">Loading…</div> : filteredObjects.map((object) => {
             const key = objectKey(object)
             return (
-              <button key={object.id || key} type="button" title={objectLabel(object)} className={key === selectedKey ? 'is-active' : ''} onClick={() => { setSelectedKey(key); setSelectedId(''); setDetailTab('details') }}>
+              <button key={object.id || key} type="button" title={objectLabel(object)} className={key === selectedKey ? 'is-active' : ''} onClick={() => {
+                if (key === selectedKey) return
+                setSelectedKey(key)
+                setSelectedId('')
+                setDetail(null)
+                setRows([])
+                setFields([])
+                setDetailTab('details')
+                setRelatedState({ key: '', loading: false, rows: [], error: '' })
+                setHistoryState({ loading: false, rows: [], error: '' })
+                onRouteChange?.(key, '', appKey || '')
+              }}>
                 <span className="workspace-object-icon"><Box size={14}/></span>
                 <span><strong>{objectLabel(object)}</strong><small>{key}</small></span>
                 <ChevronRight size={13}/>
@@ -626,7 +644,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
               <div>
                 <span>{objectLabel(selectedObject)}</span>
                 <strong>{recordTitle(detailRecord, detailFields)}</strong>
-                <small>{detailRecord.id}</small>
+                
               </div>
               <div className="workspace-detail-actions">
                 {canCreate && quickCreateLayout ? <button type="button" onClick={openQuickCreate}><Plus size={13}/> Quick Create</button> : null}
@@ -669,7 +687,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
                   </div>
                   {relatedState.loading ? <div className="workspace-state">Loading related records…</div> : relatedState.error ? <div className="workspace-state">{relatedState.error}</div> : relatedState.rows.length ? relatedState.rows.map((row) => (
                     <button className="workspace-related-row" type="button" key={row.id}>
-                      <strong>{recordTitle(row, fields)}</strong><span>{row.id}</span>
+                      <strong>{recordTitle(row, fields)}</strong>
                     </button>
                   )) : <div className="workspace-state">No related records.</div>}
                 </section>
@@ -687,7 +705,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
                 <>
                   <section className="workspace-detail-card">
                     <h3>Details</h3>
-                    {(detailFields || []).filter((field) => field.readable !== false).map((field) => (
+                    {(detailFields || []).filter((field) => field.readable !== false && !isInternalField(field)).map((field) => (
                       <div className="workspace-detail-row" key={field.id || field.api_name}>
                         <span>{field.label || field.api_name}</span>
                         <strong>{readableValue(detailRecord?.[field.api_name])}</strong>
@@ -696,7 +714,6 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
                   </section>
                   <section className="workspace-detail-card">
                     <h3>Record Information</h3>
-                    <div className="workspace-detail-row"><span>ID</span><strong>{detailRecord.id}</strong></div>
                     {selectedRecordType ? <div className="workspace-detail-row"><span>Record Type</span><strong>{selectedRecordType.name || selectedRecordType.label || selectedRecordType.record_type_key}</strong></div> : null}
                     {detailRecord.created_at ? <div className="workspace-detail-row"><span>Created</span><strong>{readableValue(detailRecord.created_at)}</strong></div> : null}
                     {detailRecord.updated_at ? <div className="workspace-detail-row"><span>Last modified</span><strong>{readableValue(detailRecord.updated_at)}</strong></div> : null}
