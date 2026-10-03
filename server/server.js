@@ -114,6 +114,7 @@ import { initializePlatformMetadata, initializeStandardObjectEcosystem } from ".
 import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
 import { seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
 import { getCompanyEntitlements } from "./services/licensing.js";
+import { reconcileCompanyPackageEntitlements } from "./services/packageEntitlements.js";
 import { requireEntitlement } from "./services/licensing.js";
 import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
@@ -2662,6 +2663,26 @@ async function startServer() {
       BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD: "marvel",
       BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
     });
+
+    // Package catalogue changes can modify managed workflow metadata without
+    // changing an installation's package version. Reconcile active OneAssistant
+    // tenants after metadata bootstrap so manifest-owned workflows (for example
+    // WhatsApp booking) are updated from the current package declaration.
+    const assistantTenants = await db(
+      `SELECT DISTINCT i.company_id
+         FROM company_package_installations i
+         JOIN package_registry p ON p.id=i.package_id
+        WHERE p.package_key='one_assistant'
+          AND i.status='active'
+          AND COALESCE(i.suspended_by_entitlement,FALSE)=FALSE`
+    );
+    for (const tenant of assistantTenants.rows || []) {
+      await reconcileCompanyPackageEntitlements(db, tenant.company_id);
+    }
+    if (assistantTenants.rowCount) {
+      console.log(`onePOS: OneAssistant managed metadata reconciled for ${assistantTenants.rowCount} tenant(s)`);
+    }
+
     console.log("onePOS: platform bootstrap ready");
 
     const loadWorkflowAutomationActor = async (companyId, preferredUserId = null) => {
