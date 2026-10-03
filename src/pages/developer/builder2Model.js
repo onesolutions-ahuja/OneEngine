@@ -93,6 +93,11 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (!elementAllowed(n.type,flowType,startConfig)) add('error','ELEMENT_NOT_ALLOWED',`${n.label||n.type} isn't available for this flow configuration.`,n.id)
     if (n.type==='ACTION'&&!n.config?.actionKey) add('error','ACTION_REQUIRED',`${n.label}: Select an action.`,n.id)
     if (['GET_RECORDS','CREATE_RECORDS','UPDATE_RECORDS','DELETE_RECORDS'].includes(n.type)&&!n.config?.objectKey) add('error','OBJECT_REQUIRED',`${n.label}: Select an object.`,n.id)
+    if (['GET_RECORDS','UPDATE_RECORDS','DELETE_RECORDS'].includes(n.type) && !['none','formula'].includes(n.config?.conditionLogic||'all') && !(n.config?.conditions||[]).some(x=>x?.resource)) add('error','CONDITION_REQUIRED',`${n.label}: Configure at least one field condition or choose an unfiltered mode.`,n.id)
+    if (n.type==='GET_RECORDS' && n.config?.conditionLogic==='formula' && !String(n.config?.formula||'').trim()) add('error','FORMULA_REQUIRED',`${n.label}: Enter a filter formula.`,n.id)
+    if (n.type==='GET_RECORDS' && n.config?.sortOrder && n.config.sortOrder!=='none' && !n.config?.sortBy) add('error','SORT_FIELD_REQUIRED',`${n.label}: Select a field to sort by.`,n.id)
+    if (n.type==='GET_RECORDS' && n.config?.limit==='limited' && !(Number(n.config?.maxRecords)>=2)) add('error','RECORD_LIMIT_REQUIRED',`${n.label}: Enter a maximum number of records.`,n.id)
+    if (n.type==='CREATE_RECORDS' && (n.config?.valueMode||'manual')==='manual' && !(n.config?.fieldValues||[]).some(x=>x?.field)) add('error','CREATE_FIELD_REQUIRED',`${n.label}: Add at least one field value.`,n.id)
     if (n.type==='SCREEN'&&!(n.config?.components||[]).length) add('warning','EMPTY_SCREEN',`${n.label}: Screen has no components.`,n.id)
   }
   const names=new Set()
