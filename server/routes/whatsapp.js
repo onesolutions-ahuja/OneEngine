@@ -37,7 +37,6 @@ import { getCompanyEntitlements, hasEntitlement } from "../services/licensing.js
 import { createWorkflowRun, executeWorkflowActions } from "../services/platformWorkflow.js";
 import { interpretWhatsAppAssistantMessage } from "../services/whatsappAssistantAi.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "../services/communicationCore.js";
-import { createAppointmentBookingCase, findAvailableAppointmentSlots, holdAppointmentSlot, confirmAppointmentFromHold } from "../services/oneAssistant.js";
 
 /* Test-connection rate limit: per company, fixed 1-minute window (in-memory,
  * no new dependencies). 256-bit tokens/credentials are not brute-forceable,
@@ -1161,103 +1160,9 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
             }
           }
 
-          const normalizedBody = String(body || "").trim().toLowerCase();
-          const appointmentIntent =
-            String(aiResult?.intent || "").toLowerCase() === "appointment"
-            || /\b(appointment|book|booking|book appointment|make appointment)\b/i.test(normalizedBody);
-
-          const activeBookingResult = await db(
-            `SELECT * FROM appointment_booking_cases
-               WHERE company_id=$1 AND channel='WHATSAPP' AND sender=$2
-                 AND status IN ('NEW','SLOT_SELECTED')
-                 AND COALESCE(state->>'conversationId','')=$3
-               ORDER BY created_at DESC LIMIT 1`,
-            [companyId, `+${sender}`, String(conversation.id)]
-          );
-          let activeBooking = activeBookingResult.rows[0] || null;
-          const sendBookingText = async (reply) => {
-            const sent = await sendWhatsAppTextMessage({ db, companyId, to: `+${sender}`, body: reply, conversationId: conversation.id });
-            if (!sent?.ok) throw new Error(sent?.errorText || "Unable to send WhatsApp appointment reply");
-          };
-          const formatBookingDate = (date) => {
-            const d = new Date(date);
-            return `${String(d.getUTCDate()).padStart(2,"0")}/${String(d.getUTCMonth()+1).padStart(2,"0")}/${d.getUTCFullYear()}`;
-          };
-          const parseBookingDate = (value) => {
-            const match = String(value || "").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-            if (!match) return null;
-            const d = new Date(Date.UTC(Number(match[3]),Number(match[2])-1,Number(match[1])));
-            return d.getUTCFullYear()===Number(match[3]) && d.getUTCMonth()===Number(match[2])-1 && d.getUTCDate()===Number(match[1]) ? d : null;
-          };
-
-          if (appointmentIntent && !activeBooking) {
-            const today = new Date(); today.setUTCHours(0,0,0,0);
-            const tomorrow = new Date(today.getTime()+86400000);
-            const nextDay = new Date(today.getTime()+2*86400000);
-            activeBooking = await createAppointmentBookingCase(db, {
-              companyId, channel:"WHATSAPP", sourceMessageId:message.id, sender:`+${sender}`, recipient:phoneNumberId, body,
-              customerId:customer?.id||null,
-              state:{ provider:"whatsapp", integrationId:integration.id, conversationId:String(conversation.id), whatsappMessageId:storedMessage.id,
-                assistantIntent:"appointment", step:"AWAITING_DATE", dateOptions:[tomorrow.toISOString(),nextDay.toISOString()] },
-            });
-            await sendBookingText(`Welcome. Please choose an appointment date:\n1. ${formatBookingDate(tomorrow)}\n2. ${formatBookingDate(nextDay)}\n3. Enter another date as DD/MM/YYYY\n\nReply 1, 2, or a date in DD/MM/YYYY format.`);
-            continue;
-          }
-
-          if (activeBooking) {
-            const state = activeBooking.state || {};
-            if (state.step === "AWAITING_DATE") {
-              let selectedDate = null;
-              if (normalizedBody === "1" || normalizedBody === "2") selectedDate = new Date(state.dateOptions?.[Number(normalizedBody)-1]);
-              else selectedDate = parseBookingDate(body);
-              const today = new Date(); today.setUTCHours(0,0,0,0);
-              if (!selectedDate || selectedDate < today) {
-                await sendBookingText("Please share a correct input: reply 1, 2, or enter a future date in DD/MM/YYYY format.");
-                continue;
-              }
-              const serviceResult = await db(`SELECT id FROM appointment_services WHERE company_id=$1 AND active=true ORDER BY created_at,id LIMIT 1`,[companyId]);
-              const serviceId = serviceResult.rows[0]?.id;
-              if (!serviceId) { await sendBookingText("No appointment service is currently available."); continue; }
-              const from = new Date(selectedDate); from.setUTCHours(0,0,0,0);
-              const to = new Date(from.getTime()+86400000);
-              const slots = await findAvailableAppointmentSlots(db,{companyId,serviceId,from:from.toISOString(),to:to.toISOString(),limit:5});
-              if (!slots.length) { await sendBookingText(`There are no available appointments on ${formatBookingDate(selectedDate)}. Please reply with another date in DD/MM/YYYY format.`); continue; }
-              await db(`UPDATE appointment_booking_cases SET service_id=$3,state=state||$4::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2`,
-                [activeBooking.id,companyId,serviceId,JSON.stringify({step:"AWAITING_SLOT",selectedDate:from.toISOString(),slots})]);
-              const choices=slots.map((slot,index)=>`${index+1}. ${new Date(slot.startsAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"})}`).join("\n");
-              await sendBookingText(`Available times for ${formatBookingDate(selectedDate)}:\n${choices}\n\nReply with 1-${slots.length}.`);
-              continue;
-            }
-            if (state.step === "AWAITING_SLOT") {
-              const choice = Number(normalizedBody);
-              const slots = Array.isArray(state.slots) ? state.slots : [];
-              if (!Number.isInteger(choice) || choice < 1 || choice > slots.length) {
-                await sendBookingText(`Please share a correct input: reply with a number from 1 to ${slots.length}.`);
-                continue;
-              }
-              const slot=slots[choice-1];
-              try {
-                const client=await pool.connect();
-                try {
-                  await client.query("BEGIN");
-                  const hold=await holdAppointmentSlot(client,{companyId,storeId:slot.storeId||null,serviceId:slot.serviceId,resourceId:slot.resourceId,customerId:customer?.id||null,conversationId:String(conversation.id),startsAt:slot.startsAt,endsAt:slot.endsAt,idempotencyKey:`whatsapp-booking:${activeBooking.id}:${slot.startsAt}`,metadata:{bookingCaseId:activeBooking.id}});
-                  const appointment=await confirmAppointmentFromHold(client,{companyId,holdId:hold.id,customerId:customer?.id||null,customerName:customer?.name||contactName||null,customerPhone:`+${sender}`,sourceChannel:"WHATSAPP",metadata:{bookingCaseId:activeBooking.id}});
-                  await client.query(`UPDATE appointment_booking_cases SET hold_id=$3,appointment_id=$4,status='CONFIRMED',state=state||$5::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2`,
-                    [activeBooking.id,companyId,hold.id,appointment.id,JSON.stringify({step:"CONFIRMED",selectedSlot:slot})]);
-                  await client.query("COMMIT");
-                  await sendBookingText(`Appointment confirmed for ${formatBookingDate(slot.startsAt)} at ${new Date(slot.startsAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"})}.`);
-                } catch(error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-              } catch(error) {
-                if (["SLOT_UNAVAILABLE","HOLD_EXPIRED"].includes(error?.code)) {
-                  await db(`UPDATE appointment_booking_cases SET state=state||$3::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2`,[activeBooking.id,companyId,JSON.stringify({step:"AWAITING_DATE"})]);
-                  await sendBookingText("That time is no longer available. Please reply with 1, 2, or another date in DD/MM/YYYY format.");
-                  continue;
-                }
-                throw error;
-              }
-              continue;
-            }
-          }
+          // Appointment booking is intentionally not implemented in this transport route.
+          // recordCommunicationEvent above publishes communication_message_received;
+          // the active OneAssistant workflow owns the conversational booking state machine.
 
           const workflowsResult = await db(
             `SELECT id,name,object_id,action
