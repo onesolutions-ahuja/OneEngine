@@ -22,10 +22,16 @@ test("OneAssistant uses one active communication-event router for SMS and WhatsA
 
   const actions = workflow.action.actions;
   const keys = actions.map((action) => action.key);
-  assert.ok(keys.includes("APPOINTMENT_SESSION_CONTEXT"));
-  assert.ok(keys.includes("PROCESS_APPOINTMENT_DATE_RESPONSE"));
-  assert.ok(keys.includes("PROCESS_APPOINTMENT_SLOT_RESPONSE"));
+  assert.ok(keys.includes("GET_RECORDS"));
+  assert.ok(keys.includes("CREATE_RECORD"));
+  assert.ok(keys.includes("UPDATE_RECORD"));
+  assert.ok(keys.includes("CONDITION"));
+  assert.ok(keys.includes("SET_VARIABLE"));
   assert.ok(keys.includes("SEND_APPOINTMENT_MESSAGE"));
+  assert.equal(keys.includes("APPOINTMENT_SESSION_CONTEXT"), false);
+  assert.equal(keys.includes("PROCESS_APPOINTMENT_CONVERSATION"), false);
+  assert.equal(keys.includes("PROCESS_APPOINTMENT_DATE_RESPONSE"), false);
+  assert.equal(keys.includes("PROCESS_APPOINTMENT_SLOT_RESPONSE"), false);
 
   const channelRouter = actions.find((action) => action.id === "channel_router");
   assert.deepEqual(channelRouter.outcomes.map((outcome) => outcome.label), ["SMS", "WhatsApp"]);
@@ -78,17 +84,22 @@ test("workflow decisions can route on outputs from previous steps", async () => 
   assert.equal(result.matched, true);
 });
 
-test("registered appointment workflow actions are available to the Builder", () => {
-  for (const key of [
-    "APPOINTMENT_SESSION_CONTEXT",
-    "PROCESS_APPOINTMENT_DATE_RESPONSE",
-    "PROCESS_APPOINTMENT_SLOT_RESPONSE",
-    "SEND_APPOINTMENT_MESSAGE",
-  ]) {
+test("booking router exposes business logic as Builder primitives", () => {
+  const { workflow } = oneAssistantRouter();
+  const keys = workflow.action.actions.map((action) => action.key);
+  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","SET_VARIABLE","SEND_APPOINTMENT_MESSAGE"]) {
     const definition = getWorkflowActionDefinition(key);
     assert.ok(definition, `${key} must be registered`);
     assert.equal(typeof definition.executor, "function");
+    assert.ok(keys.includes(key), `${key} must be visible in the booking flow`);
   }
+  for (const hidden of ["APPOINTMENT_SESSION_CONTEXT","PROCESS_APPOINTMENT_CONVERSATION","PROCESS_APPOINTMENT_DATE_RESPONSE","PROCESS_APPOINTMENT_SLOT_RESPONSE"]) {
+    assert.equal(keys.includes(hidden), false, `${hidden} must not hide booking business logic`);
+  }
+  const createAppointment = workflow.action.actions.find((action) => action.id === "create_appointment");
+  assert.equal(createAppointment.objectKey, "appointment");
+  assert.ok(createAppointment.fieldValues.starts_at);
+  assert.ok(createAppointment.fieldValues.ends_at);
 });
 
 test("SMSGate webhook only records inbound communication and no longer hard-codes booking links", () => {
