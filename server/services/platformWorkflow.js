@@ -3838,7 +3838,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (outcomes.length) {
         for (let index = 0; index < outcomes.length; index += 1) {
           const outcome = outcomes[index];
-          const matched = evaluateCondition(resolveWorkflowConditionConfig(outcome.condition, conditionContext), fields || [], record || {}, previousRecord || null);
+          const matched = evaluateResolvedWorkflowCondition(outcome.condition, fields || [], conditionContext);
           if (matched) {
             return {
               status: "completed",
@@ -3851,7 +3851,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         return { status: "completed", matched: false, outcomeId: null, outcomeLabel: String(action.defaultLabel || "Default Outcome"), outcomeIndex: -1 };
       }
-      const result = evaluateCondition(resolveWorkflowConditionConfig(action.condition, conditionContext), fields || [], record || {}, previousRecord || null);
+      const result = evaluateResolvedWorkflowCondition(action.condition, fields || [], conditionContext);
       return { status: result ? "completed" : "skipped", matched: Boolean(result), legacyBinary: true };
     },
   },
@@ -4507,8 +4507,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, fields = [], object = null, workflowVariables = {} }) => {
       const tenantId = companyId || req?.user?.companyId;
-      const condition = resolveWorkflowConditionConfig(action.waitCondition, { record, previousRecord, req, object, workflowVariables });
-      if (evaluateCondition(condition, fields || [], record || {}, previousRecord || null)) {
+      const conditionContext = { record, previousRecord, req, object, workflowVariables };
+      if (evaluateResolvedWorkflowCondition(action.waitCondition, fields || [], conditionContext)) {
         return { status: "completed", conditionMet: true };
       }
       if (!runId) throw new Error("Wait for Conditions requires a persisted workflow run");
@@ -5346,6 +5346,57 @@ function resolveWorkflowConditionConfig(condition, context = {}) {
       return { ...rule, value: resolveConfiguredResource(rule.value, context) };
     }),
   };
+}
+
+function evaluateCustomConditionLogic(expression, results = []) {
+  const tokens = String(expression || "").toUpperCase().match(/\d+|AND|OR|NOT|\(|\)/g) || [];
+  let index = 0;
+  const parsePrimary = () => {
+    const token = tokens[index++];
+    if (token === "NOT") return !parsePrimary();
+    if (token === "(") {
+      const value = parseOr();
+      if (tokens[index++] !== ")") throw new Error("Custom condition logic has unmatched parentheses");
+      return value;
+    }
+    if (!/^\d+$/.test(String(token || ""))) throw new Error("Custom condition logic is invalid");
+    const position = Number(token) - 1;
+    if (position < 0 || position >= results.length) throw new Error("Custom condition logic references an unavailable condition");
+    return Boolean(results[position]);
+  };
+  const parseAnd = () => {
+    let value = parsePrimary();
+    while (tokens[index] === "AND") { index += 1; value = value && parsePrimary(); }
+    return value;
+  };
+  const parseOr = () => {
+    let value = parseAnd();
+    while (tokens[index] === "OR") { index += 1; value = value || parseAnd(); }
+    return value;
+  };
+  const value = parseOr();
+  if (index !== tokens.length) throw new Error("Custom condition logic is invalid");
+  return value;
+}
+
+function evaluateResolvedWorkflowCondition(condition, fields = [], context = {}) {
+  const normalized = resolveWorkflowConditionConfig(condition, context);
+  if (!normalized) return true;
+  if (String(normalized.formulaExpression || "").trim()) {
+    const inputs = {};
+    for (const source of [context.record || {}, context.workflowVariables?.variables || {}]) {
+      for (const [key, value] of Object.entries(source)) {
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !["id","company_id","store_id","__proto__","constructor","prototype"].includes(key.toLowerCase())) inputs[key] = value;
+      }
+    }
+    return Boolean(evaluateWorkflowFormula(String(normalized.formulaExpression), inputs));
+  }
+  if (String(normalized.customLogic || "").trim()) {
+    const rows = Array.isArray(normalized.conditions) ? normalized.conditions : [];
+    const results = rows.map((row) => evaluateCondition({ match: "all", conditions: [row] }, fields || [], context.record || {}, context.previousRecord || null));
+    return evaluateCustomConditionLogic(normalized.customLogic, results);
+  }
+  return evaluateCondition(normalized, fields || [], context.record || {}, context.previousRecord || null);
 }
 
 function workflowBindingContext({ record, previousRecord, req, object, workflowVariables } = {}) {
