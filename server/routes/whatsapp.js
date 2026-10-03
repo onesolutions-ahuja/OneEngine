@@ -1102,10 +1102,17 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
             messageType: storedMessage.message_type,
           });
 
-          // Receiving and recording WhatsApp is a core communication capability.
-          // The optional Assistant entitlement gates only assistant/AI automation,
-          // never the inbound communication event itself.
-          if (!assistantLicensed) continue;
+          // Receiving/recording always publishes the communication event. Appointment
+          // booking itself is owned by the active OneAssistant workflow published from
+          // that event, so do not suppress the event-driven booking path when the
+          // optional legacy WhatsApp Assistant entitlement is absent.
+          if (!assistantLicensed) {
+            console.info("WhatsApp Assistant legacy handler skipped; event workflows remain eligible", {
+              companyId,
+              phoneNumberId,
+            });
+            continue;
+          }
 
           if (configuration.opt_out_enabled !== false && WHATSAPP_OPT_OUT_WORDS.has(body.toUpperCase())) {
             const updated = await db(
