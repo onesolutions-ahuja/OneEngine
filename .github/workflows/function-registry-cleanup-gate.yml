@@ -1,0 +1,34 @@
+name: Function Registry Cleanup Gate
+
+on:
+  push:
+    branches:
+      - audit/function-registry-cleanup-20261003
+    paths:
+      - "server/services/platformFunctionRegistry.js"
+      - "server/services/systemWorkflowCatalog.js"
+      - ".github/workflows/function-registry-cleanup-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Syntax
+        run: |
+          node --check server/services/platformFunctionRegistry.js
+          node --check server/services/systemWorkflowCatalog.js
+          node --check server/services/platformWorkflow.js
+      - name: Workflow coverage audit
+        run: node scripts/audit-workflow-coverage.mjs
+      - name: Core tests
+        run: npm test
