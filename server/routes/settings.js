@@ -54,7 +54,7 @@ export default function createSettingsRouter({
       `SELECT
           COUNT(*) FILTER (WHERE device_key=$3 AND active=true)::int AS linked_count,
           COUNT(*) FILTER (WHERE device_key='legacy-unassigned' AND active=true)::int AS legacy_count,
-          MIN(id) FILTER (WHERE device_key='legacy-unassigned' AND active=true) AS legacy_id
+          (ARRAY_AGG(id ORDER BY id) FILTER (WHERE device_key='legacy-unassigned' AND active=true))[1] AS legacy_id
          FROM payment_terminals
         WHERE company_id=$1 AND store_id=$2`,
       [req.user.companyId, req.user.storeId, deviceKey]
