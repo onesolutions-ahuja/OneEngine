@@ -94,3 +94,6 @@
 .b2-rf-node.is-end{min-width:72px;border-color:#706e6b;border-radius:999px;background:#706e6b;text-align:center}
 .b2-rf-node.is-end .b2-rf-title b{color:#fff}
 .b2-rf-node.is-start .react-flow__handle,.b2-rf-node.is-end .react-flow__handle{width:8px;height:8px}
+
+.b2-action-input-row{display:grid;gap:6px}.b2-action-input-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.b2-action-input-head>b{font-size:11px}.b2-action-input-head>span{display:flex;border:1px solid #c9c9c9;border-radius:4px;overflow:hidden}.b2-action-input-head button{height:24px;border:0;border-right:1px solid #c9c9c9;background:#fff;padding:0 7px;font-size:9px}.b2-action-input-head button:last-child{border-right:0}.b2-action-input-head button.is-active{background:#eef4ff;color:#0176d3;font-weight:700}
+.b2-screen-inline-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.b2-screen-inline-fields label{display:grid;gap:4px;font-size:10px;font-weight:600}
