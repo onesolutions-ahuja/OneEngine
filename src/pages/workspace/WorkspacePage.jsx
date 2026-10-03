@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
@@ -125,6 +125,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const [objects, setObjects] = useState([])
   const [query, setQuery] = useState('')
   const [selectedKey, setSelectedKey] = useState(initialObjectKey || '')
+  const objectRequestRef = useRef(0)
   const [fields, setFields] = useState([])
   const [rows, setRows] = useState([])
   const [permissions, setPermissions] = useState(null)
@@ -213,7 +214,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     if (objects.some((item) => objectKey(item) === initialObjectKey) && initialObjectKey !== selectedKey) {
       setSelectedKey(initialObjectKey)
     }
-  }, [initialObjectKey, loadingObjects, objects, selectedKey])
+  }, [initialObjectKey, loadingObjects, objects])
 
   useEffect(() => {
     // Route record IDs are only authoritative when the route belongs to the
@@ -234,6 +235,8 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
   const loadObject = async (object = selectedObject, forceRefresh = false) => {
     if (!object) return
+    const requestId = ++objectRequestRef.current
+    const isCurrent = () => requestId === objectRequestRef.current
     const key = objectKey(object)
     setLoadingRows(true)
     setError('')
@@ -242,6 +245,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         cachedGet(`/api/platform/runtime/objects/${encodeURIComponent(key)}/workspace`, { cacheKey: `workspace:meta:${key}`, forceRefresh }),
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`),
       ])
+      if (!isCurrent()) return
       const meta = workspaceRes?.data || {}
       const listViewId = meta?.defaultListView?.id || ''
       const recordPath = `/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
@@ -249,6 +253,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       // Caching an empty list made newly-arrived communication events invisible
       // until the lazy-cache TTL expired.
       const recordRes = await apiRequest(recordPath)
+      if (!isCurrent()) return
       const nextFields = Array.isArray(meta.fields) ? meta.fields : []
       const nextRows = Array.isArray(recordRes?.records)
         ? recordRes.records
@@ -271,10 +276,11 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       const first = nextRows[0]?.id || ''
       setSelectedId((current) => {
         if (current && nextRows.some((row) => String(row.id) === String(current))) return current
-        if (initialRecordId && nextRows.some((row) => String(row.id) === String(initialRecordId))) return initialRecordId
+        if (initialObjectKey === key && initialRecordId && nextRows.some((row) => String(row.id) === String(initialRecordId))) return initialRecordId
         return first
       })
     } catch (err) {
+      if (!isCurrent()) return
       setFields([])
       setRows([])
       setPermissions(null)
@@ -283,17 +289,21 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       setDetail(null)
       setError(err?.message || 'Unable to load records')
     } finally {
-      setLoadingRows(false)
+      if (isCurrent()) setLoadingRows(false)
     }
   }
 
   useEffect(() => {
     void loadObject()
-  }, [selectedKey])
+    // Invalidate both automatic loads and manual refreshes when navigating or
+    // unmounting. Object metadata can arrive after the initial route key.
+    return () => { objectRequestRef.current += 1 }
+  }, [selectedKey, selectedObject?.id])
 
   useEffect(() => {
     if (!selectedObject || !selectedId) {
       setDetail(null)
+      setLoadingDetail(false)
       return
     }
     let live = true
@@ -310,7 +320,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       })
       .finally(() => live && setLoadingDetail(false))
     return () => { live = false }
-  }, [selectedId, selectedKey, formFactor])
+  }, [selectedId, selectedKey, selectedObject?.id, formFactor, appKey])
 
   useEffect(() => {
     if (!selectedObject || !selectedId) {
@@ -327,7 +337,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         if (live) setHistoryState({ loading: false, rows: [], error: err?.message || 'Unable to load record history' })
       })
     return () => { live = false }
-  }, [selectedId, selectedKey])
+  }, [selectedId, selectedKey, selectedObject?.id])
 
   const filteredObjects = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -595,6 +605,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             return (
               <button key={object.id || key} type="button" title={objectLabel(object)} className={key === selectedKey ? 'is-active' : ''} onClick={() => {
                 if (key === selectedKey) return
+                objectRequestRef.current += 1
                 setSelectedKey(key)
                 setSelectedId('')
                 setDetail(null)
