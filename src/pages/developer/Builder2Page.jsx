@@ -110,7 +110,7 @@ const normalizeNodeType=value=>{
   if(type==='CONDITION')return 'DECISION'
   return type
 }
-const BUILDER_NATIVE_RUNTIME_TYPES=new Set(['GET_RECORDS','CREATE_RECORD','CREATE_RELATED_RECORD','UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS','DELETE_RECORD','ASSIGN_RECORD','SET_VARIABLE','CONDITION','LOOP','WAIT','SUBFLOW','COLLECTION_FILTER','COLLECTION_SORT','TRANSFORM','CUSTOM_ERROR','SCREEN','END'])
+const BUILDER_NATIVE_RUNTIME_TYPES=new Set(['GET_RECORDS','CREATE_RECORD','CREATE_RELATED_RECORD','UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS','DELETE_RECORD','ASSIGN_RECORD','SET_VARIABLE','ASSIGNMENT','CONDITION','LOOP','WAIT','SUBFLOW','COLLECTION_FILTER','COLLECTION_SORT','TRANSFORM','CUSTOM_ERROR','SCREEN','END'])
 const OPERATOR_TO_BUILDER={equals:'Equals',not_equals:'Does Not Equal',is_empty:'Is Null',changed:'Is Changed',greater_than:'Greater Than',greater_than_or_equal:'Greater Than or Equal',less_than:'Less Than',less_than_or_equal:'Less Than or Equal'}
 const OPERATOR_TO_RUNTIME=Object.fromEntries(Object.entries(OPERATOR_TO_BUILDER).map(([key,value])=>[value,key]))
 const conditionToBuilder=row=>({id:row?.id||uid(),resource:row?.field||row?.resource||'',operator:OPERATOR_TO_BUILDER[row?.operator]||row?.operator||'Equals',value:row?.value??''})
