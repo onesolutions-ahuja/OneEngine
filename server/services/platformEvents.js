@@ -127,6 +127,14 @@ export async function publishPlatformEvent({ db, companyId = null, eventType, pa
           ORDER BY r.created_at,r.id`,
         [row.company_id, row.event_type]
       );
+      if (row.event_type === "communication_message_received") {
+        console.info("Communication event workflow dispatch", {
+          companyId: row.company_id,
+          eventId: row.id,
+          workflowCount: workflows.rows?.length || 0,
+          workflows: (workflows.rows || []).map((workflow) => workflow.name),
+        });
+      }
       for (const workflow of workflows.rows || []) {
         await enqueuePlatformJob({
           db,
