@@ -9509,7 +9509,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       };
       setWorkflow(savedWorkflow);
       setSavedDefinitionSignature(persistedWorkflowSignature(savedWorkflow));
-      setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => item.id !== nextId)]);
+      setSavedWorkflows((current) => [savedWorkflow, ...current.filter((item) => String(item.id) !== String(nextId))]);
       try {
         const schedulesResponse = await apiRequest("/api/platform/schedules");
         const schedules = Array.isArray(schedulesResponse?.data) ? schedulesResponse.data : [];
