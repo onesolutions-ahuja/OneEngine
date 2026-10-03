@@ -3708,10 +3708,10 @@ async function startServer() {
                   await db(
                     `UPDATE platform_workflow_runs
                         SET status=$1,
-                            completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                            completed_at=CASE WHEN $4::boolean THEN NULL ELSE NOW() END,
                             updated_at=NOW()
                       WHERE id=$2 AND company_id=$3`,
-                    [waiting ? "WAITING" : "COMPLETED", run.id, job.company_id]
+                    [waiting ? "WAITING" : "COMPLETED", run.id, job.company_id, waiting]
                   );
                 }
                 return { status: waiting ? "WAITING" : "COMPLETED", results };
@@ -3885,7 +3885,7 @@ async function startServer() {
               record: eventPayload.record || eventPayload || null,
               actorUserId: item.actor_user_id || null,
             },
-            idempotencyKey: `event-workflow-recovery-v2:${item.workflow_id}:${item.event_id}`,
+            idempotencyKey: `event-workflow-recovery-v3:${item.workflow_id}:${item.event_id}`,
           });
         }
         if (recoverable.rowCount) {
