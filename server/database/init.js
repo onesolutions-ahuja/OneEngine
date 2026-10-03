@@ -1578,7 +1578,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         }
         console.log("onePOS: OneAssistant hidden booking processors replaced with visible flow nodes");
       },
-,
+    },
     {
       key: "0043_oneassistant_refresh_visible_booking_flow",
       version: "43",
@@ -1606,7 +1606,8 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         }
         console.log("onePOS: OneAssistant visible booking flow refreshed");
       },
-    }    }  ]);
+    }
+  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
   console.log("onePOS: database ready");
