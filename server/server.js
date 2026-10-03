@@ -2524,6 +2524,16 @@ async function startServer() {
       );
 
       if (!activeInstallation.rows.length) {
+        // An explicit operator request means reactivate this package even if
+        // the tenant had previously deactivated it. Reconciliation deliberately
+        // preserves manual deactivation, so clear that flag first.
+        await db(
+          `UPDATE company_package_installations
+              SET deactivated_by_user=false,updated_at=NOW()
+            WHERE company_id=$1 AND package_id=$2`,
+          [companyId, pkg.id]
+        );
+
         let trial = (await db(
           "SELECT activated_at,expires_at FROM company_package_trials WHERE company_id=$1 AND package_id=$2 LIMIT 1",
           [companyId, pkg.id]
