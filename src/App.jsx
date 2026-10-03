@@ -2515,7 +2515,8 @@ function Desktop({ onLock, onSignOut }) {
       </LazyLoadBoundary>
 
       <RdvnReferenceDock onItemOpen={openItem} />
-      <Dock onItemOpen={openItem} collapsible={activeApp === 'till'} />
+      {/* Production dock retained for later restoration; temporarily hidden while the efb2f731 dock is evaluated. */}
+      {false ? <Dock onItemOpen={openItem} collapsible={activeApp === 'till'} /> : null}
     </main>
   )
 }
