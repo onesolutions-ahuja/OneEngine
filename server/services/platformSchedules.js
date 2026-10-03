@@ -70,6 +70,12 @@ export function calculateNextFire(scheduleType, definition = {}, timezone = "UTC
   if (type === "CRON") throw new Error("CRON schedules are not supported until a cron parser is available");
   const now = after instanceof Date ? after : new Date(after);
   if (Number.isNaN(now.getTime())) throw new Error("Invalid reference time");
+  if (definition.startDate && type !== "ONCE") {
+    const [year, month, day] = String(definition.startDate).split("-").map(Number);
+    const starts = localDateTimeToInstants({year, month, day, hour:0, minute:0, second:0}, timezone)[0];
+    if (!starts || Number.isNaN(starts.getTime())) throw new Error("Schedule start date is invalid");
+    if (starts > now) return calculateNextFire(type, {...definition, startDate:undefined}, timezone, new Date(starts.getTime()-1));
+  }
   const current = timePartsAt(now, timezone);
 
   if (type === "ONCE") {

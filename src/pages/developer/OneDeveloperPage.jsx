@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { apiRequest, loadSessionPermissions, getActingCompanyId, getStoredUser, setActingCompanyId } from '../../services/api'
 import { clearSettingsContextCache } from '../../services/settings'
+import Builder3Page from './Builder3Page'
 import OneBuilder from '../settings/OneBuilder'
 import { ReportTypeManager } from '../reports/ReportTypeDesigner.jsx'
 import ObjectsSettingsPane from '../settings/ObjectsSettingsPane'
@@ -19,6 +20,7 @@ import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
+  { key: 'builder3', label: 'Builder 3', icon: Workflow },
   { key: 'workflow-builder', label: 'Workflow Builder', icon: Workflow },
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
   { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
@@ -192,6 +194,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading ? <div className="settings-state-card">Resolving client context…</div>
             : current.key === 'objects' ? <ObjectsSettingsPane />
+            : current.key === 'builder3' ? <Builder3Page initialWorkflowId={initialWorkflowId} onWorkflowOpen={workflowId=>onSectionChange?.('builder3',{workflowId})} onWorkflowClose={()=>onSectionChange?.('builder3',{workflowId:''})}/>
             : current.key === 'workflow-builder' ? <OneBuilder initialTab="workflow" singleBuilder initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('workflow-builder', { workflowId })} onWorkflowClose={() => onSectionChange?.('workflow-builder', { workflowId: '' })} />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
             : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />

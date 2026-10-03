@@ -1,3 +1,5 @@
+import { executeBuilder3Data } from './builder3DataAdapter.js';
+import { actionWithInputSchema } from "./workflowActionInputSchemas.js";
 import { evaluateCondition } from "./platformConditions.js";
 import { renderMessageTemplate } from "./messageTemplates.js";
 import { classifyDebugCode } from "./debugCodes.js";
@@ -1256,6 +1258,15 @@ async function resolveEmailWorkflowAction({
     return candidate === undefined ? value : candidate;
   };
 
+  for (const key of ["cc", "bcc", "from", "fromName", "replyTo", "attachments", "headers", "tags", "params", "scheduledAt", "relatedRecord", "providerTemplateId"]) {
+    if (action?.[key] !== undefined) resolved[key] = (function resolveTree(value) {
+      if (typeof value === "string") return resolveValue(value);
+      if (Array.isArray(value)) return value.map(resolveTree);
+      if (value && typeof value === "object" && value.path) return resolveBindingTree(value, workflowBindingContext(context));
+      if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, resolveTree(item)]));
+      return value;
+    })(action[key]);
+  }
   resolved.subject = resolveValue(action?.subject);
   const configuredBody = action?.body ?? action?.text ?? action?.message;
   if (configuredBody !== undefined) {
@@ -1295,10 +1306,13 @@ async function resolveEmailWorkflowAction({
     resolved.template = template.api_key || resolved.template;
   }
 
-  if (!String(resolved.subject || "").trim()) {
+  const providerTemplate = Number(resolved.providerTemplateId);
+  const nativeTemplate = Number.isInteger(providerTemplate) && providerTemplate > 0;
+  if (resolved.providerTemplateId && !nativeTemplate) throw new Error("Provider template ID must be a positive integer");
+  if (!nativeTemplate && !String(resolved.subject || "").trim()) {
     throw Object.assign(new Error("Email subject is required"), { code: "INVALID_SUBJECT", retryable: false });
   }
-  if (!String(resolved.text || resolved.body || resolved.message || resolved.html || "").trim()) {
+  if (!nativeTemplate && !String(resolved.text || resolved.body || resolved.message || resolved.html || "").trim()) {
     throw Object.assign(new Error("Email message body is required"), { code: "INVALID_MESSAGE", retryable: false });
   }
   return resolved;
@@ -3285,11 +3299,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         orderBy = ' ORDER BY "' + (sortMetadata.source_column || sortMetadata.api_name) + '" ' + (String(action.sortDirection || "asc").toLowerCase() === "desc" ? "DESC" : "ASC");
       }
-      const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 50 : 1)), 200));
+      const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 50 : 1)), action.builder3RecordLimit ? 20000 : 200));
       params.push(requestedLimit);
       const where = clauses.length ? " WHERE " + clauses.join(" AND ") : "";
       const selectColumns = ["id", ...fields.map((field) => '"' + field.source_column + '" AS "' + field.api_name + '"')];
-      const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + table + '"' + where + orderBy + " LIMIT " + parameter(params.length);
+      const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + table + '"' + where + orderBy + (action.builder3AllRecords ? "" : " LIMIT " + parameter(params.length));
+      if(action.builder3AllRecords) params.pop();
       const result = await db(query, params);
       const rows = result.rows || [];
       return {
@@ -3701,11 +3716,24 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     schema: {
       type: "object",
       properties: {
-        recipient: { type: "string", title: "Recipient email" },
+        recipient: { type: "string", title: "To", description: "Recipient email address or a Flow resource." },
+        cc: { type: "array", title: "CC", items: { type: "object", properties: { email: { type: "string", title: "Email" }, name: { type: "string", title: "Name" } }, required: ["email"] } },
+        bcc: { type: "array", title: "BCC", items: { type: "object", properties: { email: { type: "string", title: "Email" }, name: { type: "string", title: "Name" } }, required: ["email"] } },
+        from: { type: "string", title: "Sender / From", description: "Use an authorised sender address, or leave blank to use the connector sender." },
+        fromName: { type: "string", title: "Sender Name" },
+        replyTo: { type: "string", title: "Reply To" },
+        html: { type: "string", title: "HTML Body", format: "html" },
+        attachments: { type: "array", title: "Attachments", items: { type: "object", properties: { name: { type: "string", title: "Filename" }, url: { type: "string", title: "File URL" }, content: { type: "string", title: "Base64 Content" } }, required: ["name"] } },
+        relatedRecord: { type: "string", title: "Related Record", description: "Record reference retained in the workflow trace." },
+        headers: { type: "object", title: "Custom Headers" },
+        tags: { type: "array", title: "Tags", items: { type: "string" } },
+        params: { type: "object", title: "Template Parameters" },
+        scheduledAt: { type: "string", title: "Scheduled At (UTC)", format: "date-time" },
+        providerTemplateId: {type:"integer",minimum:1,title:"Brevo Template ID",description:"Native transactional template ID. Template parameters can use Flow resources; subject and body may be supplied by this template."},
         contentMode: { type: "string", enum: ["TEMPLATE","CUSTOM"], title: "Content source" },
         templateId: { type: "string", title: "Message template" },
         subject: { type: "string", title: "Subject" },
-        body: { type: "string", title: "Message body" },
+        body: { type: "string", title: "Text Body", format: "multiline" },
       },
       required: ["recipient"],
     },
@@ -4103,6 +4131,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           const value = resolveConfiguredResource(source, { record: mergedRecord, previousRecord, req, object, workflowVariables: childWorkflowVariables }, { preserveMissing: false });
           if (output.required === true && value === undefined) throw new Error(`Subflow output "${output.label || name}" was not produced`);
           outputs[name] = value;
+        }
+      }
+      if (!childWaiting && action.outputMappings) {
+        for (const [name, target] of Object.entries(action.outputMappings)) {
+          if (!Object.hasOwn(outputs, name)) throw new Error(`Subflow output "${name}" was not declared`);
+          const parts = String(target || "").replace(/^variables\./, "").split(".");
+          if (!parts.every(part => /^[A-Za-z_][A-Za-z0-9_]*$/.test(part) && !["__proto__","constructor","prototype"].includes(part))) throw new Error("Invalid subflow output variable");
+          let cursor = workflowVariables.variables ||= {};
+          for (const part of parts.slice(0, -1)) cursor = cursor[part] ||= {};
+          cursor[parts.at(-1)] = outputs[name];
         }
       }
       const childFailed = childResult.some((item) => item.result?.status === "failed");
@@ -5649,12 +5687,41 @@ export async function executeMediatedRegisteredAction({ db, companyId, userId = 
 }
 
 export function getWorkflowActionRegistry() {
-  return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
+  return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index).map(actionWithInputSchema);
 }
 
 export function getWorkflowActionDefinition(key) {
   const normalized = String(key || "").toUpperCase();
-  return (WORKFLOW_ACTION_MAP.get(normalized) || DYNAMIC_CONNECTOR_ACTIONS.find((entry) => String(entry.key || "").toUpperCase() === normalized) || null);
+  return actionWithInputSchema(WORKFLOW_ACTION_MAP.get(normalized) || DYNAMIC_CONNECTOR_ACTIONS.find((entry) => String(entry.key || "").toUpperCase() === normalized) || null);
+}
+
+function hasBuilder3ResourceInputs(action, definition) {
+  if (!Array.isArray(action?.builder3InputFields)) return false;
+  const hasReference = value => typeof value === "string" ? /^(\$|variables\.|steps\.)/.test(value) : value && typeof value === "object" && Object.values(value).some(hasReference);
+  return action.builder3InputFields.some(key => Object.hasOwn(definition.schema?.properties || {}, key) && hasReference(action[key]));
+}
+
+function resolveBuilder3ActionInputs(context) {
+  const original = context?.action;
+  if (!Array.isArray(original?.builder3InputFields)) return context;
+  const definition = getWorkflowActionDefinition(original.type);
+  const resolve = value => {
+    if (typeof value === "string" && /^(\$|variables\.|steps\.)/.test(value)) {
+      const result = resolveConfiguredResource(value, context, { preserveMissing: false });
+      if (result === undefined) throw new Error(`Workflow resource "${value}" was not produced`);
+      return result;
+    }
+    if (Array.isArray(value)) return value.map(resolve);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolve(item)]));
+    return value;
+  };
+  const action = { ...original };
+  for (const key of original.builder3InputFields) {
+    if (!Object.hasOwn(definition?.schema?.properties || {}, key)) throw new Error(`Action input "${key}" is not registered`);
+    action[key] = resolve(original[key]);
+  }
+  delete action.builder3InputFields;
+  return { ...context, action };
 }
 
 export function validateWorkflowAction(action) {
@@ -5666,7 +5733,7 @@ export function validateWorkflowAction(action) {
   if (!definition) {
     throw new Error(`Unsupported workflow action: ${action.type || action.key}`);
   }
-  if (typeof definition.validation === "function") {
+  if (typeof definition.validation === "function" && !hasBuilder3ResourceInputs(action, definition)) {
     definition.validation(action);
   }
   return definition;
@@ -6036,6 +6103,7 @@ export function friendlyWorkflowError(error, actionType = "") {
 }
 
 export async function executeWorkflowAction(context) {
+  context = resolveBuilder3ActionInputs(context);
   const action = context?.action;
   const definition = validateWorkflowAction(action);
   await assertWorkflowActionPermission(context, definition);
@@ -6061,6 +6129,14 @@ export async function executeWorkflowAction(context) {
   }
   if (typeof definition.executor !== "function") {
     return { status: "skipped", reason: "No executor configured" };
+  }
+  if(action.builder3Data){
+    return executeBuilder3Data({action,context,resolve:value=>resolveConfiguredResource(value,context,{preserveMissing:false}),execute:next=>executeWorkflowAction({...context,action:next}),writableFields:async()=>{
+      const target=await resolveWorkflowTargetObject({...context,action});
+      const metadata=await context.db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",[target.id,context.companyId||context.req?.user?.companyId]);
+      const fields=context.req?.user?await applyFieldSecurity(context.db,metadata.rows||[],context.req):metadata.rows||[];
+      return new Set(fields.filter(f=>f.writable!==false).flatMap(f=>[f.api_name,f.source_column]).filter(Boolean));
+    }});
   }
   return definition.executor(context);
 }

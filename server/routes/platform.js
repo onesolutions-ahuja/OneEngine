@@ -3308,8 +3308,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           metadata: { actorUserId: req.user.id || null, pageInteraction: true },
         });
         try {
+          const workflowVariables = { variables: {}, steps: {} };
+          if (workflow.action?.builder3 === true) {
+            const supplied = interaction.inputs && typeof interaction.inputs === "object" && !Array.isArray(interaction.inputs) ? interaction.inputs : {};
+            for (const input of workflow.action.inputContract || []) {
+              const value = Object.prototype.hasOwnProperty.call(supplied, input.name) ? supplied[input.name] : input.defaultValue;
+              if (input.required === true && (value === undefined || value === null || value === "")) throw new Error(`Flow input ${input.label || input.name} is required`);
+              if (value !== undefined) workflowVariables.variables[input.name] = value;
+            }
+          }
           const results = await executeWorkflowActions({
             actions,
+            workflowVariables,
             db,
             pool,
             req,

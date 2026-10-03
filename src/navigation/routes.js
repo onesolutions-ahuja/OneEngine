@@ -4,6 +4,7 @@ export const DEVELOPER_SETTINGS_KEYS = new Set([
   'sharing-rules',
   'platform',
   'workflow-builder',
+  'builder3',
   'approval-builder',
   'page-builder',
   'dashboard-builder',
@@ -39,7 +40,7 @@ export function readRoute() {
   }
   if (parts[0] === 'developer') {
     const section = parts[1] || 'objects'
-    const workflowId = section === 'workflow-builder' && parts[2] ? decodeURIComponent(parts[2]) : ''
+    const workflowId = ['workflow-builder','builder3'].includes(section) && parts[2] ? decodeURIComponent(parts[2]) : ''
     return { app: 'developer', section, workflowId }
   }
   if (parts[0] === 'dashboard') return { app: 'dashboard', section: null }
@@ -102,7 +103,7 @@ export function setRoute(app, section = null, options = {}) {
   const next = app === 'settings'
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
     : app === 'developer'
-      ? `${base}/developer${section && section !== 'objects' ? `/${section}` : ''}${section === 'workflow-builder' && options?.workflowId ? `/${encodeURIComponent(options.workflowId)}` : ''}`
+      ? `${base}/developer${section && section !== 'objects' ? `/${section}` : ''}${['workflow-builder','builder3'].includes(section) && options?.workflowId ? `/${encodeURIComponent(options.workflowId)}` : ''}`
     : app === 'dashboard'
       ? `${base}/dashboard`
     : app === 'till'
