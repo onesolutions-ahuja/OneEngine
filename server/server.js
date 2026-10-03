@@ -2483,6 +2483,109 @@ async function startServer() {
     }
     console.log(`onePOS: package catalogue ready (${startupRegistryHealth.actualCount}/${startupRegistryHealth.expectedCount} public packages verified)`);
 
+    // Operator-only one-time package activation hook. This is driven entirely
+    // by the private service environment and is idempotent, so it can be used
+    // to activate/install a package for a tenant without hard-coding tenant
+    // identifiers into source code or exposing an HTTP backdoor.
+    const startupPackageRequest = String(process.env.ONEENGINE_STARTUP_PACKAGE_TRIAL_INSTALL || "").trim();
+    if (startupPackageRequest) {
+      const [companyId, packageKey] = startupPackageRequest.split("|").map((value) => String(value || "").trim());
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(companyId || "")) {
+        throw new Error("ONEENGINE_STARTUP_PACKAGE_TRIAL_INSTALL has an invalid company id");
+      }
+      if (!/^[a-z_][a-z0-9_]{0,99}$/.test(packageKey || "")) {
+        throw new Error("ONEENGINE_STARTUP_PACKAGE_TRIAL_INSTALL has an invalid package key");
+      }
+
+      const companyResult = await db("SELECT id FROM companies WHERE id=$1 LIMIT 1", [companyId]);
+      if (!companyResult.rows.length) throw new Error(`Startup package activation company not found: ${companyId}`);
+
+      const packageResult = await db(
+        `SELECT id,package_key,name,version,module_id,licence_mode,installable,visible,system_only,publication_state,active
+           FROM package_registry
+          WHERE package_key=$1 AND active=true
+          LIMIT 1`,
+        [packageKey]
+      );
+      const pkg = packageResult.rows[0];
+      if (!pkg || pkg.installable !== true || pkg.visible !== true || pkg.system_only === true || pkg.publication_state !== "PUBLISHED") {
+        throw new Error(`Startup package activation is not allowed for: ${packageKey}`);
+      }
+
+      const activeInstallation = await db(
+        `SELECT id
+           FROM company_package_installations
+          WHERE company_id=$1 AND package_id=$2
+            AND status='active'
+            AND suspended_by_entitlement=false
+            AND deactivated_by_user=false
+          LIMIT 1`,
+        [companyId, pkg.id]
+      );
+
+      if (!activeInstallation.rows.length) {
+        let trial = (await db(
+          "SELECT activated_at,expires_at FROM company_package_trials WHERE company_id=$1 AND package_id=$2 LIMIT 1",
+          [companyId, pkg.id]
+        )).rows[0] || null;
+
+        const hasActiveEntitlement = await db(
+          `SELECT 1
+             FROM company_package_entitlement_sources
+            WHERE company_id=$1 AND package_id=$2 AND active=true
+              AND (starts_at IS NULL OR starts_at<=NOW())
+              AND (expires_at IS NULL OR expires_at>NOW())
+            LIMIT 1`,
+          [companyId, pkg.id]
+        );
+
+        if (!hasActiveEntitlement.rows.length) {
+          if (trial && new Date(trial.expires_at).getTime() <= Date.now()) {
+            throw new Error(`The one-time trial for ${packageKey} has already expired and cannot be restarted`);
+          }
+          if (!trial) {
+            trial = (await db(
+              `INSERT INTO company_package_trials
+                 (company_id,package_id,activated_by,activated_at,expires_at)
+               VALUES ($1,$2,NULL,NOW(),NOW() + INTERVAL '7 days')
+               RETURNING activated_at,expires_at`,
+              [companyId, pkg.id]
+            )).rows[0];
+          }
+          await db(
+            `INSERT INTO company_package_entitlement_sources
+               (company_id,package_id,source_type,source_key,active,starts_at,expires_at,metadata)
+             VALUES ($1,$2,'DIRECT_LICENCE',$3,true,$4,$5,$6::jsonb)
+             ON CONFLICT (company_id,package_id,source_type,source_key)
+             DO UPDATE SET active=true,starts_at=EXCLUDED.starts_at,expires_at=EXCLUDED.expires_at,metadata=EXCLUDED.metadata`,
+            [
+              companyId,
+              pkg.id,
+              `trial:${companyId}:${pkg.package_key}`,
+              trial.activated_at,
+              trial.expires_at,
+              JSON.stringify({ trial: true, days: 7, activatedBy: "render-startup-operator" }),
+            ]
+          );
+        }
+
+        await reconcileCompanyPackageEntitlements(db, companyId);
+      }
+
+      const verifiedInstallation = await db(
+        `SELECT i.status,i.suspended_by_entitlement,i.deactivated_by_user
+           FROM company_package_installations i
+          WHERE i.company_id=$1 AND i.package_id=$2
+          LIMIT 1`,
+        [companyId, pkg.id]
+      );
+      const installed = verifiedInstallation.rows[0];
+      if (!installed || installed.status !== "active" || installed.suspended_by_entitlement === true || installed.deactivated_by_user === true) {
+        throw new Error(`Startup package activation did not produce an active installation for ${packageKey}`);
+      }
+      console.log("onePOS: startup package trial/install complete", { companyId, packageKey });
+    }
+
     const recoveredCommands = await db(
       `UPDATE platform_workflow_runs
           SET status='FAILED',
