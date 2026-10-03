@@ -98,7 +98,7 @@ const serializeBuilderNode=(node,{nodes=[],edges=[],resources=[]}={})=>{
   return {...base,type:node.type,...p}
 }
 const resourceNameOf=resource=>String(resource?.apiName||resource?.label||resource?.value||'').replace(/^variables\./,'').trim()
-const resourceTypeOf=resource=>{const type=String(resource?.dataType||'Text').toLowerCase();if(type.includes('number')||type.includes('currency')||type.includes('decimal'))return 'number';if(type.includes('bool'))return 'boolean';if(type.includes('date/time')||type.includes('datetime'))return 'datetime';if(type==='date')return 'date';return 'text'}
+const resourceTypeOf=resource=>{const type=String(resource?.dataType||'Text').toLowerCase();if(type.includes('number')||type.includes('currency')||type.includes('decimal'))return 'number';if(type.includes('bool'))return 'boolean';if(type.includes('date/time')||type.includes('datetime'))return 'datetime';if(type==='date')return 'date';if(type.includes('record'))return 'record';return 'text'}
 const serializeResourcePrelude=(resources=[])=>resources.flatMap(resource=>{
   const name=resourceNameOf(resource);if(!name)return []
   const common={id:`resource:${name}`,label:resource.label||name,apiName:name,_builderResource:true}
@@ -107,8 +107,10 @@ const serializeResourcePrelude=(resources=[])=>resources.flatMap(resource=>{
   if(resource.type==='Formula')return [{...common,type:'FORMULA',resourceName:name,resultType:resourceTypeOf(resource),expression:String(resource.defaultValue||''),inputs:resource.inputs||{}}]
   if(resource.type==='Text Template')return [{...common,type:'TEXT_TEMPLATE',resourceName:name,templateText:String(resource.defaultValue||'')}]
   if(resource.type==='Choice')return [{...common,type:'CHOICE',resourceName:name,choiceLabel:resource.label||name,choiceValue:resource.defaultValue,choiceDataType:resourceTypeOf(resource)}]
+  if(resource.type==='Record Choice Set'&&resource.objectKey&&resource.labelPath&&resource.valuePath)return [{...common,type:'RECORD_CHOICE_SET',resourceName:name,object:resource.objectKey,choiceLabelField:resource.labelPath,choiceValueField:resource.valuePath,limit:Math.max(1,Math.min(Number(resource.limit||50),200))}]
+  if(resource.type==='Collection Choice Set'&&resource.defaultValue&&resource.labelPath&&resource.valuePath)return [{...common,type:'COLLECTION_CHOICE_SET',resourceName:name,collection:resource.defaultValue,choiceLabelPath:resource.labelPath,choiceValuePath:resource.valuePath}]
   if(resource.type==='Picklist Choice Set'&&resource.objectKey&&resource.defaultValue)return [{...common,type:'PICKLIST_CHOICE_SET',resourceName:name,object:resource.objectKey,fieldApiName:resource.defaultValue}]
-  if(resource.type==='Stage')return [{...common,type:'STAGE',resourceName:name,stageLabel:resource.label||name,stageValue:name,stageOrder:Math.max(1,Number(resource.defaultValue||1))}]
+  if(resource.type==='Stage')return [{...common,type:'STAGE',resourceName:name,stageLabel:resource.stageLabel||resource.label||name,stageValue:name,stageOrder:Math.max(1,Number(resource.defaultValue||1))}]
   return []
 })
 const workflowInputContract=(resources=[])=>resources.filter(resource=>resource.type==='Variable'&&resource.availableInput===true).map(resource=>({name:resourceNameOf(resource),label:resource.label||resourceNameOf(resource),type:resource.isCollection?'collection':resourceTypeOf(resource),required:false}))
