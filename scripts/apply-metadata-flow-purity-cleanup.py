@@ -4,6 +4,7 @@ import json
 
 workflow_path = Path("server/services/platformWorkflow.js")
 init_path = Path("server/database/init.js")
+package_path = Path("server/services/packageRegistry.js")
 
 obsolete_keys = [
     "APPOINTMENT_SESSION_CONTEXT",
@@ -199,4 +200,18 @@ if migration_key not in init:
     init = init[:insert_at] + migration + init[insert_at:]
     init_path.write_text(init)
 
+package = package_path.read_text()
+package = package.replace(
+    'key:"SET_VARIABLE", variable:"selectedDate", value:',
+    'key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:'
+)
+package = package.replace(
+    'key:"SET_VARIABLE",variable:"selectedSlot",value:',
+    'key:"ASSIGNMENT",variableName:"selectedSlot",variableType:"record",operator:"set",value:'
+)
+if 'key:"SET_VARIABLE"' in package:
+    raise RuntimeError("OneAssistant package still contains non-executable SET_VARIABLE nodes")
+package_path.write_text(package)
+
 print("Applied obsolete appointment wrapper cleanup.")
+
