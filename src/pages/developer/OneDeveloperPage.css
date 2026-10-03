@@ -169,8 +169,11 @@
   height: 100%;
 }
 .onedeveloper-page .objects-settings-shell {
-  height: calc(100vh - 156px);
-  min-height: 620px;
+  /* Fill only the padded content box. The 70px OneDeveloper bottom padding
+     matches the dock's 68px visual height, leaving the requested 2px gap. */
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
 }
 .onedeveloper-page .objects-list-pane,
 .onedeveloper-page .objects-detail-pane {
