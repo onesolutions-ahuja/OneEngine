@@ -17,7 +17,9 @@ function FlowNode({data}) {
   const outcomes=Array.isArray(data.outcomes)?data.outcomes:[]
   const branchHandles=data.type==='DECISION'
     ? [...outcomes.map((outcome,index)=>({id:`outcome:${outcome.id||index}`,label:outcome.label||`Outcome ${index+1}`})),{id:'default',label:data.defaultOutcomeLabel||'Default Outcome'}]
-    : []
+    : data.type==='LOOP'
+      ? [{id:'body',label:'For Each'},{id:'default',label:'After Last'}]
+      : []
   return <div className={`b2-rf-node ${data.selected?'is-selected':''}`} onDoubleClick={data.onOpen}>
     <Handle type="target" position={Position.Top}/>
     <div className="b2-rf-title"><b>{data.label}</b><small>{String(data.type||'').replaceAll('_',' ')}</small></div>
@@ -69,8 +71,8 @@ export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,o
 
   const connect=useCallback(params=>{
     if([START_ID,END_ID].includes(params.target)||[START_ID,END_ID].includes(params.source))return
-    const kind=params.sourceHandle==='fault'?'fault':String(params.sourceHandle||'').startsWith('outcome:')?'outcome':'normal'
-    const edge={...params,id:`${params.source}:${params.sourceHandle||'default'}:${params.target}:${Date.now()}`,kind,label:kind==='fault'?'Fault':kind==='outcome'?'Outcome':''}
+    const kind=params.sourceHandle==='fault'?'fault':String(params.sourceHandle||'').startsWith('outcome:')?'outcome':params.sourceHandle==='body'?'loop':'normal'
+    const edge={...params,id:`${params.source}:${params.sourceHandle||'default'}:${params.target}:${Date.now()}`,kind,label:kind==='fault'?'Fault':kind==='outcome'?'Outcome':kind==='loop'?'For Each':''}
     setRfEdges(es=>{
       const next=addEdge({...edge,type:'smoothstep'},es)
       onEdgesChangeExternal?.(persistentEdgesOnly(next).map(({id,source,target,sourceHandle,targetHandle,kind,label})=>({id,source,target,sourceHandle,targetHandle,kind,label})))
