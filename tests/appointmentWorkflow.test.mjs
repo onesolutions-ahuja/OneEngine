@@ -96,6 +96,22 @@ test("booking router exposes business logic as Builder primitives", () => {
   for (const hidden of ["APPOINTMENT_SESSION_CONTEXT","PROCESS_APPOINTMENT_CONVERSATION","PROCESS_APPOINTMENT_DATE_RESPONSE","PROCESS_APPOINTMENT_SLOT_RESPONSE"]) {
     assert.equal(keys.includes(hidden), false, `${hidden} must not hide booking business logic`);
   }
+
+  for (const removed of [
+    "APPOINTMENT_SESSION_CONTEXT",
+    "PROCESS_APPOINTMENT_DATE_RESPONSE",
+    "PROCESS_APPOINTMENT_SLOT_RESPONSE",
+    "PROCESS_APPOINTMENT_CONVERSATION",
+    "SEND_APPOINTMENT_CONVERSATION_REPLY",
+    "HOLD_APPOINTMENT_SLOT",
+    "RELEASE_APPOINTMENT_SLOT",
+    "LIST_APPOINTMENT_PAYMENT_PROVIDERS",
+    "CREATE_APPOINTMENT_PAYMENT_REQUEST",
+    "CALCULATE_APPOINTMENT_PAYMENT",
+    "CONFIRM_APPOINTMENT",
+  ]) {
+    assert.equal(getWorkflowActionDefinition(removed), null, removed + " must be removed from the executable registry");
+  }
   const createAppointment = workflow.action.actions.find((action) => action.id === "create_appointment");
   assert.equal(createAppointment.objectKey, "appointment");
   assert.ok(createAppointment.fieldValues.starts_at);
