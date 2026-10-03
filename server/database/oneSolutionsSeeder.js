@@ -217,23 +217,22 @@ export async function seedOneSolutionsDemo(pool) {
       categoryIds[name]=row.id;
     }
 
-    const priceListSpecs=[
-      ['retail','Retail Till','till'],
-      ['restaurant_qsr','Restaurant Till','till'],
-      ['beauty_barber','Beauty Till','till'],
-      ['cleaning_services','Cleaning Till','till'],
-      ['electronics','Electronics Till','till'],
-    ];
+    // Every active division gets a Till price list dynamically. Availability
+    // remains metadata/record driven even when a tenant adds its own divisions.
     const priceListIds={};
-    for(const [divisionKey,name,channel] of priceListSpecs){
+    const activeDivisions=(await client.query(
+      "SELECT division_key,name FROM onesolutions_business_divisions WHERE company_id=$1 AND active=TRUE ORDER BY name",
+      [company.id]
+    )).rows;
+    for(const division of activeDivisions){
       const row=(await client.query(
         `INSERT INTO price_lists(company_id,name,channel,active)
-         VALUES($1,$2,$3,TRUE)
-         ON CONFLICT(company_id,name) DO UPDATE SET channel=EXCLUDED.channel,active=TRUE
+         VALUES($1,$2,'till',TRUE)
+         ON CONFLICT(company_id,name) DO UPDATE SET channel='till',active=TRUE
          RETURNING id`,
-        [company.id,name,channel]
+        [company.id,`${division.name} Till`]
       )).rows[0];
-      priceListIds[divisionKey]=row.id;
+      priceListIds[division.division_key]=row.id;
     }
 
     const ensureProductAvailability=async(productId,divisionKey,price)=>{
