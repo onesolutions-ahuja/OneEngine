@@ -15,11 +15,13 @@ import DeploymentAdmin from '../settings/Platform/DeploymentAdmin'
 import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSubscriptionsAdmin'
 import ValueSetList from '../settings/Platform/ValueSetList'
 import DebugCodesAdmin from './DebugCodesAdmin'
+import Builder2Page from './Builder2Page'
 import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
   { key: 'workflow-builder', label: 'Workflow Builder', icon: Workflow },
+  { key: 'builder2', label: 'Builder2', icon: Workflow },
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
   { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
   { key: 'dashboard-builder', label: 'Dashboard Builder', icon: LayoutDashboard },
@@ -192,6 +194,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading ? <div className="settings-state-card">Resolving client context…</div>
             : current.key === 'objects' ? <ObjectsSettingsPane />
+            : current.key === 'builder2' ? <Builder2Page />
             : current.key === 'workflow-builder' ? <OneBuilder
                 initialTab="workflow"
                 singleBuilder
