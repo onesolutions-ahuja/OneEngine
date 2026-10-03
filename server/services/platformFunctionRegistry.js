@@ -1,5 +1,4 @@
 import { checkCreditLimit, checkPayment, buildPaymentTransaction, buildAdjustmentTransaction } from "./customerCredit.js";
-import { submitPlatformApproval } from "./platformApprovals.js";
 import { createInventoryMovement } from "./inventory.js";
 import { receivePurchase } from "./purchaseReceiving.js";
 import { executeSupplierPayment } from "./supplierPaymentExecution.js";
@@ -220,23 +219,6 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
         userId: inputs.userId,
         purpose: "REGISTRATION",
         expiresMinutes: inputs.expiresMinutes || 1440,
-      }),
-  },
-  {
-    key: "approval.submit",
-    category: "APPROVALS",
-    description: "Compatibility capability while approval submission is migrated to record/status Flow.",
-    inputs: { type: "object", required: ["recordId"] },
-    outputs: { type: "object" },
-    permissions: ["approvals.submit"],
-    handler: async ({ inputs = {}, db, object, fields, record, req }) =>
-      submitPlatformApproval({
-        db,
-        object: inputs.object || object,
-        fields: inputs.fields || fields || [],
-        recordId: inputs.recordId,
-        record: inputs.record || record,
-        req,
       }),
   },
 ]);
