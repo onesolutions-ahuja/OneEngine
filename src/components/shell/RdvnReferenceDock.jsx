@@ -4,13 +4,12 @@ import JarvisOrb from '../jarvis/JarvisOrb'
 
 const settingsSrc = 'https://rdvnui.com/assets/Settings-BIHCu_gi.png'
 const dockItems = [
-  { id: 'launchpad', label: 'Launcher', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
-  { id: 'dashboard', label: 'Dashboard', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
-  { id: 'settings', label: 'Settings', src: settingsSrc, scaled: true },
-  { id: 'maps', label: 'Maps', src: 'https://rdvnui.com/assets/Maps-C7aNhhUR.png', scaled: true },
-  { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: false },
+  { id: 'launchpad', label: 'Launcher', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Launchpad.png`, scaled: true },
+  { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png`, scaled: true },
+  { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: true },
   { id: 'store', label: 'OneStore', src: settingsSrc, scaled: true },
   { id: 'till', label: 'OneTill', src: settingsSrc, scaled: true },
+  { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png`, scaled: true },
   { id: 'workspace', label: 'Workspace', src: settingsSrc, scaled: true },
 ]
 
