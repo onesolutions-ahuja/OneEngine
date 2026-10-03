@@ -110,6 +110,59 @@ const normalizeNodeType=value=>{
   if(type==='CONDITION')return 'DECISION'
   return type
 }
+const BUILDER_NATIVE_RUNTIME_TYPES=new Set(['GET_RECORDS','CREATE_RECORD','CREATE_RELATED_RECORD','UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS','DELETE_RECORD','ASSIGN_RECORD','SET_VARIABLE','CONDITION','LOOP','WAIT','SUBFLOW','COLLECTION_FILTER','COLLECTION_SORT','TRANSFORM','CUSTOM_ERROR','SCREEN','END'])
+const OPERATOR_TO_BUILDER={equals:'Equals',not_equals:'Does Not Equal',is_empty:'Is Null',changed:'Is Changed',greater_than:'Greater Than',greater_than_or_equal:'Greater Than or Equal',less_than:'Less Than',less_than_or_equal:'Less Than or Equal'}
+const OPERATOR_TO_RUNTIME=Object.fromEntries(Object.entries(OPERATOR_TO_BUILDER).map(([key,value])=>[value,key]))
+const conditionToBuilder=row=>({id:row?.id||uid(),resource:row?.field||row?.resource||'',operator:OPERATOR_TO_BUILDER[row?.operator]||row?.operator||'Equals',value:row?.value??''})
+const conditionToRuntime=row=>({field:row?.resource||row?.field||'',operator:OPERATOR_TO_RUNTIME[row?.operator]||String(row?.operator||'equals').toLowerCase().replaceAll(' ','_'),value:row?.value??''})
+const actionInputs=x=>Object.fromEntries(Object.entries(x||{}).filter(([key])=>!['id','label','apiName','api_name','description','key','type'].includes(key)))
+const runtimeActionToBuilderNode=x=>{
+  const rawType=String(x?.type||x?.key||'').toUpperCase()
+  const base={id:x?.id||uid(),label:x?.label||x?.displayName||rawType||'Element',apiName:x?.apiName||x?.api_name||x?.id||rawType||'Element',description:x?.description||''}
+  if(rawType==='CONDITION'){
+    return {...base,type:'DECISION',config:{
+      evaluation:'first',
+      outcomes:(x?.outcomes||[]).map((outcome,index)=>({
+        id:outcome?.id||uid(),label:outcome?.label||`Outcome ${index+1}`,apiName:outcome?.apiName||outcome?.id||`Outcome_${index+1}`,
+        conditionLogic:outcome?.condition?.match||'all',
+        conditions:(outcome?.condition?.conditions||[]).map(conditionToBuilder),
+        branch:Array.isArray(outcome?.branch)?outcome.branch:[],
+      })),
+      defaultOutcomeLabel:x?.defaultLabel||'Default Outcome',
+      defaultBranch:Array.isArray(x?.defaultBranch)?x.defaultBranch:[],
+    }}
+  }
+  const normalized=normalizeNodeType(rawType)
+  if(!BUILDER_NATIVE_RUNTIME_TYPES.has(rawType)){
+    const inputs=actionInputs(x)
+    return {...base,type:'ACTION',config:{actionKey:rawType,inputs,inputsText:JSON.stringify(inputs,null,2)}}
+  }
+  return {...base,type:normalized,config:x?.config||actionInputs(x)}
+}
+const builderNodeToRuntimeAction=node=>{
+  const base={id:node.id,label:node.label,apiName:node.apiName,description:node.description||''}
+  const p=node.config||{}
+  if(node.type==='DECISION'){
+    return {...base,key:'CONDITION',
+      outcomes:(p.outcomes||[]).map((outcome,index)=>({
+        id:outcome.id||`outcome-${index+1}`,
+        label:outcome.label||`Outcome ${index+1}`,
+        condition:{match:outcome.conditionLogic||'all',conditions:(outcome.conditions||[]).map(conditionToRuntime)},
+        branch:Array.isArray(outcome.branch)?outcome.branch:[],
+      })),
+      defaultLabel:p.defaultOutcomeLabel||'Default Outcome',
+      defaultBranch:Array.isArray(p.defaultBranch)?p.defaultBranch:[],
+    }
+  }
+  if(node.type==='ACTION'){
+    let inputs=p.inputs&&typeof p.inputs==='object'?p.inputs:{}
+    if(String(p.inputsText||'').trim()){
+      try{inputs=JSON.parse(p.inputsText)}catch{throw new Error(`${node.label||'Action'} has invalid Input Values JSON`)}
+    }
+    return {...base,key:p.actionKey,...inputs}
+  }
+  return {...base,type:node.type,config:p}
+}
 const recordStartFromTrigger=(triggerKey='',objectKey='',action={})=>{
   const key=String(triggerKey||'').toLowerCase()
   const trigger=key.includes('delete')?'deleted':key.includes('create')&&!key.includes('update')?'created':key.includes('update')&&!key.includes('create')?'updated':'created_or_updated'
@@ -162,7 +215,7 @@ function MetadataFieldPicker({objects=[],objectKey='',value,onChange,placeholder
 function Conditions({value=[],onChange,resources=[],objects=[],objectKey='',onNew=()=>{},flowType='record',startConfig={}}) {
   const rows=value.length?value:[{id:uid(),resource:'',operator:'Equals',value:''}]
   const patch=(id,p)=>onChange(rows.map(r=>r.id===id?{...r,...p}:r))
-  return <div className="b2-condition-block">{rows.map((r,i)=><div className="b2-condition" key={r.id}><span>{i+1}</span><MetadataFieldPicker objects={objects} objectKey={objectKey} value={r.resource} onChange={v=>patch(r.id,{resource:v})}/><select value={r.operator} onChange={e=>patch(r.id,{operator:e.target.value})}><option>Equals</option><option>Does Not Equal</option><option>Is Null</option><option>Is Changed</option><option>Greater Than</option><option>Greater Than or Equal</option><option>Less Than</option><option>Less Than or Equal</option><option>Starts With</option><option>Ends With</option><option>Contains</option><option>In</option><option>Not In</option></select>{r.operator==='Is Null'?<select value={String(r.value||'false')} onChange={e=>patch(r.id,{value:e.target.value})}><option value="false">False</option><option value="true">True</option></select>:<input value={r.value} onChange={e=>patch(r.id,{value:e.target.value})} placeholder="Value"/>}<button onClick={()=>onChange(rows.filter(x=>x.id!==r.id))}><Trash2 size={13}/></button></div>)}<button className="b2-text-action" onClick={()=>onChange([...rows,{id:uid(),resource:'',operator:'Equals',value:''}])}><Plus size={13}/> Add Condition</button></div>
+  return <div className="b2-condition-block">{rows.map((r,i)=><div className="b2-condition" key={r.id}><span>{i+1}</span>{String(r.resource||'').startsWith('steps.')||String(r.resource||'').startsWith('variables.')?<input value={r.resource||''} onChange={e=>patch(r.id,{resource:e.target.value})} placeholder="Step or variable path"/>:<MetadataFieldPicker objects={objects} objectKey={objectKey} value={r.resource} onChange={v=>patch(r.id,{resource:v})}/>} <select value={r.operator} onChange={e=>patch(r.id,{operator:e.target.value})}><option>Equals</option><option>Does Not Equal</option><option>Is Null</option><option>Is Changed</option><option>Greater Than</option><option>Greater Than or Equal</option><option>Less Than</option><option>Less Than or Equal</option><option>Starts With</option><option>Ends With</option><option>Contains</option><option>In</option><option>Not In</option></select>{r.operator==='Is Null'?<select value={String(r.value||'false')} onChange={e=>patch(r.id,{value:e.target.value})}><option value="false">False</option><option value="true">True</option></select>:<input value={r.value} onChange={e=>patch(r.id,{value:e.target.value})} placeholder="Value"/>}<button onClick={()=>onChange(rows.filter(x=>x.id!==r.id))}><Trash2 size={13}/></button></div>)}<button className="b2-text-action" onClick={()=>onChange([...rows,{id:uid(),resource:'',operator:'Equals',value:''}])}><Plus size={13}/> Add Condition</button></div>
 }
 
 function Properties({node,onPatch,objects,resources,onNew,actions,flowType='record',startConfig={}}) {
@@ -187,7 +240,7 @@ function Properties({node,onPatch,objects,resources,onNew,actions,flowType='reco
     {node.type==='COLLECTION_SORT'?<><label>Collection<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.collection||''} onChange={v=>patch({collection:v})}/></label><label>Sort Order<select value={p.order||'asc'} onChange={e=>patch({order:e.target.value})}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label><label>Maximum Items<input type="number" min="0" value={p.max||''} onChange={e=>patch({max:e.target.value})}/></label></>:null}
     {node.type==='TRANSFORM'?<div className="b2-transform"><div><b>Source Data</b><ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.source||''} onChange={v=>patch({source:v})}/></div><div><b>Target Data</b><ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.target||''} onChange={v=>patch({target:v})}/></div><label>Field Mappings<textarea rows={6} value={p.mappingsText||''} onChange={e=>patch({mappingsText:e.target.value})} placeholder="Map source fields/resources to target fields"/></label></div>:null}
     {node.type==='CUSTOM_ERROR'?<><label>Where to Show the Error<select value={p.location||'record'} onChange={e=>patch({location:e.target.value})}><option value="record">In a window on the record page</option><option value="field">Inline on a field</option></select></label>{p.location==='field'?<label>Field<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.field||''} onChange={v=>patch({field:v})}/></label>:null}<label>Error Message<textarea rows={4} value={p.message||''} onChange={e=>patch({message:e.target.value})}/></label></>:null}
-    {node.type==='ACTION'?<><label>Action<select value={p.actionKey||''} onChange={e=>patch({actionKey:e.target.value,inputsText:''})}><option value="">Select action…</option>{actions.map(a=><option key={a.key} value={a.key}>{a.displayName||a.label||a.key}</option>)}</select></label>{p.actionKey?<label>Input Values<textarea rows={5} value={p.inputsText||''} onChange={e=>patch({inputsText:e.target.value})} placeholder="Map action inputs to resources or literal values"/></label>:null}<p className="b2-help">Actions come from OneEngine's metadata action registry; Builder2 does not hardcode provider actions.</p></>:null}
+    {node.type==='ACTION'?<><label>Action<select value={p.actionKey||''} onChange={e=>patch({actionKey:e.target.value,inputs:{},inputsText:''})}><option value="">Select action…</option>{actions.map(a=><option key={a.key} value={a.key}>{a.displayName||a.label||a.key}</option>)}</select></label>{p.actionKey==='SEND_APPOINTMENT_MESSAGE'?<label>Response Message<textarea rows={7} value={p.inputs?.message||''} onChange={e=>{const inputs={...(p.inputs||{}),message:e.target.value};patch({inputs,inputsText:JSON.stringify(inputs,null,2)})}} placeholder="Message sent to the customer. Merge fields such as {{date1}} are supported."/></label>:null}{p.actionKey?<label>Input Values (JSON)<textarea rows={7} value={p.inputsText||''} onChange={e=>patch({inputsText:e.target.value})} placeholder='{"field":"value or resource binding"}'/></label>:null}<p className="b2-help">Actions come from OneEngine's metadata action registry. Response text and action inputs are stored in this workflow definition.</p></>:null}
     {node.type==='SUBFLOW'?<><label>Flow API Name<input value={p.flow||''} onChange={e=>patch({flow:e.target.value})} placeholder="Active autolaunched flow API name"/></label><label>Input Values<textarea rows={5} value={p.inputsText||''} onChange={e=>patch({inputsText:e.target.value})} placeholder="Map available input variables"/></label><label>Output Values<textarea rows={5} value={p.outputsText||''} onChange={e=>patch({outputsText:e.target.value})} placeholder="Map output variables"/></label></>:null}
   </div>
 }
@@ -287,7 +340,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
       setWorkflowId(selectedId)
       setFlowProps({label:saved.name||'New Flow',apiName:action.apiName||'New_Flow',description:action.description||'',apiVersion:String(action.apiVersion||'66.0'),runContext:action.runContext||'default'})
       setStartConfig(nextStart)
-      setNodes(savedActions.filter(x=>normalizeNodeType(x.type)!=='END').map(x=>({id:x.id||uid(),type:normalizeNodeType(x.type),label:x.label||x.type||'Element',apiName:x.apiName||x.id||x.type||'Element',description:x.description||'',config:x.config||x})))
+      setNodes(savedActions.filter(x=>normalizeNodeType(x.type||x.key)!=='END').map(runtimeActionToBuilderNode))
       setEdges(Array.isArray(layout.edges)?layout.edges:[])
       setResources(Array.isArray(action.resources)?action.resources:[])
       setFlowTests(Array.isArray(action.tests)?action.tests:[])
@@ -304,7 +357,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
   const filtered=availableElements.filter(e=>!search||[e.label,e.category,e.description].join(' ').toLowerCase().includes(search.toLowerCase()))
   const paletteGroups=[...new Set(filtered.map(e=>e.category))]
   const commitNodes=next=>{setHistory(h=>[...h,nodes]);setFuture([]);setNodes(next);setDirty(true)}
-  const buildPayload=(lifecycle='DRAFT')=>({name:flowProps.label||'New Flow',objectId:startConfig.objectKey||null,objectKey:startConfig.objectKey||null,triggerKey:flowType==='schedule'?'scheduled':flowType==='record'?(startConfig.trigger==='created'?(startConfig.optimize==='fast'?'before_create':'after_create'):startConfig.trigger==='updated'?(startConfig.optimize==='fast'?'before_update':'after_update'):startConfig.trigger==='deleted'?'after_delete':startConfig.optimize==='fast'?'before_save':'after_save'):'manual',active:lifecycle==='ACTIVE',lifecycleStatus:lifecycle,conditions:startConfig.conditions||[],action:{type:'workflow',builder2:true,apiName:flowProps.apiName,description:flowProps.description,apiVersion:flowProps.apiVersion,flowType,runContext:flowProps.runContext,start:startConfig,optimize:startConfig.optimize||'actions',builderLayout:{mode:layoutMode==='free'?'FREE_FORM':'AUTO',positions:Object.fromEntries(nodes.map((n,i)=>[n.id,n.position||{x:320,y:120+i*120}])),edges},builderGroups:groups,resources,tests:flowTests,actions:nodes.map(n=>({id:n.id,label:n.label,apiName:n.apiName,description:n.description,type:n.type,config:n.config||{}}))}})
+  const buildPayload=(lifecycle='DRAFT')=>({name:flowProps.label||'New Flow',objectId:startConfig.objectKey||null,objectKey:startConfig.objectKey||null,triggerKey:flowType==='schedule'?'scheduled':flowType==='platform_event'?(startConfig.eventKey||''):flowType==='record'?(startConfig.trigger==='created'?(startConfig.optimize==='fast'?'before_create':'after_create'):startConfig.trigger==='updated'?(startConfig.optimize==='fast'?'before_update':'after_update'):startConfig.trigger==='deleted'?'after_delete':startConfig.optimize==='fast'?'before_save':'after_save'):'manual',active:lifecycle==='ACTIVE',lifecycleStatus:lifecycle,conditions:startConfig.conditions||[],action:{type:'workflow',builder2:true,apiName:flowProps.apiName,description:flowProps.description,apiVersion:flowProps.apiVersion,flowType,runContext:flowProps.runContext,start:startConfig,optimize:startConfig.optimize||'actions',builderLayout:{mode:layoutMode==='free'?'FREE_FORM':'AUTO',positions:Object.fromEntries(nodes.map((n,i)=>[n.id,n.position||{x:320,y:120+i*120}])),edges},builderGroups:groups,resources,tests:flowTests,actions:nodes.map(builderNodeToRuntimeAction)}})
   const persistWorkflow=async(lifecycle='DRAFT',forceNewVersion=false,forceNewFlow=false)=>{setBusy(true);setRuntimeMessage('');try{const payload={...buildPayload(lifecycle),...(forceNewVersion?{forceNewVersion:true}:{}),...(forceNewFlow?{name:`${flowProps.label||'New Flow'} Copy`,action:{...buildPayload(lifecycle).action,apiName:`${flowProps.apiName||'New_Flow'}_Copy_${Date.now()}`}}:{})};const response=workflowId&&!forceNewFlow?await apiRequest(`/api/platform/rules/${workflowId}`,{method:'PUT',body:JSON.stringify(payload)}):await apiRequest('/api/platform/rules',{method:'POST',body:JSON.stringify(payload)});const saved=response?.data||{};if(saved.id)setWorkflowId(saved.id);onSaved?.(saved,{keepOpen:true});setActive(lifecycle==='ACTIVE');setDirty(false);setEditHistory(h=>[{id:uid(),label:lifecycle==='ACTIVE'?'Activated':'Saved',at:new Date().toISOString(),nodes:nodes.length,snapshot:JSON.parse(JSON.stringify(nodes)),summary:{added:nodes.length,edited:0,deleted:0}},...h].slice(0,100));setRuntimeMessage(lifecycle==='ACTIVE'?'Flow activated.':'Flow saved.');setSaveMenu(false);return saved}catch(e){setError(e?.message||'Unable to save flow');return null}finally{setBusy(false)}}
   const saveDraft=label=>{const action=String(label||'').toLowerCase();return persistWorkflow('DRAFT',action.includes('version'),action.includes('new flow'))}
   const copySelected=()=>{const ids=selectedMany.length?selectedMany:selected?[selected]:[];setClipboard(nodes.filter(n=>ids.includes(n.id)))}
