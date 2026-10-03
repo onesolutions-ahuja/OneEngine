@@ -112,7 +112,7 @@ import createDebugCodesRouter from "./routes/debugCodes.js";
 import { buildDebugPayload, classifyDebugCode, builtinDebugCode, createDebugReference, normalizeDebugCode, writeDebugEvent } from "./services/debugCodes.js";
 import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformMetadata.js";
 import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
-import { seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
+import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
 import { getCompanyEntitlements } from "./services/licensing.js";
 import { reconcileCompanyPackageEntitlements } from "./services/packageEntitlements.js";
 import { requireEntitlement } from "./services/licensing.js";
@@ -2597,11 +2597,69 @@ async function startServer() {
           })),
         });
 
-        const reconciliation = await reconcileCompanyPackageEntitlements(db, companyId);
-        console.log("onePOS: startup package reconciliation result", {
+        if (!pkg.module_id) {
+          throw new Error(`Startup package activation has no module for ${packageKey}`);
+        }
+
+        const packageManifest = await db(
+          "SELECT manifest FROM package_registry WHERE id=$1 LIMIT 1",
+          [pkg.id]
+        );
+        await provisionPackageMetadata(db, {
+          packageId: pkg.id,
+          moduleId: pkg.module_id,
+          companyId,
+          manifest: packageManifest.rows[0]?.manifest || {},
+          packageVersion: pkg.version,
+        });
+
+        await db(
+          `INSERT INTO company_package_installations
+             (company_id,package_id,version,status,installation_type,available_version,deactivated_by_user,suspended_by_entitlement)
+           VALUES($1,$2,$3,'active','ENTITLEMENT',$3,false,false)
+           ON CONFLICT(company_id,package_id) DO UPDATE SET
+             version=EXCLUDED.version,
+             status='active',
+             installation_type=CASE
+               WHEN company_package_installations.installation_type='PLATFORM_DEFAULT'
+                 THEN company_package_installations.installation_type
+               ELSE 'ENTITLEMENT'
+             END,
+             available_version=EXCLUDED.available_version,
+             deactivated_by_user=false,
+             suspended_by_entitlement=false,
+             updated_at=NOW()`,
+          [companyId, pkg.id, pkg.version]
+        );
+
+        await db(
+          `INSERT INTO platform_module_access(module_id,company_id,store_id,enabled)
+           VALUES($1,$2,NULL,true)
+           ON CONFLICT(module_id,company_id,COALESCE(store_id,'00000000-0000-0000-0000-000000000000'::uuid))
+           DO UPDATE SET enabled=true,updated_at=NOW()`,
+          [pkg.module_id, companyId]
+        );
+
+        const workflowVerification = await db(
+          `SELECT r.id,r.active,COALESCE(r.lifecycle_status,'ACTIVE') AS lifecycle_status
+             FROM platform_rules r
+             JOIN platform_objects o ON o.id=r.object_id
+            WHERE r.company_id=$1
+              AND o.object_key='communication_event'
+              AND r.name='OneAssistant - WhatsApp Booking'
+            ORDER BY r.updated_at DESC NULLS LAST,r.created_at DESC
+            LIMIT 1`,
+          [companyId]
+        );
+        const bookingWorkflow = workflowVerification.rows[0];
+        if (!bookingWorkflow || bookingWorkflow.active !== true || bookingWorkflow.lifecycle_status !== 'ACTIVE') {
+          throw new Error("OneAssistant WhatsApp booking workflow was not provisioned as active");
+        }
+
+        console.log("onePOS: startup package targeted provisioning complete", {
           companyId,
           packageKey,
-          entitled: (reconciliation || []).some((entry) => entry.packageKey === packageKey),
+          whatsappBookingWorkflow: bookingWorkflow.id,
         });
       }
 
@@ -2810,18 +2868,26 @@ async function startServer() {
     // tenants after metadata bootstrap so manifest-owned workflows (for example
     // WhatsApp booking) are updated from the current package declaration.
     const assistantTenants = await db(
-      `SELECT DISTINCT i.company_id
+      `SELECT DISTINCT i.company_id,p.id AS package_id,p.module_id,p.version,p.manifest
          FROM company_package_installations i
          JOIN package_registry p ON p.id=i.package_id
         WHERE p.package_key='one_assistant'
           AND i.status='active'
-          AND COALESCE(i.suspended_by_entitlement,FALSE)=FALSE`
+          AND COALESCE(i.suspended_by_entitlement,FALSE)=FALSE
+          AND COALESCE(i.deactivated_by_user,FALSE)=FALSE`
     );
     for (const tenant of assistantTenants.rows || []) {
-      await reconcileCompanyPackageEntitlements(db, tenant.company_id);
+      if (!tenant.module_id) continue;
+      await provisionPackageMetadata(db, {
+        packageId: tenant.package_id,
+        moduleId: tenant.module_id,
+        companyId: tenant.company_id,
+        manifest: tenant.manifest || {},
+        packageVersion: tenant.version,
+      });
     }
     if (assistantTenants.rowCount) {
-      console.log(`onePOS: OneAssistant managed metadata reconciled for ${assistantTenants.rowCount} tenant(s)`);
+      console.log(`onePOS: OneAssistant managed metadata refreshed for ${assistantTenants.rowCount} tenant(s)`);
     }
 
     console.log("onePOS: platform bootstrap ready");
