@@ -59,9 +59,9 @@ jobs:
             assert.ok(Array.isArray(fn.permissions) && fn.permissions.length, fn.key + " permissions missing");
           }
           const defs = systemWorkflowDefinitions();
-          const functionDefs = defs.filter((d)=>d.capabilityType === "function");
+          const functionDefs = defs.filter((d)=>d.action?.capabilityType === "function");
           assert.equal(functionDefs.length, expected.length);
-          assert.deepEqual(functionDefs.map((d)=>d.capabilityKey).sort(), expected);
+          assert.deepEqual(functionDefs.map((d)=>d.action?.capabilityKey).sort(), expected);
           console.log("PASS: exact 14-key compatibility registry and System Function catalog match.");
           NODE
       - name: Existing audits
