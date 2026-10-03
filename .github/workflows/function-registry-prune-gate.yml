@@ -1,0 +1,71 @@
+name: Function Registry Prune Gate
+
+on:
+  push:
+    branches:
+      - audit/function-registry-prune-20261003
+    paths:
+      - "server/services/platformFunctionRegistry.js"
+      - "server/services/systemWorkflowCatalog.js"
+      - "server/database/init.js"
+      - ".github/workflows/function-registry-prune-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Syntax
+        run: |
+          node --check server/services/platformFunctionRegistry.js
+          node --check server/services/systemWorkflowCatalog.js
+          node --check server/database/init.js
+      - name: Verify exact compatibility registry
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { PLATFORM_FUNCTIONS } from "./server/services/platformFunctionRegistry.js";
+          import { systemWorkflowDefinitions } from "./server/services/systemWorkflowCatalog.js";
+          const expected = [
+            "customer.credit.limit.check",
+            "customer.credit.payment.check",
+            "purchase.receive",
+            "supplier.payment.execute",
+            "customer.credit.transaction.build_payment",
+            "customer.credit.transaction.build_adjustment",
+            "online_order.create",
+            "online_order.transition",
+            "inventory.movement.create",
+            "attendance.clock_in",
+            "attendance.clock_out",
+            "integration.event.dispatch",
+            "account.registration.token.issue",
+            "approval.submit",
+          ].sort();
+          const actual = PLATFORM_FUNCTIONS.map((x)=>x.key).sort();
+          assert.deepEqual(actual, expected);
+          assert.equal(new Set(actual).size, actual.length);
+          for (const fn of PLATFORM_FUNCTIONS) {
+            assert.equal(typeof fn.handler, "function", fn.key + " handler missing");
+            assert.ok(Array.isArray(fn.permissions) && fn.permissions.length, fn.key + " permissions missing");
+          }
+          const defs = systemWorkflowDefinitions();
+          const functionDefs = defs.filter((d)=>d.capabilityType === "function");
+          assert.equal(functionDefs.length, expected.length);
+          assert.deepEqual(functionDefs.map((d)=>d.capabilityKey).sort(), expected);
+          console.log("PASS: exact 14-key compatibility registry and System Function catalog match.");
+          NODE
+      - name: Existing audits
+        run: |
+          npm run audit:trusted
+          npm run audit:workflow-coverage
+          npm run test:unit
