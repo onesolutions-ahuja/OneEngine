@@ -3434,6 +3434,7 @@ CREATE INDEX IF NOT EXISTS idx_platform_communication_deliveries_company
         object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
         record_id UUID,
         communication_id UUID,
+        body TEXT,
         metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
