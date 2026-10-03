@@ -1164,8 +1164,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             active=TRUE,
             source_package_id=EXCLUDED.source_package_id,
             source_package_version=EXCLUDED.source_package_version,
-            managed=TRUE,
-            updated_at=NOW();
+            managed=TRUE;
 
           UPDATE platform_list_views v
              SET columns='["channel","event_type","direction","provider","body","recipient","created_at"]'::jsonb,
