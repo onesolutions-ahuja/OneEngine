@@ -3302,7 +3302,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           workflowName: workflow.name,
           workflowVersion: Number(workflow.active_version || workflow.version || 1),
           objectId: object?.id || null,
-          recordId: record?.id || null,
+          recordId: recordIsPersisted ? (record?.id || null) : null,
           triggerKey: "page_interaction",
           status: "RUNNING",
           metadata: { actorUserId: req.user.id || null, pageInteraction: true },
@@ -5533,7 +5533,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       let object = null;
       let record = null;
+      let recordIsPersisted = false;
       let fields = [];
+      const recordOverride = req.body?.recordOverride && typeof req.body.recordOverride === "object" && !Array.isArray(req.body.recordOverride)
+        ? req.body.recordOverride
+        : null;
       if (workflow.object_id) {
         const objectResult = await db(
           "SELECT * FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) LIMIT 1",
@@ -5548,33 +5552,41 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           [object.id, req.user.companyId]
         );
         fields = fieldsResult.rows || [];
-        const clauses = [];
-        const params = [];
-        const requestedRecordId = req.body?.recordId ? String(req.body.recordId) : null;
-        if (requestedRecordId) {
-          if (!recordIdIsValid(requestedRecordId)) return res.status(400).json({ success: false, message: "Choose a valid record for Debug" });
-          params.push(requestedRecordId);
-          clauses.push(`id=$${params.length}`);
-        }
-        if (object.company_scoped !== false) {
-          params.push(req.user.companyId);
-          clauses.push(`company_id=$${params.length}`);
-        }
-        if (object.store_scoped) {
-          if (!req.user.storeId) return res.status(409).json({ success: false, message: "Select a store before debugging this store-scoped workflow" });
-          params.push(req.user.storeId);
-          clauses.push(`store_id=$${params.length}`);
-        }
-        const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
-        const hasCreatedAt = await db(
-          "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1 AND column_name='created_at' LIMIT 1",
-          [object.source_table]
-        );
-        const orderBy = requestedRecordId ? "" : (hasCreatedAt.rows.length ? " ORDER BY created_at DESC" : "");
-        const recordResult = await db(`SELECT * FROM "${object.source_table}"${where}${orderBy} LIMIT 1`, params);
-        record = recordResult.rows[0] || null;
-        if (!record) {
-          return res.status(404).json({ success: false, message: requestedRecordId ? "The selected Debug record was not found in this company/store" : "No record is available to test this workflow yet" });
+        if (recordOverride) {
+          // Debug/Test may use a synthetic trigger record. It is never inserted
+          // into the source object and every workflow-side mutation still runs
+          // inside the Debug transaction, which is rolled back below.
+          record = { ...recordOverride };
+        } else {
+          const clauses = [];
+          const params = [];
+          const requestedRecordId = req.body?.recordId ? String(req.body.recordId) : null;
+          if (requestedRecordId) {
+            if (!recordIdIsValid(requestedRecordId)) return res.status(400).json({ success: false, message: "Choose a valid record for Debug" });
+            params.push(requestedRecordId);
+            clauses.push(`id=${params.length}`);
+          }
+          if (object.company_scoped !== false) {
+            params.push(req.user.companyId);
+            clauses.push(`company_id=${params.length}`);
+          }
+          if (object.store_scoped) {
+            if (!req.user.storeId) return res.status(409).json({ success: false, message: "Select a store before debugging this store-scoped workflow" });
+            params.push(req.user.storeId);
+            clauses.push(`store_id=${params.length}`);
+          }
+          const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+          const hasCreatedAt = await db(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1 AND column_name='created_at' LIMIT 1",
+            [object.source_table]
+          );
+          const orderBy = requestedRecordId ? "" : (hasCreatedAt.rows.length ? " ORDER BY created_at DESC" : "");
+          const recordResult = await db(`SELECT * FROM "${object.source_table}"${where}${orderBy} LIMIT 1`, params);
+          record = recordResult.rows[0] || null;
+          recordIsPersisted = Boolean(record);
+          if (!record) {
+            return res.status(404).json({ success: false, message: requestedRecordId ? "The selected Debug record was not found in this company/store" : "No record is available to test this workflow yet" });
+          }
         }
       }
 
@@ -5597,7 +5609,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           unsavedDefinition: Boolean(definition),
           rolledBack: false,
           actorUserId: req.user.id || null,
-          recordSource: req.body?.recordId ? "selected" : object ? "latest" : "none",
+          recordSource: recordOverride ? "override" : req.body?.recordId ? "selected" : object ? "latest" : "none",
         },
       });
 
