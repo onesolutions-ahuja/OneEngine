@@ -47,10 +47,13 @@ test("merged Workflow Builder keeps the list, chooser, and three-pane Builder2 g
   await expect(dialog.getByText("Select a Flow Type", { exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Record-Triggered Flow", exact: false }).click();
 
-  const objectSelect = dialog.locator(".onebuilder-new-flow-object select");
-  const values = await objectSelect.locator("option").evaluateAll((options) => options.map((option) => option.value).filter(Boolean));
-  expect(values.length).toBeGreaterThan(0);
-  await objectSelect.selectOption(values[0]);
+  const objectSearch = dialog.getByRole("combobox", { name: "Search objects" });
+  await expect(objectSearch).toBeVisible();
+  await expect(objectSearch).toBeInViewport();
+  await objectSearch.click();
+  const firstObject = dialog.locator(".onebuilder-new-flow-object-results [role='option']").first();
+  await expect(firstObject).toBeVisible();
+  await firstObject.click();
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
 
   const shell = page.locator(".b2-shell");

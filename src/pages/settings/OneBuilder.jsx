@@ -37,6 +37,9 @@ function normalizeRegistry(input) {
   })).filter((row) => row.key)
 }
 
+const workflowObjectKey=(object)=>String(object?.object_key || object?.api_name || object?.key || object?.id || '')
+const workflowObjectLabel=(object)=>object?.label || object?.name || workflowObjectKey(object)
+
 function responseRows(response) {
   const data = response?.data
   if (Array.isArray(data)) return data
@@ -138,6 +141,8 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const [workflowNewDialogOpen, setWorkflowNewDialogOpen] = useState(false)
   const [workflowNewType, setWorkflowNewType] = useState('')
   const [workflowNewObjectKey, setWorkflowNewObjectKey] = useState('')
+  const [workflowNewObjectQuery, setWorkflowNewObjectQuery] = useState('')
+  const [workflowNewObjectOpen, setWorkflowNewObjectOpen] = useState(false)
   const [sideTab, setSideTab] = useState('components')
   const [canvas, setCanvas] = useState({ workflow: [], approval: [], dashboard: [], report: [] })
   const [meta, setMeta] = useState({
@@ -151,6 +156,13 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const openedRouteWorkflowRef = useRef('')
+  const workflowNewObjectMatches = useMemo(() => {
+    const needle = String(workflowNewObjectQuery || '').trim().toLowerCase()
+    return objects.filter((object) => {
+      if (!needle) return true
+      return `${workflowObjectLabel(object)} ${workflowObjectKey(object)}`.toLowerCase().includes(needle)
+    }).slice(0, 12)
+  }, [objects, workflowNewObjectQuery])
 
   const loadBase = async () => {
     setLoading(true)
@@ -307,6 +319,8 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     if (tab === 'workflow') {
       setWorkflowNewType('')
       setWorkflowNewObjectKey('')
+      setWorkflowNewObjectQuery('')
+      setWorkflowNewObjectOpen(false)
       setWorkflowNewDialogOpen(true)
       return
     }
@@ -363,6 +377,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     setSelectedNodeId('')
     setSideTab('components')
     setWorkflowNewDialogOpen(false)
+    setWorkflowNewObjectOpen(false)
     setMode('builder')
   }
 
@@ -574,6 +589,70 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
             </header>
             <div className="onebuilder-new-flow-body">
               <div className="onebuilder-new-flow-heading">Select a Flow Type</div>
+              {workflowNewType === 'RECORD_TRIGGERED' ? (
+                <label className="onebuilder-new-flow-object">
+                  <span>Object</span>
+                  <div className="onebuilder-new-flow-object-search" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setWorkflowNewObjectOpen(false) }}>
+                    <Search size={15}/>
+                    <input
+                      autoFocus
+                      type="search"
+                      role="combobox"
+                      aria-label="Search objects"
+                      aria-autocomplete="list"
+                      aria-expanded={workflowNewObjectOpen}
+                      data-object-key={workflowNewObjectKey}
+                      value={workflowNewObjectQuery}
+                      placeholder="Search objects by name or API name"
+                      onFocus={() => setWorkflowNewObjectOpen(true)}
+                      onChange={(event) => {
+                        setWorkflowNewObjectQuery(event.target.value)
+                        setWorkflowNewObjectKey('')
+                        setWorkflowNewObjectOpen(true)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                          setWorkflowNewObjectOpen(false)
+                          event.currentTarget.blur()
+                        }
+                        if (event.key === 'Enter' && workflowNewObjectOpen && workflowNewObjectMatches[0]) {
+                          event.preventDefault()
+                          const object = workflowNewObjectMatches[0]
+                          setWorkflowNewObjectKey(workflowObjectKey(object))
+                          setWorkflowNewObjectQuery(workflowObjectLabel(object))
+                          setWorkflowNewObjectOpen(false)
+                        }
+                      }}
+                    />
+                    {workflowNewObjectOpen ? (
+                      <div className="onebuilder-new-flow-object-results" role="listbox">
+                        {workflowNewObjectMatches.length ? workflowNewObjectMatches.map((object) => {
+                          const key = workflowObjectKey(object)
+                          return key ? (
+                            <button
+                              key={key}
+                              type="button"
+                              role="option"
+                              aria-selected={workflowNewObjectKey === key}
+                              data-object-key={key}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => {
+                                setWorkflowNewObjectKey(key)
+                                setWorkflowNewObjectQuery(workflowObjectLabel(object))
+                                setWorkflowNewObjectOpen(false)
+                              }}
+                            >
+                              <span>{workflowObjectLabel(object)}</span>
+                              <small>{key}</small>
+                            </button>
+                          ) : null
+                        }) : <div className="onebuilder-new-flow-object-empty">No objects found</div>}
+                      </div>
+                    ) : null}
+                  </div>
+                  <small>Search and select the record object before opening the builder.</small>
+                </label>
+              ) : null}
               <div className="onebuilder-new-flow-grid">
                 {FLOW_TYPE_OPTIONS.map((option) => (
                   <button
@@ -581,26 +660,20 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
                     type="button"
                     className={`onebuilder-new-flow-type ${workflowNewType === option.key ? 'is-selected' : ''}`}
                     aria-pressed={workflowNewType === option.key}
-                    onClick={() => setWorkflowNewType(option.key)}
+                    onClick={() => {
+                      setWorkflowNewType(option.key)
+                      if (option.key !== 'RECORD_TRIGGERED') {
+                        setWorkflowNewObjectKey('')
+                        setWorkflowNewObjectQuery('')
+                        setWorkflowNewObjectOpen(false)
+                      }
+                    }}
                   >
                     <span className="onebuilder-new-flow-icon">{option.icon}</span>
                     <span><strong>{option.label}</strong><small>{option.description}</small></span>
                   </button>
                 ))}
               </div>
-              {workflowNewType === 'RECORD_TRIGGERED' ? (
-                <label className="onebuilder-new-flow-object">
-                  <span>Object</span>
-                  <select value={workflowNewObjectKey} onChange={(event) => setWorkflowNewObjectKey(event.target.value)}>
-                    <option value="">Select an object…</option>
-                    {objects.map((object) => {
-                      const key = String(object?.object_key || object?.api_name || object?.key || object?.id || '')
-                      return key ? <option key={key} value={key}>{object?.label || object?.name || key}</option> : null
-                    })}
-                  </select>
-                  <small>Choose the record object before opening the builder.</small>
-                </label>
-              ) : null}
             </div>
             <footer>
               <span />

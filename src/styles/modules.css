@@ -3466,3 +3466,30 @@ button.git-control-tile { cursor: pointer; }
   .connector-settings-test-actions{align-items:stretch;flex-direction:column}
   .connector-settings-test-actions button{width:100%}
 }
+
+
+/* Workflow creation dialog: keep required record-object choice visible and searchable. */
+.onebuilder-new-flow-backdrop{overflow:auto;padding:12px}
+.onebuilder-new-flow-dialog{width:min(980px,calc(100vw - 24px));max-height:calc(100dvh - 24px)}
+.onebuilder-new-flow-dialog>header{flex:0 0 auto;padding:15px 18px}
+.onebuilder-new-flow-dialog>header strong{font-size:17px}.onebuilder-new-flow-dialog>header span{font-size:13px}
+.onebuilder-new-flow-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:16px 18px 18px}
+.onebuilder-new-flow-heading{margin-bottom:12px;font-size:14px}
+.onebuilder-new-flow-grid{gap:10px}
+.onebuilder-new-flow-type{min-height:88px;padding:13px}
+.onebuilder-new-flow-type strong{font-size:14px}.onebuilder-new-flow-type small{font-size:12px;line-height:1.35}
+.onebuilder-new-flow-icon{width:42px;height:42px;flex-basis:42px;font-size:19px}
+.onebuilder-new-flow-object{position:relative;margin:0 0 14px;padding:12px 14px;gap:7px;background:#f8fbff;border-color:#a8c7e6}
+.onebuilder-new-flow-object>span{font-size:13px}
+.onebuilder-new-flow-object>small{font-size:11px}
+.onebuilder-new-flow-object-search{position:relative;height:40px;display:flex;align-items:center;gap:8px;border:1px solid #747474;border-radius:4px;background:#fff;padding:0 10px}
+.onebuilder-new-flow-object-search:focus-within{outline:2px solid #0176d3;outline-offset:-1px;border-color:#0176d3}
+.onebuilder-new-flow-object-search>svg{flex:0 0 auto;color:#706e6b}
+.onebuilder-new-flow-object-search>input{min-width:0;width:100%;height:38px;border:0;outline:0;background:transparent;font-size:13px;color:#181818}
+.onebuilder-new-flow-object-results{position:absolute;z-index:40;left:-1px;right:-1px;top:42px;max-height:260px;overflow:auto;border:1px solid #c9c7c5;border-radius:4px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px}
+.onebuilder-new-flow-object-results button{width:100%;min-height:43px;border:0;border-radius:3px;background:#fff;padding:7px 9px;display:grid;gap:2px;text-align:left;cursor:pointer}
+.onebuilder-new-flow-object-results button:hover,.onebuilder-new-flow-object-results button[aria-selected="true"]{background:#eef4ff}
+.onebuilder-new-flow-object-results span{font-size:13px;font-weight:600;color:#181818}.onebuilder-new-flow-object-results small{font-size:11px;color:#706e6b}
+.onebuilder-new-flow-object-empty{padding:12px 9px;font-size:12px;color:#706e6b}
+.onebuilder-new-flow-dialog>footer{flex:0 0 auto;min-height:56px}
+.onebuilder-new-flow-primary,.onebuilder-new-flow-secondary{min-height:34px;font-size:12px}

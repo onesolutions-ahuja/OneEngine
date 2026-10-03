@@ -2,12 +2,16 @@ import { test, expect } from "@playwright/test";
 import { loginIfConfigured, watchRuntimeFailures } from "./helpers.mjs";
 
 async function firstObjectValue(dialog) {
-  const select = dialog.locator(".onebuilder-new-flow-object select");
-  await expect(select).toBeVisible();
-  const values = await select.locator("option").evaluateAll((options) => options.map((option) => option.value).filter(Boolean));
-  expect(values.length).toBeGreaterThan(0);
-  await select.selectOption(values[0]);
-  return values[0];
+  const search = dialog.getByRole("combobox", { name: "Search objects" });
+  await expect(search).toBeVisible();
+  await expect(search).toBeInViewport();
+  await search.click();
+  const option = dialog.locator(".onebuilder-new-flow-object-results [role='option']").first();
+  await expect(option).toBeVisible();
+  const value = await option.getAttribute("data-object-key");
+  expect(value).toBeTruthy();
+  await option.click();
+  return value;
 }
 
 async function createFlowOfType(page, typeLabel, { requireObject = false } = {}) {
@@ -55,7 +59,7 @@ test("merged Workflow Builder restores list -> type chooser -> Builder2 and requ
 
   const startPanel = page.locator(".b2-start-panel");
   await expect(startPanel).toBeVisible();
-  await expect(startPanel.locator("select").first()).toHaveValue(objectKey);
+  await expect(startPanel.getByRole("combobox", { name: "Search objects" })).toHaveAttribute("data-object-key", objectKey);
 
   await expect(page.getByRole("button", { name: "Elements", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Manager", exact: true })).toBeVisible();

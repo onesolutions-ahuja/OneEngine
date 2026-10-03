@@ -40,6 +40,54 @@ const TYPES = RESOURCE_TYPES
 const keyOf=o=>String(o?.object_key||o?.objectKey||o?.api_name||o?.apiName||o?.id||'')
 const labelOf=o=>o?.label||o?.name||keyOf(o)
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36)
+
+function ObjectSearchPicker({objects,value,onChange,placeholder='Search objects…',ariaLabel='Search objects'}) {
+  const [query,setQuery]=useState('')
+  const [open,setOpen]=useState(false)
+  const selected=useMemo(()=>objects.find(object=>keyOf(object)===String(value||''))||null,[objects,value])
+  const selectedLabel=selected?labelOf(selected):''
+  const matches=useMemo(()=>{
+    const needle=String(query||'').trim().toLowerCase()
+    return objects.filter(object=>{
+      if(!needle)return true
+      return `${labelOf(object)} ${keyOf(object)}`.toLowerCase().includes(needle)
+    }).slice(0,12)
+  },[objects,query])
+  useEffect(()=>{if(!open)setQuery(selectedLabel)},[open,selectedLabel])
+  const choose=object=>{
+    const key=keyOf(object)
+    onChange(key)
+    setQuery(labelOf(object))
+    setOpen(false)
+  }
+  return <div className="b2-object-picker" onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget))setOpen(false)}}>
+    <Search size={15}/>
+    <input
+      type="search"
+      role="combobox"
+      aria-label={ariaLabel}
+      aria-autocomplete="list"
+      aria-expanded={open}
+      data-object-key={String(value||'')}
+      value={open?query:selectedLabel}
+      placeholder={placeholder}
+      onFocus={()=>{setQuery(selectedLabel);setOpen(true)}}
+      onChange={event=>{setQuery(event.target.value);if(value)onChange('');setOpen(true)}}
+      onKeyDown={event=>{
+        if(event.key==='Escape'){setOpen(false);event.currentTarget.blur()}
+        if(event.key==='Enter'&&open&&matches[0]){event.preventDefault();choose(matches[0])}
+      }}
+    />
+    {open?<div className="b2-object-picker-menu" role="listbox">
+      {matches.length?matches.map(object=>{
+        const key=keyOf(object)
+        return <button type="button" role="option" aria-selected={String(value||'')===key} data-object-key={key} key={key} onMouseDown={event=>event.preventDefault()} onClick={()=>choose(object)}>
+          <span>{labelOf(object)}</span><small>{key}</small>
+        </button>
+      }):<div className="b2-object-picker-empty">No objects found</div>}
+    </div>:null}
+  </div>
+}
 const normalizeFlowType=value=>{
   const raw=String(value||'').trim()
   if(FLOW_TYPES[raw])return raw
@@ -122,7 +170,7 @@ function Properties({node,onPatch,objects,resources,onNew,actions,flowType='reco
   const p=node.config||{}, patch=x=>onPatch({...node,config:{...p,...x}})
   const objectKey=p.objectKey||''
   const common=<><label>Label<input value={node.label||''} onChange={e=>onPatch({...node,label:e.target.value})}/></label><label>API Name<input value={node.apiName||''} onChange={e=>onPatch({...node,apiName:e.target.value})}/></label><label>Description<textarea rows={3} value={node.description||''} onChange={e=>onPatch({...node,description:e.target.value})} placeholder="Describe this element…"/></label></>
-  const object=<label>Object<select value={objectKey} onChange={e=>patch({objectKey:e.target.value})}><option value="">Select an object…</option>{objects.map(o=><option key={keyOf(o)} value={keyOf(o)}>{labelOf(o)}</option>)}</select></label>
+  const object=<label>Object<ObjectSearchPicker objects={objects} value={objectKey} onChange={value=>patch({objectKey:value})} /></label>
   const cond=<><label>Condition Requirements<select value={p.conditionLogic||'all'} onChange={e=>patch({conditionLogic:e.target.value})}><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option><option value="formula">Formula Evaluates to True</option>{node.type==='GET_RECORDS'?<option value="none">None — Get All Records</option>:null}</select></label>{p.conditionLogic==='formula'?<label>Formula<textarea rows={5} value={p.formula||''} onChange={e=>patch({formula:e.target.value})} placeholder="Enter a Boolean formula…"/></label>:p.conditionLogic==='none'?null:<><Conditions value={p.conditions} onChange={v=>patch({conditions:v})} {...{resources,objects,objectKey,onNew,flowType,startConfig}}/>{p.conditionLogic==='custom'?<label>Custom Condition Logic<input value={p.customConditionLogic||''} onChange={e=>patch({customConditionLogic:e.target.value})} placeholder="Example: 1 AND (2 OR 3)"/></label>:null}</>}</>
   return <div className="b2-form">{common}
     {['GET_RECORDS','CREATE_RECORDS','UPDATE_RECORDS','DELETE_RECORDS'].includes(node.type)?object:null}
@@ -156,10 +204,10 @@ function StartProperties({value,onChange,objects,onClose,flowType='record'}) {
   const p=value||{}, patch=x=>onChange({...p,...x})
   const meta=FLOW_TYPES[flowType]||FLOW_TYPES.record
   if(meta.start==='none') return <div className="b2-start-panel"><header><div><b>Start</b><small>{meta.label}</small></div><button onClick={onClose}><X size={16}/></button></header><div className="b2-form"><p className="b2-help">This flow starts when invoked. Configure input variables in Manager and connect the first element from Start.</p></div></div>
-  if(meta.start==='schedule') return <div className="b2-start-panel"><header><div><b>Configure Start</b><small>{meta.label}</small></div><button onClick={onClose}><X size={16}/></button></header><div className="b2-form"><label>Frequency<select value={p.schedule?.frequency||''} onChange={e=>patch({schedule:{...(p.schedule||{}),frequency:e.target.value}})}><option value="">Select frequency…</option><option value="once">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label><label>Start Date<input type="date" value={p.schedule?.startDate||''} onChange={e=>patch({schedule:{...(p.schedule||{}),startDate:e.target.value}})}/></label><label>Start Time<input type="time" value={p.schedule?.startTime||''} onChange={e=>patch({schedule:{...(p.schedule||{}),startTime:e.target.value}})}/></label><label>Object (optional)<select value={p.objectKey||''} onChange={e=>patch({objectKey:e.target.value})}><option value="">No object filter</option>{objects.map(o=><option key={keyOf(o)} value={keyOf(o)}>{labelOf(o)}</option>)}</select></label></div></div>
+  if(meta.start==='schedule') return <div className="b2-start-panel"><header><div><b>Configure Start</b><small>{meta.label}</small></div><button onClick={onClose}><X size={16}/></button></header><div className="b2-form"><label>Frequency<select value={p.schedule?.frequency||''} onChange={e=>patch({schedule:{...(p.schedule||{}),frequency:e.target.value}})}><option value="">Select frequency…</option><option value="once">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label><label>Start Date<input type="date" value={p.schedule?.startDate||''} onChange={e=>patch({schedule:{...(p.schedule||{}),startDate:e.target.value}})}/></label><label>Start Time<input type="time" value={p.schedule?.startTime||''} onChange={e=>patch({schedule:{...(p.schedule||{}),startTime:e.target.value}})}/></label><label>Object (optional)<ObjectSearchPicker objects={objects} value={p.objectKey||''} onChange={value=>patch({objectKey:value})} placeholder="Search optional object…" ariaLabel="Search optional object" /></label></div></div>
   if(meta.start==='platform_event') return <div className="b2-start-panel"><header><div><b>Configure Start</b><small>{meta.label}</small></div><button onClick={onClose}><X size={16}/></button></header><div className="b2-form"><label>Platform Event API Name<input value={p.eventKey||''} onChange={e=>patch({eventKey:e.target.value})} placeholder="Event API name"/></label></div></div>
   return <div className="b2-start-panel"><header><div><b>Configure Start</b><small>{meta.label}</small></div><button onClick={onClose}><X size={16}/></button></header><div className="b2-form">
-    <label>Object<select value={p.objectKey||''} onChange={e=>patch({objectKey:e.target.value})}><option value="">Select an object…</option>{objects.map(o=><option key={keyOf(o)} value={keyOf(o)}>{labelOf(o)}</option>)}</select></label>
+    <label>Object<ObjectSearchPicker objects={objects} value={p.objectKey||''} onChange={value=>patch({objectKey:value})} /></label>
     <fieldset><legend>Trigger the Flow When</legend>{[['created','A record is created'],['updated','A record is updated'],['created_or_updated','A record is created or updated'],['deleted','A record is deleted']].map(([v,l])=><label className="b2-radio" key={v}><input type="radio" checked={(p.trigger||'created_or_updated')===v} onChange={()=>patch({trigger:v})}/>{l}</label>)}</fieldset>
     <label>Condition Requirements<select value={p.conditionLogic||'all'} onChange={e=>patch({conditionLogic:e.target.value})}><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option><option value="formula">Formula Evaluates to True</option><option value="none">None — Always Run</option></select></label>
     {p.conditionLogic==='formula'?<label>Formula<textarea rows={5} value={p.formula||''} onChange={e=>patch({formula:e.target.value})}/></label>:p.conditionLogic==='none'?null:<><Conditions value={p.conditions} onChange={conditions=>patch({conditions})} resources={[]} objects={objects} objectKey={p.objectKey||''} onNew={()=>{}} flowType={flowType} startConfig={p}/>{p.conditionLogic==='custom'?<label>Custom Condition Logic<input value={p.customConditionLogic||''} onChange={e=>patch({customConditionLogic:e.target.value})} placeholder="Example: 1 AND (2 OR 3)"/></label>:null}</>}
