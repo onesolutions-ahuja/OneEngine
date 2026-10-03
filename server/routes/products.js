@@ -444,13 +444,14 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
 
     // Availability changes can remove a product from the active context, so a
     // scoped store receives a full snapshot rather than an unsafe delta.
-    const since = businessDivisionId
+    const hasScopedCatalogue = Boolean(storeId || businessDivisionId);
+    const since = hasScopedCatalogue
       ? null
       : (requestedScope === scopeKey ? requestedSince : null);
 
     const scopeParams = [companyId, storeId, businessDivisionObjectId, businessDivisionId, salesChannel];
     const params = [...scopeParams];
-    const availabilityClause = businessDivisionId ? `
+    const availabilityClause = `
       AND (
         NOT EXISTS (
           SELECT 1
@@ -465,11 +466,13 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
              AND pa.product_id=p.id
              AND pa.active=TRUE
              AND (pa.store_id IS NULL OR pa.store_id=$2)
-             AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$3)
-             AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$4)
+             AND (
+               pa.scope_object_id IS NULL
+               OR (pa.scope_object_id=$3 AND pa.scope_record_id=$4)
+             )
              AND pa.channel IN ($5,'all')
         )
-      )` : "";
+      )`;
 
     let sinceClause = "";
     if (since) {
@@ -497,10 +500,11 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
           WHERE pa.company_id=p.company_id
             AND pa.product_id=p.id
             AND pa.active=TRUE
-            AND $4::uuid IS NOT NULL
             AND (pa.store_id IS NULL OR pa.store_id=$2)
-            AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$3)
-            AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$4)
+            AND (
+              pa.scope_object_id IS NULL
+              OR (pa.scope_object_id=$3 AND pa.scope_record_id=$4)
+            )
             AND pa.channel IN ($5,'all')
           ORDER BY (pa.store_id IS NOT NULL) DESC, pa.priority DESC, pa.updated_at DESC
           LIMIT 1
@@ -523,7 +527,7 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
           AND p.sku IS DISTINCT FROM 'MISC'
           ${availabilityClause}
         ORDER BY c.display_order, c.name`,
-      businessDivisionId ? scopeParams : [companyId]
+      scopeParams
     );
 
     const versionResult = await db(
