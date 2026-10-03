@@ -1606,6 +1606,63 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         }
         console.log("onePOS: OneAssistant visible booking flow refreshed");
       },
+    },
+    {
+      key: "0044_replace_persisted_hidden_appointment_flows",
+      version: "44",
+      name: "Replace persisted hidden appointment conversation workflows in place",
+      up: async client => {
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+
+        const hiddenRows = await client.query(
+          `SELECT id,company_id,name,action
+             FROM platform_rules
+            WHERE company_id IS NOT NULL
+              AND (
+                action::text LIKE '%PROCESS_APPOINTMENT_CONVERSATION%'
+                OR action::text LIKE '%PROCESS_APPOINTMENT_DATE_RESPONSE%'
+                OR action::text LIKE '%PROCESS_APPOINTMENT_SLOT_RESPONSE%'
+                OR action::text LIKE '%SEND_APPOINTMENT_CONVERSATION_REPLY%'
+              )`
+        );
+
+        for (const row of hiddenRows.rows) {
+          const objectResult = await client.query(
+            `SELECT id FROM platform_objects
+              WHERE object_key='communication_event' AND active=TRUE
+                AND (company_id=$1 OR company_id IS NULL)
+              ORDER BY CASE WHEN company_id=$1 THEN 0 ELSE 1 END,id LIMIT 1`,
+            [row.company_id]
+          );
+          const objectId = objectResult.rows[0]?.id || null;
+          await client.query(
+            `UPDATE platform_rules
+                SET object_id=COALESCE($2,object_id),
+                    trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,
+                    active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW()
+              WHERE id=$1 AND company_id=$6`,
+            [row.id,objectId,router.triggerKey,JSON.stringify(router.conditions || []),
+             JSON.stringify(router.action),row.company_id]
+          );
+        }
+
+        const remaining = await client.query(
+          `SELECT COUNT(*)::int AS count FROM platform_rules
+            WHERE company_id IS NOT NULL
+              AND (
+                action::text LIKE '%PROCESS_APPOINTMENT_CONVERSATION%'
+                OR action::text LIKE '%PROCESS_APPOINTMENT_DATE_RESPONSE%'
+                OR action::text LIKE '%PROCESS_APPOINTMENT_SLOT_RESPONSE%'
+                OR action::text LIKE '%SEND_APPOINTMENT_CONVERSATION_REPLY%'
+              )`
+        );
+        if ((remaining.rows[0]?.count || 0) !== 0) {
+          throw new Error("Persisted hidden appointment workflow migration did not fully converge");
+        }
+        console.log(`onePOS: replaced ${hiddenRows.rowCount || 0} persisted hidden appointment workflows in place`);
+      },
     }
   ]);
 
