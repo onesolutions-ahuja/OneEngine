@@ -3768,3 +3768,41 @@
   .dock-mobile-items { justify-content: space-around; overflow-x: hidden; }
   .dock-mobile-item { flex: 1 1 0; width: auto; min-width: 0; }
 }
+
+/* 2026-10-03 active efb dock corrections (this is the dock rendered by App.jsx). */
+@media (min-width: 681px) {
+  .efb-dock {
+    height: 60px;
+    min-height: 60px;
+    padding: 10px 16px;
+    margin-bottom: 8px;
+    box-sizing: border-box;
+    align-items: center;
+  }
+  .efb-dock-magnify-zone {
+    height: 40px;
+    align-items: center;
+  }
+  .efb-dock-item {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .efb-dock-icon-wrap {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .efb-dock-image {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+  }
+  .efb-dock-image--scaled { transform: none; }
+  .efb-dock-fixed-zone { height: 40px; align-items: center; }
+  .efb-dock-fixed-item { width: 40px; height: 40px; }
+  .efb-dock-separator { align-self: center; }
+}
