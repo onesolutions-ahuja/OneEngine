@@ -149,7 +149,19 @@ function oneAssistantAppointmentRouterWorkflow() {
 
   // IMPORTANT: this definition intentionally uses Builder-visible primitives.
   // No PROCESS_APPOINTMENT_* or APPOINTMENT_SESSION_CONTEXT action may own the business process.
+  const channelSend = (id, label, channel, message, templateContext = {}) => ({
+    id, label, apiName: id, key: "SEND_APPOINTMENT_MESSAGE", channel,
+    recipient: { path: "sender" }, message, templateContext,
+    conversationId: { path: "metadata.conversationId" },
+  });
   const actions = [
+    { id:"channel_router", label:"Route Communication Channel", apiName:"channel_router", key:"CONDITION",
+      outcomes:[
+        {id:"sms",label:"SMS",condition:condition("channel","SMS"),branch:["sms_channel"]},
+        {id:"whatsapp",label:"WhatsApp",condition:condition("channel","WHATSAPP"),branch:["whatsapp_channel"]}
+      ],defaultLabel:"Unsupported Channel",defaultBranch:[] },
+    channelSend("sms_channel","Use SMS Channel","SMS","{{body}}",{body:{path:"body"}}),
+    channelSend("whatsapp_channel","Use WhatsApp Channel","WHATSAPP","{{body}}",{body:{path:"body"}}),
     { id:"date_1_formula", label:"Calculate Date Choice 1", apiName:"date_1_formula", key:"FORMULA", resourceName:"date1", resultType:"date", expression:"ADDDAYS(TODAY(),1)", inputs:{} },
     { id:"date_2_formula", label:"Calculate Date Choice 2", apiName:"date_2_formula", key:"FORMULA", resourceName:"date2", resultType:"date", expression:"ADDDAYS(TODAY(),2)", inputs:{} },
     { id:"get_case", label:"Get Open Booking Case", apiName:"get_case", key:"GET_RECORDS", objectKey:"appointment_booking_case",
