@@ -435,7 +435,11 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
         return [{id:lookupId,label:n.label+' · Find Records',type:'GET_RECORDS',_builderInternal:true,_builderOwnerId:n.id,objectKey:p.objectKey||'',filters:(p.conditions||[]).filter(row=>row.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value})),match:p.conditionLogic==='any'?'any':'all',store:'all',limit:200},{...base,type:'BULK_UPDATE_RECORDS',objectKey:p.objectKey||'',recordIds:'steps.'+lookupId+'.records',fieldValues}]
       }
       const resource=resources.find(r=>r.value===p.sourceRecord)
-      return resource?.isCollection?{...base,type:'BULK_UPDATE_RECORDS',objectKey:p.objectKey||'',recordIds:p.sourceRecord||'',fieldValuesResource:p.sourceRecord||''}:{...base,type:'UPDATE_RECORD',objectKey:p.objectKey||'',recordId:p.sourceRecord?(p.sourceRecord+'.id'):'',fieldValuesResource:p.sourceRecord||''}
+      if(resource?.isCollection){
+        const itemVariable=(n.apiName||'Update')+'_CurrentItem',childId=n.id+'__update'
+        return [{...base,type:'LOOP',collection:p.sourceRecord||'',itemVariable,iterationOrder:'FIRST_TO_LAST',bodyBranch:[childId]},{id:childId,label:n.label+' · Update Item',type:'UPDATE_RECORD',objectKey:p.objectKey||'',recordId:'variables.'+itemVariable+'.id',fieldValuesResource:'variables.'+itemVariable,_builderInternal:true,_builderOwnerId:n.id}]
+      }
+      return {...base,type:'UPDATE_RECORD',objectKey:p.objectKey||'',recordId:p.sourceRecord?(p.sourceRecord+'.id'):'',fieldValuesResource:p.sourceRecord||''}
     }
     if(n.type==='DELETE_RECORDS'){
       const deleteLoop=(collection,lookup=null)=>{
