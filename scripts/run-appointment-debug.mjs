@@ -72,7 +72,7 @@ const obsolete = [
 ];
 
 for (const key of obsolete) assert(!keys.includes(key), "Installed router still references obsolete hidden action " + key);
-for (const key of ["GET_RECORDS", "CREATE_RECORD", "UPDATE_RECORD", "CONDITION", "SET_VARIABLE"]) {
+for (const key of ["GET_RECORDS", "CREATE_RECORD", "UPDATE_RECORD", "CONDITION", "ASSIGNMENT"]) {
   assert(keys.includes(key), "Installed router is missing visible primitive " + key);
 }
 
