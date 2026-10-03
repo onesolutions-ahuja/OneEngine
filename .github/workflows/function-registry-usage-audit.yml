@@ -1,0 +1,59 @@
+name: Read-only Function Registry Usage Audit
+
+on:
+  push:
+    branches:
+      - audit/function-registry-usage-20261003
+    paths:
+      - ".github/workflows/function-registry-usage-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
+      ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
+      API_BASE: https://oneengine.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read production workflow metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ONEPOS_E2E_USERNAME"
+          test -n "$ONEPOS_E2E_PASSWORD"
+          PAYLOAD="$(jq -n --arg username "$ONEPOS_E2E_USERNAME" --arg password "$ONEPOS_E2E_PASSWORD" '{username:$username,password:$password,actingCompanyId:null}')"
+          LOGIN="$(curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors -H 'Content-Type: application/json' -d "$PAYLOAD" "$API_BASE/api/auth/login")"
+          TOKEN="$(printf '%s' "$LOGIN" | jq -r '.token // empty')"
+          test -n "$TOKEN"
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors -H "Authorization: Bearer $TOKEN" "$API_BASE/api/platform/rules" > /tmp/rules.json
+      - name: Report non-system function references
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const source = fs.readFileSync("server/services/platformFunctionRegistry.js","utf8");
+          const keys = [...new Set([...source.matchAll(/\bkey:\s*"([^"]+)"/g)].map((m)=>m[1]))].sort();
+          const payload = JSON.parse(fs.readFileSync("/tmp/rules.json","utf8"));
+          const rows = Array.isArray(payload?.data) ? payload.data : [];
+          const refs = Object.fromEntries(keys.map((key)=>[key,[]]));
+          let generated = 0;
+          for (const row of rows) {
+            const action = row?.action || {};
+            if (action?.systemGenerated === true) { generated += 1; continue; }
+            const blob = JSON.stringify({conditions:row?.conditions || [], action});
+            for (const key of keys) {
+              if (blob.includes('"' + key + '"')) refs[key].push(String(row?.name || row?.id || "unnamed"));
+            }
+          }
+          const used = Object.fromEntries(Object.entries(refs).filter(([,names])=>names.length));
+          const unused = keys.filter((key)=>!refs[key].length);
+          console.log("FUNCTION_KEYS=" + keys.length);
+          console.log("RULE_ROWS=" + rows.length);
+          console.log("SYSTEM_GENERATED_IGNORED=" + generated);
+          console.log("CUSTOM_REFERENCES=" + JSON.stringify(used));
+          console.log("NO_CUSTOM_RULE_REFERENCE=" + JSON.stringify(unused));
+          NODE
