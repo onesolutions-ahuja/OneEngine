@@ -288,7 +288,8 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
       setWorkflowId(selectedId)
       setFlowProps({label:saved.name||'New Flow',apiName:action.apiName||'New_Flow',description:action.description||'',apiVersion:String(action.apiVersion||'68.0'),runContext:action.runContext||'default'})
       setStartConfig(nextStart)
-      const loadedNodes=savedActions.filter(x=>normalizeNodeType(x.type)!=='END').map(x=>({id:x.id||uid(),type:normalizeNodeType(x.type),label:x.label||x.type||'Element',apiName:x.apiName||x.id||x.type||'Element',description:x.description||'',config:x.config||x}))
+      const visibleActions=savedActions.filter(x=>x?._builderInternal!==true&&normalizeNodeType(x.type)!=='END')
+      const loadedNodes=visibleActions.map(x=>({id:x.id||uid(),type:x._builderType||normalizeNodeType(x.type),label:x.label||x.type||'Element',apiName:x.apiName||x.id||x.type||'Element',description:x.description||'',config:x._builderConfig||x.config||x}))
       const loadedById=new Map(loadedNodes.map(node=>[String(node.id),node]))
       savedActions.forEach(raw=>{
         const ownerId=String(raw?.id||'')
@@ -330,7 +331,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
   const branchIds=(ownerId,key)=>nodes.filter(x=>x.branchOwnerId===ownerId&&x.branchKey===key).flatMap(runtimeIdsForNode)
   const compileNode=n=>{
     const p=n.config||{}
-    const base={id:n.id,label:n.label||n.type,apiName:n.apiName,description:n.description||''}
+    const base={id:n.id,label:n.label||n.type,apiName:n.apiName,description:n.description||'',_builderType:n.type,_builderConfig:p}
     if(n.type==='ACTION')return {...base,type:p.actionKey||'STOP',...(p.inputs||{})}
     if(n.type==='SUBFLOW'){
       let workflowInputs=p.workflowInputs||{}
@@ -355,14 +356,14 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
       if(p.valueMode==='record')return {...base,type:'CREATE_RECORD',objectKey:p.objectKey||'',fieldValuesResource:p.sourceRecord||''}
       if(p.valueMode==='collection'){
         const itemVariable=(n.apiName||'Create')+'_CurrentItem',childId=n.id+'__create'
-        return [{...base,type:'LOOP',collection:p.sourceRecord||'',itemVariable,iterationOrder:'FIRST_TO_LAST',bodyBranch:[childId]},{id:childId,label:n.label+' · Create Item',type:'CREATE_RECORD',objectKey:p.objectKey||'',fieldValuesResource:'variables.'+itemVariable}]
+        return [{...base,type:'LOOP',collection:p.sourceRecord||'',itemVariable,iterationOrder:'FIRST_TO_LAST',bodyBranch:[childId]},{id:childId,label:n.label+' · Create Item',type:'CREATE_RECORD',objectKey:p.objectKey||'',fieldValuesResource:'variables.'+itemVariable,_builderInternal:true,_builderOwnerId:n.id}]
       }
     }
     if(n.type==='UPDATE_RECORDS'){
       const fieldValues=Object.fromEntries((p.fieldValues||[]).filter(row=>row.field).map(row=>[row.field,row.value]))
       if((p.updateMode||'conditions')==='conditions'){
         const lookupId=n.id+'__lookup'
-        return [{id:lookupId,label:n.label+' · Find Records',type:'GET_RECORDS',objectKey:p.objectKey||'',filters:(p.conditions||[]).filter(row=>row.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value})),match:p.conditionLogic==='any'?'any':'all',store:'all',limit:200},{...base,type:'BULK_UPDATE_RECORDS',objectKey:p.objectKey||'',recordIds:'steps.'+lookupId+'.records',fieldValues}]
+        return [{id:lookupId,label:n.label+' · Find Records',type:'GET_RECORDS',_builderInternal:true,_builderOwnerId:n.id,objectKey:p.objectKey||'',filters:(p.conditions||[]).filter(row=>row.resource).map(row=>({field:row.resource,operator:operatorKey(row.operator),value:row.value})),match:p.conditionLogic==='any'?'any':'all',store:'all',limit:200},{...base,type:'BULK_UPDATE_RECORDS',objectKey:p.objectKey||'',recordIds:'steps.'+lookupId+'.records',fieldValues}]
       }
       const resource=resources.find(r=>r.value===p.sourceRecord)
       return resource?.isCollection?{...base,type:'BULK_UPDATE_RECORDS',objectKey:p.objectKey||'',recordIds:p.sourceRecord||'',fieldValues}:{...base,type:'UPDATE_RECORD',objectKey:p.objectKey||'',recordId:p.sourceRecord?(p.sourceRecord+'.id'):'',fieldValues}
@@ -370,7 +371,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
     if(n.type==='DELETE_RECORDS'){
       const deleteLoop=(collection,lookup=null)=>{
         const itemVariable=(n.apiName||'Delete')+'_CurrentItem',childId=n.id+'__delete'
-        return [...(lookup?[lookup]:[]),{...base,type:'LOOP',collection,itemVariable,iterationOrder:'FIRST_TO_LAST',bodyBranch:[childId]},{id:childId,label:n.label+' · Delete Item',type:'DELETE_RECORD',objectKey:p.objectKey||'',recordId:'variables.'+itemVariable+'.id'}]
+        return [...(lookup?[lookup]:[]),{...base,type:'LOOP',collection,itemVariable,iterationOrder:'FIRST_TO_LAST',bodyBranch:[childId]},{id:childId,label:n.label+' · Delete Item',type:'DELETE_RECORD',objectKey:p.objectKey||'',recordId:'variables.'+itemVariable+'.id',_builderInternal:true,_builderOwnerId:n.id}]
       }
       if((p.deleteMode||'conditions')==='conditions'){
         const lookupId=n.id+'__lookup'
