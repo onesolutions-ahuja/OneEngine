@@ -4,6 +4,7 @@ export const DEVELOPER_SETTINGS_KEYS = new Set([
   'sharing-rules',
   'platform',
   'workflow-builder',
+  'builder2',
   'approval-builder',
   'page-builder',
   'dashboard-builder',
