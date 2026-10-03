@@ -1664,6 +1664,30 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log(`onePOS: replaced ${hiddenRows.rowCount || 0} persisted hidden appointment workflows in place`);
       },
     }
+,
+    {
+      key: "0045_remove_unused_appointment_action_wrappers",
+      version: "45",
+      name: "Remove unused appointment action wrappers",
+      up: async client => {
+        const obsolete = ["APPOINTMENT_SESSION_CONTEXT", "PROCESS_APPOINTMENT_DATE_RESPONSE", "PROCESS_APPOINTMENT_SLOT_RESPONSE", "PROCESS_APPOINTMENT_CONVERSATION", "SEND_APPOINTMENT_CONVERSATION_REPLY", "HOLD_APPOINTMENT_SLOT", "RELEASE_APPOINTMENT_SLOT", "LIST_APPOINTMENT_PAYMENT_PROVIDERS", "CREATE_APPOINTMENT_PAYMENT_REQUEST", "CALCULATE_APPOINTMENT_PAYMENT", "CONFIRM_APPOINTMENT"];
+        const systemKeys = obsolete.map((key) => "action:" + key);
+        await client.query(
+          "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'=ANY($1::text[])",
+          [systemKeys]
+        );
+        const remaining = await client.query(
+          "SELECT id,name FROM platform_rules WHERE active=TRUE AND action->>'type'='workflow' AND EXISTS (" +
+          "SELECT 1 FROM jsonb_array_elements(COALESCE(action->'actions','[]'::jsonb)) step WHERE step->>'key'=ANY($1::text[]))",
+          [obsolete]
+        );
+        if (remaining.rows.length) {
+          throw new Error("Active workflow still references removed appointment wrapper: " + remaining.rows.map((row) => row.name).join(", "));
+        }
+        console.log("onePOS: unused appointment action wrappers removed");
+      },
+    },
+
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
