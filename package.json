@@ -17,15 +17,16 @@
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.0",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "@xyflow/react": "^12.11.0"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.0",
     "@vitejs/plugin-react": "^5.0.4",
-    "vite": "^7.1.7",
-    "@playwright/test": "^1.56.0"
+    "react-test-renderer": "^19.1.1",
+    "vite": "^7.1.7"
   }
 }
