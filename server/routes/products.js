@@ -391,12 +391,11 @@ export default function createProductsRouter({ authenticate, authorize, db: doma
   });
 
   /*
-   * GET /api/products/export
+   * GET /api/products/catalogue
    *
-   * Exports products as CSV. Supports an optional ?storeId= filter
-   * to export only products associated with a specific store.
-   * Store-scoped users can only export their own store; admins can
-   * export all stores within the company.
+   * Till/offline catalogue. When the active store has a metadata-driven
+   * Business Division lookup, only products mapped to that same division
+   * are returned.
    */
 router.get("/products/catalogue", authenticate, authorize("product.view"), async (req, res) => {
   try {
@@ -498,7 +497,7 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
                AND product_association.custom_values->>'business_division_id'=$3
           )` : ""}
         ORDER BY c.display_order, c.name`,
-      businessDivisionId ? [companyId, storeId, businessDivisionId] : [companyId, storeId]
+      businessDivisionId ? [companyId, storeId, businessDivisionId] : [companyId]
     );
 
     const versionResult = await db(
@@ -528,6 +527,14 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
   }
 });
 
+  /*
+   * GET /api/products/export
+   *
+   * Exports products as CSV. Supports an optional ?storeId= filter
+   * to export only products associated with a specific store.
+   * Store-scoped users can only export their own store; admins can
+   * export all stores within the company.
+   */
   router.get("/products/export", authenticate, authorize("product.view"), async (req, res) => {
     try {
       const { storeId } = req.query;
