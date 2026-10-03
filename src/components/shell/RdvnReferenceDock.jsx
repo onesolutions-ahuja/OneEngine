@@ -8,7 +8,7 @@ export const dockItems = [
   { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: true },
   { id: 'store', label: 'OneStore', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onestore-dock.png`, scaled: true },
   { id: 'till', label: 'OneTill', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onetill-dock.png`, scaled: true },
-  { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png`, scaled: true },
+  { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png`, scaled: true },
   { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace-dock.png`, scaled: true },
 ]
 
@@ -36,7 +36,7 @@ function DockItem({ item, mouseX, onActivate }) {
   return (
     <motion.button ref={ref} type="button" className="efb-dock-item" style={{ width }} onClick={onActivate} aria-label={item.label}>
       <span className="efb-dock-icon-wrap">
-        <img className={`${item.scaled ? 'efb-dock-image efb-dock-image--scaled' : 'efb-dock-image'}${item.id === 'developer' && item.src.includes('one-developer-dock.svg') ? ' efb-dock-image--developer' : ''}`} src={item.src} alt="" draggable="false" />
+        <img className={`${item.scaled ? 'efb-dock-image efb-dock-image--scaled' : 'efb-dock-image'}${item.id === 'developer' && item.src.includes('one-developer-dock.svg') ? ' efb-dock-image--developer' : ''}${['store','till','workspace'].includes(item.id) ? ' efb-dock-image--app-art' : ''}`} src={item.src} alt="" draggable="false" />
       </span>
     </motion.button>
   )
@@ -72,7 +72,7 @@ export default function RdvnReferenceDock({ onItemOpen }) {
         {mobileDockItems.map((item) => (
           <button key={item.id} type="button" className="efb-mobile-dock-item" onClick={() => onItemOpen?.(item.id)} aria-label={item.label} title={item.label}>
             <span className="efb-mobile-dock-icon-wrap">
-              <img className="efb-mobile-dock-image" src={item.src} alt="" draggable="false" />
+              <img className={`efb-mobile-dock-image${item.id === 'workspace' ? ' efb-mobile-dock-image--app-art' : ''}`} src={item.src} alt="" draggable="false" />
             </span>
           </button>
         ))}
