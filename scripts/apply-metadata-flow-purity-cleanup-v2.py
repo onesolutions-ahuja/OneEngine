@@ -91,9 +91,11 @@ workflow_path.write_text(w)
 
 init=init_path.read_text()
 if '0045_remove_unused_appointment_action_wrappers' not in init:
-    marker="  ]);"; at=init.rfind(marker)
+    marker="\n  ]);\n\n  if (bootstrapSuperadmin)"
+    at=init.find(marker)
     if at<0: raise RuntimeError("migration terminator not found")
     migration='''
+,
     {
       key: "0045_remove_unused_appointment_action_wrappers",
       version: "45",
