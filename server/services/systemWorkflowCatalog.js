@@ -101,6 +101,21 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
     (existingResult.rows || []).map((row) => [String(row.action?.systemKey || ""), row])
   );
 
+  // Remove untouched generated wrappers whose underlying capability no longer exists.
+  // Developer-modified wrappers are preserved for explicit migration/review.
+  const validSystemKeys = definitions.map((definition) => definition.systemKey);
+  const staleResult = await db(
+    `DELETE FROM platform_rules
+      WHERE company_id=$1
+        AND action->>'systemGenerated'='true'
+        AND action->>'systemKey' IS NOT NULL
+        AND COALESCE(user_modified,FALSE)=FALSE
+        AND NOT ((action->>'systemKey') = ANY($2::text[]))
+      RETURNING id,action->>'systemKey' AS system_key`,
+    [companyId, validSystemKeys]
+  );
+  const removed = staleResult.rows?.length || 0;
+
   // System workflows are executable defaults. Respect developer edits, but
   // repair untouched rows created by older catalogue versions.
   await db(
@@ -157,7 +172,8 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
 
   return {
     created,
-    existing: existing.size,
+    removed,
+    existing: Math.max(0, existing.size - removed),
     total: definitions.length,
   };
 }
