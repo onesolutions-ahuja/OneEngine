@@ -710,7 +710,7 @@ export function packageDefinition(entry) {
             objectKey: "communication_event",
             name: "OneAssistant - WhatsApp Booking",
             triggerKey: "communication_message_received",
-            conditions: [{ field: "channel", operator: "equals", value: "WHATSAPP" }, { field: "body", operator: "contains", value: "appointment" }],
+            conditions: [{ field: "channel", operator: "equals", value: "WHATSAPP" }],
             action: {
               type: "workflow",
               scope: "one_assistant",
