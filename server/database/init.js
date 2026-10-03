@@ -1062,8 +1062,8 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       },
     },
     {
-      key: "0038_backfill_whatsapp_communication_events",
-      version: "38",
+      key: "0101_backfill_whatsapp_communication_events",
+      version: "101",
       name: "Backfill WhatsApp messages into Communication Events",
       up: async client => {
         await client.query(`
