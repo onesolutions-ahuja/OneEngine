@@ -46,8 +46,8 @@ export async function recordCommunicationEvent({
   const result = await db(
     `INSERT INTO platform_communication_events
       (company_id,channel,event_type,direction,provider,provider_message_id,recipient,sender,
-       template_id,object_id,record_id,communication_id,metadata)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
+       template_id,object_id,record_id,communication_id,body,metadata)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
      RETURNING *`,
     [
       companyId,
@@ -62,6 +62,7 @@ export async function recordCommunicationEvent({
       objectId,
       recordId,
       communicationId,
+      body ?? metadata?.body ?? metadata?.text ?? null,
       JSON.stringify(metadata || {}),
     ]
   );
