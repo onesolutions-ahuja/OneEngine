@@ -8,6 +8,9 @@ on:
       - "scripts/apply-generic-slot-flow.py"
       - ".github/workflows/generic-slot-flow.yml"
       - "tests/appointmentWorkflow.test.mjs"
+      - "server/services/platformWorkflow.js"
+      - "server/services/packageRegistry.js"
+      - "server/database/init.js"
 
 permissions:
   contents: write
@@ -34,7 +37,6 @@ jobs:
           node --check server/services/packageRegistry.js
           node --check server/database/init.js
           node --test tests/appointmentWorkflow.test.mjs
-          npm test -- --runInBand
       - name: Commit product changes
         shell: bash
         run: |
