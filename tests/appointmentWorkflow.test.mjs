@@ -36,7 +36,7 @@ test("OneAssistant booking router uses visible Builder primitives", () => {
   assert.equal(workflow.action.start.eventKey, "communication_message_received");
 
   const keys = workflow.action.actions.map((action) => action.key);
-  for (const key of ["GET_RECORDS", "CREATE_RECORD", "UPDATE_RECORD", "CONDITION", "SET_VARIABLE"]) {
+  for (const key of ["GET_RECORDS", "CREATE_RECORD", "UPDATE_RECORD", "CONDITION", "ASSIGNMENT"]) {
     assert.ok(keys.includes(key), key + " must be visible in the booking flow");
     assert.ok(getWorkflowActionDefinition(key), key + " must remain a registered generic primitive");
   }
