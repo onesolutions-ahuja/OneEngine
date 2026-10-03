@@ -48,7 +48,7 @@ test("installed booking router has no obsolete hidden appointment processors", a
   ];
 
   for (const key of obsolete) expect(keys, "obsolete action " + key + " must not be installed").not.toContain(key);
-  for (const key of ["GET_RECORDS", "CREATE_RECORD", "UPDATE_RECORD", "CONDITION", "SET_VARIABLE"]) {
+  for (const key of ["GET_RECORDS", "CREATE_RECORD", "UPDATE_RECORD", "CONDITION", "ASSIGNMENT"]) {
     expect(keys, "visible primitive " + key + " must be installed").toContain(key);
   }
 });
