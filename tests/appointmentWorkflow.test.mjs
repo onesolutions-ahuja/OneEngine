@@ -36,9 +36,12 @@ test("OneAssistant uses one active communication-event router for SMS and WhatsA
   const channelRouter = actions.find((action) => action.id === "channel_router");
   assert.deepEqual(channelRouter.outcomes.map((outcome) => outcome.label), ["SMS", "WhatsApp"]);
 
+  const channelAssignments = actions.filter((action) => action.key === "ASSIGNMENT" && action.variableName === "messageChannel");
+  assert.ok(channelAssignments.some((action) => action.value === "SMS"));
+  assert.ok(channelAssignments.some((action) => action.value === "WHATSAPP"));
   const sends = actions.filter((action) => action.key === "SEND_APPOINTMENT_MESSAGE");
-  assert.ok(sends.some((action) => action.channel === "SMS"));
-  assert.ok(sends.some((action) => action.channel === "WHATSAPP"));
+  assert.ok(sends.length > 0);
+  assert.ok(sends.every((action) => action.channel?.path === "variables.messageChannel"));
   assert.ok(sends.every((action) => typeof action.message === "string" && action.message.length > 0));
 
   assert.equal(
