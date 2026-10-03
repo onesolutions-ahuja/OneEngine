@@ -866,6 +866,78 @@ export function packageDefinition(entry) {
       ...(entry.key === "one_assistant" ? {
         objects: [
           {
+            objectKey: "appointment_service",
+            metadataScope: "global",
+            label: "Appointment Service",
+            pluralLabel: "Appointment Services",
+            description: "Bookable service used by OneAssistant availability and appointment workflows.",
+            sourceTable: "appointment_services",
+            fields: [
+              { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", writable: true, required: true },
+              { apiName: "description", label: "Description", fieldType: "text", sourceColumn: "description", writable: true },
+              { apiName: "duration_minutes", label: "Duration Minutes", fieldType: "number", sourceColumn: "duration_minutes", writable: true, required: true },
+              { apiName: "price", label: "Price", fieldType: "number", sourceColumn: "price", writable: true },
+              { apiName: "currency", label: "Currency", fieldType: "text", sourceColumn: "currency", writable: true },
+              { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true },
+              { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+            ],
+          },
+          {
+            objectKey: "appointment_resource",
+            metadataScope: "global",
+            label: "Appointment Resource",
+            pluralLabel: "Appointment Resources",
+            description: "Staff or resource that can fulfil an appointment.",
+            sourceTable: "appointment_resources",
+            fields: [
+              { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", writable: true, required: true },
+              { apiName: "resource_type", label: "Resource Type", fieldType: "text", sourceColumn: "resource_type", writable: true },
+              { apiName: "timezone", label: "Timezone", fieldType: "text", sourceColumn: "timezone", writable: true },
+              { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true },
+              { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+            ],
+          },
+          {
+            objectKey: "appointment_availability_rule",
+            metadataScope: "global",
+            label: "Appointment Availability Rule",
+            pluralLabel: "Appointment Availability Rules",
+            description: "Metadata-visible working hours used by booking flows.",
+            sourceTable: "appointment_availability_rules",
+            fields: [
+              { apiName: "resource_id", label: "Resource", fieldType: "lookup", sourceColumn: "resource_id", writable: true, required: true, config: { relatedObjectKey: "appointment_resource" } },
+              { apiName: "weekday", label: "Weekday", fieldType: "number", sourceColumn: "weekday", writable: true, required: true },
+              { apiName: "start_time", label: "Start Time", fieldType: "text", sourceColumn: "start_time", writable: true, required: true },
+              { apiName: "end_time", label: "End Time", fieldType: "text", sourceColumn: "end_time", writable: true, required: true },
+              { apiName: "slot_interval_minutes", label: "Slot Interval Minutes", fieldType: "number", sourceColumn: "slot_interval_minutes", writable: true },
+              { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true }
+            ],
+          },
+          {
+            objectKey: "appointment",
+            metadataScope: "global",
+            label: "Appointment",
+            pluralLabel: "Appointments",
+            description: "Canonical appointment record. Workflow builders can create, query and update these records directly.",
+            sourceTable: "appointments",
+            fields: [
+              { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", writable: true },
+              { apiName: "service_id", label: "Service", fieldType: "lookup", sourceColumn: "service_id", writable: true, required: true, config: { relatedObjectKey: "appointment_service" } },
+              { apiName: "resource_id", label: "Resource", fieldType: "lookup", sourceColumn: "resource_id", writable: true, required: true, config: { relatedObjectKey: "appointment_resource" } },
+              { apiName: "customer_id", label: "Customer", fieldType: "lookup", sourceColumn: "customer_id", writable: true },
+              { apiName: "customer_name", label: "Customer Name", fieldType: "text", sourceColumn: "customer_name", writable: true },
+              { apiName: "customer_phone", label: "Customer Phone", fieldType: "text", sourceColumn: "customer_phone", writable: true },
+              { apiName: "customer_email", label: "Customer Email", fieldType: "text", sourceColumn: "customer_email", writable: true },
+              { apiName: "starts_at", label: "Starts At", fieldType: "datetime", sourceColumn: "starts_at", writable: true, required: true },
+              { apiName: "ends_at", label: "Ends At", fieldType: "datetime", sourceColumn: "ends_at", writable: true, required: true },
+              { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: true, options: ["TENTATIVE","AWAITING_PAYMENT","CONFIRMED","CHECKED_IN","COMPLETED","CANCELLED","NO_SHOW"] },
+              { apiName: "source_channel", label: "Source Channel", fieldType: "text", sourceColumn: "source_channel", writable: true },
+              { apiName: "notes", label: "Notes", fieldType: "text", sourceColumn: "notes", writable: true },
+              { apiName: "payment_status", label: "Payment Status", fieldType: "text", sourceColumn: "payment_status", writable: true },
+              { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+            ],
+          },
+          {
             objectKey: "appointment_booking_case",
             metadataScope: "global",
             label: "Appointment Booking Case",
@@ -878,9 +950,9 @@ export function packageDefinition(entry) {
               { apiName: "recipient", label: "Recipient", fieldType: "text", sourceColumn: "recipient", writable: false },
               { apiName: "subject", label: "Subject", fieldType: "text", sourceColumn: "subject", writable: false },
               { apiName: "body", label: "Message", fieldType: "text", sourceColumn: "body", writable: false },
-              { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: false, options: ["NEW","LINK_SENT","SLOT_SELECTED","AWAITING_PAYMENT","CONFIRMED","CANCELLED","EXPIRED"] },
-              { apiName: "service_id", label: "Service", fieldType: "lookup", sourceColumn: "service_id", writable: false },
-              { apiName: "appointment_id", label: "Appointment", fieldType: "lookup", sourceColumn: "appointment_id", writable: false },
+              { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: true, options: ["NEW","LINK_SENT","SLOT_SELECTED","AWAITING_PAYMENT","CONFIRMED","CANCELLED","EXPIRED"] },
+              { apiName: "service_id", label: "Service", fieldType: "lookup", sourceColumn: "service_id", writable: true, config: { relatedObjectKey: "appointment_service" } },
+              { apiName: "appointment_id", label: "Appointment", fieldType: "lookup", sourceColumn: "appointment_id", writable: true, config: { relatedObjectKey: "appointment" } },
               { apiName: "payment_request_id", label: "Payment Request", fieldType: "lookup", sourceColumn: "payment_request_id", writable: false },
               { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
             ],
