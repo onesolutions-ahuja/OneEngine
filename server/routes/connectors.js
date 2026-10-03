@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import express from "express";
 import { decryptCredentials, encryptCredentials } from "../services/integrationCredentials.js";
 import {
@@ -7,6 +8,7 @@ import {
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { configureSmsGateInboundWebhook } from "../services/smsGateConnector.js";
 
 function jsonValue(value, fallback) {
   if (typeof value !== "string") return value ?? fallback;
@@ -321,6 +323,51 @@ export default function createConnectorsRouter({
     return {
       ...user,
       permissionCodes: permissionResult.rows.map((row) => row.code),
+    };
+  }
+
+  async function ensureSmsGateInboundWebhook(instanceId, companyId) {
+    const currentResult = await db(
+      `SELECT id,connector_configuration,credentials_encrypted
+         FROM integration_connections
+        WHERE id=$1 AND company_id=$2 AND connector_package_key='smsgate_connector'
+        LIMIT 1`,
+      [instanceId, companyId]
+    );
+    const current = currentResult.rows[0];
+    if (!current) throw Object.assign(new Error("SMSGate connector instance not found"), { code: "CONNECTOR_NOT_FOUND" });
+
+    const configuration = jsonValue(current.connector_configuration, {});
+    let secrets = {};
+    try { secrets = decryptCredentials(current.credentials_encrypted) || {}; } catch { secrets = {}; }
+
+    const webhookToken = String(secrets.webhookToken || "").trim() || randomBytes(32).toString("hex");
+    const publicBaseUrl = String(
+      process.env.PUBLIC_API_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      "https://oneengine.onrender.com"
+    ).replace(/\/$/, "");
+    const webhookUrl = `${publicBaseUrl}/api/smsgate/webhook/${current.id}/${webhookToken}`;
+
+    const webhook = await configureSmsGateInboundWebhook(
+      { ...configuration, ...secrets },
+      { webhookUrl }
+    );
+
+    await db(
+      `UPDATE integration_connections
+          SET credentials_encrypted=$1,
+              connector_configuration=connector_configuration - 'webhookSigningKey',
+              updated_at=NOW()
+        WHERE id=$2 AND company_id=$3`,
+      [encryptCredentials({ ...secrets, webhookToken }), current.id, companyId]
+    );
+
+    return {
+      configured: true,
+      created: webhook?.created === true,
+      removedStale: Number(webhook?.removedStale || 0),
+      webhookId: webhook?.webhookId || null,
     };
   }
 
@@ -1462,7 +1509,34 @@ export default function createConnectorsRouter({
           connectorInstanceId: instance.id,
         },
       });
-      const result = execution.result?.result || execution.result || null;
+      let result = execution.result?.result || execution.result || null;
+
+      // Inbound SMS requires a provider-side sms:received webhook. Reconcile it
+      // immediately after a successful SMSGate connection test so connectors
+      // configured after process startup do not remain outbound-only.
+      if (instance.connector_package_key === "smsgate_connector" && result?.success === true) {
+        try {
+          const inboundWebhook = await ensureSmsGateInboundWebhook(instance.id, req.user.companyId);
+          result = { ...result, inboundWebhook };
+        } catch (webhookError) {
+          const message = `SMSGate connected, but inbound webhook setup failed: ${webhookError?.message || "unknown error"}`;
+          await db(
+            `UPDATE integration_connections
+                SET last_test_result=$1::jsonb,last_error=$2,updated_at=NOW()
+              WHERE id=$3 AND company_id=$4`,
+            [JSON.stringify({ success: false, code: "WEBHOOK_SETUP_FAILED", message }), message, instance.id, req.user.companyId]
+          );
+          console.error("SMSGate inbound webhook setup after connector test failed:", webhookError?.message || webhookError);
+          return res.status(409).json({
+            success: false,
+            code: "WEBHOOK_SETUP_FAILED",
+            message,
+            workflowRunId: execution.runId,
+            correlationId: execution.correlationId,
+          });
+        }
+      }
+
       res.json({ success: true, data: result, workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
       console.error("Test connector instance workflow error:", error);
