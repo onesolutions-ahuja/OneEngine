@@ -1,19 +1,23 @@
 import { useRef } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import JarvisOrb from '../jarvis/JarvisOrb'
 
+const settingsSrc = 'https://rdvnui.com/assets/Settings-BIHCu_gi.png'
 const dockItems = [
   { id: 'finder', label: 'Finder', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
-  { id: 'settings', label: 'Settings', src: 'https://rdvnui.com/assets/Settings-BIHCu_gi.png', scaled: true },
+  { id: 'settings', label: 'Settings', src: settingsSrc, scaled: true },
   { id: 'launchpad', label: 'Launchpad', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
   { id: 'maps', label: 'Maps', src: 'https://rdvnui.com/assets/Maps-C7aNhhUR.png', scaled: true },
   { id: 'notes', label: 'Notes', src: 'https://rdvnui.com/assets/Notes-fm-2Meh1.png', scaled: true },
+  { id: 'settings-2', label: 'Settings', src: settingsSrc, scaled: true },
+  { id: 'settings-3', label: 'Settings', src: settingsSrc, scaled: true },
+  { id: 'settings-4', label: 'Settings', src: settingsSrc, scaled: true },
 ]
 
 const trashItem = {
   id: 'trash',
-  label: 'Trash',
+  label: 'Recycle Bin',
   src: 'https://rdvnui.com/assets/Trash%20Full-BoE_wJYh.png',
-  scaled: false,
 }
 
 function DockItem({ item, mouseX, onActivate }) {
@@ -39,18 +43,26 @@ export default function RdvnReferenceDock({ onItemOpen }) {
 
   return (
     <div className="efb-dock-zone">
-      <motion.div
-        className="efb-dock"
-        onMouseMove={(event) => mouseX.set(event.pageX)}
-        onMouseLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
-        aria-label="Smart Theme dock efb2f731 reference"
-      >
-        {dockItems.map((item) => (
-          <DockItem key={item.id} item={item} mouseX={mouseX} onActivate={() => onItemOpen?.(item.id)} />
-        ))}
+      <div className="efb-dock" aria-label="Smart Theme dock efb2f731 reference">
+        <motion.div
+          className="efb-dock-magnify-zone"
+          onMouseMove={(event) => mouseX.set(event.pageX)}
+          onMouseLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
+        >
+          {dockItems.map((item) => (
+            <DockItem key={item.id} item={item} mouseX={mouseX} onActivate={() => onItemOpen?.(item.id)} />
+          ))}
+        </motion.div>
         <div className="efb-dock-separator" aria-hidden="true" />
-        <DockItem item={trashItem} mouseX={mouseX} onActivate={() => onItemOpen?.(trashItem.id)} />
-      </motion.div>
+        <div className="efb-dock-fixed-zone">
+          <button type="button" className="efb-dock-fixed-item" onClick={() => onItemOpen?.(trashItem.id)} aria-label={trashItem.label}>
+            <img className="efb-dock-image" src={trashItem.src} alt="" draggable="false" />
+          </button>
+          <div className="efb-dock-jarvis">
+            <JarvisOrb onClick={() => onItemOpen?.('jarvis')} />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
