@@ -2579,7 +2579,30 @@ async function startServer() {
           );
         }
 
-        await reconcileCompanyPackageEntitlements(db, companyId);
+        const entitlementSnapshot = await db(
+          `SELECT source_type,source_key,active,starts_at,expires_at
+             FROM company_package_entitlement_sources
+            WHERE company_id=$1 AND package_id=$2
+            ORDER BY source_type,source_key`,
+          [companyId, pkg.id]
+        );
+        console.log("onePOS: startup package entitlement snapshot", {
+          companyId,
+          packageKey,
+          sources: entitlementSnapshot.rows.map((row) => ({
+            sourceType: row.source_type,
+            active: row.active,
+            startsAt: row.starts_at,
+            expiresAt: row.expires_at,
+          })),
+        });
+
+        const reconciliation = await reconcileCompanyPackageEntitlements(db, companyId);
+        console.log("onePOS: startup package reconciliation result", {
+          companyId,
+          packageKey,
+          entitled: (reconciliation || []).some((entry) => entry.packageKey === packageKey),
+        });
       }
 
       const verifiedInstallation = await db(
@@ -2590,6 +2613,11 @@ async function startServer() {
         [companyId, pkg.id]
       );
       const installed = verifiedInstallation.rows[0];
+      console.log("onePOS: startup package installation snapshot", {
+        companyId,
+        packageKey,
+        installation: installed || null,
+      });
       if (!installed || installed.status !== "active" || installed.suspended_by_entitlement === true || installed.deactivated_by_user === true) {
         throw new Error(`Startup package activation did not produce an active installation for ${packageKey}`);
       }
