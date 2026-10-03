@@ -8992,24 +8992,27 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     if (normalizedInitialWorkflow) {
       setWorkflowId(normalizedInitialWorkflow.id || null);
       setWorkflow(normalizedInitialWorkflow);
+      setSavedDefinitionSignature(persistedWorkflowSignature(normalizedInitialWorkflow));
+      setFlowHistory({ past: [], future: [], last: JSON.stringify(normalizedInitialWorkflow), applying: false });
+      setWorkflowVersions([]);
+      setSavedTests([]);
+      setCompareVersionId(null);
+      setDebugResult(null);
+      setActiveSavedTest(null);
+      setDebugInputs({});
       setDebugRecordEvent(recordTriggerWhen(normalizedInitialWorkflow.trigger) === "created" ? "created" : "updated");
     } else {
+      const next = createBlankWorkflow(scopeKey);
       setWorkflowId(null);
-      setWorkflow({
-        name: "",
-        object: "",
-        trigger: "manual",
-        version: 1,
-        lifecycleStatus: "DRAFT",
-        active: false,
-        entryTransition: "EVERY_TIME",
-        inputContract: [],
-        outputContract: [],
-        steps: [],
-      });
+      setWorkflow(next);
+      setSavedDefinitionSignature(persistedWorkflowSignature(next));
+      setFlowHistory({ past: [], future: [], last: JSON.stringify(next), applying: false });
     }
+    setVersionsOpen(false);
+    setTestsOpen(false);
+    setDebugOpen(false);
     setShowBuilder(true);
-  }, [embedded, initialWorkflow?.id]);
+  }, [embedded, initialWorkflow]);
 
   useEffect(() => {
     apiRequest(scopeKey
