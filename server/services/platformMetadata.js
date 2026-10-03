@@ -1013,6 +1013,21 @@ const retailObjects = [
     ],
   },
   {
+    key: "product_availability", label: "Product Availability", plural: "Product Availability", table: "product_availability",
+    fields: [
+      ["product_id", "Product", "lookup", "product_id", true],
+      ["scope_object_id", "Scope Object", "lookup", "scope_object_id", false],
+      ["scope_record_id", "Scope Record", "text", "scope_record_id", false],
+      ["store_id", "Store", "lookup", "store_id", false],
+      ["channel", "Sales Channel", "text", "channel", true],
+      ["price_list_id", "Price List", "lookup", "price_list_id", false],
+      ["priority", "Priority", "number", "priority", false],
+      ["active", "Active", "boolean", "active", false],
+      ["created_at", "Created", "datetime", "created_at", false],
+      ["updated_at", "Updated", "datetime", "updated_at", false],
+    ],
+  },
+  {
     key: "sale", label: "Sale", plural: "Sales", table: "sales",
     fields: [
       ["invoice_number", "Receipt Number", "text", "receipt_number", false],
@@ -1365,6 +1380,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     ["category", "product", "products", "one_to_many", "category_id"],
     ["customer", "price_list", "price_list", "lookup", "price_list_id"],
     ["supplier", "product", "products", "many_to_many", null],
+    ["product", "product_availability", "availability", "one_to_many", "product_id"],
+    ["store", "product_availability", "product_availability", "one_to_many", "store_id"],
+    ["price_list", "product_availability", "product_availability", "one_to_many", "price_list_id"],
     ["product", "inventory_batch", "batches", "one_to_many", "product_id"],
     ["store", "inventory_batch", "batches", "one_to_many", "store_id"],
     ["sale", "payment", "payments", "one_to_many", "transaction_id"],
@@ -1411,7 +1429,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     },
     {
       key: "price_list", label: "Price List", plural: "Price Lists", table: "price_lists",
-      fields: [["name", "Name", "text", "name", true], ["active", "Active", "boolean", "active", false]],
+      fields: [
+        ["name", "Name", "text", "name", true],
+        ["channel", "Sales Channel", "text", "channel", true],
+        ["active", "Active", "boolean", "active", false],
+      ],
     },
   ];
 
