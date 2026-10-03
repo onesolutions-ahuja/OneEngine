@@ -31,7 +31,7 @@ function DockItem({ item, mouseX, onActivate }) {
   return (
     <motion.button ref={ref} type="button" className="efb-dock-item" style={{ width }} onClick={onActivate} aria-label={item.label}>
       <span className="efb-dock-icon-wrap">
-        <img className={item.scaled ? 'efb-dock-image efb-dock-image--scaled' : 'efb-dock-image'} src={item.src} alt="" draggable="false" />
+        <img className={`${item.scaled ? 'efb-dock-image efb-dock-image--scaled' : 'efb-dock-image'}${item.id === 'developer' && item.src.includes('one-developer-dock.svg') ? ' efb-dock-image--developer' : ''}`} src={item.src} alt="" draggable="false" />
       </span>
     </motion.button>
   )
