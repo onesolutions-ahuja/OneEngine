@@ -9,6 +9,7 @@ import jwt from "jsonwebtoken";
 import pg from "pg";
 import { initializeDatabase } from "./database/init.js";
 import { bootstrapInitialSuperadmin } from "./database/rbacBootstrap.js";
+import { seedOneSolutionsDemo } from "./database/oneSolutionsSeeder.js";
 import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs } from "./services/platformJobs.js";
@@ -2454,6 +2455,10 @@ async function startServer() {
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
 
+    // Canonical development tenant seed: a clean database must become usable
+    // without manual SQL or copied production data.
+    const oneSolutionsSeed = await seedOneSolutionsDemo(pool);
+
     // Catalogue availability is a core startup requirement, not part of the
     // heavyweight metadata bootstrap. Keep OneStore/package discovery current
     // before the HTTP listener can be reported live.
@@ -2506,7 +2511,13 @@ async function startServer() {
     // potentially long metadata bootstrap so login/E2E cannot be stranded on
     // a legacy identity during rolling deploys. The same idempotent bootstrap
     // runs again after metadata creation to grant any newly-created objects.
-    await bootstrapInitialSuperadmin(pool);
+    await bootstrapInitialSuperadmin(pool, {
+      ...process.env,
+      BOOTSTRAP_SUPERADMIN_COMPANY_ID: oneSolutionsSeed.companyId,
+      BOOTSTRAP_TENANT_SUPERADMIN_EMAIL: "superadmin@onepos.com",
+      BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD: "marvel",
+      BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
+    });
     console.log("onePOS: identity bootstrap ready");
 
     // Reconcile SMSGate inbound webhooks after the HTTP listener is live. This
@@ -2641,7 +2652,16 @@ async function startServer() {
 
     // Identity/profile synchronization remains cheap and intentionally runs on
     // every start so environment-driven bootstrap credentials can still change.
-    await bootstrapInitialSuperadmin(pool);
+    // Re-run the idempotent tenant seed after platform bootstrap so tenant
+    // extension fields/relationships can bind to canonical Platform Objects.
+    await seedOneSolutionsDemo(pool);
+    await bootstrapInitialSuperadmin(pool, {
+      ...process.env,
+      BOOTSTRAP_SUPERADMIN_COMPANY_ID: oneSolutionsSeed.companyId,
+      BOOTSTRAP_TENANT_SUPERADMIN_EMAIL: "superadmin@onepos.com",
+      BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD: "marvel",
+      BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
+    });
     console.log("onePOS: platform bootstrap ready");
 
     const loadWorkflowAutomationActor = async (companyId, preferredUserId = null) => {
