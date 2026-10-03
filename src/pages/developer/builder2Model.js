@@ -95,6 +95,8 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='SUBFLOW'&&!String(n.config?.flow||'').trim()) add('error','SUBFLOW_REQUIRED',`${n.label}: Select a subflow.`,n.id)
     if (n.type==='LOOP'&&!n.config?.collection) add('error','LOOP_COLLECTION_REQUIRED',`${n.label}: Select a collection variable.`,n.id)
     if (n.type==='COLLECTION_SORT'&&!n.config?.collection) add('error','SORT_COLLECTION_REQUIRED',`${n.label}: Select a collection.`,n.id)
+    if (n.type==='COLLECTION_FILTER'&&!n.config?.collection) add('error','FILTER_COLLECTION_REQUIRED',`${n.label}: Select a collection.`,n.id)
+    if (n.type==='COLLECTION_FILTER'&&n.config?.filterMode==='formula'&&!String(n.config?.filterFormula||'').trim()) add('error','FILTER_FORMULA_REQUIRED',`${n.label}: Enter a filter formula.`,n.id)
     if (n.type==='TRANSFORM'&&(!n.config?.source||!n.config?.target)) add('error','TRANSFORM_MAPPING_REQUIRED',`${n.label}: Select source and target data.`,n.id)
     if (n.type==='CUSTOM_ERROR'&&!String(n.config?.message||'').trim()) add('error','CUSTOM_ERROR_MESSAGE_REQUIRED',`${n.label}: Enter an error message.`,n.id)
     if (['GET_RECORDS','CREATE_RECORDS','UPDATE_RECORDS','DELETE_RECORDS'].includes(n.type)&&!n.config?.objectKey) add('error','OBJECT_REQUIRED',`${n.label}: Select an object.`,n.id)
