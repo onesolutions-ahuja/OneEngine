@@ -1028,14 +1028,6 @@ const retailObjects = [
     ],
   },
   {
-    key: "price_list_price", label: "Price List Price", plural: "Price List Prices", table: "price_list_prices",
-    fields: [
-      ["price_list_id", "Price List", "lookup", "price_list_id", true],
-      ["product_id", "Product", "lookup", "product_id", true],
-      ["price", "Price", "currency", "price", true],
-    ],
-  },
-  {
     key: "sale", label: "Sale", plural: "Sales", table: "sales",
     fields: [
       ["invoice_number", "Receipt Number", "text", "receipt_number", false],
@@ -1391,8 +1383,6 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     ["product", "product_availability", "availability", "one_to_many", "product_id"],
     ["store", "product_availability", "product_availability", "one_to_many", "store_id"],
     ["price_list", "product_availability", "product_availability", "one_to_many", "price_list_id"],
-    ["product", "price_list_price", "price_list_prices", "one_to_many", "product_id"],
-    ["price_list", "price_list_price", "prices", "one_to_many", "price_list_id"],
     ["product", "inventory_batch", "batches", "one_to_many", "product_id"],
     ["store", "inventory_batch", "batches", "one_to_many", "store_id"],
     ["sale", "payment", "payments", "one_to_many", "transaction_id"],
