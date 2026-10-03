@@ -2448,12 +2448,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         collection: { type: "string" },
         filters: { type: "array" },
         match: { type: "string", enum: ["all","any"] },
+        formulaExpression: { type: "string" },
       },
-      required: ["collection","filters"],
+      required: ["collection"],
     },
     validation: (action) => {
       if (!action?.collection) throw new Error("Collection Filter requires a collection");
-      if (!Array.isArray(action.filters) || !action.filters.length) throw new Error("Collection Filter requires at least one condition");
+      if (!String(action?.formulaExpression || "").trim() && (!Array.isArray(action.filters) || !action.filters.length)) throw new Error("Collection Filter requires at least one condition or formula");
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
@@ -2478,7 +2479,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       };
       const filters = Array.isArray(action.filters) ? action.filters : [];
       const matchAny = String(action.match || "all").toLowerCase() === "any";
+      const formulaExpression = String(action.formulaExpression || "").trim();
       const output = collection.filter((item) => {
+        if (formulaExpression) {
+          const inputs = {};
+          for (const [key, value] of Object.entries(item && typeof item === "object" ? item : {})) {
+            if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !["id","company_id","store_id","__proto__","constructor","prototype"].includes(key.toLowerCase())) inputs[key] = value;
+          }
+          return Boolean(evaluateWorkflowFormula(formulaExpression, inputs));
+        }
         const results = filters.map((filter) => {
           const left = getPath(item, filter?.field);
           const right = ["is_empty","is_not_empty"].includes(filter?.operator)
@@ -2992,23 +3001,33 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       properties: {
         recordId: { type: "string" },
         fieldValues: { type: "object" },
+        fieldValuesResource: { type: "string" },
       },
-      required: ["recordId", "fieldValues"],
+      required: ["recordId"],
     },
     validation: (action) => {
       if (!action || typeof action !== "object") throw new Error("Update Record requires an action object");
       if (!action.recordId) throw new Error("Update Record requires a recordId");
-      if (!action.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) {
-        throw new Error("Update Record requires fieldValues to be an object");
-      }
+      const hasMap = action.fieldValues && typeof action.fieldValues === "object" && !Array.isArray(action.fieldValues);
+      const hasResource = typeof action.fieldValuesResource === "string" && action.fieldValuesResource.trim();
+      if (!hasMap && !hasResource) throw new Error("Update Record requires field values or a record Resource");
     },
     async: false,
     requiredPermissions: ["records.update"],
     executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
-      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const resolvedRecordId = resolveConfiguredResource(action.recordId, context);
+      const resourceValues = action.fieldValuesResource
+        ? resolveConfiguredResource(action.fieldValuesResource, context, { preserveMissing: false })
+        : null;
+      if (action.fieldValuesResource && (!resourceValues || typeof resourceValues !== "object" || Array.isArray(resourceValues))) {
+        throw new Error("Update Record field values Resource must resolve to one record");
+      }
+      const sourceValues = resourceValues || action.fieldValues || {};
+      const safeValues = Object.fromEntries(Object.entries(sourceValues).filter(([key]) => !["id","company_id","store_id","created_at","updated_at"].includes(String(key))));
+      const resolvedFieldValues = resolveFieldValueMap(safeValues, context);
       const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", updated: null };
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
@@ -5379,7 +5398,7 @@ function evaluateCustomConditionLogic(expression, results = []) {
   return value;
 }
 
-function evaluateResolvedWorkflowCondition(condition, fields = [], context = {}) {
+export function evaluateResolvedWorkflowCondition(condition, fields = [], context = {}) {
   const normalized = resolveWorkflowConditionConfig(condition, context);
   if (!normalized) return true;
   if (String(normalized.formulaExpression || "").trim()) {
