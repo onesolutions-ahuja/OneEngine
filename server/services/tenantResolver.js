@@ -299,9 +299,6 @@ export function createTenantPoolManager(options = {}) {
       connectionString,
       ssl: connectionString.includes("://localhost") || connectionString.includes("://127.0.0.1") ? false : { rejectUnauthorized: false },
       connectionTimeoutMillis: 15000,
-      idle_in_transaction_session_timeout: 30000,
-      lock_timeout: 15000,
-      statement_timeout: 120000,
     });
   }
 
