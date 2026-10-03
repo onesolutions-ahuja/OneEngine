@@ -139,6 +139,15 @@ export async function sendWhatsAppTextMessage({ db, companyId, to, body, convers
     },
   });
   const reference = result.ok ? result.body?.messages?.[0]?.id || null : null;
+  console.info("WhatsApp workflow send result", {
+    companyId,
+    ok: result.ok === true,
+    httpStatus: result.httpStatus || 0,
+    reference: reference || null,
+    recipientMasked: maskPhone(phone),
+    conversationId: conversationId || null,
+    error: result.ok ? null : String(result.errorText || "provider failed").slice(0, 180),
+  });
   if (result.ok && conversationId) {
     await db(
       `INSERT INTO whatsapp_messages
