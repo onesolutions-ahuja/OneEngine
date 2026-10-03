@@ -245,3 +245,29 @@
 .b2-schema-fields legend,.b2-fault-config legend{padding:0 4px;font-size:10px;font-weight:700}
 .b2-schema-fields input,.b2-schema-fields select,.b2-schema-fields textarea{width:100%;box-sizing:border-box}
 .b2-binding-mode{display:grid;gap:4px;font-size:9px!important;color:#706e6b}
+
+.b2-node-targets{
+  max-height:190px;
+  overflow:auto;
+  display:grid;
+  gap:3px;
+  border:1px solid #d8dde6;
+  border-radius:5px;
+  padding:5px;
+  background:#fff;
+}
+.b2-node-targets>span{padding:7px;color:#706e6b;font-size:10px}
+.b2-node-targets label{
+  min-height:34px;
+  display:grid!important;
+  grid-template-columns:18px 1fr!important;
+  align-items:center;
+  gap:6px!important;
+  padding:4px 6px;
+  border-radius:4px;
+  font-weight:400!important;
+}
+.b2-node-targets label:hover{background:#f3f3f3}
+.b2-node-targets input{height:auto!important}
+.b2-node-targets label>span{display:grid;gap:1px}
+.b2-node-targets b{font-size:10px}.b2-node-targets small{font-size:9px;color:#706e6b}
