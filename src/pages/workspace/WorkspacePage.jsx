@@ -216,8 +216,14 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   }, [initialObjectKey, loadingObjects, objects, selectedKey])
 
   useEffect(() => {
-    if (initialRecordId && initialRecordId !== selectedId) setSelectedId(initialRecordId)
-  }, [initialRecordId])
+    // Route record IDs are only authoritative when the route belongs to the
+    // object currently selected. Do not resurrect a stale record ID after an
+    // empty/fresh list has cleared it.
+    if (!initialRecordId || initialObjectKey !== selectedKey) return
+    if (rows.some((row) => String(row.id) === String(initialRecordId)) && initialRecordId !== selectedId) {
+      setSelectedId(initialRecordId)
+    }
+  }, [initialRecordId, initialObjectKey, selectedKey, rows])
 
   useEffect(() => {
     if (!selectedKey) return
@@ -239,14 +245,10 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       const meta = workspaceRes?.data || {}
       const listViewId = meta?.defaultListView?.id || ''
       const recordPath = `/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
-      const recordRes = await cachedGet(recordPath, {
-        cacheKey: `workspace:records:${key}:${listViewId || 'default'}`,
-        forceRefresh,
-        onFresh: (fresh) => {
-          const nextRows = Array.isArray(fresh?.records) ? fresh.records : Array.isArray(fresh?.data) ? fresh.data : []
-          setRows(nextRows)
-        },
-      })
+      // Record lists are operational data and must always come from the API.
+      // Caching an empty list made newly-arrived communication events invisible
+      // until the lazy-cache TTL expired.
+      const recordRes = await apiRequest(recordPath)
       const nextFields = Array.isArray(meta.fields) ? meta.fields : []
       const nextRows = Array.isArray(recordRes?.records)
         ? recordRes.records
