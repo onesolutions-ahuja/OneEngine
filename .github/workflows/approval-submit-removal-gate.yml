@@ -1,0 +1,26 @@
+name: Approval Submit Removal Gate
+
+on:
+  push:
+    branches:
+      - audit/remove-unused-approval-submit
+    paths:
+      - ".github/workflows/approval-submit-removal-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --check server/services/platformFunctionRegistry.js
+      - run: node scripts/audit-workflow-coverage.mjs
+      - run: npm run test:unit
