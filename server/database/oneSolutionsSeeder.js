@@ -204,7 +204,7 @@ export async function seedOneSolutionsDemo(pool) {
         await client.query(
           `INSERT INTO platform_record_associations(object_id,record_id,company_id,custom_values)
            VALUES($1,$2,$3,$4::jsonb)
-           ON CONFLICT(object_id,record_id,company_id)
+           ON CONFLICT(object_id,record_id)
            DO UPDATE SET custom_values=platform_record_associations.custom_values || EXCLUDED.custom_values`,
           [productObject.id,row.id,company.id,JSON.stringify({business_division_id:divisionIds[p.d]})]
         );
