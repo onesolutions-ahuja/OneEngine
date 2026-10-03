@@ -31,4 +31,4 @@ jobs:
       - name: Workflow coverage audit
         run: node scripts/audit-workflow-coverage.mjs
       - name: Core tests
-        run: npm test
+        run: npm run test:unit
