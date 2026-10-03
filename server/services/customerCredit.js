@@ -264,12 +264,3 @@ export function isWalkInCustomer(customerId) {
   return !customerId || customerId === '' || customerId === null;
 }
 
-/** Validate credit limit data before insert/update */
-export function validateCreditLimit(limit) {
-  if (limit === null || limit === undefined) return { valid: true };
-  const n = Number(limit);
-  if (!Number.isFinite(n) || n < 0) {
-    return { valid: false, error: 'Credit limit must be a non-negative number or null for unlimited' };
-  }
-  return { valid: true };
-}
