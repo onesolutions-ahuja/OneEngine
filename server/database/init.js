@@ -1686,7 +1686,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         }
         console.log("onePOS: unused appointment action wrappers removed");
       },
-    },,
+    },
     {
       key: "0046_refresh_persisted_visible_appointment_graph",
       version: "46",
