@@ -1,0 +1,26 @@
+name: Credit Purchase Orphan Cleanup Gate
+
+on:
+  push:
+    branches:
+      - audit/remove-orphaned-credit-purchase-helpers
+    paths:
+      - ".github/workflows/credit-purchase-orphan-cleanup-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --check server/services/customerCredit.js
+      - run: npm run test:unit
+      - run: npm run build
