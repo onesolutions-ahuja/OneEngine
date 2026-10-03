@@ -215,3 +215,4 @@ package_path.write_text(package)
 
 print("Applied obsolete appointment wrapper cleanup.")
 
+# rerun after Assignment correction
