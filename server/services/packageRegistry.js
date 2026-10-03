@@ -134,6 +134,242 @@ export const packageRegistrySchema = `
    WHERE installed_version IS NULL;
 `;
 
+function oneAssistantAppointmentRouterWorkflow() {
+  const condition = (field, value) => ({ match: "all", conditions: [{ field, operator: "equals", value }] });
+  const send = (id, label, channel, message, templateContext = {}) => ({
+    id,
+    label,
+    apiName: id,
+    key: "SEND_APPOINTMENT_MESSAGE",
+    channel,
+    recipient: { path: "sender" },
+    message,
+    templateContext,
+    conversationId: { path: "metadata.conversationId" },
+  });
+
+  const dateMessage = "Welcome. Please choose an appointment date:\n1. {{date1}}\n2. {{date2}}\n3. Enter another date as DD/MM/YYYY\n\nReply 1, 2, or a date in DD/MM/YYYY format.";
+  const slotsMessage = "Available times for {{selectedDate}}:\n{{slotChoices}}\n\nReply with 1-{{slotCount}}.";
+  const invalidDateMessage = "Please share a correct input: reply 1, 2, or enter a future date in DD/MM/YYYY format.";
+  const noSlotsMessage = "There are no available appointments on {{selectedDate}}. Please reply with another date in DD/MM/YYYY format.";
+  const noServiceMessage = "No appointment service is currently available.";
+  const invalidSlotMessage = "Please share a correct input: reply with a number from 1 to {{slotCount}}.";
+  const slotUnavailableMessage = "That time is no longer available. Please choose a new date:\n1. {{date1}}\n2. {{date2}}\n3. Enter another date as DD/MM/YYYY\n\nReply 1, 2, or a date in DD/MM/YYYY format.";
+  const confirmationMessage = "Appointment confirmed for {{appointmentDate}} at {{appointmentTime}}.";
+
+  const startTemplate = {
+    date1: { path: "steps.session_context.date1" },
+    date2: { path: "steps.session_context.date2" },
+  };
+  const smsDateTemplate = {
+    selectedDate: { path: "steps.sms_date_response.selectedDate" },
+    slotChoices: { path: "steps.sms_date_response.slotChoices" },
+    slotCount: { path: "steps.sms_date_response.slotCount" },
+  };
+  const whatsappDateTemplate = {
+    selectedDate: { path: "steps.whatsapp_date_response.selectedDate" },
+    slotChoices: { path: "steps.whatsapp_date_response.slotChoices" },
+    slotCount: { path: "steps.whatsapp_date_response.slotCount" },
+  };
+  const smsSlotTemplate = {
+    slotCount: { path: "steps.sms_session_context.bookingCase.state.slots.length", fallback: 5 },
+    date1: { path: "steps.sms_slot_response.date1" },
+    date2: { path: "steps.sms_slot_response.date2" },
+    appointmentDate: { path: "steps.sms_slot_response.appointmentDate" },
+    appointmentTime: { path: "steps.sms_slot_response.appointmentTime" },
+  };
+  const whatsappSlotTemplate = {
+    slotCount: { path: "steps.whatsapp_session_context.bookingCase.state.slots.length", fallback: 5 },
+    date1: { path: "steps.whatsapp_slot_response.date1" },
+    date2: { path: "steps.whatsapp_slot_response.date2" },
+    appointmentDate: { path: "steps.whatsapp_slot_response.appointmentDate" },
+    appointmentTime: { path: "steps.whatsapp_slot_response.appointmentTime" },
+  };
+
+  const actions = [
+    {
+      id: "session_context",
+      label: "Start / Resume Booking Session",
+      apiName: "session_context",
+      key: "APPOINTMENT_SESSION_CONTEXT",
+      channel: { path: "channel" },
+      sender: { path: "sender" },
+      recipient: { path: "recipient" },
+      body: { path: "body" },
+      sourceMessageId: { path: "providerMessageId", fallback: null },
+      conversationId: { path: "metadata.conversationId", fallback: "" },
+      customerId: { path: "metadata.customerId", fallback: null },
+    },
+    {
+      id: "channel_router",
+      label: "Route by Communication Channel",
+      apiName: "channel_router",
+      key: "CONDITION",
+      outcomes: [
+        { id: "sms", label: "SMS", condition: condition("steps.session_context.channel", "SMS"), branch: ["sms_session_context"] },
+        { id: "whatsapp", label: "WhatsApp", condition: condition("steps.session_context.channel", "WHATSAPP"), branch: ["whatsapp_session_context"] },
+      ],
+      defaultLabel: "Unsupported Channel",
+      defaultBranch: [],
+    },
+
+    {
+      id: "sms_session_context",
+      label: "SMS Booking State",
+      apiName: "sms_session_context",
+      key: "CONDITION",
+      outcomes: [
+        { id: "start", label: "New / Restarted Session", condition: condition("steps.session_context.route", "STARTED"), branch: ["sms_send_date"] },
+        { id: "date", label: "Waiting for Date", condition: condition("steps.session_context.route", "AWAITING_DATE"), branch: ["sms_date_response","sms_date_result"] },
+        { id: "slot", label: "Waiting for Slot", condition: condition("steps.session_context.route", "AWAITING_SLOT"), branch: ["sms_slot_response","sms_slot_result"] },
+      ],
+      defaultLabel: "No Active Booking",
+      defaultBranch: [],
+    },
+    send("sms_send_date","SMS · Send Date Choices","SMS",dateMessage,startTemplate),
+    {
+      id: "sms_date_response",
+      label: "SMS · Process Date Reply",
+      apiName: "sms_date_response",
+      key: "PROCESS_APPOINTMENT_DATE_RESPONSE",
+      bookingCaseId: { path: "steps.session_context.bookingCaseId" },
+      body: { path: "body" },
+    },
+    {
+      id: "sms_date_result",
+      label: "SMS · Route Date Result",
+      apiName: "sms_date_result",
+      key: "CONDITION",
+      outcomes: [
+        { id: "slots", label: "Slots Found", condition: condition("steps.sms_date_response.result", "SLOTS_READY"), branch: ["sms_send_slots"] },
+        { id: "invalid", label: "Invalid Date", condition: condition("steps.sms_date_response.result", "INVALID_DATE"), branch: ["sms_send_invalid_date"] },
+        { id: "none", label: "No Slots", condition: condition("steps.sms_date_response.result", "NO_SLOTS"), branch: ["sms_send_no_slots"] },
+        { id: "service", label: "No Service", condition: condition("steps.sms_date_response.result", "NO_SERVICE"), branch: ["sms_send_no_service"] },
+      ],
+      defaultLabel: "No Reply",
+      defaultBranch: [],
+    },
+    send("sms_send_slots","SMS · Send Available Slots","SMS",slotsMessage,smsDateTemplate),
+    send("sms_send_invalid_date","SMS · Invalid Date Reply","SMS",invalidDateMessage),
+    send("sms_send_no_slots","SMS · No Slots Reply","SMS",noSlotsMessage,{ selectedDate: { path: "steps.sms_date_response.selectedDate" } }),
+    send("sms_send_no_service","SMS · No Service Reply","SMS",noServiceMessage),
+    {
+      id: "sms_slot_response",
+      label: "SMS · Process Slot Reply",
+      apiName: "sms_slot_response",
+      key: "PROCESS_APPOINTMENT_SLOT_RESPONSE",
+      bookingCaseId: { path: "steps.session_context.bookingCaseId" },
+      body: { path: "body" },
+    },
+    {
+      id: "sms_slot_result",
+      label: "SMS · Route Slot Result",
+      apiName: "sms_slot_result",
+      key: "CONDITION",
+      outcomes: [
+        { id: "confirmed", label: "Confirmed", condition: condition("steps.sms_slot_response.result", "CONFIRMED"), branch: ["sms_send_confirmation"] },
+        { id: "invalid", label: "Invalid Slot", condition: condition("steps.sms_slot_response.result", "INVALID_SLOT"), branch: ["sms_send_invalid_slot"] },
+        { id: "unavailable", label: "Slot No Longer Available", condition: condition("steps.sms_slot_response.result", "SLOT_UNAVAILABLE"), branch: ["sms_send_slot_unavailable"] },
+      ],
+      defaultLabel: "No Reply",
+      defaultBranch: [],
+    },
+    send("sms_send_confirmation","SMS · Send Confirmation","SMS",confirmationMessage,smsSlotTemplate),
+    send("sms_send_invalid_slot","SMS · Invalid Slot Reply","SMS",invalidSlotMessage,smsSlotTemplate),
+    send("sms_send_slot_unavailable","SMS · Slot Unavailable Reply","SMS",slotUnavailableMessage,smsSlotTemplate),
+
+    {
+      id: "whatsapp_session_context",
+      label: "WhatsApp Booking State",
+      apiName: "whatsapp_session_context",
+      key: "CONDITION",
+      outcomes: [
+        { id: "start", label: "New / Restarted Session", condition: condition("steps.session_context.route", "STARTED"), branch: ["whatsapp_send_date"] },
+        { id: "date", label: "Waiting for Date", condition: condition("steps.session_context.route", "AWAITING_DATE"), branch: ["whatsapp_date_response","whatsapp_date_result"] },
+        { id: "slot", label: "Waiting for Slot", condition: condition("steps.session_context.route", "AWAITING_SLOT"), branch: ["whatsapp_slot_response","whatsapp_slot_result"] },
+      ],
+      defaultLabel: "No Active Booking",
+      defaultBranch: [],
+    },
+    send("whatsapp_send_date","WhatsApp · Send Date Choices","WHATSAPP",dateMessage,startTemplate),
+    {
+      id: "whatsapp_date_response",
+      label: "WhatsApp · Process Date Reply",
+      apiName: "whatsapp_date_response",
+      key: "PROCESS_APPOINTMENT_DATE_RESPONSE",
+      bookingCaseId: { path: "steps.session_context.bookingCaseId" },
+      body: { path: "body" },
+    },
+    {
+      id: "whatsapp_date_result",
+      label: "WhatsApp · Route Date Result",
+      apiName: "whatsapp_date_result",
+      key: "CONDITION",
+      outcomes: [
+        { id: "slots", label: "Slots Found", condition: condition("steps.whatsapp_date_response.result", "SLOTS_READY"), branch: ["whatsapp_send_slots"] },
+        { id: "invalid", label: "Invalid Date", condition: condition("steps.whatsapp_date_response.result", "INVALID_DATE"), branch: ["whatsapp_send_invalid_date"] },
+        { id: "none", label: "No Slots", condition: condition("steps.whatsapp_date_response.result", "NO_SLOTS"), branch: ["whatsapp_send_no_slots"] },
+        { id: "service", label: "No Service", condition: condition("steps.whatsapp_date_response.result", "NO_SERVICE"), branch: ["whatsapp_send_no_service"] },
+      ],
+      defaultLabel: "No Reply",
+      defaultBranch: [],
+    },
+    send("whatsapp_send_slots","WhatsApp · Send Available Slots","WHATSAPP",slotsMessage,whatsappDateTemplate),
+    send("whatsapp_send_invalid_date","WhatsApp · Invalid Date Reply","WHATSAPP",invalidDateMessage),
+    send("whatsapp_send_no_slots","WhatsApp · No Slots Reply","WHATSAPP",noSlotsMessage,{ selectedDate: { path: "steps.whatsapp_date_response.selectedDate" } }),
+    send("whatsapp_send_no_service","WhatsApp · No Service Reply","WHATSAPP",noServiceMessage),
+    {
+      id: "whatsapp_slot_response",
+      label: "WhatsApp · Process Slot Reply",
+      apiName: "whatsapp_slot_response",
+      key: "PROCESS_APPOINTMENT_SLOT_RESPONSE",
+      bookingCaseId: { path: "steps.session_context.bookingCaseId" },
+      body: { path: "body" },
+    },
+    {
+      id: "whatsapp_slot_result",
+      label: "WhatsApp · Route Slot Result",
+      apiName: "whatsapp_slot_result",
+      key: "CONDITION",
+      outcomes: [
+        { id: "confirmed", label: "Confirmed", condition: condition("steps.whatsapp_slot_response.result", "CONFIRMED"), branch: ["whatsapp_send_confirmation"] },
+        { id: "invalid", label: "Invalid Slot", condition: condition("steps.whatsapp_slot_response.result", "INVALID_SLOT"), branch: ["whatsapp_send_invalid_slot"] },
+        { id: "unavailable", label: "Slot No Longer Available", condition: condition("steps.whatsapp_slot_response.result", "SLOT_UNAVAILABLE"), branch: ["whatsapp_send_slot_unavailable"] },
+      ],
+      defaultLabel: "No Reply",
+      defaultBranch: [],
+    },
+    send("whatsapp_send_confirmation","WhatsApp · Send Confirmation","WHATSAPP",confirmationMessage,whatsappSlotTemplate),
+    send("whatsapp_send_invalid_slot","WhatsApp · Invalid Slot Reply","WHATSAPP",invalidSlotMessage,whatsappSlotTemplate),
+    send("whatsapp_send_slot_unavailable","WhatsApp · Slot Unavailable Reply","WHATSAPP",slotUnavailableMessage,whatsappSlotTemplate),
+  ];
+
+  return {
+    objectKey: "communication_event",
+    name: "OneAssistant - Booking Channel Router",
+    triggerKey: "communication_message_received",
+    conditions: [],
+    action: {
+      type: "workflow",
+      builder2: true,
+      flowType: "platform_event",
+      apiName: "OneAssistant_Booking_Channel_Router",
+      description: "Editable SMS and WhatsApp appointment conversation. APPOINTMENT restarts any prior open session for the same phone number, then routes by channel and booking state.",
+      apiVersion: "66.0",
+      runContext: "system",
+      start: { eventKey: "communication_message_received" },
+      scope: "one_assistant",
+      subflowCapability: "assistant.booking.router",
+      resources: [],
+      tests: [],
+      builderGroups: [],
+      builderLayout: { mode: "AUTO", positions: {}, edges: [] },
+      actions,
+    },
+    active: true,
+  };
+}
+
 export function packageDefinition(entry) {
   const iconAssetKeys = {
     uber_eats: "uber-eats",
@@ -654,19 +890,7 @@ export function packageDefinition(entry) {
           { objectKey: "appointment_booking_case", viewKey: "recent", label: "Recent Booking Cases", columns: ["channel","sender","status","service_id","appointment_id","created_at"], sort: { field: "created_at", direction: "desc" }, pageSize: 50, isDefault: true }
         ],
         workflows: [
-          {
-            objectKey: "communication_event",
-            name: "OneAssistant - Booking Channel Router",
-            triggerKey: "communication_message_received",
-            conditions: [],
-            action: {
-              type: "workflow",
-              scope: "one_assistant",
-              subflowCapability: "assistant.booking.router",
-              actions: []
-            },
-            active: false,
-          },
+          oneAssistantAppointmentRouterWorkflow(),
           {
             objectKey: "communication_event",
             name: "OneAssistant - Email Booking",
@@ -686,62 +910,6 @@ export function packageDefinition(entry) {
               ]
             },
             active: false,
-          },
-          {
-            objectKey: "communication_event",
-            name: "OneAssistant - SMS Booking",
-            triggerKey: "communication_message_received",
-            conditions: [{ field: "channel", operator: "equals", value: "SMS" }, { field: "body", operator: "contains", value: "appointment" }],
-            action: {
-              type: "workflow",
-              scope: "one_assistant",
-              channel: "SMS",
-              subflowCapability: "assistant.communication.SMS",
-              requiredPackageKey: "sms_connector",
-              priority: 10,
-              actions: [
-                { id: "create_case", key: "CREATE_APPOINTMENT_BOOKING_CASE", channel: "SMS" },
-                { id: "issue_link", key: "ISSUE_APPOINTMENT_BOOKING_LINK", bookingCaseId: { path: "steps.create_case.bookingCase.id" }, ttlMinutes: 30 },
-                { id: "send_link", key: "SEND_SMS", recipient: { path: "sender" }, templateKey: "assistant_sms_booking_link", templateContext: { bookingUrl: { path: "steps.issue_link.link.url" } } }
-              ]
-            },
-            active: false,
-          },
-          {
-            objectKey: "communication_event",
-            name: "OneAssistant - WhatsApp Booking",
-            triggerKey: "communication_message_received",
-            conditions: [{ field: "channel", operator: "equals", value: "WHATSAPP" }],
-            action: {
-              type: "workflow",
-              scope: "one_assistant",
-              channel: "WHATSAPP",
-              subflowCapability: "assistant.communication.WHATSAPP",
-              requiredPackageKey: "whatsapp_connector",
-              priority: 10,
-              actions: [
-                {
-                  id: "appointment_conversation",
-                  key: "PROCESS_APPOINTMENT_CONVERSATION",
-                  channel: "WHATSAPP",
-                  sender: { path: "sender" },
-                  recipient: { path: "recipient" },
-                  body: { path: "body" },
-                  sourceMessageId: { path: "providerMessageId" },
-                  conversationId: { path: "metadata.conversationId" },
-                  customerId: { path: "metadata.customerId" }
-                },
-                {
-                  id: "send_reply",
-                  key: "SEND_APPOINTMENT_CONVERSATION_REPLY",
-                  channel: "WHATSAPP",
-                  recipient: { path: "sender" },
-                  message: { path: "steps.appointment_conversation.reply" },
-                  conversationId: { path: "metadata.conversationId" }
-                }
-              ]
-            },
-            active: true,
           },
           {
             objectKey: "appointment_booking_case",
