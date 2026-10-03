@@ -62,6 +62,39 @@ const normalizeNodeType=value=>{
   if(type==='CONDITION')return 'DECISION'
   return type
 }
+const conditionOperator=value=>({
+  'Equals':'equals','Does Not Equal':'not_equals','Is Null':'is_empty','Is Changed':'changed',
+  'Greater Than':'greater_than','Greater Than or Equal':'greater_than_or_equal',
+  'Less Than':'less_than','Less Than or Equal':'less_than_or_equal',
+  'Contains':'contains','Starts With':'contains','Ends With':'contains','In':'equals','Not In':'not_equals'
+}[String(value||'')]||String(value||'equals').toLowerCase().replaceAll(' ','_'))
+const runtimeConditions=(rows=[])=>rows.filter(row=>row?.resource).map(row=>({field:row.resource,operator:conditionOperator(row.operator),...(!['is_empty','is_not_empty','changed'].includes(conditionOperator(row.operator))?{value:row.value}: {})}))
+const fieldValueMap=(rows=[])=>Object.fromEntries(rows.filter(row=>row?.field).map(row=>[row.field,row.value]))
+const parseObjectText=(value='')=>{try{const parsed=JSON.parse(String(value||'{}'));return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:{}}catch{return {}}}
+const resourceVariableType=(value,resources=[])=>{const resource=resources.find(item=>item.value===value||item.apiName===value);if(resource?.isCollection)return 'collection';const type=String(resource?.dataType||resource?.type||'text').toLowerCase();if(type.includes('number')||type.includes('currency')||type.includes('decimal'))return 'number';if(type.includes('bool'))return 'boolean';if(type.includes('date/time')||type.includes('datetime'))return 'datetime';if(type==='date')return 'date';if(type.includes('record'))return 'record';return 'text'}
+const assignmentOperator=value=>({'Equals':'set','Add':'add','Subtract':'subtract','Add Item':'append'}[String(value||'')]||'set')
+const waitSeconds=(amount,unit)=>Math.max(0,Number(amount||0))*(unit==='days'?86400:unit==='hours'?3600:60)
+const branchTargets=(edges=[],sourceId,handle)=>edges.filter(edge=>String(edge.source)===String(sourceId)&&(!handle||String(edge.sourceHandle||'default')===String(handle))).map(edge=>String(edge.target)).filter(Boolean)
+const serializeBuilderNode=(node,{nodes=[],edges=[],resources=[]}={})=>{
+  const p=node.config||{}
+  const base={id:node.id,label:node.label,apiName:node.apiName,description:node.description||'',_builder:{type:node.type,config:p}}
+  if(node.type==='GET_RECORDS')return {...base,type:'GET_RECORDS',objectKey:p.objectKey,filters:runtimeConditions(p.conditions),match:p.conditionLogic==='any'?'any':'all',sortField:p.sortBy||undefined,sortDirection:p.sortOrder&&p.sortOrder!=='none'?p.sortOrder:undefined,limit:p.limit==='all'?50:p.limit==='limited'?Number(p.maxRecords||50):1,store:p.limit==='all'||p.limit==='limited'?'all':'first'}
+  if(node.type==='CREATE_RECORDS')return {...base,type:'CREATE_RECORD',objectKey:p.objectKey,fieldValues:fieldValueMap(p.fieldValues)}
+  if(node.type==='UPDATE_RECORDS'){const values=fieldValueMap(p.fieldValues);return p.updateMode==='collection'?{...base,type:'BULK_UPDATE_RECORDS',objectKey:p.objectKey,recordIds:p.sourceRecord,fieldValues:values}:{...base,type:'UPDATE_RECORD',objectKey:p.objectKey,recordId:p.sourceRecord,fieldValues:values}}
+  if(node.type==='DELETE_RECORDS')return {...base,type:'DELETE_RECORD',objectKey:p.objectKey,recordId:p.sourceRecord}
+  if(node.type==='ASSIGNMENT')return {...base,type:'ASSIGNMENT',assignments:(p.assignments||[]).map(row=>({variable:String(row.resource||'').startsWith('variables.')?row.resource:`variables.${row.resource||''}`,variableType:resourceVariableType(row.resource,resources),operator:assignmentOperator(row.operator),value:row.value}))}
+  if(node.type==='DECISION')return {...base,type:'CONDITION',outcomes:(p.outcomes||[]).map((outcome,index)=>({id:String(outcome.id||`outcome-${index+1}`),label:outcome.label||`Outcome ${index+1}`,condition:{match:outcome.conditionLogic==='any'?'any':'all',conditions:runtimeConditions(outcome.conditions)},branch:outcome.branchTarget?[String(outcome.branchTarget)]:branchTargets(edges,node.id,`outcome:${outcome.id||index}`)})),defaultLabel:p.defaultOutcomeLabel||'Default Outcome',defaultBranch:p.defaultBranchTarget?[String(p.defaultBranchTarget)]:branchTargets(edges,node.id,'default')}
+  if(node.type==='LOOP')return {...base,type:'LOOP',collection:p.collection,itemVariable:p.itemVariable||`${node.apiName||'Loop'}_Item`,iterationOrder:p.direction==='last'?'LAST_TO_FIRST':'FIRST_TO_LAST',bodyBranch:p.bodyBranchTarget?[String(p.bodyBranchTarget)]:branchTargets(edges,node.id,'body')}
+  if(node.type==='COLLECTION_FILTER')return {...base,type:'COLLECTION_FILTER',collection:p.collection,filters:runtimeConditions(p.conditions),match:p.conditionLogic==='any'?'any':'all'}
+  if(node.type==='COLLECTION_SORT')return {...base,type:'COLLECTION_SORT',collection:p.collection,sortField:p.sortField,sortDirection:p.order||'asc',limit:Number(p.max||0)}
+  if(node.type==='WAIT'){if(p.waitType==='date')return {...base,type:'WAIT_UNTIL_DATE',resumeAt:p.dateResource};if(p.waitType==='conditions')return {...base,type:'WAIT_FOR_CONDITIONS',condition:{match:p.conditionLogic==='any'?'any':'all',conditions:runtimeConditions(p.conditions)},pollSeconds:Number(p.pollSeconds||60)};return {...base,type:'WAIT',durationSeconds:waitSeconds(p.amount,p.unit||'minutes')}}
+  if(node.type==='TRANSFORM')return {...base,type:'TRANSFORM',collection:p.source,transformMappings:parseObjectText(p.mappingsText)}
+  if(node.type==='CUSTOM_ERROR')return {...base,type:'CUSTOM_ERROR',errorMessage:p.message,errorField:p.location==='field'?p.field:undefined}
+  if(node.type==='SUBFLOW')return {...base,type:'RUN_SUBFLOW',workflowId:p.flow,inputs:p.inputs||{},outputs:p.outputs||{}}
+  if(node.type==='SCREEN')return {...base,type:'SCREEN',screen:{label:node.label,apiName:node.apiName,components:(p.components||[]).map(item=>({...item,name:item.apiName||item.name||item.id}))},allowBack:p.navigation!=='next'&&p.navigation!=='finish',allowNext:p.navigation!=='finish',allowFinish:p.navigation==='finish',showFooter:p.showFooter!==false}
+  if(node.type==='ACTION'){const inputs=p.inputs&&typeof p.inputs==='object'?p.inputs:parseObjectText(p.inputsText);return {...base,type:p.actionKey||'STOP',...inputs}}
+  return {...base,type:node.type,...p}
+}
 const recordStartFromTrigger=(triggerKey='',objectKey='',action={})=>{
   const key=String(triggerKey||'').toLowerCase()
   const trigger=key.includes('delete')?'deleted':key.includes('create')&&!key.includes('update')?'created':key.includes('update')&&!key.includes('create')?'updated':'created_or_updated'
