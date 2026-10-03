@@ -2854,23 +2854,47 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
         throw new Error(`Invalid package field source column on ${objectKey}.${apiName}`);
       }
       const existingField = await db(
-        "SELECT id,company_id,source_package_id FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id IS NULL OR company_id=$3) ORDER BY company_id NULLS FIRST LIMIT 1",
+        "SELECT id,company_id,source_package_id,source_column,field_type,managed,user_modified FROM platform_fields WHERE object_id=$1 AND api_name=$2 AND (company_id IS NULL OR company_id=$3) ORDER BY company_id NULLS FIRST LIMIT 1",
         [object.id, apiName, fieldCompanyId]
       );
       if (existingField.rows.length) {
-        if (existingField.rows[0].company_id && existingField.rows[0].company_id !== fieldCompanyId) {
+        const existing = existingField.rows[0];
+        if (existing.company_id && existing.company_id !== fieldCompanyId) {
           throw new Error(`Platform field belongs to another company: ${objectKey}.${apiName}`);
         }
-        if (existingField.rows[0].source_package_id && existingField.rows[0].source_package_id !== packageId) {
+        if (existing.source_package_id && existing.source_package_id !== packageId) {
           throw new Error(`Platform field is owned by another package: ${objectKey}.${apiName}`);
         }
-        if (!existingField.rows[0].source_package_id) {
+        if (!existing.source_package_id) {
           const priorOwner = await db(
             "SELECT 1 FROM package_metadata_ownership WHERE metadata_type='field' AND metadata_id=$1 AND package_id=$2 AND managed=true",
-            [existingField.rows[0].id, packageId]
+            [existing.id, packageId]
           );
           if (!priorOwner.rows.length) {
-            throw new Error(`Package cannot take ownership of existing custom Platform field: ${objectKey}.${apiName}`);
+            // Older platform bootstrap builds created canonical physical fields
+            // (for example Product.name) before package ownership metadata
+            // existed. They are safe to adopt only when they are untouched,
+            // unmanaged legacy metadata pointing at the exact same physical
+            // source column/type declared by the package. Custom fields,
+            // modified fields, formulas, and mismatched mappings remain blocked.
+            const declaredType = field.fieldType || field.field_type || "text";
+            const safeLegacyAdoption =
+              existing.user_modified === false &&
+              existing.managed === false &&
+              Boolean(sourceColumn) &&
+              existing.source_column === sourceColumn &&
+              existing.field_type === declaredType;
+            if (!safeLegacyAdoption) {
+              throw new Error(`Package cannot take ownership of existing custom Platform field: ${objectKey}.${apiName}`);
+            }
+            await db(
+              `INSERT INTO package_metadata_ownership
+               (package_id,package_version,metadata_type,metadata_id,managed)
+               VALUES ($1,$3,'field',$2,true)
+               ON CONFLICT (package_id,metadata_type,metadata_id)
+               DO UPDATE SET managed=true,package_version=EXCLUDED.package_version,updated_at=NOW()`,
+              [packageId, existing.id, packageVersion]
+            );
           }
         }
         await db(
