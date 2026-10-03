@@ -26,7 +26,7 @@ test("OneAssistant uses one active communication-event router for SMS and WhatsA
   assert.ok(keys.includes("CREATE_RECORD"));
   assert.ok(keys.includes("UPDATE_RECORD"));
   assert.ok(keys.includes("CONDITION"));
-  assert.ok(keys.includes("SET_VARIABLE"));
+  assert.ok(keys.includes("ASSIGNMENT"));
   assert.ok(keys.includes("SEND_APPOINTMENT_MESSAGE"));
   assert.equal(keys.includes("APPOINTMENT_SESSION_CONTEXT"), false);
   assert.equal(keys.includes("PROCESS_APPOINTMENT_CONVERSATION"), false);
@@ -87,7 +87,7 @@ test("workflow decisions can route on outputs from previous steps", async () => 
 test("booking router exposes business logic as Builder primitives", () => {
   const { workflow } = oneAssistantRouter();
   const keys = workflow.action.actions.map((action) => action.key);
-  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","SET_VARIABLE","SEND_APPOINTMENT_MESSAGE"]) {
+  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","ASSIGNMENT","FORMULA","FIND_APPOINTMENT_SLOTS","SEND_APPOINTMENT_MESSAGE"]) {
     const definition = getWorkflowActionDefinition(key);
     assert.ok(definition, `${key} must be registered`);
     assert.equal(typeof definition.executor, "function");
