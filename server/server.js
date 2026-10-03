@@ -3590,10 +3590,9 @@ async function startServer() {
                 // durable schedule even if the workflow itself is paused by WAIT,
                 // so recurring schedules are not blocked by a long-running run.
                 await completeScheduledWorkflow({ db, payload });
-                console.info("Platform event workflow job completed", {
+                console.info("Platform scheduled workflow job completed", {
                   jobId: job.id,
                   workflowId: workflow.id,
-                  eventId: payload.eventId || null,
                   status: waiting ? "WAITING" : "COMPLETED",
                   steps: results.map((entry) => ({
                     stepId: entry?.stepId || null,
@@ -3714,6 +3713,17 @@ async function startServer() {
                     [waiting ? "WAITING" : "COMPLETED", run.id, job.company_id, waiting]
                   );
                 }
+                console.info("Platform event workflow job completed", {
+                  jobId: job.id,
+                  workflowId: workflow.id,
+                  eventId: payload.eventId || null,
+                  status: waiting ? "WAITING" : "COMPLETED",
+                  steps: results.map((entry) => ({
+                    stepId: entry?.stepId || null,
+                    action: entry?.action || null,
+                    status: entry?.result?.status || null,
+                  })),
+                });
                 return { status: waiting ? "WAITING" : "COMPLETED", results };
               } catch (error) {
                 console.error("Platform event workflow execution error", {
@@ -3888,6 +3898,7 @@ async function startServer() {
             idempotencyKey: `event-workflow-recovery-v3:${item.workflow_id}:${item.event_id}`,
           });
         }
+        console.log("onePOS: event workflow recovery scan", { recoverable: recoverable.rowCount || 0 });
         if (recoverable.rowCount) {
           console.log("onePOS: recovered recent event workflow jobs", { count: recoverable.rowCount });
         }
