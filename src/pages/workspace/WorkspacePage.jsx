@@ -298,8 +298,66 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   }
 
   useEffect(() => {
-    void loadObject()
-  }, [selectedKey])
+    // selectedKey is initialized from a deep link before the object catalogue
+    // has loaded. In that case selectedKey itself never changes when objects
+    // arrive, so an effect that only depends on selectedKey runs too early
+    // (selectedObject is null) and never retries. Depend on the resolved object
+    // identity as well so direct /workspace/:object/records/:id URLs load on
+    // first render instead of only after switching to another object and back.
+    if (selectedObject) void loadObject(selectedObject)
+  }, [selectedKey, selectedObject?.id])
+
+  useEffect(() => {
+    if (!selectedObject) return undefined
+
+    let cancelled = false
+    let inFlight = false
+
+    const refreshVisibleRows = async () => {
+      if (cancelled || inFlight) return
+      if (typeof document !== 'undefined' && document.hidden) return
+      inFlight = true
+      try {
+        const key = objectKey(selectedObject)
+        const listViewId = runtimeMeta?.defaultListView?.id || ''
+        const path = `/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
+        const response = await apiRequest(path)
+        if (cancelled) return
+        const nextRows = Array.isArray(response?.records)
+          ? response.records
+          : Array.isArray(response?.data)
+            ? response.data
+            : []
+        setRows(nextRows)
+        setSelectedId((current) => {
+          if (current && nextRows.some((row) => String(row.id) === String(current))) return current
+          if (formFactor === 'mobile') return ''
+          return nextRows[0]?.id || ''
+        })
+      } catch {
+        // Background refresh must not blank a working Workspace view. The next
+        // poll/focus refresh retries automatically; foreground loads still show
+        // real errors through loadObject().
+      } finally {
+        inFlight = false
+      }
+    }
+
+    const timer = window.setInterval(() => { void refreshVisibleRows() }, 3000)
+    const onFocus = () => { void refreshVisibleRows() }
+    const onVisibility = () => {
+      if (!document.hidden) void refreshVisibleRows()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [selectedKey, selectedObject?.id, runtimeMeta?.defaultListView?.id, formFactor])
 
   useEffect(() => {
     if (!selectedObject || !selectedId) {
