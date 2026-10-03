@@ -2921,21 +2921,31 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         objectKey: { type: "string" },
         objectId: { type: "string" },
         fieldValues: { type: "object" },
+        fieldValuesResource: { type: "string" },
       },
-      required: ["fieldValues"],
+      required: [],
     },
     validation: (action) => {
       if (!action || typeof action !== "object") throw new Error("Create Record requires an action object");
-      if (!action.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) {
-        throw new Error("Create Record requires fieldValues to be an object");
-      }
+      const hasMap = action.fieldValues && typeof action.fieldValues === "object" && !Array.isArray(action.fieldValues);
+      const hasResource = typeof action.fieldValuesResource === "string" && action.fieldValuesResource.trim();
+      if (!hasMap && !hasResource) throw new Error("Create Record requires field values or a record Resource");
     },
     async: false,
     requiredPermissions: ["records.create"],
     executor: async ({ db, action, req, object, companyId, fields, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const resourceValues = action.fieldValuesResource
+        ? resolveConfiguredResource(action.fieldValuesResource, context, { preserveMissing: false })
+        : null;
+      if (action.fieldValuesResource && (!resourceValues || typeof resourceValues !== "object" || Array.isArray(resourceValues))) {
+        throw new Error("Create Record field values Resource must resolve to one record");
+      }
+      const sourceValues = resourceValues || action.fieldValues || {};
+      const safeValues = Object.fromEntries(Object.entries(sourceValues).filter(([key]) => !["id","company_id","store_id","created_at","updated_at"].includes(String(key))));
+      const resolvedFieldValues = resolveFieldValueMap(safeValues, context);
       const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", created: null };
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
