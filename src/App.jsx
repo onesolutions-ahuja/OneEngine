@@ -11,6 +11,7 @@ import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import { appIconUrl, applyDefaultAppIcon, localAppIcon, marketplaceSearchText, readMarketplaceCache, resolveAppOpenRoute, writeMarketplaceCache } from './utils/appMarketplace'
 import JarvisOrb, { ORB_STATES } from './components/jarvis/JarvisOrb'
 import JarvisPanel from './components/jarvis/JarvisPanel'
+import IdentityAssuranceSettings from './pages/settings/IdentityAssuranceSettings'
 const CHUNK_RETRY_PARAM = '_oe_chunk_retry'
 const CHUNK_LOAD_RE = /failed to fetch dynamically imported module|importing a module script failed|loading chunk .* failed|error loading dynamically imported module|module script/i
 
