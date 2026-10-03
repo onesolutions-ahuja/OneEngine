@@ -9390,7 +9390,7 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
         if (selectedValues.length) {
           const placeholders = selectedValues.map((item) => {
             params.push(item);
-            return `${params.length}`;
+            return `$${params.length}`;
           });
           clauses.push(`${columnSql} IN (${placeholders.join(",")})`);
         }
@@ -9412,7 +9412,7 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
           : operator === "starts_with"
             ? `${String(rawValue)}%`
             : rawValue);
-        const placeholder = `${params.length}`;
+        const placeholder = `$${params.length}`;
         if (operator === "equals") clauses.push(`${columnSql}=${placeholder}`);
         else if (operator === "not_equals") clauses.push(`(${columnSql}<>${placeholder} OR ${columnSql} IS NULL)`);
         else if (operator === "contains") clauses.push(`CAST(${columnSql} AS TEXT) ILIKE ${placeholder}`);
