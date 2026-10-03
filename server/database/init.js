@@ -1686,7 +1686,36 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         }
         console.log("onePOS: unused appointment action wrappers removed");
       },
-    },
+    },,
+    {
+      key: "0046_refresh_persisted_visible_appointment_graph",
+      version: "46",
+      name: "Refresh persisted appointment graph with rejoined channel branches",
+      up: async client => {
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        const rows = await client.query(
+          `SELECT id,company_id FROM platform_rules
+            WHERE company_id IS NOT NULL
+              AND (
+                name='OneAssistant - Booking Channel Router'
+                OR action::text LIKE '%assistant.booking.router%'
+                OR action::text LIKE '%OneAssistant_Booking_Channel_Router%'
+              )`
+        );
+        for (const row of rows.rows) {
+          await client.query(
+            `UPDATE platform_rules
+                SET trigger_key=$2,conditions=$3::jsonb,action=$4::jsonb,
+                    active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW()
+              WHERE id=$1 AND company_id=$5`,
+            [row.id,router.triggerKey,JSON.stringify(router.conditions || []),JSON.stringify(router.action),row.company_id]
+          );
+        }
+        console.log(`onePOS: refreshed ${rows.rowCount || 0} persisted visible appointment workflow graphs`);
+      },
+    }
 
   ]);
 
