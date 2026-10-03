@@ -3743,3 +3743,12 @@
 .efb-dock-jarvis .jarvis-orb-container{pointer-events:auto}
 .efb-dock-jarvis .jarvis-orb-container::before{background:rgba(54,58,66,.62)!important;border-color:rgba(255,255,255,.26)!important;box-shadow:0 8px 20px rgba(18,24,36,.22),inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(0,0,0,.10)!important;border-radius:50%!important}
 @media(max-width:680px){.efb-dock-zone{display:none}}
+
+
+/* OneDeveloper artwork is a traced square SVG; clip the rendered asset itself so
+   its source-canvas corners can never show during dock magnification. */
+.efb-dock-image--developer {
+  border-radius: 22%;
+  clip-path: inset(0 round 22%);
+  -webkit-clip-path: inset(0 round 22%);
+}
