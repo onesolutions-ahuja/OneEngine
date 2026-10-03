@@ -90,13 +90,13 @@ test("workflow decisions can route on outputs from previous steps", async () => 
 test("booking router exposes business logic as Builder primitives", () => {
   const { workflow } = oneAssistantRouter();
   const keys = workflow.action.actions.map((action) => action.key);
-  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","ASSIGNMENT","FORMULA","FIND_APPOINTMENT_SLOTS","SEND_APPOINTMENT_MESSAGE"]) {
+  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","ASSIGNMENT","FORMULA","TIME_WINDOW_EXPAND","COLLECTION_EXCLUDE_OVERLAPS","COLLECTION_SORT","COLLECTION_FORMAT_TEXT","SEND_APPOINTMENT_MESSAGE"]) {
     const definition = getWorkflowActionDefinition(key);
     assert.ok(definition, `${key} must be registered`);
     assert.equal(typeof definition.executor, "function");
     assert.ok(keys.includes(key), `${key} must be visible in the booking flow`);
   }
-  for (const hidden of ["APPOINTMENT_SESSION_CONTEXT","PROCESS_APPOINTMENT_CONVERSATION","PROCESS_APPOINTMENT_DATE_RESPONSE","PROCESS_APPOINTMENT_SLOT_RESPONSE"]) {
+  for (const hidden of ["APPOINTMENT_SESSION_CONTEXT","PROCESS_APPOINTMENT_CONVERSATION","PROCESS_APPOINTMENT_DATE_RESPONSE","PROCESS_APPOINTMENT_SLOT_RESPONSE","FIND_APPOINTMENT_SLOTS"]) {
     assert.equal(keys.includes(hidden), false, `${hidden} must not hide booking business logic`);
   }
 
@@ -128,4 +128,47 @@ test("SMSGate webhook only records inbound communication and no longer hard-code
   assert.doesNotMatch(source, /createAppointmentBookingCase/);
   assert.doesNotMatch(source, /issueAppointmentPublicLink/);
   assert.doesNotMatch(source, /Welcome\. Book your appointment here/);
+});
+
+
+test("OneAssistant exposes service-resource and slot-hold metadata for visible availability Flow", () => {
+  const pkg = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+  const objects = pkg?.manifest?.objects || [];
+  const keys = objects.map((item) => item.objectKey);
+  assert.ok(keys.includes("appointment_resource_service"));
+  assert.ok(keys.includes("appointment_slot_hold"));
+});
+
+test("generic slot primitives expand, exclude overlaps and format text", async () => {
+  const expand = getWorkflowActionDefinition("TIME_WINDOW_EXPAND");
+  const exclude = getWorkflowActionDefinition("COLLECTION_EXCLUDE_OVERLAPS");
+  const format = getWorkflowActionDefinition("COLLECTION_FORMAT_TEXT");
+  assert.ok(expand && exclude && format);
+
+  const workflowVariables = { variables: {} };
+  const expanded = await expand.executor({
+    action: {
+      collection: [{ weekday: 1, start_time: "09:00", end_time: "11:00", slot_interval_minutes: 30 }],
+      date: "2026-10-05",
+      durationMinutes: 60,
+      limit: 10,
+    },
+    record: {}, previousRecord: null, req: { user: {} }, object: null, workflowVariables,
+  });
+  assert.deepEqual(expanded.collection.map((slot) => slot.time), ["09:00","09:30","10:00"]);
+
+  const available = await exclude.executor({
+    action: {
+      collection: expanded.collection,
+      busyCollection: [{ starts_at: "2026-10-05T09:30:00.000Z", ends_at: "2026-10-05T10:30:00.000Z" }],
+    },
+    record: {}, previousRecord: null, req: { user: {} }, object: null, workflowVariables,
+  });
+  assert.deepEqual(available.collection.map((slot) => slot.time), []);
+
+  const formatted = await format.executor({
+    action: { collection: expanded.collection.slice(0,2), lineTemplate: "{{index}}. {{item.time}}", separator: "\n" },
+    record: {}, previousRecord: null, req: { user: {} }, object: null, workflowVariables,
+  });
+  assert.equal(formatted.text, "1. 09:00\n2. 09:30");
 });
