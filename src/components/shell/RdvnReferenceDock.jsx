@@ -5,14 +5,14 @@ import JarvisOrb from '../jarvis/JarvisOrb'
 const settingsSrc = 'https://rdvnui.com/assets/Settings-BIHCu_gi.png'
 const localDockAsset = (name) => `${import.meta.env.BASE_URL || '/'}icons/dock/${name}.svg?v=20261003-dock2`
 const dockItems = [
-  { id: 'launchpad', label: 'Launcher', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png', scaled: true },
-  { id: 'dashboard', label: 'Dashboard', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png', scaled: true },
-  { id: 'settings', label: 'Settings', src: settingsSrc, scaled: true },
-  { id: 'maps', label: 'Maps', src: 'https://rdvnui.com/assets/Maps-C7aNhhUR.png', scaled: true },
-  { id: 'developer', label: 'OneDeveloper', src: localDockAsset('developer'), scaled: false },
-  { id: 'store', label: 'OneStore', src: localDockAsset('store'), scaled: false },
-  { id: 'till', label: 'OneTill', src: settingsSrc, scaled: true },
-  { id: 'workspace', label: 'Workspace', src: settingsSrc, scaled: true },
+  { id: 'launchpad', label: 'Launcher', src: 'https://rdvnui.com/assets/Launchpad-wwI6e3wv.png' },
+  { id: 'dashboard', label: 'Dashboard', src: 'https://rdvnui.com/assets/Finder-BnFYQNS_.png' },
+  { id: 'settings', label: 'Settings', src: settingsSrc },
+  { id: 'maps', label: 'Maps', src: 'https://rdvnui.com/assets/Maps-C7aNhhUR.png' },
+  { id: 'developer', label: 'OneDeveloper', src: localDockAsset('developer') },
+  { id: 'store', label: 'OneStore', src: localDockAsset('store') },
+  { id: 'till', label: 'OneTill', src: settingsSrc },
+  { id: 'workspace', label: 'Workspace', src: settingsSrc },
 ]
 
 const trashItem = {
@@ -33,7 +33,7 @@ function DockItem({ item, mouseX, onActivate }) {
   return (
     <motion.button ref={ref} type="button" className="efb-dock-item" style={{ width }} onClick={onActivate} aria-label={item.label}>
       <span className="efb-dock-icon-wrap">
-        <img className={item.scaled ? 'efb-dock-image efb-dock-image--scaled' : 'efb-dock-image'} src={item.src} alt="" draggable="false" />
+        <img className="efb-dock-image" src={item.src} alt="" draggable="false" />
       </span>
     </motion.button>
   )
