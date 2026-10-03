@@ -6,7 +6,7 @@ const SAFE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*$/;
 const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED = new Set(["id", "company_id", "store_id", "__proto__", "constructor", "prototype"]);
 const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
-const ARITY = { IF: [3, 3], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2] };
+const ARITY = { IF: [3, 3], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2], ADDMINUTES: [2, 2], MINUTESBETWEEN: [2, 2], WEEKDAY: [1, 1], COMBINEDATETIME: [2, 2], PARSEDATE: [2, 2], FORMATDATE: [2, 2], FORMATTIME: [2, 2] };
 export const ROLLUP_OPERATIONS = new Set(["COUNT", "SUM", "MIN", "MAX", "AVG"]);
 const baseType = type => ["number", "decimal", "currency", "percent"].includes(type) ? "number" : type;
 const formulaType = type => STRING_TYPES.has(type) ? "string" : baseType(type);
@@ -161,11 +161,29 @@ function infer(node, resolve, depth = 0) {
   if (node.name === "IF") { requireType(types[0], "boolean"); return common(types.slice(1)); }
   if (node.name === "COALESCE") return common(types);
   if (node.name === "CONCAT") return "string";
-  if (["TODAY", "NOW", "ADDDAYS"].includes(node.name)) {
-    if (node.name === "ADDDAYS") {
-      requireType(types[0], "string");
-      requireType(types[1], "number");
-    }
+  if (["TODAY", "NOW"].includes(node.name)) return "string";
+  if (["ADDDAYS", "ADDMINUTES"].includes(node.name)) {
+    requireType(types[0], "string");
+    requireType(types[1], "number");
+    return "string";
+  }
+  if (node.name === "MINUTESBETWEEN") {
+    requireType(types[0], "string");
+    requireType(types[1], "string");
+    return "number";
+  }
+  if (node.name === "WEEKDAY") {
+    requireType(types[0], "string");
+    return "number";
+  }
+  if (node.name === "COMBINEDATETIME") {
+    requireType(types[0], "string");
+    requireType(types[1], "string");
+    return "string";
+  }
+  if (["PARSEDATE", "FORMATDATE", "FORMATTIME"].includes(node.name)) {
+    requireType(types[0], "string");
+    requireType(types[1], "string");
     return "string";
   }
   types.forEach(t => requireType(t, "number"));
@@ -205,12 +223,68 @@ function evaluate(node, get) {
   if (node.name === "NOW") return new Date().toISOString();
   const args = node.args.map(run);
   if (node.name === "CONCAT") return args.map(value => value ?? "").join("").slice(0, 10000);
-  if (node.name === "ADDDAYS") {
+  if (node.name === "ADDDAYS" || node.name === "ADDMINUTES") {
     if (args.includes(null) || !Number.isFinite(Number(args[1]))) return null;
     const date = new Date(args[0]);
     if (Number.isNaN(date.getTime())) return null;
-    date.setUTCDate(date.getUTCDate() + Number(args[1]));
-    return String(args[0]).includes("T") ? date.toISOString() : date.toISOString().slice(0, 10);
+    if (node.name === "ADDDAYS") date.setUTCDate(date.getUTCDate() + Number(args[1]));
+    else date.setUTCMinutes(date.getUTCMinutes() + Number(args[1]));
+    return node.name === "ADDDAYS" && !String(args[0]).includes("T") ? date.toISOString().slice(0, 10) : date.toISOString();
+  }
+  if (node.name === "MINUTESBETWEEN") {
+    if (args.includes(null)) return null;
+    const start = new Date(args[0]), end = new Date(args[1]);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    return (end.getTime() - start.getTime()) / 60000;
+  }
+  if (node.name === "WEEKDAY") {
+    if (args[0] == null) return null;
+    const date = new Date(args[0]);
+    return Number.isNaN(date.getTime()) ? null : date.getUTCDay();
+  }
+  if (node.name === "COMBINEDATETIME") {
+    if (args.includes(null)) return null;
+    const datePart = String(args[0]).slice(0, 10);
+    const timeMatch = String(args[1]).match(/^(\\d{1,2}):(\\d{2})(?::(\\d{2}))?/);
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(datePart) || !timeMatch) return null;
+    const value = new Date(`${datePart}T${String(timeMatch[1]).padStart(2, "0")}:${timeMatch[2]}:${timeMatch[3] || "00"}Z`);
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+  if (node.name === "PARSEDATE") {
+    if (args.includes(null)) return null;
+    const value = String(args[0]).trim(), format = String(args[1]).toUpperCase();
+    let year, month, day;
+    if (format === "DD/MM/YYYY") {
+      const match = value.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);
+      if (!match) return null;
+      day = Number(match[1]); month = Number(match[2]); year = Number(match[3]);
+    } else if (format === "YYYY-MM-DD") {
+      const match = value.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/);
+      if (!match) return null;
+      year = Number(match[1]); month = Number(match[2]); day = Number(match[3]);
+    } else return null;
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+    return date.toISOString().slice(0, 10);
+  }
+  if (node.name === "FORMATDATE") {
+    if (args.includes(null)) return null;
+    const date = new Date(args[0]);
+    if (Number.isNaN(date.getTime())) return null;
+    const format = String(args[1]).toUpperCase();
+    const yyyy = String(date.getUTCFullYear()), mm = String(date.getUTCMonth() + 1).padStart(2, "0"), dd = String(date.getUTCDate()).padStart(2, "0");
+    if (format === "DD/MM/YYYY") return `${dd}/${mm}/${yyyy}`;
+    if (format === "YYYY-MM-DD") return `${yyyy}-${mm}-${dd}`;
+    return null;
+  }
+  if (node.name === "FORMATTIME") {
+    if (args.includes(null)) return null;
+    const date = new Date(args[0]);
+    if (Number.isNaN(date.getTime())) return null;
+    const format = String(args[1]);
+    const hh = String(date.getUTCHours()).padStart(2, "0"), mm = String(date.getUTCMinutes()).padStart(2, "0");
+    if (format === "HH:mm") return `${hh}:${mm}`;
+    return null;
   }
   if (args.includes(null)) return null;
   switch (node.name) {
