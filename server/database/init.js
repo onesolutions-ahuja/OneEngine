@@ -5,6 +5,7 @@ import { ensureReleaseTablesSql } from "../services/appReleaseManager.js";
 import { backfillLegacyRuleFieldReferences } from "../services/platformRuleReferences.js";
 import { oneAssistantSchema } from "../services/oneAssistant.js";
 import { packageDefinitions } from "../services/packageRegistry.js";
+import { platformSchema } from "../services/platformMetadata.js";
 
 export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env = process.env } = {}) {
   if (!pool) throw new Error("A PostgreSQL connection is required to initialize onePOS");
@@ -207,6 +208,18 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
                'OPTIONAL_DEPENDENCY','PLATFORM_DEFAULT','ONEENGINE_DEFAULT','SUPERADMIN_ASSIGNMENT'
              ))`
         );
+      },
+    },
+    {
+      key: "0014a_platform_schema_prerequisites",
+      version: "14a",
+      name: "Create platform metadata schema before dependent migrations",
+      up: async client => {
+        // Fresh databases do not have the metadata tables yet because the full
+        // metadata bootstrap runs after core migrations. Several historical
+        // migrations update those tables, so establish the idempotent schema
+        // first. Existing databases are unaffected by CREATE IF NOT EXISTS.
+        await client.query(platformSchema);
       },
     },
     {
