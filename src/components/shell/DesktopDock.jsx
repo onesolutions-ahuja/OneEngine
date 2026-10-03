@@ -17,9 +17,10 @@ export const dockItems = [
 ]
 
 const mobileDockItems = [
+  { id: 'store', label: 'oneStore', src: dockAsset('store') },
   { id: 'dashboard', label: 'Dashboard', src: dockAsset('dashboard') },
+  { id: 'till', label: 'OneTill', src: dockAsset('till') },
   { id: 'workspace', label: 'Workspace', src: dockAsset('contacts') },
-  { id: 'settings', label: 'Settings', src: dockAsset('settings') },
 ]
 
 export function useClock() {
