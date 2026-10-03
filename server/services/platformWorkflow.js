@@ -1485,6 +1485,16 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
       );
       if(replay.rows[0]){
         const existing=replay.rows[0];
+        const status=String(existing.status||"").toUpperCase();
+        // A provider retry of an old APPOINTMENT message must never reopen a
+        // session that the customer already restarted, cancelled or completed.
+        if(["CANCELLED","CONFIRMED","EXPIRED"].includes(status)){
+          await client.query("COMMIT");
+          return {
+            status:"skipped",route:"IGNORED",handled:false,channel,sender,
+            bookingCaseId:existing.id,bookingCase:existing,replayed:true,
+          };
+        }
         const dates=Array.isArray(existing.state?.dateOptions)&&existing.state.dateOptions.length>=2
           ? existing.state.dateOptions.map((value)=>new Date(value))
           : appointmentDateOptions();
