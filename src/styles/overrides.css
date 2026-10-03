@@ -3743,3 +3743,13 @@
 .efb-dock-jarvis .jarvis-orb-container{pointer-events:auto}
 .efb-dock-jarvis .jarvis-orb-container::before{background:rgba(54,58,66,.62)!important;border-color:rgba(255,255,255,.26)!important;box-shadow:0 8px 20px rgba(18,24,36,.22),inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(0,0,0,.10)!important;border-radius:50%!important}
 @media(max-width:680px){.efb-dock-zone{display:none}}
+
+
+/* 2026-10-03 live reference dock corrections. */
+@media (min-width: 681px) {
+  .efb-dock { padding-left: 16px; padding-right: 16px; }
+  .efb-dock-magnify-zone { align-items: center; }
+  .efb-dock-item { display:flex; align-items:center; justify-content:center; }
+  .efb-dock-icon-wrap { height:40px; align-items:center; }
+  .efb-dock-image { width:40px; height:40px; object-fit:contain; }
+}
