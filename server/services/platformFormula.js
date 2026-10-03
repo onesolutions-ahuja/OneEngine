@@ -245,8 +245,8 @@ function evaluate(node, get) {
   if (node.name === "COMBINEDATETIME") {
     if (args.includes(null)) return null;
     const datePart = String(args[0]).slice(0, 10);
-    const timeMatch = String(args[1]).match(/^(\\d{1,2}):(\\d{2})(?::(\\d{2}))?/);
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(datePart) || !timeMatch) return null;
+    const timeMatch = String(args[1]).match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart) || !timeMatch) return null;
     const value = new Date(`${datePart}T${String(timeMatch[1]).padStart(2, "0")}:${timeMatch[2]}:${timeMatch[3] || "00"}Z`);
     return Number.isNaN(value.getTime()) ? null : value.toISOString();
   }
@@ -255,11 +255,11 @@ function evaluate(node, get) {
     const value = String(args[0]).trim(), format = String(args[1]).toUpperCase();
     let year, month, day;
     if (format === "DD/MM/YYYY") {
-      const match = value.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);
+      const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       if (!match) return null;
       day = Number(match[1]); month = Number(match[2]); year = Number(match[3]);
     } else if (format === "YYYY-MM-DD") {
-      const match = value.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/);
+      const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
       if (!match) return null;
       year = Number(match[1]); month = Number(match[2]); day = Number(match[3]);
     } else return null;
