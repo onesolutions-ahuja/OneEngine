@@ -4,7 +4,6 @@ export const DEVELOPER_SETTINGS_KEYS = new Set([
   'sharing-rules',
   'platform',
   'workflow-builder',
-  'builder2',
   'approval-builder',
   'page-builder',
   'dashboard-builder',
@@ -35,7 +34,7 @@ export function readRoute() {
   const parts = routePath.split('/').filter(Boolean)
   if (parts[0] === 'settings') {
     const section = !parts[1] || parts[1] === 'general' ? 'company' : parts[1]
-    if (DEVELOPER_SETTINGS_KEYS.has(section)) return { app: 'developer', section: section === 'platform' ? 'workflow-builder' : section }
+    if (DEVELOPER_SETTINGS_KEYS.has(section)) return { app: 'developer', section: section === 'platform' || section === 'builder2' ? 'workflow-builder' : section }
     return { app: 'settings', section }
   }
   if (parts[0] === 'developer') {
