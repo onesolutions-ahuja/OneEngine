@@ -210,3 +210,38 @@
   font-size:11px;
 }
 .b2-rf-end span{font-size:9px}
+
+.b2-manager-detail{
+  margin:10px 12px 12px;
+  padding:10px;
+  border:1px solid #d8dde6;
+  border-radius:6px;
+  background:#f8fafc;
+  display:grid;
+  gap:8px;
+}
+.b2-manager-detail header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.b2-manager-detail header b{font-size:12px}
+.b2-manager-detail header button{border:0;background:transparent;display:grid;place-items:center}
+.b2-manager-detail dl{margin:0;display:grid;gap:5px}
+.b2-manager-detail dl>div{display:grid;grid-template-columns:72px 1fr;gap:6px;font-size:10px}
+.b2-manager-detail dt{color:#706e6b}.b2-manager-detail dd{margin:0;overflow-wrap:anywhere}
+.b2-manager-detail>button{min-height:30px;border:1px solid #c9c9c9;border-radius:4px;background:#fff;text-align:left;padding:5px 8px;display:flex;align-items:center;gap:6px;font-size:10px}
+.b2-detail-badge{display:inline-flex;width:max-content;padding:2px 7px;border-radius:999px;background:#eef4ff;color:#0176d3;font-size:9px;font-weight:700}
+.b2-path-summary{width:300px;display:grid;gap:4px;margin:3px 0 1px}
+.b2-path-summary>button{
+  width:100%;min-height:28px;border:1px solid #d8dde6;border-radius:5px;background:#fff;
+  display:grid;grid-template-columns:minmax(72px,1fr) 14px minmax(90px,1.2fr);align-items:center;gap:4px;
+  padding:4px 7px;text-align:left;font-size:9px;color:#444;
+}
+.b2-path-summary>button:hover{border-color:#0176d3;background:#f8fbff}
+.b2-path-summary>button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b2-path-summary>button b{font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b2-schema-fields{display:grid;gap:10px}
+.b2-schema-fields>h4{margin:3px 0 0;font-size:11px}
+.b2-schema-fields fieldset,.b2-fault-config{
+  border:1px solid #e1e5eb;border-radius:6px;padding:9px;display:grid;gap:8px;
+}
+.b2-schema-fields legend,.b2-fault-config legend{padding:0 4px;font-size:10px;font-weight:700}
+.b2-schema-fields input,.b2-schema-fields select,.b2-schema-fields textarea{width:100%;box-sizing:border-box}
+.b2-binding-mode{display:grid;gap:4px;font-size:9px!important;color:#706e6b}
