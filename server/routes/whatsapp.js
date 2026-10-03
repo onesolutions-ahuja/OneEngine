@@ -1087,6 +1087,7 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
             providerMessageId: message.id,
             sender: `+${sender}`,
             communicationId: storedMessage.id,
+            body: storedMessage.body || body || null,
             metadata: {
               conversationId: conversation.id,
               customerId: customer?.id || null,
