@@ -127,7 +127,12 @@ export async function reconcileCompanyPackageEntitlements(db, companyId) {
 
   await db(
     `DELETE FROM company_package_entitlement_sources
-      WHERE company_id=$1 AND source_type=ANY($2::text[])`,
+      WHERE company_id=$1
+        AND source_type=ANY($2::text[])
+        AND NOT (
+          source_type='DIRECT_LICENCE'
+          AND COALESCE((metadata->>'trial')::boolean,FALSE)=TRUE
+        )`,
     [companyId, DERIVED_SOURCES]
   );
 
