@@ -2526,16 +2526,13 @@ async function startServer() {
     setTimeout(async () => {
       try {
         const rows = await pool.query(
-          `SELECT id,connector_configuration,credentials_encrypted,last_test_result,enabled
+          `SELECT id,connector_configuration,credentials_encrypted,enabled
              FROM integration_connections
-            WHERE connector_package_key='smsgate_connector'`
+            WHERE connector_package_key='smsgate_connector'
+              AND enabled=TRUE`
         );
         for (const row of rows.rows) {
-          const lastTest = typeof row.last_test_result === "string"
-            ? JSON.parse(row.last_test_result || "{}")
-            : (row.last_test_result || {});
-          if (lastTest?.success !== true) continue;
-
+          try {
           const configuration = typeof row.connector_configuration === "string"
             ? JSON.parse(row.connector_configuration || "{}")
             : (row.connector_configuration || {});
@@ -2595,6 +2592,9 @@ async function startServer() {
             })),
             providerLogError: diagnostics?.logs?.error || diagnostics?.error || null,
           });
+          } catch (rowError) {
+            console.error(`onePOS: SMSGate inbound webhook reconciliation failed connection=${row.id}:`, rowError?.message || rowError);
+          }
         }
       } catch (error) {
         console.error("onePOS: SMSGate inbound webhook reconciliation failed:", error?.message || error);
