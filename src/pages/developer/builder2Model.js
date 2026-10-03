@@ -105,7 +105,8 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='COLLECTION_SORT'&&!String(n.config?.sortField||'').trim()) add('error','SORT_FIELD_REQUIRED',`${n.label}: Enter the field to sort by.`,n.id)
     if (n.type==='COLLECTION_FILTER'&&!n.config?.collection) add('error','FILTER_COLLECTION_REQUIRED',`${n.label}: Select a collection.`,n.id)
     if (n.type==='COLLECTION_FILTER'&&n.config?.filterMode==='formula'&&!String(n.config?.filterFormula||'').trim()) add('error','FILTER_FORMULA_REQUIRED',`${n.label}: Enter a filter formula.`,n.id)
-    if (n.type==='TRANSFORM'&&(!n.config?.source||!n.config?.target)) add('error','TRANSFORM_MAPPING_REQUIRED',`${n.label}: Select source and target data.`,n.id)
+    if (n.type==='COLLECTION_FILTER'&&(n.config?.filterMode||'conditions')==='conditions'&&!(n.config?.filters||[]).some(row=>String(row?.field||'').trim())) add('error','FILTER_CONDITION_REQUIRED',`${n.label}: Add at least one filter condition.`,n.id)
+    if (n.type==='TRANSFORM'&&(!n.config?.source||!(n.config?.mappings||[]).some(row=>String(row?.target||'').trim()))) add('error','TRANSFORM_MAPPING_REQUIRED',`${n.label}: Select source data and add at least one field mapping.`,n.id)
     if (n.type==='CUSTOM_ERROR'&&!String(n.config?.message||'').trim()) add('error','CUSTOM_ERROR_MESSAGE_REQUIRED',`${n.label}: Enter an error message.`,n.id)
     if (['GET_RECORDS','CREATE_RECORDS','UPDATE_RECORDS','DELETE_RECORDS'].includes(n.type)&&!n.config?.objectKey) add('error','OBJECT_REQUIRED',`${n.label}: Select an object.`,n.id)
     if (['GET_RECORDS','UPDATE_RECORDS','DELETE_RECORDS'].includes(n.type) && !['none','formula'].includes(n.config?.conditionLogic||'all') && !(n.config?.conditions||[]).some(x=>x?.resource)) add('error','CONDITION_REQUIRED',`${n.label}: Configure at least one field condition or choose an unfiltered mode.`,n.id)
@@ -122,7 +123,6 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='DECISION') (n.config?.outcomes||[]).forEach((o,i)=>{if(!String(o?.label||'').trim()) add('error','DECISION_OUTCOME_LABEL',`${n.label}: Outcome ${i+1} needs a label.`,n.id);if(!(o?.conditions||[]).some(x=>x?.resource)) add('error','DECISION_OUTCOME_CONDITION',`${n.label}: ${o?.label||`Outcome ${i+1}`} needs conditions.`,n.id)})
     if (n.type==='WAIT' && (n.config?.waitType||'duration')==='duration' && !(Number(n.config?.amount)>0)) add('error','WAIT_DURATION_REQUIRED',`${n.label}: Enter a wait duration.`,n.id)
     if (n.type==='WAIT' && n.config?.waitType==='date' && !n.config?.dateResource) add('error','WAIT_DATE_REQUIRED',`${n.label}: Select a date/time resource.`,n.id)
-    if (n.type==='WAIT' && n.config?.waitType==='event' && !String(n.config?.eventKey||'').trim()) add('error','WAIT_EVENT_REQUIRED',`${n.label}: Enter an event API name.`,n.id)
     if (n.type==='SCREEN'&&!(n.config?.components||[]).length) add('warning','EMPTY_SCREEN',`${n.label}: Screen has no components.`,n.id)
   }
   const names=new Set()
