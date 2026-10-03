@@ -33,17 +33,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Wait for OneEngine API
-        shell: bash
-        run: |
-          set -euo pipefail
-          for i in {1..90}; do
-            if curl -fsS "$ONEPOS_API_URL/api/health" >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "OneEngine API did not become ready" >&2
-          exit 1
       - name: Run live appointment Workflow Debug
         run: node scripts/run-appointment-debug.mjs
