@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, loadSessionPermissions, login, logout, setActiveStoreId, startGoogleLogin, verifyPin } from './services/api'
 import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/routes'
-import { Dock, MenuBarClock, dockItems, useClock } from './components/shell/DesktopDock'
-import RdvnReferenceDock from './components/shell/RdvnReferenceDock'
+import { MenuBarClock, useClock } from './components/shell/ShellClock'
+import RdvnReferenceDock, { dockItems } from './components/shell/RdvnReferenceDock'
 import { CompanyContextLoading, LockScreen } from './components/shell/LoginShell'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, readSettingsContextCache, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
@@ -2515,8 +2515,6 @@ function Desktop({ onLock, onSignOut }) {
       </LazyLoadBoundary>
 
       <RdvnReferenceDock onItemOpen={openItem} />
-      {/* Production dock retained for later restoration; temporarily hidden while the efb2f731 dock is evaluated. */}
-      {false ? <Dock onItemOpen={openItem} collapsible={activeApp === 'till'} /> : null}
     </main>
   )
 }
