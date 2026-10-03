@@ -15,14 +15,6 @@ function norm(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-/* Canonical bucket for a stored reason string. */
-export function classifyAdjustmentReason(reason) {
-  const v = norm(reason);
-  if (v === "wastage" || v === "wasted" || v === "waste") return "Wastage";
-  if (v === "breakage" || v === "broken" || v === "damage" || v === "damaged") return "Breakage";
-  return "Other";
-}
-
 /*
  * Validate the reason supplied with an adjustment.
  * - Increases: any reason (including blank) still allowed, exactly as before.
@@ -50,4 +42,4 @@ export function resolveAdjustmentReason(adjustmentQuantity, reason) {
   return { reason: found, detail };
 }
 
-export default { ADJUSTMENT_REASONS, classifyAdjustmentReason, resolveAdjustmentReason };
+export default { ADJUSTMENT_REASONS, resolveAdjustmentReason };
