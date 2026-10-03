@@ -111,17 +111,26 @@ function SearchablePicker({value,onChange,options=[],placeholder='Select…',sea
   </div>
 }
 
-function ActionSchemaEditor({action,inputs={},onChange}) {
+function ActionInputValue({label,spec={},value,onChange,resources,objects,objectKey,onNew,flowType,startConfig}) {
+  const resourceLike=typeof value==='string'&&(value.startsWith('$')||value.startsWith('steps.')||value.startsWith('variables.'))
+  const [mode,setMode]=useState(resourceLike?'resource':'value')
+  const literal=()=>{
+    if(Array.isArray(spec?.enum))return <select value={value??''} onChange={e=>onChange(e.target.value)}><option value="">Select…</option>{spec.enum.map(v=><option key={String(v)} value={v}>{String(v)}</option>)}</select>
+    if(spec?.type==='boolean')return <select value={value===true?'true':value===false?'false':''} onChange={e=>onChange(e.target.value===''?'':e.target.value==='true')}><option value="">Select…</option><option value="true">True</option><option value="false">False</option></select>
+    if(spec?.type==='number'||spec?.type==='integer')return <input type="number" value={value??''} onChange={e=>onChange(e.target.value===''?'':Number(e.target.value))}/>
+    if(spec?.type==='object'||spec?.type==='array')return <textarea rows={4} value={typeof value==='string'?value:value?JSON.stringify(value,null,2):''} onChange={e=>{const raw=e.target.value;try{onChange(raw.trim()?JSON.parse(raw):spec.type==='array'?[]:{})}catch{onChange(raw)}}}/>
+    return <input value={value??''} onChange={e=>onChange(e.target.value)} placeholder={spec?.description||''}/>
+  }
+  return <div className="b2-action-input-row"><div className="b2-action-input-head"><b>{label}</b><span><button type="button" className={mode==='value'?'is-active':''} onClick={()=>{setMode('value');if(resourceLike)onChange('')}}>Value</button><button type="button" className={mode==='resource'?'is-active':''} onClick={()=>{setMode('resource');if(!resourceLike)onChange('')}}>Resource</button></span></div>{mode==='resource'?<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={typeof value==='string'?value:''} onChange={onChange}/>:literal()}</div>
+}
+
+function ActionSchemaEditor({action,inputs={},onChange,resources,objects,objectKey,onNew,flowType,startConfig}) {
   const properties=action?.schema?.properties||action?.inputSchema?.properties||{}
   const entries=Object.entries(properties)
   if(!entries.length)return <p className="b2-help">This action has no configurable inputs.</p>
   return <div className="b2-action-inputs">{entries.map(([key,spec])=>{
     const label=spec?.title||key.replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase())
-    if(Array.isArray(spec?.enum))return <label key={key}>{label}<select value={inputs[key]??''} onChange={e=>onChange({...inputs,[key]:e.target.value})}><option value="">Select…</option>{spec.enum.map(v=><option key={String(v)} value={v}>{String(v)}</option>)}</select></label>
-    if(spec?.type==='boolean')return <label className="b2-check" key={key}><input type="checkbox" checked={inputs[key]===true} onChange={e=>onChange({...inputs,[key]:e.target.checked})}/>{label}</label>
-    if(spec?.type==='number'||spec?.type==='integer')return <label key={key}>{label}<input type="number" value={inputs[key]??''} onChange={e=>onChange({...inputs,[key]:e.target.value===''?'':Number(e.target.value)})}/></label>
-    if(spec?.type==='object'||spec?.type==='array')return <label key={key}>{label}<textarea rows={4} value={typeof inputs[key]==='string'?inputs[key]:inputs[key]?JSON.stringify(inputs[key],null,2):''} onChange={e=>{const raw=e.target.value;try{onChange({...inputs,[key]:raw.trim()?JSON.parse(raw):spec.type==='array'?[]:{}})}catch{onChange({...inputs,[key]:raw})}}}/></label>
-    return <label key={key}>{label}<input value={inputs[key]??''} onChange={e=>onChange({...inputs,[key]:e.target.value})} placeholder={spec?.description||''}/></label>
+    return <ActionInputValue key={key} {...{label,spec,resources,objects,objectKey,onNew,flowType,startConfig}} value={inputs[key]} onChange={next=>onChange({...inputs,[key]:next})}/>
   })}</div>
 }
 
@@ -206,7 +215,7 @@ function Properties({node,onPatch,objects,resources,onNew,actions,flows=[],flowT
     {node.type==='COLLECTION_SORT'?<><label>Collection<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.collection||''} onChange={v=>patch({collection:v})}/></label><label>Sort By Field<input value={p.sortField||''} onChange={e=>patch({sortField:e.target.value})} placeholder="Field API name or nested field path"/></label><label>Sort Order<select value={p.order||p.sortDirection||'asc'} onChange={e=>patch({order:e.target.value,sortDirection:e.target.value})}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label><label>Maximum Items<input type="number" min="0" value={p.max||p.limit||''} onChange={e=>patch({max:e.target.value,limit:e.target.value})}/></label></>:null}
     {node.type==='TRANSFORM'?<div className="b2-transform"><div><b>Source Data</b><ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.source||''} onChange={v=>patch({source:v})}/></div><div><b>Target Data</b><ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.target||''} onChange={v=>patch({target:v})}/></div><label>Field Mappings<textarea rows={6} value={p.mappingsText||''} onChange={e=>patch({mappingsText:e.target.value})} placeholder="Map source fields/resources to target fields"/></label></div>:null}
     {node.type==='CUSTOM_ERROR'?<><label>Where to Show the Error<select value={p.location||'record'} onChange={e=>patch({location:e.target.value})}><option value="record">In a window on the record page</option><option value="field">Inline on a field</option></select></label>{p.location==='field'?<label>Field<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.field||''} onChange={v=>patch({field:v})}/></label>:null}<label>Error Message<textarea rows={4} value={p.message||''} onChange={e=>patch({message:e.target.value})}/></label></>:null}
-    {node.type==='ACTION'?<><label>Action<SearchablePicker value={p.actionKey||''} onChange={v=>patch({actionKey:v,inputs:{}})} options={actions.map(a=>({value:a.key,label:a.displayName||a.label||a.key,description:a.description||a.category||''}))} placeholder="Select an action…" searchPlaceholder="Search actions…" emptyText="No matching actions"/></label>{p.actionKey?<><p className="b2-help">{actions.find(a=>a.key===p.actionKey)?.description||'Configure the selected registered action.'}</p><ActionSchemaEditor action={actions.find(a=>a.key===p.actionKey)} inputs={p.inputs||{}} onChange={inputs=>patch({inputs})}/></>:null}</>:null}
+    {node.type==='ACTION'?<><label>Action<SearchablePicker value={p.actionKey||''} onChange={v=>patch({actionKey:v,inputs:{}})} options={actions.map(a=>({value:a.key,label:a.displayName||a.label||a.key,description:a.description||a.category||''}))} placeholder="Select an action…" searchPlaceholder="Search actions…" emptyText="No matching actions"/></label>{p.actionKey?<><p className="b2-help">{actions.find(a=>a.key===p.actionKey)?.description||'Configure the selected registered action.'}</p><ActionSchemaEditor action={actions.find(a=>a.key===p.actionKey)} inputs={p.inputs||{}} onChange={inputs=>patch({inputs})} {...{resources,objects,objectKey,onNew,flowType,startConfig}}/></>:null}</>:null}
     {node.type==='SUBFLOW'?<><label>Subflow<SearchablePicker value={p.flowId||p.flow||''} onChange={v=>patch({flowId:v,flow:v})} options={flows.filter(f=>String(f.id)!==String(node.id)).map(f=>({value:f.id,label:f.name||f.action?.apiName||f.id,description:f.action?.description||f.action?.apiName||''}))} placeholder="Select a subflow…" searchPlaceholder="Search flows…" emptyText="No matching flows"/></label><label>Input Values<textarea rows={5} value={p.inputsText||''} onChange={e=>patch({inputsText:e.target.value})} placeholder="Map available input variables"/></label><label>Output Values<textarea rows={5} value={p.outputsText||''} onChange={e=>patch({outputsText:e.target.value})} placeholder="Map output variables"/></label></>:null}
   </div>
 }
