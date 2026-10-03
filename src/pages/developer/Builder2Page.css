@@ -186,3 +186,27 @@
 .b2-group-header b{font-size:12px}
 .b2-group-header small{font-size:9px;color:#706e6b}
 .b2-group-header>button:hover{background:#faf7ff}
+
+.b2-rf-start{
+  min-width:140px;
+  min-height:44px;
+  display:grid;
+  place-items:center;
+  border:2px solid #2e844a;
+  border-radius:18px;
+  background:#fff;
+  font-size:12px;
+}
+.b2-rf-end{
+  min-width:90px;
+  min-height:38px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  border:1px solid #c9c9c9;
+  border-radius:18px;
+  background:#fff;
+  font-size:11px;
+}
+.b2-rf-end span{font-size:9px}
