@@ -102,7 +102,7 @@ export async function seedOneSolutionsDemo(pool) {
       ['id','ID','text','id',true,false,0],
       ['division_key','Division Key','text','division_key',true,true,10],
       ['name','Name','text','name',true,true,20],
-      ['description','Description','textarea','description',false,true,30],
+      ['description','Description','text','description',false,true,30],
       ['active','Active','boolean','active',true,true,40],
     ];
     for (const [api,label,type,column,required,writable,order] of divisionFields) {
