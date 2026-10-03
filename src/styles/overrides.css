@@ -3741,7 +3741,7 @@
 .efb-dock-fixed-zone,.efb-dock-fixed-zone *{transition-property:none!important}
 .efb-dock-fixed-item{width:40px;height:40px;flex:0 0 40px;padding:0;border:0;background:transparent;display:block;cursor:pointer;transform:none!important}
 .efb-dock-jarvis{position:relative;width:70px;height:40px;flex:0 0 70px;display:flex;align-items:flex-end;justify-content:center;overflow:visible;transform:none!important}
-.efb-dock-jarvis .jarvis-orb-host{position:absolute;left:calc(50% + 8px)!important;bottom:-10px;transform:translateX(-50%) scale(.864)!important;transform-origin:bottom center}
+.efb-dock-jarvis .jarvis-orb-host{position:absolute;left:calc(50% + 20px)!important;bottom:-10px;transform:translateX(-50%) scale(.864)!important;transform-origin:bottom center}
 .efb-dock-jarvis .jarvis-orb-container{pointer-events:auto}
 .efb-dock-jarvis .jarvis-orb-container::before{background:rgba(54,58,66,.62)!important;border-color:rgba(255,255,255,.26)!important;box-shadow:0 8px 20px rgba(18,24,36,.22),inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(0,0,0,.10)!important;border-radius:50%!important}
 @media(max-width:680px){.efb-dock-zone{display:none}}
