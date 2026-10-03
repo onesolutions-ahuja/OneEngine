@@ -1196,7 +1196,7 @@ CREATE TABLE IF NOT EXISTS product_availability (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    scope_object_id UUID REFERENCES platform_objects(id) ON DELETE CASCADE,
+    scope_object_id UUID,
     scope_record_id UUID,
     store_id UUID REFERENCES stores(id) ON DELETE CASCADE,
     channel VARCHAR(50) NOT NULL DEFAULT 'till',
