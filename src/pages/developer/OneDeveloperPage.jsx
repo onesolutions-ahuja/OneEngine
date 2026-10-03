@@ -21,7 +21,6 @@ import './OneDeveloperPage.css'
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
   { key: 'workflow-builder', label: 'Workflow Builder', icon: Workflow },
-  { key: 'builder2', label: 'Builder2', icon: Workflow },
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
   { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
   { key: 'dashboard-builder', label: 'Dashboard Builder', icon: LayoutDashboard },
@@ -38,7 +37,8 @@ const DEVELOPER_ITEMS = [
 
 function normalizeSection(value) {
   const raw = String(value || '').trim().toLowerCase()
-  return DEVELOPER_ITEMS.some((item) => item.key === raw) ? raw : 'objects'
+  const migrated = raw === 'builder2' ? 'workflow-builder' : raw
+  return DEVELOPER_ITEMS.some((item) => item.key === migrated) ? migrated : 'objects'
 }
 
 export default function OneDeveloperPage({ initialSection = 'objects', initialWorkflowId = '', onSectionChange }) {
@@ -194,14 +194,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading ? <div className="settings-state-card">Resolving client context…</div>
             : current.key === 'objects' ? <ObjectsSettingsPane />
-            : current.key === 'builder2' ? <Builder2Page />
-            : current.key === 'workflow-builder' ? <OneBuilder
-                initialTab="workflow"
-                singleBuilder
-                initialWorkflowId={initialWorkflowId}
-                onWorkflowOpen={(workflowId) => onSectionChange?.('workflow-builder', { workflowId })}
-                onWorkflowClose={() => onSectionChange?.('workflow-builder')}
-              />
+            : current.key === 'workflow-builder' ? <Builder2Page initialWorkflowId={initialWorkflowId} />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
             : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
