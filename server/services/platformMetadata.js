@@ -1801,7 +1801,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           `INSERT INTO platform_layouts
             (object_id,page_type,role_id,company_id,name,layout_key,definition,active,is_default)
            VALUES ($1,$2,NULL,NULL,$3,$4,$5::jsonb,true,true)
-           ON CONFLICT (object_id,page_type,role_id,company_id) DO NOTHING`,
+           ON CONFLICT (object_id,page_type,layout_key) WHERE layout_key <> '' DO NOTHING`,
           [object.id, pageType, name, layoutKey, JSON.stringify(definition)]
         );
       }
