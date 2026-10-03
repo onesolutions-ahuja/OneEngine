@@ -328,13 +328,15 @@ export async function seedOneSolutionsDemo(pool) {
     ];
     for(const p of products){
       let row=null;
+      let reusedExisting=false;
       if(p.matchLike){
         row=(await client.query(
-          `SELECT id FROM products
+          `SELECT id,price FROM products
             WHERE company_id=$1 AND active=TRUE AND LOWER(name) LIKE LOWER($2)
             ORDER BY updated_at DESC,id LIMIT 1`,
           [company.id,p.matchLike]
         )).rows[0] || null;
+        reusedExisting=Boolean(row);
       }
       if(!row){
         row=(await client.query(
@@ -347,7 +349,7 @@ export async function seedOneSolutionsDemo(pool) {
                          age_restricted=EXCLUDED.age_restricted,stock_quantity=EXCLUDED.stock_quantity,
                          track_stock=EXCLUDED.track_stock,image_url=COALESCE(EXCLUDED.image_url,products.image_url),
                          kiosk_metadata=EXCLUDED.kiosk_metadata,updated_at=NOW()
-           RETURNING id`,
+           RETURNING id,price`,
           [company.id,categoryIds[p.c],p.n,p.sku,p.barcode,`OneSolutions ${p.d} demo item`,p.p,p.cost,p.age===true,p.stock,p.track!==false,p.img,JSON.stringify({demo:true,division:p.d})]
         )).rows[0];
       }else{
@@ -378,7 +380,9 @@ export async function seedOneSolutionsDemo(pool) {
       }
 
       for(const divisionKey of (p.divisions || [p.d])){
-        const scopedPrice=p.prices?.[divisionKey] ?? p.p;
+        const scopedPrice=reusedExisting
+          ? Number(row.price ?? p.p)
+          : (p.prices?.[divisionKey] ?? p.p);
         await ensureProductAvailability(row.id,divisionKey,scopedPrice);
       }
     }
@@ -408,7 +412,7 @@ export async function seedOneSolutionsDemo(pool) {
       }
       const basePrice=Number(shared.price || 0);
       await ensureProductAvailability(shared.id,'retail',basePrice);
-      await ensureProductAvailability(shared.id,'restaurant_qsr',isBeer ? 4.95 : 2.95);
+      await ensureProductAvailability(shared.id,'restaurant_qsr',basePrice);
     }
 
     const customers=[
