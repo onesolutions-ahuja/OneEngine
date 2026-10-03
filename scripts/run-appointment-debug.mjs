@@ -88,6 +88,30 @@ async function debugSavedRouter(channel, sender) {
     },
   });
   const data = response?.data;
+  console.log("DEBUG saved router action summary", (router?.action?.actions || []).map((item) => ({
+    id: item?.id || null,
+    key: item?.key || null,
+    type: item?.type || null,
+    configActionKey: item?.config?.actionKey || null,
+    outcomes: Array.isArray(item?.outcomes) ? item.outcomes.map((outcome) => ({
+      id: outcome?.id || null,
+      label: outcome?.label || null,
+      field: outcome?.condition?.conditions?.[0]?.field || null,
+      value: outcome?.condition?.conditions?.[0]?.value ?? null,
+      branch: outcome?.branch || [],
+    })) : [],
+  })));
+  console.log("DEBUG session_context", JSON.stringify(data?.variables?.steps?.session_context || null));
+  console.log("DEBUG channel_router", JSON.stringify(data?.variables?.steps?.channel_router || null));
+  console.log("DEBUG result summary", JSON.stringify((data?.results || []).map((entry) => ({
+    stepId: entry?.stepId || null,
+    action: entry?.action || null,
+    status: entry?.result?.status || null,
+    route: entry?.result?.route || null,
+    channel: entry?.result?.channel || null,
+    outcomeId: entry?.result?.outcomeId ?? null,
+    branch: entry?.result?.branch?.stepIds || [],
+  }))));
   assert(data?.status === "COMPLETED", `${channel} saved-router Debug did not complete`);
   assert(data?.rolledBack === true, `${channel} Debug did not roll back`);
   assert(data?.externalActionsSimulated === true, `${channel} Debug did not simulate external actions`);
