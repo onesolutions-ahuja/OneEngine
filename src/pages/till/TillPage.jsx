@@ -204,13 +204,18 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
 
     const cached = loadTillBootstrapCache()
-    if (cached) {
-      applyBootstrap(cached.catalogue, cached.settingsResponse, cached.buttons, cached.paymentMethods || [])
+    const cachedScope = cached?.catalogue?.data?.scopeKey || cached?.catalogue?.scopeKey || ''
+    const usableCached = cachedScope ? cached : null
+    if (usableCached) {
+      applyBootstrap(usableCached.catalogue, usableCached.settingsResponse, usableCached.buttons, usableCached.paymentMethods || [])
       setLoading(false)
     }
     try {
-      const cachedVersion = cached?.catalogue?.data?.version || cached?.catalogue?.version || ''
-      const cataloguePath = `/api/products/catalogue${cachedVersion ? `?since=${encodeURIComponent(cachedVersion)}` : ''}`
+      const cachedVersion = usableCached?.catalogue?.data?.version || usableCached?.catalogue?.version || ''
+      const catalogueQuery = new URLSearchParams()
+      if (cachedVersion) catalogueQuery.set('since', cachedVersion)
+      if (cachedScope) catalogueQuery.set('scope', cachedScope)
+      const cataloguePath = `/api/products/catalogue${catalogueQuery.size ? `?${catalogueQuery.toString()}` : ''}`
       const [catalogueDelta, settingsResponse, buttonResponse, capability, paymentResponse, permissionResponse] = await Promise.all([
         apiRequest(cataloguePath),
         apiRequest('/api/settings'),
@@ -219,7 +224,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] })),
         loadSessionPermissions().catch(() => ({ permissions: [] })),
       ])
-      const catalogue = mergeCatalogueResponse(cached?.catalogue, catalogueDelta)
+      const catalogue = mergeCatalogueResponse(usableCached?.catalogue, catalogueDelta)
       const paymentRows = paymentResponse?.data || []
       applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [], paymentRows)
       cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [], paymentMethods: paymentRows })
@@ -228,8 +233,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       setOnline(true)
       await loadTill()
     } catch (err) {
-      if (cached) {
-        applyBootstrap(cached.catalogue, cached.settingsResponse, cached.buttons, cached.paymentMethods || [])
+      if (usableCached) {
+        applyBootstrap(usableCached.catalogue, usableCached.settingsResponse, usableCached.buttons, usableCached.paymentMethods || [])
         setOnline(false)
         setError('Server unavailable — cached Till loaded. Cash sales only.')
       } else {
