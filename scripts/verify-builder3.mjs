@@ -160,7 +160,7 @@ try {
    }
  })()
  assert.deepEqual(errors,[])
- await fs.writeFile(path.join(out,'verification.json'),JSON.stringify({baseline:'50caac5d99b23e6455ea021664b7b9d387ced949',checks,panels,excludedCapabilities:registry.filter(a=>a.workflowSupported===false).map(a=>a.key),errors,liveTenantVerified:false},null,2))
+ await fs.writeFile(path.join(out,'verification.json'),JSON.stringify({baseline:'1d300b97b15369e539a286a0618bbb080edb2a12',checks,panels,excludedCapabilities:registry.filter(a=>a.workflowSupported===false).map(a=>a.key),errors,liveTenantVerified:false},null,2))
  console.log(`Passed ${checks.length} interaction checks; examined ${panels.length} registered action panels.`)
  console.log(`Missing schemas: ${panels.filter(p=>p.status==='missing_registry_schema').length}. Live tenant verification remains pending.`)
 } finally {await browser?.close();server.kill()}

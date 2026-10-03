@@ -1,5 +1,5 @@
 {
-  "baseline": "50caac5d99b23e6455ea021664b7b9d387ced949",
+  "baseline": "1d300b97b15369e539a286a0618bbb080edb2a12",
   "checks": [
     "Chooser requires searchable record object and footer stays reachable",
     "Brevo structured inputs, independent scrolling, record-field resource lookup",

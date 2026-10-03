@@ -2877,32 +2877,58 @@ async function startServer() {
       BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
     });
 
-    // Package catalogue changes can modify managed workflow metadata without
-    // changing an installation's package version. Reconcile active OneAssistant
-    // tenants after metadata bootstrap so manifest-owned workflows (for example
-    // WhatsApp booking) are updated from the current package declaration.
-    const assistantTenants = await db(
-      `SELECT DISTINCT i.company_id,p.id AS package_id,p.module_id,p.version,p.manifest
+    // Installed package manifests are the source of truth for managed metadata.
+    // Refresh every active installation after bootstrap so package-owned fields,
+    // relationships, layouts, workflows and actions do not drift behind code
+    // changes. This is intentionally additive/idempotent and preserves rows
+    // marked user_modified. Physical business tables remain authoritative and
+    // are never recreated by this metadata refresh.
+    const activePackageInstallations = await db(
+      `SELECT i.company_id,p.id AS package_id,p.package_key,p.module_id,p.version,p.manifest
          FROM company_package_installations i
          JOIN package_registry p ON p.id=i.package_id
-        WHERE p.package_key='one_assistant'
-          AND i.status='active'
+        WHERE i.status='active'
+          AND p.active=TRUE
           AND COALESCE(i.suspended_by_entitlement,FALSE)=FALSE
-          AND COALESCE(i.deactivated_by_user,FALSE)=FALSE`
+          AND COALESCE(i.deactivated_by_user,FALSE)=FALSE
+        ORDER BY i.company_id,p.package_key`
     );
-    for (const tenant of assistantTenants.rows || []) {
-      if (!tenant.module_id) continue;
-      await provisionPackageMetadata(db, {
-        packageId: tenant.package_id,
-        moduleId: tenant.module_id,
-        companyId: tenant.company_id,
-        manifest: tenant.manifest || {},
-        packageVersion: tenant.version,
-      });
+    let refreshedPackageMetadata = 0;
+    let packageMetadataRefreshFailures = 0;
+    for (const installation of activePackageInstallations.rows || []) {
+      if (!installation.module_id) continue;
+      const manifest = installation.manifest && typeof installation.manifest === "object"
+        ? installation.manifest
+        : {};
+      const hasManagedMetadata = [
+        "objects","relationships","layouts","recordForms","forms","listViews","workflows",
+        "rules","validationRules","actions","buttons","reports","templates","events",
+        "permissionDeclarations","connectors"
+      ].some((key) => Array.isArray(manifest[key]) && manifest[key].length > 0);
+      if (!hasManagedMetadata) continue;
+      try {
+        await provisionPackageMetadata(db, {
+          packageId: installation.package_id,
+          moduleId: installation.module_id,
+          companyId: installation.company_id,
+          manifest,
+          packageVersion: installation.version,
+        });
+        refreshedPackageMetadata += 1;
+      } catch (error) {
+        packageMetadataRefreshFailures += 1;
+        console.error("onePOS: managed package metadata refresh failed", {
+          companyId: installation.company_id,
+          packageKey: installation.package_key,
+          error: error?.message || String(error),
+        });
+      }
     }
-    if (assistantTenants.rowCount) {
-      console.log(`onePOS: OneAssistant managed metadata refreshed for ${assistantTenants.rowCount} tenant(s)`);
-    }
+    console.log("onePOS: managed package metadata refresh complete", {
+      installations: activePackageInstallations.rowCount || 0,
+      refreshed: refreshedPackageMetadata,
+      failures: packageMetadataRefreshFailures,
+    });
 
     console.log("onePOS: platform bootstrap ready");
 

@@ -1,7 +1,7 @@
 # Builder 3 parity audit
 
 Initial audit baseline: main fc897577dfbedcb6b4f98e5a42059df91689224a, 3 October 2026.
-Rebased and re-audited against main 50caac5d99b23e6455ea021664b7b9d387ced949 after concurrent appointment/Debug updates.
+Rebased and re-audited against main 50caac5d99b23e6455ea021664b7b9d387ced949, then incorporated main 1d300b97b15369e539a286a0618bbb080edb2a12 and reverified after further appointment Debug, product and metadata updates.
 Builder 2 and WorkflowAdmin remain unchanged. This audit distinguishes source evidence from rendered verification.
 
 Reference specification:
@@ -68,3 +68,5 @@ These items are deliberately recorded as open. Neither a successful build nor re
 The newer main includes editable appointment router definitions, extra appointment actions, rollback-safe appointment Debug handlers, synthetic Debug trigger records and deployment regression gates. These commits are included by rebase, not replaced. Reinspection confirms Builder 2 still uses `inputsText` for general action inputs, the resource dialog still has its generic choice-set textarea, and the same generic element configuration remains. Builder 3 preserves newer backend handlers and reruns its registry panel sweep and the appointment regression suite against this baseline.
 
 The action-registry fixture now uses the actual `/platform/action-registry` provider, including its two record-page-only capabilities. `RECORD_SAVE` and `RECORD_DELETE` are declared `workflowSupported: false` in server metadata and excluded from Builder 3. They are not workflow executors and must not appear as selectable workflow actions. The report records these exclusions separately from the 124 workflow actions.
+
+Final protected-builder comparisons use main `1d300b97b15369e539a286a0618bbb080edb2a12`. The later main update adds three rollback-safe appointment actions to Debug execution; that allowlist is retained. The newer metadata refresh and product availability implementation are inherited unchanged.

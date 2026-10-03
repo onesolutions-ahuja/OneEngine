@@ -401,58 +401,76 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
   try {
     const companyId = req.user.companyId;
     const storeId = req.user.storeId || null;
+    const salesChannel = "till";
 
     let businessDivisionId = null;
+    let businessDivisionObjectId = null;
     if (storeId) {
       const divisionScope = await db(
-        `SELECT association.custom_values->>'business_division_id' AS business_division_id
+        `SELECT association.custom_values->>division_field.api_name AS business_division_id,
+                division_object.id AS business_division_object_id
            FROM platform_objects store_object
            JOIN platform_record_associations association
              ON association.object_id=store_object.id
             AND association.record_id=$2
             AND association.company_id=$1
+           JOIN platform_fields division_field
+             ON division_field.object_id=store_object.id
+            AND division_field.api_name='business_division_id'
+            AND division_field.active=TRUE
+            AND (division_field.company_id IS NULL OR division_field.company_id=$1)
+           LEFT JOIN platform_objects division_object
+             ON division_object.object_key=division_field.config->>'relatedObjectKey'
+            AND division_object.active=TRUE
+            AND (division_object.company_id IS NULL OR division_object.company_id=$1)
           WHERE store_object.object_key='store'
             AND store_object.active=TRUE
             AND (store_object.company_id IS NULL OR store_object.company_id=$1)
-          ORDER BY (store_object.company_id IS NOT NULL) DESC
+          ORDER BY (division_field.company_id IS NOT NULL) DESC,
+                   (store_object.company_id IS NOT NULL) DESC
           LIMIT 1`,
         [companyId, storeId]
       );
       businessDivisionId = divisionScope.rows[0]?.business_division_id || null;
+      businessDivisionObjectId = divisionScope.rows[0]?.business_division_object_id || null;
+      if (!businessDivisionObjectId) businessDivisionId = null;
     }
 
-    const scopeKey = `${storeId || 'all'}:${businessDivisionId || 'all'}`;
+    const scopeKey = `${storeId || 'all'}:${businessDivisionObjectId || 'all'}:${businessDivisionId || 'all'}:${salesChannel}`;
     const requestedScope = typeof req.query.scope === "string" ? req.query.scope : "";
     const requestedSince = typeof req.query.since === "string" && req.query.since
       ? req.query.since
       : null;
 
-    // Division filtering can make a formerly-visible product disappear. A delta
-    // cannot safely express that removal without tombstones, so mapped stores
-    // intentionally receive a full snapshot. Unmapped stores retain delta sync.
-    const since = businessDivisionId
+    // Availability changes can remove a product from the active context, so a
+    // scoped store receives a full snapshot rather than an unsafe delta.
+    const hasScopedCatalogue = Boolean(storeId || businessDivisionId);
+    const since = hasScopedCatalogue
       ? null
       : (requestedScope === scopeKey ? requestedSince : null);
 
-    const params = [companyId, storeId];
-    let divisionClause = "";
-    if (businessDivisionId) {
-      params.push(businessDivisionId);
-      const divisionParam = params.length;
-      divisionClause = `
-         AND EXISTS (
-           SELECT 1
-             FROM platform_objects product_object
-             JOIN platform_record_associations product_association
-               ON product_association.object_id=product_object.id
-              AND product_association.record_id=p.id
-              AND product_association.company_id=p.company_id
-            WHERE product_object.object_key='product'
-              AND product_object.active=TRUE
-              AND (product_object.company_id IS NULL OR product_object.company_id=p.company_id)
-              AND product_association.custom_values->>'business_division_id'=$${divisionParam}
-         )`;
-    }
+    const scopeParams = [companyId, storeId, businessDivisionObjectId, businessDivisionId, salesChannel];
+    const params = [...scopeParams];
+    const availabilityClause = `
+      AND (
+        NOT EXISTS (
+          SELECT 1
+            FROM product_availability pa_any
+           WHERE pa_any.company_id=p.company_id
+             AND pa_any.product_id=p.id
+        )
+        OR EXISTS (
+          SELECT 1
+            FROM product_availability pa
+           WHERE pa.company_id=p.company_id
+             AND pa.product_id=p.id
+             AND pa.active=TRUE
+             AND (pa.store_id IS NULL OR pa.store_id=$2)
+             AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$3)
+             AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$4)
+             AND pa.channel IN ($5,'all')
+        )
+      )`;
 
     let sinceClause = "";
     if (since) {
@@ -460,8 +478,10 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
       sinceClause = `AND GREATEST(p.updated_at, COALESCE(ps.updated_at, p.updated_at), COALESCE(c.created_at, p.updated_at)) > $${params.length}::timestamptz`;
     }
 
-    const products = await db(
-      `SELECT p.id, p.name, p.sku, p.barcode, p.price, p.vat_rate, p.vat_applicable,
+    const catalogueProducts = await db(
+      `SELECT p.id, p.name, p.sku, p.barcode,
+              COALESCE(scoped_price.price, p.price) AS price,
+              p.vat_rate, p.vat_applicable,
               p.age_restricted, p.image_url, p.low_stock_level, p.track_stock,
               p.category_id, p.active, c.name AS category_name,
               COALESCE(ps.quantity, p.stock_quantity) AS stock,
@@ -469,9 +489,26 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
        FROM products p
        LEFT JOIN categories c ON c.id=p.category_id AND c.company_id=p.company_id
        LEFT JOIN product_store_stock ps ON ps.product_id=p.id AND ps.company_id=p.company_id AND ps.store_id=$2
+       LEFT JOIN LATERAL (
+         SELECT plp.price
+           FROM product_availability pa
+           JOIN price_list_prices plp
+             ON plp.price_list_id=pa.price_list_id
+            AND plp.product_id=pa.product_id
+          WHERE pa.company_id=p.company_id
+            AND pa.product_id=p.id
+            AND pa.active=TRUE
+            AND (pa.store_id IS NULL OR pa.store_id=$2)
+            AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$3)
+            AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$4)
+            AND pa.channel IN ($5,'all')
+          ORDER BY (pa.store_id IS NOT NULL) DESC, pa.priority DESC, pa.updated_at DESC
+          LIMIT 1
+       ) scoped_price ON TRUE
        WHERE p.company_id=$1
+         AND p.active=TRUE
          AND p.sku IS DISTINCT FROM 'MISC'
-         ${divisionClause}
+         ${availabilityClause}
          ${sinceClause}
        ORDER BY p.name`,
       params
@@ -484,20 +521,9 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
         WHERE c.company_id=$1
           AND p.active=TRUE
           AND p.sku IS DISTINCT FROM 'MISC'
-          ${businessDivisionId ? `AND EXISTS (
-            SELECT 1
-              FROM platform_objects product_object
-              JOIN platform_record_associations product_association
-                ON product_association.object_id=product_object.id
-               AND product_association.record_id=p.id
-               AND product_association.company_id=p.company_id
-             WHERE product_object.object_key='product'
-               AND product_object.active=TRUE
-               AND (product_object.company_id IS NULL OR product_object.company_id=p.company_id)
-               AND product_association.custom_values->>'business_division_id'=$2
-          )` : ""}
+          ${availabilityClause}
         ORDER BY c.display_order, c.name`,
-      businessDivisionId ? [companyId, businessDivisionId] : [companyId]
+      scopeParams
     );
 
     const versionResult = await db(
@@ -505,7 +531,8 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
          COALESCE((SELECT MAX(updated_at) FROM products WHERE company_id=$1), 'epoch'::timestamptz),
          COALESCE((SELECT MAX(created_at) FROM categories WHERE company_id=$1), 'epoch'::timestamptz),
          COALESCE((SELECT MAX(updated_at) FROM product_store_stock WHERE company_id=$1 AND store_id=$2), 'epoch'::timestamptz),
-         COALESCE((SELECT MAX(updated_at) FROM platform_record_associations WHERE company_id=$1), 'epoch'::timestamptz)
+         COALESCE((SELECT MAX(updated_at) FROM platform_record_associations WHERE company_id=$1), 'epoch'::timestamptz),
+         COALESCE((SELECT MAX(updated_at) FROM product_availability WHERE company_id=$1), 'epoch'::timestamptz)
        ) AS version`,
       [companyId, storeId]
     );
@@ -516,8 +543,10 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
         version: versionResult.rows[0]?.version || null,
         scopeKey,
         businessDivisionId,
+        businessDivisionObjectId,
+        salesChannel,
         full: !since,
-        products: products.rows,
+        products: catalogueProducts.rows,
         categories: categories.rows,
       },
     });

@@ -167,27 +167,45 @@ export async function seedOneSolutionsDemo(pool) {
     const productObject=(await client.query(
       "SELECT id FROM platform_objects WHERE object_key='product' AND active=TRUE ORDER BY company_id NULLS FIRST LIMIT 1"
     )).rows[0];
-    let divisionLookup=null;
+    const availabilityObject=(await client.query(
+      "SELECT id FROM platform_objects WHERE object_key='product_availability' AND active=TRUE ORDER BY company_id NULLS FIRST LIMIT 1"
+    )).rows[0];
+
+    // Product-to-division is many-to-many. Retire the legacy direct lookup and
+    // expose Product Availability as the related-record junction instead.
     if (productObject) {
-      divisionLookup=(await client.query(
-        `INSERT INTO platform_fields(object_id,company_id,api_name,label,field_type,required,readable,writable,config,display_order,active)
-         VALUES($1,$2,'business_division_id','Business Division','lookup',FALSE,TRUE,TRUE,
-                '{"relatedObjectKey":"onesolutions_business_division"}'::jsonb,900,TRUE)
-         ON CONFLICT(object_id,company_id,api_name) WHERE company_id IS NOT NULL
-         DO UPDATE SET label=EXCLUDED.label,field_type='lookup',writable=TRUE,config=EXCLUDED.config,active=TRUE
-         RETURNING id`,[productObject.id,company.id]
-      )).rows[0];
       await client.query(
-        `INSERT INTO platform_relationships(parent_object_id,child_object_id,relationship_key,label,description,relationship_type,child_field_id,on_delete,on_update,active)
-         VALUES($1,$2,'products','Products','Products mapped to this business division','one_to_many',$3,'restrict','restrict',TRUE)
-         ON CONFLICT(parent_object_id,relationship_key) DO UPDATE SET child_object_id=EXCLUDED.child_object_id,
-           child_field_id=EXCLUDED.child_field_id,label=EXCLUDED.label,description=EXCLUDED.description,active=TRUE`,
-        [divisionObject.id,productObject.id,divisionLookup.id]
+        `UPDATE platform_fields
+            SET active=FALSE
+          WHERE object_id=$1 AND company_id=$2 AND api_name='business_division_id'`,
+        [productObject.id,company.id]
       );
+      await client.query(
+        `UPDATE platform_relationships
+            SET active=FALSE
+          WHERE parent_object_id=$1 AND child_object_id=$2 AND relationship_key='products'`,
+        [divisionObject.id,productObject.id]
+      );
+    }
+    if (availabilityObject) {
+      const scopeRecordField=(await client.query(
+        "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name='scope_record_id' AND company_id IS NULL LIMIT 1",
+        [availabilityObject.id]
+      )).rows[0];
+      if (scopeRecordField?.id) {
+        await client.query(
+          `INSERT INTO platform_relationships(parent_object_id,child_object_id,relationship_key,label,description,relationship_type,child_field_id,on_delete,on_update,active)
+           VALUES($1,$2,'product_availability','Product Availability','Products available in this business division','one_to_many',$3,'restrict','restrict',TRUE)
+           ON CONFLICT(parent_object_id,relationship_key) DO UPDATE SET
+             child_object_id=EXCLUDED.child_object_id,child_field_id=EXCLUDED.child_field_id,
+             label=EXCLUDED.label,description=EXCLUDED.description,relationship_type='one_to_many',active=TRUE`,
+          [divisionObject.id,availabilityObject.id,scopeRecordField.id]
+        );
+      }
     }
 
     const categories=[
-      ['Retail Essentials',10],['QSR Menu',20],['Beauty Services',30],['Cleaning Services',40],['Electronics',50]
+      ['Retail Essentials',10],['Drinks',15],['QSR Menu',20],['Beauty Services',30],['Cleaning Services',40],['Electronics',50]
     ];
     const categoryIds={};
     for(const [name,displayOrder] of categories){
@@ -197,6 +215,111 @@ export async function seedOneSolutionsDemo(pool) {
         [company.id,name,displayOrder]
       )).rows[0];
       categoryIds[name]=row.id;
+    }
+
+    // Every active division gets a Till price list dynamically. Availability
+    // remains metadata/record driven even when a tenant adds its own divisions.
+    const priceListIds={};
+    const activeDivisions=(await client.query(
+      "SELECT id,division_key,name FROM onesolutions_business_divisions WHERE company_id=$1 AND active=TRUE ORDER BY name",
+      [company.id]
+    )).rows;
+    for(const division of activeDivisions){
+      divisionIds[division.division_key]=division.id;
+      const row=(await client.query(
+        `INSERT INTO price_lists(company_id,name,channel,active)
+         VALUES($1,$2,'till',TRUE)
+         ON CONFLICT(company_id,name) DO UPDATE SET channel='till',active=TRUE
+         RETURNING id`,
+        [company.id,`${division.name} Till`]
+      )).rows[0];
+      priceListIds[division.division_key]=row.id;
+    }
+
+    const ensureProductAvailability=async(productId,divisionKey,price,{overwritePrice=true}={})=>{
+      const scopeRecordId=divisionIds[divisionKey];
+      const priceListId=priceListIds[divisionKey];
+      if(!scopeRecordId || !priceListId) return;
+
+      if(overwritePrice){
+        await client.query(
+          `INSERT INTO price_list_prices(price_list_id,product_id,price)
+           VALUES($1,$2,$3)
+           ON CONFLICT(price_list_id,product_id) DO UPDATE SET price=EXCLUDED.price`,
+          [priceListId,productId,price]
+        );
+      }else{
+        await client.query(
+          `INSERT INTO price_list_prices(price_list_id,product_id,price)
+           VALUES($1,$2,$3)
+           ON CONFLICT(price_list_id,product_id) DO NOTHING`,
+          [priceListId,productId,price]
+        );
+      }
+
+      const existing=(await client.query(
+        `SELECT id FROM product_availability
+          WHERE company_id=$1 AND product_id=$2 AND scope_object_id=$3 AND scope_record_id=$4
+            AND store_id IS NULL AND channel='till'
+          LIMIT 1`,
+        [company.id,productId,divisionObject.id,scopeRecordId]
+      )).rows[0];
+      if(existing){
+        await client.query(
+          `UPDATE product_availability
+              SET price_list_id=$2,priority=0,active=TRUE,updated_at=NOW()
+            WHERE id=$1`,
+          [existing.id,priceListId]
+        );
+      }else{
+        await client.query(
+          `INSERT INTO product_availability
+            (company_id,product_id,scope_object_id,scope_record_id,store_id,channel,price_list_id,priority,active)
+           VALUES($1,$2,$3,$4,NULL,'till',$5,0,TRUE)`,
+          [company.id,productId,divisionObject.id,scopeRecordId,priceListId]
+        );
+      }
+    };
+
+    // Convert every legacy Product -> Business Division lookup into a
+    // Product Availability related record before retiring the old value. This
+    // prevents previously scoped products from becoming globally visible.
+    if(productObject){
+      const legacyMappings=(await client.query(
+        `SELECT association.record_id AS product_id,
+                division.division_key,
+                product.price
+           FROM platform_record_associations association
+           JOIN products product
+             ON product.id=association.record_id
+            AND product.company_id=$2
+           JOIN onesolutions_business_divisions division
+             ON division.id::text=association.custom_values->>'business_division_id'
+            AND division.company_id=$2
+          WHERE association.object_id=$1
+            AND association.company_id=$2
+            AND association.custom_values ? 'business_division_id'`,
+        [productObject.id,company.id]
+      )).rows;
+
+      for(const legacy of legacyMappings){
+        await ensureProductAvailability(
+          legacy.product_id,
+          legacy.division_key,
+          Number(legacy.price || 0),
+          {overwritePrice:false}
+        );
+      }
+
+      await client.query(
+        `UPDATE platform_record_associations
+            SET custom_values=custom_values - 'business_division_id',
+                updated_at=NOW()
+          WHERE object_id=$1
+            AND company_id=$2
+            AND custom_values ? 'business_division_id'`,
+        [productObject.id,company.id]
+      );
     }
 
     const products=[
@@ -210,35 +333,105 @@ export async function seedOneSolutionsDemo(pool) {
       {d:'cleaning_services',c:'Cleaning Services',n:'Deep Clean Service',sku:'DEMO-CLN-002',barcode:'5010000000302',p:140,cost:0,stock:0,track:false,img:'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?auto=format&fit=crop&w=800&q=80'},
       {d:'electronics',c:'Electronics',n:'Wireless Headphones',sku:'DEMO-ELC-001',barcode:'5010000000401',p:59.99,cost:28,stock:18,img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80'},
       {d:'electronics',c:'Electronics',n:'USB-C Charger',sku:'DEMO-ELC-002',barcode:'5010000000402',p:24.99,cost:8.50,stock:35,img:'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&w=800&q=80'},
+      {d:'retail',divisions:['retail','restaurant_qsr'],prices:{retail:1.49,restaurant_qsr:2.95},c:'Drinks',n:'Cola 330ml',sku:'DEMO-SHARED-001',barcode:'5010000000501',p:1.49,cost:.55,stock:48,img:null,matchLike:'%coca%cola%'},
+      {d:'retail',divisions:['retail','restaurant_qsr'],prices:{retail:2.49,restaurant_qsr:4.95},c:'Drinks',n:'Wheat Beer 330ml',sku:'DEMO-SHARED-002',barcode:'5010000000502',p:2.49,cost:1.10,stock:24,age:true,img:null,matchLike:'%hoeg%'},
     ];
     for(const p of products){
-      const row=(await client.query(
-        `INSERT INTO products(company_id,category_id,name,sku,barcode,description,price,cost_price,vat_rate,vat_applicable,
-                              stock_quantity,low_stock_level,track_stock,image_url,active,kiosk_metadata)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,20,TRUE,$9,5,$10,$11,TRUE,$12::jsonb)
-         ON CONFLICT(company_id,LOWER(sku)) WHERE sku IS NOT NULL AND active=TRUE
-         DO UPDATE SET category_id=EXCLUDED.category_id,name=EXCLUDED.name,barcode=EXCLUDED.barcode,
-                       description=EXCLUDED.description,price=EXCLUDED.price,cost_price=EXCLUDED.cost_price,
-                       stock_quantity=EXCLUDED.stock_quantity,track_stock=EXCLUDED.track_stock,image_url=EXCLUDED.image_url,
-                       kiosk_metadata=EXCLUDED.kiosk_metadata,updated_at=NOW()
-         RETURNING id`,
-        [company.id,categoryIds[p.c],p.n,p.sku,p.barcode,`OneSolutions ${p.d} demo item`,p.p,p.cost,p.stock,p.track!==false,p.img,JSON.stringify({demo:true,division:p.d})]
-      )).rows[0];
-      await client.query(
-        `INSERT INTO product_store_stock(company_id,store_id,product_id,quantity)
-         VALUES($1,$2,$3,$4)
-         ON CONFLICT(company_id,store_id,product_id) DO UPDATE SET quantity=EXCLUDED.quantity,updated_at=NOW()`,
-        [company.id,store.id,row.id,p.stock]
-      );
-      if(productObject){
+      let row=null;
+      let reusedExisting=false;
+      if(p.matchLike){
+        row=(await client.query(
+          `SELECT id,price FROM products
+            WHERE company_id=$1 AND active=TRUE AND LOWER(name) LIKE LOWER($2)
+            ORDER BY updated_at DESC,id LIMIT 1`,
+          [company.id,p.matchLike]
+        )).rows[0] || null;
+        reusedExisting=Boolean(row);
+      }
+      if(!row){
+        row=(await client.query(
+          `INSERT INTO products(company_id,category_id,name,sku,barcode,description,price,cost_price,vat_rate,vat_applicable,
+                                age_restricted,stock_quantity,low_stock_level,track_stock,image_url,active,kiosk_metadata)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,20,TRUE,$9,$10,5,$11,$12,TRUE,$13::jsonb)
+           ON CONFLICT(company_id,LOWER(sku)) WHERE sku IS NOT NULL AND active=TRUE
+           DO UPDATE SET category_id=EXCLUDED.category_id,name=EXCLUDED.name,barcode=EXCLUDED.barcode,
+                         description=EXCLUDED.description,price=EXCLUDED.price,cost_price=EXCLUDED.cost_price,
+                         age_restricted=EXCLUDED.age_restricted,stock_quantity=EXCLUDED.stock_quantity,
+                         track_stock=EXCLUDED.track_stock,image_url=COALESCE(EXCLUDED.image_url,products.image_url),
+                         kiosk_metadata=EXCLUDED.kiosk_metadata,updated_at=NOW()
+           RETURNING id,price`,
+          [company.id,categoryIds[p.c],p.n,p.sku,p.barcode,`OneSolutions ${p.d} demo item`,p.p,p.cost,p.age===true,p.stock,p.track!==false,p.img,JSON.stringify({demo:true,division:p.d})]
+        )).rows[0];
+      }else{
         await client.query(
-          `INSERT INTO platform_record_associations(object_id,record_id,company_id,custom_values)
-           VALUES($1,$2,$3,$4::jsonb)
-           ON CONFLICT(object_id,record_id)
-           DO UPDATE SET custom_values=platform_record_associations.custom_values || EXCLUDED.custom_values`,
-          [productObject.id,row.id,company.id,JSON.stringify({business_division_id:divisionIds[p.d]})]
+          `UPDATE products
+              SET age_restricted=(age_restricted OR $2),
+                  image_url=COALESCE(image_url,$3),
+                  active=TRUE,updated_at=NOW()
+            WHERE id=$1`,
+          [row.id,p.age===true,p.img]
         );
       }
+
+      if(reusedExisting){
+        await client.query(
+          `INSERT INTO product_store_stock(company_id,store_id,product_id,quantity)
+           VALUES($1,$2,$3,$4)
+           ON CONFLICT(company_id,store_id,product_id) DO NOTHING`,
+          [company.id,store.id,row.id,p.stock]
+        );
+      }else{
+        await client.query(
+          `INSERT INTO product_store_stock(company_id,store_id,product_id,quantity)
+           VALUES($1,$2,$3,$4)
+           ON CONFLICT(company_id,store_id,product_id) DO UPDATE SET quantity=EXCLUDED.quantity,updated_at=NOW()`,
+          [company.id,store.id,row.id,p.stock]
+        );
+      }
+
+      if(productObject){
+        await client.query(
+          `UPDATE platform_record_associations
+              SET custom_values=custom_values - 'business_division_id',updated_at=NOW()
+            WHERE object_id=$1 AND record_id=$2 AND company_id=$3`,
+          [productObject.id,row.id,company.id]
+        );
+      }
+
+      for(const divisionKey of (p.divisions || [p.d])){
+        const scopedPrice=reusedExisting
+          ? Number(row.price ?? p.p)
+          : (p.prices?.[divisionKey] ?? p.p);
+        await ensureProductAvailability(row.id,divisionKey,scopedPrice,{overwritePrice:!reusedExisting});
+      }
+    }
+
+    // Existing shared beverage records (including products created before this
+    // canonical seed) are related to both retail and restaurant contexts rather
+    // than being duplicated per division.
+    const sharedProducts=(await client.query(
+      `SELECT id,name,price
+         FROM products
+        WHERE company_id=$1 AND active=TRUE
+          AND (LOWER(name) LIKE '%coca%cola%' OR LOWER(name) LIKE '%hoeg%')`,
+      [company.id]
+    )).rows;
+    for(const shared of sharedProducts){
+      const isBeer=String(shared.name || '').toLowerCase().includes('hoeg');
+      if(isBeer){
+        await client.query("UPDATE products SET age_restricted=TRUE,updated_at=NOW() WHERE id=$1",[shared.id]);
+      }
+      if(productObject){
+        await client.query(
+          `UPDATE platform_record_associations
+              SET custom_values=custom_values - 'business_division_id',updated_at=NOW()
+            WHERE object_id=$1 AND record_id=$2 AND company_id=$3`,
+          [productObject.id,shared.id,company.id]
+        );
+      }
+      const basePrice=Number(shared.price || 0);
+      await ensureProductAvailability(shared.id,'retail',basePrice,{overwritePrice:false});
+      await ensureProductAvailability(shared.id,'restaurant_qsr',basePrice,{overwritePrice:false});
     }
 
     const customers=[

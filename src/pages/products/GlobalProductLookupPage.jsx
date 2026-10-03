@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, KeyRound, LoaderCircle, Plus, Search, Wifi, X } from 'lucide-react'
+import { Barcode, Check, ChevronRight, Globe2, KeyRound, LoaderCircle, PackageSearch, Plus, Search, Settings2, Wifi, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { ProductEditor } from './ProductsPage'
 
@@ -22,6 +22,8 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const [testingProvider,setTestingProvider]=useState('')
   const [changingDefault,setChangingDefault]=useState(false)
   const [preset,setPreset]=useState(null)
+  const [manageProviders,setManageProviders]=useState(false)
+  const [previewProduct,setPreviewProduct]=useState(null)
 
   const loadSettings=async()=>{
     try{
@@ -132,50 +134,138 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const activeProvider=usableProviders.find(p=>p.isDefault)||usableProviders[0]||null
   const providerMissing=!settingsLoading&&usableProviders.length===0
   const selectedProviderCannotSearch=lookupMode==='name'&&activeProvider&&activeProvider.supportsSearch===false
+  const displayResults=lookupMode==='name'
+    ? searchResults
+    : result?.status==='found'&&result?.product
+      ? [result.product]
+      : []
+  const visibleQuery=lookupMode==='barcode'?barcode.trim():searchText.trim()
+  const providerLabel=(provider)=>String(provider?.displayName||provider?.providerKey||'Provider').replaceAll('_',' ')
+  const exampleSearches=['Coca-Cola','Nutella','Haribo','Red Bull','Nivea','Heineken']
 
   return <section className="module-page global-product-page">
-    <header className="module-page-header">
-      <div><span>Catalogue</span><h1>Global Product Lookup</h1><p>Search worldwide products by barcode or product name, then add the result to your company catalogue.</p></div>
-      <div className="module-header-actions">{onBack?<button onClick={onBack}>Back to Products</button>:null}</div>
-    </header>
+    <section className="global-search-hero">
+      <div className="global-search-hero-copy">
+        <div className="global-search-icon"><Globe2 size={28}/></div>
+        <div>
+          <span>CATALOGUE</span>
+          <h1>Global Product Search</h1>
+          <p>Search millions of products worldwide by barcode or product name, then add them to your company catalogue.</p>
+        </div>
+        {onBack?<button className="global-back-button" type="button" onClick={onBack}>Back to Products</button>:null}
+      </div>
+
+      <form onSubmit={lookup} className="global-search-bar">
+        <div className="global-search-input">
+          {lookupMode==='barcode'?<Barcode size={19}/>:<Search size={19}/>}
+          <input
+            inputMode={lookupMode==='barcode'?'numeric':'search'}
+            autoComplete="off"
+            value={lookupMode==='barcode'?barcode:searchText}
+            maxLength={lookupMode==='barcode'?20:120}
+            onChange={e=>lookupMode==='barcode'?setBarcode(e.target.value):setSearchText(e.target.value)}
+            placeholder={lookupMode==='barcode'?'Scan barcode or enter EAN, UPC or GTIN…':'Search product name, brand or keyword…'}
+          />
+        </div>
+        <select
+          className="global-search-mode"
+          value={lookupMode}
+          onChange={e=>{setLookupMode(e.target.value);setResult(null);setSearchResults([]);setError('')}}
+          aria-label="Search mode"
+        >
+          <option value="name">Product name</option>
+          <option value="barcode">Barcode</option>
+        </select>
+        <button
+          className="global-search-submit"
+          type="submit"
+          disabled={loading||settingsLoading||providerMissing||selectedProviderCannotSearch||(lookupMode==='barcode'?!barcode.trim():searchText.trim().length<2)}
+        >
+          {loading||settingsLoading?<LoaderCircle size={16} className="spin"/>:<Search size={16}/>}
+          {loading?'Searching…':settingsLoading?'Loading…':'Search'}
+        </button>
+      </form>
+
+      <div className="global-search-examples">
+        <span>Examples:</span>
+        {exampleSearches.map(item=><button key={item} type="button" onClick={()=>{setLookupMode('name');setSearchText(item);setResult(null);setSearchResults([])}}>{item}</button>)}
+      </div>
+    </section>
 
     {notice?<div className="module-success module-page-message"><strong>{notice}</strong></div>:null}
     {error?<div className="module-inline-error module-page-message">{error}</div>:null}
 
-    <section className="module-panel global-lookup-panel">
-      <form onSubmit={lookup} className="global-lookup-form">
-        <label className="module-input-label"><span>Search by</span><select value={lookupMode} onChange={e=>{setLookupMode(e.target.value);setResult(null);setSearchResults([]);setError('')}}><option value="barcode">Barcode / EAN / UPC / GTIN</option><option value="name">Product name / brand</option></select></label>
-        {lookupMode==='barcode'
-          ?<label className="module-input-label"><span>Barcode</span><input inputMode="numeric" autoComplete="off" value={barcode} maxLength={20} onChange={e=>setBarcode(e.target.value)} placeholder="Scan or enter EAN, UPC or GTIN"/></label>
-          :<label className="module-input-label"><span>Product search</span><input autoComplete="off" value={searchText} maxLength={120} onChange={e=>setSearchText(e.target.value)} placeholder="e.g. Nutella, Haribo, Coca-Cola"/></label>}
-        <button className="module-primary-button" type="submit" disabled={loading||settingsLoading||providerMissing||selectedProviderCannotSearch||(lookupMode==='barcode'?!barcode.trim():searchText.trim().length<2)}>{loading?<LoaderCircle size={14}/>:settingsLoading?<LoaderCircle size={14}/>:<Search size={14}/>} {loading?'Searching…':settingsLoading?'Loading providers…':'Search worldwide'}</button>
-      </form>
-      <div className="module-state" style={{paddingTop:8,paddingBottom:8}}>
-        {activeProvider?<>Using <strong>{activeProvider.displayName}</strong> as the default provider. Only this provider is called for each lookup, so API usage stays under the user's control.</>:<>Worldwide scope — install a lookup provider to begin.</>}
+    <section className="global-provider-strip">
+      <div className="global-provider-strip-left">
+        <strong>Active providers:</strong>
+        {usableProviders.length
+          ? usableProviders.map(provider=><span className="global-provider-pill" key={provider.providerKey}><i/>{providerLabel(provider)}</span>)
+          : <span className="global-provider-empty">No provider installed</span>}
       </div>
-      {selectedProviderCannotSearch?<div className="module-inline-error">The selected provider supports barcode lookup only. Choose a provider with product-name search support or switch back to barcode mode.</div>:null}
+      <button type="button" className="global-manage-link" onClick={()=>setManageProviders(value=>!value)}>
+        <Settings2 size={16}/>
+        {manageProviders?'Hide provider settings':'Manage providers'}
+        <ChevronRight size={15} className={manageProviders?'is-open':''}/>
+      </button>
+    </section>
 
-      {providerMissing?<div className="module-state global-provider-missing">No Global Product Lookup provider is installed and enabled.{onOpenStore?<button type="button" onClick={onOpenStore}>Browse oneStore</button>:null}</div>:null}
+    {providerMissing?<section className="global-provider-empty-state">
+      <div className="global-provider-empty-icon"><PackageSearch size={24}/></div>
+      <div>
+        <strong>Install a product lookup provider to search worldwide</strong>
+        <span>Choose Open Food Facts, UPCitemdb, Go-UPC or another compatible provider.</span>
+      </div>
+      {onOpenStore?<button type="button" onClick={onOpenStore}>Browse oneStore</button>:null}
+    </section>:null}
 
-      {result?.status==='not_found'?<div className="module-state">No provider found a Product for this barcode.</div>:null}
+    {selectedProviderCannotSearch?<div className="module-inline-error module-page-message">The selected provider supports barcode lookup only. Switch to Barcode or choose a provider with product-name search support.</div>:null}
+
+    <section className="global-results-panel">
+      <header className="global-results-header">
+        <div>
+          <h2>Search Results</h2>
+          <p>{visibleQuery?<>Showing results for <strong>“{visibleQuery}”</strong></>:<>Search by product name or scan a barcode to begin.</>}</p>
+        </div>
+        {displayResults.length?<span>{displayResults.length} result{displayResults.length===1?'':'s'}</span>:null}
+      </header>
+
+      {result?.status==='not_found'?<div className="global-results-state">No matching product was found.</div>:null}
       {result?.status==='unavailable'?<div className="module-inline-error">
         <strong>{activeProvider?.displayName||'Product provider'} could not complete the request.</strong>
         {Array.isArray(result?.providerErrors)&&result.providerErrors.length?<ul>{result.providerErrors.map((item,index)=><li key={`${item.provider}-${index}`}>{item.message||item.code||'Provider request failed'}</li>)}</ul>:null}
       </div>:null}
-      {lookupMode==='name'&&result?.status==='not_found'?<div className="module-state">No matching products were found in the worldwide database.</div>:null}
-      {lookupMode==='name'&&searchResults.length?<div className="global-product-search-results">{searchResults.map(product=><div className="global-product-result" key={`${product.sourceProvider}:${product.barcode}`}>
-        {product.imageUrl?<img src={product.imageUrl} alt="" />:null}
-        <div><strong>{product.name}</strong><span>{[product.brand,product.quantity].filter(Boolean).join(' · ')}</span><small>Barcode {product.barcode} · {[product.country,product.sourceProvider&&String(product.sourceProvider).replaceAll('_',' ')].filter(Boolean).join(' · ')}</small>{product.category?<small>{product.category}</small>:null}</div>
-        <button className="module-primary-button" type="button" onClick={()=>addToCatalogue(product)}><Plus size={14}/> Add to company catalogue</button>
-      </div>)}</div>:null}
-      {result?.status==='found'?<div className="global-product-result">
-        {result.product.imageUrl?<img src={result.product.imageUrl} alt="" />:null}
-        <div><strong>{result.product.name}</strong><span>{[result.product.brand,result.product.variant,result.product.quantity].filter(Boolean).join(' · ')}</span><small>Barcode {result.product.barcode} · Source {String(result.product.sourceProvider||'').replaceAll('_',' ')}</small>{result.product.description?<p>{result.product.description}</p>:null}{result.product.category?<small>{result.product.category}</small>:null}</div>
-        <button className="module-primary-button" type="button" onClick={()=>addToCatalogue(result.product)}><Plus size={14}/> Add to company catalogue</button>
+      {!displayResults.length&&result?.status!=='not_found'&&result?.status!=='unavailable'
+        ? <div className="global-results-state">
+            <Globe2 size={30}/>
+            <strong>Worldwide product catalogue</strong>
+            <span>Search results will appear here as clean product cards.</span>
+          </div>
+        : null}
+
+      {displayResults.length?<div className="global-product-grid">
+        {displayResults.map((product,index)=><article className="global-product-card" key={`${product.sourceProvider||'provider'}:${product.barcode||product.name||index}`}>
+          <div className="global-product-image">
+            {product.imageUrl?<img src={product.imageUrl} alt="" />:<PackageSearch size={34}/>}
+          </div>
+          <div className="global-product-card-body">
+            <strong className="global-product-name">{product.name||'Unnamed product'}</strong>
+            <span className="global-product-brand">{product.brand||'Brand not provided'}</span>
+            <span>{product.category||'Uncategorised'}</span>
+            {product.quantity?<span>{product.quantity}</span>:null}
+            <div className="global-product-barcode"><Barcode size={14}/><span>{product.barcode||'No barcode'}</span></div>
+          </div>
+          <div className="global-product-source">
+            <span>{providerLabel({displayName:product.sourceProvider||activeProvider?.displayName||'Provider'})}</span>
+          </div>
+          <div className="global-product-actions">
+            <button type="button" className="global-secondary-button" onClick={()=>setPreviewProduct(product)}>View Details</button>
+            <button type="button" className="global-primary-button" onClick={()=>addToCatalogue(product)}><Plus size={15}/> Add to Catalogue</button>
+          </div>
+        </article>)}
       </div>:null}
     </section>
 
-    <section className="module-panel global-provider-panel">
+    {manageProviders?<section className="module-panel global-provider-panel">
       <header className="module-card-header">
         <div><strong>Provider settings</strong><span>{providers.length} providers</span></div>
         <label className="module-input-label" style={{minWidth:260}}>
@@ -202,7 +292,27 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
         {provider.configurableFields?.includes('userAgent')?<label className="module-input-label"><span>User-Agent identification</span><input value={provider.userAgent||''} onChange={e=>setProviderField(provider.providerKey,'userAgent',e.target.value)}/></label>:null}
         {provider.acceptsApiKey?<label className="module-input-label global-provider-key"><span>{provider.displayName} API key{provider.requiresApiKey?'':' (optional)'}</span><div><KeyRound size={13}/><input type="password" autoComplete="new-password" value={apiKeys[provider.providerKey]||''} onChange={e=>setApiKeys(keys=>({...keys,[provider.providerKey]:e.target.value}))} placeholder={provider.usingCustomerKey||provider.configured?'Enter a new key to replace saved key':provider.requiresApiKey?'Enter your customer API key':'Leave blank to use the provider free mode'}/></div></label>:null}
       </article>)}</div>}
-    </section>
+    </section>:null}
+
+    {previewProduct?<div className="global-product-preview-backdrop" role="presentation" onClick={()=>setPreviewProduct(null)}>
+      <article className="global-product-preview" role="dialog" aria-modal="true" aria-label="Product details" onClick={e=>e.stopPropagation()}>
+        <button type="button" className="global-preview-close" onClick={()=>setPreviewProduct(null)}><X size={18}/></button>
+        <div className="global-preview-image">{previewProduct.imageUrl?<img src={previewProduct.imageUrl} alt="" />:<PackageSearch size={48}/>}</div>
+        <div className="global-preview-content">
+          <span>GLOBAL PRODUCT</span>
+          <h2>{previewProduct.name||'Unnamed product'}</h2>
+          <p>{previewProduct.description||'No product description is available from this provider.'}</p>
+          <dl>
+            <div><dt>Brand</dt><dd>{previewProduct.brand||'—'}</dd></div>
+            <div><dt>Barcode</dt><dd>{previewProduct.barcode||'—'}</dd></div>
+            <div><dt>Category</dt><dd>{previewProduct.category||'—'}</dd></div>
+            <div><dt>Quantity</dt><dd>{previewProduct.quantity||'—'}</dd></div>
+            <div><dt>Provider</dt><dd>{providerLabel({displayName:previewProduct.sourceProvider||activeProvider?.displayName||'Provider'})}</dd></div>
+          </dl>
+          <button type="button" className="global-primary-button" onClick={()=>{addToCatalogue(previewProduct);setPreviewProduct(null)}}><Plus size={15}/> Add to Catalogue</button>
+        </div>
+      </article>
+    </div>:null}
 
     {preset?<ProductEditor mode="create" product={null} preset={preset} categories={categories} onClose={()=>setPreset(null)} onSaved={()=>{setPreset(null);setNotice('Product added to your company catalogue.')}}/>:null}
   </section>

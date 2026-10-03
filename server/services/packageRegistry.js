@@ -2980,14 +2980,76 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
       );
       if (!parentFieldResult.rows.length) throw new Error(`Package relationship field not found: ${parentFieldKey}`);
     }
-    const registeredRelationship = await db(      `INSERT INTO platform_relationships
+    const relationshipKey = relationship.relationshipKey || relationship.relationship_key;
+    const declaredRelationshipType = relationship.relationshipType || relationship.relationship_type || "lookup";
+    const existingRelationship = await db(
+      `SELECT id,child_object_id,relationship_type,child_field_id,source_package_id,managed,user_modified
+         FROM platform_relationships
+        WHERE parent_object_id=$1 AND relationship_key=$2
+        LIMIT 1`,
+      [parentObjectId, relationshipKey]
+    );
+    if (existingRelationship.rows.length) {
+      const existing = existingRelationship.rows[0];
+      if (existing.source_package_id && existing.source_package_id !== packageId) {
+        throw new Error(`Package relationship key is owned by another declaration: ${relationshipKey}`);
+      }
+      if (!existing.source_package_id) {
+        const sameChild = String(existing.child_object_id || "") === String(childObjectId || "");
+        const sameType = String(existing.relationship_type || "") === String(declaredRelationshipType || "");
+        const sameField = String(existing.child_field_id || "") === String(childFieldId || "");
+        const safeLegacyAdoption =
+          existing.user_modified === false &&
+          existing.managed === false &&
+          sameChild &&
+          sameType &&
+          sameField;
+        if (!safeLegacyAdoption) {
+          throw new Error(`Package relationship key is owned by another declaration: ${relationshipKey}`);
+        }
+        await db(
+          `UPDATE platform_relationships
+              SET source_package_id=$1,source_package_version=$2,managed=true,
+                  package_required=$3,active=true
+            WHERE id=$4`,
+          [packageId, packageVersion, relationship.required === true, existing.id]
+        );
+        await db(
+          `INSERT INTO package_metadata_ownership
+             (package_id,package_version,metadata_type,metadata_id,managed,package_required,user_modified,default_snapshot)
+           VALUES ($1,$2,'relationship',$3,true,$4,false,$5::jsonb)
+           ON CONFLICT (package_id,metadata_type,metadata_id)
+           DO UPDATE SET package_version=EXCLUDED.package_version,managed=true,
+                         package_required=EXCLUDED.package_required,user_modified=false,
+                         default_snapshot=EXCLUDED.default_snapshot,updated_at=NOW()`,
+          [
+            packageId,
+            packageVersion,
+            existing.id,
+            relationship.required === true,
+            JSON.stringify({
+              parentObjectId,
+              childObjectId,
+              relationshipKey,
+              relationshipType: declaredRelationshipType,
+              childFieldId,
+            }),
+          ]
+        );
+      }
+    }
+
+    const registeredRelationship = await db(
+      `INSERT INTO platform_relationships
        (parent_object_id,child_object_id,relationship_key,relationship_type,child_field_id,active,source_package_id,source_package_version,managed,package_required)
        VALUES ($1,$2,$3,$4,$5,true,$6,$7,true,$8)
        ON CONFLICT (parent_object_id,relationship_key)
-       DO UPDATE SET child_object_id=EXCLUDED.child_object_id,relationship_type=EXCLUDED.relationship_type,child_field_id=EXCLUDED.child_field_id,source_package_version=EXCLUDED.source_package_version,managed=true,package_required=EXCLUDED.package_required,active=true
+       DO UPDATE SET child_object_id=EXCLUDED.child_object_id,relationship_type=EXCLUDED.relationship_type,child_field_id=EXCLUDED.child_field_id,
+                     source_package_id=EXCLUDED.source_package_id,source_package_version=EXCLUDED.source_package_version,
+                     managed=true,package_required=EXCLUDED.package_required,active=true
        WHERE platform_relationships.source_package_id=EXCLUDED.source_package_id
        RETURNING id`,
-      [parentObjectId, childObjectId, relationship.relationshipKey || relationship.relationship_key, relationship.relationshipType || relationship.relationship_type || "lookup", childFieldId, packageId, packageVersion, relationship.required === true]
+      [parentObjectId, childObjectId, relationshipKey, declaredRelationshipType, childFieldId, packageId, packageVersion, relationship.required === true]
     );
     if (!registeredRelationship.rows?.length && registeredRelationship.rowCount === 0) {
       throw new Error(`Package relationship key is owned by another declaration: ${relationship.relationshipKey || relationship.relationship_key}`);

@@ -1190,6 +1190,50 @@ CREATE TABLE IF NOT EXISTS price_list_prices (
     UNIQUE (price_list_id, product_id)
 );
 
+-- Product availability is a related-record/junction model. Products remain one
+-- master record while availability and price-book selection vary by context.
+CREATE TABLE IF NOT EXISTS product_availability (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    scope_object_id UUID,
+    scope_record_id UUID,
+    store_id UUID REFERENCES stores(id) ON DELETE CASCADE,
+    channel VARCHAR(50) NOT NULL DEFAULT 'till',
+    price_list_id UUID REFERENCES price_lists(id) ON DELETE SET NULL,
+    priority INTEGER NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_availability_product
+ON product_availability(company_id, product_id, active);
+
+CREATE INDEX IF NOT EXISTS idx_product_availability_scope
+ON product_availability(company_id, scope_object_id, scope_record_id, store_id, channel, active);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_product_availability_division_channel
+ON product_availability(
+    company_id,
+    product_id,
+    COALESCE(scope_object_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    COALESCE(scope_record_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    channel
+)
+WHERE store_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_product_availability_store_channel
+ON product_availability(
+    company_id,
+    product_id,
+    COALESCE(scope_object_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    COALESCE(scope_record_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    store_id,
+    channel
+)
+WHERE store_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS scheduled_product_prices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -3533,6 +3577,22 @@ ALTER TABLE platform_fields DROP CONSTRAINT IF EXISTS platform_fields_object_id_
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_fields_global_name ON platform_fields(object_id, api_name) WHERE company_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_fields_tenant_name ON platform_fields(object_id, company_id, api_name) WHERE company_id IS NOT NULL;
 ALTER TABLE platform_record_associations ADD COLUMN IF NOT EXISTS custom_values JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+/* Product Availability is created with the commerce tables before Platform
+   metadata tables exist. Add the scope-object foreign key here, after
+   platform_objects is available, so clean bootstrap order remains valid. */
+DO $ BEGIN
+  IF to_regclass('product_availability') IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_constraint
+        WHERE conname='product_availability_scope_object_id_fkey'
+          AND conrelid='product_availability'::regclass
+     ) THEN
+    ALTER TABLE product_availability
+      ADD CONSTRAINT product_availability_scope_object_id_fkey
+      FOREIGN KEY (scope_object_id) REFERENCES platform_objects(id) ON DELETE CASCADE;
+  END IF;
+END $;
 
 -- Batch 7: account onboarding, policy acceptance and per-user licensing
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS user_email_domain VARCHAR(255);
