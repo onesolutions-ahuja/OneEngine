@@ -1,0 +1,48 @@
+name: One-time Metadata Flow Purity Cleanup
+
+on:
+  push:
+    branches:
+      - audit/metadata-flow-purity-cleanup
+    paths:
+      - "scripts/apply-metadata-flow-purity-cleanup.mjs"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/metadata-flow-purity-cleanup
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply cleanup
+        run: node scripts/apply-metadata-flow-purity-cleanup.mjs
+      - name: Verify syntax and focused tests
+        run: |
+          node --check server/services/platformWorkflow.js
+          node --check scripts/run-appointment-debug.mjs
+          node --check tests/e2e/appointment-workflow-debug.spec.mjs
+          node --test tests/appointmentWorkflow.test.mjs
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No cleanup changes were required."
+            exit 0
+          fi
+          git config user.name "oneengine-cleanup-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add server/services/platformWorkflow.js server/database/init.js scripts/run-appointment-debug.mjs tests/e2e/appointment-workflow-debug.spec.mjs tests/appointmentWorkflow.test.mjs
+          git commit -m "Remove obsolete appointment business wrappers"
+          git push origin HEAD:audit/metadata-flow-purity-cleanup
