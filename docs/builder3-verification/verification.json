@@ -1,0 +1,644 @@
+{
+  "baseline": "50caac5d99b23e6455ea021664b7b9d387ced949",
+  "checks": [
+    "Chooser requires searchable record object and footer stays reachable",
+    "Brevo structured inputs, independent scrolling, record-field resource lookup",
+    "Rich text formatting and source switching preserve HTML content",
+    "Save submits registered execution fields and separate editable definition",
+    "Middle insertion and undo/redo keep node order",
+    "Decision paths and branch insertion render separately",
+    "Keyboard copy/paste does not intercept text fields",
+    "Cancel restores the element configuration before opening the panel",
+    "Resource creation, search and edit preserve metadata",
+    "Canvas menu delete, undo and zoom perform their visible operations",
+    "Responsive panel remains reachable at tablet and phone widths"
+  ],
+  "panels": [
+    {
+      "key": "CONNECTOR_HEALTH_CHECK",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "CONNECTOR_ENABLE",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "CONNECTOR_DISABLE",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "PAYMENT_START",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "PAYMENT_CANCEL",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "PAYMENT_REFUND",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "PRINT_RECEIPT",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "PRINT_KITCHEN_TICKET",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "OPEN_CASH_DRAWER",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "SCANNER_STATUS",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "CONNECTOR_TEST_CONNECTION",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "SEND_APPOINTMENT_CONFIRMATION",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "APPOINTMENT_SESSION_CONTEXT",
+      "status": "schema_rendered",
+      "fieldCount": 7
+    },
+    {
+      "key": "PROCESS_APPOINTMENT_DATE_RESPONSE",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "PROCESS_APPOINTMENT_SLOT_RESPONSE",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "SEND_APPOINTMENT_MESSAGE",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "PROCESS_APPOINTMENT_CONVERSATION",
+      "status": "schema_rendered",
+      "fieldCount": 7
+    },
+    {
+      "key": "SEND_APPOINTMENT_CONVERSATION_REPLY",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "CREATE_APPOINTMENT_BOOKING_CASE",
+      "status": "schema_rendered",
+      "fieldCount": 8
+    },
+    {
+      "key": "ISSUE_APPOINTMENT_BOOKING_LINK",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "RUN_ASSISTANT_SUBFLOW",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "FIND_APPOINTMENT_SLOTS",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "HOLD_APPOINTMENT_SLOT",
+      "status": "schema_rendered",
+      "fieldCount": 10
+    },
+    {
+      "key": "RELEASE_APPOINTMENT_SLOT",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "LIST_APPOINTMENT_PAYMENT_PROVIDERS",
+      "status": "schema_rendered",
+      "fieldCount": 0
+    },
+    {
+      "key": "CREATE_APPOINTMENT_PAYMENT_REQUEST",
+      "status": "schema_rendered",
+      "fieldCount": 7
+    },
+    {
+      "key": "COMPLETE_APPOINTMENT_PAYMENT",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "CALCULATE_APPOINTMENT_PAYMENT",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "CONFIRM_APPOINTMENT",
+      "status": "schema_rendered",
+      "fieldCount": 11
+    },
+    {
+      "key": "LICENCE_REQUEST_PACKAGE",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "GLOBAL_PRODUCT_LOOKUP_BARCODE",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "OPEN_FOOD_FACTS_TEST_CONNECTION",
+      "status": "schema_rendered",
+      "fieldCount": 0
+    },
+    {
+      "key": "GO_UPC_LOOKUP_PRODUCT",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "GO_UPC_TEST_CONNECTION",
+      "status": "schema_rendered",
+      "fieldCount": 0
+    },
+    {
+      "key": "ONLINE_ORDER_TRANSITION",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "SEND_PASSWORD_RESET_EMAIL",
+      "status": "schema_rendered",
+      "fieldCount": 0
+    },
+    {
+      "key": "SEND_USER_INVITATION",
+      "status": "schema_rendered",
+      "fieldCount": 0
+    },
+    {
+      "key": "INVENTORY_ACTION",
+      "status": "schema_rendered",
+      "fieldCount": 10
+    },
+    {
+      "key": "CALL_CONNECTOR",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "RECONCILE_INVENTORY",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "REBUILD_INVENTORY",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "WORKFLOW",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "VALIDATION",
+      "status": "schema_rendered",
+      "fieldCount": 0
+    },
+    {
+      "key": "SET_FIELD",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "JARVES_INTERACTION",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "TILL_UI_ACTION",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "SHOW_MESSAGE",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "POST_CREDIT_PAYMENT",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "FREEZE_CREDIT_ACCOUNT",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "UNFREEZE_CREDIT_ACCOUNT",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "SEND_CREDIT_STATEMENT",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "CONSTANT",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "FORMULA",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "TEXT_TEMPLATE",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "INSTRUCTION_TEMPLATE",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "COLLECTION_FILTER",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "COLLECTION_SORT",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "TRANSFORM",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "ASSIGNMENT",
+      "status": "schema_rendered",
+      "fieldCount": 6
+    },
+    {
+      "key": "LOOP",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "BULK_UPDATE_RECORDS",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "GET_RECORDS",
+      "status": "schema_rendered",
+      "fieldCount": 7
+    },
+    {
+      "key": "CREATE_RECORD",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "UPDATE_RECORD",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "UPDATE_RELATED_RECORD",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "CREATE_RELATED_RECORD",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "DELETE_RECORD",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "ASSIGN_RECORD",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "ADD_RELATIONSHIP",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "REMOVE_RELATIONSHIP",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "IN_APP_NOTIFICATION",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "SEND_EMAIL",
+      "status": "schema_rendered",
+      "fieldCount": 8
+    },
+    {
+      "key": "SEND_EMAIL_BREVO",
+      "status": "schema_rendered",
+      "fieldCount": 18
+    },
+    {
+      "key": "SEND_EMAIL_MAILJET",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "EMAIL_ALERT",
+      "status": "schema_rendered",
+      "fieldCount": 7
+    },
+    {
+      "key": "SEND_SMS",
+      "status": "schema_rendered",
+      "fieldCount": 6
+    },
+    {
+      "key": "SEND_WHATSAPP",
+      "status": "schema_rendered",
+      "fieldCount": 6
+    },
+    {
+      "key": "PUBLISH_TO_WEB_SHOP",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "UNPUBLISH_FROM_WEB_SHOP",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "UPDATE_WEB_LISTING",
+      "status": "schema_rendered",
+      "fieldCount": 10
+    },
+    {
+      "key": "SET_WEB_FEATURED",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "CALL_FUNCTION",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "RUN_SUBFLOW",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "CALL_WEBHOOK",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "HTTP_REQUEST",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "WEBHOOK",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "CONDITION",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "SCHEDULE_PATH",
+      "status": "schema_rendered",
+      "fieldCount": 6
+    },
+    {
+      "key": "CHOICE",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "COLLECTION_CHOICE_SET",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "PICKLIST_CHOICE_SET",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "RECORD_CHOICE_SET",
+      "status": "schema_rendered",
+      "fieldCount": 9
+    },
+    {
+      "key": "STAGE",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "RECOMMENDATION_ASSIGNMENT",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "LIMIT_REPETITIONS",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "RUN_AGENT",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "SCREEN",
+      "status": "schema_rendered",
+      "fieldCount": 5
+    },
+    {
+      "key": "WAIT_FOR_CONDITIONS",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "WAIT_UNTIL_DATE",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "CUSTOM_ERROR",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "WAIT",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "QUICKBOOKS_TEST_CONNECTION",
+      "status": "schema_rendered",
+      "fieldCount": 0
+    },
+    {
+      "key": "QUICKBOOKS_SYNC_VENDORS",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "QUICKBOOKS_SYNC_PURCHASES",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "QUICKBOOKS_SYNC_SUPPLIER_CREDITS",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "QUICKBOOKS_RETRY_FAILED_SYNC",
+      "status": "schema_rendered",
+      "fieldCount": 7
+    },
+    {
+      "key": "SHOPIFY_TEST_CONNECTION",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "SHOPIFY_PROCESS_WEBHOOK",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "SHOPIFY_SYNC_PRODUCTS",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "SHOPIFY_SYNC_INVENTORY",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "SHOPIFY_RETRY_FAILED_SYNC",
+      "status": "schema_rendered",
+      "fieldCount": 4
+    },
+    {
+      "key": "SHOPIFY_EXPORT_FULFILMENT",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "SHOPIFY_EXPORT_REFUND",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "UBER_GET_STORES",
+      "status": "schema_rendered",
+      "fieldCount": 0
+    },
+    {
+      "key": "UBER_TEST_CONNECTION",
+      "status": "schema_rendered",
+      "fieldCount": 0
+    },
+    {
+      "key": "UBER_UPLOAD_MENU",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "UBER_ACCEPT_ORDER",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    },
+    {
+      "key": "UBER_DENY_ORDER",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "UBER_UPDATE_ITEM_PRICE",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "UBER_SET_ITEM_UNAVAILABLE",
+      "status": "schema_rendered",
+      "fieldCount": 3
+    },
+    {
+      "key": "UBER_SET_ITEM_AVAILABLE",
+      "status": "schema_rendered",
+      "fieldCount": 2
+    },
+    {
+      "key": "STOP",
+      "status": "schema_rendered",
+      "fieldCount": 1
+    }
+  ],
+  "excludedCapabilities": [
+    "RECORD_SAVE",
+    "RECORD_DELETE"
+  ],
+  "errors": [],
+  "liveTenantVerified": false
+}

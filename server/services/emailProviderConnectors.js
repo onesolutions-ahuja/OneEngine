@@ -115,19 +115,37 @@ function sender(configuration = {}, payload = {}) {
   return { email, name };
 }
 
-function brevoMessage(configuration, payload) {
+export function brevoMessage(configuration, payload) {
   const recipients = recipientList(payload);
   if (!recipients.length) throw Object.assign(new Error("Email recipient is required"), { code: "INVALID_RECIPIENT" });
-  const content = mailContent(payload);
+  const nativeTemplate=Number(payload.providerTemplateId);
+  if(payload.providerTemplateId&&(!Number.isInteger(nativeTemplate)||nativeTemplate<1))throw new Error("Brevo template ID must be a positive integer");
+  const content = nativeTemplate ? {subject:payload.subject,html:payload.html,text:payload.text||payload.body||payload.message} : mailContent(payload);
   const from = sender(configuration, payload);
   const body = {
     sender: { email: from.email, ...(from.name ? { name: from.name } : {}) },
     to: recipients,
-    subject: content.subject,
-    ...(content.html ? { htmlContent: content.html } : { textContent: content.text }),
+    ...(nativeTemplate?{templateId:nativeTemplate}:{}),
+    ...(content.subject?{subject:content.subject}:{}),
+    ...(content.html ? { htmlContent: content.html } : content.text?{ textContent: content.text }:{}),
   };
   if (content.html && content.text) body.textContent = content.text;
   if (payload.replyTo) body.replyTo = typeof payload.replyTo === "string" ? { email: payload.replyTo } : payload.replyTo;
+  for (const key of ["cc", "bcc"]) {
+    if (payload[key]) {
+      const addresses = recipientList({ to: payload[key] });
+      if (addresses.length) body[key] = addresses;
+    }
+  }
+  if (Array.isArray(payload.attachments) && payload.attachments.length) {
+    body.attachment = payload.attachments.map(item => {
+      if (!item?.name || (!item.url && !item.content)) throw Object.assign(new Error("Each attachment requires a filename and URL or base64 content"), { code: "INVALID_ATTACHMENT" });
+      if (item.url && !/^https?:\/\//i.test(item.url)) throw Object.assign(new Error("Attachment URL must be an absolute HTTP URL"), { code: "INVALID_ATTACHMENT" });
+      return { name: item.name, ...(item.url ? { url: item.url } : { content: item.content }) };
+    });
+  }
+  for (const key of ["headers", "tags", "params", "scheduledAt"]) if (payload[key] !== undefined && payload[key] !== "") body[key] = payload[key];
+  if(body.scheduledAt){const raw=String(body.scheduledAt);const date=new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw)?raw:`${raw}Z`);if(Number.isNaN(date.getTime()))throw new Error("Scheduled email time is invalid");body.scheduledAt=date.toISOString()}
   return body;
 }
 

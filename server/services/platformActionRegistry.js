@@ -3,8 +3,8 @@ import { getWorkflowActionRegistry } from "./platformWorkflow.js";
 // Canonical executable capability registry. UI buttons, workflows and event
 // bindings reference keys here; they do not embed business implementations.
 const CORE_ACTIONS = Object.freeze([
-  { key: "RECORD_SAVE", displayName: "Save Record", description: "Run the canonical create/update record save pipeline." },
-  { key: "RECORD_DELETE", displayName: "Delete Record", description: "Run the canonical record delete pipeline." },
+  { key: "RECORD_SAVE", workflowSupported: false, displayName: "Save Record", description: "Run the canonical create/update record save pipeline." },
+  { key: "RECORD_DELETE", workflowSupported: false, displayName: "Delete Record", description: "Run the canonical record delete pipeline." },
 ]);
 
 const definitions = [...CORE_ACTIONS, ...getWorkflowActionRegistry()];
