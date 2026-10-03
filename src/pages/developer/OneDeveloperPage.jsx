@@ -163,7 +163,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
             </label>
           </div>
         ) : null}
-        <div className="settings-window-title">OneDeveloper</div>
         <label className="settings-search">
           <Search size={17}/>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" />
