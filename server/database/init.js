@@ -1491,7 +1491,66 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         `);
       },
     }
-  ]);
+,
+    {
+      key: "0041_oneassistant_visible_booking_flow",
+      version: "41",
+      name: "Upgrade OneAssistant booking flow and appointment metadata",
+      up: async client => {
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+
+        const packageResult = await client.query(
+          "SELECT id,version FROM package_registry WHERE package_key='one_assistant' LIMIT 1"
+        );
+        const packageRow = packageResult.rows[0] || null;
+        const companies = await client.query(`
+          SELECT DISTINCT cpi.company_id
+            FROM company_package_installations cpi
+            JOIN package_registry pr ON pr.id=cpi.package_id
+           WHERE pr.package_key='one_assistant' AND cpi.status='active'
+          UNION
+          SELECT DISTINCT company_id
+            FROM platform_rules
+           WHERE company_id IS NOT NULL
+             AND name='OneAssistant - Booking Channel Router'
+        `);
+
+        for (const { company_id: companyId } of companies.rows) {
+          const objectResult = await client.query(
+            `SELECT id FROM platform_objects
+              WHERE object_key='communication_event' AND active=TRUE
+                AND (company_id=$1 OR company_id IS NULL)
+              ORDER BY CASE WHEN company_id=$1 THEN 0 ELSE 1 END,id LIMIT 1`,
+            [companyId]
+          );
+          const objectId = objectResult.rows[0]?.id || null;
+          if (!objectId) continue;
+
+          await client.query(
+            `UPDATE platform_rules
+                SET object_id=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,
+                    active=TRUE,lifecycle_status='ACTIVE',
+                    source_package_id=COALESCE($6,source_package_id),
+                    source_package_version=$7,managed=TRUE,package_required=TRUE,
+                    updated_at=NOW()
+              WHERE company_id=$1 AND name='OneAssistant - Booking Channel Router'`,
+            [companyId,objectId,router.triggerKey,JSON.stringify(router.conditions || []),
+             JSON.stringify(router.action),packageRow?.id || null,
+             packageRow?.version || oneAssistant?.version || "1.2.0"]
+          );
+
+          await client.query(
+            `UPDATE platform_rules SET active=FALSE,lifecycle_status='INACTIVE',updated_at=NOW()
+              WHERE company_id=$1
+                AND name IN ('OneAssistant - SMS Booking','OneAssistant - WhatsApp Booking')`,
+            [companyId]
+          );
+        }
+        console.log("onePOS: OneAssistant visible booking flow upgraded");
+      },
+    }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
   console.log("onePOS: database ready");
