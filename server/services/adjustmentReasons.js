@@ -11,10 +11,6 @@
 
 export const ADJUSTMENT_REASONS = ["Wastage", "Breakage", "Other"];
 
-function norm(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
 /*
  * Validate the reason supplied with an adjustment.
  * - Increases: any reason (including blank) still allowed, exactly as before.
