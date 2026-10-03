@@ -1446,7 +1446,7 @@ async function appointmentOpenCase(db,{companyId,channel,sender}){
   return result.rows[0]||null;
 }
 
-async function prepareAppointmentSession({action,db,pool,companyId,req,record,object,workflowVariables}){
+async function prepareAppointmentSession({action,db,pool,companyId,req,record,object,workflowVariables,debugMode=false}){
   const tenantId=companyId||req?.user?.companyId;
   const bound=appointmentConversationContext(action,{record,object,workflowVariables});
   const channel=String(bound.channel||record?.channel||"").toUpperCase();
@@ -1469,15 +1469,17 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
     return {status:route==="IGNORED"?"skipped":"completed",route,handled:route!=="IGNORED",channel,sender,bookingCaseId:existing.id,bookingCase:existing};
   }
 
-  if(!pool?.connect) throw new Error("Appointment session restart requires a database transaction");
-  const client=await pool.connect();
+  const ownsTransaction=!debugMode;
+  if(ownsTransaction&&!pool?.connect) throw new Error("Appointment session restart requires a database transaction");
+  const client=ownsTransaction?await pool.connect():null;
+  const query=ownsTransaction?client.query.bind(client):db;
   try{
-    await client.query("BEGIN");
+    if(ownsTransaction) await query("BEGIN");
     const digits=appointmentPhoneDigits(sender);
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",[`${tenantId}:${digits}:appointment-session`]);
+    await query("SELECT pg_advisory_xact_lock(hashtext($1))",[`${tenantId}:${digits}:appointment-session`]);
 
     if(sourceMessageId){
-      const replay=await client.query(
+      const replay=await query(
         `SELECT * FROM appointment_booking_cases
            WHERE company_id=$1 AND channel=$2 AND source_message_id=$3
            LIMIT 1`,
@@ -1486,10 +1488,8 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
       if(replay.rows[0]){
         const existing=replay.rows[0];
         const status=String(existing.status||"").toUpperCase();
-        // A provider retry of an old APPOINTMENT message must never reopen a
-        // session that the customer already restarted, cancelled or completed.
         if(["CANCELLED","CONFIRMED","EXPIRED"].includes(status)){
-          await client.query("COMMIT");
+          if(ownsTransaction) await query("COMMIT");
           return {
             status:"skipped",route:"IGNORED",handled:false,channel,sender,
             bookingCaseId:existing.id,bookingCase:existing,replayed:true,
@@ -1498,7 +1498,7 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
         const dates=Array.isArray(existing.state?.dateOptions)&&existing.state.dateOptions.length>=2
           ? existing.state.dateOptions.map((value)=>new Date(value))
           : appointmentDateOptions();
-        await client.query("COMMIT");
+        if(ownsTransaction) await query("COMMIT");
         return {
           status:"completed",route:"STARTED",handled:true,channel,sender,
           bookingCaseId:existing.id,bookingCase:existing,replayed:true,
@@ -1507,7 +1507,7 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
       }
     }
 
-    const openCases=await client.query(
+    const openCases=await query(
       `SELECT * FROM appointment_booking_cases
          WHERE company_id=$1
            AND regexp_replace(COALESCE(sender,''),'[^0-9]','','g')=$2
@@ -1518,13 +1518,13 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
     );
     for(const existing of openCases.rows||[]){
       if(existing.hold_id){
-        await releaseAppointmentHold(client.query.bind(client),{
+        await releaseAppointmentHold(query,{
           companyId:tenantId,holdId:existing.hold_id,reason:"Appointment session restarted by customer",
         });
       }
     }
     if(openCases.rows?.length){
-      await client.query(
+      await query(
         `UPDATE appointment_booking_cases
             SET status='CANCELLED',
                 state=COALESCE(state,'{}'::jsonb)||$3::jsonb,
@@ -1535,7 +1535,7 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
     }
 
     const dates=appointmentDateOptions();
-    const bookingCase=await createAppointmentBookingCase(client.query.bind(client),{
+    const bookingCase=await createAppointmentBookingCase(query,{
       companyId:tenantId,channel,sourceMessageId,sender,recipient,body,customerId,
       state:{
         conversationId,
@@ -1544,17 +1544,17 @@ async function prepareAppointmentSession({action,db,pool,companyId,req,record,ob
         startedByKeyword:"APPOINTMENT",
       },
     });
-    await client.query("COMMIT");
+    if(ownsTransaction) await query("COMMIT");
     return {
       status:"completed",route:"STARTED",handled:true,channel,sender,
       bookingCaseId:bookingCase.id,bookingCase,restartedCount:openCases.rows?.length||0,
       date1:appointmentFormatDate(dates[0]),date2:appointmentFormatDate(dates[1]),
     };
   }catch(error){
-    try{await client.query("ROLLBACK");}catch{}
+    if(ownsTransaction){try{await query("ROLLBACK");}catch{}}
     throw error;
   }finally{
-    client.release();
+    if(client) client.release();
   }
 }
 
@@ -1605,7 +1605,7 @@ async function processAppointmentDateResponse({action,db,companyId,req,record,ob
   };
 }
 
-async function processAppointmentSlotResponse({action,db,pool,companyId,req,record,object,workflowVariables}){
+async function processAppointmentSlotResponse({action,db,pool,companyId,req,record,object,workflowVariables,debugMode=false}){
   const tenantId=companyId||req?.user?.companyId;
   const bound=appointmentConversationContext(action,{record,object,workflowVariables});
   const bookingCaseId=bound.bookingCaseId;
@@ -1624,35 +1624,39 @@ async function processAppointmentSlotResponse({action,db,pool,companyId,req,reco
   if(!Number.isInteger(choice)||choice<1||choice>slots.length){
     return {status:"completed",result:"INVALID_SLOT",bookingCaseId,channel:bookingCase.channel,sender:bookingCase.sender,slotCount:slots.length};
   }
-  if(!pool?.connect) throw new Error("Appointment slot confirmation requires a database transaction");
+
+  const ownsTransaction=!debugMode;
+  if(ownsTransaction&&!pool?.connect) throw new Error("Appointment slot confirmation requires a database transaction");
   const slot=slots[choice-1];
-  const client=await pool.connect();
+  const client=ownsTransaction?await pool.connect():null;
+  const query=ownsTransaction?client.query.bind(client):db;
+  const queryClient=ownsTransaction?client:{query};
   try{
-    await client.query("BEGIN");
-    const hold=await holdAppointmentSlot(client,{
+    if(ownsTransaction) await query("BEGIN");
+    const hold=await holdAppointmentSlot(queryClient,{
       companyId:tenantId,storeId:slot.storeId||null,serviceId:slot.serviceId,resourceId:slot.resourceId,
       customerId:bookingCase.customer_id||null,conversationId:bookingCase.state?.conversationId||null,
       startsAt:slot.startsAt,endsAt:slot.endsAt,
       idempotencyKey:`${String(bookingCase.channel||"").toLowerCase()}-booking:${bookingCase.id}:${slot.startsAt}`,
       metadata:{bookingCaseId:bookingCase.id},
     });
-    const appointment=await confirmAppointmentFromHold(client,{
+    const appointment=await confirmAppointmentFromHold(queryClient,{
       companyId:tenantId,holdId:hold.id,customerId:bookingCase.customer_id||null,
       customerPhone:bookingCase.sender||null,sourceChannel:bookingCase.channel||"WORKFLOW",
       metadata:{bookingCaseId:bookingCase.id},
     });
-    await client.query(
+    await query(
       "UPDATE appointment_booking_cases SET hold_id=$3,appointment_id=$4,status='CONFIRMED',state=COALESCE(state,'{}'::jsonb)||$5::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2",
       [bookingCase.id,tenantId,hold.id,appointment.id,JSON.stringify({step:"CONFIRMED",selectedSlot:slot})]
     );
-    await client.query("COMMIT");
+    if(ownsTransaction) await query("COMMIT");
     return {
       status:"completed",result:"CONFIRMED",bookingCaseId,appointmentId:appointment.id,
       channel:bookingCase.channel,sender:bookingCase.sender,
       appointmentDate:appointmentFormatDate(slot.startsAt),appointmentTime:appointmentFormatTime(slot.startsAt),
     };
   }catch(error){
-    try{await client.query("ROLLBACK");}catch{}
+    if(ownsTransaction){try{await query("ROLLBACK");}catch{}}
     if(["SLOT_UNAVAILABLE","HOLD_EXPIRED"].includes(error?.code)){
       const dates=appointmentDateOptions();
       await db(
@@ -1666,7 +1670,7 @@ async function processAppointmentSlotResponse({action,db,pool,companyId,req,reco
     }
     throw error;
   }finally{
-    client.release();
+    if(client) client.release();
   }
 }
 
