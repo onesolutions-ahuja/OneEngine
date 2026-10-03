@@ -10,29 +10,39 @@ import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import { appIconUrl, applyDefaultAppIcon, localAppIcon, marketplaceSearchText, readMarketplaceCache, resolveAppOpenRoute, writeMarketplaceCache } from './utils/appMarketplace'
 import JarvisOrb, { ORB_STATES } from './components/jarvis/JarvisOrb'
 import JarvisPanel from './components/jarvis/JarvisPanel'
-const CHUNK_RELOAD_KEY = 'onepos:lazy-chunk-reload'
+const CHUNK_RETRY_PARAM = '_oe_chunk_retry'
+const CHUNK_LOAD_RE = /failed to fetch dynamically imported module|importing a module script failed|loading chunk .* failed|error loading dynamically imported module|module script/i
+
+function isChunkLoadFailure(error) {
+  return CHUNK_LOAD_RE.test(String(error?.message || error || ''))
+}
+
+function clearChunkRetryMarker() {
+  try {
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has(CHUNK_RETRY_PARAM)) return
+    url.searchParams.delete(CHUNK_RETRY_PARAM)
+    window.history.replaceState(window.history.state, '', url.toString())
+  } catch {}
+}
 
 function lazyWithRecovery(loader) {
   return lazy(async () => {
     try {
       const module = await loader()
-      window.sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+      clearChunkRetryMarker()
       return module
     } catch (error) {
-      const message = String(error?.message || error || '')
-      const isChunkLoadFailure = /failed to fetch dynamically imported module|importing a module script failed|loading chunk .* failed|error loading dynamically imported module/i.test(message)
-      if (isChunkLoadFailure && window.sessionStorage.getItem(CHUNK_RELOAD_KEY) !== '1') {
-        window.sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+      if (isChunkLoadFailure(error)) {
         try {
           const url = new URL(window.location.href)
-          url.searchParams.set('_refresh', Date.now().toString())
-          window.location.replace(url.toString())
-        } catch {
-          window.location.reload()
-        }
-        return new Promise(() => {})
+          if (!url.searchParams.has(CHUNK_RETRY_PARAM)) {
+            url.searchParams.set(CHUNK_RETRY_PARAM, Date.now().toString())
+            window.location.replace(url.toString())
+            return new Promise(() => {})
+          }
+        } catch {}
       }
-      window.sessionStorage.removeItem(CHUNK_RELOAD_KEY)
       throw error
     }
   })
@@ -46,7 +56,7 @@ class LazyLoadBoundary extends Component {
   }
 
   componentDidCatch(error) {
-    console.error('Lazy-loaded page failed', error)
+    console.error('Route render failed', error)
   }
 
   componentDidUpdate(prevProps) {
@@ -57,8 +67,8 @@ class LazyLoadBoundary extends Component {
 
   retry = () => {
     try {
-      window.sessionStorage.removeItem(CHUNK_RELOAD_KEY)
       const url = new URL(window.location.href)
+      url.searchParams.delete(CHUNK_RETRY_PARAM)
       url.searchParams.set('_refresh', Date.now().toString())
       window.location.replace(url.toString())
     } catch {
@@ -68,9 +78,12 @@ class LazyLoadBoundary extends Component {
 
   render() {
     if (!this.state.error) return this.props.children
+    const chunkFailure = isChunkLoadFailure(this.state.error)
+    const code = chunkFailure ? 'OEFL101' : 'OEFR101'
+    const message = chunkFailure ? 'Unable to load this page.' : 'This screen could not be displayed.'
     return (
       <div className="route-loading" role="alert">
-        <span>Unable to load this page. <strong>Error OEFL01</strong></span>
+        <span>{message} <strong>Error {code}</strong></span>
         <button type="button" onClick={this.retry}>Retry</button>
       </div>
     )

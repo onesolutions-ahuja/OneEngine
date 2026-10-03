@@ -166,7 +166,7 @@ export default function DebugCodesAdmin({ onError = () => {} }) {
             </div>
 
             <div className="oe-debug-form">
-              <label><span>Code</span><input value={draft.code} disabled={Boolean(selectedCode)} maxLength={6} placeholder="OEWA01" onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value.toUpperCase() }))}/><small>Format: OE + subsystem letter + cause letter + 2 digits.</small></label>
+              <label><span>Code</span><input value={draft.code} disabled={Boolean(selectedCode)} maxLength={7} placeholder="OENX101" onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value.toUpperCase() }))}/><small>Format: OE + subsystem letter + cause letter + 2 or 3 digits (6–7 characters).</small></label>
               <label><span>Category</span><input value={draft.category} onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))} placeholder="Database"/></label>
               <label><span>Severity</span><select value={draft.severity} onChange={(e) => setDraft((d) => ({ ...d, severity: e.target.value }))}><option>INFO</option><option>WARNING</option><option>ERROR</option><option>CRITICAL</option><option>FATAL</option></select></label>
               <label className="oe-debug-wide"><span>Developer title</span><input value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="Database resource limit"/></label>
