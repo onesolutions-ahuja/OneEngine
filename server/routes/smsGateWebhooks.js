@@ -2,9 +2,7 @@ import crypto from "node:crypto";
 import express from "express";
 
 import { decryptCredentials } from "../services/integrationCredentials.js";
-import { createSmsGateDriver } from "../services/smsGateConnector.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "../services/communicationCore.js";
-import { createAppointmentBookingCase, issueAppointmentPublicLink } from "../services/oneAssistant.js";
 
 const MAX_CLOCK_SKEW_SECONDS = 300;
 
@@ -126,7 +124,7 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
         String(body?.id || providerMessageId || crypto.createHash("sha256").update(rawBody).digest("hex"))
       ].join(":").slice(0, 255);
 
-      await recordCommunicationEvent({
+      const communicationEvent = await recordCommunicationEvent({
         db: pool.query.bind(pool),
         companyId: connection.company_id,
         channel: "SMS",
@@ -136,6 +134,7 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
         providerMessageId,
         sender,
         recipient,
+        body: message,
         metadata: {
           connectorInstanceId: connection.id,
           deviceId: body?.deviceId || null,
@@ -147,56 +146,24 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
         },
       });
 
-      console.info("SMSGate inbound message recorded", {
+      console.info("SMSGate inbound message recorded for workflow dispatch", {
         connectionId: connection.id,
         companyId: connection.company_id,
         providerMessageId,
+        communicationEventId: communicationEvent?.id || null,
         senderLast4: sender.slice(-4),
         messageLength: message.length,
       });
 
-      const bookingCase = await createAppointmentBookingCase(pool.query.bind(pool), {
-        companyId: connection.company_id,
-        channel: "SMS",
-        sourceMessageId,
-        sender,
-        recipient,
-        body: message,
-        state: {
-          provider: "smsgate",
-          connectorInstanceId: connection.id,
-          deviceId: body?.deviceId || null,
-          receivedAt: payload.receivedAt || null,
-        },
-      });
-
-      const bookingBaseUrl = String(
-        configuration.bookingBaseUrl ||
-        process.env.PUBLIC_APP_URL ||
-        process.env.FRONTEND_URL ||
-        "https://onesolutions-ahuja.github.io/OneEngine"
-      ).replace(/\/$/, "");
-
-      const link = await issueAppointmentPublicLink(pool.query.bind(pool), {
-        companyId: connection.company_id,
-        bookingCaseId: bookingCase.id,
-        purpose: "BOOK_SLOT",
-        ttlMinutes: 15,
-        publicBaseUrl: bookingBaseUrl,
-        metadata: { channel: "SMS", provider: "smsgate", connectorInstanceId: connection.id },
-      });
-
-      const connectorConfiguration = { ...configuration, ...secrets };
-      const adapter = createSmsGateDriver().createAdapter({ configuration: connectorConfiguration });
-      const replyText = `Welcome. Book your appointment here: ${link.url}. This secure link expires in 15 minutes.`;
-      const sent = await adapter.execute("sms.send", { recipient: sender, text: replyText });
-
+      // The transport route records the inbound message only. Appointment
+      // session state, replies, slot selection and confirmation are owned by
+      // the active communication_message_received workflow.
       return res.status(202).json({
         success: true,
         data: {
-          bookingCaseId: bookingCase.id,
+          communicationEventId: communicationEvent?.id || null,
           communicationChannel: "SMS",
-          replyMessageId: sent?.providerMessageId || null,
+          workflowDispatched: Boolean(communicationEvent?.id),
         },
       });
     } catch (error) {
