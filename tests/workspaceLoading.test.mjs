@@ -13,7 +13,17 @@ const deferred = () => {
   return { promise, resolve, reject }
 }
 const objectKeys = [...new Set([
-  'communication_event', 'customer', 'inventory',
+  // Include every object listed in the reported Demo Hub workspace, as well
+  // as system/package definitions that may be installed in other tenants.
+  ...`onesolutions_business_division category communication_event customer discount
+    financial_ledger hospitality_floor hardware_configuration integration inventory
+    inventory_batch inventory_movement kds_ticket layaway layaway_line layaway_payment
+    loyalty_account loyalty_transaction message_template online_order payment
+    payment_method payment_terminal permission price_list product promotion purchase
+    purchase_line purchase_receipt purchase_receipt_line reservation role role_permission
+    sale server_setting employee stock_return stock_return_line stock_transfer stock_transfer_line store
+    supplier supplier_invoice supplier_ledger supplier_payment supplier_product
+    system_settings hospitality_table`.split(/\s+/),
   ...SYSTEM_OBJECTS.map((object) => object.key),
   ...packageDefinitions().flatMap((entry) => entry.manifest?.objects || []).map((object) => object.objectKey),
 ])].filter(Boolean)
