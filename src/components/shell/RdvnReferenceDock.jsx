@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { dockItems } from './DesktopDock'
+import { CalendarDays, CloudSun, Folder, MessageCircle, Music2, Search, Settings } from 'lucide-react'
 
-export default function RdvnReferenceDock({ onItemOpen }) {
+const classicItems = [
+  { id: 'finder', label: 'Files', Icon: Folder, tint: 'blue' },
+  { id: 'search', label: 'Search', Icon: Search, tint: 'cyan' },
+  { id: 'messages', label: 'Messages', Icon: MessageCircle, tint: 'green' },
+  { id: 'weather', label: 'Weather', Icon: CloudSun, tint: 'sky' },
+  { id: 'calendar', label: 'Calendar', Icon: CalendarDays, tint: 'red' },
+  { id: 'music', label: 'Music', Icon: Music2, tint: 'pink' },
+  { id: 'settings', label: 'Settings', Icon: Settings, tint: 'silver' },
+]
+
+export default function RdvnReferenceDock() {
   const dockRef = useRef(null)
   const itemRefs = useRef([])
   const frameRef = useRef(null)
@@ -20,13 +30,11 @@ export default function RdvnReferenceDock({ onItemOpen }) {
     const dock = dockRef.current
     if (!dock) return
     const dockRect = dock.getBoundingClientRect()
-
     itemRefs.current.forEach((item) => {
       if (!item) return
       const center = dockRect.left + item.offsetLeft + item.offsetWidth / 2
       const signedDistance = center - clientX
-      const distance = Math.abs(signedDistance)
-      const normalized = Math.max(0, 1 - distance / 128)
+      const normalized = Math.max(0, 1 - Math.abs(signedDistance) / 128)
       const influence = normalized * normalized * (3 - 2 * normalized)
       item.style.setProperty('--rdvn-scale', (1 + influence * 0.66).toFixed(3))
       item.style.setProperty('--rdvn-lift', `${(influence * 21).toFixed(2)}px`)
@@ -52,7 +60,6 @@ export default function RdvnReferenceDock({ onItemOpen }) {
   const activate = (id) => {
     setBouncing(id)
     window.setTimeout(() => setBouncing(null), 360)
-    onItemOpen?.(id)
   }
 
   useEffect(() => () => {
@@ -60,25 +67,22 @@ export default function RdvnReferenceDock({ onItemOpen }) {
   }, [])
 
   return (
-    <div className="rdvn-reference-zone" aria-label="Classic Smart Theme dock">
-      <div
-        ref={dockRef}
-        className="rdvn-reference-dock"
-        onPointerMove={handlePointerMove}
-        onPointerLeave={handlePointerLeave}
-      >
-        {dockItems.slice(0, 10).map((item, index) => (
+    <div className="rdvn-reference-zone" aria-label="Original Smart Theme dock">
+      <div ref={dockRef} className="rdvn-reference-dock" onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave}>
+        {classicItems.map(({ id, label, Icon, tint }, index) => (
           <button
-            key={item.id}
+            key={id}
             ref={(node) => { itemRefs.current[index] = node }}
             type="button"
-            className={`rdvn-reference-item ${bouncing === item.id ? 'is-bouncing' : ''}`}
-            onClick={() => activate(item.id)}
-            aria-label={item.label}
-            title={item.label}
+            className={`rdvn-reference-item ${bouncing === id ? 'is-bouncing' : ''}`}
+            onClick={() => activate(id)}
+            aria-label={label}
           >
-            <span className="rdvn-reference-tooltip">{item.label}</span>
-            <img src={item.src} alt="" draggable="false" />
+            <span className="rdvn-reference-tooltip">{label}</span>
+            <span className={`rdvn-reference-icon rdvn-reference-icon--${tint}`}>
+              <Icon size={30} strokeWidth={1.8} aria-hidden="true" />
+            </span>
+            <span className="rdvn-reference-dot" aria-hidden="true" />
           </button>
         ))}
       </div>
