@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from
 import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, loadSessionPermissions, login, logout, setActiveStoreId, startGoogleLogin, verifyPin } from './services/api'
 import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/routes'
 import { Dock, MenuBarClock, dockItems, useClock } from './components/shell/DesktopDock'
+import RdvnReferenceDock from './components/shell/RdvnReferenceDock'
 import { CompanyContextLoading, LockScreen } from './components/shell/LoginShell'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, readSettingsContextCache, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
@@ -2512,6 +2513,7 @@ function Desktop({ onLock, onSignOut }) {
       </Suspense>
       </LazyLoadBoundary>
 
+      <RdvnReferenceDock onItemOpen={openItem} />
       <Dock onItemOpen={openItem} collapsible={activeApp === 'till'} />
     </main>
   )
