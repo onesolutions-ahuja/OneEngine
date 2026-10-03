@@ -34,3 +34,5 @@
 .b2-rf-title b{font-size:13px;color:#181818}
 .b2-rf-title small{font-size:10px;color:#706e6b;text-transform:capitalize}
 .b2-rf-node .react-flow__handle{width:8px;height:8px}
+
+.b2-back{width:32px!important;min-width:32px!important;padding:0!important;display:grid!important;place-items:center}

@@ -26,143 +26,63 @@ async function proxyApiForLocalPreview(page) {
   });
 }
 
-function centerX(box) {
-  return box.x + box.width / 2;
-}
-
-test("Welcome Message Customer canvas matches compact split-merge geometry", async ({ page }) => {
+test("merged Workflow Builder keeps the list, chooser, and three-pane Builder2 geometry intact", async ({ page }) => {
   test.skip(!(process.env.ONEPOS_E2E_USERNAME && process.env.ONEPOS_E2E_PASSWORD), "Authenticated QA credentials required.");
 
   await proxyApiForLocalPreview(page);
   await loginIfConfigured(page);
-
-  // Pin Developer context to the authenticated user's tenant so the visual gate
-  // opens the same workflow list deterministically instead of a previously
-  // persisted client selection.
-  const homeCompanyId = await page.evaluate(() => {
+  await page.evaluate(() => {
     try {
       const user = JSON.parse(sessionStorage.getItem("onepos_user") || "{}");
-      return String(user.companyId || user.company_id || "");
-    } catch {
-      return "";
-    }
+      const companyId = String(user.companyId || user.company_id || "");
+      if (companyId) sessionStorage.setItem("onepos_developer_target_company_id", companyId);
+    } catch {}
   });
-  if (homeCompanyId) {
-    await page.evaluate((companyId) => {
-      sessionStorage.setItem("onepos_developer_target_company_id", companyId);
-    }, homeCompanyId);
-  }
 
   await page.goto("developer/workflow-builder");
-  await expect(page.getByRole("button", { name: /new flow/i })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".onebuilder-list-view")).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: /new flow/i }).first().click();
 
-  let workflowSearch = page.getByPlaceholder("Search Workflow");
-  if (!(await workflowSearch.isVisible().catch(() => false))) {
-    const backToFlows = page.getByRole("button", { name: "Back to Flows", exact: true });
-    if (await backToFlows.isVisible().catch(() => false)) {
-      await backToFlows.click();
-    }
+  const dialog = page.getByRole("dialog", { name: "New Flow" });
+  await expect(dialog.getByText("Select a Flow Type", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Record-Triggered Flow", exact: false }).click();
+
+  const objectSelect = dialog.locator(".onebuilder-new-flow-object select");
+  const values = await objectSelect.locator("option").evaluateAll((options) => options.map((option) => option.value).filter(Boolean));
+  expect(values.length).toBeGreaterThan(0);
+  await objectSelect.selectOption(values[0]);
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+
+  const shell = page.locator(".b2-shell");
+  await expect(shell).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".b2-top")).toContainText("Workflow Builder");
+
+  const startPanel = page.locator(".b2-start-panel");
+  if (await startPanel.isVisible().catch(() => false)) {
+    await startPanel.locator("header button").click();
   }
-  workflowSearch = page.getByPlaceholder("Search Workflow");
-  await expect(workflowSearch).toBeVisible({ timeout: 20_000 });
-  await workflowSearch.fill("Welcome Message Customer");
 
-  const workflowRow = page.locator(".onebuilder-list-row").filter({ hasText: "Welcome Message Customer" }).first();
-  await expect(workflowRow).toBeVisible({ timeout: 20_000 });
-  await workflowRow.click();
+  await page.locator(".b2-palette-group").getByRole("button", { name: /Decision/ }).first().click();
+  await page.locator(".b2-palette-group").getByRole("button", { name: /Assignment/ }).first().click();
 
-  const canvas = page.locator(".workflow-canvas-surface");
-  await expect(canvas).toBeVisible();
-
-  const start = page.locator(".workflow-start-node");
-  const decisions = page.locator('.workflow-node-card[data-node-type="CONDITION"]');
-  await expect(start).toBeVisible();
-  await expect(decisions).toHaveCount(2);
-
-  const emailDecision = decisions.filter({ hasText: "Email available?" }).first();
-  const phoneDecision = decisions.filter({ hasText: "Phone number available?" }).first();
-  await expect(emailDecision).toBeVisible();
-  await expect(phoneDecision).toBeVisible();
-
-  const yesLabels = page.locator('.workflow-branch-label-input').filter({ hasValue: "Yes" });
-  const skipLabels = page.locator('.workflow-branch-label-input').filter({ hasValue: /No \/ Skip/i });
-  await expect(yesLabels).toHaveCount(2);
-  await expect(skipLabels).toHaveCount(2);
-
-  const emailAction = page.locator(".workflow-branch-node-card").filter({ hasText: "Send welcome email" }).first();
-  const smsAction = page.locator(".workflow-branch-node-card").filter({ hasText: "Send welcome SMS" }).first();
-  await expect(emailAction).toBeVisible();
-  await expect(smsAction).toBeVisible();
-
-  const [startBox, emailBox, phoneBox, emailActionBox, smsActionBox, canvasBox] = await Promise.all([
-    start.boundingBox(),
-    emailDecision.boundingBox(),
-    phoneDecision.boundingBox(),
-    emailAction.boundingBox(),
-    smsAction.boundingBox(),
-    canvas.boundingBox(),
+  const [toolboxBox, canvasBox, propertiesBox, topBox] = await Promise.all([
+    page.locator(".b2-toolbox").boundingBox(),
+    page.locator(".b2-canvas").boundingBox(),
+    page.locator(".b2-properties").boundingBox(),
+    page.locator(".b2-top").boundingBox(),
   ]);
 
-  for (const [name, box] of Object.entries({ startBox, emailBox, phoneBox, emailActionBox, smsActionBox, canvasBox })) {
+  for (const [name, box] of Object.entries({ toolboxBox, canvasBox, propertiesBox, topBox })) {
     expect(box, `${name} must have layout geometry`).not.toBeNull();
   }
 
-  // Main lane stays visually centered.
-  expect(Math.abs(centerX(startBox) - centerX(emailBox))).toBeLessThanOrEqual(6);
-  expect(Math.abs(centerX(emailBox) - centerX(phoneBox))).toBeLessThanOrEqual(6);
-
-  // Cards remain compact rather than expanding into large panels.
-  expect(emailBox.width).toBeGreaterThanOrEqual(238);
-  expect(emailBox.width).toBeLessThanOrEqual(258);
-  expect(emailBox.height).toBeGreaterThanOrEqual(44);
-  expect(emailBox.height).toBeLessThanOrEqual(62);
-
-  // First decision resolves its branch before the next main-lane decision.
-  expect(emailActionBox.y).toBeGreaterThan(emailBox.y + emailBox.height);
-  expect(phoneBox.y).toBeGreaterThan(emailActionBox.y + emailActionBox.height);
-
-  // Second decision action stays below the second decision.
-  expect(smsActionBox.y).toBeGreaterThan(phoneBox.y + phoneBox.height);
-
-  // No branch action is allowed to drift off the visible canvas.
-  for (const box of [emailActionBox, smsActionBox]) {
-    expect(box.x).toBeGreaterThanOrEqual(canvasBox.x - 2);
-    expect(box.x + box.width).toBeLessThanOrEqual(canvasBox.x + canvasBox.width + 2);
-  }
-
-  // Outcome branches must sit on opposite sides of the owning decision.
-  const emailStage = emailDecision.locator("xpath=ancestor::div[contains(@class,'workflow-node-wrap')][1]");
-  const emailPaths = emailStage.locator(".workflow-decision-map > .workflow-branch-path");
-  await expect(emailPaths).toHaveCount(2);
-  const firstPathBox = await emailPaths.nth(0).boundingBox();
-  const secondPathBox = await emailPaths.nth(1).boundingBox();
-  expect(centerX(firstPathBox)).toBeLessThan(centerX(emailBox));
-  expect(centerX(secondPathBox)).toBeGreaterThan(centerX(emailBox));
-
-  // Connector and type styling is intentional and consistent.
-  const styleSnapshot = await emailDecision.evaluate((node) => {
-    const card = getComputedStyle(node);
-    const title = getComputedStyle(node.querySelector(".workflow-node-title"));
-    const kind = getComputedStyle(node.querySelector(".workflow-node-kind"));
-    return {
-      radius: card.borderRadius,
-      borderColor: card.borderColor,
-      titleSize: title.fontSize,
-      titleWeight: title.fontWeight,
-      kindSize: kind.fontSize,
-    };
-  });
-  expect(parseFloat(styleSnapshot.radius)).toBeLessThanOrEqual(7);
-  expect(parseFloat(styleSnapshot.titleSize)).toBeLessThanOrEqual(11);
-  expect(parseFloat(styleSnapshot.kindSize)).toBeLessThanOrEqual(8);
-
-  const rails = page.locator(".workflow-decision-rail");
-  await expect(rails).toHaveCount(4);
-  const railColor = await rails.first().evaluate((node) => getComputedStyle(node).backgroundColor);
-  expect(railColor).toMatch(/rgb\((174, 183, 195|173, 183, 195)\)/);
+  expect(toolboxBox.x).toBeLessThan(canvasBox.x);
+  expect(canvasBox.x + canvasBox.width).toBeLessThanOrEqual(propertiesBox.x + 2);
+  expect(topBox.height).toBeGreaterThanOrEqual(48);
+  await expect(page.locator(".b2-node")).toHaveCount(2);
 
   await page.screenshot({
-    path: "test-results/workflow-builder-visual/welcome-message-customer.png",
+    path: "test-results/workflow-builder-visual/merged-workflow-builder.png",
     fullPage: true,
   });
 });

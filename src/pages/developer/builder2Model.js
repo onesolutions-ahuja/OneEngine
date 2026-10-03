@@ -4,24 +4,29 @@ export const FLOW_TYPES = {
   autolaunched: { label: 'Autolaunched Flow', start: 'none', testMode: true },
   screen: { label: 'Screen Flow', start: 'none', testMode: false },
   platform_event: { label: 'Platform Event-Triggered Flow', start: 'platform_event', testMode: false },
+  recommendation_strategy: { label: 'Recommendation Strategy Flow', start: 'none', testMode: true },
+  instruction: { label: 'Instruction Flow', start: 'none', testMode: true },
+  kiosk: { label: 'Kiosk Experience', start: 'none', testMode: false },
 }
 
+const ALL_FLOW_TYPES = Object.keys(FLOW_TYPES)
+
 export const ELEMENT_RULES = {
-  GET_RECORDS: { types: ['record','schedule','autolaunched','screen','platform_event'] },
-  CREATE_RECORDS: { types: ['record','schedule','autolaunched','screen','platform_event'], disallowBeforeSave: true },
-  UPDATE_RECORDS: { types: ['record','schedule','autolaunched','screen','platform_event'], disallowBeforeSave: true },
-  DELETE_RECORDS: { types: ['record','schedule','autolaunched','screen','platform_event'], disallowBeforeSave: true },
-  ASSIGNMENT: { types: ['record','schedule','autolaunched','screen','platform_event'] },
-  DECISION: { types: ['record','schedule','autolaunched','screen','platform_event'] },
-  LOOP: { types: ['record','schedule','autolaunched','screen','platform_event'] },
-  COLLECTION_FILTER: { types: ['record','schedule','autolaunched','screen','platform_event'] },
-  COLLECTION_SORT: { types: ['record','schedule','autolaunched','screen','platform_event'] },
+  GET_RECORDS: { types: ALL_FLOW_TYPES },
+  CREATE_RECORDS: { types: ALL_FLOW_TYPES, disallowBeforeSave: true },
+  UPDATE_RECORDS: { types: ALL_FLOW_TYPES, disallowBeforeSave: true },
+  DELETE_RECORDS: { types: ALL_FLOW_TYPES, disallowBeforeSave: true },
+  ASSIGNMENT: { types: ALL_FLOW_TYPES },
+  DECISION: { types: ALL_FLOW_TYPES },
+  LOOP: { types: ALL_FLOW_TYPES },
+  COLLECTION_FILTER: { types: ALL_FLOW_TYPES },
+  COLLECTION_SORT: { types: ALL_FLOW_TYPES },
   WAIT: { types: ['record','schedule','autolaunched','platform_event'], disallowBeforeSave: true },
-  TRANSFORM: { types: ['record','schedule','autolaunched','screen','platform_event'] },
+  TRANSFORM: { types: ALL_FLOW_TYPES },
   CUSTOM_ERROR: { types: ['record'] },
-  SUBFLOW: { types: ['record','schedule','autolaunched','screen','platform_event'], disallowBeforeSave: true },
-  SCREEN: { types: ['screen'] },
-  ACTION: { types: ['record','schedule','autolaunched','screen','platform_event'], disallowBeforeSave: true },
+  SUBFLOW: { types: ALL_FLOW_TYPES, disallowBeforeSave: true },
+  SCREEN: { types: ['screen','kiosk'] },
+  ACTION: { types: ALL_FLOW_TYPES, disallowBeforeSave: true },
 }
 
 export const RESOURCE_TYPES = [

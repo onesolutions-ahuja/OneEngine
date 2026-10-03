@@ -9,6 +9,7 @@ import CustomReportsAdmin from '../reports/CustomReportsAdmin.jsx'
 import WorkflowAdmin, { FLOW_TYPE_OPTIONS } from './Platform/WorkflowAdmin.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import CustomPageBuilder from './Platform/CustomPageBuilder.jsx'
+import Builder2Page from '../developer/Builder2Page.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
@@ -136,6 +137,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const [workflowDraft, setWorkflowDraft] = useState(null)
   const [workflowNewDialogOpen, setWorkflowNewDialogOpen] = useState(false)
   const [workflowNewType, setWorkflowNewType] = useState('')
+  const [workflowNewObjectKey, setWorkflowNewObjectKey] = useState('')
   const [sideTab, setSideTab] = useState('components')
   const [canvas, setCanvas] = useState({ workflow: [], approval: [], dashboard: [], report: [] })
   const [meta, setMeta] = useState({
@@ -304,6 +306,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const newDefinition = () => {
     if (tab === 'workflow') {
       setWorkflowNewType('')
+      setWorkflowNewObjectKey('')
       setWorkflowNewDialogOpen(true)
       return
     }
@@ -323,13 +326,17 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   const createWorkflowDraft = () => {
     if (!workflowNewType) return
     const type = String(workflowNewType).toUpperCase()
+    if (type === 'RECORD_TRIGGERED' && !workflowNewObjectKey) return
+    const selectedObject = objects.find((object) => String(object?.object_key || object?.api_name || object?.key || object?.id || '') === String(workflowNewObjectKey)) || null
     const trigger = type === 'RECORD_TRIGGERED' ? 'after_save'
       : type === 'SCHEDULE_TRIGGERED' ? 'scheduled'
         : type === 'PLATFORM_EVENT_TRIGGERED' ? (triggers.find((option) => option.kind === 'event')?.key || 'manual')
           : 'manual'
     setWorkflowDraft({
       name: '',
-      object: '',
+      object: type === 'RECORD_TRIGGERED' ? workflowNewObjectKey : '',
+      objectKey: type === 'RECORD_TRIGGERED' ? workflowNewObjectKey : '',
+      objectId: type === 'RECORD_TRIGGERED' ? (selectedObject?.id || null) : null,
       trigger,
       version: 1,
       lifecycleStatus: 'DRAFT',
@@ -496,11 +503,10 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     return (
       <div className="onebuilder-workflow-workspace" role="dialog" aria-modal="true" aria-label="Workflow Builder workspace">
         <div className="onebuilder-workflow-window">
-          <WorkflowAdmin
-            embedded
-            initialWorkflow={workflowDraft || (selectedSavedId ? saved.workflow.find((item) => String(item.id) === String(selectedSavedId)) || null : null)}
-            onMessage={(value) => setMessage(value || '')}
-            onError={(value) => setError(value || '')}
+          <Builder2Page
+            initialWorkflowId={selectedSavedId}
+            initialFlowType={workflowDraft?.actionMetadata?.flowType || ''}
+            initialObjectKey={workflowDraft?.objectKey || workflowDraft?.object || ''}
             onClose={() => {
               setMode('list')
               setWorkflowDraft(null)
@@ -511,20 +517,14 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
               onWorkflowClose?.()
               void loadSavedDefinitions('workflow')
             }}
-            onSaved={(savedWorkflow, options = {}) => {
+            onSaved={(savedWorkflow) => {
               setMessage('Saved.')
               if (savedWorkflow?.id) {
-                setSelectedSavedId(String(savedWorkflow.id))
-                setWorkflowDraft(savedWorkflow)
+                const id = String(savedWorkflow.id)
+                setSelectedSavedId(id)
+                onWorkflowOpen?.(id)
               }
               void loadSavedDefinitions('workflow')
-              if (options.keepOpen) return
-              setMode('list')
-              setWorkflowDraft(null)
-              setSelectedSavedId('')
-              setSelectedNodeId('')
-              setSideTab('components')
-              onWorkflowClose?.()
             }}
           />
         </div>
@@ -588,12 +588,25 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
                   </button>
                 ))}
               </div>
+              {workflowNewType === 'RECORD_TRIGGERED' ? (
+                <label className="onebuilder-new-flow-object">
+                  <span>Object</span>
+                  <select value={workflowNewObjectKey} onChange={(event) => setWorkflowNewObjectKey(event.target.value)}>
+                    <option value="">Select an object…</option>
+                    {objects.map((object) => {
+                      const key = String(object?.object_key || object?.api_name || object?.key || object?.id || '')
+                      return key ? <option key={key} value={key}>{object?.label || object?.name || key}</option> : null
+                    })}
+                  </select>
+                  <small>Choose the record object before opening the builder.</small>
+                </label>
+              ) : null}
             </div>
             <footer>
               <span />
               <span className="onebuilder-new-flow-actions">
                 <button type="button" className="onebuilder-new-flow-secondary" onClick={() => setWorkflowNewDialogOpen(false)}>Cancel</button>
-                <button type="button" className="onebuilder-new-flow-primary" disabled={!workflowNewType} onClick={createWorkflowDraft}>Create</button>
+                <button type="button" className="onebuilder-new-flow-primary" disabled={!workflowNewType || (workflowNewType === 'RECORD_TRIGGERED' && !workflowNewObjectKey)} onClick={createWorkflowDraft}>Create</button>
               </span>
             </footer>
           </div>
