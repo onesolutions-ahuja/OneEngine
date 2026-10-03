@@ -8,6 +8,7 @@ on:
       - "server/services/platformFunctionRegistry.js"
       - "server/services/systemWorkflowCatalog.js"
       - "server/database/init.js"
+      - "tests/appointmentWorkflow.test.mjs"
       - ".github/workflows/function-registry-prune-gate.yml"
 
 permissions:
