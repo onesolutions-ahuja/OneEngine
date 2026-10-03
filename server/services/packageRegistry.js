@@ -172,14 +172,14 @@ function oneAssistantAppointmentRouterWorkflow() {
     slotCount: { path: "steps.whatsapp_date_response.slotCount" },
   };
   const smsSlotTemplate = {
-    slotCount: { path: "steps.sms_session_context.bookingCase.state.slots.length", fallback: 5 },
+    slotCount: { path: "steps.sms_slot_response.slotCount", fallback: 5 },
     date1: { path: "steps.sms_slot_response.date1" },
     date2: { path: "steps.sms_slot_response.date2" },
     appointmentDate: { path: "steps.sms_slot_response.appointmentDate" },
     appointmentTime: { path: "steps.sms_slot_response.appointmentTime" },
   };
   const whatsappSlotTemplate = {
-    slotCount: { path: "steps.whatsapp_session_context.bookingCase.state.slots.length", fallback: 5 },
+    slotCount: { path: "steps.whatsapp_slot_response.slotCount", fallback: 5 },
     date1: { path: "steps.whatsapp_slot_response.date1" },
     date2: { path: "steps.whatsapp_slot_response.date2" },
     appointmentDate: { path: "steps.whatsapp_slot_response.appointmentDate" },
