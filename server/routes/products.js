@@ -494,10 +494,10 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
              WHERE product_object.object_key='product'
                AND product_object.active=TRUE
                AND (product_object.company_id IS NULL OR product_object.company_id=p.company_id)
-               AND product_association.custom_values->>'business_division_id'=$3
+               AND product_association.custom_values->>'business_division_id'=$2
           )` : ""}
         ORDER BY c.display_order, c.name`,
-      businessDivisionId ? [companyId, storeId, businessDivisionId] : [companyId]
+      businessDivisionId ? [companyId, businessDivisionId] : [companyId]
     );
 
     const versionResult = await db(
