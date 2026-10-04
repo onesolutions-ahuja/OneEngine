@@ -3462,13 +3462,52 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         };
       }
 
-      const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS" }[channel] || null;
-      if (!legacyKey) {
-        return { status: "failed", code: "UNSUPPORTED_COMMUNICATION_CHANNEL", channel, retryable: false };
+      if (channel === "EMAIL") {
+        const company = tenantId;
+        const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId: context.stepRunId });
+        if (!provider.configured) {
+          return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
+        }
+        const resolvedAction = await resolveEmailWorkflowAction({
+          db,
+          companyId: company,
+          action: forwarded,
+          record,
+          previousRecord,
+          object,
+          workflowVariables,
+          req,
+        });
+        const job = await enqueuePlatformJob({
+          db,
+          companyId: company,
+          kind: "SEND_EMAIL",
+          payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: context.stepRunId },
+          runAt: new Date(),
+          idempotencyKey: action.idempotencyKey || `${company}:${context.stepRunId || action.id || JSON.stringify(action)}`,
+        });
+        return { status: job ? "queued" : "skipped", channel, jobId: job?.id || null };
       }
-      const transport = getWorkflowActionDefinition(legacyKey);
-      if (!transport?.executor) return { status: "failed", code: "COMMUNICATION_TRANSPORT_UNAVAILABLE", channel, retryable: false };
-      return transport.executor({ ...context, action: { ...forwarded, key: legacyKey, type: legacyKey } });
+
+      if (channel === "SMS") {
+        const company = tenantId;
+        const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "SMS", stepRunId: context.stepRunId });
+        if (!provider.configured) {
+          return { status: "failed", provider: "SMS", error: provider.error, jobId: null };
+        }
+        const resolvedAction = resolveCommunicationWorkflowAction(forwarded, record, object, workflowVariables, req, previousRecord);
+        const job = await enqueuePlatformJob({
+          db,
+          companyId: company,
+          kind: "SEND_SMS",
+          payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: context.stepRunId },
+          runAt: new Date(),
+          idempotencyKey: action.idempotencyKey || `${company}:${context.stepRunId || action.id || JSON.stringify(action)}`,
+        });
+        return { status: job ? "queued" : "skipped", channel, jobId: job?.id || null };
+      }
+
+      return { status: "failed", code: "UNSUPPORTED_COMMUNICATION_CHANNEL", channel, retryable: false };
     },
   },
   {
