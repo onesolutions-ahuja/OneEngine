@@ -6722,7 +6722,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   function validateWorkflowTestConfig(config = {}, definition = null) {
     if (String(config.recordMode || "latest") === "specific" && !String(config.recordId || "").trim()) return "Specific-record tests require a record ID";
     const assertions = Array.isArray(config.assertions) ? config.assertions : [];
-    if (!assertions.length) return "Saved flow tests require at least one assertion";
     const actions = Array.isArray(definition?.action?.actions) ? definition.action.actions : [];
     const byId = new Map(actions.filter((item) => item?.id).map((item) => [String(item.id), item]));
     for (let index = 0; index < assertions.length; index += 1) {
