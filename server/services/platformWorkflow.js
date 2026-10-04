@@ -6125,13 +6125,82 @@ export function friendlyWorkflowError(error, actionType = "") {
   };
 }
 
+function workflowResultPath(value, path) {
+  if (!path) return value;
+  return String(path).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], value);
+}
+
+function setWorkflowObjectPath(target, path, value) {
+  const parts = String(path || "").split(".").filter(Boolean);
+  if (!parts.length) return value;
+  let current = target;
+  parts.forEach((part, index) => {
+    if (index === parts.length - 1) current[part] = value;
+    else {
+      if (!current[part] || typeof current[part] !== "object" || Array.isArray(current[part])) current[part] = {};
+      current = current[part];
+    }
+  });
+  return target;
+}
+
+function resolveActionBuilderBinding(value, context = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  if (value.__flowInputMode === "formula") {
+    return evaluateWorkflowFormula(String(value.expression || ""), {
+      record: context.record || {},
+      previousRecord: context.previousRecord || {},
+      variables: context.workflowVariables?.variables || {},
+      steps: context.workflowVariables?.steps || {},
+    });
+  }
+  if (value.__flowInputMode === "transform") {
+    const source = resolveConfiguredResource(value.source, context, { preserveMissing: false });
+    const mappings = Array.isArray(value.mappings) ? value.mappings : [];
+    const transformOne = (item) => {
+      const output = {};
+      for (const mapping of mappings) {
+        const mappedValue = workflowResultPath(item, mapping?.sourceField);
+        setWorkflowObjectPath(output, mapping?.targetField, mappedValue);
+      }
+      return output;
+    };
+    return Array.isArray(source) ? source.map(transformOne) : transformOne(source);
+  }
+  const keys = Object.keys(value);
+  if (typeof value.path === "string" && keys.every((key) => ["path","fallback"].includes(key))) {
+    return resolveConfiguredResource(value, context, { preserveMissing: false });
+  }
+  return value;
+}
+
+function materializeActionBuilderInputs(action, context = {}) {
+  if (!action || typeof action !== "object") return action;
+  return Object.fromEntries(Object.entries(action).map(([key, value]) => [
+    key,
+    resolveActionBuilderBinding(value, context),
+  ]));
+}
+
+function applyWorkflowActionOutputStorage(action, result, workflowVariables) {
+  if (!action || !workflowVariables?.variables) return;
+  const automatic = String(action.automaticOutputVariable || "").trim();
+  if (automatic) workflowVariables.variables[automatic] = result;
+  for (const mapping of Array.isArray(action.manualOutputMappings) ? action.manualOutputMappings : []) {
+    const target = String(mapping?.targetVariable || "").replace(/^variables\./, "");
+    if (!target) continue;
+    workflowVariables.variables[target] = workflowResultPath(result, mapping?.outputPath);
+  }
+}
+
 export async function executeWorkflowAction(context) {
-  const action = context?.action;
+  const action = materializeActionBuilderInputs(context?.action, context);
+  const executionContext = action === context?.action ? context : { ...context, action };
   const definition = validateWorkflowAction(action);
-  await assertWorkflowActionPermission(context, definition);
+  await assertWorkflowActionPermission(executionContext, definition);
   const actionType = resolveWorkflowActionType(action);
-  await assertWorkflowObjectPermission(context, actionType);
-  if (context?.debugMode === true && !DEBUG_EXECUTABLE_ACTIONS.has(actionType)) {
+  await assertWorkflowObjectPermission(executionContext, actionType);
+  if (executionContext?.debugMode === true && !DEBUG_EXECUTABLE_ACTIONS.has(actionType)) {
     return {
       status: "completed",
       simulated: true,
@@ -6139,7 +6208,7 @@ export async function executeWorkflowAction(context) {
       message: "Simulated in Debug mode so no external action or irreversible operation was performed.",
     };
   }
-  if (context?.debugMode === true && ["WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE"].includes(actionType)) {
+  if (executionContext?.debugMode === true && ["WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE"].includes(actionType)) {
     return {
       status: "completed",
       simulated: true,
@@ -6152,7 +6221,7 @@ export async function executeWorkflowAction(context) {
   if (typeof definition.executor !== "function") {
     return { status: "skipped", reason: "No executor configured" };
   }
-  return definition.executor(context);
+  return definition.executor(executionContext);
 }
 
 async function recordCompensationFailure({ db, runId, stepRunId, action, error, context }) {
