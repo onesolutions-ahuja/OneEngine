@@ -167,8 +167,13 @@ export function oneHttpRequestDefinition() {
       endpoint: action.endpoint,
       headers: action.headers || {},
       body: resolveBindingTree(action.body, { record, user: req?.user || null, variables: workflowVariables }),
-      query: action.query || {},
-      variables: { ...(record || {}), ...(workflowVariables?.variables || {}), input: workflowVariables?.input || {} },
+      query: resolveBindingTree(action.query || {}, { record, user: req?.user || null, variables: workflowVariables }),
+      variables: {
+        ...(record || {}),
+        ...(workflowVariables?.variables || {}),
+        input: workflowVariables?.input || {},
+        ...resolveBindingTree(action.variables || {}, { record, user: req?.user || null, variables: workflowVariables }),
+      },
       timeoutMs: action.timeoutMs,
     }),
   };
