@@ -4058,6 +4058,14 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
               if (output.required === true && value === undefined) throw new Error(`Subflow output "${output.label || name}" was not produced`);
               outputs[name] = value;
             }
+            for (const [outputName, target] of Object.entries(action.outputMappings || {})) {
+              if (!target) continue;
+              const variableName = String(target).replace(/^variables\./, "");
+              if (Object.prototype.hasOwnProperty.call(outputs, outputName)) {
+                if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+                workflowVariables.variables[variableName] = outputs[outputName];
+              }
+            }
             return {
               status: "completed",
               workflowId: workflowKey,
@@ -4145,6 +4153,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         });
         if (childRun?.id) {
           await runDb("UPDATE platform_workflow_step_runs SET child_run_id=$1,updated_at=NOW() WHERE id=$2", [childRun.id, stepRunId]);
+        }
+      }
+      if (!childWaiting) {
+        for (const [outputName, target] of Object.entries(action.outputMappings || {})) {
+          if (!target) continue;
+          const variableName = String(target).replace(/^variables\./, "");
+          if (Object.prototype.hasOwnProperty.call(outputs, outputName)) {
+            if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+            workflowVariables.variables[variableName] = outputs[outputName];
+          }
         }
       }
       return {
@@ -4924,6 +4942,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         allowFinish: action.allowFinish === true,
         allowPause: action.allowPause === true,
         showFooter: action.showFooter !== false,
+        nextLabel: action.nextLabel || "Next",
+        finishLabel: action.finishLabel || "Finish",
+        previousLabel: action.previousLabel || "Previous",
+        pauseLabel: action.pauseLabel || "Pause",
       };
       const existing = await db(
         "SELECT * FROM platform_workflow_screen_sessions WHERE run_id=$1 AND step_identifier=$2 AND status='ACTIVE' ORDER BY created_at DESC LIMIT 1",
