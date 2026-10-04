@@ -6838,7 +6838,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (!saved.rows.length) return res.status(404).json({ success: false, message: "Saved test not found" });
     const test = saved.rows[0];
     const config = test.config && typeof test.config === "object" ? test.config : {};
-    req.body = { ...(req.body || {}), mode: "test", assertions: Array.isArray(config.assertions) ? config.assertions : [], skipStartConditionRequirements: config.skipStartConditionRequirements === true, ...(config.recordMode === "specific" && config.recordId ? { recordId: config.recordId } : {}) };
+    req.body = {
+      ...(req.body || {}),
+      mode: "test",
+      inputs: config.inputs && typeof config.inputs === "object" ? config.inputs : {},
+      assertions: Array.isArray(config.assertions) ? config.assertions : [],
+      rollback: config.recordMode === "specific" || config.scenarioTestingAutomation === true ? true : (config.rollback ?? true),
+      skipStartConditionRequirements: config.skipStartConditionRequirements === true,
+      debugWaitElementBehavior: config.debugWaitElementBehavior === true,
+      debugWaitPaths: config.debugWaitPaths && typeof config.debugWaitPaths === "object" ? config.debugWaitPaths : {},
+    };
+    if (config.recordMode === "specific" && config.recordId) req.body.recordId = config.recordId;
+    else delete req.body.recordId;
     const originalJson = res.json.bind(res);
     res.json = async (payload) => {
       try {
