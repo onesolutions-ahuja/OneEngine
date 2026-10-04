@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 test('GPT Builder is isolated from the existing Workflow Builder implementation', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.doesNotMatch(page, /Builder2|OneBuilder|builder2Model|builder2Runtime/)
   assert.match(page, /GPT Builder/)
 })
@@ -11,12 +11,12 @@ test('GPT Builder is isolated from the existing Workflow Builder implementation'
 test('OneDeveloper exposes GPT Builder as a separate developer section', async () => {
   const developer = await readFile(new URL('../src/pages/developer/OneDeveloperPage.jsx', import.meta.url), 'utf8')
   assert.match(developer, /key: 'gptbuilder'/)
-  assert.match(developer, /current\.key === 'gptbuilder' \? <GPTBuilderPage/)
+  assert.match(developer, /import GPTBuilderPage from '\.\/gptbuilder\/GPTBuilderPage'/)\n  assert.match(developer, /current\.key === 'gptbuilder' \? <GPTBuilderPage/)
 })
 
 
 test('GPT Builder phase 2 shell follows Salesforce flow-creation and canvas chrome rules', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const automation = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderNewAutomation.jsx', import.meta.url), 'utf8')
   for (const text of ['New Automation','Start From Scratch','Use a Template']) assert.ok(automation.includes(text), text)
   for (const text of ['Record-Triggered Flow','Screen Flow','Autolaunched Flow (No Trigger)','Schedule-Triggered Flow','Platform Event-Triggered Flow','Auto-Layout','Free-Form','Canvas zoom']) assert.ok(page.includes(text), text)
@@ -26,7 +26,7 @@ test('GPT Builder phase 2 shell follows Salesforce flow-creation and canvas chro
 })
 
 test('GPT Builder keeps auto-layout and free-form toolbox behavior separate', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /layout === 'free' \? <button/)
   assert.match(page, /layout === 'auto' \? 'manager' : tab/)
   assert.match(page, /setToolboxOpen/)
@@ -34,7 +34,7 @@ test('GPT Builder keeps auto-layout and free-form toolbox behavior separate', as
 
 
 test('GPT Builder phase 2 implements Salesforce Start configuration and first-save semantics', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   for (const text of [
     'Configure Start',
     'Select Object',
@@ -58,7 +58,7 @@ test('GPT Builder phase 2 implements Salesforce Start configuration and first-sa
 })
 
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /disabled=\{!workflowId\}><Play/)
   assert.match(page, /Test Mode/)
   assert.match(page, /> Debug<\/button>/)
@@ -109,7 +109,7 @@ test('GPT Builder phase 3 applies Salesforce flow-type and layout availability r
 })
 
 test('GPT Builder phase 3 matches auto-layout picker and free-form drag discovery behavior', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   assert.match(page, /<ElementPicker/)
   assert.match(page, /aria-label="Add element" aria-expanded=\{elementPickerOpen\}/)
@@ -162,7 +162,7 @@ test('GPT Builder phase 4 matches auto-layout continuous editing and free-form d
 })
 
 test('GPT Builder phase 4 persists element identity and reopens element properties', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /const \[elements, setElements\] = useState\(\(\) => structuredClone\(templateAction\.gptBuilderElements \|\| \[\]\)\)/)
   assert.match(page, /gptBuilderElements: elements\.map/)
   assert.match(page, /labelSource: element\.labelSource/)
@@ -173,7 +173,7 @@ test('GPT Builder phase 4 persists element identity and reopens element properti
 })
 
 test('GPT Builder phase 4 blocks saving incomplete Screen and Action elements but allows other draft elements', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /hasUnsavableIncomplete = layout === 'free'/)
   assert.match(page, /\['screen', 'action'\]\.includes\(item\.key\)/)
   assert.match(page, /Complete Screen and Action elements before saving/)
@@ -197,7 +197,7 @@ test('GPT Builder phase 4 exposes one shared configuration-to-auto-label hook fo
 
 
 test('GPT Builder recheck implements Salesforce undo redo multi-select copy paste and Go To affordances', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   assert.match(page, /undoFlowChange/)
   assert.match(page, /redoFlowChange/)
@@ -209,7 +209,7 @@ test('GPT Builder recheck implements Salesforce undo redo multi-select copy past
 })
 
 test('GPT Builder recheck includes Salesforce Start custom logic formula builder async and scheduled paths', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const formula = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderFormulaBuilder.jsx', import.meta.url), 'utf8')
   const startOptions = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderStartOptions.jsx', import.meta.url), 'utf8')
   assert.match(page, /Custom Condition Logic Is Met/)
@@ -231,7 +231,7 @@ test('GPT Builder auto-generated labels apply in auto-layout and free-form and p
 
 
 test('GPT Builder recheck matches Salesforce draft-save rules by layout mode', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /const hasUnsavableIncomplete = layout === 'free'/)
   assert.match(page, /Resolve flow errors before saving in Free-Form/)
   assert.match(page, /elements\.some\(\(item\) => !item\.configured && \['screen', 'action'\]\.includes\(item\.key\)\)/)
@@ -239,7 +239,7 @@ test('GPT Builder recheck matches Salesforce draft-save rules by layout mode', a
 
 
 test('GPT Builder phase 2 recheck matches current Salesforce flow version properties', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   for (const text of [
     'Source Template',
     'Original Flow',
@@ -262,7 +262,7 @@ test('GPT Builder phase 2 recheck matches current Salesforce flow version proper
 
 
 test('GPT Builder phase 1 recheck uses the current Salesforce New Automation browser', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const automation = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderNewAutomation.jsx', import.meta.url), 'utf8')
   assert.match(page, /<GPTBuilderNewAutomation flowTypes=\{FLOW_TYPES\}/)
   for (const text of ['Start From Scratch','Use a Template','Frequently Used','Triggered','Screens','Autolaunched Automations','View All','Search automation types','Search templates']) {
@@ -274,7 +274,7 @@ test('GPT Builder phase 1 recheck uses the current Salesforce New Automation bro
 })
 
 test('GPT Builder phase 2 recheck uses Salesforce Show Advanced and current screen progress settings', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /advancedOpen \? 'Hide Advanced' : 'Show Advanced'/)
   assert.doesNotMatch(page, /<details><summary>Advanced<\/summary>/)
   assert.match(page, /showProgress: flow\.key === 'screen'/)
