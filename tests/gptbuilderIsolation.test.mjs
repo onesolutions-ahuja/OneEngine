@@ -116,6 +116,36 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Wait for Conditions platform-event UX uses event metadata filters resources and output variables', async () => {
+  const wait = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderWaitConditions.jsx', import.meta.url), 'utf8')
+  const events = await readFile(new URL('../server/services/platformEvents.js', import.meta.url), 'utf8')
+  const routes = await readFile(new URL('../server/routes/platformEvents.js', import.meta.url), 'utf8')
+  const foundation = await readFile(new URL('../server/database/baseFoundation.sql', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  const server = await readFile(new URL('../server/server.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Add Event Condition',
+    'Store Platform Event Message',
+    'Select event field',
+    'No Conditions',
+    'Custom Condition Logic Is Met',
+    'Resource',
+  ]) assert.ok(wait.includes(text), text)
+  assert.match(wait, /field_schema/)
+  assert.match(wait, /maxLength=\{765\}/)
+  assert.match(foundation, /field_schema JSONB NOT NULL DEFAULT '\[\]'::jsonb/)
+  assert.match(events, /fieldSchema = \[\]/)
+  assert.match(routes, /SELECT event_type,description,source_package_id,field_schema/)
+  assert.match(routes, /observed: true/)
+  assert.match(runtime, /platformEventConditionMode/)
+  assert.match(runtime, /platformEventCustomConditionLogic/)
+  assert.match(runtime, /platformEventOutputVariable/)
+  assert.match(server, /matchedPlatformEventPayload/)
+  assert.match(server, /platformEventConditionMode/)
+  assert.match(server, /workflowVariables\.variables\[String\(payload\.platformEventOutputVariable\)\] = matchedPlatformEventPayload/)
+  assert.match(server, /wait_already_resumed/)
+})
+
 test('GPT Builder Wait for Conditions matches Salesforce multi-configuration wait and resume-event behavior', async () => {
   const wait = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderWaitConditions.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
