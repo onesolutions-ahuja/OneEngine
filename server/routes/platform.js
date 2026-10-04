@@ -3300,7 +3300,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           companyId: req.user.companyId,
           workflowId: workflow.id,
           workflowName: workflow.name,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.version || workflow.active_version || 1),
           objectId: object?.id || null,
           recordId: recordIsPersisted ? (record?.id || null) : null,
           triggerKey: "page_interaction",
@@ -3318,7 +3318,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             recordId: record?.id || null,
             companyId: req.user.companyId,
             runId: run?.id || null,
-            workflowVersion: Number(workflow.active_version || workflow.version || 1),
+            workflowVersion: Number(workflow.version || workflow.active_version || 1),
             trigger: "page_interaction",
           });
           const waiting = workflowResultsContainStatus(results, "waiting");
@@ -5600,7 +5600,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         companyId: req.user.companyId,
         workflowId: workflow.id || null,
         workflowName: workflow.name,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.version || workflow.active_version || 1),
         objectId: object?.id || null,
         recordId: record?.id || null,
         triggerKey: executionMode,
@@ -5678,7 +5678,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: record?.id || null,
           companyId: req.user.companyId,
           runId: run?.id || null,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.version || workflow.active_version || 1),
           trigger: executionMode,
           debugMode: dryRun,
           workflowVariables,
@@ -7563,7 +7563,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           companyId: req.user.companyId,
           workflowId: workflow.id,
           workflowName: workflow.name,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.version || workflow.active_version || 1),
           objectId: object.id,
           recordId: null,
           triggerKey: "till_button",
@@ -7586,7 +7586,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: null,
           companyId: req.user.companyId,
           runId: run?.id || null,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.version || workflow.active_version || 1),
           trigger: "till_button",
         });
         const waiting = workflowResultsContainStatus(results, "waiting");
@@ -7710,7 +7710,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           companyId: req.user.companyId,
           workflowId: workflow.id,
           workflowName: workflow.name,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.version || workflow.active_version || 1),
           objectId: object.id,
           recordId: req.params.recordId,
           triggerKey: "record_page_button",
@@ -7727,7 +7727,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: req.params.recordId,
           companyId: req.user.companyId,
           runId: run?.id || null,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.version || workflow.active_version || 1),
           trigger: "record_page_button",
         });
         const waiting = workflowResultsContainStatus(results, "waiting");
@@ -7893,7 +7893,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         companyId: req.user.companyId,
         workflowId: workflow.id,
         workflowName: workflow.name,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.version || workflow.active_version || 1),
         objectId: object.id,
         recordId: req.params.recordId,
         triggerKey: "record_page_action",
@@ -7910,7 +7910,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: req.params.recordId,
           companyId: req.user.companyId,
           runId: run?.id || null,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.version || workflow.active_version || 1),
           trigger: "record_page_action",
         });
         const waiting = workflowResultsContainStatus(results, "waiting");
