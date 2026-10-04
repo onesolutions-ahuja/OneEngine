@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Bell, CalendarDays, Pencil, RefreshCw, X } from 'lucide-react'
-import { apiRequest, getAvailableStores, loadSessionPermissions } from '../../services/api'
+import { apiRequest, getStoredUser, loadSessionPermissions } from '../../services/api'
 import DashboardGrid from '../../components/dashboard/DashboardGrid.jsx'
 import { setRoute } from '../../navigation/routes'
 
@@ -196,7 +196,7 @@ export default function DashboardPage({ onOpenBuilder }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [currency, setCurrency] = useState('GBP')
-  const [dateRange, setDateRange] = useState('this_month')
+  const [dateRange, setDateRange] = useState('')
   const [globalFilterValues, setGlobalFilterValues] = useState({})
   const [permissionCodes, setPermissionCodes] = useState([])
   const [showSubscriptions, setShowSubscriptions] = useState(false)
@@ -213,20 +213,40 @@ export default function DashboardPage({ onOpenBuilder }) {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/London',
     recipientPrincipals: [],
   }))
-  const [dashboardStores, setDashboardStores] = useState(() => getAvailableStores())
-  const [dashboardStoreId, setDashboardStoreId] = useState(() => {
-    const stores = getAvailableStores()
-    return stores.length === 1 ? String(stores[0].id) : ''
-  })
+  const [dashboardStores, setDashboardStores] = useState([])
+  const [dashboardStoreId, setDashboardStoreId] = useState('')
   const [viewportMode, setViewportMode] = useState(() => (
     typeof window === 'undefined' ? 'desktop' : window.innerWidth < 640 ? 'mobile' : window.innerWidth < 1024 ? 'tablet' : 'desktop'
   ))
 
   useEffect(() => {
     let live = true
-    apiRequest('/api/settings').then((response) => {
-      if (live && response?.success) setCurrency(response.data?.company?.currency || 'GBP')
-    }).catch(() => {})
+    const filter = encodeURIComponent(JSON.stringify({ setting_key: 'company.currency' }))
+    apiRequest(`/api/platform/objects/sys_settings/records?page=1&pageSize=1&filter=${filter}`)
+      .then((response) => {
+        if (!live) return
+        const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
+        const value = rows[0]?.setting_value
+        if (typeof value === 'string' && value) setCurrency(value)
+      })
+      .catch(() => {})
+    return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    let live = true
+    const user = getStoredUser()
+    const userId = String(user?.id || user?.userId || '')
+    const filter = encodeURIComponent(JSON.stringify(userId ? { user_id: userId } : {}))
+    apiRequest(`/api/platform/objects/available_store/records?page=1&pageSize=200&filter=${filter}`)
+      .then((response) => {
+        if (!live) return
+        const rows = (Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [])
+          .map((row) => ({ ...row, id: row.store_id || row.id }))
+        setDashboardStores(rows)
+        if (rows.length === 1) setDashboardStoreId(String(rows[0].id))
+      })
+      .catch(() => { if (live) setDashboardStores([]) })
     return () => { live = false }
   }, [])
 
@@ -286,12 +306,16 @@ export default function DashboardPage({ onOpenBuilder }) {
       }
 
       setDefinition(value)
-      const stores = dashboardStores.length ? dashboardStores : getAvailableStores()
-      const scopedStoreIds = dashboardStoreId ? [dashboardStoreId] : stores.map((store) => String(store.id)).filter(Boolean)
+      const definedFilters = value.filters || []
+      const dateDefinition = definedFilters.find((filter) => filter?.field === 'date')
+      const storeDefinition = definedFilters.find((filter) => filter?.field === 'store')
+      const effectiveRange = range || dateDefinition?.operator || ''
+      if (!range && effectiveRange) setDateRange(effectiveRange)
+      const scopedStoreIds = dashboardStoreId ? [dashboardStoreId] : dashboardStores.map((store) => String(store.id)).filter(Boolean)
       const filters = [
-        ...(value.filters || []).filter((filter) => filter?.field !== 'date' && filter?.field !== 'store'),
-        ...(range ? [{ field: 'date', operator: range }] : (value.filters || []).filter((filter) => filter?.field === 'date')),
-        ...(scopedStoreIds.length ? [{ field: 'store', operator: 'in', value: scopedStoreIds }] : []),
+        ...definedFilters.filter((filter) => filter?.field !== 'date' && filter?.field !== 'store'),
+        ...(dateDefinition ? [{ ...dateDefinition, operator: effectiveRange || dateDefinition.operator }] : []),
+        ...(storeDefinition ? [{ ...storeDefinition, value: scopedStoreIds.length ? scopedStoreIds : storeDefinition.value }] : []),
       ]
       const endpoint = value.id ? `/api/dashboards/${encodeURIComponent(value.id)}/run` : '/api/dashboards/run'
       const body = value.id ? { filters, globalFilterValues: filterValues } : { ...value, filters, globalFilterValues: filterValues }
@@ -308,29 +332,14 @@ export default function DashboardPage({ onOpenBuilder }) {
   useEffect(() => { void loadDashboard(activeId, dateRange, globalFilterValues) }, [activeId, dashboardStoreId])
 
   useEffect(() => {
-    const handleStoreChange = () => {
-      const stores = getAvailableStores()
-      setDashboardStores(stores)
-      if (stores.length === 1) setDashboardStoreId(String(stores[0].id))
-      else if (dashboardStoreId && !stores.some((store) => String(store.id) === String(dashboardStoreId))) setDashboardStoreId('')
-    }
     const handleDashboardStoreScopeChange = (event) => {
-      const stores = getAvailableStores()
-      setDashboardStores(stores)
       const requested = String(event?.detail?.storeId || '')
-      if (stores.length <= 1) {
-        setDashboardStoreId(stores[0]?.id ? String(stores[0].id) : '')
-        return
-      }
-      setDashboardStoreId(requested && stores.some((store) => String(store.id) === requested) ? requested : '')
+      setDashboardStoreId(requested && dashboardStores.some((store) => String(store.id) === requested) ? requested : '')
     }
-    window.addEventListener('onepos:store-context-changed', handleStoreChange)
     window.addEventListener('onepos:dashboard-store-scope-changed', handleDashboardStoreScopeChange)
-    return () => {
-      window.removeEventListener('onepos:store-context-changed', handleStoreChange)
-      window.removeEventListener('onepos:dashboard-store-scope-changed', handleDashboardStoreScopeChange)
-    }
-  }, [dashboardStoreId])
+    return () => window.removeEventListener('onepos:dashboard-store-scope-changed', handleDashboardStoreScopeChange)
+  }, [dashboardStores])
+
 
   useEffect(() => {
     const navigate = (app, options = {}) => {
@@ -461,7 +470,7 @@ export default function DashboardPage({ onOpenBuilder }) {
           <option value="">Default dashboard</option>
           {available.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
-        <label><CalendarDays size={14}/><select value={dateRange} aria-label="Dashboard date range" onChange={(event) => { const next=event.target.value; setDateRange(next); void loadDashboard(activeId,next,globalFilterValues) }}>{DATE_RANGES.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        {(definition?.filters || []).some((filter) => filter?.field === 'date') ? <label><CalendarDays size={14}/><select value={dateRange} aria-label="Dashboard date range" onChange={(event) => { const next=event.target.value; setDateRange(next); void loadDashboard(activeId,next,globalFilterValues) }}>{DATE_RANGES.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label> : null}
         <button type="button" onClick={() => loadDashboard(activeId,dateRange,globalFilterValues)}><RefreshCw size={14}/></button>
         {canSubscribe && definition?.id ? <button type="button" onClick={openSubscriptions}><Bell size={14}/> Subscribe</button> : null}
         {onOpenBuilder ? <button type="button" onClick={onOpenBuilder}><Pencil size={14}/> Edit</button> : null}
