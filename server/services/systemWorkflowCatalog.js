@@ -164,6 +164,73 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
         assignment("set_existing_purchase_mapping","Set Existing Purchase Mapping ID","mappingId","text",{path:"steps.get_purchase_mapping.record.id"})
       ]
     }
+  },
+  {
+    systemKey:"flow:GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS", name:"GPT - QuickBooks - Sync Supplier Payments", triggerKey:"manual",
+    action:{type:"workflow",systemGenerated:true,systemKey:"flow:GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",apiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",flowType:"AUTOLAUNCHED",
+      inputs:[{name:"paymentId",type:"text",required:true},{name:"integrationId",type:"text",required:true},{name:"paymentAccountId",type:"text",required:false}],outputs:["externalId","mappingId"],
+      resources:[outputVariable("paymentId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("paymentAccountId","Text",{availableInput:true}),outputVariable("externalId"),outputVariable("mappingId")],
+      actions:[
+        {id:"get_payment",label:"Get Supplier Payment",apiName:"get_payment",key:"GET_RECORDS",objectKey:"supplier_payment",filters:[{field:"id",operator:"equals",value:{path:"variables.paymentId"}}],limit:1,store:"first"},
+        {id:"get_vendor_mapping",label:"Get Vendor Mapping",apiName:"get_vendor_mapping",key:"GET_RECORDS",objectKey:"integration_entity_mapping",filters:[{field:"integration_id",operator:"equals",value:{path:"variables.integrationId"}},{field:"entity_type",operator:"equals",value:"supplier"},{field:"local_entity_id",operator:"equals",value:{path:"steps.get_payment.record.supplier_id"}}],limit:1,store:"first"},
+        {id:"get_existing",label:"Get Existing Payment Mapping",apiName:"get_existing",key:"GET_RECORDS",objectKey:"integration_entity_mapping",filters:[{field:"integration_id",operator:"equals",value:{path:"variables.integrationId"}},{field:"entity_type",operator:"equals",value:"supplier_payment"},{field:"local_entity_id",operator:"equals",value:{path:"variables.paymentId"}}],limit:1,store:"first"},
+        {id:"already_synced",label:"Payment Already Synced?",apiName:"already_synced",key:"CONDITION",outcomes:[{id:"yes",label:"Already Synced",condition:{match:"all",conditions:[{field:"steps.get_existing.record.mapping_status",operator:"equals",value:"LINKED"}]},branch:["set_existing_payment_external","set_existing_payment_mapping"]}],defaultLabel:"Export",defaultBranch:["export_payment"]},
+        {id:"export_payment",label:"Export QuickBooks Bill Payment",apiName:"export_payment",key:"ONE_HTTP_REQUEST",providerKey:"quickbooks",method:"POST",endpoint:"/v3/company/{{realmId}}/billpayment",
+          body:{VendorRef:{value:{path:"steps.get_vendor_mapping.record.external_id"}},TotalAmt:{path:"steps.get_payment.record.amount"},TxnDate:{path:"steps.get_payment.record.payment_date"},PrivateNote:{path:"steps.get_payment.record.reference"},PayType:"Check",CheckPayment:{BankAccountRef:{value:{path:"variables.paymentAccountId"}}}}},
+        {id:"payment_exported",label:"Payment Exported?",apiName:"payment_exported",key:"CONDITION",outcomes:[{id:"yes",label:"Success",condition:{match:"all",conditions:[{field:"steps.export_payment.success",operator:"equals",value:true}]},branch:["create_payment_mapping","set_payment_external","set_payment_mapping"]}],defaultLabel:"Failed",defaultBranch:[]},
+        {id:"create_payment_mapping",label:"Create Payment Mapping",apiName:"create_payment_mapping",key:"CREATE_RECORD",objectKey:"integration_entity_mapping",fieldValues:{integration_id:{path:"variables.integrationId"},entity_type:"supplier_payment",local_entity_id:{path:"variables.paymentId"},external_id:{path:"steps.export_payment.data.BillPayment.Id"},mapping_status:"LINKED",metadata:{syncToken:{path:"steps.export_payment.data.BillPayment.SyncToken"}}}},
+        assignment("set_payment_external","Set Payment External ID","externalId","text",{path:"steps.export_payment.data.BillPayment.Id"}),assignment("set_payment_mapping","Set Payment Mapping ID","mappingId","text",{path:"steps.create_payment_mapping.created.id"}),
+        assignment("set_existing_payment_external","Set Existing Payment External ID","externalId","text",{path:"steps.get_existing.record.external_id"}),assignment("set_existing_payment_mapping","Set Existing Payment Mapping ID","mappingId","text",{path:"steps.get_existing.record.id"})
+      ]}
+  },
+  {
+    systemKey:"flow:GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",name:"GPT - QuickBooks - Sync Supplier Credits",triggerKey:"manual",
+    action:{type:"workflow",systemGenerated:true,systemKey:"flow:GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",apiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",flowType:"AUTOLAUNCHED",
+      inputs:[{name:"returnId",type:"text",required:true},{name:"integrationId",type:"text",required:true},{name:"expenseAccountId",type:"text",required:true}],outputs:["externalId","mappingId"],
+      resources:[outputVariable("returnId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("expenseAccountId","Text",{availableInput:true}),outputVariable("externalId"),outputVariable("mappingId")],
+      actions:[
+        {id:"get_return",label:"Get Supplier Return",apiName:"get_return",key:"GET_RECORDS",objectKey:"stock_return",filters:[{field:"id",operator:"equals",value:{path:"variables.returnId"}},{field:"return_type",operator:"equals",value:"SUPPLIER"}],limit:1,store:"first"},
+        {id:"get_vendor_mapping",label:"Get Vendor Mapping",apiName:"get_vendor_mapping",key:"GET_RECORDS",objectKey:"integration_entity_mapping",filters:[{field:"integration_id",operator:"equals",value:{path:"variables.integrationId"}},{field:"entity_type",operator:"equals",value:"supplier"},{field:"local_entity_id",operator:"equals",value:{path:"steps.get_return.record.supplier_id"}}],limit:1,store:"first"},
+        {id:"get_existing",label:"Get Existing Credit Mapping",apiName:"get_existing",key:"GET_RECORDS",objectKey:"integration_entity_mapping",filters:[{field:"integration_id",operator:"equals",value:{path:"variables.integrationId"}},{field:"entity_type",operator:"equals",value:"supplier_return"},{field:"local_entity_id",operator:"equals",value:{path:"variables.returnId"}}],limit:1,store:"first"},
+        {id:"already_synced",label:"Credit Already Synced?",apiName:"already_synced",key:"CONDITION",outcomes:[{id:"yes",label:"Already Synced",condition:{match:"all",conditions:[{field:"steps.get_existing.record.mapping_status",operator:"equals",value:"LINKED"}]},branch:["set_existing_credit_external","set_existing_credit_mapping"]}],defaultLabel:"Export",defaultBranch:["export_credit"]},
+        {id:"export_credit",label:"Export QuickBooks Vendor Credit",apiName:"export_credit",key:"ONE_HTTP_REQUEST",providerKey:"quickbooks",method:"POST",endpoint:"/v3/company/{{realmId}}/vendorcredit",
+          body:{VendorRef:{value:{path:"steps.get_vendor_mapping.record.external_id"}},TxnDate:{path:"steps.get_return.record.created_at"},DocNumber:{path:"steps.get_return.record.return_number"},Line:[{Amount:{path:"steps.get_return.record.refund_amount"},DetailType:"AccountBasedExpenseLineDetail",AccountBasedExpenseLineDetail:{AccountRef:{value:{path:"variables.expenseAccountId"}}}}]}},
+        {id:"credit_exported",label:"Credit Exported?",apiName:"credit_exported",key:"CONDITION",outcomes:[{id:"yes",label:"Success",condition:{match:"all",conditions:[{field:"steps.export_credit.success",operator:"equals",value:true}]},branch:["create_credit_mapping","set_credit_external","set_credit_mapping"]}],defaultLabel:"Failed",defaultBranch:[]},
+        {id:"create_credit_mapping",label:"Create Credit Mapping",apiName:"create_credit_mapping",key:"CREATE_RECORD",objectKey:"integration_entity_mapping",fieldValues:{integration_id:{path:"variables.integrationId"},entity_type:"supplier_return",local_entity_id:{path:"variables.returnId"},external_id:{path:"steps.export_credit.data.VendorCredit.Id"},mapping_status:"LINKED",metadata:{syncToken:{path:"steps.export_credit.data.VendorCredit.SyncToken"}}}},
+        assignment("set_credit_external","Set Credit External ID","externalId","text",{path:"steps.export_credit.data.VendorCredit.Id"}),assignment("set_credit_mapping","Set Credit Mapping ID","mappingId","text",{path:"steps.create_credit_mapping.created.id"}),
+        assignment("set_existing_credit_external","Set Existing Credit External ID","externalId","text",{path:"steps.get_existing.record.external_id"}),assignment("set_existing_credit_mapping","Set Existing Credit Mapping ID","mappingId","text",{path:"steps.get_existing.record.id"})
+      ]}
+  },
+  {
+    systemKey:"flow:GPT_QUICKBOOKS_RETRY_FAILED_SYNC",name:"GPT - QuickBooks - Retry Failed Sync",triggerKey:"manual",
+    action:{type:"workflow",systemGenerated:true,systemKey:"flow:GPT_QUICKBOOKS_RETRY_FAILED_SYNC",scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_RETRY_FAILED_SYNC",apiName:"GPT_QUICKBOOKS_RETRY_FAILED_SYNC",flowType:"AUTOLAUNCHED",
+      inputs:[{name:"syncType",type:"text",required:true},{name:"supplierId",type:"text"},{name:"purchaseId",type:"text"},{name:"paymentId",type:"text"},{name:"returnId",type:"text"},{name:"integrationId",type:"text",required:true}],outputs:["retryTarget"],
+      resources:[outputVariable("syncType","Text",{availableInput:true}),outputVariable("supplierId","Text",{availableInput:true}),outputVariable("purchaseId","Text",{availableInput:true}),outputVariable("paymentId","Text",{availableInput:true}),outputVariable("returnId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("retryTarget")],
+      actions:[
+        {id:"choose_retry",label:"Choose Failed Sync Type",apiName:"choose_retry",key:"CONDITION",
+          outcomes:[
+            {id:"vendors",label:"Vendors",condition:{match:"all",conditions:[{field:"variables.syncType",operator:"equals",value:"vendors"}]},branch:["retry_vendor"]},
+            {id:"purchases",label:"Purchases",condition:{match:"all",conditions:[{field:"variables.syncType",operator:"equals",value:"purchases"}]},branch:["retry_purchase"]},
+            {id:"payments",label:"Payments",condition:{match:"all",conditions:[{field:"variables.syncType",operator:"equals",value:"payments"}]},branch:["retry_payment"]},
+            {id:"credits",label:"Credits",condition:{match:"all",conditions:[{field:"variables.syncType",operator:"equals",value:"credits"}]},branch:["retry_credit"]}],
+          defaultLabel:"Invalid",defaultBranch:[]},
+        {id:"retry_vendor",label:"Retry Vendor Sync",apiName:"retry_vendor",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_VENDORS",inputMappings:{supplierId:{path:"variables.supplierId"},integrationId:{path:"variables.integrationId"}}},
+        {id:"retry_purchase",label:"Retry Purchase Sync",apiName:"retry_purchase",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_PURCHASES",inputMappings:{purchaseId:{path:"variables.purchaseId"},integrationId:{path:"variables.integrationId"}}},
+        {id:"retry_payment",label:"Retry Supplier Payment Sync",apiName:"retry_payment",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",inputMappings:{paymentId:{path:"variables.paymentId"},integrationId:{path:"variables.integrationId"}}},
+        {id:"retry_credit",label:"Retry Supplier Credit Sync",apiName:"retry_credit",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",inputMappings:{returnId:{path:"variables.returnId"},integrationId:{path:"variables.integrationId"}}},
+        assignment("set_retry_target","Set Retry Target","retryTarget","text",{path:"variables.syncType"})
+      ]}
+  },
+  {
+    systemKey:"flow:GPT_QUICKBOOKS_TEST_CONNECTION",name:"GPT - QuickBooks - Test Connection",triggerKey:"manual",
+    action:{type:"workflow",systemGenerated:true,systemKey:"flow:GPT_QUICKBOOKS_TEST_CONNECTION",scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_TEST_CONNECTION",apiName:"GPT_QUICKBOOKS_TEST_CONNECTION",flowType:"AUTOLAUNCHED",
+      inputs:[],outputs:["connected","companyName","companyId"],
+      resources:[outputVariable("connected","Boolean"),outputVariable("companyName"),outputVariable("companyId")],
+      actions:[
+        {id:"test_connection",label:"Get QuickBooks Company Info",apiName:"test_connection",key:"ONE_HTTP_REQUEST",providerKey:"quickbooks",method:"GET",endpoint:"/v3/company/{{realmId}}/companyinfo/{{realmId}}"},
+        {id:"connection_ok",label:"Connection Successful?",apiName:"connection_ok",key:"CONDITION",outcomes:[{id:"yes",label:"Connected",condition:{match:"all",conditions:[{field:"steps.test_connection.success",operator:"equals",value:true}]},branch:["set_connected","set_company_name","set_company_id"]}],defaultLabel:"Failed",defaultBranch:["set_not_connected"]},
+        assignment("set_connected","Set Connected","connected","boolean",true),assignment("set_company_name","Set Company Name","companyName","text",{path:"steps.test_connection.data.CompanyInfo.CompanyName"}),assignment("set_company_id","Set Company ID","companyId","text",{path:"steps.test_connection.data.CompanyInfo.Id"}),assignment("set_not_connected","Set Not Connected","connected","boolean",false)
+      ]}
   }
 ]);
 
