@@ -3159,8 +3159,30 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         recordId: resolveConfiguredResource(action.recordId, bindingContext, { preserveMissing: false }),
       };
 
+      const tenantId = companyId || req?.user?.companyId || null;
+      const templateRef = forwarded.templateId || forwarded.template || null;
+      if (templateRef && tenantId) {
+        const templateResult = await db(
+          `SELECT id,api_key,subject,body,channel
+             FROM platform_message_templates
+            WHERE active=TRUE
+              AND company_id=$1
+              AND (id::text=$2 OR api_key=$2)
+            LIMIT 1`,
+          [tenantId, String(templateRef)]
+        );
+        const template = templateResult.rows[0];
+        if (!template) return { status: "failed", code: "COMMUNICATION_TEMPLATE_UNAVAILABLE", retryable: false };
+        if (String(template.channel || "").toUpperCase() !== channel) {
+          return { status: "failed", code: "TEMPLATE_CHANNEL_MISMATCH", channel, retryable: false };
+        }
+        forwarded.templateId = template.id;
+        forwarded.template = template.api_key;
+        if (!action.message && !action.body && !action.text) forwarded.message = template.body;
+        if (!action.subject && template.subject) forwarded.subject = template.subject;
+      }
+
       if (channel === "IN_APP") {
-        const tenantId = companyId || req?.user?.companyId || null;
         if (!tenantId) return { status: "failed", code: "COMPANY_CONTEXT_REQUIRED", retryable: false };
         let recipientUserId = resolveConfiguredResource(action.recipientUserId || action.recipient || action.to, bindingContext, { preserveMissing: false });
         if (!recipientUserId || ["CURRENT_USER","$USER","$USER.ID"].includes(String(recipientUserId).toUpperCase())) {
@@ -3173,8 +3195,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         );
         if (!userResult.rows[0]) return { status: "failed", code: "COMMUNICATION_RECIPIENT_UNAVAILABLE", retryable: false };
         const templateContext = forwarded.templateContext && typeof forwarded.templateContext === "object" ? forwarded.templateContext : (record || {});
-        const rawMessage = action.message ?? action.body ?? action.text ?? action.templateKey ?? action.template ?? "";
-        const rawTitle = action.title ?? action.subject ?? "";
+        const rawMessage = forwarded.message ?? forwarded.body ?? forwarded.text ?? "";
+        const rawTitle = forwarded.title ?? forwarded.subject ?? "";
         const message = renderMessageTemplate(String(rawMessage), templateContext);
         const title = rawTitle ? renderMessageTemplate(String(rawTitle), templateContext) : null;
         await db(
