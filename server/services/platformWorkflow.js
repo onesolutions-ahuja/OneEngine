@@ -1342,9 +1342,9 @@ async function executeProviderSpecificEmail({
 function validateGetRecordsCustomLogic(logic, conditionCount, context = "Get Records") {
   const value = String(logic || "").trim();
   if (!value) return;
-  const remainder = value.replace(/\\bAND\\b|\\bOR\\b|\\d+|[()\\s]/gi, "");
+  const remainder = value.replace(/\bAND\b|\bOR\b|\d+|[()\s]/gi, "");
   if (remainder) throw new Error(context + " custom condition logic is invalid");
-  const indexes = value.match(/\\d+/g) || [];
+  const indexes = value.match(/\d+/g) || [];
   if (!indexes.length || indexes.some((item) => Number(item) < 1 || Number(item) > conditionCount)) {
     throw new Error(context + " custom condition logic references an unavailable condition");
   }
@@ -1354,7 +1354,7 @@ function compileGetRecordsCustomLogic(logic, clauses, context = "Get Records") {
   const value = String(logic || "").trim();
   if (!value) return "";
   validateGetRecordsCustomLogic(value, clauses.length, context);
-  const tokens = value.match(/\\d+|AND|OR|\\(|\\)/gi) || [];
+  const tokens = value.match(/\d+|AND|OR|\(|\)/gi) || [];
   let cursor = 0;
   const parseFactor = () => {
     const token = tokens[cursor++];
@@ -1363,7 +1363,7 @@ function compileGetRecordsCustomLogic(logic, clauses, context = "Get Records") {
       if (tokens[cursor++] !== ")") throw new Error(context + " custom condition logic has unmatched parentheses");
       return "(" + inner + ")";
     }
-    if (!/^\\d+$/.test(String(token || ""))) throw new Error(context + " custom condition logic is invalid");
+    if (!/^\d+$/.test(String(token || ""))) throw new Error(context + " custom condition logic is invalid");
     const index = Number(token) - 1;
     if (index < 0 || index >= clauses.length) throw new Error(context + " custom condition logic references an unavailable condition");
     return "(" + clauses[index] + ")";
@@ -2510,6 +2510,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         fieldSelection: { type: "string" },
         selectedFields: { type: "array" },
         advancedAssignment: { type: "object" },
+        relatedRecords: { type: "array" },
       },
       required: ["objectKey"],
     },
@@ -2534,6 +2535,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           throw new Error("Get Records custom condition logic references an unavailable condition");
         }
       }
+      validateRelatedGetRecordsConfig(action?.relatedRecords);
       if (action?.advancedAssignment !== undefined) {
         const assignment = action.advancedAssignment;
         if (!assignment || typeof assignment !== "object" || Array.isArray(assignment)) {
@@ -2722,6 +2724,18 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + table + '"' + where + orderBy + " LIMIT " + parameter(params.length);
       const result = await db(query, params);
       const rows = result.rows || [];
+      const relatedCollections = await loadRelatedGetRecordsCollections({
+        db,
+        relatedRecords: action.relatedRecords,
+        targetObject,
+        rows,
+        req,
+        companyId,
+        record,
+        previousRecord,
+        object,
+        workflowVariables,
+      });
 
       if (advancedAssignment) {
         if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
@@ -2747,6 +2761,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         count: rows.length,
         fieldSelection,
         selectedFields: fieldSelection === "auto" ? null : requestedFieldKeys,
+        relatedRecords: relatedCollections,
       };
     },
   },
