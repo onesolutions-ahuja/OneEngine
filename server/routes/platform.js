@@ -5527,6 +5527,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         );
         workflow = workflowResult.rows[0] || null;
         if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
+        workflow = workflowAuthoringRow(workflow);
       }
 
       const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
@@ -6266,8 +6267,145 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   });
 
+  async function runSavedWorkflowRequest(req, res, workflowId) {
+    let run = null;
+    try {
+      const workflowResult = await db(
+        "SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",
+        [workflowId, req.user.companyId]
+      );
+      const stored = workflowResult.rows[0] || null;
+      if (!stored) return res.status(404).json({ success: false, message: "Workflow not found" });
+
+      // Flow Builder Run executes the most recent saved state of the version that
+      // is open. workflowAuthoringRow resolves an active workflow's saved draft
+      // when one exists, otherwise it resolves the persisted runtime definition.
+      const workflow = workflowAuthoringRow(stored);
+      const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
+      if (!actions.length) return res.status(422).json({ success: false, message: "Workflow contains no executable steps" });
+      for (const action of actions) validateWorkflowAction(action);
+
+      let object = null;
+      let record = null;
+      let fields = [];
+      if (workflow.object_id) {
+        object = await getObject(workflow.object_id, req);
+        if (!object || !object.source_table || !isSafeIdentifier(object.source_table)) {
+          return res.status(422).json({ success: false, message: "Workflow object is unavailable" });
+        }
+        const fieldResult = await db(
+          "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
+          [object.id, req.user.companyId]
+        );
+        fields = fieldResult.rows || [];
+        const requestedRecordId = req.body?.recordId ? String(req.body.recordId) : null;
+        if (requestedRecordId) {
+          if (!recordIdIsValid(requestedRecordId)) return res.status(400).json({ success: false, message: "Choose a valid record to run the flow" });
+          const params = [requestedRecordId];
+          const clauses = ["id=$1"];
+          if (object.company_scoped !== false) {
+            params.push(req.user.companyId);
+            clauses.push(`company_id=${params.length}`);
+          }
+          if (object.store_scoped) {
+            if (!req.user.storeId) return res.status(409).json({ success: false, message: "Select a store before running this store-scoped flow" });
+            params.push(req.user.storeId);
+            clauses.push(`store_id=${params.length}`);
+          }
+          const recordResult = await db(`SELECT * FROM "${object.source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`, params);
+          record = recordResult.rows[0] || null;
+          if (!record) return res.status(404).json({ success: false, message: "The selected record was not found in this company/store" });
+        }
+      }
+
+      if (record && Array.isArray(workflow.conditions) && workflow.conditions.length) {
+        const startMatched = evaluateCondition(
+          { match: workflow.action?.match || "all", conditionLogic: workflow.action?.conditionLogic || workflow.action?.customConditionLogic || "", conditions: workflow.conditions },
+          fields,
+          record,
+          null
+        );
+        if (!startMatched) return res.status(422).json({ success: false, message: "The selected record does not meet the flow Start conditions" });
+      }
+
+      const declaredInputs = Array.isArray(workflow.action?.inputContract) ? workflow.action.inputContract : [];
+      const suppliedInputs = req.body?.inputs && typeof req.body.inputs === "object" && !Array.isArray(req.body.inputs) ? req.body.inputs : {};
+      const inputVariables = {};
+      for (const input of declaredInputs) {
+        const name = String(input?.name || "").trim();
+        if (!name) continue;
+        const hasValue = Object.prototype.hasOwnProperty.call(suppliedInputs, name);
+        const value = hasValue ? suppliedInputs[name] : input?.defaultValue;
+        if (input?.required === true && (value === undefined || value === null || String(value).trim() === "")) {
+          return res.status(422).json({ success: false, message: `Input ${input.label || name} is required` });
+        }
+        if (value !== undefined) inputVariables[name] = value;
+      }
+      const workflowVariables = { variables: inputVariables, steps: {} };
+      const pinnedVersion = Number(workflow.draft_version || workflow.version || stored.active_version || stored.version || 1);
+
+      run = await createWorkflowRun({
+        db,
+        companyId: req.user.companyId,
+        workflowId: stored.id,
+        workflowName: workflow.name,
+        workflowVersion: pinnedVersion,
+        objectId: object?.id || null,
+        recordId: record?.id || null,
+        triggerKey: "RUN",
+        status: "RUNNING",
+        metadata: {
+          manualRun: true,
+          actorUserId: req.user.id || null,
+          storeId: req.user.storeId || null,
+          tillId: req.user.tillId || null,
+          initialVariables: workflowVariables,
+        },
+      });
+
+      const results = await executeWorkflowActions({
+        actions,
+        db,
+        pool,
+        req,
+        object,
+        fields,
+        record,
+        recordId: record?.id || null,
+        companyId: req.user.companyId,
+        runId: run?.id || null,
+        workflowVersion: pinnedVersion,
+        trigger: "RUN",
+        workflowVariables,
+      });
+      const waiting = workflowResultsContainStatus(results, "waiting");
+      if (run?.id) {
+        await db(
+          `UPDATE platform_workflow_runs
+              SET status=$1,
+                  completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+                  metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,
+                  updated_at=NOW()
+            WHERE id=$3 AND company_id=$4`,
+          [waiting ? "WAITING" : "COMPLETED", JSON.stringify({ childResults: results, finalVariables: workflowVariables }), run.id, req.user.companyId]
+        );
+      }
+      return res.json({ success: true, data: { status: waiting ? "WAITING" : "COMPLETED", runId: run?.id || null, results, variables: workflowVariables } });
+    } catch (error) {
+      if (run?.id) {
+        await db(
+          "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3",
+          [String(error?.message || error).slice(0, 2000), run.id, req.user.companyId]
+        ).catch(() => {});
+      }
+      console.error("Workflow run error:", error);
+      return res.status(error.status || 500).json({ success: false, message: error.message || "Unable to run workflow" });
+    }
+  }
+
   router.post("/platform/rules/debug", ...manage, async (req, res) => runWorkflowDebugRequest(req, res, null));
   router.post("/platform/rules/:ruleId/debug", ...manage, async (req, res) => runWorkflowDebugRequest(req, res, req.params.ruleId));
+  router.post("/platform/rules/:ruleId/run", ...workflowExecute, async (req, res) => runSavedWorkflowRequest(req, res, req.params.ruleId));
 
 
   router.post("/platform/rules", ...manage, async (req, res) => {
