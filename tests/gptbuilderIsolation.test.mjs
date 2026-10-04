@@ -325,6 +325,20 @@ test('GPT Builder Custom Error matches Salesforce record-page and inline-field e
   assert.match(runtime, /CUSTOM_FLOW_ERROR/)
 })
 
+test('GPT Builder Group supports add-inside move keyboard delete and keep-or-delete group removal', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
+  assert.match(page, /Add element to \$\{group\.label\}/)
+  assert.match(page, /addElementToGroup/)
+  assert.match(page, /removeSelectedAutoElements/)
+  assert.match(page, /event\.key === 'Delete' \|\| event\.key === 'Backspace'/)
+  assert.match(page, /Keep Elements/)
+  assert.match(page, /Delete Group and Elements/)
+  assert.match(page, /deleteGroup\(groupDeleteTarget\.id,false\)/)
+  assert.match(page, /deleteGroup\(groupDeleteTarget\.id,true\)/)
+  assert.match(css, /\.gptb-group-add-slot/)
+  assert.match(css, /\.gptb-group-delete-modal/)
+})
 test('GPT Builder Group matches Salesforce auto-layout visual grouping and browser-local collapse behavior', async () => {
   const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderGroup.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
