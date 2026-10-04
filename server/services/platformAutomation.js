@@ -14,7 +14,7 @@ function apiRecord(fields, record) {
   return result;
 }
 
-function normalizeStartFormula(expression) {
+export function normalizeStartFormula(expression) {
   let value = String(expression || "").trim();
   value = value
     .replace(/\{!\s*\$Record__Prior\.([A-Za-z_][A-Za-z0-9_]*)\s*\}/g, "Prior_$1")
@@ -31,7 +31,7 @@ function normalizeStartFormula(expression) {
   return value;
 }
 
-function startFormulaInputs(fields, record, previousRecord) {
+export function startFormulaInputs(fields, record, previousRecord) {
   const inputs = {
     IsNew: !previousRecord,
     Record_id: record?.id ?? null,
