@@ -116,6 +116,36 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Screen style layout and multi-condition visibility stay aligned with runtime', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderScreen.jsx', import.meta.url), 'utf8')
+  const runtimePage = await readFile(new URL('../src/pages/flow/ScreenFlowRuntimePage.jsx', import.meta.url), 'utf8')
+  const workflow = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Details',
+    'Style',
+    'Set Container Style',
+    'Set Header Style',
+    'Set Footer Style',
+    'Width',
+    'Vertical Alignment',
+    'When all conditions are met (AND)',
+    'When any condition is met (OR)',
+    'When custom conditional logic is met',
+    'Add Condition',
+  ]) assert.ok(editor.includes(text), text)
+  assert.match(editor, /Array\.from\(\{length:12\}/)
+  assert.match(editor, /MULTI_SELECT/)
+  assert.doesNotMatch(editor, /MULTISELECT/)
+  assert.match(editor, /map\(\(option\)=>typeof option==='object'/)
+  assert.match(runtimePage, /function componentLayoutStyle/)
+  assert.match(runtimePage, /gridColumn/)
+  assert.match(runtimePage, /function evaluateVisibilityLogic/)
+  assert.match(runtimePage, /visibilityConditions/)
+  assert.match(runtimePage, /screen\.style\?\.container/)
+  assert.match(workflow, /Screen component width must be between 1 and 12 columns/)
+  assert.match(workflow, /Screen custom visibility logic/)
+  assert.match(workflow, /visibilityInitialValues/)
+})
 test('GPT Builder Screen matches Salesforce frame navigation palette drag reorder and conditional visibility behavior', async () => {
   const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderScreen.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
