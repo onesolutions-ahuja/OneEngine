@@ -37,8 +37,6 @@ import {
   listPaymentRequestProviders,
   createAppointmentPaymentRequest,
   calculateAppointmentPayment,
-  createAppointmentBookingCase,
-  issueAppointmentPublicLink,
   resolveAssistantSubflow,
   completeAppointmentPayment,
 } from "./oneAssistant.js";
@@ -1376,55 +1374,6 @@ async function executeProviderSpecificEmail({
 
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,  {
-    key: "CREATE_APPOINTMENT_BOOKING_CASE",
-    displayName: "Appointments - Create Booking Case",
-    description: "Create an appointment booking case from an inbound Email, SMS or WhatsApp workflow.",
-    validation: (action) => {
-      if (!action?.channel) throw new Error("Create Appointment Booking Case requires channel");
-    },
-    async: false,
-    requiredPermissions: ["appointments.manage"],
-    executor: async ({ action, db, companyId, req, record }) => {
-      const tenantId=companyId||req?.user?.companyId;
-      const bookingCase=await createAppointmentBookingCase(db,{
-        companyId:tenantId,
-        channel:action.channel,
-        sourceMessageId:action.sourceMessageId||record?.providerMessageId||record?.provider_message_id||record?.id||null,
-        sender:action.sender||record?.sender||record?.from||null,
-        recipient:action.recipient||record?.recipient||record?.to||null,
-        subject:action.subject||record?.subject||null,
-        body:action.body||record?.body||record?.message||record?.text||null,
-        customerId:action.customerId||record?.customerId||record?.customer_id||null,
-        state:action.state||{},
-      });
-      return {status:"completed",bookingCase};
-    },
-  },
-  {
-    key: "ISSUE_APPOINTMENT_BOOKING_LINK",
-    displayName: "Appointments - Issue Booking Link",
-    description: "Create an expiring no-login booking URL for an appointment booking case.",
-    validation: (action) => {
-      if (!action?.bookingCaseId) throw new Error("Issue Appointment Booking Link requires bookingCaseId");
-    },
-    async: false,
-    requiredPermissions: ["appointments.manage"],
-    executor: async ({ action, db, companyId, req, record, object, workflowVariables }) => {
-      const tenantId=companyId||req?.user?.companyId;
-      const rootObjectKey=object?.object_key||object?.objectKey||null;
-      const resolved=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
-      const link=await issueAppointmentPublicLink(db,{
-        companyId:tenantId,
-        bookingCaseId:resolved.bookingCaseId,
-        purpose:resolved.purpose||"BOOK_SLOT",
-        ttlMinutes:resolved.ttlMinutes||30,
-        publicBaseUrl:resolved.publicBaseUrl||process.env.PUBLIC_APP_URL||process.env.FRONTEND_URL||"",
-        metadata:resolved.metadata||{},
-      });
-      return {status:"completed",link};
-    },
-  },
-  {
     key: "RUN_ASSISTANT_SUBFLOW",
     displayName: "Appointments - Run Available Subflow",
     description: "Resolve and run an active OneAssistant communication or payment subflow whose required package is installed.",
