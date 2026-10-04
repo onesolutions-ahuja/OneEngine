@@ -1897,6 +1897,37 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         console.log("onePOS: inactive legacy booking case/link flows and wrappers removed");
       },
+    },
+    {
+      key: "0055_remove_final_appointment_wrappers",
+      version: "55",
+      name: "Remove final appointment-specific workflow wrappers",
+      up: async client => {
+        const legacy = ["RUN_ASSISTANT_SUBFLOW","COMPLETE_APPOINTMENT_PAYMENT"];
+        const active = await client.query(
+          "SELECT id,name FROM platform_rules WHERE active=TRUE AND COALESCE(action->>'systemGenerated','false')<>'true' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(action->'actions','[]'::jsonb)) step WHERE step->>'key'=ANY($1::text[]) OR step->>'type'=ANY($1::text[]))",
+          [legacy]
+        );
+        if (active.rows.length) {
+          throw new Error("Active workflow still references removed appointment wrappers: " + active.rows.map((row) => row.name || row.id).join(", "));
+        }
+        await client.query(
+          "DELETE FROM platform_rules WHERE active=FALSE AND COALESCE(action->>'systemGenerated','false')<>'true' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(action->'actions','[]'::jsonb)) step WHERE step->>'key'=ANY($1::text[]) OR step->>'type'=ANY($1::text[]))",
+          [legacy]
+        );
+        await client.query(
+          "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'=ANY($1::text[]) AND COALESCE(user_modified,FALSE)=FALSE",
+          [["action:RUN_ASSISTANT_SUBFLOW","action:COMPLETE_APPOINTMENT_PAYMENT"]]
+        );
+        const remaining = await client.query(
+          "SELECT id,name,active FROM platform_rules WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(action->'actions','[]'::jsonb)) step WHERE step->>'key'=ANY($1::text[]) OR step->>'type'=ANY($1::text[]))",
+          [legacy]
+        );
+        if (remaining.rows.length) {
+          throw new Error("Appointment wrapper references remain after cleanup: " + remaining.rows.map((row) => row.name || row.id).join(", "));
+        }
+        console.log("onePOS: final appointment-specific workflow wrappers removed");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
