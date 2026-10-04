@@ -200,6 +200,16 @@ export default function GPTBuilderRelatedRecords({
   const [tab, setTab] = useState('fields')
   const [addOpen, setAddOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [snapshot, setSnapshot] = useState(null)
+
+  useEffect(() => {
+    if (open) setSnapshot(JSON.parse(JSON.stringify(config)))
+  }, [open])
+
+  const cancel = () => {
+    if (snapshot) patchRoot(snapshot)
+    onClose()
+  }
 
   const rootObject = objects.find((object) => objectKey(object) === config.objectKey)
   const selections = Array.isArray(config.relatedSelections) ? config.relatedSelections : []
@@ -271,7 +281,7 @@ export default function GPTBuilderRelatedRecords({
   if (!open) return null
   return <div className="gptb-related-backdrop">
     <section className="gptb-related-dialog" role="dialog" aria-modal="true" aria-label="Select Related Objects and Fields">
-      <header><div><h3>Select Related Objects and Fields</h3><p>Choose fields, filters, sort order, and storage for the object and its related collections.</p></div><button className="gptb-icon-button" onClick={onClose} aria-label="Close Select Related Records"><X size={16}/></button></header>
+      <header><div><h3>Select Related Objects and Fields</h3><p>Choose fields, filters, sort order, and storage for the object and its related collections.</p></div><button className="gptb-icon-button" onClick={cancel} aria-label="Close Select Related Records"><X size={16}/></button></header>
       <div className="gptb-related-layout">
         <aside>
           <div className="gptb-related-aside-title"><b>Object</b></div>
@@ -285,7 +295,7 @@ export default function GPTBuilderRelatedRecords({
           <div className="gptb-related-content"><RelatedObjectEditor selection={selected} fields={activeFields} patch={patchSelection} resources={resources} elements={elements} tab={tab} setTab={setTab} root={selectedId === 'root'} rootConfig={config} patchRoot={patchRoot}/></div>
         </main>
       </div>
-      <footer>{allErrors.length ? <span>{allErrors[0]}{allErrors.length > 1 ? ` (+${allErrors.length - 1} more)` : ''}</span> : <span>{selections.length} related object{selections.length === 1 ? '' : 's'} selected</span>}<div><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={Boolean(allErrors.length) || !selections.length} onClick={onClose}>Done</button></div></footer>
+      <footer>{allErrors.length ? <span>{allErrors[0]}{allErrors.length > 1 ? ` (+${allErrors.length - 1} more)` : ''}</span> : <span>{selections.length} related object{selections.length === 1 ? '' : 's'} selected</span>}<div><button className="gptb-button" onClick={cancel}>Cancel</button><button className="gptb-button is-brand" disabled={Boolean(allErrors.length) || !selections.length} onClick={onClose}>Done</button></div></footer>
 
       {addOpen ? <div className="gptb-related-add-panel"><header><button type="button" onClick={() => setAddOpen(false)}><ChevronLeft size={14}/></button><strong>Add Related Object</strong><button type="button" onClick={() => setAddOpen(false)}><X size={14}/></button></header><label><Search size={13}/><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search objects related to ${config.objectLabel || config.objectKey}...`}/></label><div>{candidates.length ? candidates.map((relationship) => {
         const child = objects.find((object) => String(object.id) === String(relationship.child_object_id))
