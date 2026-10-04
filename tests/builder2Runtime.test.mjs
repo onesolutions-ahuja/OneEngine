@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { configuredValue, nativeRuntimeAction } from '../src/pages/developer/builder2Runtime.js'
 import { getWorkflowActionDefinition } from '../server/services/platformWorkflow.js'
 
@@ -30,4 +31,13 @@ test('assignment preserves variable type and references', () => {
   assert.equal(action.variableName, 'messageChannel')
   assert.deepEqual(action.value, { path: 'channel' })
   assert.equal(configuredValue('APPOINTMENT'), 'APPOINTMENT')
+})
+
+
+test('Builder2 Debug sends rollback in the backend contract and backend accepts legacy debugOptions', () => {
+  const page = readFileSync(new URL('../src/pages/developer/Builder2Page.jsx', import.meta.url), 'utf8')
+  const platform = readFileSync(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  assert.match(page, /mode:'debug',rollback:true/)
+  assert.match(page, /mode:'test',rollback:true/)
+  assert.match(platform, /req\.body\?\.rollback \?\? req\.body\?\.debugOptions\?\.rollbackMode/)
 })

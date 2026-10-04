@@ -93,7 +93,10 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
   const base = safeBaseUrl(connection.base_url);
   const connectionVariables = { ...(connection?.connector_configuration || {}), realmId: connection?.connector_configuration?.realmId || credentials?.realmId || credentials?.realm_id || credentials?.companyId || credentials?.company_id || "" };
   const renderedEndpoint = interpolate(endpoint || "/", { ...connectionVariables, ...(variables || {}) });
-  const url = new URL(renderedEndpoint, base.toString().replace(/\/$/, "") + "/");
+  const absoluteEndpoint = /^https?:\/\//i.test(renderedEndpoint);
+  const url = absoluteEndpoint
+    ? new URL(renderedEndpoint)
+    : new URL(renderedEndpoint.replace(/^\/+/, ""), base.toString().replace(/\/$/, "") + "/");
   if (url.origin !== base.origin) throw new Error("ONE_HTTP_REQUEST endpoint must remain on the configured provider host");
 
   for (const [key, value] of Object.entries(query || {})) {

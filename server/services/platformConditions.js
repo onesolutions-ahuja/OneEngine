@@ -33,7 +33,7 @@ function fail(message) {
   throw new ConditionError(message);
 }
 
-const CONDITION_PATH = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+const CONDITION_PATH = /^[A-Za-z_][A-Za-z0-9_]*(\.(?:[A-Za-z_][A-Za-z0-9_]*|\d+))*$/;
 
 function fieldType(field) {
   return field?.field_type === "formula" || field?.field_type === "rollup"
