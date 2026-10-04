@@ -5486,7 +5486,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   async function runWorkflowDebugRequest(req, res, workflowId = null) {
     let client = null;
     let run = null;
-    const executionMode = String(req.body?.mode || "debug").toLowerCase() === "test" ? "TEST" : "DEBUG";
+    const requestedMode = String(req.body?.mode || "debug").toLowerCase();
+    const executionMode = requestedMode === "test" ? "TEST" : requestedMode === "run" ? "RUN" : "DEBUG";
+    const dryRun = executionMode !== "RUN";
     try {
       const definition = req.body?.definition && typeof req.body.definition === "object" ? req.body.definition : null;
       let workflow = null;
@@ -5538,6 +5540,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const recordOverride = req.body?.recordOverride && typeof req.body.recordOverride === "object" && !Array.isArray(req.body.recordOverride)
         ? req.body.recordOverride
         : null;
+      if (!dryRun && recordOverride) return res.status(400).json({ success: false, message: "Run requires a persisted record; recordOverride is only available in Debug/Test." });
       if (workflow.object_id) {
         const objectResult = await db(
           "SELECT * FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) LIMIT 1",
@@ -5605,7 +5608,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         metadata: {
           debug: executionMode === "DEBUG",
           test: executionMode === "TEST",
-          dryRun: true,
+          dryRun,
           unsavedDefinition: Boolean(definition),
           rolledBack: false,
           actorUserId: req.user.id || null,
@@ -5628,9 +5631,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           };
           await db(
             "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
-            [JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
+            [JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun, rolledBack: dryRun, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
           );
-          const notStartedData = { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: true, externalActionsSimulated: true, variables: { variables: {}, steps: {} } };
+          const notStartedData = { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: dryRun, externalActionsSimulated: dryRun, variables: { variables: {}, steps: {} } };
           const assertions = Array.isArray(req.body?.assertions) ? req.body.assertions : [];
           const assertionResult = evaluateWorkflowAssertions(notStartedData, assertions, { record, user: req.user });
           const testPassed = executionMode === "TEST"
@@ -5640,9 +5643,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
 
-      client = await pool.connect();
-      await client.query("BEGIN");
-      const debugDb = (query, params = []) => client.query(query, params);
+      let executionDb = db;
+      if (dryRun) {
+        client = await pool.connect();
+        await client.query("BEGIN");
+        executionDb = (query, params = []) => client.query(query, params);
+      }
       let results = [];
       let debugError = null;
       const declaredInputs = Array.isArray(workflow.action?.inputContract) ? workflow.action.inputContract : [];
@@ -5662,7 +5668,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       try {
         results = await executeWorkflowActions({
           actions,
-          db: debugDb,
+          db: executionDb,
           traceDb: db,
           pool,
           req,
@@ -5674,15 +5680,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           runId: run?.id || null,
           workflowVersion: Number(workflow.active_version || workflow.version || 1),
           trigger: executionMode,
-          debugMode: true,
+          debugMode: dryRun,
           workflowVariables,
         });
       } catch (error) {
         debugError = error;
       }
-      await client.query("ROLLBACK");
-      client.release();
-      client = null;
+      if (dryRun && client) {
+        await client.query("ROLLBACK");
+        client.release();
+        client = null;
+      }
 
       const finalStatus = debugError ? "FAILED" : "COMPLETED";
       const friendly = debugError ? friendlyWorkflowError(debugError) : null;
@@ -5697,7 +5705,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         [
           finalStatus,
           debugError ? String(debugError?.message || debugError).slice(0, 2000) : null,
-          JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, startMatched: true, friendlyError: friendly }),
+          JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun, rolledBack: dryRun, startMatched: true, friendlyError: friendly }),
           run.id,
           req.user.companyId,
         ]
@@ -5731,8 +5739,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         friendlyError: friendly,
         handledFaults: debugError ? [] : handledFaults,
         completedWithHandledError: !debugError && handledFaults.length > 0,
-        rolledBack: true,
-        externalActionsSimulated: true,
+        rolledBack: dryRun,
+        externalActionsSimulated: dryRun,
         variables: workflowVariables,
         resourceHistory,
       };
@@ -5759,7 +5767,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,updated_at=NOW() WHERE id=$3 AND company_id=$4",
           [
             String(error?.message || error).slice(0, 2000),
-            JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, friendlyError: friendlyWorkflowError(error) }),
+            JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun, rolledBack: dryRun, friendlyError: friendlyWorkflowError(error) }),
             run.id,
             req.user.companyId,
           ]
@@ -6266,6 +6274,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   router.post("/platform/rules/debug", ...manage, async (req, res) => runWorkflowDebugRequest(req, res, null));
   router.post("/platform/rules/:ruleId/debug", ...manage, async (req, res) => runWorkflowDebugRequest(req, res, req.params.ruleId));
+  router.post("/platform/rules/:ruleId/run", ...manage, async (req, res) => {
+    req.body = { ...(req.body || {}), mode: "run" };
+    delete req.body.definition;
+    return runWorkflowDebugRequest(req, res, req.params.ruleId);
+  });
 
 
   router.post("/platform/rules", ...manage, async (req, res) => {
