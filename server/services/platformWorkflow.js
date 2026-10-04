@@ -5728,6 +5728,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
         faultBranch: { stepIds: faultIds, results: faultResults },
       };
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
+      if (item.apiName) workflowVariables.steps[item.apiName] = handled;
       results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun.id, resumedFaultPath: true });
       await updateWorkflowStepRunStatus({
         db: traceDb,
@@ -5750,6 +5751,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       const priorResult = stepRun.metadata?.result || { status: "completed", idempotentReplay: true };
       results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
+      if (item.apiName) workflowVariables.steps[item.apiName] = priorResult;
       restoreWorkflowRuntimeState(priorResult, workflowVariables, item.id || `step-${globalIndex + 1}`, resolveWorkflowActionType(item));
       if (priorResult?.faultHandled !== true) completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
       continue;
@@ -5758,6 +5760,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       const priorResult = stepRun.metadata?.result || { status: "waiting", idempotentReplay: true };
       results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
+      if (item.apiName) workflowVariables.steps[item.apiName] = priorResult;
       break;
     }
 
@@ -5898,6 +5901,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
 
       const entry = { stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result, stepRunId: stepRun?.id || null };
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = result;
+      if (item.apiName) workflowVariables.steps[item.apiName] = result;
       results.push(entry);
 
       if (result?.status === "failed") throw new WorkflowExecutionError(errorDetails(result.error || result), []);
@@ -5965,6 +5969,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
           howToFix: friendlyError.howToFix,
         };
         workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
+      if (item.apiName) workflowVariables.steps[item.apiName] = handled;
         results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
         if (stepRun?.id) {
           await updateWorkflowStepRunStatus({
@@ -5987,6 +5992,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
           howToFix: friendlyError.howToFix,
         };
         workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
+      if (item.apiName) workflowVariables.steps[item.apiName] = handled;
         results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
         if (stepRun?.id) {
           await updateWorkflowStepRunStatus({
@@ -6029,6 +6035,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
           faultBranch: { stepIds: faultIds, results: faultResults },
         };
         workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = handled;
+      if (item.apiName) workflowVariables.steps[item.apiName] = handled;
         results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: handled, stepRunId: stepRun?.id || null });
         if (stepRun?.id) {
           await updateWorkflowStepRunStatus({
