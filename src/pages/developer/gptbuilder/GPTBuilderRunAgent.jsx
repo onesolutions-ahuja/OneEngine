@@ -85,13 +85,25 @@ function apiNameFromLabel(label){
 export default function GPTBuilderRunAgent({ draft, updateConfig, resources = [], onConfiguredChange }) {
   const config=normalizeRunAgentConfig(draft.config)
   const [availableActions,setAvailableActions]=useState([])
+  const [availableAgents,setAvailableAgents]=useState([])
+  const [agentsLoading,setAgentsLoading]=useState(true)
+  const [agentCreateBusy,setAgentCreateBusy]=useState(false)
+  const [agentCreateError,setAgentCreateError]=useState('')
   const [actionQuery,setActionQuery]=useState('')
   useEffect(()=>{
     let live=true
-    apiRequest('/api/platform/workflow-actions').then((response)=>{
+    Promise.all([
+      apiRequest('/api/platform/workflow-actions').catch(()=>({data:[]})),
+      apiRequest('/api/platform/agents').catch(()=>({data:[]})),
+    ]).then(([actionResponse,agentResponse])=>{
       if(!live)return
-      setAvailableActions((Array.isArray(response?.data)?response.data:[]).filter((action)=>action?.builderVisible!==false && !['RUN_AGENT','SCREEN'].includes(action.key)))
-    }).catch(()=>{if(live)setAvailableActions([])})
+      setAvailableActions((Array.isArray(actionResponse?.data)?actionResponse.data:[]).filter((action)=>action?.builderVisible!==false && !['RUN_AGENT','SCREEN'].includes(action.key)))
+      const agents=(Array.isArray(agentResponse?.data)?agentResponse.data:[]).filter((agent)=>agent?.active!==false)
+      setAvailableAgents(agents)
+      if(config.agentMode==='existing' && !agents.some((agent)=>(agent.api_name||agent.apiName)===config.agentKey) && agents[0]) {
+        patch({agentKey:agents[0].api_name||agents[0].apiName})
+      }
+    }).finally(()=>{if(live)setAgentsLoading(false)})
     return()=>{live=false}
   },[])
   const errors=useMemo(()=>runAgentConfigErrors(config,resources),[JSON.stringify(config),JSON.stringify(resources)])
@@ -99,6 +111,27 @@ export default function GPTBuilderRunAgent({ draft, updateConfig, resources = []
   const patch=(changes)=>updateConfig({...config,...changes})
   const patchCreated=(changes)=>patch({createdAgent:{...config.createdAgent,...changes}})
   const scalar=resources.filter((resource)=>resource?.isCollection!==true)
+  const canCreateAgent=Boolean(String(config.createdAgent.label||'').trim() && /^[A-Za-z][A-Za-z0-9_]*$/.test(String(config.createdAgent.apiName||'')) && String(config.createdAgent.instructions||'').trim() && Array.isArray(config.createdAgent.actions) && config.createdAgent.actions.length)
+  const createAndActivateAgent=async()=>{
+    if(!canCreateAgent||agentCreateBusy)return
+    setAgentCreateBusy(true);setAgentCreateError('')
+    try{
+      const response=await apiRequest('/api/platform/agents',{method:'POST',body:JSON.stringify({
+        label:config.createdAgent.label,
+        apiName:config.createdAgent.apiName,
+        description:config.createdAgent.description||'',
+        userAccess:config.createdAgent.userAccess||'',
+        instructions:config.createdAgent.instructions,
+        actions:config.createdAgent.actions,
+      })})
+      const agent=response?.data
+      if(!agent?.api_name&&!agent?.apiName)throw new Error('Agent was created without an API Name.')
+      const key=agent.api_name||agent.apiName
+      setAvailableAgents((current)=>[...current.filter((item)=>(item.api_name||item.apiName)!==key),agent])
+      patch({agentMode:'existing',agentKey:key})
+    }catch(error){setAgentCreateError(error?.message||'Unable to create and activate agent.')}
+    finally{setAgentCreateBusy(false)}
+  }
 
   return <div className="gptb-gr gptb-run-agent">
     <section><h3>Agent</h3>
@@ -106,7 +139,7 @@ export default function GPTBuilderRunAgent({ draft, updateConfig, resources = []
         <label><input type="radio" name={`run-agent-mode-${draft.id}`} checked={config.agentMode==='existing'} onChange={()=>patch({agentMode:'existing'})}/><span>Select an existing agent</span></label>
         <label><input type="radio" name={`run-agent-mode-${draft.id}`} checked={config.agentMode==='create'} onChange={()=>patch({agentMode:'create'})}/><span>Create Agent</span></label>
       </fieldset>
-      {config.agentMode==='existing'?<label><span>Agent <b>*</b></span><select value={config.agentKey} onChange={(event)=>patch({agentKey:event.target.value})}><option value="oneengine_assistant">OneEngine Assistant · Active</option></select><small>Only active agents are available.</small></label>:<div className="gptb-agent-create">
+      {config.agentMode==='existing'?<label><span>Agent <b>*</b></span><select value={config.agentKey} disabled={agentsLoading} onChange={(event)=>patch({agentKey:event.target.value})}><option value="">{agentsLoading?'Loading active agents...':'Select an active agent'}</option>{availableAgents.map((agent)=><option key={agent.id||agent.api_name||agent.apiName} value={agent.api_name||agent.apiName}>{agent.label||agent.api_name||agent.apiName} · Active</option>)}</select><small>Only active agents are available.</small></label>:<div className="gptb-agent-create">
         <label><span>Label <b>*</b></span><input value={config.createdAgent.label} onChange={(event)=>patchCreated({label:event.target.value,apiName:apiNameFromLabel(event.target.value)})}/></label>
         <label><span>API Name <b>*</b></span><input value={config.createdAgent.apiName} onChange={(event)=>patchCreated({apiName:event.target.value})}/></label>
         <label><span>Description</span><textarea rows={2} value={config.createdAgent.description} onChange={(event)=>patchCreated({description:event.target.value})}/></label>
@@ -114,6 +147,8 @@ export default function GPTBuilderRunAgent({ draft, updateConfig, resources = []
         <label><span>Instructions <b>*</b></span><textarea rows={5} value={config.createdAgent.instructions} onChange={(event)=>patchCreated({instructions:event.target.value})} placeholder="Describe what the agent does and how it should reason."/></label>
         <div className="gptb-agent-actions"><h4>Actions <b>*</b></h4><input value={actionQuery} onChange={(event)=>setActionQuery(event.target.value)} placeholder="Search actions..."/><div>{availableActions.filter((action)=>!actionQuery.trim()||`${action.displayName||''} ${action.key||''}`.toLowerCase().includes(actionQuery.trim().toLowerCase())).slice(0,40).map((action)=><label className="gptb-properties-check" key={action.key}><input type="checkbox" checked={config.createdAgent.actions.includes(action.key)} onChange={(event)=>patchCreated({actions:event.target.checked?[...config.createdAgent.actions,action.key]:config.createdAgent.actions.filter((key)=>key!==action.key)})}/><span><b>{action.displayName||action.key}</b><small>{action.description||action.key}</small></span></label>)}</div></div>
         <small>Create & Activate requires at least one action. The selected actions become the agent's tool set.</small>
+        {agentCreateError?<div className="gptb-gr-errors" role="alert"><span>{agentCreateError}</span></div>:null}
+        <button type="button" className="gptb-button is-brand" disabled={!canCreateAgent||agentCreateBusy} onClick={()=>void createAndActivateAgent()}>{agentCreateBusy?'Creating…':'Create & Activate'}</button>
       </div>}
     </section>
 
