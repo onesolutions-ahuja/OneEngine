@@ -585,7 +585,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
             store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
-            channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP')),
+            channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP','IN_APP')),
             template_id UUID REFERENCES platform_message_templates(id) ON DELETE SET NULL,
             object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
             record_id UUID,
@@ -1749,7 +1749,56 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
     }
     ,{ key: "0048_appointment_atomic_slot_guard", version: "48", name: "Prevent overlapping appointments during ordinary record CRUD", up: client => client.query(appointmentSlotGuardSql) }
     ,{ key: "0049_booking_session_crud_metadata", version: "49", name: "Expose booking session state through normal metadata CRUD", up: client => client.query(bookingSessionMetadataSql) }
-    ,{ key: "0050_resource_service_record_identity", version: "50", name: "Provide ordinary metadata CRUD identity for resource service records", up: client => client.query(`ALTER TABLE appointment_resource_services ADD COLUMN IF NOT EXISTS id UUID NOT NULL DEFAULT gen_random_uuid(); CREATE UNIQUE INDEX IF NOT EXISTS appointment_resource_services_id ON appointment_resource_services(id);`) }
+    ,{ key: "0050_resource_service_record_identity", version: "50", name: "Provide ordinary metadata CRUD identity for resource service records", up: client => client.query(`ALTER TABLE appointment_resource_services ADD COLUMN IF NOT EXISTS id UUID NOT NULL DEFAULT gen_random_uuid(); CREATE UNIQUE INDEX IF NOT EXISTS appointment_resource_services_id ON appointment_resource_services(id);`) },
+    {
+      key: "0051_unify_send_communication",
+      version: "51",
+      name: "Unify workflow communication actions and add in-app channel",
+      up: async client => {
+        await client.query(
+          "ALTER TABLE platform_communication_events DROP CONSTRAINT IF EXISTS platform_communication_events_channel_check"
+        );
+        await client.query(
+          "ALTER TABLE platform_communication_events ADD CONSTRAINT platform_communication_events_channel_check CHECK (channel IN ('EMAIL','SMS','WHATSAPP','IN_APP'))"
+        );
+
+        await client.query(
+          "UPDATE platform_rules SET action=replace(action::text,'\"SEND_APPOINTMENT_MESSAGE\"','\"SEND_COMMUNICATION\"')::jsonb,updated_at=NOW() WHERE action::text LIKE '%SEND_APPOINTMENT_MESSAGE%'"
+        );
+
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        if (router.action.actions.some((action) => action.key === "SEND_APPOINTMENT_MESSAGE")) {
+          throw new Error("OneAssistant booking router still contains SEND_APPOINTMENT_MESSAGE");
+        }
+        if (!router.action.actions.some((action) => action.key === "SEND_COMMUNICATION")) {
+          throw new Error("OneAssistant booking router is missing SEND_COMMUNICATION");
+        }
+
+        const rows = await client.query(
+          "SELECT id,company_id FROM platform_rules WHERE company_id IS NOT NULL AND (name='OneAssistant - Booking Channel Router' OR action::text LIKE '%assistant.booking.router%' OR action::text LIKE '%OneAssistant_Booking_Channel_Router%')"
+        );
+        for (const row of rows.rows) {
+          await client.query(
+            "UPDATE platform_rules SET trigger_key=$2,conditions=$3::jsonb,action=$4::jsonb,active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW() WHERE id=$1 AND company_id=$5",
+            [row.id,router.triggerKey,JSON.stringify(router.conditions || []),JSON.stringify(router.action),row.company_id]
+          );
+        }
+
+        await client.query(
+          "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'='action:SEND_APPOINTMENT_MESSAGE' AND COALESCE(user_modified,FALSE)=FALSE"
+        );
+
+        const remaining = await client.query(
+          "SELECT COUNT(*)::int AS count FROM platform_rules WHERE action::text LIKE '%SEND_APPOINTMENT_MESSAGE%'"
+        );
+        if ((remaining.rows[0]?.count || 0) !== 0) {
+          throw new Error("Persisted SEND_APPOINTMENT_MESSAGE references remain after migration");
+        }
+        console.log("onePOS: unified appointment communication under SEND_COMMUNICATION");
+      },
+    }
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
