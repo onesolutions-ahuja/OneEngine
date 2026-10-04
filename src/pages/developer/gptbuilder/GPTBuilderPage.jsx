@@ -503,6 +503,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   const [savingScenario, setSavingScenario] = useState(false)
   const [automationEnabled, setAutomationEnabled] = useState(false)
   const [assertions, setAssertions] = useState([])
+  const [skipStartConditions, setSkipStartConditions] = useState(false)
   const executionStorageKey = `gptbuilder.execution.${workflowId || 'new'}.${mode}`
 
   useEffect(() => {
@@ -545,15 +546,16 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       setSelectedTestId(saved.selectedTestId || '')
       setAutomationEnabled(saved.automationEnabled === true)
       setAssertions(Array.isArray(saved.assertions) ? saved.assertions : [])
+      setSkipStartConditions(saved.skipStartConditions === true)
     } catch {}
   }, [executionStorageKey, workflowId])
 
   useEffect(() => {
     if (!workflowId) return
     try {
-      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, selectedTestId, automationEnabled, assertions }))
+      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, selectedTestId, automationEnabled, assertions, skipStartConditions }))
     } catch {}
-  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, selectedTestId, automationEnabled, JSON.stringify(assertions)])
+  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, selectedTestId, automationEnabled, JSON.stringify(assertions), skipStartConditions])
 
   const resetExecutionSettings = () => {
     setRecordId('')
@@ -563,6 +565,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
     setSelectedTestId('')
     setAutomationEnabled(false)
     setAssertions([])
+    setSkipStartConditions(false)
     setResult(null)
     setError('')
     try { sessionStorage.removeItem(executionStorageKey) } catch {}
@@ -588,7 +591,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           ...(recordId ? { recordId } : {}),
           inputs,
           ...(mode === 'debug' ? { mode: 'debug', rollback } : {}),
-          ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [] } : {}),
+          ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [] } : {}),
         }),
       })
       setResult(response?.data || {})
@@ -617,6 +620,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
             inputs,
             rollback: (flowType === 'record' || automationEnabled) ? true : rollback,
             scenarioTestingAutomation: automationEnabled,
+            skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false,
             assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [],
           },
         }),
@@ -663,6 +667,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         </> : null}
       </section> : null}
       {mode !== 'run' ? <section><h3>Select Run Options</h3>
+        {mode === 'test' && flowType === 'record' ? <label className="gptb-properties-check"><input type="checkbox" checked={skipStartConditions} onChange={(event) => setSkipStartConditions(event.target.checked)}/><span>Skip start condition requirements</span></label> : null}
         <label className="gptb-properties-check"><input type="checkbox" checked={mode === 'test' && (flowType === 'record' || automationEnabled) ? true : rollback} disabled={mode === 'test' && (flowType === 'record' || automationEnabled)} onChange={(event) => setRollback(event.target.checked)}/><span>Run automation in rollback mode</span></label>
         {mode === 'test' && flowType === 'record' ? <p className="gptb-help-text">Rollback is required for record-triggered test scenarios.</p> : null}
         {mode === 'test' && automationEnabled && flowType !== 'record' ? <p className="gptb-help-text">Rollback is required when Scenario Testing Automation and assertions are enabled.</p> : null}
