@@ -944,7 +944,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           return res.status(403).json({ success: false, message: "Shopify integration is not available to this store" });
         }
         const type = String(req.body?.type || "").toUpperCase();
-        const allowed = new Set(["SHOPIFY_TEST_CONNECTION", "SHOPIFY_SYNC_PRODUCTS", "SHOPIFY_SYNC_INVENTORY", "SHOPIFY_EXPORT_REFUND", "SHOPIFY_RETRY_FAILED_SYNC"]);
+        const allowed = new Set(["CONNECTOR_TEST_CONNECTION", "SHOPIFY_SYNC_PRODUCTS", "SHOPIFY_SYNC_INVENTORY", "SHOPIFY_EXPORT_REFUND", "SHOPIFY_RETRY_FAILED_SYNC"]);
         if (!allowed.has(type)) return res.status(400).json({ success: false, message: "Unsupported Shopify manual action" });
         const execution = await executeSystemWorkflow({
           db,
@@ -954,7 +954,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           req,
           storeId: integration.store_id || req.user.storeId || null,
           input: {
-            connectionId: integration.id,
+            connectorInstanceId: integration.id,
             syncType: req.body?.syncType,
             orderId: req.body?.orderId,
             returnId: req.body?.returnId,
