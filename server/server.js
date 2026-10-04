@@ -62,7 +62,8 @@ import createWhatsAppSettingsRouter from "./routes/whatsapp.js";
 import createOneAssistantRouter from "./routes/oneAssistant.js";
 import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
-import createAdminRouter from "./routes/admin.js";\nimport createTemporaryDbExportRouter from "./routes/temporaryDbExport.js";
+import createAdminRouter from "./routes/admin.js";
+import createTemporaryDbExportRouter from "./routes/temporaryDbExport.js";
 import createAttendanceRouter from "./routes/attendance.js"; // Staff clock in/out — routes/attendance.js
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
@@ -2166,7 +2167,8 @@ app.use("/api", createKioskRouter({ authenticate, authorize, db, pool, writeAudi
 
 app.use("/api", createReturnsRouter({ authenticate, authorize, db, pool, createInventoryMovement, writeAudit, canonicalTransactionWriter: createCanonicalRelatedTransaction }));
 
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));\napp.use("/api", createTemporaryDbExportRouter({ pool, env: process.env }));
+app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createTemporaryDbExportRouter({ pool, env: process.env }));
 
 /*
 |--------------------------------------------------------------------------
