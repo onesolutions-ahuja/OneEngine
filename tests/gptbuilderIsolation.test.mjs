@@ -22,7 +22,7 @@ test('GPT Builder phase 2 shell follows Salesforce flow-creation and canvas chro
   for (const text of ['New Automation','Search automations...','Categories','Frequently Used']) assert.ok(automation.includes(text), text)
   for (const text of ['Record-Triggered Flow','Screen Flow','Autolaunched Flow (No Trigger)','Schedule-Triggered Flow','Platform Event-Triggered Flow','Auto-Layout','Free-Form','Canvas zoom']) assert.ok(page.includes(text), text)
   assert.match(page, /aria-label="Start"/)
-  assert.match(page, /aria-label="Add element"/)
+  assert.match(page, /aria-label=\{\`Add element at position \$\{index \+ 1\}\`\}/)
   assert.match(page, />End</)
 })
 
@@ -799,7 +799,7 @@ test('GPT Builder phase 3 matches auto-layout picker and free-form drag discover
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   assert.match(page, /<ElementPicker/)
-  assert.match(page, /aria-label="Add element" aria-expanded=\{elementPickerOpen\}/)
+  assert.match(page, /aria-label=\{\`Add element at position \$\{index \+ 1\}\`\} aria-expanded=\{elementPickerOpen && autoInsertIndex === index\}/)
   assert.match(page, /application\/x-gptbuilder-element/)
   assert.match(page, /onDrop=\{dropElement\}/)
   assert.match(page, /<GPTBuilderElementProperties/)
