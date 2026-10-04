@@ -509,7 +509,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
     setFlowProps({label:'New Flow',apiName:'New_Flow',description:'',apiVersion:'66.0',runContext:'default'})
     setStartConfig({trigger:'created_or_updated',conditionLogic:'all',optimize:'actions',...(initialObjectKey?{objectKey:initialObjectKey}:{})})
     setStartOpen(requestedType==='record')
-    Promise.all([apiRequest('/api/platform/objects'),apiRequest('/api/platform/action-registry'),apiRequest('/api/platform/rules')]).then(([o,a,r])=>{
+    Promise.all([apiRequest('/api/platform/objects'),apiRequest('/api/platform/workflow-actions'),apiRequest('/api/platform/rules')]).then(([o,a,r])=>{
       if(!live)return
       setObjects(o?.data?.objects||o?.data||[])
       setActions(Array.isArray(a?.data)?a.data:[])
