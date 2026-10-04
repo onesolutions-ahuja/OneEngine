@@ -966,7 +966,7 @@ export default function createKioskRouter({
            LEFT JOIN integration_connections pc ON pc.id=kd.payment_connector_id AND pc.company_id=kd.company_id
            LEFT JOIN integration_connections rc ON rc.id=kd.printer_connector_id AND rc.company_id=kd.company_id
            LEFT JOIN payment_terminals pt ON pt.id=kd.payment_terminal_id AND pt.company_id=kd.company_id
-           LEFT JOIN hardware_configurations hc ON hc.id=kd.printer_hardware_id AND hc.company_id=kd.company_id
+           LEFT JOIN hardware_devices hc ON hc.id=kd.printer_hardware_id AND hc.company_id=kd.company_id
           WHERE kd.company_id=$1
             AND ($2::uuid IS NULL OR kd.store_id=$2)
           ORDER BY kd.name, kd.created_at`,
@@ -1099,7 +1099,7 @@ export default function createKioskRouter({
       }
       if (printerHardwareId) {
         const printer = await db(
-          "SELECT id FROM hardware_configurations WHERE id=$1 AND company_id=$2 AND store_id=$3 AND device_type='RECEIPT_PRINTER'",
+          "SELECT id FROM hardware_devices WHERE id=$1 AND company_id=$2 AND store_id=$3 AND device_type='RECEIPT_PRINTER'",
           [printerHardwareId, req.user.companyId, req.user.storeId]
         );
         if (!printer.rows.length) return res.status(400).json({ success: false, message: "Receipt printer is not available for this store" });
