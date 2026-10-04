@@ -1,0 +1,38 @@
+name: Validate Final Appointment Wrapper Cleanup
+
+on:
+  push:
+    branches:
+      - audit/remove-final-appointment-wrappers-20261004
+    paths:
+      - ".github/workflows/validate-final-appointment-wrapper-cleanup.yml"
+      - "server/services/platformWorkflow.js"
+      - "server/services/oneAssistant.js"
+      - "server/database/init.js"
+      - "tests/appointmentWorkflow.test.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/remove-final-appointment-wrappers-20261004
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Syntax
+        run: |
+          node --check server/services/platformWorkflow.js
+          node --check server/services/oneAssistant.js
+          node --check server/database/init.js
+      - name: Focused tests
+        run: node --test tests/appointmentWorkflow.test.mjs
+      - name: Build
+        run: npm run build
