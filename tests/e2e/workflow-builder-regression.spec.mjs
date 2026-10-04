@@ -109,7 +109,13 @@ test("saved Workflow Builder deep link reloads through the Pages-safe fixed rout
   await page.goto("developer/workflow-builder");
   await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
 
-  await page.locator(".b2-form").getByLabel("Label").first().fill("E2E Deep Link Flow");
+  await page.getByTitle("Flow Properties").click();
+  const flowProperties = page.locator(".b2-modal").filter({ hasText: "Flow Properties" });
+  const unique = Date.now().toString();
+  await flowProperties.getByLabel("Label").fill(`E2E Deep Link Flow ${unique}`);
+  await flowProperties.getByLabel("API Name").fill(`E2E_Deep_Link_Flow_${unique}`);
+  await flowProperties.getByRole("button", { name: "Done", exact: true }).click();
+
   await page.getByRole("button", { name: "Save", exact: false }).first().click();
   await expect(page.locator(".b2-runtime-message")).toContainText("Flow saved", { timeout: 20_000 });
 
