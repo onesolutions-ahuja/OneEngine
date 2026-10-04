@@ -59,14 +59,27 @@ async function executeGlobalProductLookupAction(context, providerKey = null) {
   }
 }
 
-function redact(value, depth = 0) {
+function redact(value, depth = 0, inheritedSecureValues = new Set()) {
   if (depth > 5 || value == null) return value;
-  if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
-  if (typeof value !== "object") return String(value);
+  const secureValues = new Set(inheritedSecureValues);
+  if (value && typeof value === "object" && Array.isArray(value.__secureValues)) {
+    for (const secret of value.__secureValues) {
+      const text = String(secret ?? "");
+      if (text.length >= 4) secureValues.add(text);
+    }
+  }
+  if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1, secureValues));
+  if (typeof value !== "object") {
+    let text = String(value);
+    for (const secret of secureValues) {
+      if (secret && text.includes(secret)) text = text.split(secret).join("********");
+    }
+    return text;
+  }
   const secureFields = new Set(Array.isArray(value.__secureFields) ? value.__secureFields.map(String) : []);
   return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => key !== "__secureFields")
-    .map(([key, item]) => [key, (SECRET_KEY.test(key) || secureFields.has(key)) ? "********" : redact(item, depth + 1)]));
+    .filter(([key]) => key !== "__secureFields" && key !== "__secureValues")
+    .map(([key, item]) => [key, (SECRET_KEY.test(key) || secureFields.has(key)) ? "********" : redact(item, depth + 1, secureValues)]));
 }
 
 function errorDetails(error) {
@@ -6399,6 +6412,13 @@ async function hydrateWorkflowProviderResources(context, workflowVariables) {
       : Object.entries(row.credentials_schema || {}).map(([key,value]) => ({ key, ...(value || {}) }));
     const secureKeys = new Set(schema.map((field) => String(field?.key || field?.name || "")).filter(Boolean));
     for (const key of Object.keys(credentials || {})) secureKeys.add(String(key));
+    if (!Array.isArray(workflowVariables.variables.__secureValues)) workflowVariables.variables.__secureValues = [];
+    for (const key of secureKeys) {
+      const secret = credentials?.[key];
+      if (secret !== undefined && secret !== null && String(secret).length >= 4 && !workflowVariables.variables.__secureValues.includes(String(secret))) {
+        workflowVariables.variables.__secureValues.push(String(secret));
+      }
+    }
     const variableName = `Provider_${providerKey.replace(/[^A-Za-z0-9_]/g, "_")}`;
     workflowVariables.variables[variableName] = {
       name: row.name || providerKey,
