@@ -2442,6 +2442,7 @@ async function loadRelatedGetRecordsCollections({
         fieldSelection: { type: "string" },
         selectedFields: { type: "array" },
         advancedAssignment: { type: "object" },
+        relatedRecords: { type: "array" },
       },
       required: ["objectKey"],
     },
@@ -2466,6 +2467,7 @@ async function loadRelatedGetRecordsCollections({
           throw new Error("Get Records custom condition logic references an unavailable condition");
         }
       }
+      validateRelatedGetRecordsConfig(action?.relatedRecords);
       if (action?.advancedAssignment !== undefined) {
         const assignment = action.advancedAssignment;
         if (!assignment || typeof assignment !== "object" || Array.isArray(assignment)) {
@@ -2654,6 +2656,18 @@ async function loadRelatedGetRecordsCollections({
       const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + table + '"' + where + orderBy + " LIMIT " + parameter(params.length);
       const result = await db(query, params);
       const rows = result.rows || [];
+      const relatedCollections = await loadRelatedGetRecordsCollections({
+        db,
+        relatedRecords: action.relatedRecords,
+        targetObject,
+        rows,
+        req,
+        companyId,
+        record,
+        previousRecord,
+        object,
+        workflowVariables,
+      });
 
       if (advancedAssignment) {
         if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
@@ -2679,6 +2693,7 @@ async function loadRelatedGetRecordsCollections({
         count: rows.length,
         fieldSelection,
         selectedFields: fieldSelection === "auto" ? null : requestedFieldKeys,
+        relatedRecords: relatedCollections,
       };
     },
   },
