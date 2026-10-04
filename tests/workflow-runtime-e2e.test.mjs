@@ -140,3 +140,24 @@ test('screen runtime prefills revisited inputs from workflow variables', async (
   assert.equal(inserts.length,1);
   assert.deepEqual(JSON.parse(inserts[0].params[4]),{customerName:'Kept value'});
 });
+
+
+test('subflow output mappings write declared child outputs back to parent variables', async () => {
+  const ctx=makeContext();
+  const result=await executeWorkflowAction({
+    action:{
+      id:'child-flow',
+      type:'RUN_SUBFLOW',
+      workflow:{
+        id:'child-inline',
+        actions:[{id:'set-output',type:'ASSIGNMENT',variableName:'answer',variableType:'text',operator:'set',value:'done'}],
+        outputContract:[{name:'answer',source:'variables.answer',type:'text'}],
+      },
+      outputMappings:{answer:'variables.childAnswer'},
+    },
+    ...ctx,
+  });
+  assert.equal(result.status,'completed');
+  assert.equal(result.outputs.answer,'done');
+  assert.equal(ctx.workflowVariables.variables.childAnswer,'done');
+});
