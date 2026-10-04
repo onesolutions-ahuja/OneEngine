@@ -229,7 +229,7 @@ export default function PackageBuilderAdmin({ onMessage, onError }) {
                   <h3 className="text-base font-semibold text-slate-900">App canvas</h3>
                   <p className="text-sm text-slate-500">Each node is an existing platform page. Open it in the existing Page Builder to place components and wire their events to registered actions or workflows.</p>
                 </div>
-                <button type="button" onClick={() => { setPageBuilderPageId(""); setPageBuilderOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm"><AppWindow size={15}/>Open Page Builder</button>
+                <button type="button" disabled={!app?.id} title={!app?.id ? "Save the package first so pages can be linked to it." : "Open Page Builder"} onClick={() => { setPageBuilderPageId(""); setPageBuilderOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"><AppWindow size={15}/>Open Page Builder</button>
               </div>
 
               <div className="mt-5 overflow-x-auto pb-2">
