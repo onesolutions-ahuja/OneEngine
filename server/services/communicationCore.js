@@ -1,4 +1,5 @@
 import { publishPlatformEvent } from "./platformEvents.js";
+import { enqueueRecordCreatedWorkflows } from "./recordCreatedWorkflows.js";
 
 export const COMMUNICATION_CHANNELS = Object.freeze(["EMAIL", "SMS", "WHATSAPP"]);
 
@@ -68,6 +69,7 @@ export async function recordCommunicationEvent({
   );
   const event = result.rows?.[0] || null;
   if (event) {
+    await enqueueRecordCreatedWorkflows({ db, companyId, objectKey: 'communication_event', record: event });
     await publishPlatformEvent({
       db,
       companyId,
