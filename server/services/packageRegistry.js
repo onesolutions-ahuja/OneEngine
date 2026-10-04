@@ -595,7 +595,7 @@ export function packageDefinition(entry) {
       "apiName": "GPT_UBER_EATS_GET_STORES",
       "capabilityKey": "GPT_UBER_EATS_GET_STORES",
       "inputContract": [],
-        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
       "resources": [
         {
           "value": "variables.success",
@@ -610,9 +610,9 @@ export function packageDefinition(entry) {
           "objectKey": ""
         },
         {
-          "value": "variables.response",
-          "apiName": "response",
-          "label": "Response",
+          "value": "variables.data",
+          "apiName": "data",
+          "label": "Data",
           "type": "Variable",
           "dataType": "Object",
           "defaultValue": null,
@@ -678,7 +678,7 @@ export function packageDefinition(entry) {
           "label": "Set Response",
           "apiName": "set_response",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -700,7 +700,7 @@ export function packageDefinition(entry) {
           "label": "Set Error",
           "apiName": "set_error",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -723,7 +723,7 @@ export function packageDefinition(entry) {
       "apiName": "GPT_UBER_EATS_TEST_CONNECTION",
       "capabilityKey": "GPT_UBER_EATS_TEST_CONNECTION",
       "inputContract": [],
-        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
       "resources": [
         {
           "value": "variables.success",
@@ -738,9 +738,9 @@ export function packageDefinition(entry) {
           "objectKey": ""
         },
         {
-          "value": "variables.response",
-          "apiName": "response",
-          "label": "Response",
+          "value": "variables.data",
+          "apiName": "data",
+          "label": "Data",
           "type": "Variable",
           "dataType": "Object",
           "defaultValue": null,
@@ -806,7 +806,7 @@ export function packageDefinition(entry) {
           "label": "Set Response",
           "apiName": "set_response",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -828,7 +828,7 @@ export function packageDefinition(entry) {
           "label": "Set Error",
           "apiName": "set_error",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -862,7 +862,7 @@ export function packageDefinition(entry) {
           "required": true
         }
       ],
-        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
       "resources": [
         {
           "value": "variables.storeId",
@@ -901,9 +901,9 @@ export function packageDefinition(entry) {
           "objectKey": ""
         },
         {
-          "value": "variables.response",
-          "apiName": "response",
-          "label": "Response",
+          "value": "variables.data",
+          "apiName": "data",
+          "label": "Data",
           "type": "Variable",
           "dataType": "Object",
           "defaultValue": null,
@@ -972,7 +972,7 @@ export function packageDefinition(entry) {
           "label": "Set Response",
           "apiName": "set_response",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -994,7 +994,7 @@ export function packageDefinition(entry) {
           "label": "Set Error",
           "apiName": "set_error",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1028,7 +1028,7 @@ export function packageDefinition(entry) {
           "required": false
         }
       ],
-        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
       "resources": [
         {
           "value": "variables.orderId",
@@ -1067,9 +1067,9 @@ export function packageDefinition(entry) {
           "objectKey": ""
         },
         {
-          "value": "variables.response",
-          "apiName": "response",
-          "label": "Response",
+          "value": "variables.data",
+          "apiName": "data",
+          "label": "Data",
           "type": "Variable",
           "dataType": "Object",
           "defaultValue": null,
@@ -1140,7 +1140,7 @@ export function packageDefinition(entry) {
           "label": "Set Response",
           "apiName": "set_response",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1162,7 +1162,7 @@ export function packageDefinition(entry) {
           "label": "Set Error",
           "apiName": "set_error",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1196,7 +1196,7 @@ export function packageDefinition(entry) {
           "required": false
         }
       ],
-        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
       "resources": [
         {
           "value": "variables.orderId",
@@ -1235,9 +1235,9 @@ export function packageDefinition(entry) {
           "objectKey": ""
         },
         {
-          "value": "variables.response",
-          "apiName": "response",
-          "label": "Response",
+          "value": "variables.data",
+          "apiName": "data",
+          "label": "Data",
           "type": "Variable",
           "dataType": "Object",
           "defaultValue": null,
@@ -1308,7 +1308,7 @@ export function packageDefinition(entry) {
           "label": "Set Response",
           "apiName": "set_response",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1330,7 +1330,7 @@ export function packageDefinition(entry) {
           "label": "Set Error",
           "apiName": "set_error",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1369,7 +1369,7 @@ export function packageDefinition(entry) {
           "required": true
         }
       ],
-        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
       "resources": [
         {
           "value": "variables.storeId",
@@ -1420,9 +1420,9 @@ export function packageDefinition(entry) {
           "objectKey": ""
         },
         {
-          "value": "variables.response",
-          "apiName": "response",
-          "label": "Response",
+          "value": "variables.data",
+          "apiName": "data",
+          "label": "Data",
           "type": "Variable",
           "dataType": "Object",
           "defaultValue": null,
@@ -1493,7 +1493,7 @@ export function packageDefinition(entry) {
           "label": "Set Response",
           "apiName": "set_response",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1515,7 +1515,7 @@ export function packageDefinition(entry) {
           "label": "Set Error",
           "apiName": "set_error",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1549,7 +1549,7 @@ export function packageDefinition(entry) {
           "required": true
         }
       ],
-        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
       "resources": [
         {
           "value": "variables.storeId",
@@ -1588,9 +1588,9 @@ export function packageDefinition(entry) {
           "objectKey": ""
         },
         {
-          "value": "variables.response",
-          "apiName": "response",
-          "label": "Response",
+          "value": "variables.data",
+          "apiName": "data",
+          "label": "Data",
           "type": "Variable",
           "dataType": "Object",
           "defaultValue": null,
@@ -1664,7 +1664,7 @@ export function packageDefinition(entry) {
           "label": "Set Response",
           "apiName": "set_response",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1686,7 +1686,7 @@ export function packageDefinition(entry) {
           "label": "Set Error",
           "apiName": "set_error",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1720,7 +1720,7 @@ export function packageDefinition(entry) {
           "required": true
         }
       ],
-        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
       "resources": [
         {
           "value": "variables.storeId",
@@ -1759,9 +1759,9 @@ export function packageDefinition(entry) {
           "objectKey": ""
         },
         {
-          "value": "variables.response",
-          "apiName": "response",
-          "label": "Response",
+          "value": "variables.data",
+          "apiName": "data",
+          "label": "Data",
           "type": "Variable",
           "dataType": "Object",
           "defaultValue": null,
@@ -1830,7 +1830,7 @@ export function packageDefinition(entry) {
           "label": "Set Response",
           "apiName": "set_response",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
@@ -1852,7 +1852,7 @@ export function packageDefinition(entry) {
           "label": "Set Error",
           "apiName": "set_error",
           "key": "ASSIGNMENT",
-          "variableName": "response",
+          "variableName": "data",
           "variableType": "object",
           "operator": "set",
           "value": {
