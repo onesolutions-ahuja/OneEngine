@@ -116,6 +116,22 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Get Records matches current Salesforce limits and advanced null handling', async () => {
+  const getRecords = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderGetRecords.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  assert.match(getRecords, /All records, up to a specified limit/)
+  assert.match(getRecords, /Maximum Number of Records to Store/)
+  assert.match(getRecords, /select a Number resource/)
+  assert.match(getRecords, /maxRecordsMode/)
+  assert.match(getRecords, /maxRecordsResource/)
+  assert.match(getRecords, /expected="number"/)
+  assert.match(getRecords, /When no records are returned, set specified variables to null/)
+  assert.match(getRecords, /setNullOnNoRecords/)
+  assert.match(runtime, /resolveConfiguredResource\(action\.limit/)
+  assert.match(runtime, /maximum record limit must resolve to a number/)
+  assert.match(runtime, /advancedAssignment\.setNullOnNoRecords === true/)
+})
+
 test('GPT Builder phase 3 element discovery matches the supported Salesforce catalog and visibility rules', async () => {
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   for (const label of [
