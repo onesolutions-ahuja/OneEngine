@@ -9557,7 +9557,8 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       if (!object || !object.source_table || !isSafeIdentifier(object.source_table)) return res.status(404).json({ success: false, message: "Object records are not available" });
       if (!(await hasPlatformObjectPermission(db, req, object.id, "view"))) return res.status(403).json({ success: false, message: "You do not have permission to view records for this object" });
       const metadataFields = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order", [object.id, req.user.companyId]);
-      if (systemObject(object)) object.company_scoped = true;
+      const systemDefinition = systemObject(object);
+      if (systemDefinition) object.company_scoped = systemDefinition.companyScoped !== false;
       const safeFields = safeSystemFields(object, metadataFields.rows);
       const fields = await applyFieldSecurity(db, safeFields, req);
       const readableFields = fields.filter((field) => field.readable !== false && field.field_type !== "formula" && field.field_type !== "rollup" && isSafeIdentifier(field.api_name) && Boolean(platformFieldSql(field, object)));
