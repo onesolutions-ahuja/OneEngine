@@ -37,8 +37,6 @@ import {
   listPaymentRequestProviders,
   createAppointmentPaymentRequest,
   calculateAppointmentPayment,
-  resolveAssistantSubflow,
-  completeAppointmentPayment,
 } from "./oneAssistant.js";
 
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
@@ -1374,66 +1372,6 @@ async function executeProviderSpecificEmail({
 
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,  {
-    key: "RUN_ASSISTANT_SUBFLOW",
-    displayName: "Appointments - Run Available Subflow",
-    description: "Resolve and run an active OneAssistant communication or payment subflow whose required package is installed.",
-    validation: (action) => {
-      if (!action?.capability) throw new Error("Run Available Subflow requires capability");
-    },
-    async: true,
-    requiredPermissions: ["workflow.execute"],
-    executor: async (context) => {
-      const {action,db,companyId,req,record,object,workflowVariables}=context;
-      const tenantId=companyId||req?.user?.companyId;
-      const rootObjectKey=object?.object_key||object?.objectKey||null;
-      const bound=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
-      const resolved=await resolveAssistantSubflow(db,{
-        companyId:tenantId,
-        capability:bound.capability,
-        channel:bound.channel||null,
-        providerPackageKey:bound.providerPackageKey||null,
-      });
-      if(!resolved){
-        if(bound.required===true) throw new Error(`No active installed subflow is available for ${bound.capability}`);
-        return {status:"skipped",reason:"No compatible installed subflow",capability:bound.capability};
-      }
-      const runner=WORKFLOW_ACTION_REGISTRY.find((item)=>item.key==="RUN_SUBFLOW");
-      if(!runner?.executor) throw new Error("RUN_SUBFLOW is unavailable");
-      const result=await runner.executor({
-        ...context,
-        action:{
-          ...bound,
-          workflowId:resolved.id,
-          inputs:bound.inputs||{},
-        },
-      });
-      return {...result,resolvedWorkflowId:resolved.id,resolvedWorkflowName:resolved.name};
-    },
-  },
- {
-    key: "COMPLETE_APPOINTMENT_PAYMENT",
-    displayName: "Appointments - Complete Payment",
-    description: "Standard payment-subflow callback: mark the payment request successful, confirm the held appointment, and emit appointment.confirmed.",
-    validation: (action) => {
-      if (!action?.paymentRequestId) throw new Error("Complete Appointment Payment requires paymentRequestId");
-    },
-    async: false,
-    requiredPermissions: ["appointments.payment","appointments.manage"],
-    executor: async ({ action, client, db, companyId, req, record, object, workflowVariables }) => {
-      const tenantId=companyId||req?.user?.companyId;
-      const rootObjectKey=object?.object_key||object?.objectKey||null;
-      const resolved=resolveBindingTree(action,{record,rootObjectKey,variables:workflowVariables});
-      const queryClient=client||{query:db};
-      const result=await completeAppointmentPayment(queryClient,{
-        companyId:tenantId,
-        paymentRequestId:resolved.paymentRequestId,
-        providerReference:resolved.providerReference||null,
-        paymentUrl:resolved.paymentUrl||null,
-        amountPaid:resolved.amountPaid,
-      });
-      return {status:"completed",...result};
-    },
-  },  {
     key: "LICENCE_REQUEST_PACKAGE",
     displayName: "Licence - Request Package",
     description: "Create a pending package licence request and run its configured workflow.",
