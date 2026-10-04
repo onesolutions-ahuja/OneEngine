@@ -134,11 +134,21 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
     const text = await response.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    const safeData = redactValue(data);
+    const providerMessageId = data?.messages?.[0]?.id || data?.id || null;
+    console.info("Provider HTTP request completed", {
+      providerKey,
+      method: requestMethod,
+      statusCode: response.status,
+      success: response.ok,
+      providerMessageId: providerMessageId ? String(providerMessageId) : null,
+    });
     return {
       status: "completed",
       success: response.ok,
       statusCode: response.status,
-      data: redactValue(data),
+      data: safeData,
+      providerMessageId: providerMessageId ? String(providerMessageId) : null,
       request: { providerKey, method: requestMethod, endpoint: renderedEndpoint, headers: redactHeadersForLog(requestHeaders) },
     };
   } catch (error) {

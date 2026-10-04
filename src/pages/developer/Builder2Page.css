@@ -880,3 +880,20 @@
 .b2-properties,.b2-toolbox{padding-bottom:90px}
 .b2-form{scroll-padding-bottom:90px}
 .b2-drawer textarea{width:100%;box-sizing:border-box}
+
+
+/* Workflow child-path navigation and editable provider message UX */
+.b2-zoom .b2-fit-flow{width:auto;min-width:34px;padding:0 8px;font-size:10px;font-weight:600}
+.b2-path-step-link{flex:1;border:0;background:transparent;text-align:left;color:#0176d3;padding:2px 0;cursor:pointer;font:inherit}
+.b2-path-step-link:hover{text-decoration:underline}
+.b2-message-editor{display:grid;gap:8px;padding:11px;border:1px solid #c9c9c9;border-radius:6px;background:#f8fbff}
+.b2-message-editor>div:first-child{display:grid;gap:2px}
+.b2-message-editor>div:first-child b{font-size:12px}
+.b2-message-editor>div:first-child small{font-size:10px;color:#706e6b;line-height:1.35}
+.b2-message-editor textarea{min-height:128px;resize:vertical}
+.b2-template-hints{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.b2-template-hints b{font-size:10px;margin-right:3px}
+.b2-template-hints code{font-size:10px;padding:2px 5px;border-radius:4px;background:#eef4ff;color:#0b5cab}
+.b2-advanced-action{border:1px solid #e5e5e5;border-radius:5px;padding:8px}
+.b2-advanced-action>summary{cursor:pointer;font-size:11px;font-weight:600;color:#526681}
+.b2-advanced-action[open]>summary{margin-bottom:8px}
