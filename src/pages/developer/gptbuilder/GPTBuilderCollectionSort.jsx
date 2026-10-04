@@ -13,7 +13,7 @@ export const COLLECTION_SORT_DEFAULTS = Object.freeze({
 
 export function normalizeCollectionSortConfig(config = {}) {
   const legacy = String(config.sortField || '').trim()
-    ? [{ id: uid(), field: config.sortField, direction: config.sortDirection || 'asc', nullsFirst: config.nullsFirst === true }]
+    ? [{ id: 'legacy-sort-1', field: config.sortField, direction: config.sortDirection || 'asc', nullsFirst: config.nullsFirst === true }]
     : []
   return {
     ...COLLECTION_SORT_DEFAULTS,
@@ -83,7 +83,7 @@ export default function GPTBuilderCollectionSort({ draft, updateConfig, resource
     const resource = resources.find((item) => resourcePath(item) === value)
     patch({
       collection: value,
-      sortOptions: resource?.objectKey ? [] : [{ id: uid(), field: '', direction: 'asc', nullsFirst: false }],
+      sortOptions: [{ id: uid(), field: '', direction: 'asc', nullsFirst: false }],
     })
   }
 
