@@ -142,7 +142,7 @@ export function registerExchangeRoutes({
           );
           if (row.method === "customer_credit" && customerId) {
             await client.query(
-              `INSERT INTO customer_credit_ledger
+              `INSERT INTO customer_ledger
                 (company_id, store_id, customer_id, transaction_type, amount,
                  reference_type, reference_id, description, idempotency_key, created_by)
                VALUES ($1,$2,$3,'debit_note',$4,'exchange_return',$5,$6,$7,$8)
