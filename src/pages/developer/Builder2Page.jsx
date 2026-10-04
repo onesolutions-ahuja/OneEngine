@@ -608,17 +608,18 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
       const rows=Array.isArray(r?.data)?r.data:[]
       let saved=rows.find(x=>String(x?.id||'')===selectedId)
       if(!saved){setError('Flow definition is no longer available. Return to the flow list and refresh.');return}
+      let resolvedWorkflowId=String(saved?.id||selectedId)
       const selectedApiName=String(saved?.action?.apiName||'').trim()
       const selectedIsLive=saved?.runtime_active===true||saved?.runtimeActive===true||saved?.active===true
       if(selectedApiName&&!selectedIsLive){
         const activeTwin=rows.find(x=>String(x?.id||'')!==String(saved.id||'')&&String(x?.action?.apiName||'').trim()===selectedApiName&&(x?.runtime_active===true||x?.runtimeActive===true||x?.active===true))
         if(activeTwin){
           saved=activeTwin
-          setWorkflowId(String(activeTwin.id||''))
+          resolvedWorkflowId=String(activeTwin.id||'')
           setRuntimeMessage('Opened the active flow. This link pointed to a retired duplicate.')
           try{
             const url=new URL(window.location.href)
-            url.searchParams.set('workflowId',String(activeTwin.id||''))
+            url.searchParams.set('workflowId',resolvedWorkflowId)
             window.history.replaceState(window.history.state,'',url.pathname+url.search+url.hash)
           }catch{}
         }
@@ -641,7 +642,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
       const savedActions=Array.isArray(action.actions)?action.actions:[]
       const layout=action.builderLayout||{}
       setFlowType(storedType)
-      setWorkflowId(selectedId)
+      setWorkflowId(resolvedWorkflowId)
       setFlowProps({label:saved.name||'New Flow',apiName:action.apiName||'New_Flow',description:action.description||'',apiVersion:String(action.apiVersion||'66.0'),runContext:action.runContext||'default'})
       setStartConfig(nextStart)
       setNodes(savedActions.filter(x=>normalizeNodeType(x.type||x.key)!=='END').map(runtimeActionToBuilderNode))
