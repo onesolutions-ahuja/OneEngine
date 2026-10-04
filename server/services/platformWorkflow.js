@@ -2289,69 +2289,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
-    key: "BULK_UPDATE_RECORDS",
-    displayName: "Bulk Update Records",
-    description: "Update a collection of records in one workflow data operation.",
-    schema: {
-      type: "object",
-      properties: {
-        objectKey: { type: "string" },
-        recordIds: { type: "string" },
-        fieldValues: { type: "object" },
-      },
-      required: ["objectKey","recordIds","fieldValues"],
-    },
-    validation: (action) => {
-      if (!action?.objectKey && !action?.objectId && !action?.object) throw new Error("Bulk Update Records requires an object");
-      if (!action?.recordIds) throw new Error("Bulk Update Records requires a record collection");
-      if (!action?.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) throw new Error("Bulk Update Records requires field values");
-    },
-    async: false,
-    requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables }) => {
-      const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
-      const rawCollection = resolveConfiguredResource(action.recordIds, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
-      if (!Array.isArray(rawCollection)) throw new Error("Bulk Update Records collection must resolve to a collection");
-      const ids = [...new Set(rawCollection.map((item) => {
-        if (item && typeof item === "object") return item.id || item.recordId || null;
-        return item;
-      }).filter(Boolean).map(String))];
-      if (!ids.length) return { status: "completed", updated: [], count: 0 };
-      if (ids.length > 500) throw new Error("Bulk Update Records exceeds the maximum of 500 records");
-      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
-      const entries = Object.entries(resolvedFieldValues || {});
-      if (!entries.length) return { status: "completed", updated: [], count: 0 };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
-      const params = entries.map(([, value]) => value);
-      const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
-      params.push(ids);
-      const clauses = [`id::text = ANY($${params.length}::text[])`];
-      if (targetObject.company_scoped) {
-        params.push(req?.user?.companyId || companyId || null);
-        clauses.push(`company_id=$${params.length}`);
-      }
-      if (targetObject.store_scoped && req?.user?.storeId) {
-        params.push(req.user.storeId);
-        clauses.push(`store_id=$${params.length}`);
-      }
-      const result = await db(`UPDATE "${targetObject.source_table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
-      for (const updated of result.rows || []) {
-        try {
-          await publishPlatformEvent({
-            db,
-            companyId: req?.user?.companyId || companyId,
-            eventType: "platform.object.record.updated",
-            payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated },
-            actorUserId: req?.user?.id || null,
-          });
-        } catch (error) {
-          console.error("Platform workflow bulk-update event publication error:", error);
-        }
-      }
-      return { status: "completed", updated: result.rows || [], count: result.rows?.length || 0, requestedCount: ids.length };
-    },
-  },
-  {
     key: "GET_RECORDS",
     displayName: "Get Records",
     description: "Find records on a Platform object and expose the result to later workflow steps.",
