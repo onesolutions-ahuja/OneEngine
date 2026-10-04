@@ -79,6 +79,21 @@ test('GPT Builder toolbar follows Salesforce saved-run and validation behavior',
 })
 
 
+test('GPT Builder Test Mode supports reusable saved scenarios', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  assert.match(page, /Saved Test/)
+  assert.match(page, /Scenario Name/)
+  assert.match(page, /Save Scenario/)
+  assert.match(page, /\/api\/platform\/rules\/\$\{encodeURIComponent\(workflowId\)\}\/tests/)
+  assert.match(page, /tests\/\$\{encodeURIComponent\(selectedTestId\)\}\/run/)
+  assert.match(page, /recordMode: recordId \? 'specific' : 'latest'/)
+  assert.match(page, /assertions: \[\]/)
+  assert.match(platform, /router\.post\("\/platform\/rules\/:ruleId\/tests"/)
+  assert.match(platform, /const assertions = Array\.isArray\(config\.assertions\) \? config\.assertions : \[\]/)
+  assert.doesNotMatch(platform, /Saved flow tests require at least one assertion/)
+})
+
 test('GPT Builder phase 3 exposes Salesforce element groups and core elements', async () => {
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   for (const text of [
