@@ -3168,7 +3168,7 @@ export function packageDefinition(entry) {
             label: "Hardware Configuration",
             pluralLabel: "Hardware",
             description: "Store-scoped scanner, cash drawer and receipt-printer configuration.",
-            sourceTable: "hardware_configurations",
+            sourceTable: "hardware_devices",
             storeScoped: true,
             config: { settingsHost: true, settingsGroup: "Hardware", settingsLabel: "Hardware", settingsOrder: 100 },
             metadataScope: "global",
@@ -3313,7 +3313,7 @@ export function packageDefinition(entry) {
             label: "Hardware Configuration",
             pluralLabel: "Hardware",
             description: "Store-scoped barcode scanner, cash drawer and receipt-printer configuration.",
-            sourceTable: "hardware_configurations",
+            sourceTable: "hardware_devices",
             storeScoped: true,
             config: { settingsHost: true, settingsGroup: "Hardware", settingsLabel: "Hardware", settingsOrder: 80, settingsAllowDelete: true },
             metadataScope: "global",
@@ -3912,11 +3912,11 @@ export function packageDefinition(entry) {
             ],
           },
           {
-            objectKey: "customer_credit_ledger",
+            objectKey: "customer_ledger",
             label: "Customer Credit Ledger Entry",
             pluralLabel: "Customer Credit Ledger Entries",
             description: "Immutable customer credit transactions.",
-            sourceTable: "customer_credit_ledger",
+            sourceTable: "customer_ledger",
             fields: [
               { apiName: "customer_id", label: "Customer", fieldType: "lookup", writable: false },
               { apiName: "store_id", label: "Store", fieldType: "lookup", writable: false },
@@ -3934,13 +3934,13 @@ export function packageDefinition(entry) {
         ],
         relationships: [
           { parentObjectKey: "customer", childObjectKey: "customer_credit_account", relationshipKey: "credit_account", relationshipType: "lookup" },
-          { parentObjectKey: "customer_credit_account", childObjectKey: "customer_credit_ledger", relationshipKey: "ledger_entries", relationshipType: "one_to_many", childFieldApiName: "customer_id" },
+          { parentObjectKey: "customer_credit_account", childObjectKey: "customer_ledger", relationshipKey: "ledger_entries", relationshipType: "one_to_many", childFieldApiName: "customer_id" },
         ],
         listViews: [
           { objectKey: "customer_credit_account", viewKey: "all", label: "All Credit Accounts", columns: ["credit_enabled", "credit_limit"], isDefault: true },
           { objectKey: "customer_credit_account", viewKey: "active", label: "Active", filters: { credit_enabled: true } },
           { objectKey: "customer_credit_account", viewKey: "disabled", label: "Credit Disabled", filters: { credit_enabled: false } },
-          { objectKey: "customer_credit_ledger", viewKey: "all", label: "Credit Ledger Activity", columns: ["customer_id", "transaction_type", "amount", "created_at"], isDefault: true },
+          { objectKey: "customer_ledger", viewKey: "all", label: "Credit Ledger Activity", columns: ["customer_id", "transaction_type", "amount", "created_at"], isDefault: true },
         ],
         rules: [
           {
@@ -3958,7 +3958,7 @@ export function packageDefinition(entry) {
             action: { type: "validation", message: "A credit limit is required when credit is enabled" },
           },
           {
-            objectKey: "customer_credit_ledger",
+            objectKey: "customer_ledger",
             name: "Credit payment received notification",
             triggerKey: "after_save",
             conditions: [{ field: "transaction_type", operator: "equals", value: "payment" }],
@@ -4098,7 +4098,7 @@ export function packageDefinition(entry) {
             label: "Loyalty Activity",
             pluralLabel: "Loyalty Activity",
             description: "Canonical loyalty earn, redemption, reversal and adjustment ledger.",
-            sourceTable: "customer_loyalty_transactions",
+            sourceTable: "customer_loyalty_ledger",
             fields: [
               { apiName: "company_id", label: "Company", fieldType: "lookup", required: true, writable: false },
               { apiName: "customer_id", label: "Customer", fieldType: "lookup", required: true, writable: false },
