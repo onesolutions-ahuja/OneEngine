@@ -3055,9 +3055,9 @@ button.git-control-tile { cursor: pointer; }
   position: fixed;
   inset: 0;
   z-index: 5000;
-  padding: 10px;
+  padding: 0;
   overflow: hidden;
-  background: #eef1f5;
+  background: #f3f3f3;
 }
 
 .onebuilder-workflow-window {
@@ -3066,10 +3066,10 @@ button.git-control-tile { cursor: pointer; }
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(15,23,42,.10);
-  border-radius: 14px;
-  background: #f7f9fc;
-  box-shadow: 0 24px 80px rgba(15,23,42,.18);
+  border: 0;
+  border-radius: 0;
+  background: #f3f3f3;
+  box-shadow: none;
 }
 
 .onebuilder-workflow-window .workflow-builder-page {
