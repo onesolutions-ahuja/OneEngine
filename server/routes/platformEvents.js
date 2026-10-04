@@ -27,10 +27,28 @@ export default function createPlatformEventsRouter({
   const router = express.Router();
   const manage = [authenticate, authorize("settings.manage")];
 
-  router.get("/platform/event-types", ...manage, async (_req, res) => {
+  router.get("/platform/event-types", ...manage, async (req, res) => {
     try {
-      const result = await db("SELECT event_type,description,source_package_id,active,created_at FROM platform_event_types WHERE active=TRUE ORDER BY event_type");
-      res.json({ success: true, data: result.rows });
+      const result = await db("SELECT event_type,description,source_package_id,field_schema,active,created_at FROM platform_event_types WHERE active=TRUE ORDER BY event_type");
+      const rows = [];
+      for (const row of result.rows || []) {
+        let fields = Array.isArray(row.field_schema) ? row.field_schema : [];
+        if (!fields.length) {
+          const samples = await db(
+            `SELECT payload FROM platform_events
+              WHERE company_id=$1 AND event_type=$2
+              ORDER BY created_at DESC LIMIT 20`,
+            [req.user.companyId, row.event_type]
+          );
+          const names = new Set();
+          for (const sample of samples.rows || []) {
+            for (const key of Object.keys(sample.payload || {})) names.add(key);
+          }
+          fields = [...names].sort().map((key) => ({ api_name: key, label: key, data_type: "text", observed: true }));
+        }
+        rows.push({ ...row, field_schema: fields });
+      }
+      res.json({ success: true, data: rows });
     } catch (error) {
       console.error("Platform event type list error:", error);
       res.status(500).json({ success: false, message: "Unable to load event types" });
