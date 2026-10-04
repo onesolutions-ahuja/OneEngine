@@ -119,6 +119,16 @@ test("booking router graph reaches service, availability, confirmation and only 
   }
 });
 
+test("generic Flow HTTP runtime does not depend on connector definitions", () => {
+  const coreSource = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
+  const start = coreSource.indexOf("export async function oneHttpRequest");
+  const end = coreSource.indexOf("export function oneHttpRequestDefinition", start);
+  const runtime = coreSource.slice(start, end);
+  assert.doesNotMatch(runtime, /platform_connector_definitions/);
+  assert.match(runtime, /FROM integration_connections/);
+  assert.match(runtime, /LOWER\(provider_name\)=LOWER/);
+});
+
 test("WhatsApp Flow API uses normalized recipient and fails the workflow on provider HTTP errors", () => {
   const { workflow } = oneAssistantRouter();
   const apiSteps = workflow.action.actions.filter((action) => action.key === "ONE_HTTP_REQUEST" && action.providerKey === "whatsapp");
