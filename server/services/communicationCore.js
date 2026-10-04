@@ -53,7 +53,7 @@ export async function recordCommunicationEvent({
         ORDER BY created_at DESC LIMIT 1`,
       [companyId, normalizedChannel, providerMessageId]
     );
-    if (existing.rows?.[0]) return existing.rows[0];
+    if (existing.rows?.[0]) return { ...existing.rows[0], duplicate: true, workflowDispatched: false };
   }
   const result = await db(
     `INSERT INTO platform_communication_events
