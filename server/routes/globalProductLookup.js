@@ -278,6 +278,35 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
         credentialsChanged = true;
       }
 
+      // Every product provider gets a normal connector instance, including
+      // credential-free providers such as Open Food Facts. This keeps Test
+      // Connection on the same editable CONNECTOR_TEST_CONNECTION workflow.
+      const connectorInstance = await db(
+        "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND store_id IS NULL ORDER BY updated_at DESC LIMIT 1",
+        [req.user.companyId, providerKey]
+      );
+      if (!connectorInstance.rows?.[0]) {
+        await db(
+          `INSERT INTO integration_connections
+             (company_id,store_id,name,provider_name,integration_type,connector_package_key,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by)
+           VALUES ($1,NULL,$2,$3,'product_lookup',$4,$5::jsonb,$6,NULL,true,'CONFIGURED',$7)`,
+          [
+            req.user.companyId,
+            `${connector.globalProductLookup.displayName} Product Lookup`,
+            providerKey,
+            connector.providerKey || providerKey,
+            JSON.stringify(next),
+            connector.globalProductLookup.authType === "none" ? "none" : connector.globalProductLookup.authType,
+            req.user.id,
+          ]
+        );
+      } else {
+        await db(
+          "UPDATE integration_connections SET connector_package_key=COALESCE(connector_package_key,$1),connector_configuration=$2::jsonb,updated_at=NOW() WHERE id=$3 AND company_id=$4",
+          [connector.providerKey || providerKey, JSON.stringify(next), connectorInstance.rows[0].id, req.user.companyId]
+        );
+      }
+
       await writeAudit?.(req.user.companyId, req.user.id, "global_product_provider_config_updated", "global_product_provider", providerKey, {
         fields: publicFields, credentialsChanged,
       });
