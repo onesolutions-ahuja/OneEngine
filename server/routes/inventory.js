@@ -2,7 +2,6 @@ import express from "express";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { lowStockRow, resolveStockStore, allocateBatchConsumption, upsertBatchRow, rebuildInventoryBalances, reconcileInventoryBalances } from "../services/inventory.js";
 import { resolveBatchEntry, normaliseBatchPolicy } from "../services/batchPolicy.js";
-import { resolveAdjustmentReason } from "../services/adjustmentReasons.js";
 
 export default function createInventoryRouter({
   authenticate,
@@ -212,27 +211,8 @@ export default function createInventoryRouter({
        * is canonicalised for decreases, with any free-text detail preserved
        * in notes (appended, never overwriting the caller's notes).
        */
-      let storedReason = reason;
-      let storedNotes = notes;
-      if (quantity < 0) {
-        const resolved = resolveAdjustmentReason(quantity, reason);
-        if (resolved && resolved.error) {
-          return res.status(400).json({ success: false, message: resolved.error });
-        }
-        storedReason = resolved && resolved.reason ? resolved.reason : reason;
-        if (resolved && resolved.detail) {
-          storedNotes = storedNotes && String(storedNotes).trim()
-            ? `${String(storedNotes).trim()} (${resolved.detail})`
-            : resolved.detail;
-        }
-      }
-
-      if (!pool) {
-        return res.status(500).json({
-          success: false,
-          message: "DATABASE_URL is not configured",
-        });
-      }
+      const storedReason = reason;
+      const storedNotes = notes;
 
       const client = await pool.connect();
       let transactionStarted = false;
