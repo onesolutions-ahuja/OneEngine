@@ -52,7 +52,7 @@ export function getAvailableElements({ flowType, startConfig = {}, layout = 'aut
     if (fastRecord) {
       // Current Salesforce before-save guidance and examples expose the
       // in-transaction logic/data operations that don't launch external work.
-      return ['assignment', 'decision', 'loop', 'get_records', 'update_records', 'custom_error', 'group'].includes(element.key)
+      return ['assignment', 'decision', 'get_records', 'loop'].includes(element.key)
     }
 
     return true
