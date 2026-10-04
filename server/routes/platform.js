@@ -5060,6 +5060,51 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     });
   });
 
+
+  router.get("/platform/agents", ...manage, async (req, res) => {
+    const result = await db(
+      `SELECT id,label,api_name,description,user_access,instructions,actions,active,created_at,updated_at
+         FROM platform_agents
+        WHERE company_id=$1 AND active=true
+        ORDER BY label,api_name`,
+      [req.user.companyId]
+    );
+    res.json({
+      success: true,
+      data: [
+        { id: "oneengine-assistant", label: "OneEngine Assistant", api_name: "oneengine_assistant", description: "Built-in OneEngine assistant.", active: true, built_in: true, actions: [] },
+        ...(result.rows || []),
+      ],
+    });
+  });
+
+  router.post("/platform/agents", ...manage, async (req, res) => {
+    const body = req.body || {};
+    const label = String(body.label || "").trim();
+    const apiName = String(body.apiName || body.api_name || "").trim();
+    const instructions = String(body.instructions || "").trim();
+    const actions = Array.isArray(body.actions) ? [...new Set(body.actions.map((value) => String(value || "").trim()).filter(Boolean))] : [];
+    if (!label) return res.status(400).json({ success: false, message: "Agent label is required" });
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(apiName) || apiName.endsWith("_") || apiName.includes("__")) {
+      return res.status(400).json({ success: false, message: "Agent API Name is invalid" });
+    }
+    if (!instructions) return res.status(400).json({ success: false, message: "Agent instructions are required" });
+    if (!actions.length) return res.status(400).json({ success: false, message: "Add at least one action before Create & Activate" });
+    const registry = new Set(getWorkflowBuilderActionRegistry().map((item) => item.key));
+    const invalid = actions.filter((key) => !registry.has(key) || ["RUN_AGENT","SCREEN"].includes(key));
+    if (invalid.length) return res.status(400).json({ success: false, message: `Unsupported agent actions: ${invalid.join(", ")}` });
+    const result = await db(
+      `INSERT INTO platform_agents(company_id,label,api_name,description,user_access,instructions,actions,active,created_by)
+       VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,true,$8)
+       ON CONFLICT(company_id,api_name)
+       DO UPDATE SET label=EXCLUDED.label,description=EXCLUDED.description,user_access=EXCLUDED.user_access,
+         instructions=EXCLUDED.instructions,actions=EXCLUDED.actions,active=true,updated_at=NOW()
+       RETURNING id,label,api_name,description,user_access,instructions,actions,active,created_at,updated_at`,
+      [req.user.companyId,label,apiName,body.description || null,body.userAccess || body.user_access || null,instructions,JSON.stringify(actions),req.user.id || null]
+    );
+    res.status(201).json({ success: true, data: result.rows[0] });
+  });
+
   /*
    * Licence-aware resource catalogue for scoped package builders.
    * The ordinary Platform Builder keeps using its existing unrestricted
