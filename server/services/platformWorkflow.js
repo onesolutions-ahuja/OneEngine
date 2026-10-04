@@ -6374,7 +6374,9 @@ export async function executeWorkflowActions({ actions, ...context }) {
           : null;
         const collection = pinnedLoopCollection || (Array.isArray(result?.collection) ? result.collection : []);
         const iterationOrder = String(item.iterationOrder || "FIRST_TO_LAST").toUpperCase();
-        const iterationCollection = iterationOrder === "LAST_TO_FIRST" ? [...collection].reverse() : collection;
+        // LOOP executor already returns the collection in the requested iteration order.
+        // Reversing again here would turn LAST_TO_FIRST back into FIRST_TO_LAST.
+        const iterationCollection = collection;
         const itemVariable = String(item.itemVariable || result?.itemVariable || "currentItem");
         const iterations = [];
         const hadPrevious = Object.prototype.hasOwnProperty.call(workflowVariables.variables, itemVariable);
