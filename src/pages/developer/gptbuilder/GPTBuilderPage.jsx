@@ -463,6 +463,20 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
+  const [savedTests, setSavedTests] = useState([])
+  const [selectedTestId, setSelectedTestId] = useState('')
+  const [scenarioName, setScenarioName] = useState('')
+  const [savingScenario, setSavingScenario] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    if (mode === 'test' && workflowId) {
+      apiRequest(`/api/platform/rules/${encodeURIComponent(workflowId)}/tests`)
+        .then((response) => { if (live) setSavedTests(Array.isArray(response?.data) ? response.data : []) })
+        .catch((requestError) => { if (live) setError(requestError?.message || 'Unable to load saved test scenarios.') })
+    }
+    return () => { live = false }
+  }, [mode, workflowId])
 
   useEffect(() => {
     let live = true
@@ -492,9 +506,11 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   const execute = async () => {
     setRunning(true); setError(''); setResult(null)
     try {
-      const endpoint = mode === 'run'
-        ? `/api/platform/rules/${encodeURIComponent(workflowId)}/run`
-        : `/api/platform/rules/${encodeURIComponent(workflowId)}/debug`
+      const endpoint = mode === 'test' && selectedTestId
+        ? `/api/platform/rules/${encodeURIComponent(workflowId)}/tests/${encodeURIComponent(selectedTestId)}/run`
+        : mode === 'run'
+          ? `/api/platform/rules/${encodeURIComponent(workflowId)}/run`
+          : `/api/platform/rules/${encodeURIComponent(workflowId)}/debug`
       const response = await apiRequest(endpoint, {
         method: 'POST',
         body: JSON.stringify({
@@ -505,10 +521,43 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         }),
       })
       setResult(response?.data || {})
+      if (mode === 'test') {
+        const refreshed = await apiRequest(`/api/platform/rules/${encodeURIComponent(workflowId)}/tests`).catch(() => null)
+        if (refreshed) setSavedTests(Array.isArray(refreshed?.data) ? refreshed.data : [])
+      }
     } catch (requestError) {
       setError(requestError?.message || `Unable to ${mode} flow.`)
     } finally {
       setRunning(false)
+    }
+  }
+
+  const saveScenario = async () => {
+    if (!scenarioName.trim()) return
+    setSavingScenario(true); setError('')
+    try {
+      const response = await apiRequest(`/api/platform/rules/${encodeURIComponent(workflowId)}/tests`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: scenarioName.trim(),
+          config: {
+            recordMode: recordId ? 'specific' : 'latest',
+            ...(recordId ? { recordId } : {}),
+            inputs,
+            rollback: flowType === 'record' ? true : rollback,
+            assertions: [],
+          },
+        }),
+      })
+      const saved = response?.data
+      setScenarioName('')
+      const refreshed = await apiRequest(`/api/platform/rules/${encodeURIComponent(workflowId)}/tests`)
+      setSavedTests(Array.isArray(refreshed?.data) ? refreshed.data : [])
+      if (saved?.id) setSelectedTestId(String(saved.id))
+    } catch (requestError) {
+      setError(requestError?.message || 'Unable to save test scenario.')
+    } finally {
+      setSavingScenario(false)
     }
   }
 
@@ -517,7 +566,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   return <aside className="gptb-config-panel gptb-execution-panel" aria-label={title}>
     <header><div><strong>{title}</strong><small>Uses the most recent saved version.</small></div><button className="gptb-icon-button" aria-label={`Close ${title}`} onClick={onClose}><X size={16}/></button></header>
     <div className="gptb-config-body">
-      {mode === 'test' ? <section><h3>Test Scenario</h3><p className="gptb-help-text">Configure test data and run options for this scenario.</p></section> : null}
+      {mode === 'test' ? <section><h3>Test Scenario</h3><p className="gptb-help-text">Configure test data and run options for this scenario.</p><label><span>Saved Test</span><select value={selectedTestId} onChange={(event) => setSelectedTestId(event.target.value)}><option value="">New Scenario</option>{savedTests.map((test) => <option key={test.id} value={test.id}>{test.name}{test.last_status ? ` — ${test.last_status}` : ''}</option>)}</select></label><label><span>Scenario Name</span><input value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} placeholder="Enter test name"/></label><button className="gptb-inline-action" disabled={savingScenario || !scenarioName.trim()} onClick={() => void saveScenario()}><Save size={13}/> {savingScenario ? 'Saving…' : 'Save Scenario'}</button></section> : null}
       {needsRecord ? <section><h3>{mode === 'test' ? 'Set Triggering Record' : 'Triggering Record'}</h3>
         <label><span>Search records</span><span className="gptb-execution-search"><Search size={13}/><input value={recordSearch} onChange={(event) => setRecordSearch(event.target.value)} placeholder="Search records…"/></span></label>
         <label><span>Record</span><select value={recordId} onChange={(event) => setRecordId(event.target.value)}><option value="">Select a record…</option>{filteredRecords.map((record) => {
