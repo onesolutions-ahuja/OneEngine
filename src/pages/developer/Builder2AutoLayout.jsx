@@ -1,6 +1,8 @@
 import { GitBranch, Database, Plus, Zap } from 'lucide-react'
 
 const BRANCH_MIN_WIDTH = 244
+const BRANCH_MAX_WIDTH = 420
+const TREE_MAX_WIDTH = 2600
 const BRANCH_GAP = 28
 
 function splitSharedSuffix(paths = []) {
@@ -57,12 +59,15 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
     const sharedWidth = split.sharedSteps.length
       ? pathTreeWidth({ id: 'shared', label: 'Shared continuation', steps: split.sharedSteps }, [...ancestors, id])
       : BRANCH_MIN_WIDTH
-    return Math.max(branchWidth, sharedWidth)
+    return Math.min(TREE_MAX_WIDTH, Math.max(branchWidth, sharedWidth))
   }
 
   function pathTreeWidth(path, ancestors = []) {
     const widths = (path.steps || []).map(step => nodeTreeWidth(step, ancestors))
-    return Math.max(BRANCH_MIN_WIDTH, ...widths)
+    // Keep one Decision's immediate children close to the parent. Deep nested
+    // Decisions still render inside their lane, but they cannot push sibling
+    // lanes thousands of pixels away from the visible canvas.
+    return Math.min(BRANCH_MAX_WIDTH, Math.max(BRANCH_MIN_WIDTH, ...widths))
   }
 
   const renderNode = (id, ancestors = []) => {
