@@ -23,3 +23,17 @@ test('distinct available dates retain order and never fabricate extra dates', as
   assert.equal(result.count, 2);
   assert.deepEqual(result.collection.map(row => row.date), ['2026-10-04', '2026-10-06']);
 });
+
+test('collection date comparisons exclude elapsed slots', async () => {
+  const result = await getWorkflowActionDefinition('COLLECTION_FILTER').executor({
+    action: { collection: [{ startsAt: '2026-10-04T09:00:00Z' }, { startsAt: '2026-10-04T11:00:00Z' }, { startsAt: null }], filters: [{ field: 'startsAt', operator: 'greater_than', value: { path: 'variables.currentTime' } }] },
+    workflowVariables: { variables: { currentTime: '2026-10-04T10:00:00Z' } }
+  });
+  assert.deepEqual(result.collection, [{ startsAt: '2026-10-04T11:00:00Z' }]);
+});
+
+test('structured assignments resolve nested session state and selected slot arrays', async () => {
+  const workflowVariables = { variables: { slots: [{ date: '2026-10-04', startsAt: '2026-10-04T11:00:00Z' }] } };
+  const result = await getWorkflowActionDefinition('ASSIGNMENT').executor({ action: { variableName: 'state', variableType: 'record', value: { step: 'WAITING_FOR_TIME', slots: { path: 'variables.slots' } } }, workflowVariables });
+  assert.deepEqual(result.value, { step: 'WAITING_FOR_TIME', slots: workflowVariables.variables.slots });
+});
