@@ -169,7 +169,7 @@ export default function createPurchasesRouter({
           `
           SELECT id, product_id, movement_type, quantity_change, balance_after,
             reason, reference_type, reference_id, created_by, created_at
-          FROM inventory_movements
+          FROM inventory_ledger
           WHERE reference_type = 'PURCHASE' AND reference_id = $1
           ORDER BY created_at, id
           `,
@@ -177,7 +177,7 @@ export default function createPurchasesRouter({
         );
         const receipts = await db(
           `SELECT pr.id, pr.received_at, pr.reference_number, pr.notes, u.username AS received_by_username
-             FROM purchase_receipts pr LEFT JOIN users u ON u.id=pr.received_by
+             FROM purchase_ledger pr LEFT JOIN users u ON u.id=pr.received_by
             WHERE pr.purchase_id=$1 AND pr.company_id=$2 ORDER BY pr.received_at`,
           [req.params.id, req.user.companyId]
         );
