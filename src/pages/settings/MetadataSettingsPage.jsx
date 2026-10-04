@@ -309,6 +309,86 @@ function GenericObjectSettings({ object }) {
   )
 }
 
+function settingValueForInput(record) {
+  const value = record?.setting_value
+  if (value === undefined || value === null) return ''
+  return value
+}
+
+function SettingRecordValueField({ record, disabled, onChange }) {
+  const type = String(record?.value_type || 'text').toLowerCase()
+  const value = settingValueForInput(record)
+  if (type === 'boolean') {
+    const checked = value === true || String(value).toLowerCase() === 'true'
+    return <button type="button" className={`mac-switch ${checked ? 'is-on' : ''}`} disabled={disabled} onClick={() => onChange(!checked)}><span /></button>
+  }
+  if (['number','decimal','currency'].includes(type)) {
+    return <input type="number" step={type === 'number' ? '1' : '0.01'} value={value ?? ''} disabled={disabled} onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))} />
+  }
+  if (type === 'json') {
+    const text = typeof value === 'string' ? value : JSON.stringify(value ?? {}, null, 2)
+    return <textarea value={text} disabled={disabled} onChange={(event) => {
+      const raw = event.target.value
+      try { onChange(JSON.parse(raw)) } catch { onChange(raw) }
+    }} />
+  }
+  if (type === 'email') return <input type="email" value={value ?? ''} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+  if (type === 'phone') return <input type="tel" value={value ?? ''} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+  if (type === 'date') return <input type="date" value={value ?? ''} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+  if (type === 'datetime') return <input type="datetime-local" value={value ? String(value).slice(0,16) : ''} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+  return <input type="text" value={value ?? ''} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+}
+
+function RecordSettingsSection({ object, rows, permissions, section, onSaved }) {
+  const records = (rows || []).filter((row) => row.active !== false && String(row.section || 'General') === String(section || 'General'))
+  const canEdit = permissions?.can_edit === true
+  const [drafts, setDrafts] = useState({})
+  const [saving, setSaving] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setDrafts(Object.fromEntries(records.map((row) => [String(row.id), settingValueForInput(row)])))
+  }, [section, rows])
+
+  const update = async (record) => {
+    if (!canEdit || !record?.id) return
+    setSaving(String(record.id))
+    setError('')
+    try {
+      await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records/${encodeURIComponent(record.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ data: { setting_value: drafts[String(record.id)] } }),
+      })
+      await onSaved()
+    } catch (err) {
+      setError(err?.message || 'Unable to save setting')
+    } finally {
+      setSaving('')
+    }
+  }
+
+  return (
+    <>
+      {error ? <div className="settings-error">{error}</div> : null}
+      <div className="settings-card">
+        {records.length ? records.map((record) => (
+          <div className="settings-row" key={record.id}>
+            <div><strong>{record.label || record.setting_key}</strong>{record.description ? <p>{record.description}</p> : null}</div>
+            <div className="metadata-settings-record-value">
+              <SettingRecordValueField
+                record={{ ...record, setting_value: Object.prototype.hasOwnProperty.call(drafts, String(record.id)) ? drafts[String(record.id)] : record.setting_value }}
+                disabled={!canEdit || saving === String(record.id)}
+                onChange={(value) => setDrafts((current) => ({ ...current, [String(record.id)]: value }))}
+              />
+              {canEdit ? <button type="button" disabled={saving === String(record.id)} onClick={() => update(record)}>{saving === String(record.id) ? 'Saving…' : 'Save'}</button> : null}
+            </div>
+          </div>
+        )) : <div className="settings-state-card">No settings are defined in this section.</div>}
+      </div>
+    </>
+  )
+}
+
 function SystemSettingsSection({ object, fields, record, permissions, section, onSaved }) {
   const visible = fields.filter((field) => field.active !== false && field.readable !== false && fieldSection(field) === section && !['id', 'company_id', 'updated_at'].includes(field.api_name))
   const canEdit = permissions?.can_edit === true
@@ -355,19 +435,19 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   const [objects, setObjects] = useState(cachedCatalog)
   const [objectPermissions, setObjectPermissions] = useState(() => Object.fromEntries(cachedCatalog.map((object) => [object.id, object.permissions || null])))
   const [sectionedData, setSectionedData] = useState(() => Object.fromEntries(cachedCatalog
-    .filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
+    .filter((object) => ['field-config','record-section'].includes(object?.config?.settingsSectionSource || object?.config?.settings_section_source))
     .map((object) => [object.id, { fields: Array.isArray(object.fields) ? object.fields : [], rows: [] }])))
   const [active, setActive] = useState(initialSection || '')
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(cachedCatalog.length === 0)
   const [error, setError] = useState('')
 
-  const sectionedObjects = objects.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
+  const sectionedObjects = objects.filter((object) => ['field-config','record-section'].includes(object?.config?.settingsSectionSource || object?.config?.settings_section_source))
 
   const loadSectionedRows = async (object) => {
     if (!object?.id) return
     const key = objectKey(object)
-    const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=10`)
+    const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=500`)
     const records = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
     setSectionedData((current) => ({
       ...current,
@@ -390,7 +470,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
       setObjectPermissions(Object.fromEntries(hosts.map((object) => [object.id, object.permissions || null])))
       setUser(meRes?.user || meRes?.data?.user || null)
 
-      const sectioned = hosts.filter((object) => object?.config?.settingsSectionSource === 'field-config' || object?.config?.settings_section_source === 'field-config')
+      const sectioned = hosts.filter((object) => ['field-config','record-section'].includes(object?.config?.settingsSectionSource || object?.config?.settings_section_source))
       setSectionedData((current) => Object.fromEntries(sectioned.map((object) => [object.id, {
         ...(current[object.id] || {}),
         fields: Array.isArray(object.fields) ? object.fields : [],
@@ -399,7 +479,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
 
       const sectionedPairs = await Promise.all(sectioned.map(async (object) => {
         try {
-          const recordRes = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=10`)
+          const recordRes = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=500`)
           return [object.id, {
             fields: Array.isArray(object.fields) ? object.fields : [],
             rows: Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : [],
@@ -421,12 +501,24 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
     const rows = []
     for (const sectionedObject of sectionedObjects) {
       const sections = new Map()
-      const fields = sectionedData[sectionedObject.id]?.fields || []
-      for (const field of fields) {
-        if (field.active === false || field.readable === false) continue
-        const label = fieldSection(field)
-        const key = sectionKey(label)
-        if (!sections.has(key)) sections.set(key, { key: `sectioned:${objectKey(sectionedObject)}:${key}`, label, group: fieldGroup(field, sectionedObject), type: 'system', section: label, object: sectionedObject })
+      const sourceMode = sectionedObject?.config?.settingsSectionSource || sectionedObject?.config?.settings_section_source
+      if (sourceMode === 'record-section') {
+        const records = sectionedData[sectionedObject.id]?.rows || []
+        for (const record of records) {
+          if (record?.active === false) continue
+          const label = String(record?.section || 'General')
+          const key = sectionKey(label)
+          const group = sectionedObject?.config?.settingsGroup || sectionedObject?.config?.settings_group || 'Settings'
+          if (!sections.has(key)) sections.set(key, { key: `records:${objectKey(sectionedObject)}:${key}`, label, group, type: 'record-system', section: label, object: sectionedObject })
+        }
+      } else {
+        const fields = sectionedData[sectionedObject.id]?.fields || []
+        for (const field of fields) {
+          if (field.active === false || field.readable === false) continue
+          const label = fieldSection(field)
+          const key = sectionKey(label)
+          if (!sections.has(key)) sections.set(key, { key: `sectioned:${objectKey(sectionedObject)}:${key}`, label, group: fieldGroup(field, sectionedObject), type: 'system', section: label, object: sectionedObject })
+        }
       }
       rows.push(...sections.values())
     }
@@ -496,6 +588,14 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
           {error ? <div className="settings-error">{error}</div> : null}
           {loading && !current ? <div className="settings-card settings-state-card">Loading Settings…</div> : !current ? (
             <div className="settings-card settings-state-card">No Settings metadata is available for this user.</div>
+          ) : current.type === 'record-system' ? (
+            <RecordSettingsSection
+              object={current.object}
+              rows={sectionedData[current.object.id]?.rows || []}
+              permissions={objectPermissions[current.object.id]}
+              section={current.section}
+              onSaved={() => loadSectionedRows(current.object)}
+            />
           ) : current.type === 'system' ? (
             <SystemSettingsSection
               object={current.object}
