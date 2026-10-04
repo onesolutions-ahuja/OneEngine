@@ -15,6 +15,13 @@ const REMOVED_PROVIDER_TEST_ADAPTERS = [
   "GO_UPC_TEST_CONNECTION",
   "QUICKBOOKS_TEST_CONNECTION",
   "SHOPIFY_TEST_CONNECTION",
+  "UBER_GET_STORES",
+  "UBER_UPLOAD_MENU",
+  "UBER_ACCEPT_ORDER",
+  "UBER_DENY_ORDER",
+  "UBER_UPDATE_ITEM_PRICE",
+  "UBER_SET_ITEM_UNAVAILABLE",
+  "UBER_SET_ITEM_AVAILABLE",
 ];
 
 const INTERNAL = [
@@ -27,17 +34,12 @@ const INTERNAL = [
   "SEND_USER_INVITATION",
   "SHOPIFY_SYNC_PRODUCTS",
   "SHOPIFY_EXPORT_REFUND",
-  "UBER_GET_STORES",
-  "UBER_UPLOAD_MENU",
-  "UBER_ACCEPT_ORDER",
-  "UBER_UPDATE_ITEM_PRICE",
 ];
 
 test("workflow editor uses the workflow catalogue without record-page lifecycle duplicates", () => {
   const editor = readFileSync(new URL("../src/pages/developer/Builder2Page.jsx", import.meta.url), "utf8");
   assert.ok(editor.includes("apiRequest('/api/platform/workflow-actions')"));
   assert.equal(editor.includes("apiRequest('/api/platform/action-registry')"), false);
-
   const keys = new Set(getWorkflowBuilderActionRegistry().map((item) => item.key));
   for (const key of ["CREATE_RECORD", "UPDATE_RECORD", "DELETE_RECORD"]) {
     assert.ok(keys.has(key), key + " must remain available to Flow Builder");
@@ -62,7 +64,7 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
   }
 });
 
-test("provider-specific test adapters stay removed in favor of the generic connector test flow", () => {
+test("provider-specific adapters stay removed in favor of metadata workflows", () => {
   const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
   for (const key of REMOVED_PROVIDER_TEST_ADAPTERS) {
     assert.equal(all.has(key), false, key + " must remain removed");
