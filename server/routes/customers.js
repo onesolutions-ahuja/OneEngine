@@ -102,7 +102,7 @@ export default function createCustomersRouter({
         LEFT JOIN customer_loyalty_balances clb ON clb.company_id = c.company_id AND clb.customer_id = c.id
         LEFT JOIN LATERAL (
           SELECT COALESCE(SUM(l.amount * CASE WHEN l.transaction_type IN ('payment','debit_note') THEN -1 ELSE 1 END), 0) AS outstanding
-          FROM customer_credit_ledger l
+          FROM customer_ledger l
           WHERE l.company_id = c.company_id AND l.customer_id = c.id
         ) ccl ON TRUE
         WHERE ${filters.join(" AND ")}
@@ -239,7 +239,7 @@ export default function createCustomersRouter({
         LEFT JOIN customer_loyalty_balances clb ON clb.company_id = c.company_id AND clb.customer_id = c.id
         LEFT JOIN LATERAL (
           SELECT COALESCE(SUM(l.amount * CASE WHEN l.transaction_type IN ('payment','debit_note') THEN -1 ELSE 1 END), 0) AS outstanding
-          FROM customer_credit_ledger l
+          FROM customer_ledger l
           WHERE l.company_id = c.company_id AND l.customer_id = c.id
         ) ccl ON TRUE
         WHERE c.id = $1 AND c.company_id = $2
@@ -358,7 +358,7 @@ export default function createCustomersRouter({
           clt.created_at,
           u.username,
           u.full_name
-        FROM customer_loyalty_transactions clt
+        FROM customer_loyalty_ledger clt
         LEFT JOIN users u ON u.id = clt.created_by
         WHERE clt.company_id = $1 AND clt.customer_id = $2
         ORDER BY clt.created_at DESC
@@ -471,7 +471,7 @@ export default function createCustomersRouter({
         // adjustment references a sale/invoice, otherwise 'adjustment'.
         await client.query(
           `
-          INSERT INTO customer_loyalty_transactions
+          INSERT INTO customer_loyalty_ledger
             (company_id, customer_id, transaction_type, amount, balance_after, reference_type, description, created_by)
           VALUES ($1, $2, 'ADJUST', $3, $4, $5, $6, $7)
           `,
@@ -760,7 +760,7 @@ export default function createCustomersRouter({
   async function outstandingCents(companyId, customerId) {
     const r = await db(
       `SELECT COALESCE(SUM(amount * CASE WHEN transaction_type IN ('payment','debit_note') THEN -1 ELSE 1 END), 0) AS outstanding
-       FROM customer_credit_ledger WHERE company_id = $1 AND customer_id = $2`,
+       FROM customer_ledger WHERE company_id = $1 AND customer_id = $2`,
       [companyId, customerId]
     );
     return Math.round(Number(r.rows[0]?.outstanding || 0) * 100);
@@ -813,7 +813,7 @@ export default function createCustomersRouter({
         `
         SELECT l.id, l.transaction_type, l.amount, l.balance_after, l.reference_type,
           l.reference_id, l.description, l.created_by, u.full_name AS created_by_name, l.created_at
-        FROM customer_credit_ledger l
+        FROM customer_ledger l
         LEFT JOIN users u ON u.id = l.created_by
         WHERE l.company_id = $1 AND l.customer_id = $2
         ORDER BY l.created_at DESC, l.id DESC
@@ -932,7 +932,7 @@ export default function createCustomersRouter({
         : null;
       if (idempotencyKey) {
         const existing = await db(
-          `SELECT id, amount, payment_method FROM customer_credit_ledger
+          `SELECT id, amount, payment_method FROM customer_ledger
            WHERE company_id = $1 AND idempotency_key = $2 LIMIT 1`,
           [req.user.companyId, idempotencyKey]
         );
@@ -977,7 +977,7 @@ export default function createCustomersRouter({
 
       const inserted = await db(
         `
-        INSERT INTO customer_credit_ledger
+        INSERT INTO customer_ledger
           (company_id, store_id, customer_id, transaction_type, amount, reference_type, reference_id, description, payment_method, idempotency_key, created_by)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id, created_at
@@ -1061,7 +1061,7 @@ export default function createCustomersRouter({
         : null;
       if (idempotencyKey) {
         const existing = await db(
-          "SELECT id FROM customer_credit_ledger WHERE company_id = $1 AND idempotency_key = $2 LIMIT 1",
+          "SELECT id FROM customer_ledger WHERE company_id = $1 AND idempotency_key = $2 LIMIT 1",
           [req.user.companyId, idempotencyKey]
         );
         if (existing.rows.length) {
@@ -1104,7 +1104,7 @@ export default function createCustomersRouter({
 
       await db(
         `
-        INSERT INTO customer_credit_ledger
+        INSERT INTO customer_ledger
           (company_id, store_id, customer_id, transaction_type, amount, reference_type, reference_id, description, idempotency_key, created_by)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         `,
@@ -1210,7 +1210,7 @@ export default function createCustomersRouter({
 
       const where = filters.join(" AND ");
       const countResult = await db(
-        `SELECT COUNT(*)::int AS total FROM customer_credit_ledger WHERE ${where}`,
+        `SELECT COUNT(*)::int AS total FROM customer_ledger WHERE ${where}`,
         params
       );
       const total = Number(countResult.rows[0]?.total || 0);
@@ -1222,7 +1222,7 @@ export default function createCustomersRouter({
           l.store_id, l.created_by, u.full_name AS created_by_name, l.created_at,
           SUM(l.amount * CASE WHEN l.transaction_type IN ('payment','debit_note') THEN -1 ELSE 1 END)
             OVER (ORDER BY l.created_at, l.id) AS running_balance
-         FROM customer_credit_ledger l
+         FROM customer_ledger l
          LEFT JOIN users u ON u.id = l.created_by
          WHERE ${where.replaceAll("company_id", "l.company_id").replaceAll("customer_id", "l.customer_id").replaceAll("store_id", "l.store_id").replaceAll("transaction_type", "l.transaction_type").replaceAll("created_at", "l.created_at").replaceAll("description", "l.description").replaceAll("reference_type", "l.reference_type").replaceAll("reference_id", "l.reference_id")}
          ORDER BY l.created_at DESC, l.id DESC
@@ -1256,7 +1256,7 @@ export default function createCustomersRouter({
       const result = await db(
         `
         SELECT transaction_type, amount, reference_type, reference_id, description, created_at
-        FROM customer_credit_ledger
+        FROM customer_ledger
         WHERE company_id = $1 AND customer_id = $2
         ORDER BY created_at ASC, id ASC
         `,
@@ -1387,7 +1387,7 @@ export default function createCustomersRouter({
         [req.user.companyId, code, req.body.referenceNumber || null, req.body.customerId || null, req.body.value, req.user.id, req.body.expiresAt || null]
       );
       await db(
-        `INSERT INTO gift_card_transactions (company_id, gift_card_id, transaction_type, amount, balance_after, reference_type, description, store_id, created_by)
+        `INSERT INTO gift_card_ledger (company_id, gift_card_id, transaction_type, amount, balance_after, reference_type, description, store_id, created_by)
          VALUES ($1, $2, 'issue', $3, $3, 'issue', 'Gift card issued', $4, $5)`,
         [req.user.companyId, card.rows[0].id, req.body.value, req.user.storeId, req.user.id]
       );
@@ -1404,7 +1404,7 @@ export default function createCustomersRouter({
       `SELECT g.id, g.code, g.reference_number, g.customer_id, c.name AS customer_name,
         g.status, g.initial_value, g.expires_at, COALESCE(SUM(CASE WHEN t.transaction_type = 'redeem' THEN -t.amount ELSE t.amount END), 0) AS balance
        FROM gift_cards g LEFT JOIN customers c ON c.id = g.customer_id
-       LEFT JOIN gift_card_transactions t ON t.gift_card_id = g.id
+       LEFT JOIN gift_card_ledger t ON t.gift_card_id = g.id
        WHERE g.company_id = $1 GROUP BY g.id, c.name ORDER BY g.issued_at DESC`,
       [req.user.companyId]
     );
@@ -1415,13 +1415,13 @@ export default function createCustomersRouter({
     const result = await db(
       `SELECT g.id, g.code, g.status, g.expires_at,
         COALESCE(SUM(CASE WHEN t.transaction_type = 'redeem' THEN -t.amount ELSE t.amount END), 0) AS balance
-       FROM gift_cards g LEFT JOIN gift_card_transactions t ON t.gift_card_id = g.id
+       FROM gift_cards g LEFT JOIN gift_card_ledger t ON t.gift_card_id = g.id
        WHERE g.id = $1 AND g.company_id = $2 GROUP BY g.id`,
       [req.params.id, req.user.companyId]
     );
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Gift card not found" });
     const transactions = await db(
-      `SELECT * FROM gift_card_transactions WHERE gift_card_id = $1 AND company_id = $2 ORDER BY created_at ASC`,
+      `SELECT * FROM gift_card_ledger WHERE gift_card_id = $1 AND company_id = $2 ORDER BY created_at ASC`,
       [req.params.id, req.user.companyId]
     );
     res.json({ success: true, data: { ...result.rows[0], transactions: transactions.rows } });
@@ -1440,8 +1440,8 @@ export default function createCustomersRouter({
     const card = await db(`SELECT id, code, status, expires_at FROM gift_cards WHERE id = $1 AND company_id = $2`, [req.params.id, req.user.companyId]);
     if (!card.rows.length) return res.status(404).json({ success: false, message: "Gift card not found" });
     if (card.rows[0].status !== "active") return res.status(409).json({ success: false, message: "Gift card is not active" });
-    await db(`INSERT INTO gift_card_transactions (company_id, gift_card_id, transaction_type, amount, balance_after, reference_type, description, store_id, created_by) VALUES ($1, $2, 'topup', $3, $3, 'topup', 'Gift card top up', $4, $5)`, [req.user.companyId, req.params.id, req.body.amount, req.user.storeId, req.user.id]);
-    const txs = await db(`SELECT * FROM gift_card_transactions WHERE gift_card_id = $1 AND company_id = $2 ORDER BY created_at ASC`, [req.params.id, req.user.companyId]);
+    await db(`INSERT INTO gift_card_ledger (company_id, gift_card_id, transaction_type, amount, balance_after, reference_type, description, store_id, created_by) VALUES ($1, $2, 'topup', $3, $3, 'topup', 'Gift card top up', $4, $5)`, [req.user.companyId, req.params.id, req.body.amount, req.user.storeId, req.user.id]);
+    const txs = await db(`SELECT * FROM gift_card_ledger WHERE gift_card_id = $1 AND company_id = $2 ORDER BY created_at ASC`, [req.params.id, req.user.companyId]);
     const balance = txs.rows.reduce((total, tx) => total + (tx.transaction_type === "redeem" ? -Number(tx.amount) : Number(tx.amount)), 0);
     res.json({ success: true, data: { balance } });
   });
