@@ -113,11 +113,21 @@ export const platformSchema = `
     status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE'
       CHECK (status IN ('AVAILABLE','INSTALLED','ACTIVE','INACTIVE')),
     installed_version VARCHAR(40),
+    available_version VARCHAR(40),
+    licence_status VARCHAR(20) NOT NULL DEFAULT 'NONE',
+    trial_started_at TIMESTAMPTZ,
+    trial_expires_at TIMESTAMPTZ,
+    update_status VARCHAR(20) NOT NULL DEFAULT 'CURRENT',
     installed_at TIMESTAMPTZ,
     activated_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(company_id,onestore_app_id)
   );
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS available_version VARCHAR(40);
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS licence_status VARCHAR(20) NOT NULL DEFAULT 'NONE';
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ;
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS trial_expires_at TIMESTAMPTZ;
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS update_status VARCHAR(20) NOT NULL DEFAULT 'CURRENT';
   CREATE INDEX IF NOT EXISTS idx_tenant_apps_company_status ON tenant_apps(company_id,status);
   ALTER TABLE roles ADD COLUMN IF NOT EXISTS parent_role_id UUID REFERENCES roles(id) ON DELETE SET NULL;
   CREATE INDEX IF NOT EXISTS idx_roles_company_parent ON roles(company_id,parent_role_id);
@@ -1504,6 +1514,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["onestore_app_id", "OneStore App", "lookup", "onestore_app_id", true],
         ["status", "Status", "select", "status", true],
         ["installed_version", "Installed Version", "text", "installed_version", false],
+        ["available_version", "Available Version", "text", "available_version", false],
+        ["licence_status", "Licence Status", "select", "licence_status", false],
+        ["trial_started_at", "Trial Started At", "datetime", "trial_started_at", false],
+        ["trial_expires_at", "Trial Expires At", "datetime", "trial_expires_at", false],
+        ["update_status", "Update Status", "select", "update_status", false],
         ["installed_at", "Installed At", "datetime", "installed_at", false],
         ["activated_at", "Activated At", "datetime", "activated_at", false],
         ["updated_at", "Updated At", "datetime", "updated_at", false],
@@ -1573,7 +1588,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     `);
 
     await pool.query(`
-      INSERT INTO tenant_apps (company_id,onestore_app_id,status,installed_version,installed_at,activated_at,updated_at)
+      INSERT INTO tenant_apps
+        (company_id,onestore_app_id,status,installed_version,available_version,licence_status,update_status,installed_at,activated_at,updated_at)
       SELECT
         c.id,
         a.id,
@@ -1584,6 +1600,13 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ELSE 'ACTIVE'
         END,
         COALESCE(i.installed_version,i.version),
+        a.version,
+        CASE WHEN i.id IS NULL THEN 'NONE' ELSE 'LICENSED' END,
+        CASE
+          WHEN COALESCE(i.installed_version,i.version) IS NOT NULL
+           AND COALESCE(i.installed_version,i.version) <> a.version THEN 'UPDATE_AVAILABLE'
+          ELSE 'CURRENT'
+        END,
         i.installed_at,
         CASE WHEN i.status='active' AND i.deactivated_by_user=FALSE AND i.suspended_by_entitlement=FALSE THEN COALESCE(i.updated_at,i.installed_at) ELSE NULL END,
         NOW()
@@ -1592,8 +1615,13 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       LEFT JOIN package_registry p ON p.package_key=a.app_key
       LEFT JOIN company_package_installations i ON i.company_id=c.id AND i.package_id=p.id
       ON CONFLICT (company_id,onestore_app_id) DO UPDATE SET
-        installed_version=EXCLUDED.installed_version,
-        installed_at=EXCLUDED.installed_at,
+        available_version=EXCLUDED.available_version,
+        update_status=CASE
+          WHEN tenant_apps.installed_version IS NOT NULL
+           AND tenant_apps.installed_version <> EXCLUDED.available_version THEN 'UPDATE_AVAILABLE'
+          ELSE tenant_apps.update_status
+        END,
+        installed_at=COALESCE(tenant_apps.installed_at,EXCLUDED.installed_at),
         updated_at=NOW()
     `);
 
@@ -1630,6 +1658,18 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         );
         await pool.query(
           `UPDATE platform_fields
+              SET options='["NONE","REQUESTED","LICENSED","TRIAL"]'::jsonb
+            WHERE object_id=$1 AND api_name='licence_status'`,
+          [result.rows[0].id]
+        );
+        await pool.query(
+          `UPDATE platform_fields
+              SET options='["CURRENT","UPDATE_AVAILABLE","QUEUED","UPDATING","FAILED"]'::jsonb
+            WHERE object_id=$1 AND api_name='update_status'`,
+          [result.rows[0].id]
+        );
+        await pool.query(
+          `UPDATE platform_fields
               SET config=COALESCE(config,'{}'::jsonb) || '{"relatedObjectKey":"onestore_app","relationshipKey":"tenant_apps"}'::jsonb
             WHERE object_id=$1 AND api_name='onestore_app_id'`,
           [result.rows[0].id]
@@ -1661,6 +1701,131 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
              child_field_id=EXCLUDED.child_field_id,
              active=true`,
           [oneStoreObject.id, tenantAppObject.id, tenantAppField.rows[0].id]
+        );
+      }
+    }
+
+
+    if (tenantAppObject?.id) {
+      const lifecycleFlows = [
+        {
+          name: "OneStore - Install App",
+          buttonKey: "onestore_install",
+          label: "Install",
+          visibility: { match: "all", conditions: [{ field: "status", operator: "equals", value: "AVAILABLE" }] },
+          actions: [
+            { id: "install_app", label: "Install App", apiName: "install_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INSTALLED", installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
+          ],
+        },
+        {
+          name: "OneStore - Activate App",
+          buttonKey: "onestore_activate",
+          label: "Activate",
+          visibility: { match: "any", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }, { field: "status", operator: "equals", value: "INACTIVE" }] },
+          actions: [
+            { id: "activate_app", label: "Activate App", apiName: "activate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "ACTIVE" } },
+          ],
+        },
+        {
+          name: "OneStore - Deactivate App",
+          buttonKey: "onestore_deactivate",
+          label: "Deactivate",
+          visibility: { match: "all", conditions: [{ field: "status", operator: "equals", value: "ACTIVE" }] },
+          actions: [
+            { id: "deactivate_app", label: "Deactivate App", apiName: "deactivate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INACTIVE" } },
+          ],
+        },
+        {
+          name: "OneStore - Uninstall App",
+          buttonKey: "onestore_uninstall",
+          label: "Uninstall",
+          visibility: { match: "any", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }, { field: "status", operator: "equals", value: "ACTIVE" }, { field: "status", operator: "equals", value: "INACTIVE" }] },
+          actions: [
+            { id: "uninstall_app", label: "Uninstall App", apiName: "uninstall_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "AVAILABLE", installed_version: null, activated_at: null, update_status: "CURRENT" } },
+          ],
+        },
+        {
+          name: "OneStore - Start Trial",
+          buttonKey: "onestore_trial",
+          label: "Start 7-day Trial",
+          visibility: { match: "all", conditions: [{ field: "licence_status", operator: "equals", value: "NONE" }] },
+          actions: [
+            { id: "trial_started_at", label: "Trial Start", apiName: "trial_started_at", key: "FORMULA", resourceName: "trialStartedAt", resultType: "datetime", expression: "NOW()", inputs: {} },
+            { id: "trial_expires_at", label: "Trial Expiry", apiName: "trial_expires_at", key: "FORMULA", resourceName: "trialExpiresAt", resultType: "datetime", expression: "ADDDAYS(NOW(),7)", inputs: {} },
+            { id: "grant_trial", label: "Grant Tenant Trial Licence", apiName: "grant_trial", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "TRIAL", trial_started_at: { path: "variables.trialStartedAt" }, trial_expires_at: { path: "variables.trialExpiresAt" } } },
+          ],
+        },
+        {
+          name: "OneStore - Request Licence",
+          buttonKey: "onestore_request_licence",
+          label: "Request Licence",
+          visibility: { match: "all", conditions: [{ field: "licence_status", operator: "equals", value: "NONE" }] },
+          actions: [
+            { id: "request_licence", label: "Request Licence", apiName: "request_licence", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "REQUESTED" } },
+          ],
+        },
+        {
+          name: "OneStore - Upgrade App",
+          buttonKey: "onestore_upgrade",
+          label: "Upgrade",
+          visibility: { match: "all", conditions: [{ field: "update_status", operator: "equals", value: "UPDATE_AVAILABLE" }] },
+          actions: [
+            { id: "upgrade_app", label: "Upgrade App", apiName: "upgrade_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
+          ],
+        },
+      ];
+
+      for (const flow of lifecycleFlows) {
+        const action = {
+          type: "workflow",
+          apiName: flow.buttonKey.toUpperCase(),
+          flowType: "AUTOLAUNCHED",
+          builder2: true,
+          description: flow.label,
+          actions: flow.actions,
+        };
+        const existingFlow = await pool.query(
+          "SELECT id,user_modified FROM platform_rules WHERE object_id=$1 AND company_id IS NULL AND name=$2 LIMIT 1",
+          [tenantAppObject.id, flow.name]
+        );
+        let workflowId = existingFlow.rows[0]?.id || null;
+        if (!workflowId) {
+          const createdFlow = await pool.query(
+            `INSERT INTO platform_rules
+               (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,active_version,company_id,managed,package_required,user_modified)
+             VALUES ($1,$2,'manual','[]'::jsonb,$3::jsonb,TRUE,'ACTIVE',1,1,NULL,TRUE,FALSE,FALSE)
+             RETURNING id`,
+            [tenantAppObject.id, flow.name, JSON.stringify(action)]
+          );
+          workflowId = createdFlow.rows[0]?.id || null;
+        } else if (existingFlow.rows[0]?.user_modified !== true) {
+          await pool.query(
+            `UPDATE platform_rules
+                SET action=$1::jsonb,active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW()
+              WHERE id=$2 AND company_id IS NULL AND COALESCE(user_modified,FALSE)=FALSE`,
+            [JSON.stringify(action), workflowId]
+          );
+        }
+        if (!workflowId) continue;
+
+        await pool.query(
+          `INSERT INTO platform_buttons
+             (company_id,object_id,button_key,label,action_key,target_type,target_key,variant,placement,required_permission,visibility_rule,input_mappings,config,active,managed,user_modified)
+           VALUES (NULL,$1,$2,$3,NULL,'workflow',$4,'primary','onestore_action','package.install',$5::jsonb,'{}'::jsonb,$6::jsonb,TRUE,TRUE,FALSE)
+           ON CONFLICT (button_key) WHERE company_id IS NULL
+           DO UPDATE SET
+             object_id=EXCLUDED.object_id,
+             label=CASE WHEN platform_buttons.user_modified THEN platform_buttons.label ELSE EXCLUDED.label END,
+             target_type=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_type ELSE EXCLUDED.target_type END,
+             target_key=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_key ELSE EXCLUDED.target_key END,
+             placement=CASE WHEN platform_buttons.user_modified THEN platform_buttons.placement ELSE EXCLUDED.placement END,
+             required_permission=CASE WHEN platform_buttons.user_modified THEN platform_buttons.required_permission ELSE EXCLUDED.required_permission END,
+             visibility_rule=CASE WHEN platform_buttons.user_modified THEN platform_buttons.visibility_rule ELSE EXCLUDED.visibility_rule END,
+             config=CASE WHEN platform_buttons.user_modified THEN platform_buttons.config ELSE EXCLUDED.config END,
+             active=TRUE,
+             managed=TRUE,
+             updated_at=NOW()`,
+          [tenantAppObject.id, flow.buttonKey, flow.label, String(workflowId), JSON.stringify(flow.visibility), JSON.stringify({ order: lifecycleFlows.indexOf(flow) + 1 })]
         );
       }
     }
