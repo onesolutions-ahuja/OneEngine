@@ -1118,7 +1118,7 @@ export default function createOnlineRouter({
         db,
         req,
         companyId: req.user.companyId,
-        action: { type: "UBER_GET_STORES" },
+        action: { type: "RUN_SUBFLOW", subflowApiName: "GPT_UBER_EATS_GET_STORES" },
       });
       const response = result?.data || {};
       const rawStores = Array.isArray(response.stores) ? response.stores : Array.isArray(response) ? response : [];
@@ -1411,7 +1411,7 @@ export default function createOnlineRouter({
               req,
               companyId: req.user.companyId,
               recordId: order.id,
-              action: { type: "UBER_ACCEPT_ORDER", orderId: order.id },
+              action: { type: "RUN_SUBFLOW", subflowApiName: "GPT_UBER_EATS_ACCEPT_ORDER", inputMappings: { orderId: { path: "record.external_order_id" } } },
             })
           : await service.acceptOrder(order, runtime);
 
@@ -1880,7 +1880,7 @@ export default function createOnlineRouter({
             req,
             companyId: req.user.companyId,
             recordId: order.id,
-            action: { type: "UBER_ACCEPT_ORDER", orderId: order.id },
+            action: { type: "RUN_SUBFLOW", subflowApiName: "GPT_UBER_EATS_ACCEPT_ORDER", inputMappings: { orderId: { path: "record.external_order_id" } } },
           })
         : service.acceptOrder(order, runtime),
       buildMessage: (order) => `Order accepted - preparation started (platform call ${order.platform})`,
@@ -1920,7 +1920,7 @@ export default function createOnlineRouter({
             req,
             companyId: req.user.companyId,
             recordId: order.id,
-            action: { type: "UBER_DENY_ORDER", orderId: order.id, reason },
+            action: { type: "RUN_SUBFLOW", subflowApiName: "GPT_UBER_EATS_DENY_ORDER", inputMappings: { orderId: { path: "record.external_order_id" }, reason } },
           })
         : service.rejectOrder(order, reason, runtime),
       buildMessage: (order) => `Order rejected; inventory reservation released (${order.platform})`,
