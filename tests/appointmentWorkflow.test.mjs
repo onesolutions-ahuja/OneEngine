@@ -108,7 +108,8 @@ test("booking router graph reaches service, availability, confirmation and only 
   assert.ok(start.outcomes.every((outcome) => outcome.branch.includes("create_case") && outcome.branch.includes("send_initial_prompt")));
   const validateDate = byId.get("validate_date");
   assert.ok(validateDate.outcomes.every((outcome) => outcome.branch.includes("service_found")));
-  assert.ok(validateDate.defaultBranch.includes("service_found"));
+  assert.deepEqual(validateDate.defaultBranch, ["parse_custom_date","custom_date_valid"]);
+  assert.ok(byId.get("custom_date_valid").outcomes[0].branch.includes("service_found"));
   assert.ok(byId.get("service_found").outcomes[0].branch.includes("resource_service_found"));
   assert.ok(byId.get("resource_service_found").outcomes[0].branch.includes("resource_found"));
   assert.ok(byId.get("resource_found").outcomes[0].branch.includes("availability_rules_found"));
