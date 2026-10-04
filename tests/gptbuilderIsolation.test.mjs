@@ -107,7 +107,7 @@ test('GPT Builder phase 3 matches auto-layout picker and free-form drag discover
   assert.match(page, /aria-label="Add element" aria-expanded=\{elementPickerOpen\}/)
   assert.match(page, /application\/x-gptbuilder-element/)
   assert.match(page, /onDrop=\{dropElement\}/)
-  assert.match(page, /<PendingElementEditor/)
+  assert.match(page, /<GPTBuilderElementProperties/)
   assert.match(elements, /placeholder="Search elements\.\.\."/)
   assert.match(elements, /draggable=\{draggable\}/)
   assert.match(elements, /Connect to element/)
@@ -183,6 +183,6 @@ test('GPT Builder phase 4 keeps element API identity out of the card until reque
 test('GPT Builder phase 4 exposes one shared configuration-to-auto-label hook for later element editors', async () => {
   const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
   assert.match(props, /const updateConfig = \(nextConfig\)/)
-  assert.match(props, /children\(\{ draft, updateConfig \}\)/)
+  assert.match(props, /children\(\{ draft, updateConfig, setConfigured \}\)/)
   assert.match(props, /refreshGeneratedIdentity\(draft, elements, draft\.config\)/)
 })
