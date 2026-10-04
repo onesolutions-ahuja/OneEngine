@@ -1952,6 +1952,35 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         console.log("onePOS: unused domain-specific workflow wrappers removed");
       },
+    },
+    {
+      key: "0057_unify_generic_print_action",
+      version: "57",
+      name: "Unify receipt and kitchen printing under generic Print",
+      up: async client => {
+        const legacy = ["PRINT_RECEIPT","PRINT_KITCHEN_TICKET"];
+        const custom = await client.query(
+          "SELECT id,name,active FROM platform_rules WHERE COALESCE(action->>'systemGenerated','false')<>'true' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(action->'actions','[]'::jsonb)) step WHERE step->>'key'=ANY($1::text[]) OR step->>'type'=ANY($1::text[]))",
+          [legacy]
+        );
+        if (custom.rows.length) {
+          throw new Error("Custom workflow references legacy print actions: " + custom.rows.map((row) => row.name || row.id).join(", "));
+        }
+
+        await client.query(
+          "UPDATE platform_registered_actions SET handler_key='PRINT',config=COALESCE(config,'{}'::jsonb)||jsonb_build_object('capability','printer.print','templateKey','receipt'),updated_at=NOW() WHERE handler_key='PRINT_RECEIPT'"
+        );
+
+        await client.query(
+          "UPDATE platform_registered_actions SET handler_key='PRINT',config=COALESCE(config,'{}'::jsonb)||jsonb_build_object('capability','printer.kitchen.print','templateKey','kitchen_ticket'),updated_at=NOW() WHERE handler_key='PRINT_KITCHEN_TICKET'"
+        );
+
+        await client.query(
+          "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'=ANY($1::text[]) AND COALESCE(user_modified,FALSE)=FALSE",
+          [["action:PRINT_RECEIPT","action:PRINT_KITCHEN_TICKET"]]
+        );
+        console.log("onePOS: receipt and kitchen print actions unified under generic PRINT");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
