@@ -482,8 +482,8 @@ function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, 
     <div className="gptb-toolbox-tabs">{layout === 'free' ? <button className={effectiveTab === 'elements' ? 'is-active' : ''} onClick={() => setTab('elements')}>Elements</button> : null}<button className={effectiveTab === 'manager' ? 'is-active' : ''} onClick={() => setTab('manager')}>Manager</button><button className="gptb-toolbox-close" aria-label="Close toolbox" onClick={onClose}><X size={15}/></button></div>
     {effectiveTab === 'elements'
       ? <FreeFormElements flowType={flowType} startConfig={startConfig}/>
-      : <ManagerPanel elements={elements} resources={resources} goToConnections={goToConnections} onNewResource={() => setNewResourceOpen(true)} onOpenElement={onOpenElement}/>}
-    {newResourceOpen ? <ManagerNewResource resources={resources} onClose={() => setNewResourceOpen(false)} onCreate={(resource) => { onResourcesChange([...resources, resource]); setNewResourceOpen(false) }}/> : null}
+      : <ManagerPanel elements={elements} resources={availableResources} goToConnections={goToConnections} onNewResource={() => setNewResourceOpen(true)} onOpenElement={onOpenElement}/>}
+    {newResourceOpen ? <ManagerNewResource resources={availableResources} onClose={() => setNewResourceOpen(false)} onCreate={(resource) => { onResourcesChange([...resources, resource]); setNewResourceOpen(false) }}/> : null}
   </aside>
 }
 
@@ -855,6 +855,12 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [autoInsertIndex, setAutoInsertIndex] = useState(null)
   const [elements, setElements] = useState(() => Array.isArray(templateAction.gptBuilderElements) ? structuredClone(templateAction.gptBuilderElements) : [])
   const [resources, setResources] = useState(() => Array.isArray(templateAction.resources) ? structuredClone(templateAction.resources) : [])
+  const [providerResources, setProviderResources] = useState([])
+  const availableResources = useMemo(() => [...resources, ...providerResources], [resources, providerResources])
+  const applyResourceChanges = (next) => {
+    setResources((Array.isArray(next) ? next : []).filter((resource) => resource?.providerResource !== true))
+    setDirty(true)
+  }
   const [editingElement, setEditingElement] = useState(null)
   const [selectedElementIds, setSelectedElementIds] = useState([])
   const [freeSelectedIds, setFreeSelectedIds] = useState([])
@@ -941,11 +947,28 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       apiRequest('/api/platform/objects').catch(() => ({ data: [] })),
       apiRequest('/api/platform/event-types').catch(() => ({ data: [] })),
       apiRequest('/api/platform/rules').catch(() => ({ data: [] })),
-    ]).then(([objectResponse, eventResponse, rulesResponse]) => {
+      apiRequest('/api/platform/workflow-providers').catch(() => ({ data: [] })),
+    ]).then(([objectResponse, eventResponse, rulesResponse, providerResponse]) => {
       if (!live) return
       setObjects(objectResponse?.data?.objects || objectResponse?.data || [])
       setEventTypes(Array.isArray(eventResponse?.data) ? eventResponse.data : [])
       setAvailableFlows((Array.isArray(rulesResponse?.data) ? rulesResponse.data : []).filter((item) => item?.action?.type === 'workflow'))
+      const providers = Array.isArray(providerResponse?.data) ? providerResponse.data : []
+      setProviderResources(providers.flatMap((provider) => (provider.fields || []).map((field) => ({
+        id: `provider-${provider.id}-${field.key}`,
+        apiName: `${provider.variableName}.${field.key}`,
+        label: `${provider.name} › ${field.label || field.key}`,
+        dataType: typeof field.value === 'number' ? 'number' : typeof field.value === 'boolean' ? 'boolean' : 'text',
+        isCollection: false,
+        writable: false,
+        providerResource: true,
+        providerKey: provider.providerKey,
+        providerName: provider.name,
+        providerField: field.key,
+        secure: field.secure === true,
+        previewValue: field.secure === true ? '********' : field.value,
+        resourceType: 'provider_field',
+      })))
     })
     return () => { live = false }
   }, [])
@@ -1656,7 +1679,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     {saveError ? <div className="gptb-toast is-error">{saveError}<button aria-label="Dismiss error" onClick={() => setSaveError('')}><X size={13}/></button></div> : null}
     {layoutSwitchError ? <div className="gptb-toast is-error" role="alert">{layoutSwitchError}<button aria-label="Dismiss layout error" onClick={() => setLayoutSwitchError('')}><X size={13}/></button></div> : null}
     <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''} ${editHistoryOpen ? 'is-history-mode' : ''}`}>
-      {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={resources} goToConnections={goToConnections} onResourcesChange={(next) => { setResources(next); setDirty(true) }} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
+      {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={availableResources} goToConnections={goToConnections} onResourcesChange={applyResourceChanges} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
       <main
         ref={canvasRef}
         className="gptb-canvas"
@@ -1732,7 +1755,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         const target = elements.find((element) => element.id === issue.targetId)
         if (target) openElement(target)
       }}/> : null}
-      {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={resources} elements={elements} onClose={() => setExecutionMode(null)}/> : null}
+      {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={availableResources} elements={elements} onClose={() => setExecutionMode(null)}/> : null}
       {editHistoryOpen ? <GPTBuilderEditHistoryPanel entries={editHistoryEntries} loading={editHistoryLoading} selectedVersion={editHistoryVersion} onSelect={setEditHistoryVersion} onRestore={(entry) => void restoreHistoryEntry(entry)} onSaveAsVersion={(entry) => void saveHistoryAsNewVersion(entry)} onSaveAsFlow={saveHistoryAsNewFlow} onClose={() => setEditHistoryOpen(false)}/> : null}
       {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}
@@ -1755,8 +1778,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
             flowType={flow.key}
             startConfig={startConfig}
             elements={elements}
-            resources={resources}
-            onResourcesChange={(next) => { setResources(next); setDirty(true) }}
+            resources={availableResources}
+            onResourcesChange={applyResourceChanges}
             onConfiguredChange={setConfigured}
           />
         : activeElement.key === 'create_records'
@@ -1764,7 +1787,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
               draft={draft}
               updateConfig={updateConfig}
               objects={objects}
-              resources={resources}
+              resources={availableResources}
               onConfiguredChange={setConfigured}
             />
           : activeElement.key === 'update_records'
@@ -1772,7 +1795,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                 draft={draft}
                 updateConfig={updateConfig}
                 objects={objects}
-                resources={resources}
+                resources={availableResources}
                 flowType={flow.key}
                 startConfig={startConfig}
                 onConfiguredChange={setConfigured}
@@ -1782,7 +1805,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                   draft={draft}
                   updateConfig={updateConfig}
                   objects={objects}
-                  resources={resources}
+                  resources={availableResources}
                   flowType={flow.key}
                   startConfig={startConfig}
                   onConfiguredChange={setConfigured}
@@ -1791,14 +1814,14 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                 ? <GPTBuilderAssignment
                     draft={draft}
                     updateConfig={updateConfig}
-                    resources={resources}
+                    resources={availableResources}
                     onConfiguredChange={setConfigured}
                   />
                 : activeElement.key === 'decision'
                   ? <GPTBuilderDecision
                       draft={draft}
                       updateConfig={updateConfig}
-                      resources={resources}
+                      resources={availableResources}
                       flowType={flow.key}
                       onConfiguredChange={setConfigured}
                     />
@@ -1806,21 +1829,21 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                     ? <GPTBuilderLoop
                         draft={draft}
                         updateConfig={updateConfig}
-                        resources={resources}
+                        resources={availableResources}
                         onConfiguredChange={setConfigured}
                       />
                     : activeElement.key === 'collection_filter'
                       ? <GPTBuilderCollectionFilter
                           draft={draft}
                           updateConfig={updateConfig}
-                          resources={resources}
+                          resources={availableResources}
                           onConfiguredChange={setConfigured}
                         />
                       : activeElement.key === 'collection_sort'
                         ? <GPTBuilderCollectionSort
                             draft={draft}
                             updateConfig={updateConfig}
-                            resources={resources}
+                            resources={availableResources}
                             objects={objects}
                             onConfiguredChange={setConfigured}
                           />
@@ -1828,9 +1851,9 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                           ? <GPTBuilderTransform
                               draft={draft}
                               updateConfig={updateConfig}
-                              resources={resources}
+                              resources={availableResources}
                               objects={objects}
-                              onResourcesChange={(next) => { setResources(next); setDirty(true) }}
+                              onResourcesChange={applyResourceChanges}
                               onConfiguredChange={setConfigured}
                             />
                           : activeElement.key === 'wait_duration'
@@ -1843,7 +1866,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                               ? <GPTBuilderWaitConditions
                                   draft={draft}
                                   updateConfig={updateConfig}
-                                  resources={resources}
+                                  resources={availableResources}
                                   eventTypes={eventTypes}
                                   onConfiguredChange={setConfigured}
                                 />
@@ -1851,7 +1874,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                                 ? <GPTBuilderWaitUntilDate
                                     draft={draft}
                                     updateConfig={updateConfig}
-                                    resources={resources}
+                                    resources={availableResources}
                                     onConfiguredChange={setConfigured}
                                   />
                                 : activeElement.key === 'custom_error'
@@ -1860,7 +1883,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                                       updateConfig={updateConfig}
                                       objects={objects}
                                       startConfig={startConfig}
-                                      resources={resources}
+                                      resources={availableResources}
                                       onConfiguredChange={setConfigured}
                                     />
                                   : activeElement.key === 'group'
@@ -1874,31 +1897,31 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                                       ? <GPTBuilderAction
                                           draft={draft}
                                           updateConfig={updateConfig}
-                                          resources={resources}
+                                          resources={availableResources}
                                           object={objects.find((item) => objectKey(item) === startConfig.objectKey) || null}
-                                          onResourcesChange={(next) => { setResources(next); setDirty(true) }}
+                                          onResourcesChange={applyResourceChanges}
                                           onConfiguredChange={setConfigured}
                                         />
                                       : activeElement.key === 'run_agent'
                                         ? <GPTBuilderRunAgent
                                             draft={draft}
                                             updateConfig={updateConfig}
-                                            resources={resources}
+                                            resources={availableResources}
                                             onConfiguredChange={setConfigured}
                                           />
                                         : activeElement.key === 'screen'
                                           ? <GPTBuilderScreen
                                               draft={draft}
                                               updateConfig={updateConfig}
-                                              resources={resources}
-                                              onResourcesChange={(next) => { setResources(next); setDirty(true) }}
+                                              resources={availableResources}
+                                              onResourcesChange={applyResourceChanges}
                                               onConfiguredChange={setConfigured}
                                             />
                                           : activeElement.key === 'subflow'
                                             ? <GPTBuilderSubflow
                                                 draft={draft}
                                                 updateConfig={updateConfig}
-                                                resources={resources}
+                                                resources={availableResources}
                                                 currentFlowType={flow.key}
                                                 onConfiguredChange={setConfigured}
                                               />
