@@ -405,12 +405,21 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
     if (component.type === 'CUSTOM_COMPONENT') return <div key={key} className={spanClass} style={layoutStyle}>{renderRegisteredComponent(component)}</div>
     if (component.type === 'SECTION') {
       const isCollapsed = component.collapsible === true && collapsedSections[component.id] === true
+      const columnCount = Math.max(1, Math.min(4, Number(component.columns || 1)))
+      const widths = Array.isArray(component.columnWidths) && component.columnWidths.length === columnCount
+        ? component.columnWidths.map((value) => Math.max(1, Number(value) || 1))
+        : Array.from({ length: columnCount }, () => 1)
+      const buckets = Array.from({ length: columnCount }, () => [])
+      childComponents.forEach((child) => {
+        const column = Math.max(1, Math.min(columnCount, Number(child.layoutColumn || 1)))
+        buckets[column - 1].push(child)
+      })
       return <section key={key} className={`${spanClass} overflow-hidden rounded-xl border border-slate-200 bg-white`} style={layoutStyle}>
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+        {component.includeHeader !== false ? <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
           <div className="min-w-0"><div className="text-sm font-semibold text-slate-800">{component.heading || component.label || 'Section'}</div>{component.helpText ? <div className="mt-0.5 text-xs text-slate-500">{component.helpText}</div> : null}</div>
           {component.collapsible ? <button type="button" className="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100" aria-expanded={!isCollapsed} onClick={() => setCollapsedSections((current) => ({ ...current, [component.id]: !isCollapsed }))}>{isCollapsed ? 'Expand' : 'Collapse'}</button> : null}
-        </div>
-        {!isCollapsed ? <div className="grid grid-cols-12 gap-4 p-4">{childComponents.length ? childComponents.map((child) => renderScreenComponent(child, components.indexOf(child))) : <div className="col-span-12 text-xs text-slate-400">No content in this section.</div>}</div> : null}
+        </div> : null}
+        {!isCollapsed ? <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-12">{buckets.map((bucket,columnIndex)=><div key={columnIndex} className="grid min-w-0 grid-cols-12 content-start gap-4 md:col-span-[var(--section-span)]" style={{'--section-span':widths[columnIndex]}}>{bucket.length ? bucket.map((child)=>renderScreenComponent(child,components.indexOf(child),{nested:true})) : <div className="col-span-12 min-h-4" />}</div>)}</div> : null}
       </section>
     }
     if (component.type === 'COLUMNS') {
