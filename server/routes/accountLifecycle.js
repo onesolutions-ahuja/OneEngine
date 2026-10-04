@@ -1,6 +1,6 @@
 import express from "express";
 import bcrypt from "bcryptjs";
-import { consumeAccountToken, hashAccountToken, issueAccountOtp, issueAccountToken, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
+import { consumeAccountToken, hashAccountToken, issueAccountOtp, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { assertPasswordAllowed, loadSecuritySettings, recordPasswordChange } from "../services/identitySecurity.js";
 
@@ -58,13 +58,16 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     const u=r.rows[0]; if(!u)return res.status(404).json({success:false,message:"User not found"});
     if(!u.email_registration_enabled)return res.status(409).json({success:false,message:"Email registration is disabled"});
     if(!domainAllowed(u.email,u.user_email_domain,u.domain_users_only))return res.status(400).json({success:false,message:"User email is outside the allowed company domain"});
-    // Security token issuance is runtime infrastructure, not an editable business capability.
-    const token=await issueAccountToken(db,{
+    const tokenExecution=await executeSystemWorkflow({
+      db,
       companyId:u.company_id,
-      userId:u.id,
-      purpose:"REGISTRATION",
-      expiresMinutes:u.registration_link_expiry_minutes,
+      userId:req.user.id||null,
+      systemKey:"function:account.registration.token.issue",
+      req,
+      input:{userId:u.id,expiresMinutes:u.registration_link_expiry_minutes},
+      source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"account.registration.token.issue"},
     });
+    const token=tokenExecution.result;
     // Token is returned only to the workflow caller so the registered message action can merge it into the approved template.
     res.json({success:true,data:{workflowEvent:"USER_REGISTRATION_REQUESTED",userId:u.id,email:normalizeEmail(u.email),token}});
   });
