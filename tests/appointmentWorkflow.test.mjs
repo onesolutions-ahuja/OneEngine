@@ -181,6 +181,15 @@ test("startup verifies the canonical booking router rather than a retired WhatsA
   assert.doesNotMatch(source, /r\.name='OneAssistant - WhatsApp Booking'/);
 });
 
+test("WhatsApp Flow transport has no connector-definition runtime dependency", () => {
+  const source = readFileSync(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
+  const start = source.indexOf('key: "SEND_COMMUNICATION"');
+  const end = source.indexOf('key: "IN_APP_NOTIFICATION"', start);
+  const sendCommunication = source.slice(start, end);
+  assert.doesNotMatch(sendCommunication, /platform_connector_definitions/);
+  assert.doesNotMatch(sendCommunication, /connector_definition_id/);
+});
+
 test("booking router exposes business logic as Builder primitives", () => {
   const { workflow } = oneAssistantRouter();
   const keys = workflow.action.actions.map((action) => action.key);
