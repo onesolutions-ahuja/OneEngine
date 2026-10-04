@@ -63,7 +63,7 @@ test('GPT Builder toolbar follows Salesforce saved-run and validation behavior',
   assert.match(page, /disabled=\{!workflowId\}><Play/)
   assert.match(page, /Test Mode/)
   assert.match(page, /> Debug<\/button>/)
-  assert.match(page, /disabled=\{!workflowId \|\| dirty \|\| issues\.some/)
+  assert.match(page, /disabled=\{saving \|\| !workflowId \|\| dirty \|\| issues\.some/)
   assert.match(page, /Show Errors/)
   assert.match(page, /Show Warnings/)
   assert.match(page, /Unsaved changes/)
@@ -253,7 +253,7 @@ test('GPT Builder phase 2 recheck matches current Salesforce flow version proper
     'System Context with Sharing—Enforces Record-Level Access',
     'System Context Without Sharing—Access All Data',
   ]) assert.ok(page.includes(text), text)
-  assert.match(page, /showProgress: flow\.key === 'screen'/)
+  assert.match(page, /showProgress: templateAction\.showProgress \?\? \(flow\.key === 'screen'\)/)
   assert.match(page, /interviewLabelFromFlowLabel\(label\)/)
   assert.match(page, /saved \? 'Done' : 'Save'/)
   assert.match(page, /\['screen','autolaunched'\]\.includes\(flowType\)/)
