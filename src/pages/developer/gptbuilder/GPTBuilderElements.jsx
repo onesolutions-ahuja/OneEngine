@@ -22,7 +22,9 @@ export const ELEMENTS = [
   { key: 'collection_filter', label: 'Collection Filter', category: 'logic', icon: Filter, description: 'Create a new collection containing only items that meet the filter criteria.' },
   { key: 'collection_sort', label: 'Collection Sort', category: 'logic', icon: ArrowUpDown, description: 'Reorder a collection and optionally limit the items that remain.' },
   { key: 'transform', label: 'Transform', category: 'logic', icon: Shuffle, description: 'Map and transform source flow data into a new target data structure.' },
-  { key: 'wait', label: 'Wait', category: 'logic', icon: Clock3, description: 'Pause the flow until a time, date, or configured condition is reached.' },
+  { key: 'wait_duration', label: 'Wait for Amount of Time', category: 'logic', icon: Clock3, description: 'Resume a flow interview after a specific amount of time.' },
+  { key: 'wait_conditions', label: 'Wait for Conditions', category: 'logic', icon: Clock3, description: 'Resume a flow interview after specific conditions are met.' },
+  { key: 'wait_until_date', label: 'Wait Until Date', category: 'logic', icon: Clock3, description: 'Resume a flow interview at a specific date and time.' },
   { key: 'custom_error', label: 'Custom Error', category: 'logic', icon: TriangleAlert, description: 'Stop a record-triggered transaction and show a targeted error message.' },
   { key: 'group', label: 'Group', category: 'logic', icon: Boxes, description: 'Organize related auto-layout elements inside a named collapsible group.' },
 
@@ -43,6 +45,9 @@ export function getAvailableElements({ flowType, startConfig = {}, layout = 'aut
     if (element.key === 'custom_error') return flowType === 'record'
     if (element.key === 'group') return layout === 'auto'
     if (element.key === 'transform') return ['record', 'screen', 'autolaunched'].includes(flowType)
+    if (['wait_duration', 'wait_conditions', 'wait_until_date'].includes(element.key)) {
+      return ['autolaunched', 'schedule', 'platform_event'].includes(flowType)
+    }
 
     if (fastRecord) {
       // Current Salesforce before-save guidance and examples expose the
