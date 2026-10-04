@@ -788,20 +788,20 @@ async function canViewCompanyCustomers(user, request = null) {
 async function canAccessStore(user, storeId) {
   if (!storeId || !user?.companyId || !user?.id) return false;
 
-  // Store context is assignment-driven for every tenant user. Permissions
-  // control what a user may do; user_stores controls where they may do it.
-  // This deliberately has no company.scope.all/admin bypass.
+  // Legacy user_stores was removed. The authenticated user's default store
+  // pointer is the core fallback; wider multi-store access is metadata-driven.
   const assignment = await db(
     `SELECT 1
-       FROM user_stores us
-       JOIN stores s ON s.id=us.store_id
-      WHERE us.user_id=$1
-        AND us.store_id=$2
-        AND us.active=true
-        AND s.company_id=$3
+       FROM users u
+       JOIN stores s ON s.id=u.store_id
+      WHERE u.id=$1
+        AND u.company_id=$2
+        AND u.active=true
+        AND u.store_id=$3
+        AND s.company_id=$2
         AND s.active=true
       LIMIT 1`,
-    [user.id, storeId, user.companyId]
+    [user.id, user.companyId, storeId]
   );
   return assignment.rows.length > 0;
 }
