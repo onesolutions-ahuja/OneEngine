@@ -595,10 +595,7 @@ export function packageDefinition(entry) {
       "apiName": "GPT_UBER_EATS_GET_STORES",
       "capabilityKey": "GPT_UBER_EATS_GET_STORES",
       "inputContract": [],
-      "outputs": [
-        "success",
-        "response"
-      ],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
       "resources": [
         {
           "value": "variables.success",
@@ -726,10 +723,7 @@ export function packageDefinition(entry) {
       "apiName": "GPT_UBER_EATS_TEST_CONNECTION",
       "capabilityKey": "GPT_UBER_EATS_TEST_CONNECTION",
       "inputContract": [],
-      "outputs": [
-        "success",
-        "response"
-      ],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
       "resources": [
         {
           "value": "variables.success",
@@ -868,10 +862,7 @@ export function packageDefinition(entry) {
           "required": true
         }
       ],
-      "outputs": [
-        "success",
-        "response"
-      ],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
       "resources": [
         {
           "value": "variables.storeId",
@@ -1037,10 +1028,7 @@ export function packageDefinition(entry) {
           "required": false
         }
       ],
-      "outputs": [
-        "success",
-        "response"
-      ],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
       "resources": [
         {
           "value": "variables.orderId",
@@ -1208,10 +1196,7 @@ export function packageDefinition(entry) {
           "required": false
         }
       ],
-      "outputs": [
-        "success",
-        "response"
-      ],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
       "resources": [
         {
           "value": "variables.orderId",
@@ -1384,10 +1369,7 @@ export function packageDefinition(entry) {
           "required": true
         }
       ],
-      "outputs": [
-        "success",
-        "response"
-      ],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
       "resources": [
         {
           "value": "variables.storeId",
@@ -1567,10 +1549,7 @@ export function packageDefinition(entry) {
           "required": true
         }
       ],
-      "outputs": [
-        "success",
-        "response"
-      ],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
       "resources": [
         {
           "value": "variables.storeId",
@@ -1741,10 +1720,7 @@ export function packageDefinition(entry) {
           "required": true
         }
       ],
-      "outputs": [
-        "success",
-        "response"
-      ],
+        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"response","type":"object","source":"variables.response"}],
       "resources": [
         {
           "value": "variables.storeId",
