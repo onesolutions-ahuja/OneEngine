@@ -6,56 +6,19 @@ import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFo
 import { enqueuePlatformJob } from "./platformJobs.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
-import { domainAllowed, issueAccountToken, normalizeEmail } from "./accountPolicy.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
-import { effectiveManifest } from "./connectorRuntime.js";
-import { transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
-import { createInventoryMovement } from "./inventory.js";
-import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
-import { publishPlatformEvent } from "./platformEvents.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
-import { decryptSecret } from "./onlineOrders/platformConfig.js";
-import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
-import { syncQuickBooksVendor, exportQuickBooksPurchase, exportQuickBooksSupplierPayment, exportQuickBooksSupplierCredit } from "./quickbooksSync.js";
-import { createShopifyAdapter } from "./shopifyAdapter.js";
-import { exportShopifyFulfillment, exportShopifyRefund, syncShopifyInventory, syncShopifyProducts } from "./shopifySync.js";
-import { processShopifyWebhookEvent } from "./onlineOrders/shopifyWebhookProcessor.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
-import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./coreFunctions.js";
-import {
-  holdAppointmentSlot,
-  releaseAppointmentHold,
-  confirmAppointmentFromHold,
-  listPaymentRequestProviders,
-  createAppointmentPaymentRequest,
-  calculateAppointmentPayment,
-} from "./oneAssistant.js";
 
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "ONE_HTTP_REQUEST", "CALL_CONNECTOR"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
 
-async function executeGlobalProductLookupAction(context, providerKey = null) {
-  const companyId = context.companyId || context.req?.user?.companyId;
-  const barcode = context.action?.barcode ?? context.action?.code ?? context.record?.barcode ?? context.trigger?.barcode;
-  try {
-    const result = await globalProductLookupService.lookup({
-      db: context.db,
-      companyId,
-      reqCompanyId: context.req?.user?.companyId || null,
-      barcode,
-      providerKey,
-    });
-    return { success: true, ...result };
-  } catch (error) {
-    return { success: false, code: error?.code || "LOOKUP_FAILED", message: error?.code === "INVALID_BARCODE" ? error.message : "Unable to look up this barcode" };
-  }
-}
 
 function redact(value, depth = 0, inheritedSecureValues = new Set()) {
   if (depth > 5 || value == null) return value;
@@ -91,106 +54,8 @@ function errorDetails(error) {
   });
 }
 
-async function loadProviderConnection(context, providerKey, requestedConnectionId = null) {
-  const requestCompanyId = context.req?.user?.companyId || null;
-  const companyId = context.companyId || requestCompanyId;
-  if (!context.db || typeof context.db !== "function" || !companyId) {
-    throw new Error(`${providerKey} action requires a company-scoped database context`);
-  }
-  if (requestCompanyId && String(requestCompanyId) !== String(companyId)) {
-    throw new Error(`${providerKey} action company context is invalid`);
-  }
-  const storeId = context.storeId || context.req?.user?.storeId || null;
-  const connectionPredicate = requestedConnectionId ? "AND id=$4" : "";
-  const values = [companyId, providerKey, storeId];
-  if (requestedConnectionId) values.push(requestedConnectionId);
-  const result = await context.db(
-    `SELECT id, company_id, store_id, base_url, credentials_encrypted
-       FROM integration_connections
-      WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND enabled=true
-        AND (store_id IS NULL OR store_id=$3)
-        ${connectionPredicate}
-      ORDER BY (store_id IS NULL), updated_at DESC
-      LIMIT 1`,
-    values
-  );
-  const connection = result.rows?.[0];
-  if (!connection?.credentials_encrypted) return null;
-  let credentials = decryptCredentials(connection.credentials_encrypted) || {};
-  const expiry = Date.parse(credentials.tokenExpiry || credentials.token_expiry || "");
-  if (Number.isFinite(expiry) && expiry <= Date.now() + 60_000) {
-    const clientId = credentials.clientId || credentials.client_id;
-    const clientSecret = credentials.clientSecret || credentials.client_secret;
-    let refreshed;
-    if (providerKey === "quickbooks") {
-      refreshed = await createQuickBooksAdapter().refreshAuthentication({
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
-        clientId,
-        clientSecret,
-      });
-    } else if (providerKey === "shopify") {
-      const shopDomain = credentials.shopDomain || credentials.shop_domain || connection.base_url;
-      refreshed = await createShopifyAdapter().refreshAuthentication({
-        shopDomain: String(shopDomain || "").replace(/^https?:\/\//i, "").replace(/\/$/, ""),
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
-        clientId,
-        clientSecret,
-      });
-    }
-    if (!refreshed) throw new Error(`${providerKey} token refresh is unavailable`);
-    credentials = {
-      ...credentials,
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000).toISOString(),
-      ...(refreshed.refreshTokenExpiresIn
-        ? { refreshTokenExpiry: new Date(Date.now() + refreshed.refreshTokenExpiresIn * 1000).toISOString() }
-        : {}),
-      ...(refreshed.scopes?.length ? { scopes: refreshed.scopes } : {}),
-    };
-    const saved = await context.db(
-      `UPDATE integration_connections
-          SET credentials_encrypted=$1, last_error=NULL, updated_at=NOW()
-        WHERE id=$2 AND company_id=$3 AND enabled=true
-        RETURNING id`,
-      [encryptCredentials(credentials), connection.id, companyId]
-    );
-    if (!saved.rows?.length) throw new Error(`${providerKey} connection changed during token refresh`);
-  }
-  return { connection, credentials };
-}
 
-async function shopifyPackageAvailability(db, companyId) {
-  const entitlements = await getCompanyEntitlements(db, companyId);
-  if (!hasEntitlement(entitlements, "integrations")) {
-    return { success: false, code: "NOT_LICENSED", retryable: false, message: "Shopify is not licensed for this company" };
-  }
-  const installed = await db(
-    `SELECT 1 FROM company_package_installations i
-       JOIN package_registry p ON p.id=i.package_id
-      WHERE i.company_id=$1 AND p.package_key='shopify'
-        AND i.status='active' AND i.suspended_by_entitlement=false LIMIT 1`,
-    [companyId],
-  );
-  if (!installed.rows.length) return { success: false, code: "NOT_INSTALLED", retryable: false, message: "Shopify is not installed for this company" };
-  return null;
-}
 
-async function quickBooksPackageAvailability(db, companyId) {
-  const entitlements = await getCompanyEntitlements(db, companyId);
-  if (!hasEntitlement(entitlements, "integrations")) {
-    return { success: false, code: "NOT_LICENSED", retryable: false, message: "QuickBooks is not licensed for this company" };
-  }
-  const installed = await db(
-    `SELECT 1 FROM company_package_installations i
-       JOIN package_registry p ON p.id=i.package_id
-      WHERE i.company_id=$1 AND p.package_key='quickbooks'
-        AND i.status='active' AND i.suspended_by_entitlement=false LIMIT 1`,
-    [companyId],
-  );
-  if (!installed.rows.length) return { success: false, code: "NOT_INSTALLED", retryable: false, message: "QuickBooks is not installed for this company" };
-  return null;
-}
 
 export class WorkflowExecutionError extends Error {
   constructor(details, compensationFailures = []) {
@@ -208,441 +73,6 @@ const COMMUNICATION_PROVIDER_ALIASES = {
   SMS: ["sms", "twilio", "textlocal", "messagebird", "vonage", "nexmo", "clickatell"],
   WHATSAPP: ["whatsapp", "whatsapp_business", "meta_whatsapp"],
 };
-
-const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
-]);
-
-const GENERIC_CONNECTOR_EVENTS = Object.freeze([
-  "connector.online",
-  "connector.offline",
-  "connector.enabled",
-  "connector.disabled",
-  "payment.pending",
-  "payment.approved",
-  "payment.declined",
-  "payment.cancelled",
-  "payment.failed",
-  "payment.refunded",
-  "print.started",
-  "print.completed",
-  "print.failed",
-  "scanner.connected",
-  "scanner.disconnected",
-  "cash_drawer.opened",
-  "cash_drawer.failed",
-]);
-
-const DYNAMIC_CONNECTOR_ACTIONS = [];
-const DYNAMIC_CONNECTOR_EVENTS = new Set();
-
-const CONNECTOR_ACTIONS_BY_KEY = new Map(GENERIC_CONNECTOR_ACTIONS.map((definition) => [String(definition.key), definition]));
-const CONNECTOR_EVENT_TYPES = new Set(GENERIC_CONNECTOR_EVENTS);
-
-function mergedConnectorActions() {
-  return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS];
-}
-
-function connectorActionCapability(actionKey) {
-  const normalized = String(actionKey || "").toUpperCase();
-  const action = CONNECTOR_ACTIONS_BY_KEY.get(normalized) || DYNAMIC_CONNECTOR_ACTIONS.find((item) => String(item.key || "").toUpperCase() === normalized);
-  return action?.capability || null;
-}
-
-function connectorActionPermission(actionKey) {
-  const normalized = String(actionKey || "").toUpperCase();
-  const action = CONNECTOR_ACTIONS_BY_KEY.get(normalized) || DYNAMIC_CONNECTOR_ACTIONS.find((item) => String(item.key || "").toUpperCase() === normalized);
-  return Array.isArray(action?.requiredPermissions) ? action.requiredPermissions : [];
-}
-
-function safeConnectorEventPayload(input) {
-  const allowed = new Set([
-    "companyId",
-    "storeId",
-    "tillId",
-    "connectorInstanceId",
-    "connectorKey",
-    "capability",
-    "internalTransactionId",
-    "internalReferenceId",
-    "status",
-    "timestamp",
-    "message",
-    "amount",
-    "currency",
-  ]);
-  const sensitiveKeyPattern = /(card|cvv|cvc|pan|secret|credential|token|password|api[_-]?key|authorization|cookie|private[_-]?key)/i;
-  const output = {};
-  if (!input || typeof input !== "object") return output;
-  for (const [key, value] of Object.entries(input)) {
-    if (value === undefined || value === null) continue;
-    if (key === "companyId" || key === "storeId" || key === "tillId" || key === "connectorInstanceId" || key === "connectorKey" || key === "capability" || key === "internalTransactionId" || key === "internalReferenceId" || key === "status" || key === "timestamp" || key === "message" || key === "amount" || key === "currency") {
-      output[key] = value;
-      continue;
-    }
-    if (sensitiveKeyPattern.test(key)) continue;
-    if (allowed.has(key) || (!Number.isNaN(Number(key)) && typeof value !== "object")) {
-      output[key] = value;
-      continue;
-    }
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") output[key] = value;
-  }
-  return output;
-}
-
-export function getRegisteredConnectorWorkflowActions() {
-  return [...GENERIC_CONNECTOR_ACTIONS, ...DYNAMIC_CONNECTOR_ACTIONS];
-}
-
-export function getRegisteredConnectorWorkflowEvents() {
-  return [...CONNECTOR_EVENT_TYPES, ...DYNAMIC_CONNECTOR_EVENTS];
-}
-
-export function registerConnectorWorkflowAction(definition) {
-  if (!definition || typeof definition !== "object") throw new Error("Connector workflow action registration requires an object");
-  const key = String(definition.key || "").trim();
-  if (!key) throw new Error("Connector workflow action requires a key");
-  const next = {
-    ...definition,
-    key,
-    requiredPermissions: Array.isArray(definition.requiredPermissions) ? definition.requiredPermissions : [],
-    capability: definition.capability || definition.requiredCapability || null,
-  };
-  const existingIndex = DYNAMIC_CONNECTOR_ACTIONS.findIndex((item) => String(item.key || "").toUpperCase() === key.toUpperCase());
-  if (existingIndex >= 0) DYNAMIC_CONNECTOR_ACTIONS.splice(existingIndex, 1, next);
-  else DYNAMIC_CONNECTOR_ACTIONS.push(next);
-  CONNECTOR_ACTIONS_BY_KEY.set(key.toUpperCase(), next);
-  return next;
-}
-
-export function registerConnectorWorkflowEventType(eventType, description = null) {
-  const normalized = String(eventType || "").trim();
-  if (!normalized) throw new Error("Connector workflow event requires an event type");
-  CONNECTOR_EVENT_TYPES.add(normalized);
-  if (description) DYNAMIC_CONNECTOR_EVENTS.add(normalized);
-  return { eventType: normalized, description };
-}
-
-function normalizeConnectorActionKey(rawKey) {
-  return String(rawKey || "").trim().toUpperCase();
-}
-
-function permissionAllowsConnectorAction(user, actionKey) {
-  if (!user || typeof user !== "object") return true;
-  const hasUserIdentity = [user.id, user.userId, user.companyId, user.storeId, user.roleId]
-    .some((value) => value !== undefined && value !== null && value !== false);
-  if (!hasUserIdentity) return true;
-  const permissions = Array.isArray(user?.permissions) ? user.permissions : Array.isArray(user?.permissionCodes) ? user.permissionCodes : [];
-  const required = connectorActionPermission(actionKey);
-  if (!required.length) return true;
-  return required.some((permission) => permissions.includes(permission));
-}
-
-export async function executeConnectorWorkflowAction({
-  action,
-  db,
-  companyId,
-  storeId,
-  tillId,
-  connectorDrivers,
-  req,
-  writeAudit = null,
-  actorUserId = null,
-  payload = null,
-}) {
-  const requestedKey = normalizeConnectorActionKey(action?.key || action?.actionKey || action?.type);
-  if (!requestedKey) return { success: false, code: "INVALID_ACTION", message: "Connector workflow action requires a key" };
-  const capability = connectorActionCapability(requestedKey) || action?.capability || action?.requiredCapability || null;
-  if (!capability) return { success: false, code: "UNSUPPORTED_ACTION", message: "This connector workflow action is not registered for this capability" };
-  const requestedCapability = String(action?.capability || action?.requiredCapability || "").trim();
-  if (requestedCapability && requestedCapability !== capability) {
-    return {
-      success: false,
-      code: "NOT_SUPPORTED",
-      message: `Connector workflow action "${requestedKey}" does not support capability "${requestedCapability}"`,
-      capability,
-      requestedKey,
-    };
-  }
-  const user = req?.user || {};
-  if (!permissionAllowsConnectorAction(user, requestedKey)) {
-    return { success: false, code: "PERMISSION_DENIED", message: "You do not have permission to execute this connector action" };
-  }
-  if (!db || typeof db !== "function") {
-    return { success: false, code: "NO_DATABASE_CONTEXT", message: "Connector workflow action requires a database context" };
-  }
-  const tenantCompanyId = companyId || req?.user?.companyId || null;
-  const tenantStoreId = storeId || req?.user?.storeId || null;
-  const tenantTillId = tillId || req?.user?.tillId || null;
-  if (!tenantCompanyId) {
-    return { success: false, code: "INVALID_SCOPE", message: "Connector workflow action requires a company scope" };
-  }
-  const runtimePayload = payload ?? action?.payload ?? { ...action };
-  const explicitInstanceId = action?.connectorInstanceId || action?.instanceId || runtimePayload?.connectorInstanceId || runtimePayload?.instanceId || null;
-
-  // Explicit device/app assignments resolve the exact installed connector
-  // instance instead of falling back to whichever connector is bound to the
-  // current till. Management/test actions may resolve disabled instances;
-  // runtime actions require the selected instance to be enabled and healthy.
-  if (explicitInstanceId) {
-    const instanceResult = await db(
-      `SELECT c.*,p.manifest
-         FROM integration_connections c
-         JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
-         JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=c.company_id
-          AND i.status='active' AND i.suspended_by_entitlement=FALSE
-        WHERE c.id=$1 AND c.company_id=$2
-        LIMIT 1`,
-      [explicitInstanceId, tenantCompanyId]
-    );
-    const instance = instanceResult.rows[0];
-    if (!instance) return { success: false, code: "CONNECTOR_NOT_FOUND", message: "Installed connector instance not found" };
-    const driver = connectorDrivers?.get(instance.connector_package_key);
-    if (!driver && requestedKey === "CONNECTOR_TEST_CONNECTION" && instance.connector_definition_id) {
-      try {
-        const executeConnectorAction = createConnectorActionExecutor({ db });
-        const test = await executeConnectorAction({
-          companyId: tenantCompanyId,
-          connectionId: instance.id,
-          operation: "test_connection",
-          actorUserId: actorUserId || req?.user?.id || null,
-        });
-        const testResult = { ...test, testMode: false };
-        await db(
-          `UPDATE integration_connections
-              SET connection_status='CONNECTED',last_error=NULL,last_test_at=NOW(),
-                  last_test_result=$1::jsonb,last_connected_at=NOW(),updated_at=NOW()
-            WHERE id=$2 AND company_id=$3`,
-          [JSON.stringify(testResult), instance.id, tenantCompanyId]
-        );
-        await writeAudit?.(tenantCompanyId, actorUserId || req?.user?.id || null, "connector.instance.tested", "integration_connection", instance.id, { packageKey: instance.connector_package_key, success: true, metadataDriven: true });
-        return { success: true, status: "CONNECTED", connectorInstanceId: instance.id, connectorPackageKey: instance.connector_package_key, capability, requestedKey, result: testResult };
-      } catch (error) {
-        const message = String(error?.message || "Connector test failed").slice(0, 500);
-        await db(
-          `UPDATE integration_connections
-              SET connection_status='ERROR',last_error=$1,last_test_at=NOW(),
-                  last_test_result=$2::jsonb,updated_at=NOW()
-            WHERE id=$3 AND company_id=$4`,
-          [message, JSON.stringify({ success: false, message, metadataDriven: true }), instance.id, tenantCompanyId]
-        );
-        return { success: false, status: "ERROR", code: error?.code || "TEST_FAILED", message, connectorInstanceId: instance.id, connectorPackageKey: instance.connector_package_key, capability, requestedKey };
-      }
-    }
-    if (!driver) return { success: false, code: "PROVIDER_NOT_SUPPORTED", message: "Connector app has no runtime driver", connectorInstanceId: instance.id };
-
-    const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
-    if (requestedKey === "CONNECTOR_ENABLE" || requestedKey === "CONNECTOR_DISABLE") {
-      if (requestedKey === "CONNECTOR_ENABLE") {
-        const lastTest = typeof instance.last_test_result === "string" ? JSON.parse(instance.last_test_result || "{}") : (instance.last_test_result || {});
-        const companyScoped = manifest?.connectorApp?.scope === "company";
-        if ((!companyScoped && !instance.till_id) || lastTest?.success !== true) {
-          return { success: false, code: "TEST_REQUIRED", message: companyScoped ? "Successfully test this connector before enabling it" : "Assign and successfully test this connector before enabling it", connectorInstanceId: instance.id };
-        }
-      }
-      const enabled = requestedKey === "CONNECTOR_ENABLE";
-      const updated = await db(
-        `UPDATE integration_connections
-            SET enabled=$1,updated_at=NOW()
-          WHERE id=$2 AND company_id=$3
-          RETURNING id,connector_package_key,enabled,connection_status`,
-        [enabled, instance.id, tenantCompanyId]
-      );
-      await writeAudit?.(tenantCompanyId, actorUserId || req?.user?.id || null, enabled ? "connector.instance.enabled" : "connector.instance.disabled", "integration_connection", instance.id, { packageKey: instance.connector_package_key });
-      return {
-        success: true,
-        status: enabled ? "ENABLED" : "DISABLED",
-        connectorInstanceId: instance.id,
-        connectorPackageKey: instance.connector_package_key,
-        capability,
-        requestedKey,
-        result: updated.rows[0] || { enabled },
-      };
-    }
-
-    const capabilities = (manifest?.connectorApp?.capabilities || [])
-      .map((item) => typeof item === "string" ? item : item?.key)
-      .filter((key) => key && driver.capabilities.has(key));
-    const { ConnectorService } = await import("./connectorRuntime.js");
-    const { decryptCredentials } = await import("./integrationCredentials.js");
-    const service = new ConnectorService({
-      connectorKey: instance.connector_package_key,
-      capabilities,
-      adapter: driver.createAdapter({
-        instanceId: instance.id,
-        configuration: {
-          ...(typeof instance.connector_configuration === "string" ? JSON.parse(instance.connector_configuration || "{}") : (instance.connector_configuration || {})),
-          ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
-        },
-        companyId: instance.company_id,
-        storeId: instance.store_id,
-        tillId: instance.till_id,
-      }),
-    });
-    if (!["CONNECTOR_TEST_CONNECTION","CONNECTOR_ENABLE","CONNECTOR_DISABLE"].includes(requestedKey)) {
-      if (instance.enabled !== true) {
-        return { success: false, code: "CONNECTOR_DISABLED", message: "The assigned connector instance is disabled", connectorInstanceId: instance.id };
-      }
-      if (tenantStoreId && instance.store_id && String(instance.store_id) !== String(tenantStoreId)) {
-        return { success: false, code: "INVALID_SCOPE", message: "The assigned connector belongs to a different store", connectorInstanceId: instance.id };
-      }
-      const declaredCapability = (manifest?.connectorApp?.capabilities || []).some((item) =>
-        (typeof item === "string" ? item : item?.key) === capability
-      );
-      if (!declaredCapability || !driver.capabilities.has(capability)) {
-        return { success: false, code: "NOT_SUPPORTED", message: `The assigned connector does not provide ${capability}`, connectorInstanceId: instance.id };
-      }
-    }
-
-    const connection = await service.connect();
-    await db(
-      `UPDATE integration_connections
-          SET connection_status=$1::varchar,last_error=$2,
-              last_connected_at=CASE WHEN $1::varchar='CONNECTED' THEN NOW() ELSE last_connected_at END,
-              updated_at=NOW()
-        WHERE id=$3 AND company_id=$4`,
-      [connection.state, connection.lastError || null, instance.id, tenantCompanyId]
-    );
-
-    if (requestedKey === "CONNECTOR_TEST_CONNECTION") {
-      const test = connection.healthy
-        ? await service.test()
-        : { success: false, status: connection.state, code: connection.errorCode, message: connection.lastError };
-      const testResult = { ...test, testMode: manifest.connectorApp?.mode === "TEST" || (instance.connector_configuration?.mode === "TEST") };
-      await db(
-        `UPDATE integration_connections
-            SET connection_status=$1::varchar,last_error=$2,last_test_at=NOW(),
-                last_test_result=$3::jsonb,
-                last_connected_at=CASE WHEN $1::varchar='CONNECTED' THEN NOW() ELSE last_connected_at END,
-                updated_at=NOW()
-          WHERE id=$4 AND company_id=$5`,
-        [test.success ? "CONNECTED" : connection.state, test.message || null, JSON.stringify(testResult), instance.id, tenantCompanyId]
-      );
-      await writeAudit?.(tenantCompanyId, actorUserId || req?.user?.id || null, "connector.instance.tested", "integration_connection", instance.id, { packageKey: instance.connector_package_key, success: test.success, testMode: testResult.testMode });
-      return {
-        success: test.success === true,
-        status: test.success ? "CONNECTED" : (test.status || connection.state || "ERROR"),
-        connectorInstanceId: instance.id,
-        connectorPackageKey: instance.connector_package_key,
-        capability,
-        requestedKey,
-        result: testResult,
-        ...(test.success ? {} : { code: test.code || connection.errorCode || "TEST_FAILED", message: test.message || connection.lastError || "Connector test failed" }),
-      };
-    }
-
-    if (!connection.healthy) {
-      return {
-        success: false,
-        code: connection.errorCode || "DEVICE_OFFLINE",
-        message: connection.lastError || "The assigned connector is unavailable",
-        connectorInstanceId: instance.id,
-        connectorPackageKey: instance.connector_package_key,
-        capability,
-        requestedKey,
-      };
-    }
-
-    try {
-      const result = await service.execute(capability, runtimePayload);
-      return {
-        success: true,
-        status: result?.status || "COMPLETED",
-        result,
-        connectorInstanceId: instance.id,
-        connectorPackageKey: instance.connector_package_key,
-        capability,
-        requestedKey,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        code: error?.code || "CONNECTOR_ACTION_FAILED",
-        message: error?.message || "Connector action failed",
-        connectorInstanceId: instance.id,
-        connectorPackageKey: instance.connector_package_key,
-        capability,
-        requestedKey,
-      };
-    }
-  }
-
-  if (!tenantStoreId || !tenantTillId) {
-    return { success: false, code: "INVALID_SCOPE", message: "Connector workflow action requires a store and till scope" };
-  }
-
-  const resolved = await import("./connectorRuntime.js").then(({ resolvePersistedConnectorCapability }) => resolvePersistedConnectorCapability({
-    db,
-    drivers: connectorDrivers,
-    companyId: tenantCompanyId,
-    storeId: tenantStoreId,
-    tillId: tenantTillId,
-    capabilityKey: capability,
-    selfCheckout: action?.selfCheckout === true,
-    payload: runtimePayload,
-    writeAudit,
-    actorUserId: actorUserId || req?.user?.id || null,
-  }));
-  if (!resolved.available) {
-    return {
-      success: false,
-      code: resolved.code || "CONNECTOR_UNAVAILABLE",
-      message: resolved.message || "No eligible connector is available in the current scope",
-      connectorInstanceId: resolved.connectorInstanceId || null,
-      capability,
-    };
-  }
-  return {
-    success: true,
-    status: resolved.result?.status || (resolved.state ? resolved.state : "COMPLETED"),
-    result: resolved.result || { status: resolved.state || "COMPLETED" },
-    connectorInstanceId: resolved.connectorInstanceId || null,
-    connectorPackageKey: resolved.connectorPackageKey || null,
-    capability,
-    requestedKey,
-  };
-}
-
-export async function emitConnectorWorkflowEvent({
-  db,
-  companyId,
-  storeId,
-  tillId,
-  connectorInstanceId,
-  connectorKey,
-  capability,
-  eventType,
-  status,
-  internalTransactionId,
-  internalReferenceId,
-  payload = {},
-}) {
-  const normalizedType = String(eventType || "").trim();
-  if (!normalizedType || !CONNECTOR_EVENT_TYPES.has(normalizedType)) {
-    throw new Error(`Unsupported connector workflow event: ${normalizedType || "unknown"}`);
-  }
-  const safePayload = safeConnectorEventPayload({
-    companyId,
-    storeId,
-    tillId,
-    connectorInstanceId,
-    connectorKey,
-    capability,
-    internalTransactionId,
-    internalReferenceId,
-    status,
-    timestamp: new Date().toISOString(),
-    ...(payload && typeof payload === "object" ? payload : {}),
-  });
-  const result = await publishPlatformEvent({
-    db,
-    companyId,
-    eventType: normalizedType,
-    payload: safePayload,
-    actorUserId: null,
-    idempotencyKey: internalReferenceId || `${connectorInstanceId || connectorKey || "connector"}:${normalizedType}:${Date.now()}`,
-  });
-  return result;
-}
 
 function normalizeProviderName(value) {
   return String(value || "").trim().toLowerCase();
@@ -769,7 +199,7 @@ const ONLINE_ORDER_TRANSITION_TARGETS = new Set([
   "CANCELLED",
 ]);
 
-async function executeOnlineOrderTransition({ db, pool, action, req, record, recordId, companyId, userId }) {
+) {
   const tenantId = companyId || req?.user?.companyId;
   const orderId = action?.orderId || record?.id || recordId;
   if (!tenantId || !orderId || typeof db !== "function" || typeof pool?.connect !== "function") {
@@ -834,7 +264,7 @@ async function executeOnlineOrderTransition({ db, pool, action, req, record, rec
   return transition;
 }
 
-async function executeLicenceRequestPackageAction({ db, action, req, companyId, userId, pool, writeAudit }) {
+) {
   const packageKey = String(action?.packageKey || action?.package_key || "").trim();
   const tenantId = companyId || req?.user?.companyId;
   const actorId = userId || req?.user?.id || null;
@@ -992,21 +422,7 @@ async function resolveEmailWorkflowAction({
   return resolved;
 }
 
-async function executeProviderSpecificEmail({
-  packageKey,
-  actionKey,
-  db,
-  action,
-  req,
-  companyId,
-  stepRunId,
-  record,
-  previousRecord,
-  object,
-  workflowVariables,
-  connectorDrivers,
-  writeAudit,
-}) {
+) {
   const company = companyId || req?.user?.companyId;
   if (!company) return { status: "failed", provider: packageKey, error: "Company scope is required" };
   const connection = await db(
@@ -1290,7 +706,6 @@ async function loadRelatedGetRecordsCollections({ db, relatedRecords, targetObje
   return collections;
 }
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
-  ...GENERIC_CONNECTOR_ACTIONS,    
   
   
   
