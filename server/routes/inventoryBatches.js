@@ -7,7 +7,6 @@ import {
   expiryStatus,
   BATCH_LIMITS,
 } from "../services/inventory.js";
-import { resolveAdjustmentReason } from "../services/adjustmentReasons.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -522,17 +521,8 @@ export default function createInventoryBatchesRouter({
         return res.status(400).json({ success: false, message: "Quantity must be greater than zero" });
       }
 
-      const resolved = resolveAdjustmentReason(-qty, reason);
-      if (resolved && resolved.error) {
-        return res.status(400).json({ success: false, message: resolved.error });
-      }
-      let storedReason = resolved && resolved.reason ? resolved.reason : reason;
-      let storedNotes = notes;
-      if (resolved && resolved.detail) {
-        storedNotes = storedNotes && String(storedNotes).trim()
-          ? `${String(storedNotes).trim()} (${resolved.detail})`
-          : resolved.detail;
-      }
+      const storedReason = reason;
+      const storedNotes = notes;
 
       if (!pool) {
         return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
