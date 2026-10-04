@@ -61,12 +61,17 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
       </button>
       <div className="b2-path-controls"><button type="button" aria-label={`Copy ${node.label}`} onClick={() => onCopy(id)}>Copy</button><button type="button" aria-label={`Delete ${node.label}`} onClick={() => onDelete(id)}>Delete</button>{paths.length ? <button type="button" onClick={() => onToggle(id)}>{collapsed[id] ? 'Expand Paths' : 'Collapse Paths'}</button> : null}</div>
       <div className={`b2-line ${paths.length ? 'b2-line-to-branches' : ''}`}/>
-      {paths.length && !collapsed[id] ? <div className="b2-decision-paths" style={branchStyle}>{paths.map((path, index) => <section key={path.id} className={`b2-decision-path ${path.id === 'default' ? 'is-default' : ''} ${path.id === 'fault' ? 'is-fault' : ''}`} style={{ width: `${pathWidths[index] || BRANCH_MIN_WIDTH}px` }}>
+      {paths.length ? (collapsed[id] ? <div className="b2-collapsed-paths" role="group" aria-label={`${node.label} collapsed paths`}>
+        {paths.map(path => <div key={path.id} className={`b2-collapsed-path ${path.id === 'default' ? 'is-default' : ''} ${path.id === 'fault' ? 'is-fault' : ''}`}>
+          <strong>{path.label}</strong>
+          <small>{path.steps.length ? `${path.steps.length} ${path.steps.length === 1 ? 'step' : 'steps'}` : 'End'}</small>
+        </div>)}
+      </div> : <div className="b2-decision-paths" style={branchStyle}>{paths.map((path, index) => <section key={path.id} className={`b2-decision-path ${path.id === 'default' ? 'is-default' : ''} ${path.id === 'fault' ? 'is-fault' : ''}`} style={{ width: `${pathWidths[index] || BRANCH_MIN_WIDTH}px` }}>
         <strong>{path.label}</strong><div className="b2-line"/>
         {path.steps.map(step => renderNode(step, [...ancestors, id]))}
         {path.id !== 'fault' ? <button className="b2-add" aria-label={`Add element to ${node.label}: ${path.label}`} onClick={() => onAdd({ nodeId: id, outcomeId: path.id })}><Plus size={14}/></button> : null}
         <small>{path.steps.length ? 'Path complete' : 'End'}</small>
-      </section>)}</div> : null}
+      </section>)}</div>) : null}
     </div>
   }
   return <div className="b2-flow" style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}>
