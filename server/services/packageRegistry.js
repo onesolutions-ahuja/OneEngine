@@ -137,7 +137,7 @@ export const packageRegistrySchema = `
 function oneAssistantAppointmentRouterWorkflow() {
   const condition = (field, value) => ({ match: "all", conditions: [{ field, operator: "equals", value }] });
   const send = (id, label, channel, message, templateContext = {}) => ({
-    id, label, apiName: id, key: "SEND_APPOINTMENT_MESSAGE", channel,
+    id, label, apiName: id, key: "SEND_COMMUNICATION", channel,
     recipient: { path: "sender" }, message, templateContext,
     conversationId: { path: "metadata.conversationId" },
   });
@@ -150,7 +150,7 @@ function oneAssistantAppointmentRouterWorkflow() {
   // IMPORTANT: this definition intentionally uses Builder-visible primitives.
   // No PROCESS_APPOINTMENT_* or APPOINTMENT_SESSION_CONTEXT action may own the business process.
   const channelSend = (id, label, channel, message, templateContext = {}) => ({
-    id, label, apiName: id, key: "SEND_APPOINTMENT_MESSAGE", channel,
+    id, label, apiName: id, key: "SEND_COMMUNICATION", channel,
     recipient: { path: "sender" }, message, templateContext,
     conversationId: { path: "metadata.conversationId" },
   });
@@ -738,10 +738,13 @@ export function packageDefinition(entry) {
             "communication.opted_out",
             "communication.handoff"
           ],
+          action: "SEND_COMMUNICATION",
+          channels: ["EMAIL","SMS","WHATSAPP","IN_APP"],
           legacyActions: {
             EMAIL: "SEND_EMAIL",
             SMS: "SEND_SMS",
-            WHATSAPP: "SEND_WHATSAPP"
+            WHATSAPP: "SEND_WHATSAPP",
+            IN_APP: "IN_APP_NOTIFICATION"
           }
         },
         objects: [
@@ -753,7 +756,7 @@ export function packageDefinition(entry) {
             description: "Provider-neutral communication events emitted by Email, SMS and WhatsApp.",
             sourceTable: "platform_communication_events",
             fields: [
-              { apiName: "channel", label: "Channel", fieldType: "picklist", sourceColumn: "channel", writable: false, options: ["EMAIL","SMS","WHATSAPP"] },
+              { apiName: "channel", label: "Channel", fieldType: "picklist", sourceColumn: "channel", writable: false, options: ["EMAIL","SMS","WHATSAPP","IN_APP"] },
               { apiName: "event_type", label: "Event Type", fieldType: "text", sourceColumn: "event_type", writable: false },
               { apiName: "direction", label: "Direction", fieldType: "text", sourceColumn: "direction", writable: false },
               { apiName: "provider", label: "Provider", fieldType: "text", sourceColumn: "provider", writable: false },
@@ -918,7 +921,7 @@ export function packageDefinition(entry) {
               actions: [
                 { id: "create_case", key: "CREATE_APPOINTMENT_BOOKING_CASE", channel: "EMAIL" },
                 { id: "issue_link", key: "ISSUE_APPOINTMENT_BOOKING_LINK", bookingCaseId: { path: "steps.create_case.bookingCase.id" }, ttlMinutes: 30 },
-                { id: "send_link", key: "SEND_EMAIL", recipient: { path: "sender" }, templateKey: "assistant_email_booking_link", templateContext: { bookingUrl: { path: "steps.issue_link.link.url" } } }
+                { id: "send_link", key: "SEND_COMMUNICATION", channel: "EMAIL", recipient: { path: "sender" }, templateKey: "assistant_email_booking_link", templateContext: { bookingUrl: { path: "steps.issue_link.link.url" } } }
               ]
             },
             active: false,
