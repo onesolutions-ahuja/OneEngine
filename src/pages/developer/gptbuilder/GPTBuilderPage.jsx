@@ -14,6 +14,7 @@ import GPTBuilderElementProperties, {
 import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRecords'
 import GPTBuilderCreateRecords, { createRecordsRuntimeAction } from './GPTBuilderCreateRecords'
 import GPTBuilderUpdateRecords, { updateRecordsRuntimeAction } from './GPTBuilderUpdateRecords'
+import GPTBuilderDeleteRecords, { deleteRecordsRuntimeAction } from './GPTBuilderDeleteRecords'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
@@ -791,6 +792,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (element.key === 'get_records') return getRecordsRuntimeAction(element)
         if (element.key === 'create_records') return createRecordsRuntimeAction(element)
         if (element.key === 'update_records') return updateRecordsRuntimeAction(element)
+        if (element.key === 'delete_records') return deleteRecordsRuntimeAction(element)
         return null
       }).filter(Boolean),
     },
@@ -1399,7 +1401,17 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                 startConfig={startConfig}
                 onConfiguredChange={setConfigured}
               />
-            : null}</GPTBuilderElementProperties> : null}
+            : activeElement.key === 'delete_records'
+              ? <GPTBuilderDeleteRecords
+                  draft={draft}
+                  updateConfig={updateConfig}
+                  objects={objects}
+                  resources={resources}
+                  flowType={flow.key}
+                  startConfig={startConfig}
+                  onConfiguredChange={setConfigured}
+                />
+              : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => {
