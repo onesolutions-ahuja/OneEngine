@@ -9,7 +9,7 @@ import { oneAssistantSchema } from "../services/oneAssistant.js";
 import { packageDefinitions } from "../services/packageRegistry.js";
 import { platformSchema } from "../services/platformMetadata.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
-import { decryptSecret } from "../services/secretCrypto.js";
+import { decryptSecret } from "../services/onlineOrders/platformConfig.js";
 
 export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env = process.env } = {}) {
   if (!pool) throw new Error("A PostgreSQL connection is required to initialize onePOS");
@@ -2052,7 +2052,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         for (const row of duplicates.rows) {
           const keep = row.ids[0];
           await client.query(
-            "UPDATE platform_rules SET active=FALSE,lifecycle_status='RETIRED',updated_at=NOW() WHERE company_id=$1 AND name='OneAssistant - Booking Channel Router' AND id<>$2",
+            "UPDATE platform_rules SET active=FALSE,lifecycle_status='INACTIVE',updated_at=NOW() WHERE company_id=$1 AND name='OneAssistant - Booking Channel Router' AND id<>$2",
             [row.company_id, keep]
           );
           await client.query(
