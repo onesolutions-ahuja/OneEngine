@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS sys_settings (
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   store_id UUID REFERENCES stores(id) ON DELETE CASCADE,
   setting_key VARCHAR(160) NOT NULL,
-  setting_value JSONB,
+  setting_value TEXT,
   value_type VARCHAR(30) NOT NULL DEFAULT 'text',
   section VARCHAR(120) NOT NULL DEFAULT 'General',
   label VARCHAR(200) NOT NULL,
@@ -104,33 +104,33 @@ LEFT JOIN LATERAL (
 
 -- Seed the generic settings store from existing core company/company_settings data.
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT id,'company.name',to_jsonb(name),'text','Company','Company Name','COMPANY' FROM companies
+SELECT id,'company.name',name::text,'text','Company','Company Name','COMPANY' FROM companies
 ON CONFLICT DO NOTHING;
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT id,'company.legal_name',to_jsonb(legal_name),'text','Company','Legal Name','COMPANY' FROM companies WHERE legal_name IS NOT NULL
+SELECT id,'company.legal_name',legal_name::text,'text','Company','Legal Name','COMPANY' FROM companies WHERE legal_name IS NOT NULL
 ON CONFLICT DO NOTHING;
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT id,'company.email',to_jsonb(email),'email','Company','Email','COMPANY' FROM companies WHERE email IS NOT NULL
+SELECT id,'company.email',email::text,'email','Company','Email','COMPANY' FROM companies WHERE email IS NOT NULL
 ON CONFLICT DO NOTHING;
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT id,'company.phone',to_jsonb(phone),'phone','Company','Phone','COMPANY' FROM companies WHERE phone IS NOT NULL
+SELECT id,'company.phone',phone::text,'phone','Company','Phone','COMPANY' FROM companies WHERE phone IS NOT NULL
 ON CONFLICT DO NOTHING;
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT id,'company.currency',to_jsonb(currency),'text','General','Currency','COMPANY' FROM companies
+SELECT id,'company.currency',currency::text,'text','General','Currency','COMPANY' FROM companies
 ON CONFLICT DO NOTHING;
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT id,'company.timezone',to_jsonb(timezone),'text','General','Timezone','COMPANY' FROM companies
+SELECT id,'company.timezone',timezone::text,'text','General','Timezone','COMPANY' FROM companies
 ON CONFLICT DO NOTHING;
 
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT company_id,'general.date_format',to_jsonb(date_format),'text','General','Date Format','COMPANY' FROM company_settings
+SELECT company_id,'general.date_format',date_format::text,'text','General','Date Format','COMPANY' FROM company_settings
 ON CONFLICT DO NOTHING;
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT company_id,'tax.vat_enabled',to_jsonb(vat_enabled),'boolean','Tax / VAT','VAT Enabled','COMPANY' FROM company_settings
+SELECT company_id,'tax.vat_enabled',vat_enabled::text,'boolean','Tax / VAT','VAT Enabled','COMPANY' FROM company_settings
 ON CONFLICT DO NOTHING;
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT company_id,'tax.default_vat_rate',to_jsonb(default_vat_rate),'number','Tax / VAT','Default VAT Rate','COMPANY' FROM company_settings
+SELECT company_id,'tax.default_vat_rate',default_vat_rate::text,'number','Tax / VAT','Default VAT Rate','COMPANY' FROM company_settings
 ON CONFLICT DO NOTHING;
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT company_id,'ui.default_landing_page',to_jsonb(default_landing_page),'text','General','Default Landing Page','COMPANY' FROM company_settings
+SELECT company_id,'ui.default_landing_page',default_landing_page::text,'text','General','Default Landing Page','COMPANY' FROM company_settings
 ON CONFLICT DO NOTHING;
