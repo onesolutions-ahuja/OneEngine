@@ -118,13 +118,13 @@ const normalizeFlowType=value=>{
 const normalizeNodeType=value=>{
   const type=String(value||'').toUpperCase()
   if(['CREATE_RECORD','CREATE_RELATED_RECORD'].includes(type))return 'CREATE_RECORDS'
-  if(['UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS'].includes(type))return 'UPDATE_RECORDS'
+  if(['UPDATE_RECORD','UPDATE_RELATED_RECORD'].includes(type))return 'UPDATE_RECORDS'
   if(type==='DELETE_RECORD')return 'DELETE_RECORDS'
   if(['ASSIGN_RECORD','SET_VARIABLE'].includes(type))return 'ASSIGNMENT'
   if(type==='CONDITION')return 'DECISION'
   return type
 }
-const BUILDER_NATIVE_RUNTIME_TYPES=new Set(['GET_RECORDS','CREATE_RECORD','CREATE_RELATED_RECORD','UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS','DELETE_RECORD','ASSIGN_RECORD','SET_VARIABLE','ASSIGNMENT','CONDITION','LOOP','WAIT','SUBFLOW','COLLECTION_FILTER','COLLECTION_SORT','TRANSFORM','CUSTOM_ERROR','SCREEN','END'])
+const BUILDER_NATIVE_RUNTIME_TYPES=new Set(['GET_RECORDS','CREATE_RECORD','CREATE_RELATED_RECORD','UPDATE_RECORD','UPDATE_RELATED_RECORD','DELETE_RECORD','ASSIGN_RECORD','SET_VARIABLE','ASSIGNMENT','CONDITION','LOOP','WAIT','SUBFLOW','COLLECTION_FILTER','COLLECTION_SORT','TRANSFORM','CUSTOM_ERROR','SCREEN','END'])
 const OPERATOR_TO_BUILDER={equals:'Equals',not_equals:'Does Not Equal',is_empty:'Is Null',changed:'Is Changed',greater_than:'Greater Than',greater_than_or_equal:'Greater Than or Equal',less_than:'Less Than',less_than_or_equal:'Less Than or Equal'}
 const OPERATOR_TO_RUNTIME=Object.fromEntries(Object.entries(OPERATOR_TO_BUILDER).map(([key,value])=>[value,key]))
 const conditionToBuilder=row=>({id:row?.id||uid(),resource:row?.field||row?.resource||'',operator:OPERATOR_TO_BUILDER[row?.operator]||row?.operator||'Equals',value:row?.value??''})
@@ -207,7 +207,7 @@ const runtimeActionToBuilderNode=x=>{
       fieldValues:fieldMapRows(inputs.fieldValues),
     }}
   }
-  if(['UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS'].includes(rawType)){
+  if(['UPDATE_RECORD','UPDATE_RELATED_RECORD'].includes(rawType)){
     const inputs=actionInputs(x)
     return {...base,type:'UPDATE_RECORDS',config:{
       objectKey:inputs.objectKey||inputs.object_key||'',
@@ -476,22 +476,47 @@ function ScreenEditor({node,onPatch,onClose}) {
   </div>
 }
 
-function FlowTestPanel({workflowId,busy,setBusy,buildPayload,setError,setRuntimeMessage,onClose}) {
-  const [recordJson,setRecordJson]=useState('{}'),[result,setResult]=useState(null)
+function FlowDebugPanel({workflowId,busy,setBusy,buildPayload,inputContract,setError,setRuntimeMessage,onClose}) {
+  const initialInputs=()=>Object.fromEntries((inputContract||[]).filter(input=>input?.name).map(input=>[input.name,input.defaultValue??'']))
+  const [inputs,setInputs]=useState(initialInputs),[result,setResult]=useState(null)
+  useEffect(()=>setInputs(initialInputs()),[inputContract])
+  const setValue=(input,value)=>setInputs(current=>({...current,[input.name]:input.type==='number'&&value!==''?Number(value):input.type==='boolean'?value==='true':value}))
+  return <div className="b2-drawer"><header><b>Debug</b><button onClick={onClose}><X size={16}/></button></header><div>
+    <p>Debug the most recent saved version with input values. Database changes are rolled back and connector sends are simulated.</p>
+    {(inputContract||[]).map(input=><label key={input.name}>{input.label||input.name}{input.required?<span> *</span>:null}{input.type==='boolean'
+      ?<select aria-label={input.label||input.name} value={String(inputs[input.name]??false)} onChange={e=>setValue(input,e.target.value)}><option value="false">False</option><option value="true">True</option></select>
+      :<input aria-label={input.label||input.name} type={input.type==='number'?'number':'text'} value={inputs[input.name]??''} onChange={e=>setValue(input,e.target.value)}/>}</label>)}
+    <label className="b2-check"><input type="checkbox" checked readOnly/> Roll back changes after debugging</label>
+    <button className="is-primary" disabled={!workflowId||busy} onClick={async()=>{setBusy(true);setError('');try{
+      const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),mode:'debug',inputs,debugOptions:{rollbackMode:true}})})
+      const data=r?.data||r;setResult(data);setRuntimeMessage(data?.status?`Debug: ${data.status}`:'Debug completed.')
+    }catch(e){setError(e?.message||'Debug failed')}finally{setBusy(false)}}}>Run Debug</button>
+    {result?<><h4>Execution Result</h4><pre className="b2-test-result">{JSON.stringify(result,null,2)}</pre></>:null}
+  </div></div>
+}
+
+function FlowTestPanel({workflowId,busy,setBusy,buildPayload,inputContract,setError,setRuntimeMessage,onClose}) {
+  const initialInputs=()=>Object.fromEntries((inputContract||[]).filter(input=>input?.name).map(input=>[input.name,input.defaultValue??'']))
+  const [recordJson,setRecordJson]=useState('{}'),[inputs,setInputs]=useState(initialInputs),[result,setResult]=useState(null)
+  useEffect(()=>setInputs(initialInputs()),[inputContract])
+  const setValue=(input,value)=>setInputs(current=>({...current,[input.name]:input.type==='number'&&value!==''?Number(value):input.type==='boolean'?value==='true':value}))
   return <div className="b2-drawer"><header><b>Test Mode</b><button onClick={onClose}><X size={16}/></button></header><div>
-    <p>Test the draft with an inbound trigger record. Database changes are rolled back and connector sends are simulated.</p>
-    <label>Trigger Record (JSON)<textarea rows={10} value={recordJson} onChange={e=>setRecordJson(e.target.value)}/></label>
+    <p>Test the draft with input values and an optional inbound trigger record. Database changes are rolled back and connector sends are simulated.</p>
+    {(inputContract||[]).map(input=><label key={input.name}>{input.label||input.name}{input.required?<span> *</span>:null}{input.type==='boolean'
+      ?<select aria-label={input.label||input.name} value={String(inputs[input.name]??false)} onChange={e=>setValue(input,e.target.value)}><option value="false">False</option><option value="true">True</option></select>
+      :<input aria-label={input.label||input.name} type={input.type==='number'?'number':'text'} value={inputs[input.name]??''} onChange={e=>setValue(input,e.target.value)}/>}</label>)}
+    <label>Trigger Record (JSON)<textarea rows={6} value={recordJson} onChange={e=>setRecordJson(e.target.value)}/></label>
     <button className="is-primary" disabled={!workflowId||busy} onClick={async()=>{setBusy(true);setError('');try{
       const recordOverride=JSON.parse(recordJson)
       if(!recordOverride||Array.isArray(recordOverride)||typeof recordOverride!=='object')throw new Error('Trigger Record must be a JSON object')
-      const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),recordOverride,mode:'test',debugOptions:{rollbackMode:true}})})
+      const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),recordOverride,inputs,mode:'test',debugOptions:{rollbackMode:true}})})
       setResult(r?.data||r);setRuntimeMessage(`Test: ${r?.data?.status||'completed'}`)
     }catch(e){setError(e?.message||'Test failed')}finally{setBusy(false)}}}>Run Test</button>
     {result?<><h4>Execution Result</h4><pre className="b2-test-result">{JSON.stringify(result,null,2)}</pre></>:null}
   </div></div>
 }
 export default function Builder2Page({initialWorkflowId='',initialFlowType='',initialObjectKey='',onClose,onSaved}){
-  const [objects,setObjects]=useState([]),[actions,setActions]=useState([]),[nodes,setNodes]=useState([]),[edges,setEdges]=useState([]),[selected,setSelected]=useState(''),[selector,setSelector]=useState(false),[search,setSearch]=useState(''),[resources,setResources]=useState([]),[flowTests,setFlowTests]=useState([]),[resourceDialog,setResourceDialog]=useState(false),[tab,setTab]=useState('elements'),[error,setError]=useState(''),[screenEditing,setScreenEditing]=useState(''),[supportPanel,setSupportPanel]=useState(''),[startOpen,setStartOpen]=useState(()=>normalizeFlowType(initialFlowType)==='record'),[startConfig,setStartConfig]=useState(()=>({trigger:'created_or_updated',conditionLogic:'all',optimize:'actions',...(initialObjectKey?{objectKey:initialObjectKey}:{})})),[zoom,setZoom]=useState(100),[history,setHistory]=useState([]),[future,setFuture]=useState([]),[dirty,setDirty]=useState(false),[nodeMenu,setNodeMenu]=useState(''),[saveMenu,setSaveMenu]=useState(false),[active,setActive]=useState(false),[clipboard,setClipboard]=useState([]),[multiSelect,setMultiSelect]=useState(false),[selectedMany,setSelectedMany]=useState([]),[managerFilter,setManagerFilter]=useState('all'),[editHistory,setEditHistory]=useState([]),[actionEditing,setActionEditing]=useState(''),[toolboxOpen,setToolboxOpen]=useState(true),[layoutMode,setLayoutMode]=useState('auto'),[flowType,setFlowType]=useState(()=>normalizeFlowType(initialFlowType||'record')),[flowProps,setFlowProps]=useState({label:'New Flow',apiName:'New_Flow',description:'',apiVersion:'66.0',runContext:'default'}),[flowPropsOpen,setFlowPropsOpen]=useState(false),[historyPreview,setHistoryPreview]=useState(''),[groups,setGroups]=useState([]),[groupDialog,setGroupDialog]=useState(false),[branchCollapsed,setBranchCollapsed]=useState({}),[workflowId,setWorkflowId]=useState(()=>String(initialWorkflowId||'')),[busy,setBusy]=useState(false),[runtimeMessage,setRuntimeMessage]=useState('')
+  const [objects,setObjects]=useState([]),[actions,setActions]=useState([]),[nodes,setNodes]=useState([]),[edges,setEdges]=useState([]),[selected,setSelected]=useState(''),[selector,setSelector]=useState(false),[search,setSearch]=useState(''),[resources,setResources]=useState([]),[inputContract,setInputContract]=useState([]),[outputContract,setOutputContract]=useState([]),[flowTests,setFlowTests]=useState([]),[resourceDialog,setResourceDialog]=useState(false),[tab,setTab]=useState('elements'),[error,setError]=useState(''),[screenEditing,setScreenEditing]=useState(''),[supportPanel,setSupportPanel]=useState(''),[startOpen,setStartOpen]=useState(()=>normalizeFlowType(initialFlowType)==='record'),[startConfig,setStartConfig]=useState(()=>({trigger:'created_or_updated',conditionLogic:'all',optimize:'actions',...(initialObjectKey?{objectKey:initialObjectKey}:{})})),[zoom,setZoom]=useState(100),[history,setHistory]=useState([]),[future,setFuture]=useState([]),[dirty,setDirty]=useState(false),[nodeMenu,setNodeMenu]=useState(''),[saveMenu,setSaveMenu]=useState(false),[active,setActive]=useState(false),[clipboard,setClipboard]=useState([]),[multiSelect,setMultiSelect]=useState(false),[selectedMany,setSelectedMany]=useState([]),[managerFilter,setManagerFilter]=useState('all'),[editHistory,setEditHistory]=useState([]),[actionEditing,setActionEditing]=useState(''),[toolboxOpen,setToolboxOpen]=useState(true),[layoutMode,setLayoutMode]=useState('auto'),[flowType,setFlowType]=useState(()=>normalizeFlowType(initialFlowType||'record')),[flowProps,setFlowProps]=useState({label:'New Flow',apiName:'New_Flow',description:'',apiVersion:'66.0',runContext:'default'}),[flowPropsOpen,setFlowPropsOpen]=useState(false),[historyPreview,setHistoryPreview]=useState(''),[groups,setGroups]=useState([]),[groupDialog,setGroupDialog]=useState(false),[branchCollapsed,setBranchCollapsed]=useState({}),[workflowId,setWorkflowId]=useState(()=>String(initialWorkflowId||'')),[busy,setBusy]=useState(false),[runtimeMessage,setRuntimeMessage]=useState('')
   const canvasRef=useRef(null), centeredWorkflowRef=useRef('')
   useEffect(()=>{
     let live=true
@@ -502,6 +527,8 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
     setNodes([])
     setEdges([])
     setResources([])
+    setInputContract([])
+    setOutputContract([])
     setFlowTests([])
     setGroups([])
     setActive(false)
@@ -541,6 +568,8 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
       setNodes(savedActions.filter(x=>normalizeNodeType(x.type||x.key)!=='END').map(runtimeActionToBuilderNode))
       setEdges(Array.isArray(layout.edges)?layout.edges:[])
       setResources(Array.isArray(action.resources)?action.resources:[])
+      setInputContract(Array.isArray(action.inputContract)?action.inputContract:[])
+      setOutputContract(Array.isArray(action.outputContract)?action.outputContract:[])
       setFlowTests(Array.isArray(action.tests)?action.tests:[])
       setGroups(Array.isArray(action.builderGroups)?action.builderGroups:[])
       setLayoutMode(String(layout.mode||'AUTO').toUpperCase()==='FREE_FORM'?'free':'auto')
@@ -555,7 +584,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
   const filtered=availableElements.filter(e=>!search||[e.label,e.category,e.description].join(' ').toLowerCase().includes(search.toLowerCase()))
   const paletteGroups=[...new Set(filtered.map(e=>e.category))]
   const commitNodes=next=>{setHistory(h=>[...h,nodes]);setFuture([]);setNodes(next);setDirty(true)}
-  const buildPayload=(lifecycle='DRAFT')=>({name:flowProps.label||'New Flow',objectId:objects.find(o=>keyOf(o)===startConfig.objectKey)?.id||null,objectKey:startConfig.objectKey||null,triggerKey:flowType==='schedule'?'scheduled':flowType==='platform_event'?(startConfig.eventKey||''):flowType==='record'?(startConfig.trigger==='created'?(startConfig.optimize==='fast'?'before_create':'after_create'):startConfig.trigger==='updated'?(startConfig.optimize==='fast'?'before_update':'after_update'):startConfig.trigger==='deleted'?'after_delete':startConfig.optimize==='fast'?'before_save':'after_save'):'manual',active:lifecycle==='ACTIVE',lifecycleStatus:lifecycle,conditions:(startConfig.conditions||[]).filter(c=>c.resource||c.field).map(conditionToRuntime),action:{match:startConfig.conditionLogic==='any'?'any':'all',entryTransition:startConfig.updateMode==='transition'?'UPDATED_TO_MEET':'EVERY_TIME',type:'workflow',builder2:true,apiName:flowProps.apiName,description:flowProps.description,apiVersion:flowProps.apiVersion,flowType,runContext:flowProps.runContext,start:startConfig,optimize:startConfig.optimize||'actions',builderLayout:{mode:layoutMode==='free'?'FREE_FORM':'AUTO',positions:Object.fromEntries(nodes.map((n,i)=>[n.id,n.position||{x:320,y:120+i*120}])),edges},builderGroups:groups,resources,tests:flowTests,actions:nodes.map(n=>builderNodeToRuntimeAction(n,resources))}})
+  const buildPayload=(lifecycle='DRAFT')=>({name:flowProps.label||'New Flow',objectId:objects.find(o=>keyOf(o)===startConfig.objectKey)?.id||null,objectKey:startConfig.objectKey||null,triggerKey:flowType==='schedule'?'scheduled':flowType==='platform_event'?(startConfig.eventKey||''):flowType==='record'?(startConfig.trigger==='created'?(startConfig.optimize==='fast'?'before_create':'after_create'):startConfig.trigger==='updated'?(startConfig.optimize==='fast'?'before_update':'after_update'):startConfig.trigger==='deleted'?'after_delete':startConfig.optimize==='fast'?'before_save':'after_save'):'manual',active:lifecycle==='ACTIVE',lifecycleStatus:lifecycle,conditions:(startConfig.conditions||[]).filter(c=>c.resource||c.field).map(conditionToRuntime),action:{match:startConfig.conditionLogic==='any'?'any':'all',entryTransition:startConfig.updateMode==='transition'?'UPDATED_TO_MEET':'EVERY_TIME',type:'workflow',builder2:true,apiName:flowProps.apiName,description:flowProps.description,apiVersion:flowProps.apiVersion,flowType,runContext:flowProps.runContext,start:startConfig,optimize:startConfig.optimize||'actions',builderLayout:{mode:layoutMode==='free'?'FREE_FORM':'AUTO',positions:Object.fromEntries(nodes.map((n,i)=>[n.id,n.position||{x:320,y:120+i*120}])),edges},builderGroups:groups,resources,inputContract,outputContract,tests:flowTests,actions:nodes.map(n=>builderNodeToRuntimeAction(n,resources))}})
   const persistWorkflow=async(lifecycle='DRAFT',forceNewVersion=false,forceNewFlow=false)=>{setBusy(true);setRuntimeMessage('');try{const payload={...buildPayload(lifecycle),...(forceNewVersion?{forceNewVersion:true}:{}),...(forceNewFlow?{name:`${flowProps.label||'New Flow'} Copy`,action:{...buildPayload(lifecycle).action,apiName:`${flowProps.apiName||'New_Flow'}_Copy_${Date.now()}`}}:{})};const response=workflowId&&!forceNewFlow?await apiRequest(`/api/platform/rules/${workflowId}`,{method:'PUT',body:JSON.stringify(payload)}):await apiRequest('/api/platform/rules',{method:'POST',body:JSON.stringify(payload)});const saved=response?.data||{};if(saved.id)setWorkflowId(saved.id);onSaved?.(saved,{keepOpen:true});setActive(lifecycle==='ACTIVE');setDirty(false);setEditHistory(h=>[{id:uid(),label:lifecycle==='ACTIVE'?'Activated':'Saved',at:new Date().toISOString(),nodes:nodes.length,snapshot:JSON.parse(JSON.stringify(nodes)),summary:{added:nodes.length,edited:0,deleted:0}},...h].slice(0,100));setRuntimeMessage(lifecycle==='ACTIVE'?'Flow activated.':'Flow saved.');setSaveMenu(false);return saved}catch(e){setError(e?.message||'Unable to save flow');return null}finally{setBusy(false)}}
   const saveDraft=label=>{const action=String(label||'').toLowerCase();return persistWorkflow('DRAFT',action.includes('version'),action.includes('new flow'))}
   const copySelected=()=>{const ids=selectedMany.length?selectedMany:selected?[selected]:[];setClipboard(nodes.filter(n=>ids.includes(n.id)))}
@@ -609,8 +638,8 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
     {groupDialog?<GroupDialog onClose={()=>setGroupDialog(false)} onCreate={createGroup}/>:null}
     {actionEditing?<div className="b2-action-dialog b2-modal-backdrop"><div className="b2-modal"><header><div><h3>Action</h3><p>Configure the selected OneEngine metadata action.</p></div><button onClick={()=>setActionEditing('')}><X size={18}/></button></header><Properties node={nodes.find(n=>n.id===actionEditing)} onPatch={patch} {...{objects,resources,actions,flowType,startConfig}} onNew={()=>setResourceDialog(true)}/><footer><button onClick={()=>setActionEditing('')}>Cancel</button><button className="is-primary" onClick={()=>setActionEditing('')}>Done</button></footer></div></div>:null}
     {supportPanel==='history'?<div className="b2-drawer"><header><b>Edit History</b><button onClick={()=>setSupportPanel('')}><X size={16}/></button></header><div className="b2-history">{!editHistory.length?<p>No saved changes yet.</p>:editHistory.map(h=><div key={h.id} className={historyPreview===h.id?'is-selected':''}><Clock3 size={13}/><span><button className="b2-history-title" onClick={()=>setHistoryPreview(h.id)}><b>{h.label}</b><small>{new Date(h.at).toLocaleString()} · {h.nodes} elements</small></button>{historyPreview===h.id?<span className="b2-history-actions"><small>Added {h.summary?.added||0} · Edited {h.summary?.edited||0} · Deleted {h.summary?.deleted||0}</small><button onClick={()=>{setNodes(JSON.parse(JSON.stringify(h.snapshot||[])));setDirty(true);setSupportPanel('');setHistoryPreview('')}}>Restore</button><button onClick={()=>{setNodes(JSON.parse(JSON.stringify(h.snapshot||[])));saveDraft('Restored as new version');setSupportPanel('')}}>Save as New Version</button><button onClick={()=>{setNodes(JSON.parse(JSON.stringify(h.snapshot||[])));saveDraft('Restored as new flow');setSupportPanel('')}}>Save as New Flow</button></span>:null}</span></div>)}</div></div>:null}
-    {supportPanel==='debug'?<div className="b2-drawer"><header><b>Debug</b><button onClick={()=>setSupportPanel('')}><X size={16}/></button></header><div><p>Debug the most recent saved version with input values, rollback options, and execution details.</p><label className="b2-check"><input type="checkbox" defaultChecked/> Roll back changes after debugging</label><button className="is-primary" disabled={!workflowId||busy} onClick={async()=>{setBusy(true);try{const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),mode:'debug',inputs:{},debugOptions:{rollbackMode:true}})});setRuntimeMessage(r?.data?.status?`Debug: ${r.data.status}`:'Debug completed.')}catch(e){setError(e?.message||'Debug failed')}finally{setBusy(false)}}}>Run Debug</button></div></div>:null}
-    {supportPanel==='testmode'?<FlowTestPanel {...{workflowId,busy,setBusy,buildPayload,setError,setRuntimeMessage}} onClose={()=>setSupportPanel('')}/>:null}
+    {supportPanel==='debug'?<FlowDebugPanel {...{workflowId,busy,setBusy,buildPayload,inputContract,setError,setRuntimeMessage}} onClose={()=>setSupportPanel('')}/>:null}
+    {supportPanel==='testmode'?<FlowTestPanel {...{workflowId,busy,setBusy,buildPayload,inputContract,setError,setRuntimeMessage}} onClose={()=>setSupportPanel('')}/>:null}
     {supportPanel==='run'?<div className="b2-drawer"><header><b>Run Flow</b><button onClick={()=>setSupportPanel('')}><X size={16}/></button></header><div><p>Run the current flow version with the configured inputs.</p><button className="is-primary" disabled={!workflowId||busy} onClick={async()=>{setBusy(true);try{const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT')})});setRuntimeMessage(r?.data?.status?`Run: ${r.data.status}`:'Run completed.')}catch(e){setError(e?.message||'Run failed')}finally{setBusy(false)}}}>Run</button></div></div>:null}
     {supportPanel==='tests'?<div className="b2-drawer"><header><b>Tests</b><button onClick={()=>setSupportPanel('')}><X size={16}/></button></header><div>{!flowTests.length?<p>No tests have been created for this draft.</p>:flowTests.map(t=><div key={t.id}><b>{t.label}</b><small>{t.description||'Flow test'}</small><button disabled={!workflowId||busy} onClick={async()=>{setBusy(true);try{await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),test:t})});setRuntimeMessage(`Test "${t.label}" completed.`)}catch(e){setError(e?.message||'Test failed')}finally{setBusy(false)}}}>Run</button><button onClick={()=>{setFlowTests(v=>v.filter(x=>x.id!==t.id));setDirty(true)}}>Delete</button></div>)}<button className="is-primary" onClick={()=>{const label=window.prompt('Test label');if(!label?.trim())return;const description=window.prompt('Test description (optional)')||'';setFlowTests(v=>[...v,{id:uid(),label:label.trim(),description}]);setDirty(true)}}>Create Test</button></div></div>:null}
     {resourceDialog?<ResourceDialog onClose={()=>setResourceDialog(false)} onCreate={r=>{setResources(x=>[...x,r]);setResourceDialog(false)}}/>:null}
