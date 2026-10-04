@@ -1989,19 +1989,29 @@ function Desktop({ onLock, onSignOut }) {
 
   useEffect(() => {
     let live = true
-    ensureActiveStoreContext()
-      .then(({ stores, activeStoreId: selected }) => {
+    const userId = String(storedUser?.id || storedUser?.userId || '')
+    const filter = encodeURIComponent(JSON.stringify(userId ? { user_id: userId } : {}))
+    apiRequest(`/api/platform/objects/available_store/records?page=1&pageSize=200&filter=${filter}`, { timeoutMs: 12000, retryGet: true })
+      .then((response) => {
         if (!live) return
-        setAvailableStores(Array.isArray(stores) ? stores : [])
-        setActiveStoreState(selected || '')
+        const rows = (Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [])
+          .map((row) => ({ ...row, id: row.store_id || row.id }))
+        setAvailableStores(rows)
+        try { sessionStorage.setItem('onepos_available_stores', JSON.stringify(rows)) } catch {}
+        const remembered = getActiveStoreId()
+        const selected = rows.some((store) => String(store.id) === String(remembered))
+          ? remembered
+          : String(rows.find((store) => store.is_primary === true)?.id || rows[0]?.id || '')
+        setActiveStoreId(selected)
+        setActiveStoreState(selected)
       })
       .catch(() => {
         if (!live) return
-        setAvailableStores(getAvailableStores())
-        setActiveStoreState(getActiveStoreId())
+        setAvailableStores([])
+        setActiveStoreState('')
       })
     return () => { live = false }
-  }, [storedUser?.companyId])
+  }, [storedUser?.companyId, storedUser?.id])
 
   useEffect(() => {
     let live = true
@@ -2022,16 +2032,23 @@ function Desktop({ onLock, onSignOut }) {
 
   useEffect(() => {
     let live = true
-    checkBackend()
-      .catch(() => null)
-      .then((health) => {
+    apiRequest('/api/platform/objects/connection_health/records?page=1&pageSize=100', { timeoutMs: 12000, retryGet: true })
+      .then((response) => {
         if (!live) return
-        document.documentElement.setAttribute('data-onepos-backend', health ? 'connected' : 'offline')
+        const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
+        const connected = rows.filter((row) => ['CONNECTED','ONLINE','READY'].includes(String(row.connection_status || '').toUpperCase())).length
+        const failed = rows.filter((row) => ['ERROR','OFFLINE','FAILED'].includes(String(row.connection_status || '').toUpperCase())).length
+        document.documentElement.setAttribute('data-onepos-backend', 'connected')
         setConnectionHealth({
-          status: health ? 'Connected' : 'Offline',
-          api: health ? 'Connected' : 'Unavailable',
-          database: health?.database || (health ? 'Connected' : 'Unavailable'),
+          status: 'Connected',
+          api: rows.length ? `${connected}/${rows.length} connections online` : 'Connected',
+          database: failed ? `${failed} connection issue${failed === 1 ? '' : 's'}` : 'Connected',
         })
+      })
+      .catch(() => {
+        if (!live) return
+        document.documentElement.setAttribute('data-onepos-backend', 'offline')
+        setConnectionHealth({ status: 'Offline', api: 'Unavailable', database: 'Unknown' })
       })
     return () => { live = false }
   }, [])
@@ -2047,8 +2064,9 @@ function Desktop({ onLock, onSignOut }) {
       if (!silent) setStoreAppsLoading(true)
       setStoreAppsError('')
       try {
-        const packages = await apiRequest('/api/packages/marketplace', { timeoutMs: 12000, retryGet: true })
-        const rows = Array.isArray(packages?.data) ? packages.data : []
+        const packages = await apiRequest('/api/platform/objects/one_store_app/records?page=1&pageSize=500', { timeoutMs: 12000, retryGet: true })
+        const sourceRows = Array.isArray(packages?.records) ? packages.records : Array.isArray(packages?.data) ? packages.data : []
+        const rows = sourceRows.map((row) => ({ ...row, name: row.app_name || row.name, package_key: row.package_key, icon_url: row.logo }))
         setStoreApps(rows)
         writeMarketplaceCache(rows)
         setStoreAppsLoaded(true)
