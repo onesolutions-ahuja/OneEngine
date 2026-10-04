@@ -308,6 +308,34 @@ function ScreenEditor({node,onPatch,onClose}) {
   </div>
 }
 
+function FlowDebugPanel({workflowId,busy,setBusy,dirty,setError,setRuntimeMessage,onClose}) {
+  const [rollback,setRollback]=useState(true),[result,setResult]=useState(null)
+  return <div className="b2-drawer"><header><b>Debug</b><button onClick={onClose}><X size={16}/></button></header><div>
+    <p>Debug the most recently saved version. Database writes can be rolled back; external actions are simulated only while rollback is enabled.</p>
+    {dirty?<p className="b2-debug-warning">Save your changes before Debug to test the version currently shown on the canvas.</p>:null}
+    <label className="b2-check"><input type="checkbox" checked={rollback} onChange={e=>setRollback(e.target.checked)}/> Roll back changes after debugging</label>
+    {!rollback?<p className="b2-debug-warning">Rollback is off. Database changes, connector sends, waits, and other executable actions can be real.</p>:null}
+    <button className="is-primary" disabled={!workflowId||busy||dirty} onClick={async()=>{setBusy(true);setError('');setResult(null);try{
+      const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({mode:'debug',inputs:{},debugOptions:{rollbackMode:rollback}})})
+      const data=r?.data||r;setResult(data);setRuntimeMessage(`Debug: ${data?.status||'completed'}`)
+    }catch(e){setError(e?.message||'Debug failed')}finally{setBusy(false)}}}>Run Debug</button>
+    {result?<><h4>Execution Result</h4><pre className="b2-test-result">{JSON.stringify(result,null,2)}</pre></>:null}
+  </div></div>
+}
+
+function FlowRunPanel({workflowId,busy,setBusy,dirty,setError,setRuntimeMessage,onClose}) {
+  const [result,setResult]=useState(null)
+  return <div className="b2-drawer"><header><b>Run Flow</b><button onClick={onClose}><X size={16}/></button></header><div>
+    <p>Run the most recently saved version. Database changes and executable external actions are real.</p>
+    {dirty?<p className="b2-debug-warning">You have unsaved changes. Run will use the last saved version, not the unsaved canvas changes.</p>:null}
+    <button className="is-primary" disabled={!workflowId||busy} onClick={async()=>{setBusy(true);setError('');setResult(null);try{
+      const r=await apiRequest(`/api/platform/rules/${workflowId}/run`,{method:'POST',body:JSON.stringify({mode:'run',inputs:{}})})
+      const data=r?.data||r;setResult(data);setRuntimeMessage(`Run: ${data?.status||'completed'}`)
+    }catch(e){setError(e?.message||'Run failed')}finally{setBusy(false)}}}>Run Saved Version</button>
+    {result?<><h4>Execution Result</h4><pre className="b2-test-result">{JSON.stringify(result,null,2)}</pre></>:null}
+  </div></div>
+}
+
 function FlowTestPanel({workflowId,busy,setBusy,buildPayload,setError,setRuntimeMessage,onClose}) {
   const [recordJson,setRecordJson]=useState('{}'),[result,setResult]=useState(null)
   return <div className="b2-drawer"><header><b>Test Mode</b><button onClick={onClose}><X size={16}/></button></header><div>
@@ -441,9 +469,9 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
     {groupDialog?<GroupDialog onClose={()=>setGroupDialog(false)} onCreate={createGroup}/>:null}
     {actionEditing?<div className="b2-action-dialog b2-modal-backdrop"><div className="b2-modal"><header><div><h3>Action</h3><p>Configure the selected OneEngine metadata action.</p></div><button onClick={()=>setActionEditing('')}><X size={18}/></button></header><Properties node={nodes.find(n=>n.id===actionEditing)} onPatch={patch} {...{objects,resources,actions,flowType,startConfig}} onNew={()=>setResourceDialog(true)}/><footer><button onClick={()=>setActionEditing('')}>Cancel</button><button className="is-primary" onClick={()=>setActionEditing('')}>Done</button></footer></div></div>:null}
     {supportPanel==='history'?<div className="b2-drawer"><header><b>Edit History</b><button onClick={()=>setSupportPanel('')}><X size={16}/></button></header><div className="b2-history">{!editHistory.length?<p>No saved changes yet.</p>:editHistory.map(h=><div key={h.id} className={historyPreview===h.id?'is-selected':''}><Clock3 size={13}/><span><button className="b2-history-title" onClick={()=>setHistoryPreview(h.id)}><b>{h.label}</b><small>{new Date(h.at).toLocaleString()} · {h.nodes} elements</small></button>{historyPreview===h.id?<span className="b2-history-actions"><small>Added {h.summary?.added||0} · Edited {h.summary?.edited||0} · Deleted {h.summary?.deleted||0}</small><button onClick={()=>{setNodes(JSON.parse(JSON.stringify(h.snapshot||[])));setDirty(true);setSupportPanel('');setHistoryPreview('')}}>Restore</button><button onClick={()=>{setNodes(JSON.parse(JSON.stringify(h.snapshot||[])));saveDraft('Restored as new version');setSupportPanel('')}}>Save as New Version</button><button onClick={()=>{setNodes(JSON.parse(JSON.stringify(h.snapshot||[])));saveDraft('Restored as new flow');setSupportPanel('')}}>Save as New Flow</button></span>:null}</span></div>)}</div></div>:null}
-    {supportPanel==='debug'?<div className="b2-drawer"><header><b>Debug</b><button onClick={()=>setSupportPanel('')}><X size={16}/></button></header><div><p>Debug the most recent saved version with input values, rollback options, and execution details.</p><label className="b2-check"><input type="checkbox" defaultChecked/> Roll back changes after debugging</label><button className="is-primary" disabled={!workflowId||busy} onClick={async()=>{setBusy(true);try{const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),mode:'debug',inputs:{},debugOptions:{rollbackMode:true}})});setRuntimeMessage(r?.data?.status?`Debug: ${r.data.status}`:'Debug completed.')}catch(e){setError(e?.message||'Debug failed')}finally{setBusy(false)}}}>Run Debug</button></div></div>:null}
+    {supportPanel==='debug'?<FlowDebugPanel {...{workflowId,busy,setBusy,dirty,setError,setRuntimeMessage}} onClose={()=>setSupportPanel('')}/>:null}
     {supportPanel==='testmode'?<FlowTestPanel {...{workflowId,busy,setBusy,buildPayload,setError,setRuntimeMessage}} onClose={()=>setSupportPanel('')}/>:null}
-    {supportPanel==='run'?<div className="b2-drawer"><header><b>Run Flow</b><button onClick={()=>setSupportPanel('')}><X size={16}/></button></header><div><p>Run the current flow version with the configured inputs.</p><button className="is-primary" disabled={!workflowId||busy} onClick={async()=>{setBusy(true);try{const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT')})});setRuntimeMessage(r?.data?.status?`Run: ${r.data.status}`:'Run completed.')}catch(e){setError(e?.message||'Run failed')}finally{setBusy(false)}}}>Run</button></div></div>:null}
+    {supportPanel==='run'?<FlowRunPanel {...{workflowId,busy,setBusy,dirty,setError,setRuntimeMessage}} onClose={()=>setSupportPanel('')}/>:null}
     {supportPanel==='tests'?<div className="b2-drawer"><header><b>Tests</b><button onClick={()=>setSupportPanel('')}><X size={16}/></button></header><div>{!flowTests.length?<p>No tests have been created for this draft.</p>:flowTests.map(t=><div key={t.id}><b>{t.label}</b><small>{t.description||'Flow test'}</small><button disabled={!workflowId||busy} onClick={async()=>{setBusy(true);try{await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),test:t})});setRuntimeMessage(`Test "${t.label}" completed.`)}catch(e){setError(e?.message||'Test failed')}finally{setBusy(false)}}}>Run</button><button onClick={()=>{setFlowTests(v=>v.filter(x=>x.id!==t.id));setDirty(true)}}>Delete</button></div>)}<button className="is-primary" onClick={()=>{const label=window.prompt('Test label');if(!label?.trim())return;const description=window.prompt('Test description (optional)')||'';setFlowTests(v=>[...v,{id:uid(),label:label.trim(),description}]);setDirty(true)}}>Create Test</button></div></div>:null}
     {resourceDialog?<ResourceDialog onClose={()=>setResourceDialog(false)} onCreate={r=>{setResources(x=>[...x,r]);setResourceDialog(false)}}/>:null}
   </div>
