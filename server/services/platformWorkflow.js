@@ -237,6 +237,9 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   },
   {
     key: "PAYMENT_START",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Payment - Start",
     description: "Start a payment through the assigned connector instance for the current till.",
     validation: (action) => {
@@ -250,6 +253,9 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   },
   {
     key: "PAYMENT_CANCEL",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Payment - Cancel",
     description: "Cancel an in-flight payment through the assigned connector instance.",
     validation: (action) => {
@@ -1367,6 +1373,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "GLOBAL_PRODUCT_LOOKUP_BARCODE",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Global Product - Lookup Barcode",
     description: "Resolve an external barcode using enabled, installed product lookup providers in configured priority order.",
     validation: () => undefined,
@@ -1376,6 +1385,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Open Food Facts - Lookup Product",
     description: "Look up a barcode using the installed Open Food Facts connector.",
     validation: () => undefined,
@@ -1385,6 +1397,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "OPEN_FOOD_FACTS_TEST_CONNECTION",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Open Food Facts - Test Connection",
     description: "Verify the Open Food Facts barcode API connection without credentials.",
     validation: () => undefined,
@@ -1394,6 +1409,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "GO_UPC_LOOKUP_PRODUCT",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Go-UPC - Lookup Product",
     description: "Look up a barcode using the installed Go-UPC connector and company credential.",
     validation: () => undefined,
@@ -1403,6 +1421,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "GO_UPC_TEST_CONNECTION",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Go-UPC - Test Connection",
     description: "Verify the configured Go-UPC API key without returning it.",
     validation: () => undefined,
@@ -1412,6 +1433,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "ONLINE_ORDER_TRANSITION",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Online Order Lifecycle Transition",
     description: "Apply a provider-neutral direct online order lifecycle transition using the canonical service.",
     validation: (action) => {
@@ -1425,6 +1449,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SEND_PASSWORD_RESET_EMAIL",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Send Password Reset Email",
     description: "Issue a tenant-scoped expiring password-reset token and queue the configured reset email for the selected User/Employee record.",
     validation: () => undefined,
@@ -1463,6 +1490,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SEND_USER_INVITATION",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Send User Invitation",
     description: "Issue a tenant-scoped registration token and queue the configured invitation email for the selected User/Employee record.",
     validation: () => undefined,
@@ -4223,6 +4253,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "QUICKBOOKS_TEST_CONNECTION",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Test QuickBooks Connection",
     description: "Verify the enabled, company-scoped QuickBooks connection without returning credentials.",
     validation: () => undefined,
@@ -4246,6 +4279,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "QUICKBOOKS_SYNC_VENDORS",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Sync QuickBooks Vendors",
     description: "Create or update mapped QuickBooks vendors from canonical onePOS suppliers.",
     validation: () => undefined,
@@ -4271,6 +4307,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "QUICKBOOKS_SYNC_PURCHASES",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Sync QuickBooks Purchases",
     description: "Export canonical onePOS purchases and supplier invoices as QuickBooks Bills.",
     validation: () => undefined,
@@ -4297,6 +4336,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Sync QuickBooks Supplier Payments",
     description: "Export canonical supplier payments and invoice allocations to QuickBooks.",
     validation: () => undefined,
@@ -4322,6 +4364,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "QUICKBOOKS_SYNC_SUPPLIER_CREDITS",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Sync QuickBooks Supplier Credits",
     description: "Export canonical supplier returns as QuickBooks Vendor Credits.",
     validation: () => undefined,
@@ -4347,6 +4392,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "QUICKBOOKS_RETRY_FAILED_SYNC",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Retry Failed QuickBooks Sync",
     description: "Retry a failed QuickBooks vendor, purchase, supplier payment, or supplier credit export idempotently.",
     validation: () => undefined,
@@ -4379,6 +4427,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SHOPIFY_TEST_CONNECTION",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Test Shopify Connection",
     description: "Verify the enabled, company- and store-scoped Shopify connection without returning credentials.",
     validation: () => undefined,
@@ -4411,6 +4462,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SHOPIFY_PROCESS_WEBHOOK",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Process Shopify Webhook",
     description: "Import Shopify orders into Online Orders and apply cancellation events through the canonical lifecycle.",
     validation: () => undefined,
@@ -4458,6 +4512,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SHOPIFY_SYNC_PRODUCTS",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Sync Shopify Products",
     description: "Upsert canonical onePOS products and variants into the configured Shopify store.",
     validation: () => undefined,
@@ -4482,6 +4539,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SHOPIFY_SYNC_INVENTORY",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Sync Shopify Inventory",
     description: "Set Shopify inventory levels from the canonical onePOS store stock balances.",
     validation: () => undefined,
@@ -4506,6 +4566,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SHOPIFY_RETRY_FAILED_SYNC",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Retry Failed Shopify Sync",
     description: "Retry the selected Shopify product or inventory synchronisation after a provider failure.",
     validation: () => undefined,
@@ -4538,6 +4601,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SHOPIFY_EXPORT_FULFILMENT",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Export Shopify Fulfilment",
     description: "Create the Shopify fulfilment for a completed canonical onePOS order.",
     validation: () => undefined,
@@ -4565,6 +4631,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SHOPIFY_EXPORT_REFUND",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Export Shopify Refund",
     description: "Export a canonical onePOS customer return refund for a Shopify order.",
     validation: () => undefined,
@@ -4590,6 +4659,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "UBER_GET_STORES",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Get Uber Eats Stores",
     description: "List Uber Eats stores available to the configured company connector.",
     validation: () => undefined,
@@ -4611,6 +4683,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "UBER_TEST_CONNECTION",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Test Uber Eats Connection",
     description: "Test the configured Uber Eats connector and discover its accessible stores.",
     validation: () => undefined,
@@ -4623,6 +4698,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "UBER_UPLOAD_MENU",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Upload Uber Eats Menu",
     description: "Publish the tenant's Uber-enabled Product Master items to its configured Uber Eats store.",
     validation: () => undefined,
@@ -4776,6 +4854,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "UBER_ACCEPT_ORDER",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Accept Uber Eats Order",
     description: "Acknowledge a received Uber Eats order using its company-scoped onePOS order record.",
     validation: () => undefined,
@@ -4785,6 +4866,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "UBER_DENY_ORDER",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Deny Uber Eats Order",
     description: "Deny a received or accepted Uber Eats order using its company-scoped onePOS order record.",
     validation: () => undefined,
@@ -4794,6 +4878,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "UBER_UPDATE_ITEM_PRICE",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Update Uber Eats Item Price",
     description: "Update one company-scoped Uber Eats item price.",
     validation: () => undefined,
@@ -4803,6 +4890,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "UBER_SET_ITEM_UNAVAILABLE",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Set Uber Eats Item Unavailable",
     description: "Suspend one company-scoped Uber Eats item until a future time.",
     validation: () => undefined,
@@ -4812,6 +4902,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "UBER_SET_ITEM_AVAILABLE",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Set Uber Eats Item Available",
     description: "Remove the suspension from one company-scoped Uber Eats item.",
     validation: () => undefined,
