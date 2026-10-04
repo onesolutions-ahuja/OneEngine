@@ -137,6 +137,33 @@ test("WhatsApp Flow API uses normalized recipient and fails the workflow on prov
   assert.ok(apiSteps.every((action) => action.body?.to?.path === "metadata.senderDigits"));
 });
 
+test("booking router validates custom dates, no-slot retry state and slot bounds", () => {
+  const { workflow } = oneAssistantRouter();
+  const byId = new Map(workflow.action.actions.map((action) => [action.id, action]));
+  assert.equal(byId.get("parse_custom_date")?.key, "FORMULA");
+  assert.equal(byId.get("parse_custom_date")?.expression, "PARSEDATE(inputDate)");
+  assert.deepEqual(byId.get("custom_date_valid")?.defaultBranch, ["send_invalid_date"]);
+  assert.deepEqual(byId.get("availability_found")?.defaultBranch, ["reset_to_date","send_no_slots"]);
+  assert.equal(byId.get("reset_to_date")?.fieldValues?.state?.step, "AWAITING_DATE");
+  const slotDecision = byId.get("validate_slot");
+  for (let index = 0; index < 5; index += 1) {
+    assert.ok(slotDecision.outcomes[index].condition.conditions.some((condition) =>
+      condition.field === `steps.get_case.record.state.slots.${index}.startsAt` &&
+      condition.operator === "not_equals" && condition.value === null
+    ));
+  }
+});
+
+test("direct Flow HTTP retains OAuth client-credentials metadata from the connection", () => {
+  const coreSource = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
+  const start = coreSource.indexOf("export async function oneHttpRequest");
+  const end = coreSource.indexOf("export function oneHttpRequestDefinition", start);
+  const runtime = coreSource.slice(start, end);
+  assert.match(runtime, /tokenUrl.*token_url/);
+  assert.match(runtime, /oauth_client_credentials/);
+  assert.doesNotMatch(runtime, /operations:\s*\[\]/);
+});
+
 test("booking router exposes business logic as Builder primitives", () => {
   const { workflow } = oneAssistantRouter();
   const keys = workflow.action.actions.map((action) => action.key);
