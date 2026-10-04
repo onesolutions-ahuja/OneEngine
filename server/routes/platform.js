@@ -5908,13 +5908,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (!empty && component?.type === "EMAIL" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) {
         errors[name] = component.validationMessage || "Enter a valid email address";
       }
-      if (!empty && ["NUMBER","SLIDER"].includes(component?.type)) {
+      if (!empty && ["NUMBER","CURRENCY","SLIDER"].includes(component?.type)) {
         const numeric = Number(value);
         if (!Number.isFinite(numeric)) errors[name] = component.validationMessage || "Enter a valid number";
         if (Number.isFinite(numeric) && component.min !== "" && component.min != null && numeric < Number(component.min)) errors[name] = component.validationMessage || `Enter a value of at least ${component.min}`;
         if (Number.isFinite(numeric) && component.max !== "" && component.max != null && numeric > Number(component.max)) errors[name] = component.validationMessage || `Enter a value no greater than ${component.max}`;
       }
-      if (!empty && ["TEXT","TEXT_AREA","EMAIL","PASSWORD"].includes(component?.type)) {
+      if (!empty && ["TEXT","TEXT_AREA","EMAIL","PASSWORD","PHONE"].includes(component?.type)) {
         const length = String(value).length;
         if (component.minLength !== "" && component.minLength != null && length < Number(component.minLength)) errors[name] = component.validationMessage || `Enter at least ${component.minLength} characters`;
         if (component.maxLength !== "" && component.maxLength != null && length > Number(component.maxLength)) errors[name] = component.validationMessage || `Enter no more than ${component.maxLength} characters`;
