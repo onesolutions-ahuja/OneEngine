@@ -403,3 +403,14 @@ test("single-router migration retires converted legacy appointment workflows", (
   assert.match(source, /id<>\$2/);
   assert.match(source, /OneAssistant event router dedupe verification failed/);
 });
+
+
+test("workflow step identifiers are TEXT for deep Decision paths", () => {
+  const schema = readFileSync(new URL("../server/database/schema.sql", import.meta.url), "utf8");
+  const init = readFileSync(new URL("../server/database/init.js", import.meta.url), "utf8");
+  assert.doesNotMatch(schema, /step_identifier VARCHAR\(200\)/);
+  assert.match(schema, /step_identifier TEXT/);
+  assert.match(init, /0063_workflow_step_identifier_text/);
+  assert.match(init, /ALTER TABLE platform_workflow_step_runs ALTER COLUMN step_identifier TYPE TEXT/);
+  assert.match(init, /ALTER TABLE platform_workflow_screen_sessions ALTER COLUMN step_identifier TYPE TEXT/);
+});
