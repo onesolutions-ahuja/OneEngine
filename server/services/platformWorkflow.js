@@ -2572,52 +2572,174 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "CREATE_RECORD",
     displayName: "Create Record",
-    description: "Create a record on an object using field mappings.",
+    description: "Create one or more records on an object using field mappings or record resources.",
     schema: {
       type: "object",
       properties: {
         objectKey: { type: "string" },
         objectId: { type: "string" },
         fieldValues: { type: "object" },
+        recordResource: {},
+        recordCollectionResource: {},
+        updateExisting: { type: "boolean" },
+        matchField: { type: "string" },
+        checkMatchingRecords: { type: "boolean" },
+        match: { type: "string" },
+        matchConditions: { type: "array" },
+        matchAction: { type: "string" },
       },
-      required: ["fieldValues"],
     },
     validation: (action) => {
       if (!action || typeof action !== "object") throw new Error("Create Record requires an action object");
-      if (!action.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) {
-        throw new Error("Create Record requires fieldValues to be an object");
+      const hasFields = action.fieldValues && typeof action.fieldValues === "object" && !Array.isArray(action.fieldValues);
+      const hasRecord = action.recordResource !== undefined;
+      const hasCollection = action.recordCollectionResource !== undefined;
+      if (!hasFields && !hasRecord && !hasCollection) throw new Error("Create Record requires field values or a record resource");
+      if (action.updateExisting === true && !String(action.matchField || "").trim()) {
+        throw new Error("Create Record update-existing mode requires a matching field");
+      }
+      if (action.checkMatchingRecords === true) {
+        if (!Array.isArray(action.matchConditions) || !action.matchConditions.length) {
+          throw new Error("Create Record matching-record mode requires at least one condition");
+        }
+        if (!["skip","update"].includes(String(action.matchAction || "skip").toLowerCase())) {
+          throw new Error("Create Record matching-record action must be skip or update");
+        }
       }
     },
     async: false,
     requiredPermissions: ["records.create"],
-    executor: async ({ db, action, req, object, companyId, fields, record, previousRecord, workflowVariables }) => {
+    executor: async ({ db, action, req, object, companyId, fields, record, previousRecord, workflowVariables = {} }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
-      const entries = Object.entries(resolvedFieldValues || {});
-      if (!entries.length) return { status: "completed", created: null };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
-      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
-      const columns = mappedFields.map((field) => `"${field.source_column}"`);
-      const params = entries.map(([, value]) => value);
-      const values = entries.map((_, index) => `$${index + 1}`);
-      if (req?.user?.companyId && targetObject.company_scoped) {
-        columns.push('"company_id"');
-        values.push(`$${params.length + 1}`);
-        params.push(req.user.companyId);
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || null;
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const metadataResult = await db(
+        "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+        [targetObject.id, runtimeCompanyId]
+      );
+      const metadataByKey = new Map([["id", { api_name: "id", source_column: "id" }]]);
+      for (const field of metadataResult.rows || []) {
+        metadataByKey.set(String(field.api_name), field);
+        if (field.source_column) metadataByKey.set(String(field.source_column), field);
       }
-      if (req?.user?.storeId && targetObject.store_scoped) {
-        columns.push('"store_id"');
-        values.push(`$${params.length + 1}`);
-        params.push(req.user.storeId);
+
+      let payloads = [];
+      let sourceVariableName = "";
+      if (action.recordCollectionResource !== undefined) {
+        const resolved = resolveConfiguredResource(action.recordCollectionResource, context, { preserveMissing: false });
+        if (!Array.isArray(resolved)) throw new Error("Create Record collection resource must resolve to a record collection");
+        payloads = resolved;
+      } else if (action.recordResource !== undefined) {
+        const resolved = resolveConfiguredResource(action.recordResource, context, { preserveMissing: false });
+        if (!resolved || typeof resolved !== "object" || Array.isArray(resolved)) throw new Error("Create Record record resource must resolve to one record");
+        payloads = [resolved];
+        sourceVariableName = String(action.recordResource?.path || "").replace(/^variables\./, "");
+      } else {
+        payloads = [resolveFieldValueMap(action.fieldValues || {}, context)];
       }
-      const query = `INSERT INTO "${table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`;
-      const result = await db(query, params);
-      const created = result.rows[0] || null;
-      try {
-        if (created?.id) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.created", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: created.id, record: created }, actorUserId: req?.user?.id || null });
-      } catch (error) { console.error("Platform workflow record event publication error:", error); }
-      return { status: "completed", created, duplicateWarning: duplicateAction === "WARN" };
+
+      const findExisting = async (payload) => {
+        const conditions = [];
+        const params = [];
+        if (action.updateExisting === true) {
+          const metadata = metadataByKey.get(String(action.matchField || ""));
+          if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name)) throw new Error("Create Record matching field is unavailable");
+          const value = payload?.[String(action.matchField)];
+          if (value === undefined || value === null || value === "") return null;
+          params.push(value);
+          conditions.push('"' + (metadata.source_column || metadata.api_name) + '"=$' + params.length);
+        } else if (action.checkMatchingRecords === true) {
+          for (const condition of action.matchConditions || []) {
+            const metadata = metadataByKey.get(String(condition?.field || ""));
+            if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name)) throw new Error("Create Record matching condition field is unavailable");
+            const value = resolveConfiguredResource(condition?.value, context, { preserveMissing: false });
+            params.push(value);
+            conditions.push('"' + (metadata.source_column || metadata.api_name) + '"=$' + params.length);
+          }
+        } else return null;
+        if (!conditions.length) return null;
+        const joiner = String(action.match || "all").toLowerCase() === "any" ? " OR " : " AND ";
+        const scope = [];
+        if (targetObject.company_scoped) { params.push(runtimeCompanyId); scope.push('"company_id"=$' + params.length); }
+        if (targetObject.store_scoped && runtimeStoreId) { params.push(runtimeStoreId); scope.push('"store_id"=$' + params.length); }
+        const where = ["(" + conditions.join(joiner) + ")", ...scope].join(" AND ");
+        const existing = await db('SELECT * FROM "' + table + '" WHERE ' + where + ' LIMIT 1', params);
+        return existing.rows[0] || null;
+      };
+
+      const updateExistingRecord = async (existing, payload) => {
+        await assertSpecificWorkflowObjectPermission({ db, req, companyId: runtimeCompanyId }, targetObject, "edit");
+        const entries = Object.entries(payload || {}).filter(([key]) => key !== "id");
+        if (!entries.length) return existing;
+        const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
+        const sets = mappedFields.map((field, index) => '"' + field.source_column + '"=$' + (index + 1)).join(", ");
+        const params = [...entries.map(([, value]) => value), existing.id];
+        const clauses = ["id=$" + params.length];
+        if (targetObject.company_scoped) { params.push(runtimeCompanyId); clauses.push("company_id=$" + params.length); }
+        if (targetObject.store_scoped && runtimeStoreId) { params.push(runtimeStoreId); clauses.push("store_id=$" + params.length); }
+        const result = await db('UPDATE "' + table + '" SET ' + sets + ' WHERE ' + clauses.join(" AND ") + " RETURNING *", params);
+        return result.rows[0] || existing;
+      };
+
+      const insertRecord = async (payload) => {
+        const entries = Object.entries(payload || {}).filter(([key]) => key !== "id");
+        if (!entries.length) throw new Error("Create Record requires at least one field value");
+        const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
+        const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req });
+        const columns = mappedFields.map((field) => '"' + field.source_column + '"');
+        const params = entries.map(([, value]) => value);
+        const values = entries.map((_, index) => "$" + (index + 1));
+        if (runtimeCompanyId && targetObject.company_scoped) { columns.push('"company_id"'); values.push("$" + (params.length + 1)); params.push(runtimeCompanyId); }
+        if (runtimeStoreId && targetObject.store_scoped) { columns.push('"store_id"'); values.push("$" + (params.length + 1)); params.push(runtimeStoreId); }
+        const result = await db('INSERT INTO "' + table + '" (' + columns.join(", ") + ") VALUES (" + values.join(", ") + ") RETURNING *", params);
+        return { record: result.rows[0] || null, duplicateWarning: duplicateAction === "WARN" };
+      };
+
+      const created = [];
+      const updated = [];
+      const skipped = [];
+      let duplicateWarning = false;
+      for (const rawPayload of payloads) {
+        if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) throw new Error("Create Record resource contains an invalid record value");
+        const payload = { ...rawPayload };
+        delete payload.id;
+        const existing = await findExisting(payload);
+        if (existing) {
+          const shouldUpdate = action.updateExisting === true || String(action.matchAction || "skip").toLowerCase() === "update";
+          if (shouldUpdate) updated.push(await updateExistingRecord(existing, payload));
+          else skipped.push(existing);
+          continue;
+        }
+        const inserted = await insertRecord(payload);
+        if (inserted.record) created.push(inserted.record);
+        duplicateWarning ||= inserted.duplicateWarning;
+      }
+
+      for (const createdRecord of created) {
+        try {
+          if (createdRecord?.id) await publishPlatformEvent({ db, companyId: runtimeCompanyId, eventType: "platform.object.record.created", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: createdRecord.id, record: createdRecord }, actorUserId: req?.user?.id || null });
+        } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      }
+      for (const updatedRecord of updated) {
+        try {
+          if (updatedRecord?.id) await publishPlatformEvent({ db, companyId: runtimeCompanyId, eventType: "platform.object.record.updated", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updatedRecord.id, record: updatedRecord }, actorUserId: req?.user?.id || null });
+        } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      }
+      if (sourceVariableName && workflowVariables.variables && (created[0] || updated[0])) {
+        workflowVariables.variables[sourceVariableName] = created[0] || updated[0];
+      }
+      return {
+        status: created.length || updated.length ? "completed" : "skipped",
+        created: created[0] || null,
+        createdRecords: created,
+        updated: updated[0] || null,
+        updatedRecords: updated,
+        skippedRecords: skipped,
+        count: created.length + updated.length,
+        duplicateWarning,
+      };
     },
   },
   {
