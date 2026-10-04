@@ -167,6 +167,56 @@ test("decision collapse keeps branch summaries visible and expand restores the c
   expect(failures, failures.join("\n")).toEqual([]);
 });
 
+test("expanded Decision keeps child lanes inside the visible canvas instead of exploding off-screen", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("developer/workflow-builder");
+  await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
+
+  await page.locator(".b2-palette-group").getByRole("button", { name: /Decision/ }).first().click();
+  const properties = page.locator(".b2-properties");
+  for (let i = 0; i < 4; i += 1) {
+    await properties.getByRole("button", { name: "New Outcome", exact: true }).click();
+  }
+
+  await properties.getByRole("button", { name: /Add Element to Path/i }).first().click();
+  const selector = page.locator(".b2-selector");
+  await selector.locator(".b2-selector-search input").fill("Decision");
+  await selector.getByRole("button", { name: /^Decision/ }).first().click();
+
+  const rootDecision = page.locator(".b2-node.is-decision").first();
+  await rootDecision.click();
+  await expect(rootDecision.locator("..").getByRole("button", { name: "Collapse Paths", exact: true })).toBeVisible();
+
+  const visibility = await page.evaluate(() => {
+    const canvas = document.querySelector(".b2-canvas");
+    const root = document.querySelector(".b2-node.is-decision");
+    const rootWrap = root?.parentElement;
+    const branchLabels = rootWrap ? [...rootWrap.querySelectorAll(":scope > .b2-line + .b2-decision-paths > .b2-decision-path > strong")] : [];
+    const childNodes = rootWrap ? [...rootWrap.querySelectorAll(":scope > .b2-line + .b2-decision-paths .b2-node")] : [];
+    if (!canvas || !root || !branchLabels.length) return null;
+    const c = canvas.getBoundingClientRect();
+    const inViewport = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.right > c.left && r.left < c.right && r.bottom > c.top && r.top < c.bottom;
+    };
+    return {
+      zoom: Number((document.querySelector(".b2-zoom span")?.textContent || "0").replace("%","")),
+      visibleBranchLabels: branchLabels.filter(inViewport).length,
+      visibleChildNodes: childNodes.filter(inViewport).length,
+      scrollWidth: canvas.scrollWidth,
+      clientWidth: canvas.clientWidth,
+    };
+  });
+
+  expect(visibility).not.toBeNull();
+  expect(visibility.zoom).toBeLessThanOrEqual(100);
+  expect(visibility.visibleBranchLabels).toBeGreaterThan(0);
+  expect(visibility.visibleChildNodes).toBeGreaterThan(0);
+  expect(visibility.scrollWidth).toBeLessThan(12000);
+  expect(visibility.clientWidth).toBeGreaterThan(0);
+  expect(failures, failures.join("\n")).toEqual([]);
+});
+
 test("properties panel uses the reviewed geometry and really scrolls with long nested configuration", async ({ page }) => {
   const failures = watchRuntimeFailures(page);
   await page.goto("developer/workflow-builder");
