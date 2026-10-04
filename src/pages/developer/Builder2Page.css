@@ -897,3 +897,32 @@
 .b2-advanced-action{border:1px solid #e5e5e5;border-radius:5px;padding:8px}
 .b2-advanced-action>summary{cursor:pointer;font-size:11px;font-weight:600;color:#526681}
 .b2-advanced-action[open]>summary{margin-bottom:8px}
+
+
+/* Keep high-cardinality Decision outcomes visible instead of pushing child nodes off-canvas. */
+.b2-decision-paths.is-many-paths{
+  display:grid;
+  grid-template-columns:repeat(var(--b2-path-count,3),minmax(220px,1fr));
+  width:min(920px,calc(100vw - 700px));
+  max-width:920px;
+  gap:18px;
+  align-items:start;
+}
+.b2-decision-paths.is-many-paths::before{display:none}
+.b2-decision-paths.is-many-paths .b2-decision-path{
+  width:100%!important;
+  min-width:0;
+  max-width:none;
+  padding-top:0;
+}
+.b2-decision-paths.is-many-paths .b2-decision-path::before{display:none}
+.b2-decision-paths.is-many-paths .b2-decision-path>strong{
+  max-width:100%;
+  width:100%;
+}
+@media(max-width:1250px){
+  .b2-decision-paths.is-many-paths{
+    grid-template-columns:repeat(2,minmax(220px,1fr));
+    width:min(520px,calc(100vw - 620px));
+  }
+}
