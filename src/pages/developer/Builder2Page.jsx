@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Database, Eye, GitBranch, Group, LayoutGrid, ListFilter, Monitor, MoreVertical, Plus, Redo2, Save, Search, Settings2, Trash2, Type, Undo2, Workflow, X, Zap, ZoomIn, ZoomOut } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import './Builder2Page.css'
-import { FLOW_TYPES, RESOURCE_TYPES, automaticResources, elementAllowed, validateDefinition } from './builder2Model'
+import { FLOW_TYPES, RESOURCE_TYPES, automaticResources, elementAllowed, requiresRuntimeRecordEditor, validateDefinition } from './builder2Model'
 import Builder2GraphCanvas from './Builder2GraphCanvas'
 
 const CORE = [
@@ -133,7 +133,7 @@ const runtimeActionToBuilderNode=x=>{
     }}
   }
   const normalized=normalizeNodeType(rawType)
-  if(!BUILDER_NATIVE_RUNTIME_TYPES.has(rawType)){
+  if(!BUILDER_NATIVE_RUNTIME_TYPES.has(rawType)||requiresRuntimeRecordEditor(x)){
     const inputs=actionInputs(x)
     return {...base,type:'ACTION',config:{actionKey:rawType,inputs,inputsText:JSON.stringify(inputs,null,2)}}
   }
