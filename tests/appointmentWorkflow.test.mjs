@@ -96,6 +96,37 @@ test("workflow decisions can route on outputs from previous steps", async () => 
   assert.equal(result.matched, true);
 });
 
+test("booking router graph reaches service, availability, confirmation and only starts new sessions explicitly", () => {
+  const { workflow } = oneAssistantRouter();
+  const actions = workflow.action.actions;
+  const byId = new Map(actions.map((action) => [action.id, action]));
+  const hasCase = byId.get("has_case");
+  assert.deepEqual(hasCase.defaultBranch, ["is_booking_request"]);
+  const start = byId.get("is_booking_request");
+  assert.ok(start);
+  assert.equal(start.defaultBranch.length, 0);
+  assert.ok(start.outcomes.every((outcome) => outcome.branch.includes("create_case") && outcome.branch.includes("send_initial_prompt")));
+  const validateDate = byId.get("validate_date");
+  assert.ok(validateDate.outcomes.every((outcome) => outcome.branch.includes("service_found")));
+  assert.ok(validateDate.defaultBranch.includes("service_found"));
+  assert.ok(byId.get("service_found").outcomes[0].branch.includes("resource_service_found"));
+  assert.ok(byId.get("resource_service_found").outcomes[0].branch.includes("resource_found"));
+  assert.ok(byId.get("resource_found").outcomes[0].branch.includes("availability_found"));
+  assert.ok(byId.get("validate_slot").outcomes.every((outcome) => outcome.branch.includes("confirm_case") && outcome.branch.includes("send_confirmation")));
+  const getCase = byId.get("get_case");
+  for (const status of ["CONFIRMED","CANCELLED","EXPIRED"]) {
+    assert.ok(getCase.filters.some((filter) => filter.field === "status" && filter.operator === "not_equals" && filter.value === status));
+  }
+});
+
+test("WhatsApp Flow API uses normalized recipient and fails the workflow on provider HTTP errors", () => {
+  const { workflow } = oneAssistantRouter();
+  const apiSteps = workflow.action.actions.filter((action) => action.key === "ONE_HTTP_REQUEST" && action.providerKey === "whatsapp");
+  assert.ok(apiSteps.length > 0);
+  assert.ok(apiSteps.every((action) => action.requireSuccess === true));
+  assert.ok(apiSteps.every((action) => action.body?.to?.path === "metadata.senderDigits"));
+});
+
 test("booking router exposes business logic as Builder primitives", () => {
   const { workflow } = oneAssistantRouter();
   const keys = workflow.action.actions.map((action) => action.key);
