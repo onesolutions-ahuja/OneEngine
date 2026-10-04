@@ -118,7 +118,72 @@ test('record CRUD respects tenant and store scope and maps workflow resources', 
   assert.ok(deleteWrite);
   assert.match(deleteWrite.sql,/company_id=\$2/);
   assert.match(deleteWrite.sql,/store_id=\$3/);
-  assert.deepEqual(deleteWrite.params,['r1','c1','s1']);
+  assert.deepEqual(deleteWrite.params,[['r1'],'c1','s1']);
+});
+
+
+test('record resource and condition CRUD modes stay tenant and store scoped', async () => {
+  const object = { id:'obj1', object_key:'case', label:'Case', source_table:'case_records', company_id:'c1', company_scoped:true, store_scoped:true, active:true };
+  const fields = [
+    { id:'f1', object_id:'obj1', api_name:'name', source_column:'name', active:true, writable:true, readable:true },
+    { id:'f2', object_id:'obj1', api_name:'status', source_column:'status', active:true, writable:true, readable:true },
+  ];
+  const writes=[];
+  const filterReads=[];
+  const db=async(sql,params=[])=>{
+    const q=String(sql);
+    if (q.includes('FROM platform_objects')) return {rows:[object]};
+    if (q.includes('FROM platform_fields')) return {rows:fields};
+    if (q.includes('FROM role_permissions') && q.includes('p.code = ANY')) return {rows:(params[2]||[]).map(code=>({code}))};
+    if (q.includes('FROM platform_object_permissions')) return {rows:[{can_view:true,can_create:true,can_edit:true,can_delete:true}]};
+    if (q.includes('FROM platform_permission_set_assignments')) return {rows:[]};
+    if (q.includes('FROM role_permissions') && q.includes('p.code=$2')) return {rows:[{ok:1}]};
+    if (q.includes('FROM platform_duplicate_rules') || q.includes('FROM platform_matching_rules')) return {rows:[]};
+    if (q.includes('information_schema.columns')) return {rows:[{one:1}]};
+    if (q.startsWith('SELECT id FROM "case_records"')) {
+      filterReads.push({sql:q,params:[...params]});
+      return {rows:[{id:'r2'},{id:'r3'}]};
+    }
+    if (/^(INSERT INTO|UPDATE |DELETE FROM)/.test(q.trim())) {
+      writes.push({sql:q,params:[...params]});
+      if (q.includes('ANY(')) {
+        const ids = Array.isArray(params.find(Array.isArray)) ? params.find(Array.isArray) : ['r2','r3'];
+        return {rows:ids.map((id)=>({id,name:'Updated',status:'closed',company_id:'c1',store_id:'s1'}))};
+      }
+      return {rows:[{id:'r2',name:params[0] ?? 'Updated',status:params[1] ?? 'closed',company_id:'c1',store_id:'s1'}]};
+    }
+    return {rows:[]};
+  };
+  const req={user:{id:'u1',companyId:'c1',storeId:'s1',roleId:'r1',permissions:['workflow.execute','records.create','records.update','records.delete']},_workflowEffectivePermissionSets:[]};
+  const workflowVariables={variables:{
+    newCases:[{name:'First',status:'new'},{name:'Second',status:'new'}],
+    casesToSave:[{id:'r2',name:'First',status:'saved'},{id:'r3',name:'Second',status:'saved'}],
+  },steps:{}};
+  const base={db,req,companyId:'c1',userId:'u1',workflowVariables};
+
+  const created=await executeWorkflowAction({...base,action:{id:'create-many',type:'CREATE_RECORDS',objectKey:'case',sourceRecord:{path:'variables.newCases'}}});
+  assert.equal(created.count,2);
+
+  const saved=await executeWorkflowAction({...base,action:{id:'save-many',type:'UPDATE_RECORD',objectKey:'case',sourceRecord:{path:'variables.casesToSave'}}});
+  assert.equal(saved.count,2);
+
+  const closed=await executeWorkflowAction({...base,action:{id:'close-open',type:'BULK_UPDATE_RECORDS',objectKey:'case',filters:[{field:'status',operator:'equals',value:'open'}],match:'all',fieldValues:{status:'closed'}}});
+  assert.equal(closed.requestedCount,2);
+
+  const deleted=await executeWorkflowAction({...base,action:{id:'delete-obsolete',type:'DELETE_RECORD',objectKey:'case',filters:[{field:'status',operator:'equals',value:'obsolete'}],match:'all'}});
+  assert.equal(deleted.count,2);
+
+  assert.equal(filterReads.length,2);
+  for (const read of filterReads) {
+    assert.match(read.sql,/"company_id"=\$1/);
+    assert.match(read.sql,/"store_id"=\$2/);
+  }
+  const bulkWrites=writes.filter(x=>x.sql.includes('ANY('));
+  assert.ok(bulkWrites.length>=2);
+  for (const write of bulkWrites) {
+    assert.match(write.sql,/company_id=\$/);
+    assert.match(write.sql,/store_id=\$/);
+  }
 });
 
 
