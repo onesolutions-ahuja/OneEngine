@@ -1,9 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { ReactFlow, Background, Controls, Handle, Position, addEdge, useEdgesState, useNodesState } from '@xyflow/react'
+import { AlertTriangle, ArrowUpDown, Braces, Clock3, Database, GitBranch, ListFilter, Monitor, Plus, Repeat2, Settings2, Trash2, Variable, Workflow, Zap } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 
 const START_ID='__flow_start__'
 const END_ID='__flow_end__'
+
+function tone(type){
+  if(['GET_RECORDS','CREATE_RECORDS','UPDATE_RECORDS','DELETE_RECORDS'].includes(type))return 'data'
+  if(['SUBFLOW','SCREEN'].includes(type))return 'interaction'
+  if(type==='ACTION')return 'action'
+  return 'logic'
+}
+function NodeGlyph({type}) {
+  if(type==='CREATE_RECORDS')return <Plus size={14}/>
+  if(type==='UPDATE_RECORDS')return <Settings2 size={14}/>
+  if(type==='DELETE_RECORDS')return <Trash2 size={14}/>
+  if(type==='ASSIGNMENT')return <Variable size={14}/>
+  if(type==='DECISION')return <GitBranch size={14}/>
+  if(type==='LOOP')return <Repeat2 size={14}/>
+  if(type==='COLLECTION_FILTER')return <ListFilter size={14}/>
+  if(type==='COLLECTION_SORT')return <ArrowUpDown size={14}/>
+  if(type==='WAIT')return <Clock3 size={14}/>
+  if(type==='TRANSFORM')return <Braces size={14}/>
+  if(type==='CUSTOM_ERROR')return <AlertTriangle size={14}/>
+  if(type==='SUBFLOW')return <Workflow size={14}/>
+  if(type==='SCREEN')return <Monitor size={14}/>
+  if(type==='ACTION')return <Zap size={14}/>
+  return <Database size={14}/>
+}
 
 function FlowStart() {
   return <div className="b2-rf-start"><b>Start</b><Handle id="default" type="source" position={Position.Bottom}/></div>
@@ -22,7 +47,7 @@ function FlowNode({data}) {
       : []
   return <div className={`b2-rf-node ${data.selected?'is-selected':''}`} onDoubleClick={data.onOpen}>
     <Handle type="target" position={Position.Top}/>
-    <div className="b2-rf-title"><b>{data.label}</b><small>{String(data.type||'').replaceAll('_',' ')}</small></div>
+    <div className={`b2-rf-icon is-${tone(data.type)}`}><NodeGlyph type={data.type}/></div><div className="b2-rf-title"><b>{data.label}</b><small>{String(data.type||'').replaceAll('_',' ')}</small></div>
     {branchHandles.length?branchHandles.map((handle,index)=><Handle key={handle.id} id={handle.id} type="source" position={Position.Bottom} title={handle.label} style={{left:`${((index+1)/(branchHandles.length+1))*100}%`}}/>):<Handle id="default" type="source" position={Position.Bottom}/>}
     {data.canFault?<Handle id="fault" type="source" position={Position.Right}/>:null}
   </div>
