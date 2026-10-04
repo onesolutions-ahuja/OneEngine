@@ -1506,8 +1506,14 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     res.json({ success: true, data: listPlatformComponents() });
   });
 
-  router.get("/platform/action-registry", ...manage, async (req, res) => {
-    res.json({ success: true, data: listRegisteredPlatformActions().map(({ executor, validation, ...definition }) => definition) });
+  router.get("/platform/action-registry", ...manage, async (_req, res) => {
+    const allowed = new Set(listCoreFunctions());
+    res.json({
+      success: true,
+      data: listRegisteredPlatformActions()
+        .filter((definition) => allowed.has(definition.key))
+        .map(({ executor, validation, ...definition }) => definition),
+    });
   });
 
   router.get("/platform/objects/:objectId/registered-actions", ...manage, async (req, res) => {
