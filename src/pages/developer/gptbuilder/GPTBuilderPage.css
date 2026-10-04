@@ -248,3 +248,11 @@
 .gptb-action-output-mappings>div{display:grid;grid-template-columns:20px minmax(0,1fr) minmax(0,1fr) 24px;gap:5px;align-items:center}
 .gptb-action-transform-mappings button,.gptb-action-output-mappings button{display:grid;place-items:center;border:0;background:transparent;color:#706e6b}
 @media(max-width:760px){.gptb-action-input-head{align-items:stretch;flex-direction:column}.gptb-action-input-head>select{width:100%}.gptb-action-transform-mappings>div,.gptb-action-output-mappings>div{grid-template-columns:1fr}}
+
+.gptb-auto-group-actions{display:flex;align-items:center;gap:5px}
+.gptb-auto-group-delete{display:grid;place-items:center;border:0;background:transparent;color:#706e6b}
+.gptb-auto-group-delete:hover{color:#ba0517}
+.gptb-group-add-slot{position:relative;display:grid;justify-items:center;gap:5px;padding-top:8px}
+.gptb-group-add-slot>.gptb-element-picker{z-index:6}
+.gptb-group-delete-modal .gptb-properties-body p{margin:0;font-size:10px;line-height:1.5}
+.gptb-group-delete-modal footer{display:flex;justify-content:flex-end;gap:7px}
