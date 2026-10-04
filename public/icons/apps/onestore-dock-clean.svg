@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+  <radialGradient id="bg" cx="46%" cy="40%" r="80%"><stop offset="0" stop-color="#40205f"/><stop offset=".55" stop-color="#21153f"/><stop offset="1" stop-color="#0b1b35"/></radialGradient>
+  <linearGradient id="bag" x1="120" y1="120" x2="385" y2="410" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff"/><stop offset=".42" stop-color="#fff8fb"/><stop offset=".73" stop-color="#ffbea4"/><stop offset="1" stop-color="#e86e55"/></linearGradient>
+  <linearGradient id="handle" x1="170" y1="110" x2="335" y2="170" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff5db1"/><stop offset=".48" stop-color="#ff8b43"/><stop offset="1" stop-color="#ffdf48"/></linearGradient>
+  <linearGradient id="tri" x1="180" y1="205" x2="330" y2="330" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#40d8ff"/><stop offset=".36" stop-color="#2d6cff"/><stop offset=".68" stop-color="#b53cff"/><stop offset="1" stop-color="#ff4f7b"/></linearGradient>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#000" flood-opacity=".38"/></filter>
+</defs>
+<rect x="6" y="6" width="500" height="500" rx="116" fill="url(#bg)"/>
+<g filter="url(#shadow)">
+  <path d="M175 184 C175 117 203 74 257 74 C311 74 339 117 339 184" fill="none" stroke="url(#handle)" stroke-width="28" stroke-linecap="round"/>
+  <path d="M137 176 H377 C394 176 406 189 404 206 L381 383 C379 400 365 412 348 412 H166 C149 412 135 400 133 383 L110 206 C108 189 120 176 137 176 Z" fill="url(#bag)"/>
+  <path d="M210 223 L323 288 C334 294 334 310 323 317 L210 382 C198 389 184 380 184 366 V239 C184 225 198 216 210 223 Z" fill="url(#tri)"/>
+  <path d="M211 223 L257 250 L215 277 L184 258 V239 C184 225 198 216 211 223Z" fill="#43d9ff" opacity=".9"/>
+  <path d="M215 277 L257 250 L301 275 L258 302 Z" fill="#5268ff" opacity=".9"/>
+  <path d="M258 302 L301 275 L323 288 C334 294 334 310 323 317 L275 345 Z" fill="#c53dff" opacity=".9"/>
+  <path d="M275 345 L210 382 C198 389 184 380 184 366 V323 L216 304 Z" fill="#ff4d7a" opacity=".92"/>
+</g></svg>

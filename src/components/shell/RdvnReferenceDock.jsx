@@ -6,8 +6,8 @@ export const dockItems = [
   { id: 'launchpad', label: 'Launcher', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Launchpad.png`, scaled: true },
   { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png`, scaled: true },
   { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: true },
-  { id: 'store', label: 'OneStore', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onestore-dock.png?v=20261003c`, scaled: true },
-  { id: 'till', label: 'OneTill', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onetill-dock.png?v=20261003d`, scaled: true },
+  { id: 'store', label: 'OneStore', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onestore-dock-clean.svg?v=20261004a`, scaled: true },
+  { id: 'till', label: 'OneTill', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onetill-dock-clean.svg?v=20261004a`, scaled: true },
   { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png`, scaled: true },
   { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace-dock.png?v=20261003c`, scaled: true },
 ]
