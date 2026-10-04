@@ -119,6 +119,9 @@ function NewAutomation({ onCreate, onClose }) {
   const [category, setCategory] = useState('frequent')
   const [selected, setSelected] = useState('record')
   const [search, setSearch] = useState('')
+  const [templates, setTemplates] = useState([])
+  const [templateLoading, setTemplateLoading] = useState(false)
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return FLOW_TYPES.filter((flow) => {
@@ -126,6 +129,27 @@ function NewAutomation({ onCreate, onClose }) {
       return inCategory && (!needle || `${flow.label} ${flow.description}`.toLowerCase().includes(needle))
     })
   }, [category, search])
+
+  useEffect(() => {
+    let live = true
+    if (step !== 'template') return () => { live = false }
+    setTemplateLoading(true)
+    apiRequest('/api/platform/rules')
+      .then((response) => {
+        if (!live) return
+        const rows = (Array.isArray(response?.data) ? response.data : []).filter((item) => item?.action?.type === 'workflow' && item?.action?.isTemplate === true)
+        setTemplates(rows)
+        setSelectedTemplateId((current) => current || String(rows[0]?.id || ''))
+      })
+      .catch(() => { if (live) setTemplates([]) })
+      .finally(() => { if (live) setTemplateLoading(false) })
+    return () => { live = false }
+  }, [step])
+
+  const templateRows = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    return templates.filter((item) => !needle || `${item.name || ''} ${item.action?.apiName || ''} ${item.action?.description || ''}`.toLowerCase().includes(needle))
+  }, [templates, search])
 
   if (step === 'source') return <div className="gptb-modal-backdrop">
     <section className="gptb-new-automation" role="dialog" aria-modal="true" aria-labelledby="gptb-new-title">
@@ -138,13 +162,19 @@ function NewAutomation({ onCreate, onClose }) {
     </section>
   </div>
 
-  if (step === 'template') return <div className="gptb-modal-backdrop">
-    <section className="gptb-new-automation gptb-template-dialog" role="dialog" aria-modal="true" aria-labelledby="gptb-template-title">
-      <header className="gptb-new-head"><div><h2 id="gptb-template-title">New Automation</h2><p>Use a Template</p></div><button className="gptb-icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></header>
-      <div className="gptb-template-body"><label className="gptb-modal-search"><Search size={15}/><input aria-label="Search templates" placeholder="Search templates"/></label><div className="gptb-empty-template"><Copy size={30}/><strong>No templates available</strong><span>GPT Builder does not have any published templates yet.</span></div></div>
-      <footer className="gptb-new-footer"><button className="gptb-button" onClick={() => setStep('source')}><ChevronLeft size={14}/> Back</button><span className="gptb-footer-spacer"/><button className="gptb-button" onClick={onClose}>Cancel</button></footer>
-    </section>
-  </div>
+  if (step === 'template') {
+    const selectedTemplate = templates.find((item) => String(item.id) === String(selectedTemplateId)) || null
+    return <div className="gptb-modal-backdrop">
+      <section className="gptb-new-automation gptb-template-dialog" role="dialog" aria-modal="true" aria-labelledby="gptb-template-title">
+        <header className="gptb-new-head"><div><h2 id="gptb-template-title">New Automation</h2><p>Use a Template</p></div><button className="gptb-icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></header>
+        <div className="gptb-template-body">
+          <label className="gptb-modal-search"><Search size={15}/><input value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search templates" placeholder="Search templates"/></label>
+          {templateLoading ? <div className="gptb-empty-template"><Copy size={30}/><strong>Loading templates…</strong></div> : templateRows.length ? <div className="gptb-template-list" role="listbox">{templateRows.map((item) => <button type="button" role="option" aria-selected={String(item.id) === String(selectedTemplateId)} className={String(item.id) === String(selectedTemplateId) ? 'is-selected' : ''} key={item.id} onClick={() => setSelectedTemplateId(String(item.id))}><span className="gptb-source-icon"><Copy size={18}/></span><span><b>{item.name}</b><small>{item.action?.description || item.action?.apiName || 'Flow Template'}</small><i>{FLOW_TYPES.find((type) => type.key === item.action?.flowType)?.label || item.action?.flowType || 'Flow'}</i></span></button>)}</div> : <div className="gptb-empty-template"><Copy size={30}/><strong>No templates available</strong><span>No published flow templates match your search.</span></div>}
+        </div>
+        <footer className="gptb-new-footer"><button className="gptb-button" onClick={() => { setSearch(''); setStep('source') }}><ChevronLeft size={14}/> Back</button><span className="gptb-footer-spacer"/><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!selectedTemplate} onClick={() => { const type = FLOW_TYPES.find((item) => item.key === selectedTemplate?.action?.flowType) || FLOW_TYPES.find((item) => item.key === 'autolaunched'); onCreate({ ...type, templateRule: selectedTemplate }) }}>Create</button></footer>
+      </section>
+    </div>
+  }
 
   return <div className="gptb-modal-backdrop">
     <section className="gptb-new-automation gptb-type-dialog" role="dialog" aria-modal="true" aria-labelledby="gptb-type-title">
@@ -381,7 +411,8 @@ function Toolbox({ layout, onClose, flowType, startConfig }) {
 }
 
 function FlowShell({ flow, onNew }) {
-  const [layout, setLayout] = useState('auto')
+  const templateAction = flow.templateRule?.action || {}
+  const [layout, setLayout] = useState(templateAction.layout?.mode === 'FREE_FORM' ? 'free' : 'auto')
   const [toolboxOpen, setToolboxOpen] = useState(true)
   const [selecting, setSelecting] = useState(false)
   const [zoom, setZoom] = useState(100)
@@ -389,8 +420,8 @@ function FlowShell({ flow, onNew }) {
   const [objects, setObjects] = useState([])
   const [eventTypes, setEventTypes] = useState([])
   const [availableFlows, setAvailableFlows] = useState([])
-  const [startConfig, setStartConfig] = useState(() => initialStart(flow.key))
-  const [startDraft, setStartDraft] = useState(() => initialStart(flow.key))
+  const [startConfig, setStartConfig] = useState(() => templateAction.start ? structuredClone(templateAction.start) : initialStart(flow.key))
+  const [startDraft, setStartDraft] = useState(() => templateAction.start ? structuredClone(templateAction.start) : initialStart(flow.key))
   const [startOpen, setStartOpen] = useState(flow.startNeedsConfiguration)
   const [flowProps, setFlowProps] = useState({ label: '', apiName: '', description: '', interviewLabel: '', runContext: defaultRunContextForFlowType(flow.key), apiVersion: '68.0', triggerOrder: '', showProgress: flow.key === 'screen', progressIndicatorType: 'simple_top', sourceTemplateId: '', originalFlowId: '', isTemplate: false, overridable: false })
   const [propertiesOpen, setPropertiesOpen] = useState(false)
@@ -402,8 +433,8 @@ function FlowShell({ flow, onNew }) {
   const [message, setMessage] = useState('')
   const [saveError, setSaveError] = useState('')
   const [elementPickerOpen, setElementPickerOpen] = useState(false)
-  const [elements, setElements] = useState([])
-  const [resources, setResources] = useState([])
+  const [elements, setElements] = useState(() => Array.isArray(templateAction.gptBuilderElements) ? structuredClone(templateAction.gptBuilderElements) : [])
+  const [resources, setResources] = useState(() => Array.isArray(templateAction.resources) ? structuredClone(templateAction.resources) : [])
   const [editingElement, setEditingElement] = useState(null)
   const [selectedElementIds, setSelectedElementIds] = useState([])
   const [freeSelectedIds, setFreeSelectedIds] = useState([])
@@ -411,7 +442,7 @@ function FlowShell({ flow, onNew }) {
   const canvasRef = useRef(null)
   const [copiedElements, setCopiedElements] = useState([])
   const [connectMode, setConnectMode] = useState(false)
-  const [goToConnections, setGoToConnections] = useState([])
+  const [goToConnections, setGoToConnections] = useState(() => Array.isArray(templateAction.goToConnections) ? structuredClone(templateAction.goToConnections) : [])
   const historyRef = useRef([])
   const futureRef = useRef([])
   const currentSnapshotRef = useRef(null)
