@@ -36,7 +36,7 @@ import {
   calculateAppointmentPayment,
 } from "./oneAssistant.js";
 
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "ONE_HTTP_REQUEST", "CALL_CONNECTOR"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
 
@@ -3616,50 +3616,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       };
     },
   },
-  {
-    key: "CALL_WEBHOOK",
-    displayName: "Call Webhook",
-    description: "Send a webhook to an approved endpoint.",
-    schema: {
-      type: "object",
-      properties: {"url":{"type":"string","title":"Webhook URL"},"method":{"type":"string","title":"Method","enum":["POST","GET","PUT","PATCH"]},"headers":{"type":"object","title":"Headers"},"body":{"type":"object","title":"Body"}},
-      required: [],
-    },
-    validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a url or endpoint");
-    },
-    async: true,
-    requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
-  },
   oneHttpRequestDefinition(),
-  {
-    key: "HTTP_REQUEST",
-    displayName: "HTTP Request",
-    description: "Send an HTTP request to an approved endpoint.",
-    schema: {
-      type: "object",
-      properties: {"url":{"type":"string","title":"Request URL"},"method":{"type":"string","title":"Method","enum":["POST","GET","PUT","PATCH","DELETE"]},"headers":{"type":"object","title":"Headers"},"body":{"type":"object","title":"Body"}},
-      required: [],
-    },
-    validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a url or endpoint");
-    },
-    async: true,
-    requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
-  },
-  {
-    key: "WEBHOOK",
-    displayName: "Webhook",
-    description: "Send a webhook to an approved endpoint.",
-    validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Webhook requires a url or endpoint");
-    },
-    async: true,
-    requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
-  },
   {
     key: "CONDITION",
     displayName: "Decision",
