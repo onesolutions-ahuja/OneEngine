@@ -138,7 +138,10 @@ export function PendingElementCard({ elementKey, instance = null, free = false, 
   >
     <span className={`gptb-element-icon is-${element.category}`}><Icon size={16}/></span>
     <span><strong>{label}</strong><small>{instance?.configured ? element.label : `${element.label} · Not fully configured`}</small></span>
-    {instance?.description ? <span className="gptb-card-description" title={instance.description}><CircleHelp size={12}/></span> : null}
+    {instance ? <span className="gptb-card-info" tabIndex={0} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+      <CircleHelp size={12}/>
+      <span role="tooltip"><b>{element.label}</b><small>API Name: {instance.apiName}</small>{instance.description ? <small>{instance.description}</small> : null}</span>
+    </span> : null}
   </button>
 }
 
