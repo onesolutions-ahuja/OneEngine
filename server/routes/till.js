@@ -54,7 +54,7 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
           INNER JOIN stores s ON s.id = t.store_id
           INNER JOIN companies c ON c.id = s.company_id
           LEFT JOIN users u ON u.id = ts.user_id
-          LEFT JOIN cash_movements cm ON cm.till_session_id = ts.id
+          LEFT JOIN cash_ledger cm ON cm.till_session_id = ts.id
           WHERE ts.company_id = $1
             AND ts.store_id = $2
             AND ts.status = 'open'
@@ -247,8 +247,8 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
         }
         const s = session.rows[0];
 
-        const cashIn = await client.query("SELECT COALESCE(SUM(amount),0) AS total FROM cash_movements WHERE till_session_id=$1 AND type='cash_in'", [s.id]);
-        const cashOut = await client.query("SELECT COALESCE(SUM(amount),0) AS total FROM cash_movements WHERE till_session_id=$1 AND type='cash_out'", [s.id]);
+        const cashIn = await client.query("SELECT COALESCE(SUM(amount),0) AS total FROM cash_ledger WHERE till_session_id=$1 AND type='cash_in'", [s.id]);
+        const cashOut = await client.query("SELECT COALESCE(SUM(amount),0) AS total FROM cash_ledger WHERE till_session_id=$1 AND type='cash_out'", [s.id]);
         const cashSales = await client.query(
           `SELECT COALESCE(SUM(s.total),0) AS total
            FROM sales s
@@ -337,7 +337,7 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
             .json({ success: false, message: "Till session not found" });
         const result = await db(
           `SELECT cm.id, cm.till_session_id, cm.user_id, u.username, cm.type, cm.amount, cm.reason, cm.created_at
-           FROM cash_movements cm
+           FROM cash_ledger cm
            LEFT JOIN users u ON u.id = cm.user_id
            WHERE cm.till_session_id = $1
            ORDER BY cm.created_at DESC
@@ -413,8 +413,8 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
           const position = await client.query(
             `SELECT
                (SELECT opening_cash FROM till_sessions WHERE id = $1) AS opening_cash,
-               (SELECT COALESCE(SUM(amount),0) FROM cash_movements WHERE till_session_id=$1 AND type='cash_in') AS cash_in,
-               (SELECT COALESCE(SUM(amount),0) FROM cash_movements WHERE till_session_id=$1 AND type='cash_out') AS cash_out,
+               (SELECT COALESCE(SUM(amount),0) FROM cash_ledger WHERE till_session_id=$1 AND type='cash_in') AS cash_in,
+               (SELECT COALESCE(SUM(amount),0) FROM cash_ledger WHERE till_session_id=$1 AND type='cash_out') AS cash_out,
                (SELECT COALESCE(SUM(s.total),0) FROM sales s
                  INNER JOIN payments pa ON pa.sale_id = s.id
                  INNER JOIN till_sessions ts ON ts.id = $1
@@ -446,7 +446,7 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
         }
 
         const result = await client.query(
-          `INSERT INTO cash_movements (till_session_id, user_id, type, amount, reason, store_id, terminal_id)
+          `INSERT INTO cash_ledger (till_session_id, user_id, type, amount, reason, store_id, terminal_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id, till_session_id, user_id, type, amount, reason, store_id, terminal_id, created_at`,
           [session.rows[0].id, req.user.id, type, value, reason || null, session.rows[0].store_id, session.rows[0].terminal_id]
@@ -504,8 +504,8 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
           `SELECT ts.id, ts.company_id, ts.store_id, ts.terminal_id, ts.user_id,
                   t.terminal_number, u.username AS opened_by_name,
                   ts.opening_cash, ts.status, ts.opened_at,
-                  COALESCE((SELECT SUM(amount) FROM cash_movements cm WHERE cm.till_session_id = ts.id AND cm.type='cash_in'), 0) AS cash_in_total,
-                  COALESCE((SELECT SUM(amount) FROM cash_movements cm WHERE cm.till_session_id = ts.id AND cm.type='cash_out'), 0) AS cash_out_total,
+                  COALESCE((SELECT SUM(amount) FROM cash_ledger cm WHERE cm.till_session_id = ts.id AND cm.type='cash_in'), 0) AS cash_in_total,
+                  COALESCE((SELECT SUM(amount) FROM cash_ledger cm WHERE cm.till_session_id = ts.id AND cm.type='cash_out'), 0) AS cash_out_total,
                   (
                     SELECT COALESCE(SUM(s.total), 0)
                     FROM sales s
@@ -600,7 +600,7 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
         );
 
         await db(
-          `INSERT INTO cash_movements (till_session_id, user_id, type, amount, reason, store_id, terminal_id)
+          `INSERT INTO cash_ledger (till_session_id, user_id, type, amount, reason, store_id, terminal_id)
            VALUES ($1, $2, 'drawer_open', $3, $4, $5, $6)`,
           [session.rows[0]?.id ?? null, req.user.id, 0, reason, req.user.storeId, terminalId]
         );
