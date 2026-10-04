@@ -74,7 +74,7 @@ function sanitizeSettings(body, providerKey, current) {
   return next;
 }
 
-export default function createGlobalProductLookupRouter({ authenticate, authorize, db, writeAudit, lookupService }) {
+export default function createGlobalProductLookupRouter({ authenticate, authorize, db, writeAudit, lookupService, connectorDrivers = null }) {
   const router = express.Router();
 
   async function providerRows(companyId) {
@@ -335,6 +335,7 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
       systemKey: "action:CONNECTOR_TEST_CONNECTION",
       req,
       input: { connectorInstanceId },
+      connectorDrivers,
       source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "CONNECTOR_TEST_CONNECTION" },
     });
     const result = execution.result || { success: false, code: "TEST_FAILED", message: "Provider test did not return a result" };
