@@ -20,7 +20,7 @@ const FUNCTIONS = [
 ]
 const OPERATORS = ['+', '-', '*', '/', '=', '<>', '<', '>', '<=', '>=', '&']
 
-function basicFormulaCheck(value) {
+export function basicFormulaCheck(value) {
   const text = String(value || '').trim()
   if (!text) return 'Enter a formula.'
   let paren = 0
