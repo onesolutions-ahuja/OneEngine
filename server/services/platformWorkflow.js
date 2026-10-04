@@ -5092,7 +5092,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null }) => {
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, debugMode = false, debugWaitElementBehavior = false, debugWaitPaths = {} }) => {
       const tenantId = companyId || req?.user?.companyId;
       const amount = Number(action.amount);
       const unit = String(action.unit || "minutes").toLowerCase();
@@ -5147,6 +5147,21 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           dateParts = addLocalDay(dateParts.year, dateParts.month, dateParts.day);
           runAt = localToUtc(dateParts.year, dateParts.month, dateParts.day, resumeHour, resumeMinute, timeZone);
         }
+      }
+
+      if (debugMode && debugWaitElementBehavior) {
+        const selectedPath = debugWaitPaths?.[action.id];
+        if (!selectedPath) throw new Error(`Select a Wait Path for "${action.label || action.apiName || action.id || "Wait for Amount of Time"}"`);
+        return {
+          status: "completed",
+          simulated: true,
+          debugWait: true,
+          selectedPath,
+          waitType: "WAIT_DURATION",
+          amount,
+          unit,
+          resumeAt: runAt.toISOString(),
+        };
       }
 
       const job = await enqueuePlatformJob({
@@ -5213,7 +5228,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, fields = [], object = null, workflowVariables = {} }) => {
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, fields = [], object = null, workflowVariables = {}, debugMode = false, debugWaitElementBehavior = false, debugWaitPaths = {} }) => {
       const tenantId = companyId || req?.user?.companyId;
       if (!runId) throw new Error("Wait for Conditions requires a persisted workflow run");
       const legacyConfig = action?.waitCondition ? [{
@@ -5224,6 +5239,25 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }] : [];
       const configs = Array.isArray(action?.waitConfigurations) && action.waitConfigurations.length ? action.waitConfigurations : legacyConfig;
       const context = { record, previousRecord, req, object, workflowVariables };
+      if (debugMode && debugWaitElementBehavior) {
+        const selectedPath = debugWaitPaths?.[action.id];
+        if (!selectedPath) throw new Error(`Select a Wait Path for "${action.label || action.apiName || action.id || "Wait for Conditions"}"`);
+        if (selectedPath === "__DEFAULT__") {
+          return { status: "completed", simulated: true, debugWait: true, selectedPath, waitType: "WAIT_FOR_CONDITIONS", defaultPath: true };
+        }
+        const selectedConfiguration = configs.find((config) => String(config?.id || "") === String(selectedPath));
+        if (!selectedConfiguration) throw new Error(`Selected Wait Path is unavailable for "${action.label || action.apiName || action.id || "Wait for Conditions"}"`);
+        return {
+          status: "completed",
+          simulated: true,
+          debugWait: true,
+          selectedPath,
+          waitType: "WAIT_FOR_CONDITIONS",
+          defaultPath: false,
+          waitConfigurationId: selectedConfiguration.id || null,
+          waitConfigurationLabel: selectedConfiguration.label || null,
+        };
+      }
       const eligible = [];
       for (const config of configs) {
         let conditionMet = true;
@@ -5344,7 +5378,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, object = null, workflowVariables = {} }) => {
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, object = null, workflowVariables = {}, debugMode = false, debugWaitElementBehavior = false, debugWaitPaths = {} }) => {
       const tenantId = companyId || req?.user?.companyId;
       const context = { record, previousRecord, req, object, workflowVariables };
       const orgTimeZone = String(req?.user?.timeZone || req?.user?.timezone || "UTC");
@@ -5423,6 +5457,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
 
       if (Number.isNaN(runAt.getTime())) runAt = new Date();
+      if (debugMode && debugWaitElementBehavior) {
+        const selectedPath = debugWaitPaths?.[action.id];
+        if (!selectedPath) throw new Error(`Select a Wait Path for "${action.label || action.apiName || action.id || "Wait Until Date"}"`);
+        return {
+          status: "completed",
+          simulated: true,
+          debugWait: true,
+          selectedPath,
+          waitType: "WAIT_UNTIL_DATE",
+          resumeAt: runAt.toISOString(),
+          mode,
+        };
+      }
       const job = await enqueuePlatformJob({
         db,
         companyId: tenantId,
@@ -5483,7 +5530,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null }) => {
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, debugMode = false, debugWaitElementBehavior = false, debugWaitPaths = {} }) => {
       const tenantId = companyId || req?.user?.companyId;
       const requestedResumeAt = action.resumeAt || action.until || null;
       const waitSeconds = Number(action.durationSeconds ?? action.waitSeconds ?? 0);
@@ -5491,6 +5538,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         ? new Date(requestedResumeAt)
         : new Date(Date.now() + Math.max(0, waitSeconds || 0) * 1000);
       if (Number.isNaN(runAt.getTime())) throw new Error("Wait resume time is invalid");
+      if (debugMode && debugWaitElementBehavior) {
+        const selectedPath = debugWaitPaths?.[action.id] || "__WAIT__";
+        return { status: "completed", simulated: true, debugWait: true, selectedPath, waitType: "WAIT", resumeAt: runAt.toISOString() };
+      }
       const job = await enqueuePlatformJob({
         db,
         companyId: tenantId,
