@@ -313,7 +313,11 @@ function FlowPropertiesModal({ value, saved, saving, flowType, availableFlows, o
           {flowType === 'screen' ? <><label className="gptb-properties-check"><input type="checkbox" checked={draft.showProgress === true} onChange={(event) => setDraft((current) => ({ ...current, showProgress: event.target.checked }))}/><span>Show a progress indicator on screen elements</span></label>{draft.showProgress ? <label><span>Progress Indicator Type</span><select value={draft.progressIndicatorType || 'simple_top'} onChange={(event) => setDraft((current) => ({ ...current, progressIndicatorType: event.target.value }))}><option value="simple_top">Simple: Top of Screen</option><option value="path_top">Path: Top of Screen</option><option value="simple_footer">Simple: Footer of Screen</option></select></label> : null}</> : null}
         </div> : null}
       </div>
-      <footer className="gptb-new-footer"><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled={!valid || saving} onClick={() => { onChange(draft); onSave(draft) }}>{saving ? 'Saving…' : saved ? 'Done' : 'Save'}</button></footer>
+      <footer className="gptb-new-footer"><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled={!valid || saving} onClick={() => {
+        onChange(draft)
+        if (saved) onCancel()
+        else onSave(draft)
+      }}>{saving ? 'Saving…' : saved ? 'Done' : 'Save'}</button></footer>
     </section>
   </div>
 }
@@ -620,7 +624,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [saving, setSaving] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState(() => initialRule?.updated_at || initialRule?.created_at || '')
   const [dirty, setDirty] = useState(() => !initialRule)
-  const [activeStatus, setActiveStatus] = useState(() => initialRule?.active === true || initialRule?.lifecycle_status === 'ACTIVE')
+  const [activeStatus, setActiveStatus] = useState(() => initialRule?.runtime_active === true || initialRule?.active === true || initialRule?.lifecycle_status === 'ACTIVE')
   const [message, setMessage] = useState('')
   const [saveError, setSaveError] = useState('')
   const [elementPickerOpen, setElementPickerOpen] = useState(false)
@@ -812,7 +816,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       })
       const saved = response?.data || {}
       if (saved.id) { setWorkflowId(String(saved.id)); onWorkflowSaved?.(String(saved.id)) }
-      if (saved.active !== undefined || saved.lifecycle_status) setActiveStatus(saved.active === true || saved.lifecycle_status === 'ACTIVE')
+      if (saved.active !== undefined || saved.lifecycle_status || saved.runtime_active !== undefined) setActiveStatus(saved.runtime_active === true || saved.active === true || saved.lifecycle_status === 'ACTIVE')
       const nextProps = forceNewFlow
         ? { ...props, label: payload.name, apiName: payload.action.apiName, description: payload.action.description, originalFlowId: workflowId || props.originalFlowId || '' }
         : props
@@ -843,7 +847,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         body: JSON.stringify(payload),
       })
       const activated = response?.data || {}
-      setActiveStatus(activated.active === true || activated.lifecycle_status === 'ACTIVE')
+      setActiveStatus(activated.runtime_active === true || activated.active === true || activated.lifecycle_status === 'ACTIVE')
       setLastSavedAt(new Date().toISOString())
       setDirty(false)
       setMessage('Flow activated.')
@@ -1361,7 +1365,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
-    {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
+    {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => {
+      const changed = JSON.stringify(next) !== JSON.stringify(flowProps)
+      setFlowProps(next)
+      if (changed) setDirty(true)
+    }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
     {saveAsFlowOpen ? <GPTBuilderSaveAsFlowDialog value={flowProps} saving={saving} onCancel={() => setSaveAsFlowOpen(false)} onSave={(next) => void save(flowProps, { forceNewFlow: true, newFlow: next })}/> : null}
     {editHistoryPending ? <GPTBuilderUnsavedHistoryDialog saving={saving} onCancel={() => setEditHistoryPending(false)} onSaveAndView={() => void saveAndOpenEditHistory()}/> : null}
     {shortcutHelpOpen ? <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-shortcuts-title"><header><strong id="gptb-shortcuts-title">Keyboard Shortcuts</strong><button className="gptb-icon-button" aria-label="Close Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(false)}><X size={16}/></button></header><div className="gptb-properties-body"><dl className="gptb-shortcut-list"><div><dt>Zoom in / out</dt><dd>Ctrl/Cmd + Alt/Option + + / − or Ctrl/Cmd + mouse wheel</dd></div><div><dt>Zoom to fit</dt><dd>Ctrl/Cmd + Alt/Option + 1</dd></div><div><dt>Reset zoom</dt><dd>Ctrl/Cmd + Alt/Option + 0</dd></div><div><dt>Switch panel focus</dt><dd>F6</dd></div><div><dt>Toolbox / tips focus</dt><dd>g, then d</dd></div><div><dt>Delete selected elements</dt><dd>Delete / Backspace</dd></div><div><dt>Select multiple elements</dt><dd>Shift + Click</dd></div></dl></div><footer><button className="gptb-button is-brand" onClick={() => setShortcutHelpOpen(false)}>Close</button></footer></section></div> : null}
