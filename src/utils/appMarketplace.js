@@ -122,6 +122,8 @@ export function localAppIcon(assetKey = 'default-app') {
 }
 
 export function appIconUrl(item) {
+  const objectSvg = typeof item?.svg === 'string' ? item.svg.trim() : ''
+  if (objectSvg) return objectSvg
   const manifest = item?.manifest || {}
   const provider = manifest.providerConnector || manifest.provider_connector || {}
   const brandText = [item?.name, item?.publisher, item?.package_key, provider?.providerKey, provider.provider_key]
@@ -192,6 +194,8 @@ const DEDICATED_OPEN_ROUTES = Object.freeze({
 })
 
 export function resolveAppOpenRoute(item) {
+  const objectRoute = String(item?.landing_route || '').trim()
+  if (objectRoute) return objectRoute
   const key = String(item?.package_key || item?.manifest?.packageKey || '')
   if (DEDICATED_OPEN_ROUTES[key]) return DEDICATED_OPEN_ROUTES[key]
 
