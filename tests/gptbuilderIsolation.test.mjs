@@ -60,14 +60,22 @@ test('GPT Builder phase 2 implements Salesforce Start configuration and first-sa
 
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
-  assert.match(page, /disabled=\{!workflowId\}><Play/)
-  assert.match(page, /Test Mode/)
+  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  assert.match(page, /disabled=\{!workflowId\} onClick=\{\(\) => setExecutionMode\('run'\)\}><Play/)
+  assert.match(page, /setExecutionMode\('test'\)/)
+  assert.match(page, /> Test<\/button>/)
+  assert.match(page, /setExecutionMode\('debug'\)/)
   assert.match(page, /> Debug<\/button>/)
+  assert.match(page, /\/api\/platform\/rules\/\$\{encodeURIComponent\(workflowId\)\}\/run/)
+  assert.match(page, /\/api\/platform\/rules\/\$\{encodeURIComponent\(workflowId\)\}\/debug/)
+  assert.match(platform, /router\.post\("\/platform\/rules\/:ruleId\/run", \.\.\.workflowExecute/)
+  assert.match(platform, /workflow = workflowAuthoringRow\(workflow\)/)
+  assert.match(platform, /const rollbackMode = executionMode === "TEST"/)
   assert.match(page, /disabled=\{saving \|\| !workflowId \|\| dirty \|\| issues\.some/)
   assert.match(page, /Show Errors/)
   assert.match(page, /Show Warnings/)
   assert.match(page, /Unsaved changes/)
-  assert.match(page, /Run, Test, and Debug use the most recent saved version/)
+  assert.match(page, /Uses the most recent saved version/)
 })
 
 
