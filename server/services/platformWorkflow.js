@@ -3138,12 +3138,43 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         ...resolved,
         subject: resolveConfiguredResource(action.subject, bindingContext, { preserveMissing: false }),
         title: resolveConfiguredResource(action.title, bindingContext, { preserveMissing: false }),
+        message: resolveConfiguredResource(action.message ?? action.body ?? action.text, bindingContext, { preserveMissing: false }),
         templateId: resolveConfiguredResource(action.templateId, bindingContext, { preserveMissing: false }),
         template: resolveConfiguredResource(action.template || action.templateKey, bindingContext, { preserveMissing: false }),
         conversationId: resolveConfiguredResource(action.conversationId, bindingContext, { preserveMissing: false }),
         objectId: resolveConfiguredResource(action.objectId, bindingContext, { preserveMissing: false }),
         recordId: resolveConfiguredResource(action.recordId, bindingContext, { preserveMissing: false }),
       };
+
+      const templateRef = forwarded.templateId || forwarded.template || null;
+      if (templateRef) {
+        const templateResult = await db(
+          `SELECT id,api_key,channel,subject,body
+             FROM platform_message_templates
+            WHERE active=TRUE
+              AND (company_id=$1 OR company_id IS NULL)
+              AND (id::text=$2 OR api_key=$2)
+            ORDER BY CASE WHEN company_id=$1 THEN 0 ELSE 1 END
+            LIMIT 1`,
+          [companyId || req?.user?.companyId, String(templateRef)]
+        );
+        const template = templateResult.rows[0];
+        if (!template) return { status: "failed", code: "TEMPLATE_NOT_FOUND", retryable: false };
+        if (String(template.channel || "").toUpperCase() !== channel) {
+          return { status: "failed", code: "TEMPLATE_CHANNEL_MISMATCH", retryable: false };
+        }
+        const templateContext = forwarded.templateContext && typeof forwarded.templateContext === "object"
+          ? forwarded.templateContext
+          : (record || {});
+        forwarded.templateId = template.id;
+        forwarded.template = template.api_key;
+        forwarded.templateKey = template.api_key;
+        forwarded.subject = renderMessageTemplate(template.subject || forwarded.subject || "", templateContext);
+        forwarded.title = forwarded.title || forwarded.subject || null;
+        forwarded.message = renderMessageTemplate(template.body || forwarded.message || "", templateContext);
+        forwarded.body = forwarded.message;
+        forwarded.text = forwarded.message;
+      }
 
       if (channel === "IN_APP") {
         const tenantId = companyId || req?.user?.companyId || null;
@@ -3174,8 +3205,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         if (!recipientUserIds.length) return { status: "failed", code: "COMMUNICATION_RECIPIENT_UNAVAILABLE", retryable: false };
 
         const templateContext = forwarded.templateContext && typeof forwarded.templateContext === "object" ? forwarded.templateContext : (record || {});
-        const rawMessage = action.message ?? action.body ?? action.text ?? action.templateKey ?? action.template ?? "";
-        const rawTitle = action.title ?? action.subject ?? "";
+        const rawMessage = forwarded.message ?? action.message ?? action.body ?? action.text ?? "";
+        const rawTitle = forwarded.title ?? forwarded.subject ?? action.title ?? action.subject ?? "";
         const message = renderMessageTemplate(String(rawMessage), templateContext);
         const title = rawTitle ? renderMessageTemplate(String(rawTitle), templateContext) : null;
 
