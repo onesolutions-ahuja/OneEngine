@@ -393,6 +393,35 @@ test('GPT Builder Group matches Salesforce auto-layout visual grouping and brows
   assert.doesNotMatch(page, /if \(element\.key === 'group'\) return .*RuntimeAction/)
 })
 
+test('GPT Builder Test Mode persists settings, evaluates assertions, skips record start conditions, and simulates Wait paths', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Scenario Testing Automation',
+    'Add Assertion',
+    'Reset Settings',
+    'Skip start condition requirements',
+    'Debug wait element behavior',
+    'Select a Wait Path',
+    'Expected Results',
+  ]) assert.ok(page.includes(text), text)
+  assert.match(page, /sessionStorage\.setItem\(executionStorageKey/)
+  assert.match(page, /RESOURCE_CONDITION/)
+  assert.match(page, /debugWaitElementBehavior/)
+  assert.match(page, /debugWaitPaths/)
+  assert.match(platform, /skipStartConditionRequirements/)
+  assert.match(platform, /debugWaitElementBehavior/)
+  assert.match(platform, /debugWaitPaths/)
+  assert.match(platform, /"RESOURCE_CONDITION"/)
+  assert.match(platform, /greater_than_or_equal/)
+  assert.match(runtime, /debugWaitElementBehavior/)
+  assert.match(runtime, /waitType: "WAIT_DURATION"/)
+  assert.match(runtime, /waitType: "WAIT_FOR_CONDITIONS"/)
+  assert.match(runtime, /waitType: "WAIT_UNTIL_DATE"/)
+  assert.match(runtime, /simulated: true/)
+})
+
 test('GPT Builder Wait Until Date matches Salesforce Enter Date and Get from Attribute UX and runtime behavior', async () => {
   const wait = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderWaitUntilDate.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
