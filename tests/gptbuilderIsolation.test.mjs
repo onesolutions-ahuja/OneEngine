@@ -70,6 +70,15 @@ test('GPT Builder phase 2 implements Salesforce Start configuration and first-sa
   assert.ok(page.includes("method: workflowId && !forceNewFlow ? 'PUT' : 'POST'"))
 })
 
+test('GPT Builder saved Flow Properties update the draft and require toolbar Save to persist', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /if \(saved\) onCancel\(\)/)
+  assert.match(page, /else onSave\(draft\)/)
+  assert.match(page, /const changed = JSON\.stringify\(next\) !== JSON\.stringify\(flowProps\)/)
+  assert.match(page, /if \(changed\) setDirty\(true\)/)
+  assert.match(page, /runtime_active === true/)
+})
+
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
