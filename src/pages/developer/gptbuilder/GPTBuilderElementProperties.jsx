@@ -55,16 +55,15 @@ export function generatedLabelForElement(elementKey, config = {}) {
 export function createElementInstance(elementKey, elements, options = {}) {
   const id = options.id || (globalThis.crypto?.randomUUID?.() || `element-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   const source = options.source || 'auto'
-  const autoName = source === 'auto' && elementKey !== 'screen'
-  const generated = autoName ? uniqueLabel(generatedLabelForElement(elementKey, options.config || {}), elements, id) : ''
-  const apiName = generated ? uniqueApiName(apiNameFromElementLabel(generated, 'Element'), elements, id) : ''
+  const generated = uniqueLabel(generatedLabelForElement(elementKey, options.config || {}), elements, id)
+  const apiName = uniqueApiName(apiNameFromElementLabel(generated, 'Element'), elements, id)
   return {
     id,
     key: elementKey,
     label: generated,
     apiName,
     description: '',
-    labelSource: autoName ? 'auto' : 'manual',
+    labelSource: 'auto',
     apiNameSource: 'auto',
     config: options.config || {},
     configured: false,
