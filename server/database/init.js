@@ -2078,6 +2078,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         // Historical duplicates may already have been dispatched and referenced by
         // workflow jobs. Do not delete audit events. Enforce idempotency prospectively
         // in recordCommunicationEvent instead of risking referential/audit loss here.
+        await client.query("CREATE INDEX IF NOT EXISTS idx_platform_communication_events_provider_message ON platform_communication_events(company_id,channel,provider_message_id) WHERE provider_message_id IS NOT NULL");
 
         const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
