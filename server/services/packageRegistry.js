@@ -562,10 +562,10 @@ export function packageDefinition(entry) {
             operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: "/admin/api/2025-01/shop.json" }],
           },
           uber_eats: {
-            authType: "bearer",
+            authType: "oauth2_client_credentials",
             baseUrl: "https://api.uber.com",
-            credentialsSchema: [{ key: "token", type: "secret", required: true, label: "OAuth access token" }],
-            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: "/v1/eats/stores" }],
+            credentialsSchema: [{ key: "token", type: "secret", required: false, label: "OAuth access token" }, { key: "clientId", type: "string", required: false, label: "Client ID" }, { key: "clientSecret", type: "secret", required: false, label: "Client Secret" }],
+            operations: [{ key: "oauth_client_credentials", tokenUrl: "https://auth.uber.com/oauth/v2/token", scope: "eats.store eats.order" }, { key: "test_connection", name: "Test Connection", method: "GET", path: "/v1/eats/stores" }],
           },
         };
         const definition = definitions[entry.key];
