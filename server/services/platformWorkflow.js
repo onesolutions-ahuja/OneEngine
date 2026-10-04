@@ -2238,20 +2238,20 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       type: "object",
       properties: {
         collection: { type: "string" },
-        transformMappings: { type: "object" },
+        transformMappings: { type: "object" },\n        outputValue: {},
       },
       required: ["collection","transformMappings"],
     },
     validation: (action) => {
       if (!action?.collection) throw new Error("Transform requires a source Resource");
-      if (!action.transformMappings || typeof action.transformMappings !== "object" || !Object.keys(action.transformMappings).length) throw new Error("Transform requires at least one mapping");
+      if (action.outputValue === undefined && (!action.transformMappings || typeof action.transformMappings !== "object" || !Object.keys(action.transformMappings).length)) throw new Error("Transform requires at least one mapping or output value");
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
       const context = { record, previousRecord, req, object, workflowVariables };
       const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
-      const mappings = action.transformMappings || {};
+      const mappings = action.transformMappings || {};\n      const resolveTransformValue = (sourceValue, item) => {\n        let value;\n        if (typeof sourceValue === "string" && sourceValue.startsWith("item.")) value = String(sourceValue).slice(5).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);\n        else if (sourceValue === "item") value = item;\n        else if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue) && Object.prototype.hasOwnProperty.call(sourceValue, "source")) {\n          value = resolveTransformValue(sourceValue.source, item);\n          if (sourceValue.multiply !== undefined) value = Number(value) * Number(sourceValue.multiply);\n          if (sourceValue.round === true) value = Math.round(Number(value));\n        } else value = resolveConfiguredResource(sourceValue, { ...context, record: item }, { preserveMissing: false });\n        return value;\n      };
       const assignPath = (target, path, value) => {
         const parts = String(path || "").split(".").filter(Boolean);
         if (!parts.length) return;
@@ -2264,23 +2264,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const transformOne = (item) => {
         const output = {};
         for (const [targetPath, sourceValue] of Object.entries(mappings)) {
-          let value;
-          if (typeof sourceValue === "string" && sourceValue.startsWith("item.")) {
-            value = String(sourceValue).slice(5).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);
-          } else if (sourceValue === "item") {
-            value = item;
-          } else {
-            value = resolveConfiguredResource(sourceValue, { ...context, record: item }, { preserveMissing: false });
-          }
-          assignPath(output, targetPath, value);
+          const value = resolveTransformValue(sourceValue, item);\n          assignPath(output, targetPath, value);
         }
         return output;
       };
       if (Array.isArray(source)) {
-        const collection = source.map(transformOne);
+        const collection = action.outputValue !== undefined ? source.map((item) => resolveTransformValue(action.outputValue, item)) : source.map(transformOne);
         return { status: "completed", collection, count: collection.length, value: collection };
       }
-      const value = transformOne(source && typeof source === "object" ? source : {});
+      const value = action.outputValue !== undefined ? resolveTransformValue(action.outputValue, source && typeof source === "object" ? source : {}) : transformOne(source && typeof source === "object" ? source : {});
       return { status: "completed", value, collection: null };
     },
   },
