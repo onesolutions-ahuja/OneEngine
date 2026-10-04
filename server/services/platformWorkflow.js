@@ -1164,20 +1164,6 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
       JSON.stringify({ licensed: false, entitlementKey: packageRow.manifest?.entitlementKey || packageKey })]
   );
   const request = requestResult.rows[0];
-  const platformAdmins = await db(
-    `SELECT DISTINCT u.id
-       FROM users u
-       JOIN role_permissions rp ON rp.role_id=u.role_id
-       JOIN permissions p ON p.id=rp.permission_id
-      WHERE u.active=true AND p.code='oneengine.manage'`
-  );
-  for (const admin of platformAdmins.rows || []) {
-    await db(
-      `INSERT INTO platform_notifications (company_id,user_id,title,message,metadata)
-       VALUES (NULL,$1,$2,$3,$4::jsonb)`,
-      [admin.id, "Licence request received", `${packageRow.company_name} requested licence for ${packageRow.name}`, JSON.stringify({ source: "licence_request", requestId: request.id, companyId: tenantId, packageKey })]
-    );
-  }
   if (typeof writeAudit === "function") {
     await writeAudit(tenantId, actorId, "licence_request_created", "platform_licence_request", request.id, { packageKey, packageName: packageRow.name, status: "PENDING" });
   }
@@ -1197,8 +1183,8 @@ async function executeLicenceRequestPackageAction({ db, action, req, companyId, 
      SELECT NULL,'Licence Request Created','licence_request_created','[]'::jsonb,$1::jsonb,true,$2,$3
       WHERE NOT EXISTS (SELECT 1 FROM platform_rules WHERE company_id=$2 AND trigger_key='licence_request_created' AND active=true)`,
     [JSON.stringify({ type: "workflow", actions: [
-      { type: "IN_APP_NOTIFICATION", message: `${packageRow.company_name} requested licence for ${packageRow.name}` },
-      { type: "SEND_EMAIL", recipient: "platform_superadmins", templateId, templateContext: {
+      { type: "SEND_COMMUNICATION", channel: "IN_APP", recipient: "platform_superadmins", title: "Licence request received", message: `${packageRow.company_name} requested licence for ${packageRow.name}` },
+      { type: "SEND_COMMUNICATION", channel: "EMAIL", recipient: "platform_superadmins", templateId, templateContext: {
         company: { name: packageRow.company_name }, package: { name: packageRow.name },
         request: { user_name: request.requesting_user_name, created_at: request.created_at },
       } },
@@ -3162,39 +3148,57 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (channel === "IN_APP") {
         const tenantId = companyId || req?.user?.companyId || null;
         if (!tenantId) return { status: "failed", code: "COMPANY_CONTEXT_REQUIRED", retryable: false };
-        let recipientUserId = resolveConfiguredResource(action.recipientUserId || action.recipient || action.to, bindingContext, { preserveMissing: false });
-        if (!recipientUserId || ["CURRENT_USER","$USER","$USER.ID"].includes(String(recipientUserId).toUpperCase())) {
-          recipientUserId = req?.user?.id || null;
+        let recipientSpec = resolveConfiguredResource(action.recipientUserId || action.recipient || action.to, bindingContext, { preserveMissing: false });
+        if (!recipientSpec || ["CURRENT_USER","$USER","$USER.ID"].includes(String(recipientSpec).toUpperCase())) {
+          recipientSpec = req?.user?.id || null;
         }
-        if (!recipientUserId) return { status: "failed", code: "COMMUNICATION_RECIPIENT_REQUIRED", retryable: false };
-        const userResult = await db(
-          "SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE LIMIT 1",
-          [recipientUserId, tenantId]
-        );
-        if (!userResult.rows[0]) return { status: "failed", code: "COMMUNICATION_RECIPIENT_UNAVAILABLE", retryable: false };
+        if (!recipientSpec) return { status: "failed", code: "COMMUNICATION_RECIPIENT_REQUIRED", retryable: false };
+
+        let recipientUserIds = [];
+        if (["PLATFORM_SUPERADMINS","PLATFORM_ADMINS"].includes(String(recipientSpec).toUpperCase())) {
+          const admins = await db(
+            `SELECT DISTINCT u.id
+               FROM users u
+               JOIN role_permissions rp ON rp.role_id=u.role_id
+               JOIN permissions p ON p.id=rp.permission_id
+              WHERE u.active=TRUE AND p.code='oneengine.manage'`
+          );
+          recipientUserIds = (admins.rows || []).map((row) => row.id).filter(Boolean);
+        } else {
+          const userResult = await db(
+            "SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE LIMIT 1",
+            [recipientSpec, tenantId]
+          );
+          recipientUserIds = userResult.rows?.[0]?.id ? [userResult.rows[0].id] : [];
+        }
+        if (!recipientUserIds.length) return { status: "failed", code: "COMMUNICATION_RECIPIENT_UNAVAILABLE", retryable: false };
+
         const templateContext = forwarded.templateContext && typeof forwarded.templateContext === "object" ? forwarded.templateContext : (record || {});
         const rawMessage = action.message ?? action.body ?? action.text ?? action.templateKey ?? action.template ?? "";
         const rawTitle = action.title ?? action.subject ?? "";
         const message = renderMessageTemplate(String(rawMessage), templateContext);
         const title = rawTitle ? renderMessageTemplate(String(rawTitle), templateContext) : null;
-        await db(
-          "INSERT INTO platform_notifications (company_id,user_id,title,message,metadata) VALUES ($1,$2,$3,$4,$5::jsonb)",
-          [tenantId, recipientUserId, title, message, JSON.stringify({ source: "send_communication", channel: "IN_APP", objectId: forwarded.objectId || null, recordId: forwarded.recordId || null })]
-        );
-        await recordCommunicationEvent({
-          db,
-          companyId: tenantId,
-          channel: "IN_APP",
-          eventType: COMMUNICATION_EVENTS.SENT,
-          direction: "OUTBOUND",
-          provider: "IN_APP",
-          recipient: String(recipientUserId),
-          objectId: forwarded.objectId || null,
-          recordId: forwarded.recordId || null,
-          body: message,
-          metadata: { title, actionType: "SEND_COMMUNICATION" },
-        }).catch(() => null);
-        return { status: "completed", channel: "IN_APP", recipient: recipientUserId };
+
+        for (const recipientUserId of recipientUserIds) {
+          await db(
+            "INSERT INTO platform_notifications (company_id,user_id,title,message,metadata) VALUES ($1,$2,$3,$4,$5::jsonb)",
+            [tenantId, recipientUserId, title, message, JSON.stringify({ source: "send_communication", channel: "IN_APP", objectId: forwarded.objectId || null, recordId: forwarded.recordId || null })]
+          );
+          await recordCommunicationEvent({
+            db,
+            companyId: tenantId,
+            channel: "IN_APP",
+            eventType: COMMUNICATION_EVENTS.SENT,
+            direction: "OUTBOUND",
+            provider: "IN_APP",
+            recipient: String(recipientUserId),
+            objectId: forwarded.objectId || null,
+            recordId: forwarded.recordId || null,
+            body: message,
+            metadata: { title, actionType: "SEND_COMMUNICATION" },
+          }).catch(() => null);
+        }
+        return { status: "completed", channel: "IN_APP", recipients: recipientUserIds };
       }
 
       const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS", WHATSAPP: "SEND_WHATSAPP" }[channel] || null;
