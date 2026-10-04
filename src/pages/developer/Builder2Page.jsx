@@ -108,22 +108,54 @@ const normalizeNodeType=value=>{
   if(type==='DELETE_RECORD')return 'DELETE_RECORDS'
   if(['ASSIGN_RECORD','SET_VARIABLE'].includes(type))return 'ASSIGNMENT'
   if(type==='CONDITION')return 'DECISION'
+  if(type==='RUN_SUBFLOW')return 'SUBFLOW'
+  if(['WAIT_FOR_CONDITIONS','WAIT_UNTIL_DATE'].includes(type))return 'WAIT'
   return type
 }
-const BUILDER_NATIVE_RUNTIME_TYPES=new Set(['GET_RECORDS','CREATE_RECORD','CREATE_RELATED_RECORD','UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS','DELETE_RECORD','ASSIGN_RECORD','SET_VARIABLE','ASSIGNMENT','CONDITION','LOOP','WAIT','SUBFLOW','COLLECTION_FILTER','COLLECTION_SORT','TRANSFORM','CUSTOM_ERROR','SCREEN','END'])
-const OPERATOR_TO_BUILDER={equals:'Equals',not_equals:'Does Not Equal',is_empty:'Is Null',changed:'Is Changed',greater_than:'Greater Than',greater_than_or_equal:'Greater Than or Equal',less_than:'Less Than',less_than_or_equal:'Less Than or Equal'}
+const BUILDER_NATIVE_RUNTIME_TYPES=new Set(['GET_RECORDS','CREATE_RECORD','UPDATE_RECORD','BULK_UPDATE_RECORDS','DELETE_RECORD','ASSIGNMENT','CONDITION','LOOP','WAIT','WAIT_FOR_CONDITIONS','WAIT_UNTIL_DATE','RUN_SUBFLOW','COLLECTION_FILTER','COLLECTION_SORT','TRANSFORM','CUSTOM_ERROR','SCREEN','END'])
+const OPERATOR_TO_BUILDER={equals:'Equals',not_equals:'Does Not Equal',is_empty:'Is Null',is_not_empty:'Is Null',changed:'Is Changed',greater_than:'Greater Than',greater_than_or_equal:'Greater Than or Equal',less_than:'Less Than',less_than_or_equal:'Less Than or Equal',contains:'Contains'}
 const OPERATOR_TO_RUNTIME=Object.fromEntries(Object.entries(OPERATOR_TO_BUILDER).map(([key,value])=>[value,key]))
-const conditionToBuilder=row=>({id:row?.id||uid(),resource:row?.field||row?.resource||'',operator:OPERATOR_TO_BUILDER[row?.operator]||row?.operator||'Equals',value:row?.value??''})
-const conditionToRuntime=row=>({field:row?.resource||row?.field||'',operator:OPERATOR_TO_RUNTIME[row?.operator]||String(row?.operator||'equals').toLowerCase().replaceAll(' ','_'),value:row?.value??''})
-const actionInputs=x=>Object.fromEntries(Object.entries(x||{}).filter(([key])=>!['id','label','apiName','api_name','description','key','type'].includes(key)))
+const conditionToBuilder=row=>({id:row?.id||uid(),resource:row?.field||row?.resource||'',operator:OPERATOR_TO_BUILDER[row?.operator]||row?.operator||'Equals',value:row?.operator==='is_not_empty'?'false':row?.operator==='is_empty'?'true':row?.value??''})
+const conditionToRuntime=row=>{
+  const operator=row?.operator==='Is Null'
+    ? (String(row?.value||'true')==='false'?'is_not_empty':'is_empty')
+    : OPERATOR_TO_RUNTIME[row?.operator]||String(row?.operator||'equals').toLowerCase().replaceAll(' ','_')
+  return {field:row?.resource||row?.field||'',operator,...(!['is_empty','is_not_empty','changed'].includes(operator)?{value:row?.value??''}:{})}
+}
+const actionInputs=x=>Object.fromEntries(Object.entries(x||{}).filter(([key])=>!['id','label','apiName','api_name','description','key','type','_builder','_builderResource','faultMode','faultBranch','retryCount'].includes(key)))
+const parseObjectText=(value='')=>{try{const parsed=JSON.parse(String(value||'{}'));return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:{}}catch{return {}}}
+const fieldRows=value=>Object.entries(value&&typeof value==='object'&&!Array.isArray(value)?value:{}).map(([field,rowValue])=>({id:uid(),field,value:rowValue}))
+const fieldValueMap=(rows=[])=>Object.fromEntries(rows.filter(row=>row?.field).map(row=>[row.field,row.value]))
+const assignmentOperatorToRuntime=value=>({'Equals':'set','Add':'add','Subtract':'subtract','Add Item':'append'}[String(value||'')]||'set')
+const assignmentOperatorToBuilder=value=>({set:'Equals',add:'Add',subtract:'Subtract',append:'Add Item'}[String(value||'').toLowerCase()]||'Equals')
+const resourceVariableType=(value,resources=[])=>{
+  const resource=resources.find(item=>item.value===value||item.apiName===String(value||'').replace(/^variables\./,''))
+  if(resource?.isCollection)return 'collection'
+  const type=String(resource?.dataType||resource?.type||'text').toLowerCase()
+  if(type.includes('number')||type.includes('currency')||type.includes('decimal'))return 'number'
+  if(type.includes('bool'))return 'boolean'
+  if(type.includes('date/time')||type.includes('datetime'))return 'datetime'
+  if(type==='date')return 'date'
+  if(type.includes('record'))return 'record'
+  return 'text'
+}
+const waitParts=seconds=>{
+  const total=Math.max(0,Number(seconds||0))
+  if(total&&total%86400===0)return {amount:total/86400,unit:'days'}
+  if(total&&total%3600===0)return {amount:total/3600,unit:'hours'}
+  return {amount:Math.max(1,Math.round(total/60)||1),unit:'minutes'}
+}
+const branchTargets=(edges=[],sourceId,handle)=>edges.filter(edge=>String(edge.source)===String(sourceId)&&String(edge.sourceHandle||'default')===String(handle||'default')).map(edge=>String(edge.target)).filter(Boolean)
 const runtimeActionToBuilderNode=x=>{
+  const authored=x?._builder&&typeof x._builder==='object'?x._builder:null
   const rawType=String(x?.type||x?.key||'').toUpperCase()
   const base={id:x?.id||uid(),label:x?.label||x?.displayName||rawType||'Element',apiName:x?.apiName||x?.api_name||x?.id||rawType||'Element',description:x?.description||''}
+  if(authored?.type)return {...base,type:authored.type,config:authored.config&&typeof authored.config==='object'?authored.config:{}}
   if(rawType==='CONDITION'){
     return {...base,type:'DECISION',config:{
       evaluation:'first',
       outcomes:(x?.outcomes||[]).map((outcome,index)=>({
-        id:outcome?.id||uid(),label:outcome?.label||`Outcome ${index+1}`,apiName:outcome?.apiName||outcome?.id||`Outcome_${index+1}`,
+        id:outcome?.id||uid(),label:outcome?.label||('Outcome '+(index+1)),apiName:outcome?.apiName||outcome?.id||('Outcome_'+(index+1)),
         conditionLogic:outcome?.condition?.match||'all',
         conditions:(outcome?.condition?.conditions||[]).map(conditionToBuilder),
         branch:Array.isArray(outcome?.branch)?outcome.branch:[],
@@ -132,6 +164,29 @@ const runtimeActionToBuilderNode=x=>{
       defaultBranch:Array.isArray(x?.defaultBranch)?x.defaultBranch:[],
     }}
   }
+  if(rawType==='GET_RECORDS')return {...base,type:'GET_RECORDS',config:{objectKey:x.objectKey||x.object||'',conditionLogic:(x.filters||[]).length?(x.match||'all'):'none',conditions:(x.filters||[]).map(conditionToBuilder),sortOrder:x.sortDirection||'none',sortBy:x.sortField||'',limit:String(x.store||'first').toLowerCase()==='all'?(Number(x.limit||50)!==50?'limited':'all'):'first',maxRecords:x.limit||''}}
+  if(rawType==='CREATE_RECORD')return {...base,type:'CREATE_RECORDS',config:{objectKey:x.objectKey||x.object||'',createCount:'one',valueMode:'manual',fieldValues:fieldRows(x.fieldValues)}}
+  if(rawType==='UPDATE_RECORD')return {...base,type:'UPDATE_RECORDS',config:{objectKey:x.objectKey||x.object||'',updateMode:'record',sourceRecord:x.recordId||'',fieldValues:fieldRows(x.fieldValues)}}
+  if(rawType==='BULK_UPDATE_RECORDS')return {...base,type:'UPDATE_RECORDS',config:{objectKey:x.objectKey||x.object||'',updateMode:'collection',sourceRecord:x.recordIds||'',fieldValues:fieldRows(x.fieldValues)}}
+  if(rawType==='DELETE_RECORD')return {...base,type:'DELETE_RECORDS',config:{objectKey:x.objectKey||x.object||'',deleteMode:'record',sourceRecord:x.recordId||''}}
+  if(rawType==='ASSIGNMENT'){
+    const rows=Array.isArray(x.assignments)&&x.assignments.length?x.assignments:[{variable:'variables.'+(x.variableName||''),variableType:x.variableType||'text',operator:x.operator||'set',value:x.value}]
+    return {...base,type:'ASSIGNMENT',config:{assignments:rows.map(row=>({id:uid(),resource:String(row.variable||'').startsWith('variables.')?row.variable:'variables.'+(row.variable||''),operator:assignmentOperatorToBuilder(row.operator),value:row.value??''}))}}
+  }
+  if(rawType==='LOOP')return {...base,type:'LOOP',config:{collection:x.collection||'',itemVariable:x.itemVariable||'',direction:String(x.iterationOrder||'FIRST_TO_LAST').toUpperCase()==='LAST_TO_FIRST'?'last':'first',bodyBranch:Array.isArray(x.bodyBranch)?x.bodyBranch:[]}}
+  if(rawType==='COLLECTION_FILTER')return {...base,type:'COLLECTION_FILTER',config:{collection:x.collection||'',conditionLogic:x.match||'all',conditions:(x.filters||[]).map(conditionToBuilder)}}
+  if(rawType==='COLLECTION_SORT')return {...base,type:'COLLECTION_SORT',config:{collection:x.collection||'',sortField:x.sortField||'',order:x.sortDirection||'asc',max:x.limit||''}}
+  if(rawType==='WAIT')return {...base,type:'WAIT',config:{waitType:'duration',...waitParts(x.durationSeconds??x.waitSeconds)}}
+  if(rawType==='WAIT_UNTIL_DATE')return {...base,type:'WAIT',config:{waitType:'date',dateResource:x.resumeAt||''}}
+  if(rawType==='WAIT_FOR_CONDITIONS')return {...base,type:'WAIT',config:{waitType:'conditions',conditionLogic:x.waitCondition?.match||'all',conditions:(x.waitCondition?.conditions||[]).map(conditionToBuilder),pollSeconds:x.pollSeconds||60}}
+  if(rawType==='TRANSFORM')return {...base,type:'TRANSFORM',config:{source:x.collection||'',mappingsText:JSON.stringify(x.transformMappings||{},null,2)}}
+  if(rawType==='CUSTOM_ERROR')return {...base,type:'CUSTOM_ERROR',config:{location:x.errorField?'field':'record',field:x.errorField||'',message:x.errorMessage||''}}
+  if(rawType==='RUN_SUBFLOW')return {...base,type:'SUBFLOW',config:{flow:x.workflowId||x.subflowId||'',inputs:x.inputs||x.workflowInputs||{},outputs:x.outputMappings||x.outputs||{}}}
+  if(rawType==='SCREEN'){
+    const screen=x.screen||{}
+    const navigation=x.allowFinish===true?'finish':x.allowBack===false?'next':'both'
+    return {...base,type:'SCREEN',config:{...screen,components:Array.isArray(screen.components)?screen.components:[],showFooter:x.showFooter!==false,navigation}}
+  }
   const normalized=normalizeNodeType(rawType)
   if(!BUILDER_NATIVE_RUNTIME_TYPES.has(rawType)||requiresRuntimeRecordEditor(x)){
     const inputs=actionInputs(x)
@@ -139,30 +194,70 @@ const runtimeActionToBuilderNode=x=>{
   }
   return {...base,type:normalized,config:x?.config||actionInputs(x)}
 }
-const builderNodeToRuntimeAction=node=>{
-  const base={id:node.id,label:node.label,apiName:node.apiName,description:node.description||''}
+const builderNodeToRuntimeAction=(node,{edges=[],resources=[]}={})=>{
   const p=node.config||{}
-  if(node.type==='DECISION'){
-    return {...base,key:'CONDITION',
-      outcomes:(p.outcomes||[]).map((outcome,index)=>({
-        id:outcome.id||`outcome-${index+1}`,
-        label:outcome.label||`Outcome ${index+1}`,
-        condition:{match:outcome.conditionLogic||'all',conditions:(outcome.conditions||[]).map(conditionToRuntime)},
-        branch:Array.isArray(outcome.branch)?outcome.branch:[],
-      })),
-      defaultLabel:p.defaultOutcomeLabel||'Default Outcome',
-      defaultBranch:Array.isArray(p.defaultBranch)?p.defaultBranch:[],
-    }
+  const faultBranch=Array.isArray(p.faultBranch)&&p.faultBranch.length?p.faultBranch:branchTargets(edges,node.id,'fault')
+  const base={id:node.id,label:node.label,apiName:node.apiName,description:node.description||'',_builder:{type:node.type,config:p},...(p.faultMode?{faultMode:p.faultMode,faultBranch,...(p.faultMode==='RETRY'?{retryCount:Number(p.retryCount||1)}:{})}:{})}
+  if(node.type==='GET_RECORDS')return {...base,type:'GET_RECORDS',objectKey:p.objectKey,filters:p.conditionLogic==='none'?[]:(p.conditions||[]).filter(row=>row?.resource).map(conditionToRuntime),match:p.conditionLogic==='any'?'any':'all',sortField:p.sortBy||undefined,sortDirection:p.sortOrder&&p.sortOrder!=='none'?p.sortOrder:undefined,limit:p.limit==='limited'?Number(p.maxRecords||50):p.limit==='all'?50:1,store:p.limit==='first'||!p.limit?'first':'all'}
+  if(node.type==='CREATE_RECORDS')return {...base,type:'CREATE_RECORD',objectKey:p.objectKey,fieldValues:fieldValueMap(p.fieldValues)}
+  if(node.type==='UPDATE_RECORDS')return p.updateMode==='collection'
+    ? {...base,type:'BULK_UPDATE_RECORDS',objectKey:p.objectKey,recordIds:p.sourceRecord,fieldValues:fieldValueMap(p.fieldValues)}
+    : {...base,type:'UPDATE_RECORD',objectKey:p.objectKey,recordId:p.sourceRecord,fieldValues:fieldValueMap(p.fieldValues)}
+  if(node.type==='DELETE_RECORDS')return {...base,type:'DELETE_RECORD',objectKey:p.objectKey,recordId:p.sourceRecord}
+  if(node.type==='ASSIGNMENT'){
+    const rows=p.assignments?.length?p.assignments:[{resource:p.resource||'',operator:p.operator||'Equals',value:p.value||''}]
+    return {...base,type:'ASSIGNMENT',assignments:rows.filter(row=>row.resource).map(row=>({variable:String(row.resource||'').startsWith('variables.')?row.resource:'variables.'+(row.resource||''),variableType:resourceVariableType(row.resource,resources),operator:assignmentOperatorToRuntime(row.operator),value:row.value}))}
   }
+  if(node.type==='DECISION')return {...base,type:'CONDITION',outcomes:(p.outcomes||[]).map((outcome,index)=>({id:outcome.id||('outcome-'+(index+1)),label:outcome.label||('Outcome '+(index+1)),condition:{match:outcome.conditionLogic==='any'?'any':'all',conditions:(outcome.conditions||[]).filter(row=>row?.resource).map(conditionToRuntime)},branch:Array.isArray(outcome.branch)&&outcome.branch.length?outcome.branch:branchTargets(edges,node.id,'outcome:'+(outcome.id||index))})),defaultLabel:p.defaultOutcomeLabel||'Default Outcome',defaultBranch:Array.isArray(p.defaultBranch)&&p.defaultBranch.length?p.defaultBranch:branchTargets(edges,node.id,'default')}
+  if(node.type==='LOOP')return {...base,type:'LOOP',collection:p.collection,itemVariable:p.itemVariable||(node.apiName||'Loop')+'_Item',iterationOrder:p.direction==='last'?'LAST_TO_FIRST':'FIRST_TO_LAST',bodyBranch:Array.isArray(p.bodyBranch)&&p.bodyBranch.length?p.bodyBranch:branchTargets(edges,node.id,'body')}
+  if(node.type==='COLLECTION_FILTER')return {...base,type:'COLLECTION_FILTER',collection:p.collection,filters:(p.conditions||[]).filter(row=>row?.resource).map(conditionToRuntime),match:p.conditionLogic==='any'?'any':'all'}
+  if(node.type==='COLLECTION_SORT')return {...base,type:'COLLECTION_SORT',collection:p.collection,sortField:p.sortField,sortDirection:p.order||'asc',limit:Number(p.max||0)}
+  if(node.type==='WAIT'){
+    if(p.waitType==='date')return {...base,type:'WAIT_UNTIL_DATE',resumeAt:p.dateResource}
+    if(p.waitType==='conditions')return {...base,type:'WAIT_FOR_CONDITIONS',waitCondition:{match:p.conditionLogic==='any'?'any':'all',conditions:(p.conditions||[]).filter(row=>row?.resource).map(conditionToRuntime)},pollSeconds:Number(p.pollSeconds||60)}
+    const seconds=Math.max(0,Number(p.amount||0))*(p.unit==='days'?86400:p.unit==='hours'?3600:60)
+    return {...base,type:'WAIT',durationSeconds:seconds}
+  }
+  if(node.type==='TRANSFORM')return {...base,type:'TRANSFORM',collection:p.source,transformMappings:parseObjectText(p.mappingsText)}
+  if(node.type==='CUSTOM_ERROR')return {...base,type:'CUSTOM_ERROR',errorMessage:p.message,errorField:p.location==='field'?p.field:undefined}
+  if(node.type==='SUBFLOW')return {...base,type:'RUN_SUBFLOW',workflowId:p.flow,inputs:p.inputs||parseObjectText(p.inputsText),outputMappings:p.outputs||parseObjectText(p.outputsText)}
+  if(node.type==='SCREEN')return {...base,type:'SCREEN',screen:{...p,label:node.label,apiName:node.apiName,components:(p.components||[]).map(item=>({...item,name:item.name||item.apiName||item.id}))},allowBack:p.navigation!=='next'&&p.navigation!=='finish',allowNext:p.navigation!=='finish',allowFinish:p.navigation==='finish',showFooter:p.showFooter!==false}
   if(node.type==='ACTION'){
     let inputs=p.inputs&&typeof p.inputs==='object'?p.inputs:{}
     if(String(p.inputsText||'').trim()){
-      try{inputs=JSON.parse(p.inputsText)}catch{throw new Error(`${node.label||'Action'} has invalid Input Values JSON`)}
+      try{inputs=JSON.parse(p.inputsText)}catch{throw new Error((node.label||'Action')+' has invalid Input Values JSON')}
     }
-    return {...base,key:p.actionKey,...inputs}
+    return {...base,type:p.actionKey,...inputs}
   }
-  return {...base,type:node.type,config:p}
+  return {...base,type:node.type,...p}
 }
+const resourceNameOf=resource=>String(resource?.apiName||resource?.label||resource?.value||'').replace(/^variables\./,'').trim()
+const resourceTypeOf=resource=>{
+  const type=String(resource?.dataType||'Text').toLowerCase()
+  if(type.includes('number')||type.includes('currency')||type.includes('decimal'))return 'number'
+  if(type.includes('bool'))return 'boolean'
+  if(type.includes('date/time')||type.includes('datetime'))return 'datetime'
+  if(type==='date')return 'date'
+  if(type.includes('record'))return 'record'
+  return 'text'
+}
+const serializeResourcePrelude=(resources=[])=>resources.flatMap(resource=>{
+  const name=resourceNameOf(resource)
+  if(!name)return []
+  const common={id:'resource:'+name,label:resource.label||name,apiName:name,_builderResource:true}
+  if(resource.type==='Variable'&&resource.defaultValue!=='')return [{...common,type:'ASSIGNMENT',assignments:[{variable:'variables.'+name,variableType:resource.isCollection?'collection':resourceTypeOf(resource),operator:'set',value:resource.defaultValue}]}]
+  if(resource.type==='Constant')return [{...common,type:'CONSTANT',resourceName:name,resourceType:resourceTypeOf(resource),value:resource.defaultValue}]
+  if(resource.type==='Formula')return [{...common,type:'FORMULA',resourceName:name,resultType:resourceTypeOf(resource),expression:String(resource.defaultValue||''),inputs:resource.inputs||{}}]
+  if(resource.type==='Text Template')return [{...common,type:'TEXT_TEMPLATE',resourceName:name,templateText:String(resource.defaultValue||'')}]
+  if(resource.type==='Choice')return [{...common,type:'CHOICE',resourceName:name,choiceLabel:resource.label||name,choiceValue:resource.defaultValue,choiceDataType:resourceTypeOf(resource)}]
+  if(resource.type==='Record Choice Set'&&resource.objectKey&&resource.labelPath&&resource.valuePath)return [{...common,type:'RECORD_CHOICE_SET',resourceName:name,object:resource.objectKey,choiceLabelField:resource.labelPath,choiceValueField:resource.valuePath,limit:Math.max(1,Math.min(Number(resource.limit||50),200))}]
+  if(resource.type==='Collection Choice Set'&&resource.defaultValue&&resource.labelPath&&resource.valuePath)return [{...common,type:'COLLECTION_CHOICE_SET',resourceName:name,collection:resource.defaultValue,choiceLabelPath:resource.labelPath,choiceValuePath:resource.valuePath}]
+  if(resource.type==='Picklist Choice Set'&&resource.objectKey&&resource.defaultValue)return [{...common,type:'PICKLIST_CHOICE_SET',resourceName:name,object:resource.objectKey,fieldApiName:resource.defaultValue}]
+  if(resource.type==='Stage')return [{...common,type:'STAGE',resourceName:name,stageLabel:resource.stageLabel||resource.label||name,stageValue:name,stageOrder:Math.max(1,Number(resource.defaultValue||1))}]
+  return []
+})
+const workflowInputContract=(resources=[])=>resources.filter(resource=>resource.type==='Variable'&&resource.availableInput===true).map(resource=>({name:resourceNameOf(resource),label:resource.label||resourceNameOf(resource),type:resource.isCollection?'collection':resourceTypeOf(resource),required:false}))
+const workflowOutputContract=(resources=[])=>resources.filter(resource=>resource.type==='Variable'&&resource.availableOutput===true).map(resource=>({name:resourceNameOf(resource),label:resource.label||resourceNameOf(resource),type:resource.isCollection?'collection':resourceTypeOf(resource)}))
 const recordStartFromTrigger=(triggerKey='',objectKey='',action={})=>{
   const key=String(triggerKey||'').toLowerCase()
   const trigger=key.includes('delete')?'deleted':key.includes('create')&&!key.includes('update')?'created':key.includes('update')&&!key.includes('create')?'updated':'created_or_updated'
