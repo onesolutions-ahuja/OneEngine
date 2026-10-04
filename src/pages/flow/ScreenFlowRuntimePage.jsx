@@ -239,8 +239,8 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
     if (component.type === 'TEXT_AREA') {
       return <textarea {...common} rows={component.rows || 4} minLength={component.minLength === '' || component.minLength == null ? undefined : Number(component.minLength)} maxLength={component.maxLength === '' || component.maxLength == null ? undefined : Number(component.maxLength)} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || ''} value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)} />
     }
-    if (['TEXT','EMAIL','PASSWORD','DATE','DATETIME','NUMBER'].includes(component.type)) {
-      const type = component.type === 'DATETIME' ? 'datetime-local' : component.type.toLowerCase()
+    if (['TEXT','EMAIL','PHONE','PASSWORD','DATE','TIME','DATETIME','NUMBER'].includes(component.type)) {
+      const type = component.type === 'DATETIME' ? 'datetime-local' : component.type === 'PHONE' ? 'tel' : component.type.toLowerCase()
       return <input {...common} type={type} min={component.min} max={component.max} step={component.type === 'NUMBER' ? (component.step || 'any') : undefined} minLength={component.minLength === '' || component.minLength == null ? undefined : Number(component.minLength)} maxLength={component.maxLength === '' || component.maxLength == null ? undefined : Number(component.maxLength)} pattern={component.pattern || undefined} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || ''} value={value ?? ''} onChange={(event) => setValue(component.name, component.type === 'NUMBER' ? event.target.value : event.target.value)} />
     }
     if (['CHECKBOX','TOGGLE'].includes(component.type)) {
