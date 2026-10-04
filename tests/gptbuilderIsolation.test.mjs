@@ -13,3 +13,19 @@ test('OneDeveloper exposes GPT Builder as a separate developer section', async (
   assert.match(developer, /key: 'gptbuilder'/)
   assert.match(developer, /current\.key === 'gptbuilder' \? <GPTBuilderPage/)
 })
+
+
+test('GPT Builder phase 2 shell follows Salesforce flow-creation and canvas chrome rules', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  for (const text of ['New Automation','Start From Scratch','Use a Template','Record-Triggered Flow','Screen Flow','Autolaunched Flow (No Trigger)','Schedule-Triggered Flow','Platform Event-Triggered Flow','Auto-Layout','Free-Form','Canvas zoom']) assert.ok(page.includes(text), text)
+  assert.match(page, /aria-label="Start"/)
+  assert.match(page, /aria-label="Add element"/)
+  assert.match(page, />End</)
+})
+
+test('GPT Builder keeps auto-layout and free-form toolbox behavior separate', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /layout === 'free' \? <button/)
+  assert.match(page, /layout === 'auto' \? 'manager' : tab/)
+  assert.match(page, /setToolboxOpen/)
+})
