@@ -1105,7 +1105,7 @@ const retailObjects = [
 
 const operationalObjects = [
   {
-    key: "one_store_app", label: "OneStore App", plural: "OneStore Apps", table: "one_store_apps",
+    key: "one_store_app", moduleKey: "oneengine_core", label: "OneStore App", plural: "OneStore Apps", table: "one_store_apps",
     companyScoped: false,
     config: { searchSource: true, searchLabelField: "app_name", searchIconField: "logo", searchStatusField: "status" },
     fields: [
@@ -1124,7 +1124,7 @@ const operationalObjects = [
     ],
   },
   {
-    key: "sys_settings", label: "System Setting", plural: "System Settings", table: "sys_settings",
+    key: "sys_settings", moduleKey: "oneengine_core", label: "System Setting", plural: "System Settings", table: "sys_settings",
     config: { settingsHost: true, settingsGroup: "Settings", settingsLabel: "System Settings", settingsOrder: 10, settingsSectionSource: "record-section" },
     fields: [
       ["store_id","Store","lookup","store_id",false,true],
@@ -1140,7 +1140,7 @@ const operationalObjects = [
     ],
   },
   {
-    key: "connection_health", label: "Connection Health", plural: "Connection Health", table: "integration_connections",
+    key: "connection_health", moduleKey: "oneengine_core", label: "Connection Health", plural: "Connection Health", table: "integration_connections",
     fields: [
       ["store_id","Store","lookup","store_id",false,false],
       ["provider_name","Provider","text","provider_name",false,false],
@@ -1154,7 +1154,7 @@ const operationalObjects = [
     ],
   },
   {
-    key: "available_store", label: "Available Store", plural: "Available Stores", table: "available_stores",
+    key: "available_store", moduleKey: "oneengine_core", label: "Available Store", plural: "Available Stores", table: "available_stores",
     fields: [
       ["user_id","User","lookup","user_id",true,false],
       ["store_id","Store","lookup","store_id",true,false],
@@ -1168,7 +1168,7 @@ const operationalObjects = [
     ],
   },
   {
-    key: "device_health", label: "Device Health", plural: "Device Health", table: "device_health",
+    key: "device_health", moduleKey: "oneengine_core", label: "Device Health", plural: "Device Health", table: "device_health",
     fields: [
       ["store_id","Store","lookup","store_id",false,false],
       ["user_id","User","lookup","user_id",false,false],
@@ -1422,6 +1422,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
      RETURNING id`
   );
   const moduleId = moduleResult.rows[0].id;
+  await pool.query(
+    `INSERT INTO platform_modules (module_key,name,version,description,installed,metadata)
+     VALUES ('oneengine_core','OneEngine Core','1.0.0','Shared metadata runtime for shell, settings, health and platform data sources.',TRUE,'{"technical":true}'::jsonb)
+     ON CONFLICT (module_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,installed=TRUE,updated_at=NOW()`
+  );
   for (const object of [...retailObjects, ...(includeOperationalObjects ? operationalObjects : [])]) {
     const objectModuleResult = object.moduleKey
       ? await pool.query("SELECT id FROM platform_modules WHERE module_key=$1 LIMIT 1", [object.moduleKey])
