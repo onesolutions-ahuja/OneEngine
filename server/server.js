@@ -918,6 +918,7 @@ function safeGoogleReturnTo(value) {
     const allowed = new Set([
       "https://onesolutions-ahuja.github.io",
       "https://smart-theme.onrender.com",
+      "https://oneengine2.onrender.com",
       "http://localhost:5173",
     ]);
     if (!allowed.has(parsed.origin)) return fallback;
