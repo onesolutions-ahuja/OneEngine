@@ -5,7 +5,7 @@ const SAFE = /^[a-z_][a-z0-9_]*$/;
 const SAFE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*$/;
 const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED = new Set(["id", "company_id", "store_id", "__proto__", "constructor", "prototype"]);
-const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
+const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "&": 5, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
 const ARITY = { IF: [3, 3], AND: [2, 20], OR: [2, 20], NOT: [1, 1], ISBLANK: [1, 1], ISPICKVAL: [2, 2], TEXT: [1, 1], BEGINS: [2, 2], CONTAINS: [2, 2], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2], PARSEDATE: [1, 1], TRIM: [1, 1], UPPER: [1, 1] };
 export const ROLLUP_OPERATIONS = new Set(["COUNT", "SUM", "MIN", "MAX", "AVG"]);
 const baseType = type => ["number", "decimal", "currency", "percent"].includes(type) ? "number" : type;
@@ -40,7 +40,7 @@ function fail(message) { throw new FormulaError(message); }
 export function parseFormula(expression, { identifierPattern = SAFE, caseInsensitiveReserved = false } = {}) {
   if (typeof expression !== "string" || !expression.trim() || expression.length > 2000) fail("Formula must contain 1–2000 characters");
   const tokens = [];
-  const pattern = /\s*(?:(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|("(?:[^"\\]|\\["\\nrt])*")|([A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*)|(\|\||&&|==|!=|>=|<=|[+*/%(),!<>-]))/y;
+  const pattern = /\s*(?:(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|("(?:[^"\\]|\\["\\nrt])*")|([A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*)|(\|\||&&|==|!=|>=|<=|[+*/%(),!<>&-]))/y;
   let offset = 0;
   while (offset < expression.trimEnd().length) {
     pattern.lastIndex = offset;
@@ -155,6 +155,7 @@ function infer(node, resolve, depth = 0) {
     const left = typeOf(node.left), right = typeOf(node.right);
     if (["&&", "||"].includes(node.op)) { requireType(left, "boolean"); requireType(right, "boolean"); return "boolean"; }
     if (["==", "!=", ">", ">=", "<", "<="].includes(node.op)) { common([left, right]); return "boolean"; }
+    if (node.op === "&") return "string";
     requireType(left, "number"); requireType(right, "number"); return "number";
   }
   const types = node.args.map(typeOf);
@@ -198,6 +199,7 @@ function evaluate(node, get) {
     const right = run(node.right);
     if (node.op === "==") return left === right;
     if (node.op === "!=") return left !== right;
+    if (node.op === "&") return String(left ?? "") + String(right ?? "");
     if (left === null || right === null) return null;
     switch (node.op) {
       case "+": return left + right; case "-": return left - right; case "*": return left * right;
