@@ -63,7 +63,10 @@ function redact(value, depth = 0) {
   if (depth > 5 || value == null) return value;
   if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
   if (typeof value !== "object") return String(value);
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, SECRET_KEY.test(key) ? "[REDACTED]" : redact(item, depth + 1)]));
+  const secureFields = new Set(Array.isArray(value.__secureFields) ? value.__secureFields.map(String) : []);
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => key !== "__secureFields")
+    .map(([key, item]) => [key, (SECRET_KEY.test(key) || secureFields.has(key)) ? "********" : redact(item, depth + 1)]));
 }
 
 function errorDetails(error) {
@@ -6365,6 +6368,53 @@ export function workflowResultsContainStatus(entries = [], status = "waiting") {
   });
 }
 
+async function hydrateWorkflowProviderResources(context, workflowVariables) {
+  if (workflowVariables.__providerResourcesHydrated === true) return;
+  workflowVariables.__providerResourcesHydrated = true;
+  const companyId = context.companyId || context.req?.user?.companyId || null;
+  if (!companyId || !context.db || typeof context.db !== "function") return;
+  const storeId = context.storeId || context.req?.user?.storeId || null;
+  const result = await context.db(
+    `SELECT c.id,c.name,c.provider_name,c.base_url,c.auth_type,c.credentials_encrypted,
+            c.connector_configuration,c.timeout_ms,c.connection_status,d.connector_key,d.credentials_schema
+       FROM integration_connections c
+       LEFT JOIN platform_connector_definitions d ON d.id=c.connector_definition_id
+      WHERE c.company_id=$1 AND c.enabled=true
+        AND (c.store_id IS NULL OR c.store_id=$2)
+      ORDER BY (c.store_id IS NULL),c.updated_at DESC`,
+    [companyId, storeId]
+  );
+  const seen = new Set();
+  for (const row of result.rows || []) {
+    const providerKey = String(row.provider_name || row.connector_key || "").trim();
+    if (!providerKey || seen.has(providerKey.toLowerCase())) continue;
+    seen.add(providerKey.toLowerCase());
+    let credentials = {};
+    try { credentials = row.credentials_encrypted ? (decryptCredentials(row.credentials_encrypted) || {}) : {}; } catch { credentials = {}; }
+    const configuration = row.connector_configuration && typeof row.connector_configuration === "object" && !Array.isArray(row.connector_configuration)
+      ? row.connector_configuration
+      : {};
+    const schema = Array.isArray(row.credentials_schema)
+      ? row.credentials_schema
+      : Object.entries(row.credentials_schema || {}).map(([key,value]) => ({ key, ...(value || {}) }));
+    const secureKeys = new Set(schema.map((field) => String(field?.key || field?.name || "")).filter(Boolean));
+    for (const key of Object.keys(credentials || {})) secureKeys.add(String(key));
+    const variableName = `Provider_${providerKey.replace(/[^A-Za-z0-9_]/g, "_")}`;
+    workflowVariables.variables[variableName] = {
+      name: row.name || providerKey,
+      providerKey,
+      baseUrl: row.base_url || "",
+      authType: row.auth_type || "none",
+      timeoutMs: Number(row.timeout_ms || 15000),
+      status: row.connection_status || "",
+      ...configuration,
+      ...credentials,
+      __secureFields: [...secureKeys],
+    };
+    credentials = {};
+  }
+}
+
 export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
   const results = [];
@@ -6374,6 +6424,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
     : {};
   if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
   if (!workflowVariables.steps || typeof workflowVariables.steps !== "object") workflowVariables.steps = {};
+  await hydrateWorkflowProviderResources(context, workflowVariables);
   const allActions = Array.isArray(context.allActions) ? context.allActions : actions;
   const actionById = new Map(allActions.filter((item) => item?.id).map((item) => [String(item.id), item]));
   const branchTargetIds = new Set();
