@@ -6,7 +6,7 @@ import { resolveReportSubscriptionRecipients } from "../services/reportSubscript
 import { assertDashboardSubscriptionCompatible } from "../services/dashboardSubscriptionCompatibility.js";
 
 import { toSafeApiName } from "../services/platformMetadata.js";
-import { DATE_RANGES, DEFAULT_DASHBOARD_DEFINITION, mergeDashboardFilters, normalizeDashboardIdentity, validateDashboardDefinition } from "../services/dashboardBuilder.js";
+import { DATE_RANGES, mergeDashboardFilters, normalizeDashboardIdentity, validateDashboardDefinition } from "../services/dashboardBuilder.js";
 import { resolveDashboardExecutionUser } from "../services/analyticsSecurity.js";
 import { dashboardAccessAtLeast, dashboardPrincipalExists, loadDashboardPrincipalContext, resolveDashboardAccess, resolveDefaultDashboard } from "../services/dashboardSecurity.js";
 
@@ -79,7 +79,7 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
         });
         return res.json({ success: true, data: { id: resolved.dashboard.id, ...definition } });
       }
-      res.json({ success: true, data: validateDashboardDefinition(structuredClone(DEFAULT_DASHBOARD_DEFINITION)) });
+      return res.status(404).json({ success: false, code: "DASHBOARD_NOT_CONFIGURED", message: "No Dashboard Builder definition is assigned as the default dashboard." });
     } catch (error) { res.status(500).json({ success: false, message: "Unable to resolve the default dashboard" }); }
   });
   /* Run a definition that is not (yet) saved — the Dashboard page uses this to
