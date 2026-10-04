@@ -5533,9 +5533,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
       if (!actions.length) return res.status(422).json({ success: false, message: "Workflow contains no executable steps" });
       const flowType = String(workflow.action?.flowType || "");
+      const requestedRollback = req.body?.rollback ?? req.body?.debugOptions?.rollbackMode;
       const rollbackMode = executionMode === "TEST"
-        ? (flowType === "record" || req.body?.rollback !== false)
-        : req.body?.rollback === true;
+        ? (flowType === "record" || requestedRollback !== false)
+        : requestedRollback === true;
 
 
       let object = null;
