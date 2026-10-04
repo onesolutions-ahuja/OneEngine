@@ -89,6 +89,36 @@ export const platformSchema = `
   ${internalAppCatalogSchema}
   ${packageRegistrySchema}
   ${deploymentSchema}
+  CREATE TABLE IF NOT EXISTS onestore_apps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    app_key VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    version VARCHAR(40) NOT NULL DEFAULT '1.0.0',
+    description TEXT,
+    svg TEXT,
+    landing_route TEXT,
+    category VARCHAR(100),
+    publisher VARCHAR(200),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    visible BOOLEAN NOT NULL DEFAULT TRUE,
+    installable BOOLEAN NOT NULL DEFAULT TRUE,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE TABLE IF NOT EXISTS tenant_apps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    onestore_app_id UUID NOT NULL REFERENCES onestore_apps(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE'
+      CHECK (status IN ('AVAILABLE','INSTALLED','ACTIVE','INACTIVE')),
+    installed_version VARCHAR(40),
+    installed_at TIMESTAMPTZ,
+    activated_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(company_id,onestore_app_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_tenant_apps_company_status ON tenant_apps(company_id,status);
   ALTER TABLE roles ADD COLUMN IF NOT EXISTS parent_role_id UUID REFERENCES roles(id) ON DELETE SET NULL;
   CREATE INDEX IF NOT EXISTS idx_roles_company_parent ON roles(company_id,parent_role_id);
   CREATE TABLE IF NOT EXISTS platform_objects (
@@ -1450,6 +1480,35 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["active", "Active", "boolean", "active", false],
       ],
     },
+    {
+      key: "onestore_app", label: "OneStore App", plural: "OneStore Apps", table: "onestore_apps",
+      fields: [
+        ["app_key", "App Key", "text", "app_key", true],
+        ["name", "App Name", "text", "name", true],
+        ["version", "Version", "text", "version", true],
+        ["description", "Description", "text_area", "description", false],
+        ["svg", "SVG", "url", "svg", false],
+        ["landing_route", "Landing Route", "text", "landing_route", false],
+        ["category", "Category", "text", "category", false],
+        ["publisher", "Publisher", "text", "publisher", false],
+        ["active", "Active", "boolean", "active", false],
+        ["visible", "Visible", "boolean", "visible", false],
+        ["installable", "Installable", "boolean", "installable", false],
+        ["display_order", "Display Order", "number", "display_order", false],
+      ],
+    },
+    {
+      key: "tenant_app", label: "Tenant App", plural: "Tenant Apps", table: "tenant_apps",
+      fields: [
+        ["company_id", "Tenant", "lookup", "company_id", true],
+        ["onestore_app_id", "OneStore App", "lookup", "onestore_app_id", true],
+        ["status", "Status", "select", "status", true],
+        ["installed_version", "Installed Version", "text", "installed_version", false],
+        ["installed_at", "Installed At", "datetime", "installed_at", false],
+        ["activated_at", "Activated At", "datetime", "activated_at", false],
+        ["updated_at", "Updated At", "datetime", "updated_at", false],
+      ],
+    },
   ];
 
   function standardDefinition(fields) {
@@ -1475,6 +1534,69 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     const moduleResult = await pool.query("SELECT id FROM platform_modules WHERE module_key='retail_pos' LIMIT 1");
     const moduleId = moduleResult.rows[0]?.id;
     if (!moduleId) return;
+
+    await pool.query(`
+      INSERT INTO onestore_apps
+        (app_key,name,version,description,svg,landing_route,category,publisher,active,visible,installable,display_order,updated_at)
+      SELECT
+        p.package_key,
+        p.name,
+        p.version,
+        p.description,
+        COALESCE(
+          NULLIF(p.manifest->>'svg',''),
+          NULLIF(p.manifest->>'iconUrl',''),
+          '/icons/apps/' || replace(p.package_key,'_','-') || '.svg'
+        ),
+        COALESCE(NULLIF(p.manifest->>'landingRoute',''),NULLIF(p.manifest->>'route',''),'/workspace'),
+        p.category,
+        p.publisher,
+        p.active,
+        p.visible,
+        p.installable,
+        p.display_order,
+        NOW()
+      FROM package_registry p
+      ON CONFLICT (app_key) DO UPDATE SET
+        name=EXCLUDED.name,
+        version=EXCLUDED.version,
+        description=EXCLUDED.description,
+        svg=EXCLUDED.svg,
+        landing_route=EXCLUDED.landing_route,
+        category=EXCLUDED.category,
+        publisher=EXCLUDED.publisher,
+        active=EXCLUDED.active,
+        visible=EXCLUDED.visible,
+        installable=EXCLUDED.installable,
+        display_order=EXCLUDED.display_order,
+        updated_at=NOW()
+    `);
+
+    await pool.query(`
+      INSERT INTO tenant_apps (company_id,onestore_app_id,status,installed_version,installed_at,activated_at,updated_at)
+      SELECT
+        c.id,
+        a.id,
+        CASE
+          WHEN i.id IS NULL THEN 'AVAILABLE'
+          WHEN i.status='inactive' THEN 'INACTIVE'
+          WHEN i.deactivated_by_user=TRUE OR i.suspended_by_entitlement=TRUE THEN 'INSTALLED'
+          ELSE 'ACTIVE'
+        END,
+        COALESCE(i.installed_version,i.version),
+        i.installed_at,
+        CASE WHEN i.status='active' AND i.deactivated_by_user=FALSE AND i.suspended_by_entitlement=FALSE THEN COALESCE(i.updated_at,i.installed_at) ELSE NULL END,
+        NOW()
+      FROM companies c
+      CROSS JOIN onestore_apps a
+      LEFT JOIN package_registry p ON p.package_key=a.app_key
+      LEFT JOIN company_package_installations i ON i.company_id=c.id AND i.package_id=p.id
+      ON CONFLICT (company_id,onestore_app_id) DO UPDATE SET
+        installed_version=EXCLUDED.installed_version,
+        installed_at=EXCLUDED.installed_at,
+        updated_at=NOW()
+    `);
+
     for (const object of additionalStandardObjects) {
       const result = await pool.query(
         `INSERT INTO platform_objects (module_id,object_key,label,plural_label,source_table)
@@ -1503,6 +1625,28 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       [      [...retailObjects, ...additionalStandardObjects, ...operationalObjects].map((object) => object.key)]
     );
     const byKey = new Map(objects.rows.map((row) => [row.object_key, row]));
+
+    const oneStoreObject = byKey.get("onestore_app");
+    const tenantAppObject = byKey.get("tenant_app");
+    if (oneStoreObject?.id && tenantAppObject?.id) {
+      const tenantAppField = await pool.query(
+        "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name='onestore_app_id' AND company_id IS NULL LIMIT 1",
+        [tenantAppObject.id]
+      );
+      if (tenantAppField.rows[0]?.id) {
+        await pool.query(
+          `INSERT INTO platform_relationships
+             (parent_object_id,child_object_id,relationship_key,relationship_type,child_field_id,on_delete,on_update,active)
+           VALUES ($1,$2,'tenant_apps','one_to_many',$3,'cascade','restrict',true)
+           ON CONFLICT (parent_object_id,relationship_key) DO UPDATE SET
+             child_object_id=EXCLUDED.child_object_id,
+             relationship_type=EXCLUDED.relationship_type,
+             child_field_id=EXCLUDED.child_field_id,
+             active=true`,
+          [oneStoreObject.id, tenantAppObject.id, tenantAppField.rows[0].id]
+        );
+      }
+    }
 
     /* Retail Till chrome is metadata, not JSX policy. The browser maps each
        uiAction to the existing native POS implementation; labels, placement,
