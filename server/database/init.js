@@ -1928,6 +1928,30 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         }
         console.log("onePOS: final appointment-specific workflow wrappers removed");
       },
+    },
+    {
+      key: "0056_remove_unused_domain_wrappers",
+      version: "56",
+      name: "Remove unused domain-specific workflow wrappers",
+      up: async client => {
+        const legacy = [
+          "PAYMENT_REFUND","INVENTORY_ACTION","RECONCILE_INVENTORY","REBUILD_INVENTORY",
+          "POST_CREDIT_PAYMENT","FREEZE_CREDIT_ACCOUNT","UNFREEZE_CREDIT_ACCOUNT","SEND_CREDIT_STATEMENT",
+          "PUBLISH_TO_WEB_SHOP","UNPUBLISH_FROM_WEB_SHOP","UPDATE_WEB_LISTING","SET_WEB_FEATURED"
+        ];
+        const custom = await client.query(
+          "SELECT id,name,active FROM platform_rules WHERE COALESCE(action->>'systemGenerated','false')<>'true' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(action->'actions','[]'::jsonb)) step WHERE step->>'key'=ANY($1::text[]) OR step->>'type'=ANY($1::text[]))",
+          [legacy]
+        );
+        if (custom.rows.length) {
+          throw new Error("Custom workflow references removed domain wrappers: " + custom.rows.map((row) => row.name || row.id).join(", "));
+        }
+        await client.query(
+          "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'=ANY($1::text[]) AND COALESCE(user_modified,FALSE)=FALSE",
+          [legacy.map((key) => "action:" + key)]
+        );
+        console.log("onePOS: unused domain-specific workflow wrappers removed");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);

@@ -5,7 +5,6 @@ import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
 import { executeRegisteredAction } from "./platformActions.js";
-import { executeInventoryPlatformAction } from "./inventoryPlatform.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { domainAllowed, issueAccountToken, normalizeEmail } from "./accountPolicy.js";
@@ -262,20 +261,6 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
     requiredPermissions: ["sale.create"],
     capability: "payment.cancel",
     executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PAYMENT_CANCEL" } }),
-  },
-  {
-    key: "PAYMENT_REFUND",
-    displayName: "Payment - Refund",
-    description: "Refund a completed payment through the assigned connector instance.",
-    validation: (action) => {
-      if (!action?.providerTransactionId && !action?.transactionId && !action?.paymentId) {
-        throw new Error("Payment refund requires a transaction reference");
-      }
-    },
-    async: true,
-    requiredPermissions: ["sale.refund"],
-    capability: "payment.refund",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PAYMENT_REFUND" } }),
   },
   {
     key: "PRINT_RECEIPT",
@@ -1530,22 +1515,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
-    key: "INVENTORY_ACTION",
-    displayName: "Inventory Action",
-    description: "Executes an atomic inventory adjustment, wastage, transfer, or stock operation.",
-    validation: (action) => {
-      if (!action?.operation && !action?.inventoryAction) throw new Error("Inventory Action requires operation");
-    },
-    async: false,
-    requiredPermissions: ["inventory.adjust"],
-    executor: async ({ action, client, db, companyId, req, userId }) => executeInventoryPlatformAction({
-      client: client || db,
-      action: { ...action, type: action.operation || action.inventoryAction },
-      companyId: companyId || req?.user?.companyId,
-      userId: userId || req?.user?.id || null,
-    }),
-  },
-  {
     key: "CALL_CONNECTOR",
     displayName: "Call Connector",
     description: "Execute a registered operation through a tenant connector connection.",
@@ -1586,32 +1555,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         })),
       };
     },
-  },
-  {
-    key: "RECONCILE_INVENTORY",
-    displayName: "Reconcile Inventory",
-    description: "Compares movement history, rollups, and store stock projections.",
-    validation: () => undefined,
-    async: false,
-    requiredPermissions: ["inventory.view"],
-    executor: async ({ action, client, db, companyId, req }) => executeInventoryPlatformAction({
-      client: client || db,
-      action: { ...action, type: "RECONCILE" },
-      companyId: companyId || req?.user?.companyId,
-    }),
-  },
-  {
-    key: "REBUILD_INVENTORY",
-    displayName: "Rebuild Inventory Projection",
-    description: "Rebuilds persisted inventory rollups from the movement ledger.",
-    validation: () => undefined,
-    async: false,
-    requiredPermissions: ["inventory.adjust"],
-    executor: async ({ action, client, db, companyId, req }) => executeInventoryPlatformAction({
-      client: client || db,
-      action: { ...action, type: "REBUILD" },
-      companyId: companyId || req?.user?.companyId,
-    }),
   },
   {
     key: "WORKFLOW",
@@ -1708,72 +1651,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: false,
     requiredPermissions: ["notifications.write"],
     executor: async ({ action }) => ({ status: "completed", message: action.message }),
-  },
-  {
-    key: "POST_CREDIT_PAYMENT",
-    displayName: "Post Credit Payment",
-    description: "Posts a customer credit payment through the protected credit transaction endpoint.",
-    validation: (action) => {
-      if (!action?.customerId || !Number.isFinite(Number(action.amount)) || Number(action.amount) <= 0) {
-        throw new Error("Post Credit Payment requires customerId and a positive amount");
-      }
-    },
-    async: false,
-    requiredPermissions: ["customer.credit.payment"],
-    executor: async ({ creditActionExecutor, action, ...context }) => {
-      if (typeof creditActionExecutor !== "function") {
-        throw new Error("Customer credit payment executor is unavailable");
-      }
-      return creditActionExecutor({ ...context, action });
-    },
-  },
-  {
-    key: "FREEZE_CREDIT_ACCOUNT",
-    displayName: "Freeze Credit Account",
-    description: "Freezes a customer credit account through the protected credit operation.",
-    validation: (action) => {
-      if (!action?.customerId) throw new Error("Freeze Credit Account requires customerId");
-    },
-    async: false,
-    requiredPermissions: ["customer.credit.freeze"],
-    executor: async ({ creditActionExecutor, action, ...context }) => {
-      if (typeof creditActionExecutor !== "function") {
-        throw new Error("Customer credit account executor is unavailable");
-      }
-      return creditActionExecutor({ ...context, action: { ...action, operation: "freeze" } });
-    },
-  },
-  {
-    key: "UNFREEZE_CREDIT_ACCOUNT",
-    displayName: "Unfreeze Credit Account",
-    description: "Unfreezes a customer credit account through the protected credit operation.",
-    validation: (action) => {
-      if (!action?.customerId) throw new Error("Unfreeze Credit Account requires customerId");
-    },
-    async: false,
-    requiredPermissions: ["customer.credit.freeze"],
-    executor: async ({ creditActionExecutor, action, ...context }) => {
-      if (typeof creditActionExecutor !== "function") {
-        throw new Error("Customer credit account executor is unavailable");
-      }
-      return creditActionExecutor({ ...context, action: { ...action, operation: "unfreeze" } });
-    },
-  },
-  {
-    key: "SEND_CREDIT_STATEMENT",
-    displayName: "Send Credit Statement",
-    description: "Sends a customer credit statement using the configured communication action.",
-    validation: (action) => {
-      if (!action?.customerId) throw new Error("Send Credit Statement requires customerId");
-    },
-    async: false,
-    requiredPermissions: ["customer.credit.statement"],
-    executor: async ({ creditActionExecutor, action, ...context }) => {
-      if (typeof creditActionExecutor !== "function") {
-        throw new Error("Customer credit statement executor is unavailable");
-      }
-      return creditActionExecutor({ ...context, action });
-    },
   },
   {
     key: "CONSTANT",
@@ -3229,97 +3106,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
-    },
-  },
-  {
-    key: "PUBLISH_TO_WEB_SHOP",
-    displayName: "Publish to Web Shop",
-    description: "Set a canonical product as published for the active client web shop.",
-    validation: (action) => {
-      if (!action?.productId) throw new Error("Publish to Web Shop requires a productId");
-    },
-    async: true,
-    requiredPermissions: ["product.manage"],
-    executor: async ({ db, action, companyId, req }) => {
-      const targetCompanyId = companyId || req?.user?.companyId;
-      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
-      const now = new Date();
-      await db(
-        `UPDATE products SET web_shop_published=true, updated_at=NOW(), web_shop_publish_start=COALESCE(web_shop_publish_start, $2::timestamptz), web_shop_publish_end=COALESCE(web_shop_publish_end, NULL), web_shop_sort_order=COALESCE(web_shop_sort_order, 0) WHERE id=$1 AND company_id=$3`,
-        [action.productId, now.toISOString(), targetCompanyId]
-      );
-      await publishPlatformEvent({ db, companyId: targetCompanyId, eventType: "webshop.product_published", payload: { productId: action.productId }, actorUserId: req?.user?.id || null, objectType: "product", objectId: action.productId, idempotencyKey: `webshop.publish:${action.productId}` });
-      return { status: "completed", productId: action.productId };
-    },
-  },
-  {
-    key: "UNPUBLISH_FROM_WEB_SHOP",
-    displayName: "Unpublish from Web Shop",
-    description: "Hide a canonical product from the public storefront.",
-    validation: (action) => {
-      if (!action?.productId) throw new Error("Unpublish from Web Shop requires a productId");
-    },
-    async: true,
-    requiredPermissions: ["product.manage"],
-    executor: async ({ db, action, companyId, req }) => {
-      const targetCompanyId = companyId || req?.user?.companyId;
-      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
-      await db(
-        `UPDATE products SET web_shop_published=false, updated_at=NOW() WHERE id=$1 AND company_id=$2`,
-        [action.productId, targetCompanyId]
-      );
-      await publishPlatformEvent({ db, companyId: targetCompanyId, eventType: "webshop.product_unpublished", payload: { productId: action.productId }, actorUserId: req?.user?.id || null, objectType: "product", objectId: action.productId, idempotencyKey: `webshop.unpublish:${action.productId}` });
-      return { status: "completed", productId: action.productId };
-    },
-  },
-  {
-    key: "UPDATE_WEB_LISTING",
-    displayName: "Update Web Listing",
-    description: "Apply canonical product listing metadata for the Web Shop storefront.",
-    validation: (action) => {
-      if (!action?.productId) throw new Error("Update Web Listing requires a productId");
-    },
-    async: true,
-    requiredPermissions: ["product.manage"],
-    executor: async ({ db, action, companyId, req }) => {
-      const targetCompanyId = companyId || req?.user?.companyId;
-      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
-      const fields = [];
-      const values = [action.productId, targetCompanyId];
-      const assign = (column, value) => { if (value !== undefined) { fields.push(`${column}=$${values.length + 1}`); values.push(value); } };
-      assign("web_shop_title_override", action.webShopTitleOverride);
-      assign("web_shop_description_override", action.webShopDescriptionOverride);
-      assign("web_shop_image_override", action.webShopImageOverride);
-      assign("web_shop_category_override", action.webShopCategoryOverride);
-      assign("web_shop_sort_order", action.webShopSortOrder);
-      assign("web_shop_delivery_eligible", action.webShopDeliveryEligible);
-      assign("web_shop_pickup_eligible", action.webShopPickupEligible);
-      assign("web_shop_featured", action.webShopFeatured);
-      assign("web_shop_price_override", action.webShopPriceOverride);
-      if (!fields.length) return { status: "completed", productId: action.productId, updated: false };
-      fields.push("updated_at=NOW()");
-      await db(`UPDATE products SET ${fields.join(", ")} WHERE id=$1 AND company_id=$2`, values);
-      await publishPlatformEvent({ db, companyId: targetCompanyId, eventType: "webshop.listing_updated", payload: { productId: action.productId, changes: fields }, actorUserId: req?.user?.id || null, objectType: "product", objectId: action.productId, idempotencyKey: `webshop.listing:${action.productId}` });
-      return { status: "completed", productId: action.productId, updated: true };
-    },
-  },
-  {
-    key: "SET_WEB_FEATURED",
-    displayName: "Set Web Featured",
-    description: "Toggle the product featured status in Web Shop listings.",
-    validation: (action) => {
-      if (!action?.productId) throw new Error("Set Web Featured requires a productId");
-    },
-    async: true,
-    requiredPermissions: ["product.manage"],
-    executor: async ({ db, action, companyId, req }) => {
-      const targetCompanyId = companyId || req?.user?.companyId;
-      if (!targetCompanyId || !db || typeof db !== "function") return { status: "failed", code: "INVALID_CONTEXT", retryable: false };
-      await db(
-        `UPDATE products SET web_shop_featured=$3, updated_at=NOW() WHERE id=$1 AND company_id=$2`,
-        [action.productId, targetCompanyId, action.webShopFeatured === true]
-      );
-      return { status: "completed", productId: action.productId, featured: action.webShopFeatured === true };
     },
   },
   {
