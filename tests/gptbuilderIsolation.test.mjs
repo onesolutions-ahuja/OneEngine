@@ -258,6 +258,17 @@ test('GPT Builder recheck includes Salesforce Start custom logic formula builder
   assert.match(startOptions, /Batch Size/)
 })
 
+test('GPT Builder Start clears incompatible state when trigger or object changes', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /objectKey: event\.target\.value, conditions: \[\], formula: '', customConditionLogic: ''/)
+  assert.match(page, /!allowsChanged && row\.operator === 'changed'/)
+  assert.match(page, /next\.asyncPath = false/)
+  assert.match(page, /next\.scheduledPaths = \[\]/)
+  assert.match(page, /next\.updateMode = 'every_time'/)
+  assert.match(page, /if \(!flow\.startNeedsConfiguration\) return/)
+  assert.match(page, /aria-disabled=\{!flow\.startNeedsConfiguration\}/)
+})
+
 test('GPT Builder auto-generated labels apply in auto-layout and free-form and preserve manual edits', async () => {
   const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
   assert.match(props, /const generated = uniqueLabel\(generatedLabelForElement/)
