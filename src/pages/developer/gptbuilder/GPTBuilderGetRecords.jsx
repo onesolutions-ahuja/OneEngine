@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, Database, Plus, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
+import GPTBuilderRelatedRecords, { relatedRuntimeConfig, relatedSelectionErrors } from './GPTBuilderRelatedRecords'
 
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
 const objectLabel = (value) => value?.label || value?.name || objectKey(value)
@@ -33,6 +34,8 @@ export const GET_RECORDS_DEFAULTS = Object.freeze({
   advancedMode: 'record',
   advancedTarget: '',
   fieldAssignments: [],
+  relatedEnabled: false,
+  relatedSelections: [],
 })
 
 export function normalizeGetRecordsConfig(config = {}) {
@@ -42,6 +45,7 @@ export function normalizeGetRecordsConfig(config = {}) {
     conditions: Array.isArray(config.conditions) ? config.conditions : [],
     selectedFields: Array.isArray(config.selectedFields) ? config.selectedFields : [],
     fieldAssignments: Array.isArray(config.fieldAssignments) ? config.fieldAssignments : [],
+    relatedSelections: Array.isArray(config.relatedSelections) ? config.relatedSelections : [],
   }
 }
 
@@ -70,6 +74,10 @@ export function getRecordsConfigErrors(config = {}) {
     if (c.advancedMode === 'record' && !c.selectedFields.length) errors.push('Select at least one field to store.')
     if (c.advancedMode === 'fields' && !c.fieldAssignments.some((row) => row.field && row.resource)) errors.push('Map at least one field to a variable.')
     if (c.recordLimit !== 'first' && c.advancedMode !== 'record') errors.push('Multiple records must be stored in a record collection variable.')
+  }
+  if (c.relatedEnabled) {
+    if (!c.relatedSelections.length) errors.push('Select at least one related object.')
+    c.relatedSelections.forEach((selection) => relatedSelectionErrors(selection).forEach((error) => errors.push(`${selection.objectLabel || selection.objectKey || 'Related object'}: ${error}`)))
   }
   return errors
 }
@@ -101,6 +109,7 @@ export function getRecordsRuntimeAction(instance) {
     store: c.recordLimit === 'first' ? 'first' : 'all',
     fieldSelection: c.storeMode,
     selectedFields: c.storeMode === 'choose' ? c.selectedFields : c.storeMode === 'advanced' && c.advancedMode === 'record' ? c.selectedFields : undefined,
+    relatedRecords: c.relatedEnabled ? c.relatedSelections.map(relatedRuntimeConfig) : undefined,
   }
   if (c.storeMode === 'advanced') {
     action.advancedAssignment = c.advancedMode === 'record'
@@ -268,6 +277,7 @@ export default function GPTBuilderGetRecords({
   const [fields, setFields] = useState([])
   const [loadingFields, setLoadingFields] = useState(false)
   const [newResource, setNewResource] = useState(null)
+  const [relatedOpen, setRelatedOpen] = useState(false)
   const selectedObject = objects.find((item) => objectKey(item) === config.objectKey)
 
   useEffect(() => {
@@ -368,8 +378,12 @@ export default function GPTBuilderGetRecords({
       </div> : null}
     </section>
 
+
+    {flowType === 'autolaunched' && config.objectKey ? <section className="gptb-gr-related-section"><h3>Related Records</h3><label className="gptb-gr-related-toggle"><input type="checkbox" checked={config.relatedEnabled === true} onChange={(event) => patch({ relatedEnabled: event.target.checked })}/><span><b>Also add related records (beta)</b><small>Retrieve child collections related to the records returned by this Get Records element.</small></span></label>{config.relatedEnabled ? <><button type="button" className="gptb-button gptb-gr-related-button" onClick={() => setRelatedOpen(true)}>Select Related Records</button>{config.relatedSelections.length ? <div className="gptb-gr-related-summary">{config.relatedSelections.map((selection) => <span key={selection.id}>{selection.objectLabel || selection.objectKey}<small>{selection.relationshipKey}</small></span>)}</div> : null}</> : null}</section> : null}
+
     {loadingFields ? <div className="gptb-gr-loading">Loading object fields…</div> : null}
     {errors.length ? <div className="gptb-gr-errors"><b>Complete this Get Records element</b>{errors.map((error) => <span key={error}>{error}</span>)}</div> : null}
     {newResource ? <NewVariableDialog objectKey={newResource.objectKey || ''} collectionDefault={Boolean(newResource.collection)} initialDataType={newResource.dataType || ''} onCreate={storeResource} onClose={() => setNewResource(null)}/> : null}
+    <GPTBuilderRelatedRecords open={relatedOpen} onClose={() => setRelatedOpen(false)} config={config} patchRoot={patch} objects={objects} rootFields={fields} resources={resources} elements={elements}/>
   </div>
 }
