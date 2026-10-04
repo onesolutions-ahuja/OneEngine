@@ -485,7 +485,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     return listRows.filter((item) => `${rowTitle(item)} ${rowSubtitle(item)} ${item?.id || ''}`.toLowerCase().includes(query))
   }, [listRows, listQuery, tab])
 
-  const workflowObjectKey = (item) => String(
+  const workflowRuleObjectKey = (item) => String(
     item?.object || item?.object_key || item?.objectKey || item?.trigger_object ||
     item?.action?.object || item?.action?.objectKey || item?.definition?.object || ''
   ).trim()
@@ -500,7 +500,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     })
     const groups = new Map()
     visibleListRows.forEach((item) => {
-      const key = workflowObjectKey(item)
+      const key = workflowRuleObjectKey(item)
       const label = key ? (objectLabelByKey.get(key) || key) : 'System / No Object'
       if (!groups.has(label)) groups.set(label, [])
       groups.get(label).push(item)
