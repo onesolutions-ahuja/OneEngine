@@ -1728,8 +1728,9 @@ function oneAssistantAppointmentRouterWorkflow() {
         recipient_type: "individual",
         to: { path: "sender" },
         type: "text",
-        text: { body: { template: message, context: templateContext } },
+        text: { body: message },
       },
+      variables: templateContext,
     },
     {
       id: id + "_sms", label: label + " - SMS", apiName: id + "_sms",
