@@ -5332,10 +5332,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ action }) => {
-      const error = new Error(String(action.errorMessage).trim());
+    executor: async ({ action, record = null, previousRecord = null, req = null, object = null, workflowVariables = {} }) => {
+      const resolved = resolveConfiguredResource(action.errorMessage, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+      const message = String(resolved ?? "").trim();
+      if (!message) throw new Error("Custom Error requires a resolved error message");
+      if (message.length > 255) throw new Error("Custom Error message must be 255 characters or fewer");
+      const error = new Error(message);
       error.code = "CUSTOM_FLOW_ERROR";
-      error.field = action.errorField || null;
+      error.field = action.errorLocation === "field" ? action.errorField || null : null;
+      error.location = action.errorLocation || (action.errorField ? "field" : "record");
       error.retryable = false;
       throw error;
     },
