@@ -1,0 +1,13 @@
+.gptb-root{height:100%;min-height:680px;display:flex;flex-direction:column;background:#f3f3f3;color:#181818;font-family:Arial,"Helvetica Neue",sans-serif}
+.gptb-foundation-header{height:54px;flex:0 0 54px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #c9c9c9;background:#fff}
+.gptb-foundation-title{display:flex;align-items:center;gap:9px}
+.gptb-foundation-title>span:last-child{display:grid;gap:1px}
+.gptb-foundation-title strong{font-size:15px}
+.gptb-foundation-title small{font-size:10px;color:#706e6b}
+.gptb-foundation-icon{width:28px;height:28px;border-radius:6px;background:#eef4ff;color:#0176d3;display:grid;place-items:center}
+.gptb-foundation-badge{font-size:11px;color:#2e844a;background:#eef8f1;border:1px solid #91db8b;border-radius:999px;padding:5px 9px}
+.gptb-foundation-canvas{min-height:0;flex:1;overflow:auto;display:grid;place-items:center;background-color:#f3f3f3;background-image:radial-gradient(#c9c9c9 .7px,transparent .7px);background-size:16px 16px}
+.gptb-foundation-card{width:min(420px,calc(100% - 48px));display:grid;justify-items:center;gap:8px;padding:28px;border:1px solid #c9c9c9;border-radius:8px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08);text-align:center}
+.gptb-foundation-card svg{color:#0176d3}
+.gptb-foundation-card strong{font-size:16px}
+.gptb-foundation-card span{max-width:330px;color:#706e6b;font-size:12px;line-height:1.45}
