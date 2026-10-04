@@ -159,7 +159,8 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
         data: {
           communicationEventId: communicationEvent?.id || null,
           communicationChannel: "SMS",
-          workflowDispatched: Boolean(communicationEvent?.id),
+          workflowDispatched: communicationEvent?.duplicate !== true && Boolean(communicationEvent?.id),
+          duplicate: communicationEvent?.duplicate === true,
         },
       });
     } catch (error) {
