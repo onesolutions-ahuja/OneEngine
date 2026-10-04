@@ -5525,7 +5525,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           "SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",
           [workflowId, req.user.companyId]
         );
-        workflow = workflowResult.rows[0] || null;
+        workflow = workflowAuthoringRow(workflowResult.rows[0] || null);
         if (!workflow) return res.status(404).json({ success: false, message: "Workflow not found" });
       }
 
