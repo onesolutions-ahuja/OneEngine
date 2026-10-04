@@ -307,12 +307,58 @@ function MetadataFieldPicker({objects=[],objectKey='',value,onChange,placeholder
   return <select value={value||''} disabled={!objectKey||loading} onChange={e=>onChange(e.target.value)}><option value="">{loading?'Loading fields…':objectKey?placeholder:'Select an object first'}</option>{fields.map(field=>{const key=field.api_name||field.apiName||field.field_key||field.key||field.id;return <option key={key} value={key}>{field.label||field.name||key}</option>})}</select>
 }
 
-function Conditions({value=[],onChange,resources=[],objects=[],objectKey='',onNew=()=>{},flowType='record',startConfig={}}) {
+function Conditions({value=[],onChange,resources=[],objects=[],objectKey='',onNew=()=>{},flowType='record',startConfig={},pathMode=false}) {
   const rows=value.length?value:[{id:uid(),resource:'',operator:'Equals',value:''}]
   const patch=(id,p)=>onChange(rows.map(r=>r.id===id?{...r,...p}:r))
-  return <div className="b2-condition-block">{rows.map((r,i)=><div className="b2-condition" key={r.id}><span>{i+1}</span>{String(r.resource||'').startsWith('steps.')||String(r.resource||'').startsWith('variables.')?<input value={r.resource||''} onChange={e=>patch(r.id,{resource:e.target.value})} placeholder="Step or variable path"/>:<MetadataFieldPicker objects={objects} objectKey={objectKey} value={r.resource} onChange={v=>patch(r.id,{resource:v})}/>} <select value={r.operator} onChange={e=>patch(r.id,{operator:e.target.value})}><option>Equals</option><option>Does Not Equal</option><option>Is Null</option><option>Is Changed</option><option>Greater Than</option><option>Greater Than or Equal</option><option>Less Than</option><option>Less Than or Equal</option><option>Starts With</option><option>Ends With</option><option>Contains</option><option>In</option><option>Not In</option></select>{r.operator==='Is Null'?<select value={String(r.value||'false')} onChange={e=>patch(r.id,{value:e.target.value})}><option value="false">False</option><option value="true">True</option></select>:<input value={r.value} onChange={e=>patch(r.id,{value:e.target.value})} placeholder="Value"/>}<button onClick={()=>onChange(rows.filter(x=>x.id!==r.id))}><Trash2 size={13}/></button></div>)}<button className="b2-text-action" onClick={()=>onChange([...rows,{id:uid(),resource:'',operator:'Equals',value:''}])}><Plus size={13}/> Add Condition</button></div>
+  return <div className="b2-condition-block">{rows.map((r,i)=><div className="b2-condition" key={r.id}><span>{i+1}</span>{pathMode||String(r.resource||'').startsWith('steps.')||String(r.resource||'').startsWith('variables.')?<input value={r.resource||''} onChange={e=>patch(r.id,{resource:e.target.value})} placeholder="Field or resource path"/>:<MetadataFieldPicker objects={objects} objectKey={objectKey} value={r.resource} onChange={v=>patch(r.id,{resource:v})}/>} <select value={r.operator} onChange={e=>patch(r.id,{operator:e.target.value})}><option>Equals</option><option>Does Not Equal</option><option>Is Null</option><option>Is Changed</option><option>Greater Than</option><option>Greater Than or Equal</option><option>Less Than</option><option>Less Than or Equal</option><option>Starts With</option><option>Ends With</option><option>Contains</option><option>In</option><option>Not In</option></select>{r.operator==='Is Null'?<select value={String(r.value||'false')} onChange={e=>patch(r.id,{value:e.target.value})}><option value="false">False</option><option value="true">True</option></select>:<input value={r.value} onChange={e=>patch(r.id,{value:e.target.value})} placeholder="Value"/>}<button onClick={()=>onChange(rows.filter(x=>x.id!==r.id))}><Trash2 size={13}/></button></div>)}<button className="b2-text-action" onClick={()=>onChange([...rows,{id:uid(),resource:'',operator:'Equals',value:''}])}><Plus size={13}/> Add Condition</button></div>
 }
 
+function ActionPicker({actions=[],value,onChange}) {
+  const [open,setOpen]=useState(false), [query,setQuery]=useState('')
+  const selected=actions.find(a=>String(a.key)===String(value))
+  const rows=actions.filter(a=>!query||[a.displayName,a.label,a.key,a.category,a.description].filter(Boolean).join(' ').toLowerCase().includes(query.toLowerCase()))
+  return <div className="b2-action-picker">
+    <button type="button" className="b2-combobox" onClick={()=>setOpen(v=>!v)}><span>{selected?.displayName||selected?.label||selected?.key||'Select an action…'}</span><ChevronDown size={14}/></button>
+    {open?<div className="b2-action-menu"><label className="b2-resource-search"><Search size={14}/><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search actions…"/></label><div className="b2-action-results">{!rows.length?<div className="b2-empty-small">No matching actions</div>:rows.map(a=><button type="button" key={a.key} onClick={()=>{onChange(a.key);setOpen(false);setQuery('')}}><span className="b2-resource-icon"><Zap size={14}/></span><span><b>{a.displayName||a.label||a.key}</b><small>{a.category||'Action'}{a.description?' · '+a.description:''}</small></span></button>)}</div></div>:null}
+  </div>
+}
+function SubflowPicker({flows=[],value,onChange}) {
+  const [open,setOpen]=useState(false), [query,setQuery]=useState('')
+  const selected=flows.find(flow=>String(flow.apiName)===String(value)||String(flow.id)===String(value))
+  const rows=flows.filter(flow=>!query||[flow.label,flow.apiName,flow.description].filter(Boolean).join(' ').toLowerCase().includes(query.toLowerCase()))
+  return <div className="b2-action-picker">
+    <button type="button" className="b2-combobox" onClick={()=>setOpen(v=>!v)}><span>{selected?.label||value||'Select a subflow…'}</span><ChevronDown size={14}/></button>
+    {open?<div className="b2-action-menu"><label className="b2-resource-search"><Search size={14}/><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search subflows…"/></label><div className="b2-action-results">{!rows.length?<div className="b2-empty-small">No matching active autolaunched flows</div>:rows.map(flow=><button type="button" key={flow.id||flow.apiName} onClick={()=>{onChange(flow.id);setOpen(false);setQuery('')}}><span className="b2-resource-icon"><Workflow size={14}/></span><span><b>{flow.label}</b><small>{flow.apiName}{flow.description?' · '+flow.description:''}</small></span></button>)}</div></div>:null}
+  </div>
+}
+function ActionInputs({action,config,onPatch,resources,objects,objectKey,onNew,flowType,startConfig}) {
+  const properties=action?.schema?.properties||{}, required=new Set(action?.schema?.required||[])
+  const inputs=config.inputs&&typeof config.inputs==='object'?config.inputs:{}, modes=config.inputModes&&typeof config.inputModes==='object'?config.inputModes:{}
+  const setInput=(name,value)=>onPatch({inputs:{...inputs,[name]:value}})
+  const setMode=(name,mode)=>onPatch({inputModes:{...modes,[name]:mode},inputs:{...inputs,[name]:mode==='resource'?'':inputs[name]}})
+  if(!Object.keys(properties).length)return <p className="b2-help">This action has no configurable inputs.</p>
+  return <div className="b2-schema-fields">{Object.entries(properties).map(([name,spec])=>{const title=spec?.title||name.replace(/([A-Z])/g,' $1').replace(/^./,x=>x.toUpperCase());const mode=modes[name]||((typeof inputs[name]==='string'&&/^(?:\$|variables\.|steps\.)/.test(inputs[name]))?'resource':'literal');const value=inputs[name];return <fieldset key={name}><legend>{title}{required.has(name)?' *':''}</legend>{spec?.type!=='boolean'?<label className="b2-binding-mode">Value Source<select value={mode} onChange={e=>setMode(name,e.target.value)}><option value="literal">Literal Value</option><option value="resource">Resource</option></select></label>:null}{mode==='resource'?<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={value||''} onChange={v=>setInput(name,v)}/>:Array.isArray(spec?.enum)?<select value={value??''} onChange={e=>setInput(name,e.target.value)}><option value="">Select…</option>{spec.enum.map(option=><option key={String(option)} value={option}>{String(option)}</option>)}</select>:spec?.type==='boolean'?<label className="b2-check"><input type="checkbox" checked={value===true} onChange={e=>setInput(name,e.target.checked)}/>{title}</label>:['number','integer'].includes(spec?.type)?<input type="number" value={value??''} onChange={e=>setInput(name,e.target.value===''?'':Number(e.target.value))}/>:['object','array'].includes(spec?.type)?<textarea rows={4} value={value?JSON.stringify(value,null,2):''} placeholder={spec.type==='array'?'[]':'{}'} onChange={e=>{try{setInput(name,e.target.value.trim()?JSON.parse(e.target.value):spec.type==='array'?[]:{})}catch{}}}/>:<input value={value??''} onChange={e=>setInput(name,e.target.value)}/>}</fieldset>})}</div>
+}
+
+function SubflowInputs({flow,config,onPatch,resources,objects,objectKey,onNew,flowType,startConfig}) {
+  if(!flow)return null
+  const inputs=config.inputs&&typeof config.inputs==='object'?config.inputs:{}, outputs=config.outputs&&typeof config.outputs==='object'?config.outputs:{}
+  const inputContract=Array.isArray(flow.inputContract)?flow.inputContract:[], outputContract=Array.isArray(flow.outputContract)?flow.outputContract:[]
+  return <div className="b2-schema-fields">{inputContract.length?<><h4>Input Values</h4>{inputContract.map(item=><fieldset key={item.name}><legend>{item.label||item.name}{item.required?' *':''}</legend><ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={inputs[item.name]||''} onChange={v=>onPatch({inputs:{...inputs,[item.name]:v}})}/></fieldset>)}</>:<p className="b2-help">This subflow has no declared input variables.</p>}{outputContract.length?<><h4>Output Values</h4>{outputContract.map(item=><fieldset key={item.name}><legend>{item.label||item.name}</legend><ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={outputs[item.name]||''} onChange={v=>onPatch({outputs:{...outputs,[item.name]:v}})}/></fieldset>)}</>:null}</div>
+}
+
+function NodeTargetSelect({nodes=[],currentId='',value,onChange,placeholder='Continue on the main path'}) {
+  const currentIndex=nodes.findIndex(node=>node.id===currentId)
+  const rows=nodes.filter((node,index)=>node.id!==currentId&&(currentIndex<0||index>currentIndex))
+  return <select value={value||''} onChange={e=>onChange(e.target.value)}><option value="">{placeholder}</option>{rows.map(node=><option key={node.id} value={node.id}>{node.label} · {node.type.replaceAll('_',' ')}</option>)}</select>
+}
+function NodeTargetMultiSelect({nodes=[],currentId='',values=[],onChange,emptyLabel='No path steps selected'}) {
+  const currentIndex=nodes.findIndex(node=>node.id===currentId)
+  const rows=nodes.filter((node,index)=>node.id!==currentId&&(currentIndex<0||index>currentIndex))
+  const selected=new Set((Array.isArray(values)?values:[]).map(String))
+  const toggle=id=>onChange(selected.has(String(id))?(values||[]).filter(value=>String(value)!==String(id)):[...(values||[]),id])
+  return <div className="b2-node-targets">{!rows.length?<span>{emptyLabel}</span>:rows.map(node=><label key={node.id}><input type="checkbox" checked={selected.has(String(node.id))} onChange={()=>toggle(node.id)}/><span><b>{node.label}</b><small>{node.type.replaceAll('_',' ')}</small></span></label>)}</div>
+}
 function Properties({node,onPatch,objects,resources,onNew,actions,flowType='record',startConfig={}}) {
   if(!node)return <div className="b2-properties-empty"><Settings2 size={26}/><b>Select an element</b><span>Its properties appear here.</span></div>
   const p=node.config||{}, patch=x=>onPatch({...node,config:{...p,...x}})
