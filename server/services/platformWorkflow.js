@@ -8,9 +8,6 @@ import { executeRegisteredAction } from "./platformActions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { domainAllowed, issueAccountToken, normalizeEmail } from "./accountPolicy.js";
-import { getPlatformService } from "./onlineOrders/index.js";
-import { loadPlatformConfig } from "./onlineOrders/platformConfig.js";
-import { resolveUberMenuProducts, UberMenuMappingError } from "./onlineOrders/uberMenuMapping.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
 import { effectiveManifest } from "./connectorRuntime.js";
 import { transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
@@ -756,159 +753,6 @@ export async function emitConnectorWorkflowEvent({
 
 function normalizeProviderName(value) {
   return String(value || "").trim().toLowerCase();
-}
-
-async function loadUberWorkflowContext({ db, req, companyId }) {
-  const requestCompanyId = req?.user?.companyId || null;
-  const tenantId = companyId || requestCompanyId;
-  if (!db || typeof db !== "function" || !tenantId) {
-    throw new Error("Uber action requires a company-scoped database context");
-  }
-  if (requestCompanyId && String(requestCompanyId) !== String(tenantId)) {
-    throw new Error("Uber action company context is invalid");
-  }
-  return {
-    db,
-    companyId: tenantId,
-    runtime: await loadPlatformConfig(db, tenantId, "uber"),
-    service: getPlatformService("uber"),
-  };
-}
-
-function extractUberStoreIds(data) {
-  const stores = Array.isArray(data?.stores) ? data.stores : Array.isArray(data) ? data : [];
-  return stores.map((store) => ({
-    storeId: store.id || store.store_id || null,
-    name: store.name || null,
-    brandId: store.brand?.id || store.brand_id || null,
-    brandName: store.brand?.description || store.brand?.name || store.brand_name || null,
-    status: typeof store.status === "string" ? store.status : store.status?.type || null,
-    integrationEnabled: store.integration_enabled == null ? null : store.integration_enabled === true,
-  }));
-}
-
-async function executeUberOrderAction(context, operation) {
-  const { db, req, action = {}, recordId, record } = context;
-  const { companyId, runtime, service } = await loadUberWorkflowContext(context);
-  const orderId = action.orderId || recordId || record?.id;
-  if (!orderId) {
-    return { success: false, code: "ORDER_NOT_FOUND", message: "Uber order identifier is required" };
-  }
-
-  const orderDb = context.client
-    ? context.client.query.bind(context.client)
-    : db;
-  const orderResult = await orderDb(
-    `SELECT id, company_id, store_id, platform, external_order_id, status
-       FROM online_orders
-      WHERE id=$1 AND company_id=$2 AND platform='uber'
-      LIMIT 1`,
-    [orderId, companyId]
-  );
-  const order = orderResult.rows?.[0];
-  if (!order || !order.external_order_id) {
-    return { success: false, code: "ORDER_NOT_FOUND", message: "Uber order not found" };
-  }
-  if (req?.user?.storeId && String(req.user.storeId) !== String(order.store_id || "")) {
-    return { success: false, code: "STORE_SCOPE_MISMATCH", message: "Uber order is outside the current store scope" };
-  }
-
-  const validStatuses = operation === "accept" ? ["RECEIVED"] : ["RECEIVED", "ACCEPTED"];
-  if (!validStatuses.includes(order.status)) {
-    return {
-      success: false,
-      code: "INVALID_STATUS",
-      message: `Order in status ${order.status} cannot be ${operation === "accept" ? "accepted" : "denied"}`,
-    };
-  }
-
-  if (runtime.enabled !== true) {
-    return {
-      success: false,
-      code: "PLATFORM_DISABLED",
-      message: "Uber Eats integration is disabled in Settings - Online Platforms",
-    };
-  }
-  if (operation === "accept") return service.acceptOrder(order, runtime);
-  return service.rejectOrder(order, action.reason || null, runtime);
-}
-
-function uberItemId(product) {
-  return product?.uber_item_id || product?.id || null;
-}
-
-function validateUberStore(runtime) {
-  const storeId = runtime.store_id || runtime.store_location_id;
-  return storeId
-    ? { storeId: String(storeId) }
-    : { success: false, code: "STORE_NOT_MAPPED", message: "No Uber store is mapped for this company" };
-}
-
-async function loadUberProductForItem(context, runtime) {
-  const { db, action = {}, recordId, record } = context;
-  const companyId = context.companyId || context.req?.user?.companyId;
-  const productId = action.productId || recordId || record?.id;
-  const itemId = action.itemId || action.uberItemId || null;
-  if (!productId && !itemId) {
-    return { error: { success: false, code: "PRODUCT_REQUIRED", message: "Product or Uber item identifier is required" } };
-  }
-  const result = await db(
-    `SELECT p.id, p.company_id, p.uber_item_id, p.price
-       FROM products p
-      WHERE p.company_id = $1
-        AND (${productId ? "p.id = $2" : "p.uber_item_id = $2"})
-      LIMIT 1`,
-    [companyId, productId || itemId]
-  );
-  const product = result.rows?.[0];
-  if (!product) {
-    return { error: { success: false, code: "PRODUCT_NOT_FOUND", message: "Product is not mapped for this company" } };
-  }
-  const resolvedItemId = uberItemId(product);
-  if (!resolvedItemId) {
-    return { error: { success: false, code: "ITEM_NOT_MAPPED", message: "Product has no stable Uber item mapping" } };
-  }
-  const store = validateUberStore(runtime);
-  if (store.success === false) return { error: store };
-  return { product, itemId: String(resolvedItemId), storeId: store.storeId };
-}
-
-function priceMinorUnits(value) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0 || Math.round(parsed * 100) !== parsed * 100) return null;
-  return Math.round(parsed * 100);
-}
-
-async function executeUberItemAction(context, operation) {
-  const { action = {} } = context;
-  const { runtime, service } = await loadUberWorkflowContext(context);
-  if (runtime.enabled !== true) {
-    return { success: false, code: "PLATFORM_DISABLED", message: "Uber Eats integration is disabled in Settings - Online Platforms" };
-  }
-  const resolved = await loadUberProductForItem(context, runtime);
-  if (resolved.error) return resolved.error;
-
-  let body;
-  if (operation === "price") {
-    const price = priceMinorUnits(action.priceMinorUnits ?? action.price ?? resolved.product.price);
-    if (price === null) {
-      return { success: false, code: "INVALID_PRICE", message: "Price must be a non-negative amount with at most two decimal places" };
-    }
-    body = { price_info: { price, overrides: [] } };
-  } else if (operation === "available") {
-    body = { suspension_info: { suspension: { suspend_until: null } } };
-  } else {
-    const suspendUntil = Number(action.suspendUntil ?? action.suspend_until);
-    if (!Number.isInteger(suspendUntil) || suspendUntil <= Math.floor(Date.now() / 1000)) {
-      return { success: false, code: "INVALID_SUSPENSION", message: "suspendUntil must be a future Unix timestamp in seconds" };
-    }
-    body = { suspension_info: { suspension: { suspend_until: suspendUntil, reason: "Out of stock" } } };
-  }
-
-  const response = await service.updateMenuItem(resolved.storeId, resolved.itemId, body, runtime);
-  return response.success === true
-    ? { ...response, productId: resolved.product.id, itemId: resolved.itemId, storeId: resolved.storeId }
-    : { ...response, code: response.code || "UBER_ITEM_UPDATE_FAILED", productId: resolved.product.id, itemId: resolved.itemId, storeId: resolved.storeId };
 }
 
 function resolveCommunicationWorkflowAction(action, record, object = null, workflowVariables = null, req = null, previousRecord = null) {
@@ -2239,12 +2083,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       properties: {
         collection: { type: "string" },
         transformMappings: { type: "object" },
+        outputValue: {},
       },
       required: ["collection","transformMappings"],
     },
     validation: (action) => {
       if (!action?.collection) throw new Error("Transform requires a source Resource");
-      if (!action.transformMappings || typeof action.transformMappings !== "object" || !Object.keys(action.transformMappings).length) throw new Error("Transform requires at least one mapping");
+      if (action.outputValue === undefined && (!action.transformMappings || typeof action.transformMappings !== "object" || !Object.keys(action.transformMappings).length)) throw new Error("Transform requires at least one mapping or output value");
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
@@ -2252,6 +2097,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const context = { record, previousRecord, req, object, workflowVariables };
       const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
       const mappings = action.transformMappings || {};
+      const resolveTransformValue = (sourceValue, item) => {
+        let value;
+        if (typeof sourceValue === "string" && sourceValue.startsWith("item.")) value = String(sourceValue).slice(5).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);
+        else if (sourceValue === "item") value = item;
+        else if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue) && Array.isArray(sourceValue.coalesce)) {
+          value = sourceValue.coalesce.map((entry) => resolveTransformValue(entry, item)).find((entry) => entry !== undefined && entry !== null && entry !== "");
+        } else if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue) && Object.prototype.hasOwnProperty.call(sourceValue, "source")) {
+          value = resolveTransformValue(sourceValue.source, item);
+          if (sourceValue.multiply !== undefined) value = Number(value) * Number(sourceValue.multiply);
+          if (sourceValue.round === true) value = Math.round(Number(value));
+        } else value = resolveConfiguredResource(sourceValue, { ...context, record: item }, { preserveMissing: false });
+        return value;
+      };
       const assignPath = (target, path, value) => {
         const parts = String(path || "").split(".").filter(Boolean);
         if (!parts.length) return;
@@ -2264,23 +2122,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const transformOne = (item) => {
         const output = {};
         for (const [targetPath, sourceValue] of Object.entries(mappings)) {
-          let value;
-          if (typeof sourceValue === "string" && sourceValue.startsWith("item.")) {
-            value = String(sourceValue).slice(5).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);
-          } else if (sourceValue === "item") {
-            value = item;
-          } else {
-            value = resolveConfiguredResource(sourceValue, { ...context, record: item }, { preserveMissing: false });
-          }
+          const value = resolveTransformValue(sourceValue, item);
           assignPath(output, targetPath, value);
         }
         return output;
       };
       if (Array.isArray(source)) {
-        const collection = source.map(transformOne);
+        const collection = action.outputValue !== undefined ? source.map((item) => resolveTransformValue(action.outputValue, item)) : source.map(transformOne);
         return { status: "completed", collection, count: collection.length, value: collection };
       }
-      const value = transformOne(source && typeof source === "object" ? source : {});
+      const value = action.outputValue !== undefined ? resolveTransformValue(action.outputValue, source && typeof source === "object" ? source : {}) : transformOne(source && typeof source === "object" ? source : {});
       return { status: "completed", value, collection: null };
     },
   },
@@ -2435,69 +2286,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         count: collection.length,
         collection,
       };
-    },
-  },
-  {
-    key: "BULK_UPDATE_RECORDS",
-    displayName: "Bulk Update Records",
-    description: "Update a collection of records in one workflow data operation.",
-    schema: {
-      type: "object",
-      properties: {
-        objectKey: { type: "string" },
-        recordIds: { type: "string" },
-        fieldValues: { type: "object" },
-      },
-      required: ["objectKey","recordIds","fieldValues"],
-    },
-    validation: (action) => {
-      if (!action?.objectKey && !action?.objectId && !action?.object) throw new Error("Bulk Update Records requires an object");
-      if (!action?.recordIds) throw new Error("Bulk Update Records requires a record collection");
-      if (!action?.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) throw new Error("Bulk Update Records requires field values");
-    },
-    async: false,
-    requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables }) => {
-      const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
-      const rawCollection = resolveConfiguredResource(action.recordIds, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
-      if (!Array.isArray(rawCollection)) throw new Error("Bulk Update Records collection must resolve to a collection");
-      const ids = [...new Set(rawCollection.map((item) => {
-        if (item && typeof item === "object") return item.id || item.recordId || null;
-        return item;
-      }).filter(Boolean).map(String))];
-      if (!ids.length) return { status: "completed", updated: [], count: 0 };
-      if (ids.length > 500) throw new Error("Bulk Update Records exceeds the maximum of 500 records");
-      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
-      const entries = Object.entries(resolvedFieldValues || {});
-      if (!entries.length) return { status: "completed", updated: [], count: 0 };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
-      const params = entries.map(([, value]) => value);
-      const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
-      params.push(ids);
-      const clauses = [`id::text = ANY($${params.length}::text[])`];
-      if (targetObject.company_scoped) {
-        params.push(req?.user?.companyId || companyId || null);
-        clauses.push(`company_id=$${params.length}`);
-      }
-      if (targetObject.store_scoped && req?.user?.storeId) {
-        params.push(req.user.storeId);
-        clauses.push(`store_id=$${params.length}`);
-      }
-      const result = await db(`UPDATE "${targetObject.source_table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
-      for (const updated of result.rows || []) {
-        try {
-          await publishPlatformEvent({
-            db,
-            companyId: req?.user?.companyId || companyId,
-            eventType: "platform.object.record.updated",
-            payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated },
-            actorUserId: req?.user?.id || null,
-          });
-        } catch (error) {
-          console.error("Platform workflow bulk-update event publication error:", error);
-        }
-      }
-      return { status: "completed", updated: result.rows || [], count: result.rows?.length || 0, requestedCount: ids.length };
     },
   },
   {
@@ -4768,246 +4556,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
-    key: "UBER_GET_STORES",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Get Uber Eats Stores",
-    description: "List Uber Eats stores available to the configured company connector.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["online_orders.configure"],
-    executor: async (context) => {
-      const { runtime, service } = await loadUberWorkflowContext(context);
-      if (runtime.enabled !== true) {
-        return {
-          success: false,
-          code: "PLATFORM_DISABLED",
-          message: "Uber Eats integration is disabled in Settings - Online Platforms",
-          httpStatus: null,
-          data: null,
-        };
-      }
-      return service.getStores(runtime);
-    },
-  },
-  {
-    key: "UBER_UPLOAD_MENU",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Upload Uber Eats Menu",
-    description: "Publish the tenant's Uber-enabled Product Master items to its configured Uber Eats store.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["online_orders.configure"],
-    executor: async (context) => {
-      const { db, runtime, service } = await loadUberWorkflowContext(context);
-      if (runtime.enabled !== true) {
-        return {
-          success: false,
-          code: "PLATFORM_DISABLED",
-          message: "Uber Eats integration is disabled in Settings - Online Platforms",
-          productCount: 0,
-          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
-          httpStatus: null,
-          data: null,
-        };
-      }
-      const productsResult = await db(
-        `SELECT p.id, p.name, p.description, p.price, p.vat_rate, p.active,
-                p.uber_item_id, p.available_on_uber, p.category_id,
-                c.name AS category_name
-           FROM products p
-           LEFT JOIN categories c ON c.id = p.category_id
-          WHERE p.company_id = $1
-            AND (p.available_on_uber = true OR p.uber_item_id IS NOT NULL)
-          ORDER BY c.display_order, c.name, p.name`,
-        [context.companyId || context.req?.user?.companyId]
-      );
-      const products = productsResult.rows;
-      if (!products.length) {
-        return {
-          success: false,
-          code: "NOTHING_TO_SYNC",
-          message: "No products are marked 'Available on Uber Eats' in the Product Master",
-          productCount: 0,
-          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
-          httpStatus: null,
-          data: null,
-        };
-      }
-      if (runtime.configured !== true) {
-        return { ...await service.syncMenu(products, runtime), productCount: products.length };
-      }
-      const requestedStoreId = String(context.action?.storeId || "").trim();
-      const storeId = String(context.action?.storeId || runtime.store_id || runtime.store_location_id || "").trim();
-      const storeMenuMappings = runtime.store_menu_mappings || [];
-      const configuredStoreIds = new Set([
-        runtime.store_id,
-        ...runtime.store_mappings.map((entry) => entry.uber_store_id),
-        ...storeMenuMappings.map((entry) => entry.uber_store_id),
-      ].filter(Boolean).map(String));
-      if (requestedStoreId && !configuredStoreIds.has(requestedStoreId)) {
-        return {
-          success: false,
-          code: "UBER_STORE_NOT_CONFIGURED",
-          message: `Uber store ${requestedStoreId} is not configured for this company`,
-          productCount: products.length,
-          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
-          httpStatus: null,
-          data: null,
-        };
-      }
-      const selectedStoreMenuMapping = storeMenuMappings.find(
-        (entry) => entry.uber_store_id === storeId
-      );
-      if (!storeId) {
-        return {
-          success: false,
-          code: "STORE_NOT_MAPPED",
-          message: "Select an Uber store before syncing its menu",
-          productCount: products.length,
-          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
-          httpStatus: null,
-          data: null,
-        };
-      }
-      if (
-        (storeMenuMappings.length > 0 && !selectedStoreMenuMapping) ||
-        (storeMenuMappings.length === 0 && runtime.store_mappings.length > 1)
-      ) {
-        return {
-          success: false,
-          code: "STORE_MENU_CONFIGURATION_REQUIRED",
-          message: `Configure a menu mapping for Uber store ${storeId} before syncing`,
-          productCount: products.length,
-          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
-          httpStatus: null,
-          data: null,
-        };
-      }
-      const menuRuntime = {
-        ...runtime,
-        store_id: storeId,
-        store_location_id: storeId,
-        menu_mapping: selectedStoreMenuMapping?.menu_mapping || runtime.menu_mapping || null,
-      };
-      let mappingProducts = products;
-      let customFields;
-      if (menuRuntime.menu_mapping) {
-        const customFieldResult = await db(
-          `SELECT f.api_name
-             FROM platform_fields f
-             JOIN platform_objects o ON o.id = f.object_id
-            WHERE o.object_key = 'product'
-              AND o.active = true
-              AND f.active = true
-              AND f.config->>'storage' = 'extension'
-              AND (o.company_id IS NULL OR o.company_id = $1)
-              AND (f.company_id IS NULL OR f.company_id = $1)`,
-          [context.companyId || context.req?.user?.companyId]
-        );
-        customFields = customFieldResult.rows.map((field) => field.api_name);
-        const overridesResult = await db(
-          `SELECT a.record_id, a.custom_values
-             FROM platform_record_associations a
-             JOIN platform_objects o ON o.id = a.object_id
-            WHERE o.object_key = 'product'
-              AND o.active = true
-              AND (o.company_id IS NULL OR o.company_id = $1)
-              AND a.company_id = $1
-              AND a.record_id = ANY($2::uuid[])`,
-          [context.companyId || context.req?.user?.companyId, products.map((product) => product.id)]
-        );
-        const overridesById = new Map(
-          overridesResult.rows.map((row) => [String(row.record_id), row.custom_values || {}])
-        );
-        mappingProducts = products.map((product) => ({
-          ...product,
-          custom_values: overridesById.get(String(product.id)) || {},
-        }));
-      }
-
-      try {
-        const { products: mappedProducts } = resolveUberMenuProducts(mappingProducts, menuRuntime.menu_mapping, { customFields });
-        return { ...await service.syncMenu(mappedProducts, menuRuntime), productCount: products.length };
-      } catch (error) {
-        if (!(error instanceof UberMenuMappingError)) throw error;
-        return {
-          success: false,
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          productCount: products.length,
-          meta: { publishedCount: 0, skippedInactiveCount: 0, categoryCount: 0, publishedItemIds: [] },
-          httpStatus: null,
-          data: null,
-        };
-      }
-    },
-  },
-  {
-    key: "UBER_ACCEPT_ORDER",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Accept Uber Eats Order",
-    description: "Acknowledge a received Uber Eats order using its company-scoped onePOS order record.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["online_orders.manage"],
-    executor: (context) => executeUberOrderAction(context, "accept"),
-  },
-  {
-    key: "UBER_DENY_ORDER",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Deny Uber Eats Order",
-    description: "Deny a received or accepted Uber Eats order using its company-scoped onePOS order record.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["online_orders.manage"],
-    executor: (context) => executeUberOrderAction(context, "deny"),
-  },
-  {
-    key: "UBER_UPDATE_ITEM_PRICE",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Update Uber Eats Item Price",
-    description: "Update one company-scoped Uber Eats item price.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["online_orders.configure"],
-    executor: (context) => executeUberItemAction(context, "price"),
-  },
-  {
-    key: "UBER_SET_ITEM_UNAVAILABLE",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Set Uber Eats Item Unavailable",
-    description: "Suspend one company-scoped Uber Eats item until a future time.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["online_orders.configure"],
-    executor: (context) => executeUberItemAction(context, "unavailable"),
-  },
-  {
-    key: "UBER_SET_ITEM_AVAILABLE",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Set Uber Eats Item Available",
-    description: "Remove the suspension from one company-scoped Uber Eats item.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["online_orders.configure"],
-    executor: (context) => executeUberItemAction(context, "available"),
-  },
-  {
     key: "STOP",
     displayName: "Stop",
     description: "Stop workflow execution cleanly and record the reason.",
@@ -5304,7 +4852,6 @@ const WORKFLOW_OBJECT_ACCESS = Object.freeze({
   CREATE_RELATED_RECORD: "create",
   UPDATE_RECORD: "edit",
   UPDATE_RELATED_RECORD: "edit",
-  BULK_UPDATE_RECORDS: "edit",
   DELETE_RECORD: "delete",
   ASSIGN_RECORD: "edit",
   ADD_RELATIONSHIP: "edit",
@@ -5369,7 +4916,7 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "CONSTANT","FORMULA","TEXT_TEMPLATE","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
-  "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
+  "SCHEDULE_PATH","RUN_SUBFLOW","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
   // Appointment orchestration actions are safe to execute in Debug because
   // their database writes use the Debug transaction and are rolled back.
   // SEND_COMMUNICATION is intentionally omitted so external and in-app delivery
