@@ -1,0 +1,37 @@
+name: Temporary DB Export Transfer
+
+on:
+  push:
+    branches: [temp-db-export]
+    paths:
+      - ".github/workflows/temp-db-export-transfer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp-db-export
+      - name: Rebuild Excel
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > OneEngine_All_SQL_Data.xlsx
+          for f in tmp/dbxlsx-bundle-01.txt tmp/dbxlsx-bundle-02.txt tmp/dbxlsx-bundle-03.txt tmp/dbxlsx-bundle-04.txt; do
+            while IFS= read -r line || [ -n "$line" ]; do
+              [ -z "$line" ] && continue
+              printf '%s' "$line" | base64 -d >> OneEngine_All_SQL_Data.xlsx
+            done < "$f"
+          done
+          test "$(sha256sum OneEngine_All_SQL_Data.xlsx | awk '{print $1}')" = "87d15b74f68a06f831493c4978d15dc69e75416b166fbbb67b28852273e90b1f"
+          ls -lh OneEngine_All_SQL_Data.xlsx
+      - name: Upload Excel
+        uses: actions/upload-artifact@v4
+        with:
+          name: OneEngine-All-SQL-Data
+          path: OneEngine_All_SQL_Data.xlsx
+          retention-days: 1
