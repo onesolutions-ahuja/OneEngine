@@ -116,6 +116,23 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Screen Section supports Salesforce nested columns headers and destructive column removal', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderScreen.jsx', import.meta.url), 'utf8')
+  const runtimePage = await readFile(new URL('../src/pages/flow/ScreenFlowRuntimePage.jsx', import.meta.url), 'utf8')
+  const workflow = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
+  for (const text of ['Include Header','Header Label','Collapsible','Column 1 Width','Drop here','Section Placement']) assert.ok(editor.includes(text), text)
+  assert.match(editor, /moveToSectionColumn/)
+  assert.match(editor, /addToSectionColumn/)
+  assert.match(editor, /component\.layoutParentId!==selected\.id\|\|Number\(component\.layoutColumn\|\|1\)<=count/)
+  assert.match(runtimePage, /const columnCount = Math\.max\(1, Math\.min\(4/)
+  assert.match(runtimePage, /component\.columnWidths/)
+  assert.match(runtimePage, /child\.layoutColumn/)
+  assert.match(runtimePage, /md:grid-cols-12/)
+  assert.match(workflow, /Screen Section column widths must total 12/)
+  assert.match(css, /\.gptb-screen-section-preview/)
+  assert.match(css, /grid-template-columns:1fr!important/)
+})
 test('GPT Builder Screen style layout and multi-condition visibility stay aligned with runtime', async () => {
   const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderScreen.jsx', import.meta.url), 'utf8')
   const runtimePage = await readFile(new URL('../src/pages/flow/ScreenFlowRuntimePage.jsx', import.meta.url), 'utf8')
