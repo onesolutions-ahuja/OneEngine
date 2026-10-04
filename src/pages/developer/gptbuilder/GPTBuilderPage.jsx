@@ -688,7 +688,15 @@ function FlowShell({ flow, onNew }) {
 
   const flowName = workflowId ? flowProps.label : flow.label
   const activeElement = editingElement ? elements.find((item) => item.id === editingElement.id) || null : null
-  const hasUnsavableIncomplete = elements.some((item) => !item.configured && ['screen', 'action'].includes(item.key))
+  const hasFlowErrors = issues.some((issue) => issue.level === 'error')
+  const hasUnsavableIncomplete = layout === 'free'
+    ? hasFlowErrors
+    : elements.some((item) => !item.configured && ['screen', 'action'].includes(item.key))
+  const saveBlockedReason = layout === 'free' && hasFlowErrors
+    ? 'Resolve flow errors before saving in Free-Form.'
+    : hasUnsavableIncomplete
+      ? 'Complete Screen and Action elements before saving.'
+      : 'Save'
 
   return <section className="gptb-builder" aria-label="GPT Builder workspace">
     <header className="gptb-buttonbar">
@@ -706,7 +714,7 @@ function FlowShell({ flow, onNew }) {
         <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={() => { setLayout('auto'); setLayoutOpen(false); setDirty(true) }}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={() => { setLayout('free'); setLayoutOpen(false); setToolboxOpen(true); setDirty(true) }}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
         <span className="gptb-toolbar-separator"/>
         <button className="gptb-text-tool" disabled={!workflowId}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId}><Eye size={14}/> Test Mode</button> : <button className="gptb-text-tool" disabled={!workflowId}><Eye size={14}/> Debug</button>}
-        <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={hasUnsavableIncomplete ? 'Complete Screen and Action elements before saving.' : 'Save'} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
+        <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <button className="gptb-text-tool is-brand" disabled={!workflowId || dirty || issues.some((issue) => issue.level === 'error')}>Activate</button><button aria-label="More actions"><MoreHorizontal size={16}/></button>
       </div>
     </header>
