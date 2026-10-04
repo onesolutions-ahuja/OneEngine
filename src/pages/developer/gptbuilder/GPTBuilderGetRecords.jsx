@@ -29,11 +29,14 @@ export const GET_RECORDS_DEFAULTS = Object.freeze({
   sortBy: '',
   recordLimit: 'first',
   maxRecords: '',
+  maxRecordsMode: 'literal',
+  maxRecordsResource: '',
   storeMode: 'auto',
   selectedFields: [],
   advancedMode: 'record',
   advancedTarget: '',
   fieldAssignments: [],
+  setNullOnNoRecords: false,
   relatedEnabled: false,
   relatedSelections: [],
 })
@@ -65,8 +68,12 @@ export function getRecordsConfigErrors(config = {}) {
   if (c.conditionLogic === 'custom' && !String(c.customConditionLogic || '').trim()) errors.push('Enter custom condition logic.')
   if (c.sortOrder !== 'none' && !c.sortBy) errors.push('Select a field to sort by.')
   if (c.recordLimit === 'limited') {
-    const n = Number(c.maxRecords)
-    if (!Number.isInteger(n) || n < 2 || n > 20000) errors.push('Maximum records must be a whole number from 2 to 20,000.')
+    if (c.maxRecordsMode === 'resource') {
+      if (!c.maxRecordsResource) errors.push('Select a Number resource for the maximum records.')
+    } else {
+      const n = Number(c.maxRecords)
+      if (!Number.isInteger(n) || n < 2 || n > 20000) errors.push('Maximum records must be a whole number from 2 to 20,000.')
+    }
   }
   if (c.storeMode === 'choose' && !c.selectedFields.length) errors.push('Select at least one field to store.')
   if (c.storeMode === 'advanced') {
@@ -105,7 +112,11 @@ export function getRecordsRuntimeAction(instance) {
     customConditionLogic: c.conditionLogic === 'custom' ? c.customConditionLogic : undefined,
     sortField: c.sortOrder === 'none' ? undefined : c.sortBy,
     sortDirection: c.sortOrder === 'none' ? undefined : c.sortOrder,
-    limit: c.recordLimit === 'first' ? 1 : c.recordLimit === 'limited' ? Number(c.maxRecords) : 20000,
+    limit: c.recordLimit === 'first'
+      ? 1
+      : c.recordLimit === 'limited'
+        ? (c.maxRecordsMode === 'resource' ? { path: c.maxRecordsResource } : Number(c.maxRecords))
+        : 20000,
     store: c.recordLimit === 'first' ? 'first' : 'all',
     fieldSelection: c.storeMode,
     selectedFields: c.storeMode === 'choose' ? c.selectedFields : c.storeMode === 'advanced' && c.advancedMode === 'record' ? c.selectedFields : undefined,
@@ -113,8 +124,8 @@ export function getRecordsRuntimeAction(instance) {
   }
   if (c.storeMode === 'advanced') {
     action.advancedAssignment = c.advancedMode === 'record'
-      ? { mode: c.recordLimit === 'first' ? 'record' : 'collection', resourceName: String(c.advancedTarget || '').replace(/^variables\./, ''), fields: c.selectedFields }
-      : { mode: 'fields', mappings: c.fieldAssignments.filter((row) => row.field && row.resource).map((row) => ({ field: row.field, resourceName: String(row.resource).replace(/^variables\./, '') })) }
+      ? { mode: c.recordLimit === 'first' ? 'record' : 'collection', resourceName: String(c.advancedTarget || '').replace(/^variables\./, ''), fields: c.selectedFields, setNullOnNoRecords: c.setNullOnNoRecords === true }
+      : { mode: 'fields', mappings: c.fieldAssignments.filter((row) => row.field && row.resource).map((row) => ({ field: row.field, resourceName: String(row.resource).replace(/^variables\./, '') })), setNullOnNoRecords: c.setNullOnNoRecords === true }
   }
   return action
 }
@@ -352,7 +363,9 @@ export default function GPTBuilderGetRecords({
       <label className="gptb-gr-radio"><input type="radio" name={`gr-limit-${draft.id}`} checked={config.recordLimit === 'first'} onChange={() => patch({ recordLimit: 'first', maxRecords: '', advancedMode: config.storeMode === 'advanced' ? config.advancedMode : 'record' })}/><span>Only the first record</span></label>
       <label className="gptb-gr-radio"><input type="radio" name={`gr-limit-${draft.id}`} checked={config.recordLimit === 'all'} onChange={() => patch({ recordLimit: 'all', maxRecords: '', advancedMode: config.storeMode === 'advanced' ? 'record' : config.advancedMode })}/><span>All records</span></label>
       <label className="gptb-gr-radio"><input type="radio" name={`gr-limit-${draft.id}`} checked={config.recordLimit === 'limited'} onChange={() => patch({ recordLimit: 'limited', advancedMode: config.storeMode === 'advanced' ? 'record' : config.advancedMode })}/><span>All records, up to a specified limit</span></label>
-      {config.recordLimit === 'limited' ? <label><span>Maximum Number of Records to Store <b>*</b></span><input type="number" min="2" max="20000" value={config.maxRecords} onChange={(event) => patch({ maxRecords: event.target.value })}/><small>Enter a value from 2 through 20,000.</small></label> : null}
+      {config.recordLimit === 'limited' ? <label><span>Maximum Number of Records to Store <b>*</b></span><div className="gptb-gr-value"><button type="button" onClick={() => patch({ maxRecordsMode: config.maxRecordsMode === 'resource' ? 'literal' : 'resource', maxRecords: '', maxRecordsResource: '' })}>{config.maxRecordsMode === 'resource' ? 'Resource' : 'Value'}</button>{config.maxRecordsMode === 'resource'
+        ? <ResourcePicker value={config.maxRecordsResource || ''} onChange={(maxRecordsResource) => patch({ maxRecordsResource, maxRecordsMode: 'resource' })} resources={resources} flowType={flowType} startConfig={startConfig} objects={objects} elements={elements} expected="number" collection={false}/>
+        : <input type="number" min="2" max="20000" value={config.maxRecords} onChange={(event) => patch({ maxRecords: event.target.value, maxRecordsMode: 'literal' })}/>}</div><small>Enter a value from 2 through 20,000, or select a Number resource.</small></label> : null}
     </section>
 
     <section><h3>How to Store Record Data</h3>
@@ -375,6 +388,7 @@ export default function GPTBuilderGetRecords({
           {config.fieldAssignments.map((row, index) => <div key={row.id}><span>{index + 1}</span><FieldPicker fields={fields} value={row.field} onChange={(field) => patch({ fieldAssignments: config.fieldAssignments.map((item) => item.id === row.id ? { ...item, field } : item) })}/><ResourcePicker value={row.resource} onChange={(resource) => patch({ fieldAssignments: config.fieldAssignments.map((item) => item.id === row.id ? { ...item, resource } : item) })} resources={resources} flowType={flowType} startConfig={startConfig} objects={objects} elements={elements} expected={resourceTypeForField(fields.find((field) => fieldKey(field) === row.field))} collection={false} allowNew onNewResource={() => setNewResource({ purpose: `assignment:${row.id}`, dataType: resourceTypeForField(fields.find((field) => fieldKey(field) === row.field)) })}/><button type="button" aria-label={`Remove assignment ${index + 1}`} onClick={() => patch({ fieldAssignments: config.fieldAssignments.filter((item) => item.id !== row.id) })}><Trash2 size={13}/></button></div>)}
           <button type="button" className="gptb-inline-action" onClick={() => patch({ fieldAssignments: [...config.fieldAssignments, { id: uid(), field: '', resource: '' }] })}><Plus size={13}/> Add Field Assignment</button>
         </div>}
+        <label className="gptb-gr-check"><input type="checkbox" checked={config.setNullOnNoRecords === true} onChange={(event) => patch({ setNullOnNoRecords: event.target.checked })}/> When no records are returned, set specified variables to null</label>
       </div> : null}
     </section>
 
