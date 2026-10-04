@@ -195,7 +195,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {clientsLoading ? <div className="settings-state-card">Resolving client context…</div>
             : current.key === 'objects' ? <ObjectsSettingsPane />
             : current.key === 'workflow-builder' ? <OneBuilder initialTab="workflow" singleBuilder initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('workflow-builder', { workflowId })} onWorkflowClose={() => onSectionChange?.('workflow-builder', { workflowId: '' })} />
-            : current.key === 'gptbuilder' ? <GPTBuilderPage />
+            : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
             : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
