@@ -4945,6 +4945,10 @@ export function getWorkflowActionRegistry() {
   return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
 }
 
+export function getWorkflowBuilderActionRegistry() {
+  return getWorkflowActionRegistry().filter((definition) => definition?.builderVisible !== false);
+}
+
 export function getWorkflowActionDefinition(key) {
   const normalized = String(key || "").toUpperCase();
   return (WORKFLOW_ACTION_MAP.get(normalized) || DYNAMIC_CONNECTOR_ACTIONS.find((entry) => String(entry.key || "").toUpperCase() === normalized) || null);
