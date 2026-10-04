@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { connectedAppDecision, normalizeScopes, normalizeTrustedOrigin } from '../server/services/securityGovernance.js'
 
 test('trusted origins require exact HTTPS origins',()=>{
@@ -45,4 +46,14 @@ test('connected app blocks scopes outside the approved set',async()=>{
   assert.equal(decision.allowed,false)
   assert.equal(decision.reason,'OAUTH_SCOPE_NOT_APPROVED')
   assert.deepEqual(decision.missingScopes,['write_products'])
+})
+
+
+test('connected-app list query avoids PostgreSQL unsupported FULL JOIN OR predicates',async()=>{
+  const source=await readFile(new URL('../server/routes/securityGovernance.js',import.meta.url),'utf8')
+  const route=source.slice(source.indexOf('router.get("/security/governance/connected-apps"'),source.indexOf('router.put("/security/governance/connected-apps/:appKey"'))
+  assert.doesNotMatch(route,/FULL\s+OUTER\s+JOIN/i)
+  assert.match(route,/LEFT\s+JOIN\s+security_connected_app_policies/i)
+  assert.match(route,/UNION\s+ALL/i)
+  assert.match(route,/NOT\s+EXISTS/i)
 })
