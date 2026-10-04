@@ -588,7 +588,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           ...(recordId ? { recordId } : {}),
           inputs,
           ...(mode === 'debug' ? { mode: 'debug', rollback } : {}),
-          ...(mode === 'test' ? { mode: 'test', rollback: flowType === 'record' ? true : rollback } : {}),
+          ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [] } : {}),
         }),
       })
       setResult(response?.data || {})
@@ -615,9 +615,9 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
             recordMode: recordId ? 'specific' : 'latest',
             ...(recordId ? { recordId } : {}),
             inputs,
-            rollback: flowType === 'record' ? true : rollback,
+            rollback: (flowType === 'record' || automationEnabled) ? true : rollback,
             scenarioTestingAutomation: automationEnabled,
-            assertions: automationEnabled ? assertions : [],
+            assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [],
           },
         }),
       })
@@ -663,11 +663,12 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         </> : null}
       </section> : null}
       {mode !== 'run' ? <section><h3>Select Run Options</h3>
-        <label className="gptb-properties-check"><input type="checkbox" checked={flowType === 'record' && mode === 'test' ? true : rollback} disabled={flowType === 'record' && mode === 'test'} onChange={(event) => setRollback(event.target.checked)}/><span>Run automation in rollback mode</span></label>
+        <label className="gptb-properties-check"><input type="checkbox" checked={mode === 'test' && (flowType === 'record' || automationEnabled) ? true : rollback} disabled={mode === 'test' && (flowType === 'record' || automationEnabled)} onChange={(event) => setRollback(event.target.checked)}/><span>Run automation in rollback mode</span></label>
         {mode === 'test' && flowType === 'record' ? <p className="gptb-help-text">Rollback is required for record-triggered test scenarios.</p> : null}
+        {mode === 'test' && automationEnabled && flowType !== 'record' ? <p className="gptb-help-text">Rollback is required when Scenario Testing Automation and assertions are enabled.</p> : null}
       </section> : null}
       {error ? <div className="gptb-execution-error" role="alert">{error}</div> : null}
-      {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl></section> : null}
+      {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b></summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}</section> : null}
     </div>
     <footer><button className="gptb-button" onClick={onClose}>Close</button>{mode !== 'run' ? <button className="gptb-button" onClick={resetExecutionSettings}>Reset Settings</button> : null}<button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId)} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
   </aside>
