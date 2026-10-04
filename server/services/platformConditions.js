@@ -56,6 +56,18 @@ function resolveConditionField(conditionField, fields = []) {
   return { api_name: trimmed, field_type: "text", active: true };
 }
 
+function workflowResourceBinding(value) {
+  if (typeof value === "string") {
+    return /^(?:\$|steps\.|variables\.)/.test(value.trim());
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const keys = Object.keys(value);
+  return typeof value.path === "string"
+    && value.path.trim() !== ""
+    && keys.every((key) => ["path", "fallback"].includes(key))
+    && /^(?:\$|steps\.|variables\.)/.test(value.path.trim());
+}
+
 function normalize(value, field) {
   if (empty(value)) return null;
   const type = fieldType(field);
@@ -82,7 +94,9 @@ function validateCondition(condition, fields, context, options = {}) {
   if (source !== "field") {
     if (!CONTEXT_SOURCES.has(source)) fail(`${context} uses an unsupported source: ${source}`);
     if (!OPERATORS.has(condition.operator)) fail(`${context} uses an unsupported operator`);
+    const comparisonResource = options.allowResources && workflowResourceBinding(condition.value);
     if (condition.operator !== "is_empty" && condition.operator !== "is_not_empty"
+      && !comparisonResource
       && (condition.value === undefined || Array.isArray(condition.value) || typeof condition.value === "object")) {
       fail(`${context} must use a simple comparison value`);
     }
@@ -107,15 +121,16 @@ function validateCondition(condition, fields, context, options = {}) {
     if (!condition.value || typeof condition.value !== "object" || Array.isArray(condition.value)) {
       fail(`${context} changed_from_to requires from and to values`);
     }
-    if (!options.allowResources || !(typeof condition.value.from === "string" && (/^(?:\$|steps\.|variables\.)/.test(condition.value.from)))) normalize(condition.value.from, field);
-    if (!options.allowResources || !(typeof condition.value.to === "string" && (/^(?:\$|steps\.|variables\.)/.test(condition.value.to)))) normalize(condition.value.to, field);
+    if (!options.allowResources || !workflowResourceBinding(condition.value.from)) normalize(condition.value.from, field);
+    if (!options.allowResources || !workflowResourceBinding(condition.value.to)) normalize(condition.value.to, field);
     return field;
   }
   if (!["is_empty", "is_not_empty"].includes(condition.operator)) {
-    if (condition.value === undefined || Array.isArray(condition.value) || typeof condition.value === "object") {
+    const comparisonResource = options.allowResources && workflowResourceBinding(condition.value);
+    if (!comparisonResource && (condition.value === undefined || Array.isArray(condition.value) || typeof condition.value === "object")) {
       fail(`${context} must use a simple comparison value`);
     }
-    if (!options.allowResources || !(typeof condition.value === "string" && (/^(?:\$|steps\.|variables\.)/.test(condition.value)))) normalize(condition.value, field);
+    if (!comparisonResource) normalize(condition.value, field);
   }
   return field;
 }
