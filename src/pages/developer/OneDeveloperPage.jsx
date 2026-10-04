@@ -10,7 +10,7 @@ import { ReportTypeManager } from '../reports/ReportTypeDesigner.jsx'
 import ObjectsSettingsPane from '../settings/ObjectsSettingsPane'
 import WorkflowRunsAdmin from '../settings/Platform/WorkflowRunsAdmin'
 import WorkItemsAdmin from '../settings/Platform/WorkItemsAdmin'
-import PlatformAppsAdmin from '../settings/Platform/PlatformAppsAdmin'
+import PackageBuilderAdmin from '../settings/Platform/PackageBuilderAdmin'
 import DeploymentAdmin from '../settings/Platform/DeploymentAdmin'
 import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSubscriptionsAdmin'
 import ValueSetList from '../settings/Platform/ValueSetList'
@@ -27,7 +27,7 @@ const DEVELOPER_ITEMS = [
   { key: 'report-builder', label: 'Report Builder', icon: BarChart3 },
   { key: 'workflow-runs', label: 'Workflow Runs', icon: Workflow },
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
-  { key: 'platform-apps', label: 'OneEngine Apps', icon: LayoutGrid },
+  { key: 'platform-apps', label: 'Package Builder', icon: LayoutGrid },
   { key: 'deployments', label: 'Deployments', icon: Rocket },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'value-sets', label: 'Value Sets', icon: ListChecks },
@@ -200,7 +200,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
             : current.key === 'report-builder' ? <OneBuilder initialTab="report" singleBuilder />
             : current.key === 'workflow-runs' ? <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'work-items' ? <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-            : current.key === 'platform-apps' ? <PlatformAppsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : current.key === 'platform-apps' ? <PackageBuilderAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'deployments' ? <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'notifications' ? <NotificationSubscriptionsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'value-sets' ? <ValueSetList onMessage={() => {}} onError={(value) => setError(value || '')} />
