@@ -116,6 +116,33 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Collection Filter matches current Salesforce criteria and generated resources', async () => {
+  const filter = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderCollectionFilter.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Filter Collection',
+    'Condition Requirements',
+    'All Conditions Are Met (AND)',
+    'Any Condition Is Met (OR)',
+    'Custom Condition Logic Is Met',
+    'Formula Evaluates to True',
+    'Condition Logic',
+    'Generated Resources',
+    'Output Collection:',
+    'Current Item:',
+  ]) assert.ok(filter.includes(text), text)
+  assert.match(filter, /CurrentItem_/)
+  assert.match(filter, /collectionFilterRuntimeAction/)
+  assert.match(page, /activeElement\.key === 'collection_filter'/)
+  assert.match(page, /collectionFilterRuntimeAction\(element, resources\)/)
+  assert.match(runtime, /Collection Filter formula is required/)
+  assert.match(runtime, /custom condition logic/)
+  assert.match(runtime, /evaluateWorkflowFormula/)
+  assert.match(runtime, /workflowVariables\.variables\[outputVariable\] = output/)
+  assert.match(runtime, /currentItemVariable/)
+})
+
 test('GPT Builder Loop matches current Salesforce collection direction and current-item behavior', async () => {
   const loop = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderLoop.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
