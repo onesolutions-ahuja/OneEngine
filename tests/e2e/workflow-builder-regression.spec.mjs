@@ -111,3 +111,130 @@ test("persisted appointment workflow renders without OEFR101", async ({ page }) 
   await expect(page.getByText(/OEFR101/)).toHaveCount(0);
   expect(failures, failures.join("\n")).toEqual([]);
 });
+
+test("decision collapse keeps branch summaries visible and expand restores the child nodes", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("developer/workflow-builder");
+  await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
+
+  const decisionPalette = page.locator(".b2-palette-group").getByRole("button", { name: /Decision/ }).first();
+  await decisionPalette.click();
+  const properties = page.locator(".b2-properties");
+  await expect(properties).toContainText("Decision");
+
+  await properties.getByRole("button", { name: /Add Element to Path/i }).first().click();
+  const selector = page.locator(".b2-selector");
+  await expect(selector).toBeVisible();
+  await selector.locator(".b2-selector-search input").fill("Assignment");
+  await selector.getByRole("button", { name: /Assignment/ }).first().click();
+
+  const decisionNode = page.locator(".b2-node").filter({ hasText: "Decision" }).first();
+  const decisionWrap = decisionNode.locator("..");
+  await expect(decisionWrap.getByRole("button", { name: "Collapse Paths", exact: true })).toBeVisible();
+  await expect(page.locator(".b2-node").filter({ hasText: "Assignment" })).toHaveCount(1);
+
+  await decisionWrap.getByRole("button", { name: "Collapse Paths", exact: true }).click();
+  const collapsed = decisionWrap.locator(".b2-collapsed-paths");
+  await expect(collapsed).toBeVisible();
+  await expect(collapsed).toContainText("Outcome 1");
+  await expect(collapsed).toContainText("1 step");
+  await expect(page.locator(".b2-node").filter({ hasText: "Assignment" })).toHaveCount(0);
+
+  await decisionWrap.getByRole("button", { name: "Expand Paths", exact: true }).click();
+  await expect(collapsed).toHaveCount(0);
+  await expect(page.locator(".b2-node").filter({ hasText: "Assignment" })).toHaveCount(1);
+
+  expect(failures, failures.join("\n")).toEqual([]);
+});
+
+test("properties panel uses the reviewed geometry and really scrolls with long nested configuration", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("developer/workflow-builder");
+  await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
+
+  await page.locator(".b2-palette-group").getByRole("button", { name: /Decision/ }).first().click();
+  const properties = page.locator(".b2-properties");
+  const form = properties.locator(".b2-form");
+
+  for (let i = 0; i < 4; i += 1) {
+    await properties.getByRole("button", { name: "New Outcome", exact: true }).click();
+  }
+
+  const geometry = await page.evaluate(() => {
+    const toolbox = document.querySelector(".b2-toolbox");
+    const props = document.querySelector(".b2-properties");
+    const form = props?.querySelector(".b2-form");
+    const firstInput = form?.querySelector("input:not([type='checkbox']):not([type='radio'])");
+    const firstLabel = form?.querySelector("label");
+    if (!toolbox || !props || !form || !firstInput || !firstLabel) return null;
+    const inputStyle = getComputedStyle(firstInput);
+    const labelStyle = getComputedStyle(firstLabel);
+    const formStyle = getComputedStyle(form);
+    return {
+      toolboxWidth: toolbox.getBoundingClientRect().width,
+      propertiesWidth: props.getBoundingClientRect().width,
+      inputHeight: firstInput.getBoundingClientRect().height,
+      labelFontSize: labelStyle.fontSize,
+      overflowY: formStyle.overflowY,
+      clientHeight: form.clientHeight,
+      scrollHeight: form.scrollHeight,
+    };
+  });
+  expect(geometry).not.toBeNull();
+  expect(geometry.toolboxWidth).toBeGreaterThanOrEqual(250);
+  expect(geometry.propertiesWidth).toBeGreaterThanOrEqual(380);
+  expect(geometry.inputHeight).toBeGreaterThanOrEqual(37);
+  expect(geometry.labelFontSize).toBe("12px");
+  expect(["auto", "scroll"]).toContain(geometry.overflowY);
+  expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+
+  const scrollTop = await form.evaluate((el) => {
+    el.scrollTop = Math.min(240, el.scrollHeight - el.clientHeight);
+    return el.scrollTop;
+  });
+  expect(scrollTop).toBeGreaterThan(0);
+
+  expect(failures, failures.join("\n")).toEqual([]);
+});
+
+test("screen switches and subflow configuration stay functional after the UI-only styling pass", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("developer/workflow-builder");
+  await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
+
+  const palette = page.locator(".b2-palette-group");
+  await palette.getByRole("button", { name: /^Screen\b/ }).first().click();
+  await expect(page.locator(".b2-screen-editor")).toBeVisible();
+
+  await page.locator(".b2-screen-palette").getByRole("button", { name: /^Text\b/ }).first().click();
+  const required = page.locator(".b2-screen-properties").getByRole("checkbox", { name: "Required" });
+  await expect(required).not.toBeChecked();
+  await required.check();
+  await expect(required).toBeChecked();
+  await page.locator(".b2-screen-top").getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.locator(".b2-screen-editor")).toHaveCount(0);
+
+  await page.locator(".b2-node").filter({ hasText: "Screen" }).first().click();
+  await expect(page.locator(".b2-screen-editor")).toBeVisible();
+  await page.locator(".b2-screen-canvas .b2-screen-component").first().click();
+  await expect(page.locator(".b2-screen-properties").getByRole("checkbox", { name: "Required" })).toBeChecked();
+  await page.locator(".b2-screen-top").getByRole("button", { name: "Done", exact: true }).click();
+
+  await palette.getByRole("button", { name: /Subflow/ }).first().click();
+  const props = page.locator(".b2-properties");
+  const flowName = props.getByLabel("Flow API Name");
+  const inputs = props.getByLabel("Input Values");
+  const outputs = props.getByLabel("Output Values");
+  await flowName.fill("Child_Flow");
+  await inputs.fill('{"customerId":"variables.customerId"}');
+  await outputs.fill('{"result":"variables.result"}');
+
+  await palette.getByRole("button", { name: /Assignment/ }).first().click();
+  await page.locator(".b2-node").filter({ hasText: "Subflow" }).first().click();
+  await expect(props.getByLabel("Flow API Name")).toHaveValue("Child_Flow");
+  await expect(props.getByLabel("Input Values")).toHaveValue('{"customerId":"variables.customerId"}');
+  await expect(props.getByLabel("Output Values")).toHaveValue('{"result":"variables.result"}');
+
+  expect(failures, failures.join("\n")).toEqual([]);
+});
+
