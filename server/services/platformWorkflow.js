@@ -5133,7 +5133,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         } else {
           runAt = new Date(Date.now() + Math.max(30, Number(action.pollSeconds || 60)) * 1000);
           payload.platformEventType = String(event.eventType);
-          payload.platformEventConditions = Array.isArray(event.conditions) ? event.conditions : [];
+          payload.platformEventConditionMode = String(event.conditionMode || "none");
+          payload.platformEventCustomConditionLogic = String(event.customConditionLogic || "");
+          payload.platformEventConditions = Array.isArray(event.conditions)
+            ? event.conditions.map((condition) => ({
+                ...condition,
+                value: condition?.valueMode === "resource"
+                  ? resolveConfiguredResource(condition.value, context, { preserveMissing: false })
+                  : condition?.value,
+              }))
+            : [];
+          payload.platformEventOutputVariable = event.outputVariable ? String(event.outputVariable).replace(/^variables\./, "") : null;
           payload.pollSeconds = Math.max(30, Number(action.pollSeconds || 60));
         }
         const job = await enqueuePlatformJob({
