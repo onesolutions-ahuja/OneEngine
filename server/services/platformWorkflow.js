@@ -3782,7 +3782,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record, previousRecord, object, workflowVariables = {}, debugMode = false, workflowVersion = 1 }) => {
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record, previousRecord, object, workflowVariables = {}, debugMode = false, simulateExternalActions = null, workflowVersion = 1 }) => {
       const mode = String(action.scheduleMode || "OFFSET").toUpperCase();
       let runAt;
       if (mode === "AT_DATETIME") {
@@ -3795,7 +3795,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         runAt = new Date(Date.now() + amount * multiplier);
       }
       if (Number.isNaN(runAt.getTime())) throw new Error("Scheduled Path resolved to an invalid date/time");
-      if (debugMode) {
+      const shouldSimulate = simulateExternalActions === true || (simulateExternalActions == null && debugMode === true);
+      if (shouldSimulate) {
         return { status: "scheduled", simulated: true, runAt: runAt.toISOString(), pathLabel: action.pathLabel, stepIds: action.branch };
       }
       const tenantId = companyId || req?.user?.companyId;
@@ -5553,20 +5554,22 @@ export async function executeWorkflowAction(context) {
   await assertWorkflowActionPermission(context, definition);
   const actionType = resolveWorkflowActionType(action);
   await assertWorkflowObjectPermission(context, actionType);
-  if (context?.debugMode === true && !DEBUG_EXECUTABLE_ACTIONS.has(actionType)) {
+  const simulateExternalActions = context?.simulateExternalActions === true
+    || (context?.simulateExternalActions == null && context?.debugMode === true);
+  if (simulateExternalActions && !DEBUG_EXECUTABLE_ACTIONS.has(actionType)) {
     return {
       status: "completed",
       simulated: true,
       actionType,
-      message: "Simulated in Debug mode so no external action or irreversible operation was performed.",
+      message: "Simulated in Debug/Test mode so no external action or irreversible operation was performed.",
     };
   }
-  if (context?.debugMode === true && ["WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE"].includes(actionType)) {
+  if (simulateExternalActions && ["WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE"].includes(actionType)) {
     return {
       status: "completed",
       simulated: true,
       actionType,
-      message: "Wait was skipped in Debug mode.",
+      message: "Wait was skipped in Debug/Test mode.",
       resumeAt: action?.resumeAt || action?.until || null,
       durationSeconds: Number(action?.durationSeconds ?? action?.waitSeconds ?? 0),
     };
@@ -5822,7 +5825,9 @@ export async function executeWorkflowActions({ actions, ...context }) {
       }
 
       let branchPaused = false;
-      if (context.debugMode === true && resolveWorkflowActionType(item) === "SCHEDULE_PATH") {
+      const simulateExternalActions = context.simulateExternalActions === true
+        || (context.simulateExternalActions == null && context.debugMode === true);
+      if (simulateExternalActions && resolveWorkflowActionType(item) === "SCHEDULE_PATH") {
         const scheduledIds = Array.isArray(item.branch) ? item.branch : [];
         const scheduledActions = scheduledIds
           .map((id) => actionById.get(String(id)))
@@ -5955,7 +5960,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
             result: redact(result),
             retryAttempts,
             irreversible: IRREVERSIBLE_ACTIONS.has(resolveWorkflowActionType(item)),
-            ...(context.debugMode === true ? {
+            ...((context.debugTrace === true || context.debugMode === true) ? {
               resourceSnapshot: redact({
                 variables: { ...(workflowVariables.variables || {}) },
                 stepResult: result,
@@ -5983,7 +5988,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
             error: details,
             friendlyError,
             retryAttempts,
-            ...(context.debugMode === true ? {
+            ...((context.debugTrace === true || context.debugMode === true) ? {
               resourceSnapshot: redact({ variables: { ...(workflowVariables.variables || {}) } }),
             } : {}),
           },
