@@ -645,7 +645,7 @@ const CATALOG = [
         "communication.message_delivered",
         "communication.message_failed"
       ],
-      actions: ["SEND_EMAIL"],
+      actions: ["SEND_COMMUNICATION"],
     },
   },
   {
@@ -802,7 +802,7 @@ const CATALOG = [
         "communication.message_delivered",
         "communication.message_failed"
       ],
-      actions: ["SEND_SMS"],
+      actions: ["SEND_COMMUNICATION"],
     },
   },
   {
@@ -836,7 +836,7 @@ const CATALOG = [
       settings: ["apiUrl", "authenticationMethod", "username", "password", "apiToken", "deviceId", "simNumber", "bookingBaseUrl", "webhookSigningKey"],
       mappings: ["recipient_phone", "message", "provider_message_id"],
       events: ["communication.message_received"],
-      actions: ["SEND_SMS", "TEST_CONNECTION", "LIST_DEVICES"],
+      actions: ["SEND_COMMUNICATION", "TEST_CONNECTION", "LIST_DEVICES"],
     },
     connectorApp: {
       type: "communication",
@@ -899,7 +899,7 @@ const CATALOG = [
         "communication.message_delivered",
         "communication.message_failed"
       ],
-      actions: ["SEND_WHATSAPP", "WHATSAPP_TEST_CONNECTION", "WHATSAPP_SYNC_MESSAGE_STATUS"],
+      actions: ["SEND_COMMUNICATION", "WHATSAPP_TEST_CONNECTION", "WHATSAPP_SYNC_MESSAGE_STATUS"],
     },
     iconAssetKey: "whatsapp",
   },
@@ -982,7 +982,7 @@ const CATALOG = [
         "communication.opted_out",
         "communication.handoff"
       ],
-      actions: ["SEND_WHATSAPP"],
+      actions: ["SEND_COMMUNICATION"],
       workflowScope: {
         channel: "WHATSAPP",
         licenceAwareObjects: true,
