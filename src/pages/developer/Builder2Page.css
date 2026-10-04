@@ -69,3 +69,112 @@
 .b2-decision-paths{display:flex;align-items:flex-start;gap:24px;border-top:2px solid #c8d4e2;padding-top:12px;margin-bottom:20px}.b2-decision-path{display:flex;flex-direction:column;align-items:center;min-width:240px;gap:4px}.b2-decision-path>strong{font-size:12px;padding:6px 12px;border:1px solid #c8d4e2;border-radius:5px;background:white}.b2-path-reference{border:1px dashed #8497b0;border-radius:6px;padding:10px;background:#fff;color:#1466b8}.b2-path-step{display:flex;justify-content:space-between;gap:6px;padding:6px 0}.b2-branch-steps{margin:12px 0}.b2-path-missing{color:#b31c1c}
 
 .b2-path-controls{display:flex;gap:8px;padding:3px}.b2-path-controls button{font-size:10px;border:0;background:transparent;color:#526681;padding:2px}.b2-condition:has([aria-label^="Use resource path"]){grid-template-columns:18px auto minmax(70px,1fr) minmax(65px,1fr) minmax(65px,1fr) 24px}
+
+
+/* Dynamic decision-tree Auto Layout.
+   Presentation only: workflow metadata, click handlers, properties and runtime behaviour are unchanged. */
+.b2-flow{
+  width:max-content;
+  min-width:100%;
+  box-sizing:border-box;
+  padding-left:36px;
+  padding-right:36px;
+}
+.b2-step-wrap{
+  width:max-content;
+  min-width:244px;
+}
+.b2-node{
+  border-color:#cfd5dd;
+  border-radius:7px;
+  box-shadow:0 1px 3px rgba(0,0,0,.10);
+}
+.b2-node.is-decision{
+  border-color:#e6a23c;
+  box-shadow:0 1px 4px rgba(140,91,18,.14);
+}
+.b2-node.is-decision .b2-node-icon{
+  background:#f5a623;
+}
+.b2-decision-paths{
+  position:relative;
+  display:flex;
+  align-items:flex-start;
+  gap:28px;
+  border-top:0;
+  padding-top:20px;
+  margin-bottom:22px;
+  width:max-content;
+}
+.b2-decision-paths::before{
+  content:"";
+  position:absolute;
+  top:0;
+  left:var(--b2-first-half,122px);
+  right:var(--b2-last-half,122px);
+  height:1px;
+  background:#8fa3ba;
+}
+.b2-decision-path{
+  position:relative;
+  flex:0 0 auto;
+  min-width:244px;
+  gap:0;
+}
+.b2-decision-path::before{
+  content:"";
+  position:absolute;
+  top:-20px;
+  left:50%;
+  width:1px;
+  height:20px;
+  background:#8fa3ba;
+}
+.b2-decision-path>strong{
+  min-width:72px;
+  max-width:190px;
+  box-sizing:border-box;
+  padding:5px 12px;
+  border:1px solid #9dbde3;
+  border-radius:999px;
+  background:#f4f8fd;
+  color:#1b5f9e;
+  font-size:11px;
+  line-height:1.2;
+  font-weight:700;
+  text-align:center;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  box-shadow:0 1px 2px rgba(0,0,0,.05);
+}
+.b2-decision-path.is-default>strong{
+  border-color:#c6cbd2;
+  background:#f7f8fa;
+  color:#5c6570;
+}
+.b2-decision-path.is-fault>strong{
+  border-color:#e7b0a8;
+  background:#fff5f3;
+  color:#a33b2d;
+}
+.b2-decision-path>.b2-line{
+  height:22px;
+  background:#8fa3ba;
+}
+.b2-line-to-branches{
+  height:24px;
+  background:#8fa3ba;
+}
+.b2-decision-path>.b2-step-wrap{
+  margin-left:auto;
+  margin-right:auto;
+}
+.b2-decision-path>.b2-add{
+  margin-top:0;
+}
+.b2-decision-path>small{
+  margin-top:5px;
+  color:#7a8490;
+  font-size:9px;
+}

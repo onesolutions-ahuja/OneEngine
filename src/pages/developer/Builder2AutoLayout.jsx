@@ -1,5 +1,8 @@
 import { GitBranch, Database, Plus, Zap } from 'lucide-react'
 
+const BRANCH_MIN_WIDTH = 244
+const BRANCH_GAP = 28
+
 export function decisionPaths(node) {
   if (node.type === 'ACTION') {
     try {
@@ -17,6 +20,22 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
   const byId = new Map(nodes.map(node => [node.id, node]))
   const referenced = new Set(nodes.flatMap(node => decisionPaths(node).flatMap(path => path.steps)))
   const expanded = new Set()
+
+  function nodeTreeWidth(id, ancestors = []) {
+    const node = byId.get(id)
+    if (!node || ancestors.includes(id)) return BRANCH_MIN_WIDTH
+    if (node.groupId && groups.find(group => group.id === node.groupId)?.collapsed) return BRANCH_MIN_WIDTH
+    const paths = decisionPaths(node)
+    if (!paths.length || collapsed[id]) return BRANCH_MIN_WIDTH
+    const widths = paths.map(path => pathTreeWidth(path, [...ancestors, id]))
+    return Math.max(BRANCH_MIN_WIDTH, widths.reduce((sum, width) => sum + width, 0) + BRANCH_GAP * Math.max(0, widths.length - 1))
+  }
+
+  function pathTreeWidth(path, ancestors = []) {
+    const widths = (path.steps || []).map(step => nodeTreeWidth(step, ancestors))
+    return Math.max(BRANCH_MIN_WIDTH, ...widths)
+  }
+
   const renderNode = (id, ancestors = []) => {
     const node = byId.get(id)
     if (!node) return <div key={id} className="b2-path-missing">Missing element: {id}</div>
@@ -24,14 +43,25 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
     if (expanded.has(id) || ancestors.includes(id)) return <button key={id} className="b2-path-reference" onClick={() => onSelect(node)}>Go to {node.label}</button>
     expanded.add(id)
     const paths = decisionPaths(node)
+    const pathWidths = paths.map(path => pathTreeWidth(path, [...ancestors, id]))
+    const totalBranchWidth = Math.max(
+      BRANCH_MIN_WIDTH,
+      pathWidths.reduce((sum, width) => sum + width, 0) + BRANCH_GAP * Math.max(0, pathWidths.length - 1),
+    )
+    const branchStyle = paths.length ? {
+      width: `${totalBranchWidth}px`,
+      '--b2-first-half': `${(pathWidths[0] || BRANCH_MIN_WIDTH) / 2}px`,
+      '--b2-last-half': `${(pathWidths[pathWidths.length - 1] || BRANCH_MIN_WIDTH) / 2}px`,
+    } : undefined
+
     return <div key={id} className="b2-step-wrap">
-      <button data-node-id={id} className={`b2-node ${selected === id || selectedMany.includes(id) ? 'is-selected' : ''}`} onClick={() => onSelect(node)}>
+      <button data-node-id={id} className={`b2-node ${node.type === 'DECISION' ? 'is-decision' : ''} ${selected === id || selectedMany.includes(id) ? 'is-selected' : ''}`} onClick={() => onSelect(node)}>
         <span className="b2-node-icon">{paths.length ? <GitBranch size={16}/> : node.type === 'ACTION' ? <Zap size={16}/> : <Database size={16}/>}</span>
         <span><b>{node.label}</b><small>{node.type.replaceAll('_', ' ')}</small></span>
       </button>
       <div className="b2-path-controls"><button type="button" aria-label={`Copy ${node.label}`} onClick={() => onCopy(id)}>Copy</button><button type="button" aria-label={`Delete ${node.label}`} onClick={() => onDelete(id)}>Delete</button>{paths.length ? <button type="button" onClick={() => onToggle(id)}>{collapsed[id] ? 'Expand Paths' : 'Collapse Paths'}</button> : null}</div>
-      <div className="b2-line"/>
-      {paths.length && !collapsed[id] ? <div className="b2-decision-paths">{paths.map(path => <section key={path.id} className="b2-decision-path">
+      <div className={`b2-line ${paths.length ? 'b2-line-to-branches' : ''}`}/>
+      {paths.length && !collapsed[id] ? <div className="b2-decision-paths" style={branchStyle}>{paths.map((path, index) => <section key={path.id} className={`b2-decision-path ${path.id === 'default' ? 'is-default' : ''} ${path.id === 'fault' ? 'is-fault' : ''}`} style={{ width: `${pathWidths[index] || BRANCH_MIN_WIDTH}px` }}>
         <strong>{path.label}</strong><div className="b2-line"/>
         {path.steps.map(step => renderNode(step, [...ancestors, id]))}
         {path.id !== 'fault' ? <button className="b2-add" aria-label={`Add element to ${node.label}: ${path.label}`} onClick={() => onAdd({ nodeId: id, outcomeId: path.id })}><Plus size={14}/></button> : null}
