@@ -4725,20 +4725,30 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "RUN_AGENT",
     displayName: "Run Agent",
-    description: "Run the configured OneEngine AI service with Flow inputs and capture its answer.",
+    description: "Run an active OneEngine agent with request/session inputs and capture unstructured or structured outputs.",
     schema: {
       type: "object",
       properties: {
+        agentKey: { type: "string" },
+        agentDefinition: { type: "object" },
         agentPrompt: {},
-        agentContext: { type: "object" },
-        agentOutputVariable: { type: "string" },
+        sessionId: {},
+        structuredOutput: { type: "array" },
+        agentResponseVariable: { type: "string" },
+        agentSessionVariable: { type: "string" },
+        structuredResponseVariable: { type: "string" },
       },
-      required: ["agentPrompt","agentOutputVariable"],
+      required: ["agentPrompt"],
     },
     validation: (action) => {
-      if (!String(action?.agentPrompt || "").trim()) throw new Error("Run Agent requires a prompt");
-      if (!action?.agentOutputVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.agentOutputVariable))) {
-        throw new Error("Run Agent requires a valid output Variable API Name");
+      if (!action?.agentPrompt) throw new Error("Run Agent requires an Agent Request");
+      const names = new Set();
+      for (const field of action?.structuredOutput || []) {
+        const name = String(field?.name || "");
+        if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw new Error("Run Agent structured output field names must be valid API names");
+        if (names.has(name.toLowerCase())) throw new Error("Run Agent structured output field names must be unique");
+        names.add(name.toLowerCase());
+        if (!["text","number","boolean","date","datetime"].includes(String(field?.dataType || ""))) throw new Error("Run Agent structured output field type is invalid");
       }
     },
     async: true,
@@ -4750,31 +4760,62 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const contextBase = { record, previousRecord, req, object, workflowVariables };
       const promptValue = resolveConfiguredResource(action.agentPrompt, contextBase, { preserveMissing: false });
       const prompt = String(promptValue ?? "").trim();
-      if (!prompt) throw new Error("Run Agent prompt resolved to an empty value");
-      const resolvedContext = {};
-      for (const [name, configured] of Object.entries(action.agentContext || {})) {
-        if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(name))) continue;
-        resolvedContext[name] = resolveConfiguredResource(configured, contextBase, { preserveMissing: false });
-      }
+      if (!prompt) throw new Error("Run Agent request resolved to an empty value");
+      const resolvedSession = action.sessionId
+        ? resolveConfiguredResource(action.sessionId, contextBase, { preserveMissing: false })
+        : null;
+      const agentDefinition = action.agentDefinition && typeof action.agentDefinition === "object" ? action.agentDefinition : null;
       const safeContext = {
         companyId: req?.user?.companyId || null,
         storeId: req?.user?.storeId || null,
         roleId: req?.user?.roleId || null,
         userId: req?.user?.id || null,
         permissions: Array.isArray(req?.user?.permissions) ? req.user.permissions : [],
-        ...resolvedContext,
+        agentKey: action.agentKey || "oneengine_assistant",
+        agentDefinition,
+        sessionId: resolvedSession || null,
       };
-      const result = await service.ask({ message: prompt, context: safeContext });
-      const outputVariable = String(action.agentOutputVariable);
-      workflowVariables.variables[outputVariable] = result.answer;
+      const result = await service.ask({ message: prompt, context: safeContext, sessionId: resolvedSession || undefined });
+      const sessionId = result?.sessionId || result?.session_id || resolvedSession || null;
+      const structuredSpec = Array.isArray(action.structuredOutput) ? action.structuredOutput : [];
+      let structured = result?.structuredResponse || result?.structured || null;
+      if (structuredSpec.length && (!structured || typeof structured !== "object" || Array.isArray(structured))) {
+        try {
+          const parsed = JSON.parse(String(result?.answer || ""));
+          structured = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch { structured = {}; }
+      }
+      if (structuredSpec.length) {
+        const normalized = {};
+        for (const field of structuredSpec) {
+          const name = String(field.name);
+          const present = Object.prototype.hasOwnProperty.call(structured || {}, name);
+          let value = present ? structured[name] : null;
+          const type = String(field.dataType || "text");
+          if (value != null && type === "number") value = Number(value);
+          if (value != null && type === "boolean") value = [true,1,"true","1"].includes(value);
+          if (value != null && ["date","datetime"].includes(type)) value = String(value);
+          if (value != null && type === "text") value = String(value);
+          normalized[name] = value;
+          normalized[`${name}_set`] = present;
+        }
+        structured = normalized;
+      }
+      const responseVar = String(action.agentResponseVariable || "AgentResponse");
+      const sessionVar = String(action.agentSessionVariable || "SessionId");
+      const structuredVar = String(action.structuredResponseVariable || "StructuredAgentResponse");
+      workflowVariables.variables[responseVar] = structuredSpec.length ? null : (result?.answer ?? null);
+      workflowVariables.variables[sessionVar] = sessionId;
+      workflowVariables.variables[structuredVar] = structuredSpec.length ? structured : null;
       return {
         status: "completed",
-        variableName: outputVariable,
-        value: result.answer,
-        answer: result.answer,
-        provider: result.provider || null,
-        model: result.model || null,
-        latencyMs: result.latencyMs || null,
+        agentKey: action.agentKey || "oneengine_assistant",
+        answer: structuredSpec.length ? null : (result?.answer ?? null),
+        sessionId,
+        structuredResponse: structuredSpec.length ? structured : null,
+        provider: result?.provider || null,
+        model: result?.model || null,
+        latencyMs: result?.latencyMs || null,
       };
     },
   },
