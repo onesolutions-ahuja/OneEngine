@@ -53,8 +53,8 @@ test('GPT Builder phase 2 implements Salesforce Start configuration and first-sa
   assert.match(page, /apiNameFromLabel\(label\)/)
   assert.match(page, /disabled=\{saved\}/)
   assert.match(page, /The API name can’t be edited after the flow is saved/)
-  assert.match(page, /workflowId \? `\/api\/platform\/rules\//)
-  assert.match(page, /method: workflowId \? 'PUT' : 'POST'/)
+  assert.match(page, /workflowId && !forceNewFlow \? `\\/api\\/platform\\/rules\\//)
+  assert.match(page, /method: workflowId && !forceNewFlow \? 'PUT' : 'POST'/)
 })
 
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
@@ -163,7 +163,7 @@ test('GPT Builder phase 4 matches auto-layout continuous editing and free-form d
 
 test('GPT Builder phase 4 persists element identity and reopens element properties', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
-  assert.match(page, /const \[elements, setElements\] = useState\(\(\) => structuredClone\(templateAction\.gptBuilderElements \|\| \[\]\)\)/)
+  assert.match(page, /Array\.isArray\(templateAction\.gptBuilderElements\).*structuredClone\(templateAction\.gptBuilderElements\)/s)
   assert.match(page, /gptBuilderElements: elements\.map/)
   assert.match(page, /labelSource: element\.labelSource/)
   assert.match(page, /apiNameSource: element\.apiNameSource/)
@@ -318,11 +318,13 @@ test('GPT Builder edit history makes the canvas read-only while reviewing saves'
 
 test('GPT Builder recheck makes Use a Template functional instead of a placeholder', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
-  assert.match(page, /apiRequest\('\/api\/platform\/rules'\)/)
-  assert.match(page, /action\?\.isTemplate === true/)
-  assert.match(page, /Search templates/)
-  assert.match(page, /role="listbox"/)
-  assert.match(page, /templateRule: selectedTemplate/)
+  const automation = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderNewAutomation.jsx', import.meta.url), 'utf8')
+  assert.match(page, /<GPTBuilderNewAutomation flowTypes=\{FLOW_TYPES\}/)
+  assert.match(automation, /apiRequest\('\/api\/platform\/rules'\)/)
+  assert.match(automation, /action\?\.isTemplate === true/)
+  assert.match(automation, /Search templates/)
+  assert.match(automation, /role="listbox"/)
+  assert.match(automation, /templateRule: template/)
   assert.match(page, /templateAction\.gptBuilderElements/)
   assert.match(page, /templateAction\.resources/)
   assert.match(page, /templateAction\.goToConnections/)
