@@ -1400,6 +1400,21 @@ export default function createSettingsRouter({
         [req.user.companyId, names[platform], platform, JSON.stringify(configuration), enabled === true]
       );
 
+      if (platform === "uber") {
+        const definition = await client.query("SELECT id FROM platform_connector_definitions WHERE connector_key='uber_eats' AND status='ACTIVE' LIMIT 1");
+        if (definition.rows[0]?.id) {
+          const credentials = { clientId: configuration.client_id || null, clientSecret: decryptSecret(configuration.client_secret), token: decryptSecret(configuration.api_key) };
+          const connectorConfiguration = { environment: configuration.environment, storeId: configuration.store_id || configuration.store_location_id || null };
+          const baseUrl = configuration.environment === "production" ? "https://api.uber.com" : "https://test-api.uber.com";
+          const existingConnection = await client.query("SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)='uber_eats' ORDER BY updated_at DESC LIMIT 1", [req.user.companyId]);
+          if (existingConnection.rows[0]?.id) {
+            await client.query("UPDATE integration_connections SET connector_definition_id=$1,connector_package_key='uber_eats',connector_configuration=$2::jsonb,base_url=$3,auth_type='bearer',credentials_encrypted=$4,enabled=$5,updated_at=NOW() WHERE id=$6 AND company_id=$7", [definition.rows[0].id, JSON.stringify(connectorConfiguration), baseUrl, encryptCredentials(credentials), enabled === true, existingConnection.rows[0].id, req.user.companyId]);
+          } else {
+            await client.query("INSERT INTO integration_connections (company_id,name,provider_name,integration_type,base_url,connector_package_key,connector_definition_id,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by) VALUES ($1,'Uber Eats Connection','uber_eats','online_orders',$2,'uber_eats',$3,$4::jsonb,'bearer',$5,$6,'NOT_CONNECTED',$7)", [req.user.companyId, baseUrl, definition.rows[0].id, JSON.stringify(connectorConfiguration), encryptCredentials(credentials), enabled === true, req.user.id || null]);
+          }
+        }
+      }
+
       await writeAudit(
         req.user.companyId,
         req.user.id,
