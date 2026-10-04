@@ -1580,8 +1580,8 @@ function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, onRetr
   const q = String(query || '').trim().toLowerCase()
   const visible = apps.filter((item) => item?.visible !== false && item?.system_only !== true)
     .filter((item) => !q || marketplaceSearchText(item).includes(q))
-  const installed = visible.filter((item) => Boolean(item.company_installation))
-  const available = visible.filter((item) => !item.company_installation)
+  const installed = visible.filter((item) => ['INSTALLED','ACTIVE','INACTIVE'].includes(String(item?.tenant_app_status || '').toUpperCase()))
+  const available = visible.filter((item) => !['INSTALLED','ACTIVE','INACTIVE'].includes(String(item?.tenant_app_status || '').toUpperCase()))
   const showInstalled = mode !== 'store'
   const renderRows = (rows, start = 0) => rows.slice(0, 12).map((item, index) => {
     const icon = appIconUrl(item)
@@ -1592,12 +1592,13 @@ function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, onRetr
         className="topbar-app-row"
         onClick={() => {
           const route = resolveAppOpenRoute(item)
-          if (mode !== 'store' && item?.company_installation) {
+          const tenantStatus = String(item?.tenant_app_status || '').toUpperCase()
+          if (mode !== 'store' && tenantStatus === 'ACTIVE' && route) {
             onOpenRoute?.(route)
             onClose?.()
             return
           }
-          if (mode !== 'store' && !item?.company_installation) {
+          if (mode !== 'store') {
             onOpenStore?.(item.package_key)
             return
           }
@@ -1668,7 +1669,9 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
           {visible.map((item, index) => {
             const icon = appIconUrl(item)
             const route = resolveAppOpenRoute(item)
-            const installed = Boolean(item.company_installation)
+            const tenantStatus = String(item?.tenant_app_status || '').toUpperCase()
+            const installed = ['INSTALLED','ACTIVE','INACTIVE'].includes(tenantStatus)
+            const active = tenantStatus === 'ACTIVE'
             return (
               <motion.button
                 key={item.package_key || item.id}
@@ -1683,7 +1686,7 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
                 whileHover={{ y: -7, scale: 1.055 }}
                 whileTap={{ scale: 0.94 }}
                 onClick={() => {
-                  if (installed && route) {
+                  if (active && route) {
                     onClose?.()
                     onOpenRoute?.(route)
                   } else {
