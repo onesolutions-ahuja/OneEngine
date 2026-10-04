@@ -422,7 +422,7 @@ function FlowShell({ flow, onNew }) {
   const [availableFlows, setAvailableFlows] = useState([])
   const [startConfig, setStartConfig] = useState(() => templateAction.start ? structuredClone(templateAction.start) : initialStart(flow.key))
   const [startDraft, setStartDraft] = useState(() => templateAction.start ? structuredClone(templateAction.start) : initialStart(flow.key))
-  const [startOpen, setStartOpen] = useState(flow.startNeedsConfiguration)
+  const [startOpen, setStartOpen] = useState(flow.startNeedsConfiguration && !flow.templateRule)
   const [flowProps, setFlowProps] = useState({ label: '', apiName: '', description: '', interviewLabel: '', runContext: defaultRunContextForFlowType(flow.key), apiVersion: '68.0', triggerOrder: '', showProgress: flow.key === 'screen', progressIndicatorType: 'simple_top', sourceTemplateId: '', originalFlowId: '', isTemplate: false, overridable: false })
   const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
