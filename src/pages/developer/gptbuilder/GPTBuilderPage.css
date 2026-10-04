@@ -194,7 +194,7 @@
 .gptb-action-input>label>span{display:flex;gap:4px;align-items:center}
 .gptb-action-input small{font-size:8px;color:#706e6b}
 .gptb-agent-create,.gptb-agent-structured-list{display:grid;gap:7px}
-.gptb-agent-structured-list>div{display:grid;grid-template-columns:20px minmax(0,1fr) 110px minmax(0,1.2fr) 26px;gap:6px;align-items:center}
+.gptb-agent-structured-list>div{display:grid;grid-template-columns:20px minmax(0,1fr) 110px minmax(0,1.2fr) 86px 26px;gap:6px;align-items:center}
 .gptb-agent-structured-list button{display:grid;place-items:center;border:0;background:transparent;color:#706e6b}
 .gptb-agent-outputs{display:grid;gap:6px;margin:0}.gptb-agent-outputs>div{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px}.gptb-agent-outputs dt{font-size:8px;color:#706e6b}.gptb-agent-outputs dd{margin:0;font-size:9px;overflow-wrap:anywhere}
 @media (max-width:760px){.gptb-action-input,.gptb-action-input>label,.gptb-agent-structured-list>div,.gptb-agent-outputs>div{grid-template-columns:1fr}}
@@ -215,3 +215,5 @@
 .gptb-subflow-contract-row{display:grid;grid-template-columns:minmax(0,.75fr) minmax(0,1fr);gap:6px;align-items:end;padding:7px 0;border-bottom:1px solid #ecebea}.gptb-subflow-contract-row>label{display:grid;grid-template-columns:minmax(0,1fr) 90px;gap:6px;align-items:center}.gptb-subflow-contract-row>small{grid-column:1/-1;color:#706e6b;font-size:7px}
 .gptb-subflow-output-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,.8fr);gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #ecebea}.gptb-subflow-output-row>span{display:grid;gap:1px}.gptb-subflow-output-row b{font-size:9px}.gptb-subflow-output-row small{font-size:7px;color:#706e6b}
 @media(max-width:980px){.gptb-screen-builder{grid-template-columns:145px minmax(280px,1fr) 205px}}@media(max-width:760px){.gptb-screen-builder{grid-template-columns:1fr}.gptb-screen-palette,.gptb-screen-properties{max-height:220px;border:0;border-bottom:1px solid #dddbda}.gptb-subflow-contract-row,.gptb-subflow-contract-row>label,.gptb-subflow-output-row{grid-template-columns:1fr}}
+
+.gptb-agent-required{display:flex!important;align-items:center!important;gap:5px!important;margin:0!important;font-size:8px!important;font-weight:500!important}.gptb-agent-required input{width:auto!important;min-height:auto!important}.gptb-agent-actions{display:grid;gap:6px;padding:8px;border:1px solid #ecebea;border-radius:4px}.gptb-agent-actions>div{display:grid;gap:4px;max-height:180px;overflow:auto}.gptb-agent-actions .gptb-properties-check>span{display:grid;gap:1px}
