@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp,
   Copy, Eye, LayoutPanelLeft, MoreHorizontal, Play, Plus, Redo2, Save, Search,
@@ -261,6 +261,67 @@ function FlowShell({ flow, onNew }) {
   const [elements, setElements] = useState([])
   const [resources, setResources] = useState([])
   const [editingElement, setEditingElement] = useState(null)
+  const [selectedElementIds, setSelectedElementIds] = useState([])
+  const [copiedElements, setCopiedElements] = useState([])
+  const [connectMode, setConnectMode] = useState(false)
+  const [goToConnections, setGoToConnections] = useState([])
+  const historyRef = useRef([])
+  const futureRef = useRef([])
+  const currentSnapshotRef = useRef(null)
+  const applyingHistoryRef = useRef(false)
+  const [historyRevision, setHistoryRevision] = useState(0)
+
+  useEffect(() => {
+    const snapshot = JSON.parse(JSON.stringify({ layout, startConfig, elements, resources, goToConnections }))
+    const serialized = JSON.stringify(snapshot)
+    if (!currentSnapshotRef.current) {
+      currentSnapshotRef.current = { value: snapshot, serialized }
+      return
+    }
+    if (applyingHistoryRef.current) {
+      currentSnapshotRef.current = { value: snapshot, serialized }
+      applyingHistoryRef.current = false
+      setHistoryRevision((value) => value + 1)
+      return
+    }
+    if (currentSnapshotRef.current.serialized !== serialized) {
+      historyRef.current = [...historyRef.current, currentSnapshotRef.current.value].slice(-100)
+      futureRef.current = []
+      currentSnapshotRef.current = { value: snapshot, serialized }
+      setHistoryRevision((value) => value + 1)
+    }
+  }, [layout, startConfig, elements, resources, goToConnections])
+
+  const applyHistorySnapshot = (snapshot) => {
+    applyingHistoryRef.current = true
+    setLayout(snapshot.layout)
+    setStartConfig(snapshot.startConfig)
+    setStartDraft(snapshot.startConfig)
+    setElements(snapshot.elements)
+    setResources(snapshot.resources)
+    setGoToConnections(snapshot.goToConnections || [])
+    setEditingElement(null)
+    setElementPickerOpen(false)
+    setDiagnosticsOpen(false)
+    setStartOpen(false)
+    setDirty(true)
+  }
+
+  const undoFlowChange = () => {
+    const previous = historyRef.current.pop()
+    if (!previous || !currentSnapshotRef.current) return
+    futureRef.current = [currentSnapshotRef.current.value, ...futureRef.current].slice(0, 100)
+    applyHistorySnapshot(previous)
+    setHistoryRevision((value) => value + 1)
+  }
+
+  const redoFlowChange = () => {
+    const next = futureRef.current.shift()
+    if (!next || !currentSnapshotRef.current) return
+    historyRef.current = [...historyRef.current, currentSnapshotRef.current.value].slice(-100)
+    applyHistorySnapshot(next)
+    setHistoryRevision((value) => value + 1)
+  }
 
   useEffect(() => {
     let live = true
@@ -330,6 +391,7 @@ function FlowShell({ flow, onNew }) {
         position: element.position,
       })),
       resources,
+      goToConnections,
       actions: elements.filter((element) => element.configured).map((element) => {
         if (element.key === 'get_records') return getRecordsRuntimeAction(element)
         return null
@@ -365,6 +427,47 @@ function FlowShell({ flow, onNew }) {
     setElements((current) => current.map((item) => item.id === next.id ? next : item))
     setDirty(true)
   }
+  const toggleElementSelection = (id) => setSelectedElementIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
+  const copySelectedElements = () => {
+    const picked = elements.filter((element) => selectedElementIds.includes(element.id))
+    setCopiedElements(JSON.parse(JSON.stringify(picked)))
+    setSelecting(false)
+    setSelectedElementIds([])
+  }
+  const pasteCopiedElements = () => {
+    if (!copiedElements.length) return
+    const existing = [...elements]
+    const clones = copiedElements.map((element, index) => {
+      const base = createElementInstance(element.key, [...existing], { source: 'auto', config: JSON.parse(JSON.stringify(element.config || {})) })
+      const clone = {
+        ...base,
+        label: `${element.label || base.label} ${index ? index + 2 : 'Copy'}`,
+        description: element.description || '',
+        configured: element.configured,
+      }
+      clone.apiName = clone.label.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || base.apiName
+      existing.push(clone)
+      return clone
+    })
+    setElements((current) => [...current, ...clones])
+    setDirty(true)
+    setElementPickerOpen(false)
+  }
+  const beginConnectToElement = () => {
+    if (!elements.length) return
+    setConnectMode(true)
+    setElementPickerOpen(false)
+    setSelecting(false)
+    setSelectedElementIds([])
+  }
+  const connectToElement = (targetId) => {
+    const sourceId = elements.filter((element) => element.source === 'auto').at(-1)?.id || 'start'
+    if (targetId === sourceId) return
+    setGoToConnections((current) => [...current.filter((edge) => edge.sourceId !== sourceId), { sourceId, targetId }])
+    setConnectMode(false)
+    setDirty(true)
+  }
+
   const chooseElement = (element, source = 'auto', position = null) => {
     setElementPickerOpen(false)
     setDiagnosticsOpen(false)
@@ -402,9 +505,10 @@ function FlowShell({ flow, onNew }) {
       <div className="gptb-status"><span className="gptb-status-dot"/>Inactive <i>·</i> {lastSavedAt ? (dirty ? 'Unsaved changes' : 'Saved') : 'Never saved'}</div>
       <div className="gptb-toolbar" role="toolbar" aria-label="Flow Builder controls">
         <button className={toolboxOpen ? 'is-on' : ''} aria-label={toolboxOpen ? 'Hide Toolbox' : 'Show Toolbox'} onClick={() => setToolboxOpen((value) => !value)}><LayoutPanelLeft size={16}/></button>
-        <button className={selecting ? 'is-on' : ''} aria-label="Select Elements" onClick={() => setSelecting((value) => !value)}><Copy size={16}/></button>
+        {layout === 'auto' ? <button className={selecting ? 'is-on' : ''} aria-label="Select Elements" onClick={() => { setSelecting((value) => !value); setSelectedElementIds([]); setConnectMode(false) }}><Copy size={16}/></button> : null}
+        {layout === 'auto' && selecting ? <button aria-label="Copy Elements" title="Copy Elements" disabled={!selectedElementIds.length} onClick={copySelectedElements}><Copy size={16}/><em>{selectedElementIds.length || ''}</em></button> : null}
         <span className="gptb-toolbar-separator"/>
-        <button aria-label="Undo" disabled><Undo2 size={16}/></button><button aria-label="Redo" disabled><Redo2 size={16}/></button>
+        <button aria-label="Undo" title="Undo" disabled={!historyRef.current.length} onClick={undoFlowChange}><Undo2 size={16}/></button><button aria-label="Redo" title="Redo" disabled={!futureRef.current.length} onClick={redoFlowChange}><Redo2 size={16}/></button>
         {issues.length ? <button className={issues.some((issue) => issue.level === 'error') ? 'has-issues is-error' : 'has-issues is-warning'} aria-label={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} title={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} onClick={() => { setDiagnosticsOpen((value) => !value); setStartOpen(false); setEditingElement(null) }}><AlertTriangle size={16}/><em>{issues.filter((issue) => issue.level === (issues.some((row) => row.level === 'error') ? 'error' : 'warning')).length}</em></button> : null}
         <button aria-label="View Properties" title="View Properties" onClick={() => setPropertiesOpen(true)}><Settings2 size={16}/></button>
         <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={() => { setLayout('auto'); setLayoutOpen(false); setDirty(true) }}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={() => { setLayout('free'); setLayoutOpen(false); setToolboxOpen(true); setDirty(true) }}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
@@ -427,10 +531,10 @@ function FlowShell({ flow, onNew }) {
         <div className="gptb-canvas-stage" style={{ transform: `scale(${zoom / 100})` }}>{layout === 'auto' ? <>
           <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} aria-label="Start" onClick={openStart}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
           <div className="gptb-connector"/>
-          {elements.filter((element) => element.source === 'auto').map((element) => <div className="gptb-auto-element-slot" key={element.id}><PendingElementCard instance={element} onOpen={() => openElement(element)}/><div className="gptb-connector"/></div>)}
+          {elements.filter((element) => element.source === 'auto').map((element) => <div className="gptb-auto-element-slot" key={element.id}><PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/><div className="gptb-connector"/></div>)}
           <div className="gptb-add-slot">
             <button className="gptb-add-node" aria-label="Add element" aria-expanded={elementPickerOpen} onClick={() => { setElementPickerOpen((value) => !value); setStartOpen(false); setDiagnosticsOpen(false); setEditingElement(null) }}><Plus size={15}/></button>
-            {elementPickerOpen ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={false} onSelect={(element) => chooseElement(element, 'auto')} onClose={() => setElementPickerOpen(false)}/> : null}
+            {elementPickerOpen ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={elements.some((element) => element.source === 'auto')} copiedCount={copiedElements.length} onPaste={pasteCopiedElements} onConnect={beginConnectToElement} onSelect={(element) => chooseElement(element, 'auto')} onClose={() => setElementPickerOpen(false)}/> : null}
           </div>
           <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
         </> : <>
