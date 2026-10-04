@@ -488,7 +488,7 @@ function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, 
 }
 
 
-function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, inputContract = [], resources = [], onClose }) {
+function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, inputContract = [], resources = [], elements = [], onClose }) {
   const [records, setRecords] = useState([])
   const [recordSearch, setRecordSearch] = useState('')
   const [recordId, setRecordId] = useState('')
@@ -504,6 +504,9 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   const [automationEnabled, setAutomationEnabled] = useState(false)
   const [assertions, setAssertions] = useState([])
   const [skipStartConditions, setSkipStartConditions] = useState(false)
+  const [debugWaitBehavior, setDebugWaitBehavior] = useState(false)
+  const [debugWaitPaths, setDebugWaitPaths] = useState({})
+  const waitElements = elements.filter((element) => ['wait_duration','wait_conditions','wait_until_date'].includes(element.key))
   const executionStorageKey = `gptbuilder.execution.${workflowId || 'new'}.${mode}`
 
   useEffect(() => {
@@ -547,15 +550,17 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       setAutomationEnabled(saved.automationEnabled === true)
       setAssertions(Array.isArray(saved.assertions) ? saved.assertions : [])
       setSkipStartConditions(saved.skipStartConditions === true)
+      setDebugWaitBehavior(saved.debugWaitBehavior === true)
+      setDebugWaitPaths(saved.debugWaitPaths && typeof saved.debugWaitPaths === 'object' ? saved.debugWaitPaths : {})
     } catch {}
   }, [executionStorageKey, workflowId])
 
   useEffect(() => {
     if (!workflowId) return
     try {
-      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, selectedTestId, automationEnabled, assertions, skipStartConditions }))
+      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, selectedTestId, automationEnabled, assertions, skipStartConditions, debugWaitBehavior, debugWaitPaths }))
     } catch {}
-  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, selectedTestId, automationEnabled, JSON.stringify(assertions), skipStartConditions])
+  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, selectedTestId, automationEnabled, JSON.stringify(assertions), skipStartConditions, debugWaitBehavior, JSON.stringify(debugWaitPaths)])
 
   const resetExecutionSettings = () => {
     setRecordId('')
@@ -566,6 +571,8 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
     setAutomationEnabled(false)
     setAssertions([])
     setSkipStartConditions(false)
+    setDebugWaitBehavior(false)
+    setDebugWaitPaths({})
     setResult(null)
     setError('')
     try { sessionStorage.removeItem(executionStorageKey) } catch {}
@@ -591,7 +598,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           ...(recordId ? { recordId } : {}),
           inputs,
           ...(mode === 'debug' ? { mode: 'debug', rollback } : {}),
-          ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [] } : {}),
+          ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false, debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {}, assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [] } : {}),
         }),
       })
       setResult(response?.data || {})
@@ -621,6 +628,8 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
             rollback: (flowType === 'record' || automationEnabled) ? true : rollback,
             scenarioTestingAutomation: automationEnabled,
             skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false,
+            debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false,
+            debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {},
             assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [],
           },
         }),
@@ -668,6 +677,15 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       </section> : null}
       {mode !== 'run' ? <section><h3>Select Run Options</h3>
         {mode === 'test' && flowType === 'record' ? <label className="gptb-properties-check"><input type="checkbox" checked={skipStartConditions} onChange={(event) => setSkipStartConditions(event.target.checked)}/><span>Skip start condition requirements</span></label> : null}
+        {mode === 'test' && flowType === 'autolaunched' && waitElements.length ? <>
+          <label className="gptb-properties-check"><input type="checkbox" checked={debugWaitBehavior} onChange={(event) => setDebugWaitBehavior(event.target.checked)}/><span>Debug wait element behavior</span></label>
+          {debugWaitBehavior ? <div className="gptb-debug-wait-paths">{waitElements.map((element) => {
+            const options = element.key === 'wait_conditions'
+              ? [...(element.config?.configurations || []).map((configuration, index) => ({ value: configuration.id || `configuration-${index+1}`, label: configuration.label || `Wait Configuration ${index+1}` })), { value: '__DEFAULT__', label: 'Default Path' }]
+              : [{ value: '__WAIT__', label: element.key === 'wait_duration' ? 'Wait for Amount of Time' : 'Wait Until Date' }]
+            return <label key={element.id}><span>{element.label || element.apiName}</span><select value={debugWaitPaths[element.id] || ''} onChange={(event) => setDebugWaitPaths((current) => ({ ...current, [element.id]: event.target.value }))}><option value="">Select a Wait Path</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          })}</div> : null}
+        </> : null}
         <label className="gptb-properties-check"><input type="checkbox" checked={mode === 'test' && (flowType === 'record' || automationEnabled) ? true : rollback} disabled={mode === 'test' && (flowType === 'record' || automationEnabled)} onChange={(event) => setRollback(event.target.checked)}/><span>Run automation in rollback mode</span></label>
         {mode === 'test' && flowType === 'record' ? <p className="gptb-help-text">Rollback is required for record-triggered test scenarios.</p> : null}
         {mode === 'test' && automationEnabled && flowType !== 'record' ? <p className="gptb-help-text">Rollback is required when Scenario Testing Automation and assertions are enabled.</p> : null}
@@ -1517,7 +1535,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         const target = elements.find((element) => element.id === issue.targetId)
         if (target) openElement(target)
       }}/> : null}
-      {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={resources} onClose={() => setExecutionMode(null)}/> : null}
+      {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={resources} elements={elements} onClose={() => setExecutionMode(null)}/> : null}
       {editHistoryOpen ? <GPTBuilderEditHistoryPanel entries={editHistoryEntries} loading={editHistoryLoading} selectedVersion={editHistoryVersion} onSelect={setEditHistoryVersion} onRestore={(entry) => void restoreHistoryEntry(entry)} onSaveAsVersion={(entry) => void saveHistoryAsNewVersion(entry)} onSaveAsFlow={saveHistoryAsNewFlow} onClose={() => setEditHistoryOpen(false)}/> : null}
       {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}
