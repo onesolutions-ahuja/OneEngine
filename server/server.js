@@ -64,6 +64,7 @@ import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
 import createAdminRouter from "./routes/admin.js";
 import createTemporaryDbExportRouter from "./routes/temporaryDbExport.js";
+import { logDatabaseWorkbook } from "./services/tempDbExcelLogExport.js";
 import createAttendanceRouter from "./routes/attendance.js"; // Staff clock in/out — routes/attendance.js
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
@@ -2458,6 +2459,9 @@ async function startServer() {
     await db("SELECT NOW()");
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
+    if (process.env.TEMP_DB_EXPORT_LOG === "1") {
+      await logDatabaseWorkbook(pool);
+    }
 
     // Canonical development tenant seed: a clean database must become usable
     // without manual SQL or copied production data.
