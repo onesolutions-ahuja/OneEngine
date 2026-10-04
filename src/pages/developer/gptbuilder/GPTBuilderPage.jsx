@@ -667,6 +667,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [message, setMessage] = useState('')
   const [saveError, setSaveError] = useState('')
   const [elementPickerOpen, setElementPickerOpen] = useState(false)
+  const [autoInsertIndex, setAutoInsertIndex] = useState(null)
   const [elements, setElements] = useState(() => Array.isArray(templateAction.gptBuilderElements) ? structuredClone(templateAction.gptBuilderElements) : [])
   const [resources, setResources] = useState(() => Array.isArray(templateAction.resources) ? structuredClone(templateAction.resources) : [])
   const [editingElement, setEditingElement] = useState(null)
@@ -1184,13 +1185,25 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setDirty(true)
   }
 
-  const chooseElement = (element, source = 'auto', position = null) => {
+  const chooseElement = (element, source = 'auto', position = null, insertIndex = autoInsertIndex) => {
     setElementPickerOpen(false)
+    setAutoInsertIndex(null)
     setDiagnosticsOpen(false)
     setStartOpen(false)
     if (!element || element.key === 'end') return
     const instance = createElementInstance(element.key, elements, { source, position })
-    setElements((current) => [...current, instance])
+    setElements((current) => {
+      if (source !== 'auto' || insertIndex == null) return [...current, instance]
+      const autoElements = current.filter((item) => item.source === 'auto')
+      const target = autoElements[insertIndex] || null
+      if (target) {
+        const globalIndex = current.findIndex((item) => item.id === target.id)
+        return [...current.slice(0, globalIndex), instance, ...current.slice(globalIndex)]
+      }
+      const lastAuto = [...current].map((item, index) => ({ item, index })).filter((entry) => entry.item.source === 'auto').at(-1)
+      if (!lastAuto) return [instance, ...current]
+      return [...current.slice(0, lastAuto.index + 1), instance, ...current.slice(lastAuto.index + 1)]
+    })
     setEditingElement({ id: instance.id, isNew: true })
     setDirty(true)
   }
@@ -1362,18 +1375,24 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       >
         <div className="gptb-canvas-stage" style={{ transform: `scale(${zoom / 100})` }}>{layout === 'auto' ? <>
           <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} data-gptb-auto-focus="true" data-gptb-element-id="start" data-gptb-description="The Start element defines when and how the flow begins." aria-label="Start" aria-disabled={!flow.startNeedsConfiguration} onClick={flow.startNeedsConfiguration ? openStart : undefined}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
-          <div className="gptb-connector"/>
           {(() => {
             const autoElements = elements.filter((element) => element.source === 'auto')
             const memberIds = new Set(autoElements.filter((element)=>element.key==='group').flatMap((group)=>Array.isArray(group.config?.memberIds)?group.config.memberIds:[]))
-            return autoElements.filter((element)=>!memberIds.has(element.id)).map((element) => <div className="gptb-auto-element-slot" tabIndex="-1" data-gptb-auto-focus="true" data-gptb-element-id={element.id} data-gptb-description={element.description || `${element.label || 'Flow element'} (${element.key})`} key={element.id}>{element.key==='group'
+            const visible = autoElements.filter((element)=>!memberIds.has(element.id))
+            const addSlot = (index) => <div className="gptb-add-slot" key={`add-${index}`}>
+              <div className="gptb-connector"/>
+              <button className="gptb-add-node" aria-label={`Add element at position ${index + 1}`} aria-expanded={elementPickerOpen && autoInsertIndex === index} onClick={() => {
+                const same = elementPickerOpen && autoInsertIndex === index
+                setElementPickerOpen(!same)
+                setAutoInsertIndex(same ? null : index)
+                setStartOpen(false); setDiagnosticsOpen(false); setEditingElement(null)
+              }}><Plus size={15}/></button>
+              {elementPickerOpen && autoInsertIndex === index ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={autoElements.length > 0} copiedCount={copiedElements.length} onPaste={pasteCopiedElements} onConnect={beginConnectToElement} onSelect={(element) => chooseElement(element, 'auto', null, index)} onClose={() => { setElementPickerOpen(false); setAutoInsertIndex(null) }}/>:null}
+            </div>
+            return <>{addSlot(0)}{visible.map((element,index)=><React.Fragment key={element.id}><div className="gptb-auto-element-slot" tabIndex="-1" data-gptb-auto-focus="true" data-gptb-element-id={element.id} data-gptb-description={element.description || `${element.label || 'Flow element'} (${element.key})`}>{element.key==='group'
               ? <AutoGroupCard group={element} members={(element.config?.memberIds||[]).map((id)=>autoElements.find((item)=>item.id===id)).filter(Boolean)} onOpenGroup={()=>openElement(element)} onOpenMember={openElement} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} connecting={connectMode} onConnectTarget={connectToElement}/>
-              : <PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/>}<div className="gptb-connector"/></div>)
+              : <PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/>}</div>{addSlot(index + 1)}</React.Fragment>)}</>
           })()}
-          <div className="gptb-add-slot">
-            <button className="gptb-add-node" aria-label="Add element" aria-expanded={elementPickerOpen} onClick={() => { setElementPickerOpen((value) => !value); setStartOpen(false); setDiagnosticsOpen(false); setEditingElement(null) }}><Plus size={15}/></button>
-            {elementPickerOpen ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={elements.some((element) => element.source === 'auto')} copiedCount={copiedElements.length} onPaste={pasteCopiedElements} onConnect={beginConnectToElement} onSelect={(element) => chooseElement(element, 'auto')} onClose={() => setElementPickerOpen(false)}/> : null}
-          </div>
           <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
         </> : <>
           <svg className="gptb-free-connections" aria-hidden="true">
