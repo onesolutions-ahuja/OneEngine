@@ -34,50 +34,17 @@ import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
-import createTillRouter from "./routes/till.js";
-import createHeldSalesRouter from "./routes/heldSales.js";
-import createCustomersRouter from "./routes/customers.js";
-import createProductsRouter from "./routes/products.js";
-import createProductFeaturesRouter from "./routes/productFeatures.js";
-import createPricingRouter from "./routes/pricing.js";
-import createEanLookupRouter from "./routes/eanLookup.js";
-import createSuppliersRouter from "./routes/suppliers.js";
-import createPurchasesRouter from "./routes/purchases.js";
-import createSupplierAccountsRouter from "./routes/supplierAccounts.js";
-import createInventoryRouter from "./routes/inventory.js";
-import createInventoryBatchesRouter from "./routes/inventoryBatches.js";
 
-import createSalesRouter from "./routes/sales.js";
-import createLayawaysRouter from "./routes/layaways.js";
-import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
-import createKioskRouter, { createKioskModeGate } from "./routes/kiosk.js";
-import createScanGoRouter from "./routes/scanAndGo.js";
-import createMobileScannerRouter from "./routes/mobileScanner.js";
-import createReturnsRouter from "./routes/returns.js";
-import createReportsRouter from "./routes/reports.js";
-import createSecureInvoiceRouter from "./routes/secureInvoice.js";
 import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
-import createWhatsAppSettingsRouter from "./routes/whatsapp.js";
-import createOneAssistantRouter from "./routes/oneAssistant.js";
-import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
-import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
 import createAdminRouter from "./routes/admin.js";
-import createAttendanceRouter from "./routes/attendance.js"; // Staff clock in/out — routes/attendance.js
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
 import createIntegrationsRouter from "./routes/integrations.js";
 import createProviderOAuthRouter from "./routes/providerOAuth.js";
-import createShopifyWebhooksRouter from "./routes/shopifyWebhooks.js";
 import createDashboardRouter from "./routes/dashboard.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
-import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
 import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
-import createReplenishmentRouter from "./routes/replenishment.js";
-import createOnlineRouter from "./routes/online.js";
-import createCustomerAuthRouter from "./routes/customerAuth.js";
-import createAccountingExportRouter from "./routes/accountingExport.js"; // T10V - accounting integration export
-import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
 import createPlatformRouter from "./routes/platform.js";
 import createPlatformDeploymentsRouter from "./routes/platformDeployments.js";
@@ -89,12 +56,8 @@ import createSecurityGovernanceRouter from "./routes/securityGovernance.js";
 import createDataProtectionRouter from "./routes/dataProtection.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
-import createHospitalityRouter from "./routes/hospitality.js";
-import { createClientWebShopRouter } from "./routes/clientWebShop.js";
-import createOwnDeliveryRouter from "./routes/ownDelivery.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
-import createPaypalQrRouter from "./routes/paypalQr.js";
 import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
