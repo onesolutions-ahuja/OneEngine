@@ -4,11 +4,11 @@ import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationC
 import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
+import { publishPlatformEvent } from "./platformEvents.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
-import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
@@ -17,7 +17,6 @@ import { oneHttpRequestDefinition } from "./coreFunctions.js";
 
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "ONE_HTTP_REQUEST", "CALL_CONNECTOR"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
-const globalProductLookupService = createGlobalProductLookupService();
 
 
 function redact(value, depth = 0, inheritedSecureValues = new Set()) {
@@ -188,167 +187,6 @@ async function loadRecordRelationship({ db, action, object }) {
   return { relationship, field: fieldResult.rows[0] || null };
 }
 
-const ONLINE_ORDER_TRANSITION_TARGETS = new Set([
-  "PREPARING",
-  "REJECTED",
-  "AUTO_READY",
-  "READY_FOR_PICKUP",
-  "READY_FOR_DELIVERY",
-  "COLLECTED",
-  "COMPLETED",
-  "CANCELLED",
-]);
-
-) {
-  const tenantId = companyId || req?.user?.companyId;
-  const orderId = action?.orderId || record?.id || recordId;
-  if (!tenantId || !orderId || typeof db !== "function" || typeof pool?.connect !== "function") {
-    throw new Error("Online order actions require a company-scoped record and database pool");
-  }
-  if (req?.user?.companyId && String(req.user.companyId) !== String(tenantId)) {
-    throw new Error("Online order action company context is invalid");
-  }
-  const result = await db(
-    "SELECT id,company_id,store_id,platform,fulfilment_type,status FROM online_orders WHERE id=$1 AND company_id=$2 LIMIT 1",
-    [orderId, tenantId]
-  );
-  const order = result.rows[0];
-  if (!order) throw Object.assign(new Error("Online order not found"), { status: 404 });
-  if (req?.user?.storeId && String(req.user.storeId) !== String(order.store_id || "")) {
-    throw Object.assign(new Error("Online order is outside the current store scope"), { status: 403 });
-  }
-  if (!["direct", "one_kiosk"].includes(order.platform)) {
-    throw Object.assign(new Error("Provider-specific order actions must be executed by the provider integration"), { status: 409 });
-  }
-
-  let toStatus = String(action.toStatus || "").toUpperCase();
-  if (toStatus === "AUTO_READY") {
-    toStatus = order.fulfilment_type === "SELF_PICKUP"
-      ? "READY_FOR_PICKUP"
-      : order.fulfilment_type === "DELIVERY"
-        ? "READY_FOR_DELIVERY"
-        : "READY";
-  }
-  if (!ONLINE_ORDER_TRANSITION_TARGETS.has(String(action.toStatus || "").toUpperCase())) {
-    throw new Error("Online order action requires a supported lifecycle target");
-  }
-  if (toStatus === "READY_FOR_PICKUP" && order.fulfilment_type !== "SELF_PICKUP") {
-    throw new Error("Only self-pickup orders can be marked ready for pickup");
-  }
-  if (toStatus === "READY_FOR_DELIVERY" && order.fulfilment_type !== "DELIVERY") {
-    throw new Error("Only delivery orders can be marked ready for delivery");
-  }
-
-  const transition = await transitionGenericOrder({
-    pool,
-    companyId: tenantId,
-    orderId,
-    userId: userId || req?.user?.id || null,
-    toStatus,
-    reason: action.reason || null,
-    createSale: order.platform === "one_kiosk" ? null : createSaleForCompletedOrder,
-    createInventoryMovement,
-    publishEvent: ({ client, eventType, payload, actorUserId }) => publishPlatformEvent({
-      db: client.query.bind(client),
-      companyId: tenantId,
-      eventType,
-      payload,
-      actorUserId,
-    }),
-  });
-  if (!transition.success) {
-    throw Object.assign(new Error(transition.error || "Online order transition failed"), {
-      status: transition.error === "Order not found" ? 404 : 409,
-    });
-  }
-  return transition;
-}
-
-) {
-  const packageKey = String(action?.packageKey || action?.package_key || "").trim();
-  const tenantId = companyId || req?.user?.companyId;
-  const actorId = userId || req?.user?.id || null;
-  if (!db || !tenantId || !packageKey) throw new Error("Licence request requires a package key and company context");
-  const packageResult = await db(
-    `SELECT p.package_key,p.name,p.visible,p.active,p.installable,p.system_only,p.publication_state,p.manifest,
-            c.name AS company_name,u.full_name,u.username,u.email
-       FROM package_registry p
-       JOIN companies c ON c.id=$2
-       LEFT JOIN users u ON u.id=$3
-      WHERE p.package_key=$1 LIMIT 1`,
-    [packageKey, tenantId, actorId]
-  );
-  const packageRow = packageResult.rows[0];
-  if (!packageRow || packageRow.visible !== true || packageRow.active !== true || packageRow.installable !== true || packageRow.system_only === true || packageRow.publication_state !== "PUBLISHED") {
-    throw Object.assign(new Error("This package cannot be requested"), { status: 409 });
-  }
-  const entitlements = await getCompanyEntitlements(db, tenantId);
-  if (isPackageLicensed(entitlements, packageRow)) {
-    throw Object.assign(new Error("This package is already licensed for the company"), { status: 409 });
-  }
-  const existing = await db("SELECT * FROM platform_licence_requests WHERE company_id=$1 AND package_key=$2 AND status='PENDING' LIMIT 1", [tenantId, packageKey]);
-  if (existing.rows.length) return { status: "PENDING", duplicate: true, request: existing.rows[0] };
-  const requestResult = await db(
-    `INSERT INTO platform_licence_requests
-      (company_id,package_key,package_name,requesting_user_id,requesting_user_name,licence_status)
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb) RETURNING *`,
-    [tenantId, packageKey, packageRow.name, actorId, packageRow.full_name || packageRow.username || packageRow.email || null,
-      JSON.stringify({ licensed: false, entitlementKey: packageRow.manifest?.entitlementKey || packageKey })]
-  );
-  const request = requestResult.rows[0];
-  if (typeof writeAudit === "function") {
-    await writeAudit(tenantId, actorId, "licence_request_created", "platform_licence_request", request.id, { packageKey, packageName: packageRow.name, status: "PENDING" });
-  }
-  const templateResult = await db(
-    `INSERT INTO platform_message_templates
-      (company_id,name,api_key,description,channel,subject,body,active,created_by)
-     VALUES ($1,'Licence Request Created','licence_request_superadmin','Default Superadmin licence-request email','EMAIL',
-       'Licence request - {{company.name}} - {{package.name}}',
-       'Company: {{company.name}}\n\nRequested app: {{package.name}}\n\nRequested by: {{request.user_name}}\n\nRequested at: {{request.created_at}}',true,$2)
-     ON CONFLICT(company_id,api_key) DO UPDATE SET updated_at=NOW()
-     RETURNING id`,
-    [tenantId, actorId]
-  );
-  const templateId = templateResult.rows[0]?.id;
-  await db(
-    `INSERT INTO platform_rules (object_id,name,trigger_key,conditions,action,active,company_id,created_by)
-     SELECT NULL,'Licence Request Created','licence_request_created','[]'::jsonb,$1::jsonb,true,$2,$3
-      WHERE NOT EXISTS (SELECT 1 FROM platform_rules WHERE company_id=$2 AND trigger_key='licence_request_created' AND active=true)`,
-    [JSON.stringify({ type: "workflow", actions: [
-      { type: "SEND_COMMUNICATION", channel: "IN_APP", recipient: "platform_superadmins", title: "Licence request received", message: `${packageRow.company_name} requested licence for ${packageRow.name}` },
-      { type: "SEND_COMMUNICATION", channel: "EMAIL", recipient: "platform_superadmins", templateId, templateContext: {
-        company: { name: packageRow.company_name }, package: { name: packageRow.name },
-        request: { user_name: request.requesting_user_name, created_at: request.created_at },
-      } },
-    ] }), tenantId, actorId]
-  );
-  const workflowResult = await db(
-    `SELECT id,name,action FROM platform_rules
-      WHERE active=true AND trigger_key='licence_request_created' AND (company_id=$1 OR company_id IS NULL)
-      ORDER BY CASE WHEN company_id=$1 THEN 0 ELSE 1 END,id LIMIT 1`,
-    [tenantId]
-  );
-  if (workflowResult.rows[0]?.action) {
-    const workflow = workflowResult.rows[0];
-    const actions = Array.isArray(workflow.action.actions) ? workflow.action.actions : [];
-    const run = await createWorkflowRun({ db, companyId: tenantId, workflowId: workflow.id, workflowName: workflow.name, triggerKey: "licence_request_created", status: "RUNNING", metadata: { requestId: request.id } });
-    const record = { ...request, company_name: packageRow.company_name, package_name: packageRow.name, request_user_name: request.requesting_user_name };
-    try {
-      await executeWorkflowActions({ actions, db, pool, req, companyId: tenantId, userId: actorId, record, runId: run?.id || null, trigger: "licence_request_created", writeAudit });
-      if (run?.id) await db("UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1", [run.id]);
-    } catch (error) {
-      if (run?.id) {
-        const failureMessage = String(error?.message || error || "Workflow execution failed").slice(0, 2000);
-        await db(
-          "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,updated_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb WHERE id=$3",
-          [failureMessage, JSON.stringify({ error: failureMessage, last_error: failureMessage }), run.id]
-        );
-      }
-    }
-  }
-  return { status: "PENDING", duplicate: false, request };
-}
-
 async function resolveEmailWorkflowAction({
   db,
   companyId,
@@ -358,139 +196,7 @@ async function resolveEmailWorkflowAction({
   object,
   workflowVariables,
   req,
-}) {
-  const context = { record, previousRecord, req, object, workflowVariables };
-  const resolved = resolveCommunicationWorkflowAction(
-    action,
-    record,
-    object,
-    workflowVariables,
-    req,
-    previousRecord
-  );
-  const resolveValue = (value) => {
-    if (value === undefined || value === null || value === "") return value;
-    const candidate = resolveConfiguredResource(value, context, { preserveMissing: true });
-    return candidate === undefined ? value : candidate;
-  };
-
-  resolved.subject = resolveValue(action?.subject);
-  const configuredBody = action?.body ?? action?.text ?? action?.message;
-  if (configuredBody !== undefined) {
-    const body = resolveValue(configuredBody);
-    resolved.body = body;
-    resolved.text = body;
-    resolved.message = body;
-  }
-  if (action?.html !== undefined) resolved.html = resolveValue(action.html);
-
-  const templateRef = action?.templateId || action?.template || null;
-  const contentMode = String(action?.contentMode || (templateRef ? "TEMPLATE" : "CUSTOM")).toUpperCase();
-  if (contentMode === "TEMPLATE" && templateRef) {
-    const templateResult = await db(
-      `SELECT id,api_key,subject,body
-         FROM platform_message_templates
-        WHERE active=TRUE
-          AND channel='EMAIL'
-          AND (company_id=$1 OR company_id IS NULL)
-          AND (id::text=$2 OR api_key=$2)
-        ORDER BY CASE WHEN company_id=$1 THEN 0 ELSE 1 END
-        LIMIT 1`,
-      [companyId, String(templateRef)]
-    );
-    const template = templateResult.rows[0];
-    if (!template) {
-      throw Object.assign(new Error("Selected email template is unavailable"), { code: "TEMPLATE_NOT_FOUND", retryable: false });
-    }
-    const templateContext = resolved.templateContext && typeof resolved.templateContext === "object"
-      ? resolved.templateContext
-      : (record || {});
-    resolved.subject = renderMessageTemplate(template.subject || "", templateContext);
-    resolved.text = renderMessageTemplate(template.body || "", templateContext);
-    resolved.body = resolved.text;
-    resolved.message = resolved.text;
-    resolved.templateId = template.id;
-    resolved.template = template.api_key || resolved.template;
-  }
-
-  if (!String(resolved.subject || "").trim()) {
-    throw Object.assign(new Error("Email subject is required"), { code: "INVALID_SUBJECT", retryable: false });
-  }
-  if (!String(resolved.text || resolved.body || resolved.message || resolved.html || "").trim()) {
-    throw Object.assign(new Error("Email message body is required"), { code: "INVALID_MESSAGE", retryable: false });
-  }
-  return resolved;
 }
-
-) {
-  const company = companyId || req?.user?.companyId;
-  if (!company) return { status: "failed", provider: packageKey, error: "Company scope is required" };
-  const connection = await db(
-    `SELECT c.id
-       FROM integration_connections c
-       JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
-       JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=c.company_id
-        AND i.status='active' AND i.suspended_by_entitlement=FALSE
-      WHERE c.company_id=$1
-        AND c.connector_package_key=$2
-        AND c.enabled=TRUE
-        AND UPPER(COALESCE(c.connection_status,''))='CONNECTED'
-        AND COALESCE((c.last_test_result->>'success')::boolean,FALSE)=TRUE
-      ORDER BY c.fallback_order ASC,c.updated_at DESC
-      LIMIT 1`,
-    [company, packageKey]
-  );
-  const connectorInstanceId = connection.rows[0]?.id || null;
-  if (!connectorInstanceId) {
-    return {
-      status: "failed",
-      provider: packageKey,
-      error: `${packageKey === "brevo_connector" ? "Brevo" : "Mailjet"} connector is not configured, tested and enabled`,
-    };
-  }
-  const resolvedAction = await resolveEmailWorkflowAction({
-    db,
-    companyId: company,
-    action,
-    record,
-    previousRecord,
-    object,
-    workflowVariables,
-    req,
-  });
-  const execution = await executeConnectorWorkflowAction({
-    action: {
-      ...resolvedAction,
-      key: actionKey,
-      capability: "email.send",
-      connectorInstanceId,
-    },
-    payload: resolvedAction,
-    db,
-    companyId: company,
-    connectorDrivers,
-    req,
-    writeAudit,
-    actorUserId: req?.user?.id || null,
-  });
-  if (!execution.success) {
-    return {
-      status: "failed",
-      provider: packageKey,
-      error: execution.message || execution.code || "Email connector failed",
-      connectorInstanceId,
-    };
-  }
-  return {
-    status: "sent",
-    provider: packageKey,
-    connectorInstanceId,
-    providerMessageId: execution.result?.providerMessageId || null,
-    result: execution.result || null,
-    stepRunId: stepRunId || null,
-  };
-}
-
 
 function validateGetRecordsCustomLogic(logic, conditionCount, context = "Get Records") {
   const value = String(logic || "").trim();
