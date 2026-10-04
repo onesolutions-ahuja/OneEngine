@@ -2024,7 +2024,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     validation: (action) => {
       if (!action?.collection) throw new Error("Collection Filter requires a collection");
-      if (!Array.isArray(action.filters) || !action.filters.length) throw new Error("Collection Filter requires at least one condition");
+      if (!String(action?.formula || "").trim() && (!Array.isArray(action.filters) || !action.filters.length)) throw new Error("Collection Filter requires conditions or a formula");
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
@@ -2054,8 +2054,14 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
       };
       const filters = Array.isArray(action.filters) ? action.filters : [];
+      const formula = String(action.formula || "").trim();
       const matchAny = String(action.match || "all").toLowerCase() === "any";
       const output = collection.filter((item) => {
+        if (formula) {
+          const inputs = item && typeof item === "object" && !Array.isArray(item) ? { ...item } : { item };
+          inputs.item = item;
+          return Boolean(evaluateWorkflowFormula(formula, inputs));
+        }
         const results = filters.map((filter) => {
           const left = getPath(item, filter?.field);
           const right = ["is_empty","is_not_empty"].includes(filter?.operator)
@@ -2276,12 +2282,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         return output;
       };
+      const targetResource = String(action.targetResource || "").replace(/^variables\./, "");
       if (Array.isArray(source)) {
         const collection = source.map(transformOne);
-        return { status: "completed", collection, count: collection.length, value: collection };
+        if (targetResource) workflowVariables.variables[targetResource] = collection;
+        return { status: "completed", collection, count: collection.length, value: collection, resourceName: targetResource || null };
       }
       const value = transformOne(source && typeof source === "object" ? source : {});
-      return { status: "completed", value, collection: null };
+      if (targetResource) workflowVariables.variables[targetResource] = value;
+      return { status: "completed", value, collection: null, resourceName: targetResource || null };
     },
   },
   {
@@ -3497,9 +3506,18 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         ? action.workflow
         : (() => {
             if (!db || typeof db !== "function") return null;
-            const id = action.workflowId || action.subflowId;
-            if (!id) return null;
-            return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
+            const idOrApiName = action.workflowId || action.subflowId;
+            if (!idOrApiName) return null;
+            const tenantId = companyId || req?.user?.companyId || null;
+            return db(
+              `SELECT * FROM platform_rules
+               WHERE active=true
+                 AND (company_id=$2 OR company_id IS NULL)
+                 AND (id::text=$1 OR action->>'apiName'=$1)
+               ORDER BY CASE WHEN company_id=$2 THEN 0 ELSE 1 END
+               LIMIT 1`,
+              [String(idOrApiName), tenantId]
+            ).then((result) => result.rows[0] || null);
           })();
       const definition = await Promise.resolve(subflowDefinition);
       if (!definition) {
@@ -3564,6 +3582,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
               const value = resolveConfiguredResource(source, { record: mergedRecord, previousRecord, req, object, workflowVariables: persistedVariables }, { preserveMissing: false });
               if (output.required === true && value === undefined) throw new Error(`Subflow output "${output.label || name}" was not produced`);
               outputs[name] = value;
+            }
+            if (action.outputMappings && typeof action.outputMappings === "object" && !Array.isArray(action.outputMappings)) {
+              for (const [outputName, targetResource] of Object.entries(action.outputMappings)) {
+                if (!Object.prototype.hasOwnProperty.call(outputs, outputName)) continue;
+                const targetName = String(targetResource || "").replace(/^variables\./, "");
+                if (targetName) workflowVariables.variables[targetName] = outputs[outputName];
+              }
             }
             return {
               status: "completed",
@@ -3632,6 +3657,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           const value = resolveConfiguredResource(source, { record: mergedRecord, previousRecord, req, object, workflowVariables: childWorkflowVariables }, { preserveMissing: false });
           if (output.required === true && value === undefined) throw new Error(`Subflow output "${output.label || name}" was not produced`);
           outputs[name] = value;
+        }
+      }
+      if (!childWaiting && action.outputMappings && typeof action.outputMappings === "object" && !Array.isArray(action.outputMappings)) {
+        for (const [outputName, targetResource] of Object.entries(action.outputMappings)) {
+          if (!Object.prototype.hasOwnProperty.call(outputs, outputName)) continue;
+          const targetName = String(targetResource || "").replace(/^variables\./, "");
+          if (targetName) workflowVariables.variables[targetName] = outputs[outputName];
         }
       }
       const childFailed = childResult.some((item) => item.result?.status === "failed");
